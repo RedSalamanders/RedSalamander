@@ -1,0 +1,21 @@
+{
+  "schema": "review-remediation.publication-final.v1",
+  "run_id": "20261101T112252Z-58936-6977f6f4b4384cc7adccb49765eaeb57",
+  "based_on_merge": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+  "native_integration_source": "ca8f8e62b153bafccdd97cbc93c35fde364513c054c155c4f028323768160d6a",
+  "pending_delta_scope": "Twelve live Markdown documents plus compact evidence only; native/tooling/CI inputs unchanged after merged-source verification",
+  "changelog": "passed",
+  "tool_inventory": "passed",
+  "staged_source_whitespace": "passed",
+  "archive_paths": 1371,
+  "archive_violations": 0,
+  "stock_proof": "sf-f65668c1",
+  "specification_blocking_findings": 0,
+  "codeql": "OPEN: two high annotations in preserved historical snapshots; no dismissal or query exclusion",
+  "pending": [
+    "native ARM64/WIC",
+    "physical devices/providers",
+    "foreground/mixed-DPI/AT/shutdown",
+    "incoming I50 revision-2 findings including H5"
+  ]
+}

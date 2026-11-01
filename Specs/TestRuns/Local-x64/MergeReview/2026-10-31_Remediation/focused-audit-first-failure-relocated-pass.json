@@ -1,0 +1,138 @@
+{
+  "runId": "20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6",
+  "testRoot": "Z:\\RedSalamander.Perf",
+  "runRoot": "Z:\\RedSalamander.Perf\\runs\\20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6",
+  "temp": "Z:\\RedSalamander.Perf\\runs\\20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6\\scratch\\focused-pester\\static-audits-and-relocated-debug",
+  "tmp": "Z:\\RedSalamander.Perf\\runs\\20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6\\scratch\\focused-pester\\static-audits-and-relocated-debug",
+  "profile": {
+    "platform": "x64",
+    "configuration": "Debug"
+  },
+  "pesterVersion": "3.4.0",
+  "head": "6b6f5646be297fbc232d137f1df6a00c5cb74461",
+  "branch": "ej/review-remediation-20261031",
+  "sourceHashes": [
+    {
+      "path": "Tools/Tests/DocumentationDriftContracts.Tests.ps1",
+      "sha256": "84486B3B6E39C18CDDF8A7DFAAAE6AACB7C5911728C81DF3B4ADE2CF53F42BE7"
+    },
+    {
+      "path": "Tools/Tests/HistoricalTerminalProfile.Tests.ps1",
+      "sha256": "A96108866B791D9B75264893955388C7669B980C3E72651EC18002B807E82327"
+    },
+    {
+      "path": "Tools/Tests/ResourceLocalizationContracts.Tests.ps1",
+      "sha256": "258E836B8933129B82A41EE8BA0A10211294B9BF1111186A6AA5506643593B0A"
+    },
+    {
+      "path": "Tools/Tests/SharedToolingModules.Tests.ps1",
+      "sha256": "4FE337287793DFD9DB77B5AAF0EEF5CF967F5D1F10039A289D7DACEF7BF80AA4"
+    },
+    {
+      "path": "Tools/Tests/ToolInventory.Tests.ps1",
+      "sha256": "E0B570BF25F22F633E85BDA109CDE3CEF2F92350CC9DD284C67DC4DBB13FC1B7"
+    },
+    {
+      "path": "Tools/Tests/RelocatedTestSandbox.Tests.ps1",
+      "sha256": "8609D68D06829992F9FBE89CB326FBF4332632CCDB59955E5B89904A4351CE41"
+    },
+    {
+      "path": "Tools/Audit-ComctlReportSurfaces.ps1",
+      "sha256": "99C2D07B3C8885EFF6ED2FC1425F607C9D749A4868D2D9C5E706AAC7A1ED9DD9"
+    },
+    {
+      "path": "Tools/Audit-VisibleNativeSurfaces.ps1",
+      "sha256": "722EEEF3AFC403FAD17063F8B44500A963A153F3A7C23CDBB5F68C8612D1DDD3"
+    },
+    {
+      "path": "Tools/Audit-RemainingWin32UiDependencies.ps1",
+      "sha256": "CBED90CB072EA8D6BC0A18390473548E303A8C6654C4D77813951E556D79F686"
+    },
+    {
+      "path": "Tools/Modules/Auditing/RepositorySourceScanner.psm1",
+      "sha256": "AA23B73E304AC05501581073A4F059765E968D537E083193FB5B1148D9B27824"
+    },
+    {
+      "path": "Tools/Modules/Build/MSBuildInvocation.psm1",
+      "sha256": "EBD57ECDDB52819B90A2609385A0DD2C6EC4CACD1F8E537E369E0BF25C90333C"
+    },
+    {
+      "path": "Tools/Tests/TestSupport.psm1",
+      "sha256": "A433A95348A526229907FD15BEB6B8D4D85B565A7EC39E27799854289E61373E"
+    },
+    {
+      "path": "Tools/tool-inventory.json",
+      "sha256": "6BF24B8E4201006A7C12816D2967EE9258BB2906E0F2103A206CF8BF382538C8"
+    },
+    {
+      "path": "Tools/README.md",
+      "sha256": "841C32595EE2F69EB6B00958864024611FA19E006B4300661FCC3A0FEE51D229"
+    },
+    {
+      "path": "Specs/UI/UI_VisibleNativeAudit.md",
+      "sha256": "81BABF4CA78B46B42B8744550A1E324393490E38426313A430671CDBB78FDB22"
+    }
+  ],
+  "startedUtc": "2026-10-31T15:59:21.3150994+00:00",
+  "endedUtc": "2026-10-31T16:00:31.9532097+00:00",
+  "elapsedSeconds": 70.638,
+  "runs": [
+    {
+      "scripts": [
+        ".\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1",
+        ".\\Tools\\Tests\\HistoricalTerminalProfile.Tests.ps1",
+        ".\\Tools\\Tests\\ResourceLocalizationContracts.Tests.ps1",
+        ".\\Tools\\Tests\\SharedToolingModules.Tests.ps1",
+        ".\\Tools\\Tests\\ToolInventory.Tests.ps1"
+      ],
+      "tag": null,
+      "excludeTag": "RequiresBuildToolchain",
+      "passed": 69,
+      "failed": 1,
+      "skipped": 0,
+      "total": 70,
+      "startedUtc": "2026-10-31T15:59:21.3156412+00:00",
+      "endedUtc": "2026-10-31T16:00:27.7911942+00:00",
+      "elapsedSeconds": 66.476
+    },
+    {
+      "scripts": [
+        ".\\Tools\\Tests\\RelocatedTestSandbox.Tests.ps1"
+      ],
+      "tag": "RequiresBuildToolchain",
+      "excludeTag": null,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "total": 1,
+      "startedUtc": "2026-10-31T16:00:27.8056348+00:00",
+      "endedUtc": "2026-10-31T16:00:31.9509027+00:00",
+      "elapsedSeconds": 4.145
+    }
+  ],
+  "totalPassed": 70.0,
+  "totalFailed": 1.0,
+  "totalSkipped": 0.0,
+  "totalTests": 71.0,
+  "failures": [
+    {
+      "describe": "Visible native audit contracts",
+      "context": "",
+      "name": "handles empty and classified surfaces under StrictMode and rejects an unclassified dependency with its actual diagnostic",
+      "message": "Remaining Win32 UI audit failed: System.Management.Automation.RuntimeException: Remaining Win32 UI dependency audit found 1 unallowed finding(s).\r\nat <ScriptBlock>, Z:\\src\\RedSalamander\\Tools\\Audit-RemainingWin32UiDependencies.ps1: line 440\r\nat <ScriptBlock>, Z:\\src\\RedSalamander\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1: line 132\r\nat Invoke-RSTestBlock, Z:\\src\\RedSalamander\\Tools\\Tests\\TestSupport.psm1: line 94\r\nat <ScriptBlock>, Z:\\src\\RedSalamander\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1: line 131\r\nat Invoke-Test, C:\\Program Files\\WindowsPowerShell\\Modules\\Pester\\3.4.0\\Functions\\It.ps1: line 253\r\nat ItImpl, C:\\Program Files\\WindowsPowerShell\\Modules\\Pester\\3.4.0\\Functions\\It.ps1: line 203\r\nat It, C:\\Program Files\\WindowsPowerShell\\Modules\\Pester\\3.4.0\\Functions\\It.ps1: line 117\r\nat <ScriptBlock>, Z:\\src\\RedSalamander\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1: line 121\r\nat Describe, C:\\Program Files\\WindowsPowerShell\\Modules\\Pester\\3.4.0\\Functions\\Describe.ps1: line 100\r\nat <ScriptBlock>, Z:\\src\\RedSalamander\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1: line 120\r\nat <ScriptBlock>, C:\\Program Files\\WindowsPowerShell\\Modules\\Pester\\3.4.0\\Pester.psm1: line 297\r\nat Invoke-Pester, C:\\Program Files\\WindowsPowerShell\\Modules\\Pester\\3.4.0\\Pester.psm1: line 310\r\nat <ScriptBlock>, <No file>: line 2",
+      "stack": "at line: 141 in Z:\\src\\RedSalamander\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1"
+    }
+  ],
+  "buildLogs": [
+    "Z:\\RedSalamander.Perf\\runs\\20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6\\scratch\\relocated-test-sandbox\\1b88c82059374aa2bb09d7312d06c262\\build.log"
+  ],
+  "buildDiagnostics": [
+    {
+      "LogPath": "Z:\\RedSalamander.Perf\\runs\\20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6\\scratch\\relocated-test-sandbox\\1b88c82059374aa2bb09d7312d06c262\\build.log",
+      "WarningCount": 0,
+      "ErrorCount": 0
+    }
+  ],
+  "buildZeroWarningsErrors": true,
+  "transcript": "Z:\\RedSalamander.Perf\\runs\\20261031T155920Z-74776-59a2bb65bbf946c4b6a8cd3888421df6\\scratch\\focused-pester\\static-audits-and-relocated-debug\\focused-pester-transcript.txt"
+}

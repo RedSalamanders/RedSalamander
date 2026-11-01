@@ -63,7 +63,7 @@ namespace
 
 [[nodiscard]] bool IsBackupTail(const std::wstring_view value) noexcept
 {
-    return IsGuidWithBraces(value);
+    return IsGuidWithBraces(value) || IsRenameTail(value);
 }
 
 // I35 R7.6: `<32 hex>.tmp`, the tail of the MTP writer temps (`.<leaf>.rs-mtp-overwrite-` and
@@ -141,9 +141,10 @@ bool HasPossibleArtifactName(const std::wstring_view leaf) noexcept
 {
     // I35 R7.6: the provider staging names are leftovers too (Curl upload/writer siblings, the MTP
     // writer temps), next to the possible originals above.
-    return HasTail(leaf, L".rs_tmp_", IsBridgeTail) || HasTail(leaf, L".rs_copy_tmp_", IsLegacyCopyTail) || HasTail(leaf, L".~rs-write-", IsWriterTail) ||
-           HasTail(leaf, L".rs-mtp-overwrite-", IsHexTmpTail) || HasTail(leaf, L".rs-mtp-create-", IsHexTmpTail) ||
-           IsWholeLeafHexName(leaf, L".redsalamander-upload-") || IsWholeLeafHexName(leaf, L".redsalamander-writer-") || HasPossibleOriginalArtifactName(leaf);
+    return HasTail(leaf, L".rs_tmp_", IsBridgeTail) || HasTail(leaf, L".rs_copy_tmp_", IsLegacyCopyTail) || HasTail(leaf, L".rs_copy_tmp_", IsRenameTail) ||
+           HasTail(leaf, L".~rs-write-", IsWriterTail) || HasTail(leaf, L".rs-mtp-overwrite-", IsHexTmpTail) ||
+           HasTail(leaf, L".rs-mtp-create-", IsHexTmpTail) || IsWholeLeafHexName(leaf, L".redsalamander-upload-") ||
+           IsWholeLeafHexName(leaf, L".redsalamander-writer-") || HasPossibleOriginalArtifactName(leaf);
 }
 
 bool IsDeleteHandoffCandidate(const Candidate& candidate) noexcept

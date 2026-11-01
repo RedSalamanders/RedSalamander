@@ -141,12 +141,13 @@ private:
 
     struct Node final
     {
-        uint32_t id             = 0;
-        uint32_t parentId       = 0;
-        bool isDirectory        = false;
-        bool isSynthetic        = false;
-        bool contentNotMeasured = false;
-        ScanState scanState     = ScanState::NotStarted;
+        uint32_t id                      = 0;
+        uint32_t parentId                = 0;
+        bool isDirectory                 = false;
+        bool isSynthetic                 = false;
+        bool contentNotMeasured          = false;
+        bool aggregateContainsUnreadable = false;
+        ScanState scanState              = ScanState::NotStarted;
 
         std::wstring_view name;
 
@@ -258,6 +259,7 @@ private:
             AddChild,
             UpdateSize,
             UpdateState,
+            UpdateAggregateUnreadable,
             UpdateMetadata,
             DirectorySummaryBegin,
             DirectorySummaryChunk,
@@ -277,9 +279,10 @@ private:
         ScanState state       = ScanState::NotStarted;
         std::wstring name;
         std::optional<FileSystemPathIdentity> pathIdentity;
-        bool isDirectory        = false;
-        bool isSynthetic        = false;
-        bool contentNotMeasured = false;
+        bool isDirectory                 = false;
+        bool isSynthetic                 = false;
+        bool contentNotMeasured          = false;
+        bool aggregateContainsUnreadable = false;
 
         uint64_t scannedFolders           = 0;
         uint64_t scannedFiles             = 0;
@@ -432,6 +435,7 @@ private:
         std::vector<uint32_t> navForwardStack;
         std::vector<std::wstring> selectedRelativePath;
         size_t selectionPathPart     = 0u;
+        bool selectionResolved       = false;
         uint32_t selectionPathNodeId = 0u;
         bool selectionPathIsFile     = false;
     };
@@ -481,7 +485,7 @@ private:
     LRESULT DebugNavigationFolder(WndMsg::ViewerSpaceNavigationFolderDebugQuery* query);
 #endif
     void ContinueAnalysisBuild() noexcept;
-    [[nodiscard]] uint64_t AnalysisOwnedBytes() const noexcept;
+    [[nodiscard]] uint64_t AnalysisOwnedBytes(bool includeFilter = true) const noexcept;
     void InvalidateAnalysis() noexcept;
     void SelectItem(uint32_t itemId, bool syncGrid = true) noexcept;
     void UpdateInspector() noexcept;
@@ -568,8 +572,10 @@ private:
     void CancelDeferredStartScan() noexcept;
     [[nodiscard]] bool HasDeferredDisposalCapacity(bool closing = false) noexcept;
     void CancelScan() noexcept;
+    [[nodiscard]] bool CanCancelScanFromHeader() const noexcept;
     void CancelScanByUser() noexcept;
     void AbandonScanWorkers() noexcept;
+    struct ScanWorkerReapContext;
     void ReapFinishedScanWorkers() noexcept;
     void ContinueDeferredDisposalSubmissions() noexcept;
     void ReapFinishedDeferredDisposals() noexcept;
@@ -603,6 +609,8 @@ private:
     void EmitQueueDiagnostics(bool terminalSnapshot, bool force) noexcept;
     bool IsQueueTerminalReady() noexcept;
     static size_t EstimatePendingUpdateBytes(const PendingUpdate& update) noexcept;
+    struct ScanCacheOwner;
+    [[nodiscard]] ScanCacheOwner& GetScanCacheOwner() noexcept;
     void ContinueScanCacheBuild() noexcept;
     void CancelScanCacheBuild() noexcept;
     void ContinueScanCacheRestore() noexcept;
@@ -838,6 +846,7 @@ private:
     uint64_t _debugLocaleInvalidations = 0u;
 #endif
 
+    std::unique_ptr<ScanCacheOwner> _scanCacheOwner;
     std::shared_ptr<void> _scanCacheBuildSnapshot;
     std::wstring _scanCacheBuildRootKey;
     std::shared_ptr<const void> _scanCacheRestoreSnapshot;
@@ -989,8 +998,9 @@ private:
     double _workspaceScanStartedSeconds = 0.0;
     D2D1_RECT_F _headerProblemsBounds{};
     std::shared_ptr<WorkspaceExportBuild> _workspaceExport;
-    bool _exportProjectionRequested = false;
-    bool _exportDialogOpen          = false;
+    std::shared_ptr<std::atomic_uint64_t> _workspaceExportOwnedBytes = std::make_shared<std::atomic_uint64_t>(0u);
+    bool _exportProjectionRequested                                  = false;
+    bool _exportDialogOpen                                           = false;
     std::shared_ptr<const uint8_t> _workspaceLifetime{std::make_shared<const uint8_t>(uint8_t{0})};
     uint64_t _layoutTurnCount        = 0u;
     uint64_t _layoutMaxTurnUs        = 0u;

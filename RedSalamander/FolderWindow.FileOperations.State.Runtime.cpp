@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <tuple>
 
@@ -17,6 +18,25 @@ using namespace FolderWindowFileOperationsStateInternal;
 
 namespace
 {
+// One process has one visible owner per durable notice. Weak claims carry no provider
+// or UI state and expire with the final summary/snapshot so another window can adopt it.
+std::mutex g_moveNoticeClaimsMutex;
+using NoticePathOrder = bool (*)(const std::wstring&, const std::wstring&) noexcept;
+std::map<std::wstring, std::weak_ptr<const uint8_t>, NoticePathOrder> g_moveNoticeClaims{+[](const std::wstring& left, const std::wstring& right) noexcept
+{ return OrdinalString::Compare(left, right, true) < 0; }};
+
+[[nodiscard]] std::shared_ptr<const uint8_t> ClaimMoveNotice(const std::filesystem::path& path)
+{
+    std::scoped_lock lock(g_moveNoticeClaimsMutex);
+    std::erase_if(g_moveNoticeClaims, [](const auto& item) noexcept { return item.second.expired(); });
+    const auto key = path.lexically_normal().native();
+    if (g_moveNoticeClaims.contains(key))
+        return {};
+    auto claim = std::make_shared<const uint8_t>(uint8_t{0});
+    g_moveNoticeClaims.emplace(key, claim);
+    return claim;
+}
+
 [[nodiscard]] uint64_t SaturatingAdd(const uint64_t left, const size_t right) noexcept
 {
     const uint64_t converted =
@@ -98,7 +118,9 @@ namespace
     }
     record.sourceRootCount            = static_cast<uint64_t>(uniqueSourceRoots.size());
     record.sourceRootSamplesTruncated = uniqueSourceRoots.size() > record.sourceRootSamples.size();
-    out                               = std::move(record);
+    if (FileOperationMoveBreadcrumb::AdmittedItemCount(record.admittedStrategies) == 1u)
+        record.singleItemName = task._selection.singleName;
+    out = std::move(record);
     return S_OK;
 }
 
@@ -577,6 +599,13 @@ FolderWindow::FileOperationState::~FileOperationState()
 
 void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
 {
+    size_t noticeCount = 0u;
+    {
+        std::scoped_lock lock(_mutex);
+        noticeCount = static_cast<size_t>(std::ranges::count_if(_completedTasks, [](const auto& summary) noexcept { return summary.interruptedMoveNotice; }));
+    }
+    if (noticeCount >= kMaxCompletedTaskSummaries)
+        return; // Pin a bounded batch until dismissal; other durable records remain in the store.
     std::vector<FileOperationMoveBreadcrumb::LoadedRecord> loaded;
     FileOperationMoveBreadcrumb::LoadStats stats{};
     const HRESULT loadHr = FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats);
@@ -585,10 +614,18 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
         Debug::Warning(L"File Operations could not load interrupted-Move breadcrumbs (hr=0x{:08X}).", static_cast<unsigned long>(loadHr));
         return;
     }
-    if (FAILED(loadHr))
+    if (FAILED(loadHr) || stats.rejectedRecords != 0u || stats.unverifiedWriterRecords != 0u)
     {
-        Debug::Warning(L"File Operations loaded a partial interrupted-Move breadcrumb set (hr=0x{:08X}); valid records remain visible.",
-                       static_cast<unsigned long>(loadHr));
+        Debug::Warning(
+            L"File Operations loaded a partial interrupted-Move breadcrumb set (hr=0x{:08X}, rejected={}, writerUnverified={}); valid records remain visible.",
+            static_cast<unsigned long>(loadHr),
+            stats.rejectedRecords,
+            stats.unverifiedWriterRecords);
+    }
+    if (stats.legacyRecordsWithheld != 0u)
+    {
+        Debug::Info(L"File Operations deferred {} legacy interrupted-Move breadcrumb(s) while another RedSalamander process may still be their writer.",
+                    stats.legacyRecordsWithheld);
     }
     if (loaded.empty())
     {
@@ -613,23 +650,26 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
             Debug::Warning(L"File Operations ignored an interrupted-Move breadcrumb with a noncanonical provider instance ID.");
             continue;
         }
-        const UINT phaseStringId   = record.phase == FileOperationMoveBreadcrumb::DurablePhase::Executing ? IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING
-                                                                                                          : IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED;
-        const std::wstring message = FormatStringResource(nullptr,
-                                                          IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
-                                                          record.taskId,
-                                                          LoadStringResource(nullptr, phaseStringId),
-                                                          record.admittedStrategies.nativeItems,
-                                                          record.admittedStrategies.managedItems,
-                                                          record.admittedStrategies.copyOnlyItems,
-                                                          record.sourceRootCount);
+        const auto noticeClaim = ClaimMoveNotice(loadedRecord.path);
+        if (! noticeClaim)
+            continue;
+        const uint64_t noticeLanguageRevision = Localization::GetLanguagePreferenceRevision();
+        const bool noticeWasExecuting         = record.phase == FileOperationMoveBreadcrumb::DurablePhase::Executing;
+        const UINT phaseStringId              = noticeWasExecuting ? IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING : IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED;
+        const std::wstring message            = FormatStringResource(nullptr,
+                                                                     IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
+                                                                     record.taskId,
+                                                                     LoadStringResource(nullptr, phaseStringId),
+                                                                     record.admittedStrategies.nativeItems,
+                                                                     record.admittedStrategies.managedItems,
+                                                                     record.admittedStrategies.copyOnlyItems,
+                                                                     record.sourceRootCount);
 
         CompletedTaskSummary summary{};
-        summary.taskId                 = _nextTaskId++;
         summary.interruptedOperationId = record.taskId;
-        summary.selection.itemCount    = record.sourceRootCount;
-        if (record.sourceRootCount == 1u)
-            summary.selection.singleName = source.representativePath.native(); // Recovery retains an exact path, without a live provider profile or probe.
+        summary.selection.itemCount    = FileOperationMoveBreadcrumb::AdmittedItemCount(record.admittedStrategies);
+        if (summary.selection.itemCount == 1u)
+            summary.selection.singleName = record.singleItemName;
         summary.operation           = FILESYSTEM_MOVE;
         summary.sourcePane          = record.sourcePane == FileOperationMoveBreadcrumb::PaneHint::Right ? FolderWindow::Pane::Right : FolderWindow::Pane::Left;
         summary.sourcePluginId      = source.pluginId;
@@ -651,17 +691,29 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
         summary.unknownSourceCount          = 1u;
         summary.indeterminateItemCount      = 1u;
         summary.unknownSourcePaths.push_back(source.representativePath);
-        summary.completedTick                 = GetTickCount64();
-        summary.interruptedMoveBreadcrumbPath = std::move(loadedRecord.path);
-        summary.interruptedMoveNotice         = true;
-        _completedTasks.push_back(std::move(summary));
+        summary.completedTick                    = GetTickCount64();
+        summary.interruptedMoveBreadcrumbPath    = std::move(loadedRecord.path);
+        summary.interruptedMoveNoticeClaim       = noticeClaim;
+        summary.interruptedMoveNotice            = true;
+        summary.interruptedMoveNoticeHasSummary  = true;
+        summary.interruptedMoveNoticeExecuting   = noticeWasExecuting;
+        summary.interruptedMoveNativeItemCount   = record.admittedStrategies.nativeItems;
+        summary.interruptedMoveManagedItemCount  = record.admittedStrategies.managedItems;
+        summary.interruptedMoveCopyOnlyItemCount = record.admittedStrategies.copyOnlyItems;
+        summary.interruptedMoveSourceRootCount   = record.sourceRootCount;
+        summary.resultSummaryLanguageRevision    = noticeLanguageRevision;
+        {
+            std::scoped_lock lock(_mutex);
+            summary.taskId = _nextTaskId++;
+            _completedTasks.push_back(std::move(summary));
+        }
         _issuesRevision.fetch_add(1u, std::memory_order_relaxed);
-        if (_completedTasks.size() >= kMaxCompletedTaskSummaries)
+        if (++noticeCount >= kMaxCompletedTaskSummaries)
         {
             break;
         }
     }
-    _interruptedMoveSummariesPendingPresentation.store(! _completedTasks.empty(), std::memory_order_release);
+    _interruptedMoveSummariesPendingPresentation.store(noticeCount != 0u, std::memory_order_release);
 }
 
 void FolderWindow::FileOperationState::QueueSettingsSave(std::wstring_view context) noexcept
@@ -915,15 +967,15 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     bool childMissingMoveClipboardSequence = false;
     for (const FileOperations::FileOperationPlan& plan : plans)
     {
-        // Display grouping borrows only the already captured endpoint contracts.
-        // A multi-root/profile admission cannot lend one child's rules to another.
-        if (sourceDisplayIdentity && ! FileOperations::QualifiedEndpointsHaveSamePathContract(firstSourceEndpoint, planSourceEndpoint(plan)))
-            sourceDisplayIdentity = nullptr;
+        // Display grouping may share path rules across roots in one provider namespace;
+        // operation strategy and mutation admission remain root-qualified.
+        if (sourceDisplayIdentity)
+            sourceDisplayIdentity = FileOperations::SelectSharedDisplayPathIdentity(firstSourceEndpoint, planSourceEndpoint(plan));
         if (destinationDisplayIdentity)
         {
             const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
-            if (! transfer || ! FileOperations::QualifiedEndpointsHaveSamePathContract(firstTransfer->destinationEndpoint, transfer->destinationEndpoint))
-                destinationDisplayIdentity = nullptr;
+            destinationDisplayIdentity =
+                transfer ? FileOperations::SelectSharedDisplayPathIdentity(firstTransfer->destinationEndpoint, transfer->destinationEndpoint) : nullptr;
         }
         const FileOperations::OperationOptions childOptions = planOptions(plan);
         if (planOperation(plan) != operation || planSourcePluginId(plan) != sourcePluginId || planDestinationPluginId(plan) != destinationPluginId ||
@@ -1309,31 +1361,26 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
             unknownCount = static_cast<unsigned long long>(sourcePaths.size());
         }
 
-        auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view
-        { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
-
         const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
         std::wstring what;
         if (unknownCount > 0)
         {
-            const std::wstring_view itemSuffix = suffixFor(itemCount);
-            what                               = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_ITEM, itemCount, itemSuffix);
+            what = FormatFileOperationCountNoun(FileOperationCountNoun::Item, itemCount);
         }
         else if (fileCount > 0 && folderCount > 0)
         {
-            const std::wstring_view fileSuffix   = suffixFor(fileCount);
-            const std::wstring_view folderSuffix = suffixFor(folderCount);
-            what = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS, fileCount, fileSuffix, folderCount, folderSuffix);
+            what = FormatStringResource(nullptr,
+                                        IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS,
+                                        FormatFileOperationCountNoun(FileOperationCountNoun::File, fileCount),
+                                        FormatFileOperationCountNoun(FileOperationCountNoun::Folder, folderCount));
         }
         else if (fileCount > 0)
         {
-            const std::wstring_view fileSuffix = suffixFor(fileCount);
-            what                               = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILE, fileCount, fileSuffix);
+            what = FormatFileOperationCountNoun(FileOperationCountNoun::File, fileCount);
         }
         else
         {
-            const std::wstring_view folderSuffix = suffixFor(folderCount);
-            what                                 = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FOLDER, folderCount, folderSuffix);
+            what = FormatFileOperationCountNoun(FileOperationCountNoun::Folder, folderCount);
         }
 
         NonRevertableFileOperationPromptCounts counts{};
@@ -3001,6 +3048,30 @@ std::shared_ptr<const std::vector<FolderWindow::FileOperationState::CompletedTas
     presentation->reserve(_completedTasks.size());
     for (auto& summary : _completedTasks)
     {
+        if (summary.interruptedMoveNotice && summary.interruptedMoveNoticeHasSummary && summary.resultSummaryLanguageRevision != languageRevision)
+        {
+            const UINT phaseStringId =
+                summary.interruptedMoveNoticeExecuting ? IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING : IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED;
+            const std::wstring message            = FormatStringResource(nullptr,
+                                                                         IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
+                                                                         summary.interruptedOperationId,
+                                                                         LoadStringResource(nullptr, phaseStringId),
+                                                                         summary.interruptedMoveNativeItemCount,
+                                                                         summary.interruptedMoveManagedItemCount,
+                                                                         summary.interruptedMoveCopyOnlyItemCount,
+                                                                         summary.interruptedMoveSourceRootCount);
+            summary.resultSummary                 = message;
+            summary.lastDiagnosticMessage         = message;
+            summary.resultSummaryLanguageRevision = languageRevision;
+        }
+        if (summary.resultSummaryResourceId != 0u && summary.resultSummaryLanguageRevision != languageRevision)
+        {
+            summary.resultSummary =
+                summary.resultSummaryHasArguments
+                    ? FormatStringResource(nullptr, summary.resultSummaryResourceId, summary.resultSummaryArgument0, summary.resultSummaryArgument1)
+                    : LoadStringResource(nullptr, summary.resultSummaryResourceId);
+            summary.resultSummaryLanguageRevision = languageRevision;
+        }
         // Q9: a Last note with a typed source follows the live language; it is formatted again
         // only after a language change.
         if (summary.lastNoteLanguageRevision != languageRevision &&
@@ -3160,6 +3231,8 @@ void FolderWindow::FileOperationState::DismissCompletedTask(const uint64_t sessi
                            breadcrumb.native());
         }
     }
+    if (! acknowledgedBreadcrumbs.empty())
+        LoadInterruptedMoveBreadcrumbs();
 }
 
 void FolderWindow::FileOperationState::ClearCompletedTasks(const std::span<const uint64_t> sessionTaskIds) noexcept
@@ -3270,11 +3343,11 @@ std::optional<UINT> FolderWindow::FileOperationState::RefreshDeferredTaskPresent
 {
     if (_actionablePromptPresentationPending.exchange(false, std::memory_order_acq_rel))
     {
-        EnsurePopupVisible();
+        EnsurePopupVisible(PopupRevealReason::ActionableTask);
     }
     if (_interruptedMoveSummariesPendingPresentation.exchange(false, std::memory_order_acq_rel))
     {
-        EnsurePopupVisible();
+        EnsurePopupVisible(PopupRevealReason::InterruptedMoveNotice);
     }
     const ULONGLONG nowTick = TaskPresentationNowTick();
     std::optional<ULONGLONG> nextDeadline;
@@ -3353,7 +3426,7 @@ std::optional<UINT> FolderWindow::FileOperationState::RefreshDeferredTaskPresent
 
     if (showPopup)
     {
-        EnsurePopupVisible();
+        EnsurePopupVisible(PopupRevealReason::RoutineTask);
     }
     FileOperationsPopup::RefreshTelemetry(_popup.get());
     // x-lifetime#7: the completion-recovery safety net stays armed for as long as work exists, but
@@ -3376,7 +3449,6 @@ std::optional<UINT> FolderWindow::FileOperationState::RefreshDeferredTaskPresent
 
 void FolderWindow::FileOperationState::RevealPendingTasksImmediately() noexcept
 {
-    bool showPopup = false;
     {
         std::scoped_lock lock(_mutex);
         for (const auto& task : _tasks)
@@ -3388,7 +3460,6 @@ void FolderWindow::FileOperationState::RevealPendingTasksImmediately() noexcept
             const Task::TaskPresentationState previous = task->_presentationState.exchange(Task::TaskPresentationState::Presented, std::memory_order_acq_rel);
             if (previous == Task::TaskPresentationState::Hidden || previous == Task::TaskPresentationState::RevealRequested)
             {
-                showPopup = true;
 #ifdef ENABLE_TESTS
                 _debugTaskPresentedCount.fetch_add(1u, std::memory_order_relaxed);
 #endif
@@ -3398,10 +3469,6 @@ void FolderWindow::FileOperationState::RevealPendingTasksImmediately() noexcept
                 task->_presentationState.store(previous, std::memory_order_release);
             }
         }
-    }
-    if (showPopup)
-    {
-        EnsurePopupVisible();
     }
 }
 
@@ -3515,7 +3582,7 @@ uint64_t FolderWindow::FileOperationState::CreateOrUpdateInformationalTask(const
 
     if (needShowPopup)
     {
-        EnsurePopupVisible();
+        EnsurePopupVisible(PopupRevealReason::InformationalTask);
     }
     else if (popup)
     {

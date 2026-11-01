@@ -72,7 +72,7 @@ if ($Remove) {
 
 Write-Host ""
 Write-Host "IMPORTANT: Sign out/in (or reboot) so your access token picks up the new group membership." -ForegroundColor Cyan
-Write-Host "Then launch RedSalamanderMonitor normally (no UAC prompt expected on most machines)." -ForegroundColor Cyan
+Write-Host "Then launch the independently installed RedMonitor normally (no UAC prompt expected on most machines)." -ForegroundColor Cyan
 
 Write-Host ""
 if (-not $NoPause) {

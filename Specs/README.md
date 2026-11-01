@@ -70,6 +70,17 @@ Do not copy a public ABI definition, generated inventory, mutable count, depende
   from WIP indexing and content analysis. Other scratch notes and continuation
   batons require a named status and owner; unowned planning state is not a
   valid closeout condition.
+- Immutable `Done/` captures and historical `TestRuns` files may be relocated
+  only through the reviewed one-to-one `Specs/Testing/ProtectedPathRelocations.json`
+  map pinned to source commit `6b6f5646be297fbc232d137f1df6a00c5cb74461`.
+  The stock-Windows map covers exactly 596 protected I27 capture files, 1,394
+  archive-baseline continuation files and 1,012 current-contract archive files;
+  every effective tracked path stays at or below 200 characters. The guards verify
+  pinned mode/blob/canonical-byte identities, exact destinations, source removal,
+  and complete target trees. Only the exact 1,394 baseline-matched continuation
+  files retain cap grandfathering; current-contract files still pass ordinary
+  archive caps and semantics. Directory aliases do not rewrite archived payloads,
+  embedded IDs, manifests, or provenance.
 
 ## Pinned runtime and evidence paths
 
@@ -95,7 +106,7 @@ These locations are consumed by build/runtime/test workflows and must not be mov
 | UI | `UI/UI_DxUiWinUIDesign.md`, `UI/UI_FolderWindow.md`, `UI/UI_FolderView.md`, `UI/UI_DxUiSharedGrid.md`, `UI/UI_TopLevelToolWindows.md`, `UI/UI_PreferencesDialog.md` |
 | File systems | `FileSystem/FileSystem_FileOperations.md`, `FileSystem/FileSystem_FtpSftpScp.md`, and the provider-specific specs |
 | Plugins | `Plugins/Plugins_PluginAPI.md`, `Plugins/Plugins_VirtualFileSystem.md`, `Plugins/Plugins_ViewerPlugins.md` |
-| Installer/release | `Installer/Installer_Msix.md`, `Installer/Installer_Msi.md`, `Installer/WingetIntegration.md` |
+| Installer/release | `Installer/Installer_PortableZip.md`, `Installer/WingetIntegration.md` |
 | Terminal | `Terminal/Terminal_EmbeddedPlugin.md`, `Terminal/TerminalEngineDecision.md` |
 | Testing and tooling | `Testing/Testing_SelfTests.md`, `Testing/Testing_TestCoverage.md`, `Testing/Testing_PerformanceValidation.md`, `Testing/Testing_SelfTestRemoteCredentials.md`, `Testing/Testing_ToolingGovernance.md`, `Testing/Testing_AgentGuidance.md`, `Testing/Testing_ValidationEvidence.md`, `TestRuns/README.md` |
 

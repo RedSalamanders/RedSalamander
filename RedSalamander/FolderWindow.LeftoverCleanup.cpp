@@ -7,6 +7,7 @@
 #include "FileOperationArtifactRegistry.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
+#include "PathUtils.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include <DxUi/DxUi.h>
@@ -19,6 +20,7 @@
 #include <stop_token>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 // I35 R7.5 (D-7.2): "Clean Up Leftovers of Interrupted Operations". A modeless DxUi-hosted listing of
 // the current folder's Possible artifact rows (optionally its subfolders), Cancel by default. Confirm
@@ -32,16 +34,13 @@ namespace
 {
 constexpr wchar_t kLeftoverCleanupWindowClassName[] = L"RedSalamander.LeftoverCleanupWindow";
 // The subfolder walk is bounded: a cleanup listing is not a search.
-constexpr size_t kLeftoverScanMaxFolders = 4096u;
-constexpr size_t kLeftoverScanMaxRows    = 4096u;
-constexpr size_t kLeftoverScanMaxDepth   = 32u;
-constexpr UINT kLeftoverCleanupDelete    = 1u;
-// Stopping a walk re-issues the I/O cancel while it waits, at most this long on the UI thread: a
-// cancel can land between two synchronous directory reads.
-constexpr unsigned int kStopScanCancelAttempts  = 10u;
-constexpr DWORD kStopScanCancelIntervalMs       = 20u;
-constexpr float kLeftoverNoteMinimumHeightDip   = 40.0f;
-constexpr float kLeftoverStatusMinimumHeightDip = 20.0f;
+constexpr size_t kLeftoverScanMaxFolders           = 4096u;
+constexpr size_t kLeftoverScanMaxRows              = 4096u;
+constexpr size_t kLeftoverScanMaxDepth             = 32u;
+constexpr uint64_t kLeftoverRecentStageWindowTicks = 24ull * 60ull * 60ull * 10'000'000ull;
+constexpr UINT kLeftoverCleanupDelete              = 1u;
+constexpr float kLeftoverNoteMinimumHeightDip      = 40.0f;
+constexpr float kLeftoverStatusMinimumHeightDip    = 20.0f;
 // Process-wide, so that a completion posted by a closed listing's walk never matches a newer listing.
 std::atomic<uint64_t> g_leftoverScanGeneration{0u};
 
@@ -73,22 +72,6 @@ struct LeftoverScanLimits final
     return name == L"." || name == L"..";
 }
 
-// True when the thread has returned; otherwise its pending synchronous I/O is canceled again.
-[[nodiscard]] bool ReapScanThread(std::jthread& thread) noexcept
-{
-    if (! thread.joinable())
-    {
-        return true;
-    }
-    const HANDLE handle = thread.native_handle();
-    if (WaitForSingleObject(handle, 0u) == WAIT_OBJECT_0)
-    {
-        thread.join();
-        return true;
-    }
-    static_cast<void>(CancelSynchronousIo(handle));
-    return false;
-}
 } // namespace
 
 struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::IGridDelegate
@@ -112,10 +95,87 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
     struct ScanResult final
     {
         std::vector<Row> rows;
-        bool folderLimit = false;
-        bool rowLimit    = false;
-        bool depthLimit  = false;
-        bool canceled    = false;
+        size_t incompleteFolderCount = 0u;
+        size_t invalidChildNameCount = 0u;
+        HRESULT firstError           = S_OK;
+        bool folderLimit             = false;
+        bool rowLimit                = false;
+        bool depthLimit              = false;
+        bool canceled                = false;
+    };
+
+    struct ScanRetirementSignal final
+    {
+        ScanRetirementSignal()                                       = default;
+        ScanRetirementSignal(const ScanRetirementSignal&)            = delete;
+        ScanRetirementSignal& operator=(const ScanRetirementSignal&) = delete;
+        ScanRetirementSignal(ScanRetirementSignal&&)                 = delete;
+        ScanRetirementSignal& operator=(ScanRetirementSignal&&)      = delete;
+
+        HANDLE borrowedEvent = nullptr;
+
+        ~ScanRetirementSignal()
+        {
+            if (borrowedEvent != nullptr)
+            {
+                SetEvent(borrowedEvent);
+            }
+        }
+    };
+
+    struct ScanWorkContext final
+    {
+        ScanWorkContext()                                  = default;
+        ScanWorkContext(const ScanWorkContext&)            = delete;
+        ScanWorkContext& operator=(const ScanWorkContext&) = delete;
+        ScanWorkContext(ScanWorkContext&&)                 = delete;
+        ScanWorkContext& operator=(ScanWorkContext&&)      = delete;
+        ~ScanWorkContext()                                 = default;
+
+        // Destruction order releases the provider, then its module pin, then signals test retirement.
+        ScanRetirementSignal retirementSignal;
+        // Keep the code module pinned until after the provider COM reference is released.
+        wil::unique_hmodule providerModulePin;
+        wil::com_ptr<IFileSystem> fileSystem;
+        std::filesystem::path rootFolder;
+        uint64_t generation = 0u;
+        HWND target         = nullptr;
+        std::atomic<bool> acceptCompletion{true};
+        std::mutex resultMutex;
+        ScanResult result;
+    };
+
+    struct ScanCompletionPayload final
+    {
+        std::weak_ptr<ScanWorkContext> context;
+        uint64_t generation = 0u;
+    };
+
+    struct ScanWorkerReaper final
+    {
+        ScanWorkerReaper()                                   = default;
+        ScanWorkerReaper(const ScanWorkerReaper&)            = delete;
+        ScanWorkerReaper& operator=(const ScanWorkerReaper&) = delete;
+        ScanWorkerReaper(ScanWorkerReaper&&)                 = delete;
+        ScanWorkerReaper& operator=(ScanWorkerReaper&&)      = delete;
+
+        std::jthread worker;
+        std::shared_ptr<ScanWorkContext> context;
+
+        void Execute(PTP_CALLBACK_INSTANCE instance) noexcept
+        {
+            if (context)
+            {
+                TransferModulePinToCallbackReturn(instance, context->providerModulePin);
+            }
+            if (worker.joinable())
+            {
+                worker.join();
+            }
+#ifdef ENABLE_TESTS
+            context.reset();
+#endif
+        }
     };
 
     LeftoverCleanupDialogState()                                             = default;
@@ -125,7 +185,20 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
     LeftoverCleanupDialogState& operator=(LeftoverCleanupDialogState&&)      = delete;
     ~LeftoverCleanupDialogState()
     {
-        static_cast<void>(StopScan(true));
+        StopScan();
+    }
+
+    [[nodiscard]] static wil::unique_hmodule PinProviderModule(IFileSystem* provider) noexcept
+    {
+        if (provider == nullptr)
+        {
+            return {};
+        }
+        // COM interface objects begin with a vtable pointer. Pin the module containing its
+        // QueryInterface implementation so releasing this provider on the reaper cannot unload
+        // code while that callback is still returning through the provider's module.
+        void** const vtable = *reinterpret_cast<void***>(provider);
+        return vtable != nullptr && vtable[0] != nullptr ? AcquireModuleReferenceFromAddress(vtable[0]) : wil::unique_hmodule{};
     }
 
     static HRESULT EnsureWindowClass() noexcept
@@ -161,6 +234,7 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
             {
                 state->hwnd.reset(hwnd);
             }
+            InitPostedPayloadWindow(hwnd);
             return TRUE;
         }
 
@@ -220,7 +294,15 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
                 }
                 return 0;
             }
-            case WndMsg::kLeftoverCleanupScanComplete: state->OnScanComplete(static_cast<uint64_t>(wParam)); return 0;
+            case WndMsg::kLeftoverCleanupScanComplete:
+            {
+                std::unique_ptr<ScanCompletionPayload> payload = TakeMessagePayload<ScanCompletionPayload>(hwnd, message, lParam);
+                if (payload)
+                {
+                    state->OnScanComplete(payload->context.lock(), payload->generation);
+                }
+                return 0;
+            }
             case WM_COMMAND:
                 switch (LOWORD(wParam))
                 {
@@ -338,6 +420,32 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
         return owner != nullptr && owner->IsLeftoverFolderInUse(pluginId, row.path.parent_path());
     }
 
+    [[nodiscard]] static bool IsRecentOrUnknownStage(const Row& row) noexcept
+    {
+        if (row.lastWriteTime <= 0)
+        {
+            return true;
+        }
+
+        FILETIME nowFileTime{};
+        GetSystemTimeAsFileTime(&nowFileTime);
+        ULARGE_INTEGER now{};
+        now.LowPart             = nowFileTime.dwLowDateTime;
+        now.HighPart            = nowFileTime.dwHighDateTime;
+        const uint64_t modified = static_cast<uint64_t>(row.lastWriteTime);
+        const uint64_t current  = now.QuadPart;
+        return modified >= current || current - modified <= kLeftoverRecentStageWindowTicks;
+    }
+
+    static void RecordIncompleteFolder(ScanResult& result, const HRESULT status) noexcept
+    {
+        ++result.incompleteFolderCount;
+        if (SUCCEEDED(result.firstError))
+        {
+            result.firstError = FAILED(status) ? status : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+    }
+
     // Leftovers first, then possible originals, each by name. A row keeps the check state the user gave
     // it (also across the subfolder toggle); a row never seen before starts checked when it is a leftover
     // the location can delete, and a possible original never starts checked.
@@ -347,7 +455,7 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
         for (Row& row : newRows)
         {
             row.name    = LeftoverRelativeName(folder, row.path);
-            row.checked = checkStates.try_emplace(row.path.native(), deleteSupported && ! row.mayHoldOriginal).first->second;
+            row.checked = checkStates.try_emplace(row.path.native(), deleteSupported && ! row.mayHoldOriginal && ! IsRecentOrUnknownStage(row)).first->second;
         }
         std::ranges::stable_sort(newRows,
                                  [](const Row& left, const Row& right) noexcept
@@ -577,6 +685,13 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
         {
             append(FormatStringResource(nullptr, IDS_FMT_LEFTOVER_CLEANUP_DEPTH_LIMIT, static_cast<unsigned long>(kLeftoverScanMaxDepth)));
         }
+        if (incompleteFolderCount != 0u || invalidChildNameCount != 0u)
+        {
+            append(FormatStringResource(nullptr,
+                                        IDS_FMT_LEFTOVER_CLEANUP_SCAN_ERRORS,
+                                        static_cast<unsigned long long>(incompleteFolderCount),
+                                        static_cast<unsigned long long>(invalidChildNameCount)));
+        }
         if (hiddenInUse != 0u)
         {
             append(FormatStringResource(nullptr, IDS_FMT_LEFTOVER_CLEANUP_IN_USE, static_cast<unsigned long long>(hiddenInUse)));
@@ -633,10 +748,13 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
             return;
         }
         includeSubfolders = include;
-        static_cast<void>(StopScan(false));
-        folderLimit = false;
-        rowLimit    = false;
-        depthLimit  = false;
+        StopScan();
+        folderLimit           = false;
+        rowLimit              = false;
+        depthLimit            = false;
+        incompleteFolderCount = 0u;
+        invalidChildNameCount = 0u;
+        scanFirstError        = S_OK;
         if (! include)
         {
             scanning = false;
@@ -644,11 +762,6 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
             return;
         }
         scanning = true;
-        rows.clear();
-        if (grid)
-        {
-            grid->NotifyDataChanged();
-        }
         UpdateState();
         StartScan();
     }
@@ -659,7 +772,12 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
                                const std::filesystem::path& rootFolder,
                                const LeftoverScanLimits& limits,
                                const std::stop_token& stopToken,
-                               ScanResult& out) noexcept
+                               ScanResult& out
+#ifdef ENABLE_TESTS
+                               ,
+                               const std::filesystem::path& failReadDirectoryForTest = {}
+#endif
+                               ) noexcept
     {
         out = {};
         std::vector<std::pair<std::filesystem::path, size_t>> pending;
@@ -681,30 +799,88 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
             pending.pop_back();
             ++folders;
             wil::com_ptr<IFilesInformation> info;
-            if (fileSystem == nullptr || FAILED(fileSystem->ReadDirectoryInfo(directory.c_str(), info.put())) || ! info)
+            HRESULT hr = E_POINTER;
+#ifdef ENABLE_TESTS
+            if (! failReadDirectoryForTest.empty() && directory == failReadDirectoryForTest)
             {
+                hr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            }
+            else
+#endif
+            {
+                hr = fileSystem == nullptr ? E_POINTER : fileSystem->ReadDirectoryInfo(directory.c_str(), info.put());
+            }
+            if (FAILED(hr) || ! info)
+            {
+                RecordIncompleteFolder(out, FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+                continue;
+            }
+            unsigned long entryCount = 0u;
+            hr                       = info->GetCount(&entryCount);
+            if (FAILED(hr))
+            {
+                RecordIncompleteFolder(out, hr);
+                continue;
+            }
+            unsigned long bufferSize = 0u;
+            hr                       = info->GetBufferSize(&bufferSize);
+            if (FAILED(hr))
+            {
+                RecordIncompleteFolder(out, hr);
                 continue;
             }
             FileInfo* entry = nullptr;
-            if (FAILED(info->GetBuffer(&entry)))
+            hr              = info->GetBuffer(&entry);
+            if (FAILED(hr))
             {
+                RecordIncompleteFolder(out, hr);
                 continue;
             }
-            for (; entry != nullptr;
-                 entry = entry->NextEntryOffset != 0u ? reinterpret_cast<FileInfo*>(reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset) : nullptr)
+            unsigned long allocatedSize = 0u;
+            hr                          = info->GetAllocatedSize(&allocatedSize);
+            if (FAILED(hr))
+            {
+                RecordIncompleteFolder(out, hr);
+                continue;
+            }
+            if (allocatedSize < bufferSize || (entryCount == 0u && bufferSize != 0u) ||
+                (entryCount != 0u && (entry == nullptr || bufferSize < offsetof(FileInfo, FileName))))
+            {
+                RecordIncompleteFolder(out, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+                continue;
+            }
+
+            Common::Plugins::PackedFileInfoCursor cursor(entry, bufferSize, entryCount);
+            for (unsigned long entryIndex = 0u; entryIndex < entryCount; ++entryIndex)
             {
                 if (stopToken.stop_requested())
                 {
                     out.canceled = true;
                     return;
                 }
-                const std::wstring_view name(entry->FileName, entry->FileNameSize / sizeof(wchar_t));
-                if (name.empty() || IsLeftoverScanDotEntry(name))
+                const FileInfo* current = nullptr;
+                hr                      = cursor.Next(&current);
+                if (FAILED(hr) || current == nullptr)
+                {
+                    RecordIncompleteFolder(out, FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+                    break;
+                }
+                const std::wstring_view name(current->FileName, current->FileNameSize / sizeof(wchar_t));
+                if (IsLeftoverScanDotEntry(name))
                 {
                     continue;
                 }
-                const bool directoryEntry   = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
-                const bool reparse          = (entry->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u;
+                if (! Common::Paths::IsSingleChildPathComponent(name))
+                {
+                    ++out.invalidChildNameCount;
+                    if (SUCCEEDED(out.firstError))
+                    {
+                        out.firstError = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+                    }
+                    continue;
+                }
+                const bool directoryEntry   = (current->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+                const bool reparse          = (current->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u;
                 std::filesystem::path child = directory;
                 child /= std::wstring(name);
                 if (FileOperationArtifacts::HasPossibleArtifactName(name))
@@ -716,9 +892,9 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
                     }
                     out.rows.push_back(Row{
                         .path            = std::move(child),
-                        .sizeBytes       = entry->EndOfFile > 0 ? static_cast<uint64_t>(entry->EndOfFile) : 0u,
-                        .lastWriteTime   = entry->LastWriteTime,
-                        .fileAttributes  = entry->FileAttributes,
+                        .sizeBytes       = current->EndOfFile > 0 ? static_cast<uint64_t>(current->EndOfFile) : 0u,
+                        .lastWriteTime   = current->LastWriteTime,
+                        .fileAttributes  = current->FileAttributes,
                         .isDirectory     = directoryEntry,
                         .mayHoldOriginal = FileOperationArtifacts::HasPossibleOriginalArtifactName(name),
                     });
@@ -741,94 +917,154 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
 
     void StartScan()
     {
-        const uint64_t generation = g_leftoverScanGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-        scanGeneration            = generation;
-        const HWND target         = hwnd.get();
-        scanThread = std::jthread([this, generation, target, fileSystemCopy = fileSystem, rootFolder = folder](std::stop_token stopToken) noexcept
+        const uint64_t generation  = g_leftoverScanGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        scanGeneration             = generation;
+        auto context               = std::make_shared<ScanWorkContext>();
+        context->providerModulePin = PinProviderModule(fileSystem.get());
+        if (! context->providerModulePin)
+        {
+            scanning              = false;
+            incompleteFolderCount = 1u;
+            scanFirstError        = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
+            Debug::Warning(L"Leftover cleanup scan cannot safely pin its provider module.");
+            UpdateState();
+            return;
+        }
+        context->fileSystem = fileSystem;
+        context->rootFolder = folder;
+        context->generation = generation;
+        context->target     = hwnd.get();
+#ifdef ENABLE_TESTS
+        if (scanCompletionTargetForTest != nullptr)
+        {
+            context->target = scanCompletionTargetForTest;
+        }
+        context->retirementSignal.borrowedEvent = scanReapedEventForTest;
+#endif
+        scanWorkContext = context;
+        scanThread      = std::jthread([context = std::move(context)](std::stop_token stopToken) noexcept
         {
             ScanResult result;
-            ScanFolderTree(fileSystemCopy.get(), rootFolder, LeftoverScanLimits{}, stopToken, result);
+            ScanFolderTree(context->fileSystem.get(), context->rootFolder, LeftoverScanLimits{}, stopToken, result);
             if (stopToken.stop_requested() || result.canceled)
             {
                 return;
             }
             {
-                std::scoped_lock lock(scanMutex);
-                scanResult           = std::move(result);
-                scanResultGeneration = generation;
+                std::scoped_lock lock(context->resultMutex);
+                context->result = std::move(result);
             }
-            if (target != nullptr)
+            if (context->target != nullptr && context->acceptCompletion.load(std::memory_order_acquire))
             {
-                static_cast<void>(PostMessageW(target, WndMsg::kLeftoverCleanupScanComplete, static_cast<WPARAM>(generation), 0));
+                auto payload        = std::make_unique<ScanCompletionPayload>();
+                payload->context    = context;
+                payload->generation = context->generation;
+                static_cast<void>(
+                    PostMessagePayload(context->target, WndMsg::kLeftoverCleanupScanComplete, static_cast<WPARAM>(context->generation), std::move(payload)));
             }
         });
     }
 
-    void OnScanComplete(uint64_t generation)
+    void OnScanComplete(const std::shared_ptr<ScanWorkContext>& context, const uint64_t generation)
     {
-        if (generation != scanGeneration || ! includeSubfolders)
+        if (! context || scanWorkContext.get() != context.get() || generation != scanGeneration || context->generation != generation || ! includeSubfolders)
         {
             return;
         }
         ScanResult result;
         {
-            std::scoped_lock lock(scanMutex);
-            if (scanResultGeneration != generation)
-            {
-                return;
-            }
-            result               = std::move(scanResult);
-            scanResult           = {};
-            scanResultGeneration = 0u;
+            std::scoped_lock lock(context->resultMutex);
+            result = std::move(context->result);
         }
-        if (scanThread.joinable())
+        RetireScanWorker(false);
+        scanning              = false;
+        folderLimit           = result.folderLimit;
+        rowLimit              = result.rowLimit;
+        depthLimit            = result.depthLimit;
+        incompleteFolderCount = result.incompleteFolderCount;
+        invalidChildNameCount = result.invalidChildNameCount;
+        scanFirstError        = result.firstError;
+        if (incompleteFolderCount != 0u || invalidChildNameCount != 0u)
         {
-            // The walk posted its completion as its last step.
-            scanThread.join();
+            // A failed root/child read must not erase the rows already shown from the pane or the
+            // valid prefix/results collected from independent folders.
+            std::unordered_set<std::wstring> retainedPaths;
+            std::vector<Row> visibleRows;
+            visibleRows.reserve(baseRows.size() + result.rows.size());
+            for (const Row& row : baseRows)
+            {
+                retainedPaths.insert(row.path.native());
+                visibleRows.push_back(row);
+            }
+            for (Row& row : result.rows)
+            {
+                if (retainedPaths.insert(row.path.native()).second)
+                {
+                    visibleRows.push_back(std::move(row));
+                }
+            }
+            Debug::Warning(L"Leftover cleanup scan was incomplete (folders={}, invalidNames={}, firstHr=0x{:08X}).",
+                           incompleteFolderCount,
+                           invalidChildNameCount,
+                           static_cast<unsigned long>(scanFirstError));
+            SetRows(std::move(visibleRows));
+            return;
         }
-        scanning    = false;
-        folderLimit = result.folderLimit;
-        rowLimit    = result.rowLimit;
-        depthLimit  = result.depthLimit;
         SetRows(std::move(result.rows));
     }
 
-    // Stops every walk of this listing: the stop request ends a walk between directory reads, and the
-    // I/O cancel is re-issued while waiting because one can land between two synchronous reads. Without
-    // `wait` it waits at most kStopScanCancelAttempts intervals and returns false when a walk is still
-    // blocked (the owner then keeps this listing until it returns); with `wait` it waits for all of them.
-    [[nodiscard]] bool StopScan(bool wait) noexcept
+    void RetireScanWorker(const bool requestStop) noexcept
     {
-        if (scanThread.joinable())
+        if (scanWorkContext)
+        {
+            scanWorkContext->acceptCompletion.store(false, std::memory_order_release);
+        }
+        if (requestStop && scanThread.joinable())
         {
             scanThread.request_stop();
-            stoppedScanThreads.push_back(std::move(scanThread));
         }
-        for (unsigned int attempt = 0u; ! stoppedScanThreads.empty(); ++attempt)
+        if (! scanThread.joinable())
         {
-            std::erase_if(stoppedScanThreads, [](std::jthread& thread) noexcept { return ReapScanThread(thread); });
-            if (stoppedScanThreads.empty() || (! wait && attempt + 1u >= kStopScanCancelAttempts))
-            {
-                break;
-            }
-            Sleep(kStopScanCancelIntervalMs);
+            scanWorkContext.reset();
+            return;
         }
-        return stoppedScanThreads.empty();
+
+        auto reaper     = std::make_unique<ScanWorkerReaper>();
+        reaper->worker  = std::move(scanThread);
+        reaper->context = std::move(scanWorkContext);
+        if (SubmitOwnedThreadpoolCallbackWithInstance(reaper))
+        {
+            return;
+        }
+
+        const DWORD error = GetLastError();
+        // Submission refusal is exceptional. Detaching is safe only because the running callable
+        // owns the shared work context (provider COM ref and module pin) until it returns.
+        if (reaper->worker.joinable())
+        {
+            reaper->worker.detach();
+        }
+        reaper.reset();
+        Debug::Warning(L"Leftover cleanup scan reaper submission failed (gle=0x{:08X}); detached the context-owning worker.",
+                       static_cast<unsigned long>(error));
     }
 
-    // True once no walk of this listing runs any more (non-blocking).
-    [[nodiscard]] bool ReapStoppedScans() noexcept
+    void StopScan() noexcept
     {
-        std::erase_if(stoppedScanThreads, [](std::jthread& thread) noexcept { return ReapScanThread(thread); });
-        return stoppedScanThreads.empty() && ! scanThread.joinable();
+        RetireScanWorker(true);
     }
 
     void OnNcDestroy(HWND destroyedHwnd) noexcept
     {
         destroyed = true;
-        // Bounded: a walk still blocked keeps this state alive through the owner's retired list.
-        static_cast<void>(StopScan(false));
+        // The visible HWND and DxUi objects die here; only the worker context survives off-thread.
+        if (scanWorkContext)
+        {
+            scanWorkContext->acceptCompletion.store(false, std::memory_order_release);
+        }
         dxHost.Detach();
+        static_cast<void>(DrainPostedPayloadsForWindow(destroyedHwnd));
+        StopScan();
         if (hwnd.get() == destroyedHwnd)
         {
             static_cast<void>(hwnd.release());
@@ -862,18 +1098,22 @@ struct FolderWindow::LeftoverCleanupDialogState final : DxUi::IGridModel, DxUi::
     std::vector<Row> rows;
     // The user's check state per listed path, kept across rebuilds of the list.
     std::unordered_map<std::wstring, bool> checkStates;
-    size_t hiddenInUse      = 0u;
-    bool includeSubfolders  = false;
-    bool scanning           = false;
-    bool folderLimit        = false;
-    bool rowLimit           = false;
-    bool depthLimit         = false;
-    uint64_t scanGeneration = 0u;
-    std::mutex scanMutex;
-    ScanResult scanResult;
-    uint64_t scanResultGeneration = 0u;
+    size_t hiddenInUse           = 0u;
+    size_t incompleteFolderCount = 0u;
+    size_t invalidChildNameCount = 0u;
+    HRESULT scanFirstError       = S_OK;
+    bool includeSubfolders       = false;
+    bool scanning                = false;
+    bool folderLimit             = false;
+    bool rowLimit                = false;
+    bool depthLimit              = false;
+    uint64_t scanGeneration      = 0u;
+    std::shared_ptr<ScanWorkContext> scanWorkContext;
     std::jthread scanThread;
-    std::vector<std::jthread> stoppedScanThreads;
+#ifdef ENABLE_TESTS
+    HWND scanCompletionTargetForTest = nullptr;
+    HANDLE scanReapedEventForTest    = nullptr;
+#endif
     bool destroyed = false;
     wil::unique_hwnd hwnd;
 };
@@ -1105,35 +1345,20 @@ void FolderWindow::CloseLeftoverCleanupDialog() noexcept
 {
     if (_leftoverCleanupDialog)
     {
-        // Bounded: a walk still blocked in a canceled read keeps the listing (window closed) until it returns.
-        const bool stopped = _leftoverCleanupDialog->StopScan(false);
+        if (_leftoverCleanupDialog->scanWorkContext)
+        {
+            _leftoverCleanupDialog->scanWorkContext->acceptCompletion.store(false, std::memory_order_release);
+        }
         if (_leftoverCleanupDialog->hwnd && ! _leftoverCleanupDialog->destroyed && IsWindow(_leftoverCleanupDialog->hwnd.get()) != FALSE)
         {
             _leftoverCleanupDialog->hwnd.reset();
         }
-        if (stopped)
-        {
-            _leftoverCleanupDialog.reset();
-        }
         else
         {
-            _retiredLeftoverCleanupDialogs.push_back(std::move(_leftoverCleanupDialog));
+            _leftoverCleanupDialog->StopScan();
         }
+        _leftoverCleanupDialog.reset();
     }
-    SweepRetiredLeftoverCleanupDialogs(false);
-}
-
-void FolderWindow::SweepRetiredLeftoverCleanupDialogs(bool wait) noexcept
-{
-    if (wait)
-    {
-        // Window teardown: every retired walk is canceled until it returns, then freed.
-        _retiredLeftoverCleanupDialogs.clear();
-        return;
-    }
-    std::erase_if(_retiredLeftoverCleanupDialogs, [](const std::unique_ptr<LeftoverCleanupDialogState, LeftoverCleanupDialogStateDeleter>& retired) noexcept {
-        return ! retired || retired->ReapStoppedScans();
-    });
 }
 
 void FolderWindow::ApplyLeftoverCleanupDialogTheme() noexcept
@@ -1154,16 +1379,19 @@ bool FolderWindow::DebugGetLeftoverCleanupSnapshot(LeftoverCleanupDebugSnapshot&
     {
         return false;
     }
-    out.open              = true;
-    out.includeSubfolders = _leftoverCleanupDialog->includeSubfolders;
-    out.scanning          = _leftoverCleanupDialog->scanning;
-    out.deleteEnabled     = _leftoverCleanupDialog->deleteButton && _leftoverCleanupDialog->deleteButton->IsEnabled();
-    out.deleteSupported   = _leftoverCleanupDialog->deleteSupported;
-    out.folderLimit       = _leftoverCleanupDialog->folderLimit;
-    out.rowLimit          = _leftoverCleanupDialog->rowLimit;
-    out.depthLimit        = _leftoverCleanupDialog->depthLimit;
-    out.hiddenInUse       = _leftoverCleanupDialog->hiddenInUse;
-    out.status            = _leftoverCleanupDialog->statusLabel ? std::wstring(_leftoverCleanupDialog->statusLabel->GetText()) : std::wstring();
+    out.open                  = true;
+    out.includeSubfolders     = _leftoverCleanupDialog->includeSubfolders;
+    out.scanning              = _leftoverCleanupDialog->scanning;
+    out.deleteEnabled         = _leftoverCleanupDialog->deleteButton && _leftoverCleanupDialog->deleteButton->IsEnabled();
+    out.deleteSupported       = _leftoverCleanupDialog->deleteSupported;
+    out.folderLimit           = _leftoverCleanupDialog->folderLimit;
+    out.rowLimit              = _leftoverCleanupDialog->rowLimit;
+    out.depthLimit            = _leftoverCleanupDialog->depthLimit;
+    out.hiddenInUse           = _leftoverCleanupDialog->hiddenInUse;
+    out.incompleteFolderCount = _leftoverCleanupDialog->incompleteFolderCount;
+    out.invalidChildNameCount = _leftoverCleanupDialog->invalidChildNameCount;
+    out.scanFirstError        = _leftoverCleanupDialog->scanFirstError;
+    out.status                = _leftoverCleanupDialog->statusLabel ? std::wstring(_leftoverCleanupDialog->statusLabel->GetText()) : std::wstring();
     for (const LeftoverCleanupDialogState::Row& row : _leftoverCleanupDialog->rows)
     {
         out.rows.push_back(LeftoverCleanupDebugSnapshot::Row{.path = row.path, .checked = row.checked, .mayHoldOriginal = row.mayHoldOriginal});
@@ -1207,13 +1435,53 @@ bool FolderWindow::DebugToggleLeftoverCleanupRow(const std::filesystem::path& pa
     return true;
 }
 
+HRESULT FolderWindow::DebugRetireLeftoverScanWorkerForSelfTest(IFileSystem* fileSystem,
+                                                               const std::filesystem::path& folder,
+                                                               HWND completionTarget,
+                                                               HANDLE providerEnteredEvent,
+                                                               HANDLE reapedEvent,
+                                                               DWORD& retirementElapsedMs) noexcept
+{
+    retirementElapsedMs = 0u;
+    if (fileSystem == nullptr || folder.empty() || completionTarget == nullptr || IsWindow(completionTarget) == FALSE || providerEnteredEvent == nullptr ||
+        reapedEvent == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+
+    LeftoverCleanupDialogState scanOwner;
+    scanOwner.fileSystem                  = fileSystem;
+    scanOwner.folder                      = folder;
+    scanOwner.scanning                    = true;
+    scanOwner.scanCompletionTargetForTest = completionTarget;
+    scanOwner.scanReapedEventForTest      = reapedEvent;
+    scanOwner.StartScan();
+    if (! scanOwner.scanThread.joinable())
+    {
+        return FAILED(scanOwner.scanFirstError) ? scanOwner.scanFirstError : E_UNEXPECTED;
+    }
+
+    const DWORD waitStatus = WaitForSingleObject(providerEnteredEvent, 10'000u);
+    if (waitStatus != WAIT_OBJECT_0)
+    {
+        scanOwner.StopScan();
+        return HRESULT_FROM_WIN32(waitStatus == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT);
+    }
+
+    const ULONGLONG startedAt = GetTickCount64();
+    scanOwner.StopScan();
+    retirementElapsedMs = static_cast<DWORD>(std::min<ULONGLONG>(GetTickCount64() - startedAt, MAXDWORD));
+    return S_OK;
+}
+
 HRESULT FolderWindow::DebugScanLeftoversForSelfTest(IFileSystem* fileSystem,
                                                     const std::filesystem::path& folder,
                                                     size_t maxFolders,
                                                     size_t maxRows,
                                                     size_t maxDepth,
                                                     bool cancelBeforeStart,
-                                                    LeftoverScanDebugResult& out) noexcept
+                                                    LeftoverScanDebugResult& out,
+                                                    const std::filesystem::path& failReadDirectoryForTest) noexcept
 {
     out = {};
     if (fileSystem == nullptr || folder.empty())
@@ -1226,16 +1494,23 @@ HRESULT FolderWindow::DebugScanLeftoversForSelfTest(IFileSystem* fileSystem,
         static_cast<void>(stop.request_stop());
     }
     LeftoverCleanupDialogState::ScanResult result;
-    LeftoverCleanupDialogState::ScanFolderTree(
-        fileSystem, folder, LeftoverScanLimits{.maxFolders = maxFolders, .maxRows = maxRows, .maxDepth = maxDepth}, stop.get_token(), result);
+    LeftoverCleanupDialogState::ScanFolderTree(fileSystem,
+                                               folder,
+                                               LeftoverScanLimits{.maxFolders = maxFolders, .maxRows = maxRows, .maxDepth = maxDepth},
+                                               stop.get_token(),
+                                               result,
+                                               failReadDirectoryForTest);
     for (LeftoverCleanupDialogState::Row& row : result.rows)
     {
         out.rows.push_back(std::move(row.path));
     }
-    out.folderLimit = result.folderLimit;
-    out.rowLimit    = result.rowLimit;
-    out.depthLimit  = result.depthLimit;
-    out.canceled    = result.canceled;
+    out.folderLimit           = result.folderLimit;
+    out.rowLimit              = result.rowLimit;
+    out.depthLimit            = result.depthLimit;
+    out.canceled              = result.canceled;
+    out.incompleteFolderCount = result.incompleteFolderCount;
+    out.invalidChildNameCount = result.invalidChildNameCount;
+    out.firstError            = result.firstError;
     return S_OK;
 }
 

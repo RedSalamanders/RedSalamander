@@ -1239,6 +1239,21 @@ public:
         }
         return false;
     }
+
+    [[nodiscard]] bool DebugSetHostedButtonEnabledForSelfTest(HWND hwnd, std::wstring_view automationId, bool enabled) noexcept
+    {
+        if (hwnd != _controlsHost.GetHwnd())
+            return false;
+        for (DxUi::Button* button : _hostedButtons)
+        {
+            if (button && button->GetAccessibleAutomationId() == automationId)
+            {
+                button->SetEnabled(enabled);
+                return true;
+            }
+        }
+        return false;
+    }
     [[nodiscard]] bool DebugSetHostedPathRegionFocusForSelfTest(HWND hwnd, std::wstring_view automationId) noexcept
     {
         if (hwnd == nullptr || hwnd != _controlsHost.GetHwnd() || ! _pathDetailId.empty())
@@ -1280,6 +1295,32 @@ public:
             _controlsHost.ResetInteractionState();
         SyncPathDetail(hwnd);
         return _pathDetailLogicalFocusId == automationId;
+    }
+    [[nodiscard]] bool DebugFocusPathDetailControlForSelfTest(HWND hwnd, std::wstring_view automationId) noexcept
+    {
+        if (hwnd == nullptr || hwnd != _controlsHost.GetHwnd() || _pathDetailId.empty() || ! _pathDetailField || ! _pathDetailCopy || ! _pathDetailClose)
+            return false;
+        DxUi::Control* control = automationId == L"FileOperations.PathDetail.Text"    ? static_cast<DxUi::Control*>(_pathDetailField)
+                                 : automationId == L"FileOperations.PathDetail.Copy"  ? static_cast<DxUi::Control*>(_pathDetailCopy)
+                                 : automationId == L"FileOperations.PathDetail.Close" ? static_cast<DxUi::Control*>(_pathDetailClose)
+                                                                                      : nullptr;
+        if (! control)
+            return false;
+        _pathDetailNeedsFocus = true;
+        _controlsHost.SetFocusControl(control, false);
+        return _controlsHost.GetFocusControl() == control && _pathDetailLogicalFocusId == automationId && ! _pathDetailNeedsFocus;
+    }
+    [[nodiscard]] bool DebugPathDetailNeedsFocusForSelfTest() const noexcept
+    {
+        return _pathDetailNeedsFocus;
+    }
+    [[nodiscard]] std::wstring_view DebugPathDetailCopyAnnouncementForSelfTest() const noexcept
+    {
+        return _debugPathDetailCopyAnnouncement;
+    }
+    void DebugSetPathDetailCopyResultForSelfTest(std::optional<bool> result) noexcept
+    {
+        _debugPathDetailCopyResult = result;
     }
     [[nodiscard]] std::wstring_view DebugPathDetailLogicalFocusForSelfTest() const noexcept
     {
@@ -1386,6 +1427,8 @@ private:
         // Text that changes with progress (rates, current paths, counters): its UIA Name/HelpText is
         // republished at most once per interval (x-perf#4). Other text is published at once.
         bool liveText = false;
+        // Localized row subject paired with the exact path in the read-only detail surface.
+        std::wstring copyPathSubject;
 #ifdef ENABLE_TESTS
         D2D1_RECT_F paintedLabelBounds{};
         D2D1_RECT_F paintedContainerBounds{};
@@ -1851,6 +1894,8 @@ private:
     bool _debugRetainRetiredControls = false;
     std::vector<std::unique_ptr<DxUi::Control>> _debugRetiredControlQuarantine;
     uint64_t _debugDetachedControlInputCount = 0u;
+    std::optional<bool> _debugPathDetailCopyResult;
+    std::wstring _debugPathDetailCopyAnnouncement;
 #endif
 
     std::optional<RECT> _footerOnlyRestoreWindowRect;

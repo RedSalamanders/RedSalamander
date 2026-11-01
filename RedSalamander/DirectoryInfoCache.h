@@ -77,6 +77,16 @@ public:
         std::wstring newInstanceContext;
     };
 
+    struct ContextKey
+    {
+        std::wstring pluginId;
+        std::wstring pluginIdKey;
+        std::wstring pluginShortId;
+        std::wstring instanceContext;
+        std::wstring instanceContextKey;
+        bool isFilePlugin = false;
+    };
+
     class Borrowed final
     {
     public:
@@ -134,24 +144,22 @@ public:
     void RegisterProvider(IFileSystem* fileSystem, std::wstring_view pluginId, std::wstring_view pluginShortId, std::wstring_view instanceContext) noexcept;
     void UnregisterProvider(IFileSystem* fileSystem) noexcept;
 
+    // Creates the canonical logical cache identity used by both registered providers and
+    // task-scoped completion notifications after a pane has unregistered its provider pointer.
+    [[nodiscard]] static ContextKey MakeContextKey(std::wstring_view pluginId, std::wstring_view pluginShortId, std::wstring_view instanceContext) noexcept;
+
     void ClearForFileSystem(IFileSystem* fileSystem) noexcept;
     void InvalidateFolder(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept;
     bool IsFolderWatched(IFileSystem* fileSystem, const std::filesystem::path& folder) const noexcept;
 
     void NotifyFolderContentsChanged(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept;
+    void NotifyFolderContentsChanged(const ContextKey& context, const std::filesystem::path& folder) noexcept;
     void NotifyPathCreated(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept;
+    void NotifyPathCreated(const ContextKey& context, const std::filesystem::path& path) noexcept;
     void NotifyPathDeleted(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept;
+    void NotifyPathDeleted(const ContextKey& context, const std::filesystem::path& path) noexcept;
     void NotifyPathMoved(IFileSystem* fileSystem, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationPath) noexcept;
-
-    struct ContextKey
-    {
-        std::wstring pluginId;
-        std::wstring pluginIdKey;
-        std::wstring pluginShortId;
-        std::wstring instanceContext;
-        std::wstring instanceContextKey;
-        bool isFilePlugin = false;
-    };
+    void NotifyPathMoved(const ContextKey& context, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationPath) noexcept;
 
     struct ContextKeyHash
     {
@@ -166,6 +174,11 @@ public:
     Borrowed BorrowDirectoryInfo(IFileSystem* fileSystem, const std::filesystem::path& folder, BorrowMode mode) noexcept;
     Borrowed BorrowDirectoryInfo(IFileSystem* fileSystem, const std::filesystem::path& folder, BorrowMode mode, std::stop_token stopToken) noexcept;
     Pin PinFolder(IFileSystem* fileSystem, const std::filesystem::path& folder, HWND hwnd, UINT message) noexcept;
+#ifdef ENABLE_TESTS
+    using EnsureLoadedPrewaitHookForSelfTest = void (*)(void*) noexcept;
+    void SetEnsureLoadedPrewaitHookForSelfTest(EnsureLoadedPrewaitHookForSelfTest hook, void* context) noexcept;
+    void WakeWaitersForSelfTest() noexcept;
+#endif
 
 private:
     DirectoryInfoCache()                                     = default;
@@ -233,6 +246,7 @@ private:
 
     std::optional<ContextKey> ResolveContextForFileSystem(IFileSystem* fileSystem) const noexcept;
     std::optional<Key> MakeKey(IFileSystem* fileSystem, const std::filesystem::path& folder) const noexcept;
+    std::optional<Key> MakeKey(const ContextKey& context, const std::filesystem::path& folder) const noexcept;
     HRESULT EnsureLoaded(const std::shared_ptr<Entry>& entry, BorrowMode mode) noexcept;
     HRESULT EnsureLoaded(const std::shared_ptr<Entry>& entry, BorrowMode mode, std::stop_token stopToken) noexcept;
     void TouchLocked(const std::shared_ptr<Entry>& entry) noexcept;
@@ -281,6 +295,10 @@ private:
     uint64_t _enumerations = 0;
     uint64_t _evictions    = 0;
     uint64_t _dirtyMarks   = 0;
+#ifdef ENABLE_TESTS
+    EnsureLoadedPrewaitHookForSelfTest _ensureLoadedPrewaitHookForSelfTest = nullptr; // Guarded by _mutex.
+    void* _ensureLoadedPrewaitContextForSelfTest                           = nullptr; // Guarded by _mutex.
+#endif
 
     std::list<std::shared_ptr<Entry>> _lru;
     std::unordered_map<ContextKey, ContextState, ContextKeyHash, ContextKeyEq> _contexts;

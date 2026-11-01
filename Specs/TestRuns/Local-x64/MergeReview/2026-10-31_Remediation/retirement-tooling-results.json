@@ -1,0 +1,51 @@
+{
+  "schema": "red-salamander.review-tooling-retirement.v1",
+  "report_run_id": "20261031T223505Z-59304-00f4a9be23af4facae79ac93b5237b35",
+  "results": [
+    {
+      "run_id": "20261031T222704Z-26900-652c2585946d43a48ebdd64440ab3720",
+      "xml_sha256": "88a3c1ad2191c8aa5bcd946317994a5c5402524d7b6a277cef16572bd0159550",
+      "total": 153,
+      "passed": 145,
+      "failed": 8,
+      "failure_names": [
+        "Distributable test surface (ENABLE_TESTS) policy.keeps the portable ZIP packaging path test-disabled and checked",
+        "Release artifact fail-closed policy.writes and revalidates exact SHA256 entries and rejects tampering",
+        "Release workflow source contracts.uses normal dependency success semantics and no permissive artifact download",
+        "Release workflow source contracts.keeps Ghostty observation read-only, scheduled, and explicit about candidate identity",
+        "Release workflow source contracts.qualifies reviewed Ghostty candidates on native ARM64 with read-only artifact evidence",
+        "Release workflow source contracts.qualifies the admitted Ghostty product and portable package on native ARM64",
+        "Release workflow source contracts.publishes only an explicitly selected qualified ZIP matrix with a separate winget action",
+        "Release workflow source contracts.separates read-only project execution from trusted state, format and publication writers"
+      ],
+      "wrapper_count_matches_xml": false,
+      "scope": "Seven whole compiler-free tooling test files; RequiresBuildToolchain excluded; no native/runtime qualification",
+      "xml_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T222704Z-26900-652c2585946d43a48ebdd64440ab3720\\artifacts\\tooling-pester.xml"
+    },
+    {
+      "run_id": "20261031T223047Z-76280-c9eb754d39554010b78705379dbba7b9",
+      "xml_sha256": "1e0b44dd08e4bdb894d253b855dbc175a8070d283586a2805992d660fa4647f8",
+      "total": 154,
+      "passed": 153,
+      "failed": 1,
+      "failure_names": [
+        "Positive test-block success assertion.rejects unreliable positive Throw assertions in executable test syntax"
+      ],
+      "wrapper_count_matches_xml": true,
+      "scope": "Seven whole compiler-free tooling test files; RequiresBuildToolchain excluded; no native/runtime qualification",
+      "xml_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T223047Z-76280-c9eb754d39554010b78705379dbba7b9\\artifacts\\tooling-pester.xml"
+    },
+    {
+      "run_id": "20261031T223246Z-85836-5dc4f48e2f4e4cc799079b83562fcd66",
+      "xml_sha256": "f34285a663ce1d10d05a8f75b1c18c2af837c4bae5688bac33cc8cd091b39328",
+      "total": 154,
+      "passed": 154,
+      "failed": 0,
+      "failure_names": [],
+      "wrapper_count_matches_xml": true,
+      "scope": "Seven whole compiler-free tooling test files; RequiresBuildToolchain excluded; no native/runtime qualification",
+      "xml_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261031T223246Z-85836-5dc4f48e2f4e4cc799079b83562fcd66\\artifacts\\tooling-pester.xml"
+    }
+  ],
+  "correction": "First wrapper matched the wrong XML element and emitted zero counts. Its exit is invalid acceptance; original XML and summary are preserved. Later wrappers count test-case and match XML. The root independently rechecked every count."
+}

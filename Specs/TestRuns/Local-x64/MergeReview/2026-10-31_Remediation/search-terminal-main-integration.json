@@ -1,0 +1,107 @@
+{
+  "schema": "review-remediation.main-integration.v1",
+  "merge_commit": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+  "implementation_commit": "f58f8c4750cca4084c273e435486c75793177f56",
+  "main_commit": "eb779e0bd83694492cd1717bb39eaff3cdcee7cb",
+  "scope": "Publication integration only; no shipping source changes from the validated implementation. No Full, native ARM64, physical-device or foreground acceptance claimed.",
+  "native": {
+    "parent_run_id": "20261101T105736Z-62312-a61771c40ce847ceb0310dee56f814db",
+    "run_id": "20261101T110522Z-62312-dd0e95c82aed4f8388c282cb31fc6a51",
+    "scope": "Merged main integration: Release build and full noninteractive Compare; does not establish Full or pending desktop/device acceptance",
+    "git_head": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+    "source_snapshot_id_before": "ca8f8e62b153bafccdd97cbc93c35fde364513c054c155c4f028323768160d6a",
+    "source_snapshot_id_after": "ca8f8e62b153bafccdd97cbc93c35fde364513c054c155c4f028323768160d6a",
+    "source_stable": true,
+    "build_receipt_id": "f046bd62482cf0767d980dcb484a1e117681f4b0469b197ae002a3d097452a0e",
+    "build_outputs": 188,
+    "build_exit": 0,
+    "compare_exit": 2,
+    "compare_passed": 253,
+    "compare_failed": 0,
+    "compare_skipped": 31,
+    "duration_ms": 128388,
+    "regression_cases": [
+      {
+        "name": "local_search_callback_contract",
+        "status": "passed",
+        "duration_ms": 7
+      },
+      {
+        "name": "search_service_fixture_connect_retries_missing_instance",
+        "status": "passed",
+        "duration_ms": 244
+      },
+      {
+        "name": "search_service_multi_client_and_rebuild_control",
+        "status": "passed",
+        "duration_ms": 2967
+      }
+    ],
+    "forced_ordering_dispatches": 4,
+    "raw_compare_result": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T110522Z-62312-dd0e95c82aed4f8388c282cb31fc6a51\\artifacts\\archive\\4cb089111a23\\CompareDirectories\\2026-11-01_120902\\compare_results.json",
+    "raw_compare_sha256": "0d091753124cb7656ca7b96bf551f702af7f82b97935b46d189ae8710cd07fbf"
+  },
+  "native_raw_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T105736Z-62312-a61771c40ce847ceb0310dee56f814db\\scratch\\publication-native\\checks.json",
+  "native_raw_sha256": "49c0a5a7fba66329ace407420aa8cb947c64b81b30461afc4acdffd25006ad26",
+  "pinned_engine": {
+    "configured_pin": "e32cf9f9b29f4e817decb09e1be44be7fc1a94de",
+    "previous_ignored_checkout": "fcf723f54140eabb69ef5017c32c971deb117ada",
+    "project_pin_changed": false,
+    "restoration_run": "20261101T110459Z-54000-3fde30cd67d14292b44d4cf0d51b2833"
+  },
+  "first_tooling_batch": {
+    "run_id": "20261101T105736Z-65048-846b7e61d5874555a7a9fc81aa038932",
+    "total": 490,
+    "passed": 489,
+    "failed": 1,
+    "failure": "Winget Describe setup could not find Ci.WingetInstall.psm1 in older ignored engine checkout",
+    "verdict": "FAILED; preserved, never retagged"
+  },
+  "winget_repeat": {
+    "run_id": "20261101T110528Z-72588-e309100f558d4173b2bdd4565c6e0cd8",
+    "scope": "Complete Winget test file after restoring the configured engine pin; original failed batch preserved",
+    "git_head": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+    "pester_total": 21,
+    "pester_passed": 21,
+    "pester_failed": 0,
+    "pester_skipped": 0,
+    "xml_cases": 21,
+    "xml_sha256": "13aabc8114c2c10eb36b5f32637220b6a6fbbbba4936770b958fb49db26e2761",
+    "tests": [
+      "Tools/Tests/WingetValidation.Tests.ps1"
+    ],
+    "changelog": "passed",
+    "tool_inventory": "passed"
+  },
+  "release_policy_repeat": {
+    "run_id": "20261101T110734Z-86680-40f51da85e6a4747b18129eef42880fe",
+    "scope": "Complete release-policy file after restoring the configured engine pin; original batch remains a prior-environment observation",
+    "git_head": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+    "pester_total": 38,
+    "pester_passed": 38,
+    "pester_failed": 0,
+    "pester_skipped": 0,
+    "xml_cases": 38,
+    "xml_sha256": "18da359d46e118b3f5c93e3a3d6db68116237bb26ae4f6bdeb5ae982689dce83",
+    "tests": [
+      "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
+    ],
+    "changelog": "passed",
+    "tool_inventory": "passed"
+  },
+  "hosted_inventory_failure": {
+    "workflow_run": "41300004164",
+    "job": "124828787155",
+    "blocking_findings": 12,
+    "local_reproduction": "20261101T110829Z-75896-538f00d5cd1041f3905c1cc50e723281",
+    "repair_run": "20261101T111340Z-16312-6a559016b8284175be5b401cd4465d9f",
+    "repair_scope": "Twelve live links in eight mutable documents restored to exact manifest targets; protected historical payloads unchanged",
+    "qualification": "See separately recorded repeat; the first CI failure remains failed"
+  },
+  "pending": [
+    "Native ARM64 and WIC diagnosis",
+    "Physical-device and independent-storage/provider qualification",
+    "Foreground, mixed-DPI, real assistive technology and shutdown/logoff acceptance",
+    "Incoming expanded I50 review including open H5; existing I51/I52/I56 routing"
+  ]
+}

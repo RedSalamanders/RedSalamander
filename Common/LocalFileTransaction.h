@@ -41,6 +41,18 @@ namespace Testing
 inline std::atomic<HRESULT> g_nextWriteFailure{S_OK};
 inline std::atomic<HRESULT> g_nextFlushFailure{S_OK};
 inline std::atomic<HRESULT> g_nextPublishFailure{S_OK};
+inline std::atomic<HRESULT> g_nextRenameExFailure{S_OK};
+inline std::atomic<HRESULT> g_nextLegacyRenameFailure{S_OK};
+
+inline void FailNextLocalFileTransactionRenameEx(HRESULT hr) noexcept
+{
+    g_nextRenameExFailure.store(FAILED(hr) ? hr : E_FAIL, std::memory_order_relaxed);
+}
+
+inline void FailNextLocalFileTransactionLegacyRename(HRESULT hr) noexcept
+{
+    g_nextLegacyRenameFailure.store(FAILED(hr) ? hr : E_FAIL, std::memory_order_relaxed);
+}
 
 inline void FailNextLocalFileTransactionWrite(HRESULT hr) noexcept
 {
@@ -293,54 +305,39 @@ public:
             return injectedPublishFailure;
         }
 #endif
-        DWORD handleRenameError = ERROR_SUCCESS;
-        if (_policy == ExistingTargetPolicy::Replace)
+        const std::wstring& targetNative = _targetPath.native();
+        if (targetNative.size() > (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
         {
-            const std::wstring& targetNative = _targetPath.native();
-            if (targetNative.size() > (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
-            {
-                return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
-            }
-            const size_t fileNameBytes    = targetNative.size() * sizeof(wchar_t);
-            constexpr size_t kHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
-            if (fileNameBytes > (std::numeric_limits<DWORD>::max)() - kHeaderBytes - sizeof(wchar_t) ||
-                fileNameBytes > (std::numeric_limits<size_t>::max)() - kHeaderBytes - sizeof(wchar_t))
-            {
-                return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
-            }
-            std::vector<std::byte> renameStorage(kHeaderBytes + fileNameBytes + sizeof(wchar_t));
-            auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
-            rename->Flags          = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
-            rename->RootDirectory  = nullptr;
-            rename->FileNameLength = static_cast<DWORD>(fileNameBytes);
-            std::memcpy(rename->FileName, targetNative.data(), fileNameBytes);
-            if (SetFileInformationByHandle(_file.get(), FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size())) != FALSE)
-            {
-                _file.reset();
-                _temporaryPath.clear();
-                _committed = true;
-                if (committedFileInformation)
-                {
-                    *committedFileInformation = finalizedInformation;
-                }
-                return S_OK;
-            }
-            handleRenameError = GetLastError();
-            if (handleRenameError != ERROR_INVALID_PARAMETER && handleRenameError != ERROR_INVALID_FUNCTION && handleRenameError != ERROR_NOT_SUPPORTED &&
-                handleRenameError != ERROR_CALL_NOT_IMPLEMENTED && handleRenameError != ERROR_ACCESS_DENIED)
-            {
-                return HRESULT_FROM_WIN32(handleRenameError == ERROR_SUCCESS ? ERROR_WRITE_FAULT : handleRenameError);
-            }
+            return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
         }
+        const size_t fileNameBytes    = targetNative.size() * sizeof(wchar_t);
+        constexpr size_t kHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
+        if (fileNameBytes > (std::numeric_limits<DWORD>::max)() - kHeaderBytes - sizeof(wchar_t) ||
+            fileNameBytes > (std::numeric_limits<size_t>::max)() - kHeaderBytes - sizeof(wchar_t))
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+        }
+        std::vector<std::byte> renameStorage(kHeaderBytes + fileNameBytes + sizeof(wchar_t));
+        auto* const rename     = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
+        const bool replace     = _policy == ExistingTargetPolicy::Replace;
+        rename->Flags          = FILE_RENAME_FLAG_POSIX_SEMANTICS | (replace ? static_cast<DWORD>(FILE_RENAME_FLAG_REPLACE_IF_EXISTS) : 0u);
+        rename->RootDirectory  = nullptr;
+        rename->FileNameLength = static_cast<DWORD>(fileNameBytes);
+        std::memcpy(rename->FileName, targetNative.data(), fileNameBytes);
+        HRESULT renameHr = RenameOwnedFile(FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size()));
+        if (renameHr == HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER) || renameHr == HRESULT_FROM_WIN32(ERROR_INVALID_FUNCTION) ||
+            renameHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || renameHr == HRESULT_FROM_WIN32(ERROR_CALL_NOT_IMPLEMENTED) || renameHr == E_ACCESSDENIED)
+        {
+            // Legacy handle rename preserves exact source authority on filesystems without Ex.
+            // Closing and using a pathname here could publish a replacement of our private stage.
+            rename->Flags           = 0u;
+            rename->ReplaceIfExists = static_cast<BOOLEAN>(replace);
+            renameHr                = RenameOwnedFile(FileRenameInfo, rename, static_cast<DWORD>(renameStorage.size()));
+        }
+        if (FAILED(renameHr))
+            return renameHr;
 
         _file.reset();
-        const DWORD moveFlags = MOVEFILE_WRITE_THROUGH | (_policy == ExistingTargetPolicy::Replace ? static_cast<DWORD>(MOVEFILE_REPLACE_EXISTING) : 0u);
-        if (MoveFileExW(_temporaryPath.c_str(), _targetPath.c_str(), moveFlags) == FALSE)
-        {
-            const DWORD error = GetLastError();
-            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : (handleRenameError != ERROR_SUCCESS ? handleRenameError : ERROR_WRITE_FAULT));
-        }
-
         _temporaryPath.clear();
         _committed = true;
         if (committedFileInformation)
@@ -388,16 +385,8 @@ public:
             }
         }
         _file.reset();
-        if (! markedForDeletion && ! _committed && ! _temporaryPath.empty())
-        {
-            const BOOL removed = DeleteFileW(_temporaryPath.c_str());
-#ifdef ENABLE_TESTS
-            rollback.pathDeleteAttempted = true;
-            rollback.pathDeleteError     = removed != FALSE ? ERROR_SUCCESS : GetLastError();
-#else
-            static_cast<void>(removed);
-#endif
-        }
+        // No pathname fallback: after close the same spelling can belong to another writer.
+        // If both disposition APIs refuse cleanup, preserve the uncertain entry for diagnostics.
 #ifdef ENABLE_TESTS
         if (observedRollback)
             Testing::g_lastRollbackSnapshot = rollback;
@@ -408,6 +397,22 @@ public:
     }
 
 private:
+    [[nodiscard]] HRESULT RenameOwnedFile(FILE_INFO_BY_HANDLE_CLASS informationClass, FILE_RENAME_INFO* rename, DWORD bytes) noexcept
+    {
+#ifdef ENABLE_TESTS
+        auto& nextFailure             = informationClass == FileRenameInfoEx ? Testing::g_nextRenameExFailure : Testing::g_nextLegacyRenameFailure;
+        const HRESULT injectedFailure = nextFailure.exchange(S_OK, std::memory_order_relaxed);
+        if (FAILED(injectedFailure))
+            return injectedFailure;
+#endif
+        if (SetFileInformationByHandle(_file.get(), informationClass, rename, bytes) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_WRITE_FAULT : error);
+        }
+        return S_OK;
+    }
+
     wil::unique_hfile _file;
     std::filesystem::path _targetPath;
     std::filesystem::path _temporaryPath;

@@ -1,0 +1,9 @@
+{
+  "raw_perf_sha256": "7ae92a201dd9d1fe49ce34bfb9fbd690c4456ef51d8d4499079b98cc276e7609",
+  "selected_metric_prefix": "FileOps.Interlock.Classifier",
+  "selected_rows": 3,
+  "raw_run_id": "20261031T133217Z-78760-0683c01f176749aaabf72c88b89ef0af",
+  "receipt": "32f7b0bb0958cdd07d0d972d722a0b24a438ad89e3e7060f10bf5591f0edd818",
+  "profile": "x64 Debug",
+  "limitation": "Filtered observational subset of a failed run; raw evidence retained in the marked sandbox."
+}

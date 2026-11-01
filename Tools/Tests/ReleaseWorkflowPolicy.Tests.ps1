@@ -175,64 +175,12 @@ function New-RSFakePortableArtifact {
     return $path
 }
 
-function New-RSFakeMsixArtifact {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Root,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ReleaseVersion,
-
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('x64', 'ARM64')]
-        [string]$Platform,
-
-        [string]$IdentityVersion = '',
-
-        [string]$ProcessorArchitecture = '',
-
-        [string[]]$PluginExport = @('RedSalamanderCreate')
-    )
-
-    if (-not $IdentityVersion) {
-        $IdentityVersion = "$ReleaseVersion.0"
-    }
-    if (-not $ProcessorArchitecture) {
-        $ProcessorArchitecture = if ($Platform -eq 'ARM64') { 'arm64' } else { 'x64' }
-    }
-
-    $path = Join-Path $Root (Get-RSMsixReleaseFileName -ReleaseVersion $ReleaseVersion -Platform $Platform)
-    $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-    $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create, $false)
-    try {
-        $entry = $archive.CreateEntry('AppxManifest.xml')
-        $entryStream = $entry.Open()
-        $writer = [IO.StreamWriter]::new($entryStream, [Text.UTF8Encoding]::new($false))
-        try {
-            $writer.Write("<?xml version=`"1.0`" encoding=`"utf-8`"?><Package xmlns=`"http://schemas.microsoft.com/appx/manifest/foundation/windows10`"><Identity Name=`"RedSalamander`" Publisher=`"CN=RedSalmanders`" Version=`"$IdentityVersion`" ProcessorArchitecture=`"$ProcessorArchitecture`" /></Package>")
-        }
-        finally {
-            $writer.Dispose()
-            $entryStream.Dispose()
-        }
-        $machine = if ($Platform -eq 'ARM64') { 0xAA64 } else { 0x8664 }
-        Add-RSFakeArchiveEntry -Archive $archive -Name 'Plugins/FileSystem.dll' `
-            -Bytes (New-RSFakePeBytes -Machine $machine -Export $PluginExport)
-    }
-    finally {
-        $archive.Dispose()
-        $stream.Dispose()
-    }
-
-    return $path
-}
-
 Describe 'Release artifact fail-closed policy' {
-    It 'accepts the exact x64-only portable matrix when ARM64 and MSIX are disabled' {
+    It 'accepts the exact x64-only portable matrix when ARM64 is disabled' {
         $root = New-RSReleasePolicyTestRoot
         try {
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
-            $artifacts = @(Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $false)
+            $artifacts = @(Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false)
             $artifacts.Count | Should Be 1
             $artifacts[0].Platform | Should Be 'x64'
         }
@@ -241,15 +189,15 @@ Describe 'Release artifact fail-closed policy' {
         }
     }
 
-    It 'accepts the exact x64 and ARM64 portable plus MSIX matrix' {
+    It 'accepts the exact x64 and ARM64 portable ZIP matrix' {
         $root = New-RSReleasePolicyTestRoot
         try {
             foreach ($platform in @('x64', 'ARM64')) {
                 New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform $platform | Out-Null
-                New-RSFakeMsixArtifact -Root $root -ReleaseVersion '7.0.42' -Platform $platform | Out-Null
             }
-            $artifacts = @(Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $true)
-            $artifacts.Count | Should Be 4
+            $artifacts = @(Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true)
+            $artifacts.Count | Should Be 2
+            @($artifacts.Platform | Sort-Object) -join ',' | Should Be 'ARM64,x64'
         }
         finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -260,7 +208,7 @@ Describe 'Release artifact fail-closed policy' {
         $root = New-RSReleasePolicyTestRoot
         try {
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform ARM64 | Out-Null
-            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $false } |
+            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false } |
                 Should Throw "Expected exactly one release artifact named 'RedSalamander-7.0.42-x64-Portable.zip'; found 0."
         }
         finally {
@@ -272,22 +220,8 @@ Describe 'Release artifact fail-closed policy' {
         $root = New-RSReleasePolicyTestRoot
         try {
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
-            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false } |
+            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true } |
                 Should Throw 'Release artifact count mismatch. Expected [RedSalamander-7.0.42-ARM64-Portable.zip, RedSalamander-7.0.42-x64-Portable.zip]; found [RedSalamander-7.0.42-x64-Portable.zip].'
-        }
-        finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'allows omitted MSIX only when the explicit policy input disables it' {
-        $root = New-RSReleasePolicyTestRoot
-        try {
-            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
-            @(Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $false).Count |
-                Should Be 1
-            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $true } |
-                Should Throw 'Release artifact count mismatch. Expected [RedSalamander-7.0.42-x64-Portable.zip, RedSalamander-7.0.42-x64.msix]; found [RedSalamander-7.0.42-x64-Portable.zip].'
         }
         finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -298,21 +232,8 @@ Describe 'Release artifact fail-closed policy' {
         $root = New-RSReleasePolicyTestRoot
         try {
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 -Machine 0xAA64 | Out-Null
-            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $false } |
+            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false } |
                 Should Throw "Portable artifact 'RedSalamander-7.0.42-x64-Portable.zip' has PE machine 0xAA64; expected 0x8664 for x64."
-        }
-        finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'rejects MSIX identity version and architecture mismatches' {
-        $root = New-RSReleasePolicyTestRoot
-        try {
-            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
-            New-RSFakeMsixArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 -IdentityVersion '7.0.41.0' | Out-Null
-            { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $true } |
-                Should Throw "MSIX 'RedSalamander-7.0.42-x64.msix' has Identity Version '7.0.41.0'; expected '7.0.42.0'."
         }
         finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -325,8 +246,8 @@ Describe 'Release artifact fail-closed policy' {
             foreach ($platform in @('x64', 'ARM64')) {
                 New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform $platform | Out-Null
             }
-            New-RSReleaseChecksumFile -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false | Out-Null
-            Assert-RSReleaseChecksumFile -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false |
+            New-RSReleaseChecksumFile -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true | Out-Null
+            Assert-RSReleaseChecksumFile -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true |
                 Should Be $true
 
             $checksumPath = Join-Path $root 'checksums.sha256'
@@ -334,7 +255,7 @@ Describe 'Release artifact fail-closed policy' {
             $lines[0] = ('0' * 64) + $lines[0].Substring(64)
             [IO.File]::WriteAllLines($checksumPath, $lines, [Text.UTF8Encoding]::new($false))
             $expectedMessage = "Release checksum mismatch at line 1. Expected '$((Get-FileHash -LiteralPath (Join-Path $root 'RedSalamander-7.0.42-ARM64-Portable.zip') -Algorithm SHA256).Hash)  RedSalamander-7.0.42-ARM64-Portable.zip'; found '$($lines[0])'."
-            { Assert-RSReleaseChecksumFile -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false } |
+            { Assert-RSReleaseChecksumFile -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true } |
                 Should Throw $expectedMessage
         }
         finally {
@@ -373,7 +294,7 @@ Describe 'Distributable test surface (ENABLE_TESTS) policy' {
         try {
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 `
                 -PluginExport @('RedSalamanderCreate', 'RedSalamanderFileSystemTestAdmissionProbe') | Out-Null
-            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $false }
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false }
             $message | Should Match 'Distributable package carries a test surface'
             $message | Should Match ([regex]::Escape('Plugins/FileSystem.dll: test exports [RedSalamanderFileSystemTestAdmissionProbe]'))
         }
@@ -386,174 +307,12 @@ Describe 'Distributable test surface (ENABLE_TESTS) policy' {
         $root = New-RSReleasePolicyTestRoot
         try {
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform ARM64 -TestEnabledApplication | Out-Null
-            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false }
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true }
             # The x64 archive is missing, so build the full matrix to reach the content check.
             $message | Should Match 'Release artifact count mismatch'
             New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
-            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false }
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true }
             $message | Should Match ([regex]::Escape('RedSalamander.exe: built with ENABLE_TESTS'))
-        }
-        finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'rejects a release MSIX whose plugin exports a test entry point' {
-        $root = New-RSReleasePolicyTestRoot
-        try {
-            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
-            New-RSFakeMsixArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 `
-                -PluginExport @('RedSalamanderCreate', 'RedSalamanderS3DebugSelfTests') | Out-Null
-            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $true }
-            $message | Should Match ([regex]::Escape('RedSalamander-7.0.42-x64.msix'))
-            $message | Should Match ([regex]::Escape('test exports [RedSalamanderS3DebugSelfTests]'))
-        }
-        finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'removes a rejected produced MSIX and its package folder but keeps accepted packages' {
-        $root = New-RSReleasePolicyTestRoot
-        try {
-            $appPackages = Join-Path $root 'AppPackages'
-            $rejectedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.42.0_x64_Test'
-            $acceptedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.41.0_x64_Test'
-            [void][IO.Directory]::CreateDirectory((Join-Path $rejectedFolder 'Dependencies'))
-            [void][IO.Directory]::CreateDirectory($acceptedFolder)
-            $rejected = New-RSFakeMsixArtifact -Root $rejectedFolder -ReleaseVersion '7.0.42' -Platform x64 `
-                -PluginExport @('RedSalamanderCreate', 'RedSalamanderFileSystemTestAdmissionProbe')
-            [IO.File]::WriteAllText((Join-Path $rejectedFolder 'Add-AppDevPackage.ps1'), '#')
-            $accepted = New-RSFakeMsixArtifact -Root $acceptedFolder -ReleaseVersion '7.0.41' -Platform x64
-
-            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $accepted -AppPackagesRoot $appPackages } |
-                Should BeNullOrEmpty
-            Test-Path -LiteralPath $accepted -PathType Leaf | Should Be $true
-
-            $message = Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $rejected -AppPackagesRoot $appPackages }
-            $message | Should Match ([regex]::Escape('test exports [RedSalamanderFileSystemTestAdmissionProbe]'))
-            $message | Should Match ([regex]::Escape("The rejected package was removed: $rejectedFolder"))
-            Test-Path -LiteralPath $rejectedFolder | Should Be $false
-            Test-Path -LiteralPath $accepted -PathType Leaf | Should Be $true
-
-            # A package written directly into AppPackages is removed alone; one outside it is refused untouched.
-            $loose = New-RSFakeMsixArtifact -Root $appPackages -ReleaseVersion '7.0.43' -Platform x64 -PluginExport @('RedSalamanderS3DebugSelfTests')
-            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $loose -AppPackagesRoot $appPackages } |
-                Should Match ([regex]::Escape("The rejected package was removed: $loose"))
-            Test-Path -LiteralPath $loose | Should Be $false
-            Test-Path -LiteralPath $acceptedFolder -PathType Container | Should Be $true
-
-            $outside = New-RSFakeMsixArtifact -Root $root -ReleaseVersion '7.0.44' -Platform x64 -PluginExport @('RedSalamanderS3DebugSelfTests')
-            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $outside -AppPackagesRoot $appPackages } |
-                Should Match 'is not beneath the AppPackages root'
-            Test-Path -LiteralPath $outside -PathType Leaf | Should Be $true
-        }
-        finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'never deletes a rejected produced MSIX through a link' {
-        $root = New-RSReleasePolicyTestRoot
-        $links = [Collections.Generic.List[string]]::new()
-        try {
-            $testExport = @('RedSalamanderCreate', 'RedSalamanderS3DebugSelfTests')
-
-            # The AppPackages root is a junction: the package folder behind it stays untouched.
-            $elsewhere = Join-Path $root 'elsewhere'
-            $behindFolder = Join-Path $elsewhere 'RedSalamanderInstaller_7.0.42.0_x64_Test'
-            [void][IO.Directory]::CreateDirectory($behindFolder)
-            $behindMsix = New-RSFakeMsixArtifact -Root $behindFolder -ReleaseVersion '7.0.42' -Platform x64 -PluginExport $testExport
-            $linkedAppPackages = Join-Path $root 'LinkedAppPackages'
-            New-RSTestSandboxLink -ItemType Junction -Path $linkedAppPackages -Target $elsewhere | Out-Null
-            $links.Add($linkedAppPackages)
-            $throughRoot = Join-Path $linkedAppPackages ('RedSalamanderInstaller_7.0.42.0_x64_Test\' + [IO.Path]::GetFileName($behindMsix))
-            $message = Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $throughRoot -AppPackagesRoot $linkedAppPackages }
-            $message | Should Match ([regex]::Escape('test exports [RedSalamanderS3DebugSelfTests]'))
-            $message | Should Match 'could not be removed and must not be distributed'
-            $message | Should Match ([regex]::Escape("reparse point '$linkedAppPackages'"))
-            Test-Path -LiteralPath $behindMsix -PathType Leaf | Should Be $true
-
-            # The package folder itself is a junction beneath a real AppPackages root.
-            $appPackages = Join-Path $root 'AppPackages'
-            [void][IO.Directory]::CreateDirectory($appPackages)
-            $linkedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.43.0_x64_Test'
-            New-RSTestSandboxLink -ItemType Junction -Path $linkedFolder -Target $behindFolder | Out-Null
-            $links.Add($linkedFolder)
-            $throughFolder = Join-Path $linkedFolder ([IO.Path]::GetFileName($behindMsix))
-            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $throughFolder -AppPackagesRoot $appPackages } |
-                Should Match ([regex]::Escape("reparse point '$linkedFolder'"))
-            Test-Path -LiteralPath $behindMsix -PathType Leaf | Should Be $true
-
-            # A link inside the package folder refuses the whole removal before anything is deleted.
-            $keep = Join-Path $root 'keep'
-            [void][IO.Directory]::CreateDirectory($keep)
-            $keepFile = Join-Path $keep 'precious.txt'
-            [IO.File]::WriteAllText($keepFile, 'keep')
-            $packageFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.44.0_x64_Test'
-            [void][IO.Directory]::CreateDirectory($packageFolder)
-            $packaged = New-RSFakeMsixArtifact -Root $packageFolder -ReleaseVersion '7.0.44' -Platform x64 -PluginExport $testExport
-            $innerLink = Join-Path $packageFolder 'Dependencies'
-            New-RSTestSandboxLink -ItemType Junction -Path $innerLink -Target $keep | Out-Null
-            $links.Add($innerLink)
-            $message = Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $packaged -AppPackagesRoot $appPackages }
-            $message | Should Match 'could not be removed and must not be distributed'
-            $message | Should Match ([regex]::Escape("contains the reparse point '$innerLink'"))
-            Test-Path -LiteralPath $keepFile -PathType Leaf | Should Be $true
-            Test-Path -LiteralPath $packaged -PathType Leaf | Should Be $true
-        }
-        finally {
-            foreach ($link in $links) {
-                if (Test-Path -LiteralPath $link) { [IO.Directory]::Delete($link, $false) }
-            }
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    It 'checks an up-to-date MSIX in place and fails only when packaging produced none' {
-        $root = New-RSReleasePolicyTestRoot
-        try {
-            $appPackages = Join-Path $root 'AppPackages'
-            $currentFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.42.0_x64_Test'
-            [void][IO.Directory]::CreateDirectory($currentFolder)
-            $current = New-RSFakeMsixArtifact -Root $currentFolder -ReleaseVersion '7.0.42' -Platform x64
-            [IO.File]::WriteAllBytes((Join-Path $appPackages 'broken.msix'), [byte[]](1, 2, 3))
-            $before = Get-RSMsixOutputSnapshot -AppPackagesRoot $appPackages
-            $before.Count | Should Be 2
-
-            # MSBuild left the package for this version and platform untouched: not an error.
-            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.42' -Platform x64 } |
-                Should BeNullOrEmpty
-            Test-Path -LiteralPath $current -PathType Leaf | Should Be $true
-
-            # No up-to-date package for the requested version or platform still fails.
-            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.42' -Platform ARM64 } |
-                Should Match 'produced no new MSIX, and no up-to-date 7\.0\.42\.0 ARM64 MSIX exists'
-            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.43' -Platform x64 } |
-                Should Match 'produced no new MSIX'
-            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot (Join-Path $root 'missing') -Before @{} -ReleaseVersion '7.0.42' -Platform x64 } |
-                Should Match 'produced no new MSIX'
-
-            # An up-to-date package with a test surface fails but is only checked, never removed.
-            $staleFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.45.0_x64_Test'
-            [void][IO.Directory]::CreateDirectory($staleFolder)
-            $stale = New-RSFakeMsixArtifact -Root $staleFolder -ReleaseVersion '7.0.45' -Platform x64 `
-                -PluginExport @('RedSalamanderCreate', 'RedSalamanderS3DebugSelfTests')
-            $before = Get-RSMsixOutputSnapshot -AppPackagesRoot $appPackages
-            $message = Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.45' -Platform x64 }
-            $message | Should Match ([regex]::Escape('test exports [RedSalamanderS3DebugSelfTests]'))
-            $message | Should Not Match 'was removed'
-            Test-Path -LiteralPath $stale -PathType Leaf | Should Be $true
-
-            # A package this run produced is checked with removal, and only it is checked.
-            $producedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.46.0_x64_Test'
-            [void][IO.Directory]::CreateDirectory($producedFolder)
-            New-RSFakeMsixArtifact -Root $producedFolder -ReleaseVersion '7.0.46' -Platform x64 `
-                -PluginExport @('RedSalamanderCreate', 'RedSalamanderFileSystemTestAdmissionProbe') | Out-Null
-            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.46' -Platform x64 } |
-                Should Match ([regex]::Escape("The rejected package was removed: $producedFolder"))
-            Test-Path -LiteralPath $producedFolder | Should Be $false
-            Test-Path -LiteralPath $stale -PathType Leaf | Should Be $true
         }
         finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -615,47 +374,37 @@ Describe 'Distributable test surface (ENABLE_TESTS) policy' {
         ($found.Count - $production.Count) | Should BeGreaterThan 40
     }
 
-    It 'keeps every distributable packaging path test-disabled and checked' {
+    It 'keeps the portable ZIP packaging path test-disabled and checked' {
         $versionInfo = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\VersionInfo.rc') -Raw
         $versionInfo | Should Match '#if defined\(ENABLE_TESTS\)\s+VALUE "SpecialBuild", L"RedSalamander\.TestSurface=ENABLE_TESTS"\s+#endif'
         $versionInfo | Should Match 'FILEFLAGS \(RS_VERSION_FILEFLAGS \| RS_VERSION_TEST_FILEFLAGS\)'
 
         $build = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $build | Should Match '\(\$Msix -or \$Msi -or \$Zip -or \$GenerateWingetManifest -or \$OfficialRelease\) -and\s+\(\$requestedDistributableTests -ieq ''true'' -or\s+\(\[string\]::IsNullOrWhiteSpace\(\$requestedDistributableTests\) -and \$Configuration -ne ''Release''\)\)\) \{\s+Write-Error[^\r\n]+\s+exit 1'
-        $build | Should Match '"/p:RSAppxManifestPath=\$stagedMsixManifest"\s+"/p:RSBuildEnableTests=false"'
-        $build | Should Match "-AppPackagesRoot \`$appPackagesEvidenceRoot\s+\}\s+\}\s+\`$msixStopwatch\.Stop\(\)"
-        $build | Should Match "\`$appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath \``\s+-RepoRoot \`$SolutionDir -GuardedRelativeRoot '\.build\\AppPackages' \``\s+-Path \`$appPackagesEvidenceRoot"
-        # The whole repository chain is re-checked for links right before a rejected package can be removed.
-        $build | Should Match '\$appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `\s+-RepoRoot \$SolutionDir -GuardedRelativeRoot ''\.build\\AppPackages'' `\s+-Path \$appPackagesEvidenceRoot\s+foreach \(\$producedMsix in'
-        # After the packaging lease is released the package outputs are only checked, never deleted.
-        $leaseRelease = $build.IndexOf('Exit-RSArtifactOperationLock -Lock $packagingLock')
-        $leaseRelease | Should BeGreaterThan 0
-        $afterLease = $build.Substring($leaseRelease)
-        $afterLease | Should Not Match 'Assert-RSProducedMsixHasNoTestSurface'
-        $afterLease | Should Match "\.Extension -ieq '\.msix' -or \`$file\.Extension -ieq '\.zip'\) \{\s+Assert-RSShippingPackageHasNoTestSurface -LiteralPath \`$file\.FullName\s+\}"
-
+        $build | Should Not Match '\$Msix|\$Msi|RSAppxManifestPath|BuildMsix'
+        $build | Should Match '\$Zip'
+        $build | Should Match '\$buildParams \+= "/p:RSBuildEnableTests=\$\(\$effectiveTestsEnabled\.ToString\(\)\.ToLowerInvariant\(\)\)"'
+        $build | Should Match '(?s)if \(\(\$Zip -or \$GenerateWingetManifest -or \$OfficialRelease\) -and\s+\$receiptTestsEnabled\) \{\s+throw ''A distributable build contains a test-enabled output; no package receipt will be published\.'''
         $zip = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\zip\build-zip.ps1') -Raw
         $zip | Should Match "Compress-Archive[\s\S]+if \(\`$Configuration -eq 'Release'\) \{\s+Assert-RSShippingPackageHasNoTestSurface -LiteralPath \`$StagedZipPath[\s\S]+Test-RSPortablePackage"
 
-        $msi = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\build-msi.ps1') -Raw
-        $msi | Should Match 'Assert-RSShippingPackageHasNoTestSurface -LiteralPath \$stageDir[\s\S]+\$wixExitCode = Invoke-RSProcess'
-
-        $msix = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msix\build-msix.ps1') -Raw
-        $msix | Should Match "'/p:RSBuildEnableTests=false'"
-        $msix | Should Match '\$appPackagesRoot = Resolve-RSGuardedRepositoryPath `\s+-RepoRoot \$repoRoot -GuardedRelativeRoot ''\.build\\AppPackages'' `\s+-Path ''\.build\\AppPackages''\s+\$msixBefore = Get-RSMsixOutputSnapshot -AppPackagesRoot \$appPackagesRoot'
-        $msix | Should Match '\$appPackagesRoot = Resolve-RSGuardedRepositoryPath `\s+-RepoRoot \$repoRoot -GuardedRelativeRoot ''\.build\\AppPackages'' `\s+-Path \$appPackagesRoot\s+Assert-RSMsixPackagingOutput `'
-        $msix | Should Match 'Assert-RSMsixPackagingOutput `\s+-AppPackagesRoot \$appPackagesRoot `\s+-Before \$msixBefore `\s+-ReleaseVersion \$Version `\s+-Platform \$Platform'
-        $msix | Should Not Match 'produced no new MSIX'
-
-        $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
-        $reusable | Should Match 'if: \$\{\{ inputs\.official_release && \(inputs\.run_full_tests \|\| inputs\.configuration != ''Release''\) \}\}\s+shell: pwsh\s+run: throw'
-        $release = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
-        $release | Should Not Match 'run_full_tests'
-        $release | Should Match 'Write-CiProductionReceipt'
+        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Raw
+        $releaseWorkflow | Should Not Match 'run_full_tests|BuildMsix|\.msix|\.msi'
+        $releaseWorkflow | Should Match 'Write-CiProductionReceipt'
     }
 }
 
 Describe 'Release workflow source contracts' {
+    BeforeAll {
+        $releaseWorkflowPath = Join-Path $repoRoot '.ci-engine/.github/workflows/publish.yml'
+        $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
+        $ghosttyStatusWorkflowPath = Join-Path $repoRoot '.github/workflows/ghostty-runtime-status.yml'
+        $ghosttyStatusWorkflow = Get-Content -LiteralPath $ghosttyStatusWorkflowPath -Raw
+        $ghosttyNativeWorkflowPath = Join-Path $repoRoot '.github/workflows/ghostty-runtime-native-qualification.yml'
+        $ghosttyNativeWorkflow = Get-Content -LiteralPath $ghosttyNativeWorkflowPath -Raw
+        $ghosttyProductWorkflowPath = Join-Path $repoRoot '.github/workflows/ghostty-runtime-product-qualification.yml'
+        $ghosttyProductWorkflow = Get-Content -LiteralPath $ghosttyProductWorkflowPath -Raw
+    }
+
     It 'restores exact tracked bytes through a deep checkout with Git long paths enabled' {
         $fixture = New-RSReleasePolicyTestRoot
         $relative = ((@('a', 'b', 'c', 'd') | ForEach-Object { 'deep-path-' + ($_ * 70) }) -join '/') + '/proof.txt'
@@ -701,6 +450,18 @@ Describe 'Release workflow source contracts' {
         $flake.IndexOf('Initialize-RSTestSandboxRoot') | Should BeLessThan $flake.IndexOf('name: Run nightly shuffle repeat lane')
         $flake | Should Match 'if:\s*\$\{\{ always\(\) && steps\.test-root\.outputs\.path != '''' \}\}'
         $flake | Should Match 'if-no-files-found:\s*error'
+        $uploadStart = $flake.IndexOf('name: Upload nightly shuffle artifacts', [StringComparison]::Ordinal)
+        $uploadStart | Should BeGreaterThan -1
+        $upload = $flake.Substring($uploadStart)
+        $upload | Should Match 'include-hidden-files:\s*true'
+        $upload | Should Match '(?m)^\s+path:\s*\|\s*$'
+        foreach ($suffix in @('/evidence/', '/runs/*/artifacts/selftest/', '/runs/*/artifacts/selftest/**/work/**',
+                '/evidence/completed-runs/*/scratch/**', '/evidence/completed-runs/*/artifacts/selftest/**/work/**',
+                '/**/*.vhd', '/**/*.vhdx', '/**/*.avhdx')) {
+            $prefix = if ($suffix -in @('/evidence/', '/runs/*/artifacts/selftest/')) { '' } else { '!' }
+            $upload | Should Match ([regex]::Escape($prefix + '${{ steps.test-root.outputs.path }}' + $suffix))
+        }
+        $upload | Should Not Match '(?m)^\s+path:\s*\$\{\{ steps\.test-root\.outputs\.path \}\}[\\/]?\s*$'
         $flake | Should Match 'Import-RSPortableBuildAttestation'
         $flake | Should Match '-ExpectedAttestationId'
         $flake | Should Match '-SelfTestRepeat 5 -SelfTestShuffleSeed \$seed -ClassifyFailures'
@@ -800,7 +561,7 @@ Describe 'Release workflow source contracts' {
         (& ([scriptblock]::Create(($helpers -join "`n") + "`nResolve-RSHostOrderedMSBuildPath -Path '$unrelated'"))) | Should Be $unrelated
         ([regex]::Matches($buildScript, 'Get-RSHostOrderedMSBuildRelativePaths \| ForEach-Object')).Count | Should Be 3
         $buildScript | Should Not Match '\\MSBuild\\Current\\Bin\\MSBuild\.exe",'
-        # MSIX remains a local packaging wrapper; public CI promotes ZIPs only.
+        # Public CI and local publication use the portable ZIP.
         $restoreScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Restore-DxUi.ps1') -Raw
         $restoreScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value
@@ -809,31 +570,6 @@ Describe 'Release workflow source contracts' {
         $diagnostics = [regex]::Match($workflow, '(?s)- name: Upload native build diagnostics(.*?)(?=      - name:)').Groups[1].Value
         $diagnostics | Should Match 'include-hidden-files: true'
         $diagnostics | Should Not Match 'steps\.test_root\.outputs\.path'
-    }
-
-    It 'maps every MSIX profile to matching product inputs without automatic sanitizer packaging' {
-        [xml]$project = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msix/RedSalamanderInstaller.wapproj') -Raw
-        $solution = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander.sln') -Raw
-        foreach ($platform in @('x64', 'ARM64')) {
-            foreach ($configuration in @('Debug', 'Release', 'ASan Debug')) {
-                $profile = "$configuration|$platform"
-                @($project.SelectNodes('//*[local-name()="ProjectConfiguration"]') | Where-Object Include -EQ $profile).Count | Should Be 1
-                $mapping = '{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.' + $profile + '.ActiveCfg = ' + $profile
-                $solution | Should Match ([regex]::Escape($mapping))
-            }
-        }
-        $solution | Should Not Match '9A97489C-F552-4B8C-875A-199D3E5A1E3A\}\.ASan Debug\|[^\r\n]+\.(Build|Deploy)\.0'
-    }
-
-    BeforeAll {
-        $releaseWorkflowPath = Join-Path $repoRoot '.ci-engine/.github/workflows/publish.yml'
-        $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
-        $ghosttyStatusWorkflowPath = Join-Path $repoRoot '.github\workflows\ghostty-runtime-status.yml'
-        $ghosttyStatusWorkflow = Get-Content -LiteralPath $ghosttyStatusWorkflowPath -Raw
-        $ghosttyNativeWorkflowPath = Join-Path $repoRoot '.github\workflows\ghostty-runtime-native-qualification.yml'
-        $ghosttyNativeWorkflow = Get-Content -LiteralPath $ghosttyNativeWorkflowPath -Raw
-        $ghosttyProductWorkflowPath = Join-Path $repoRoot '.github\workflows\ghostty-runtime-product-qualification.yml'
-        $ghosttyProductWorkflow = Get-Content -LiteralPath $ghosttyProductWorkflowPath -Raw
     }
 
     It 'uses normal dependency success semantics and no permissive artifact download' {
@@ -985,9 +721,10 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow | Should Match 'persist-credentials:\s*false'
         $ghosttyProductWorkflow | Should Match 'Import-Module.*VcpkgInstallSafety\.psm1'
         $ghosttyProductWorkflow | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$env:GITHUB_WORKSPACE'
-        $ghosttyProductWorkflow | Should Match 'VCPKG_REGISTRY_ROOT=.*\$context.RegistryRoot'
-        $ghosttyProductWorkflow | Should Not Match '\$env:VCPKG_ROOT\s*='
+        $ghosttyProductWorkflow | Should Match '\(''VCPKG_REGISTRY_ROOT='' \+ \$context\.RegistryRoot\)'
         $ghosttyProductWorkflow | Should Match '(?s)vcpkg-install\.ps1.*?-Platform ARM64.*?-VcpkgExe \.\\\.build\\vcpkg-tool\\vcpkg\.exe.*?-VcpkgRoot \.\\\.build\\vcpkg-registry'
+        $ghosttyProductWorkflow | Should Not Match '\$env:VCPKG_ROOT\s*='
+        $ghosttyProductWorkflow.IndexOf('Bootstrap the pinned vcpkg tool') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Install pinned ARM64 dependencies')
         $ghosttyProductWorkflow.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('.\vcpkg-install.ps1')
         $ghosttyProductWorkflow.IndexOf('.\vcpkg-install.ps1') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Build admitted Debug ARM64 product with tests')
         $ghosttyProductWorkflow | Should Match 'Configure pinned ARM64 vcpkg build integration'

@@ -1,0 +1,1616 @@
+{
+  "run_id": "20261031T190456Z-41600-6be1054aac134f2d80c59f6a900805ab",
+  "results": [
+    {
+      "path": "Tools\\Tests\\BuildReproducibility.Tests.ps1",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 4382,
+      "cases": [
+        {
+          "Name": "uses one complete manifest for every supported flavor and platform",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "replaces plugin-local xcopy batches with fail-closed MSBuild tasks",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "honors test-harness definitions in Release and permits bounded build parallelism",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects a missing required staged dependency by exact output name",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "stages and validates the SearchService SQLite runtime at the profile root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Terminal runtime sources literal, platform-specific, and nested under the plugin output",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "validates a clean extracted portable package from the shared manifest",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "makes fresh-extraction app and plugin smoke part of portable packaging",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "publishes portable ZIPs through guarded same-directory atomic replacement",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "runs app and plugin extraction probes through contained process support",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "formats only tracked owned files with the pinned installer from a foreign working directory",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires explicit standalone package identities and never allocates from repository version state",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps standalone package mutators under balanced fail-closed coordination",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "validates exact Winget versions and portable archive identities before hashing",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps each release MSIX build in one contained packaging transaction",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps MSI staging aligned with the two shipping executables and optional service component",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "excludes build provenance and test sidecars from MSI and MSIX harvested content",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "stages the actual MSI copy recipe without root receipts and rejects leaked evidence before harvest",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the symbols MSI allowlist aligned with shipped binaries and plugin PDBs",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps MSIX identity applications architecture stamping and directory-preserving harvest aligned",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "stages MSIX identity changes without changing the tracked manifest",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "separately pins and validates the vcpkg executable revision locally and in CI",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "installs CI dependencies from a registry checkout of the manifest baseline beside the pinned executable",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps native ARM64 regression behind main admission and PRs compiler-free",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps manual ASan on both native architectures with seeded detector proof",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "accepts a relocated VS18 MSBuild and rejects wrong layouts and non-MSBuild binaries",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        }
+      ]
+    },
+    {
+      "path": "Tools\\Tests\\ToolInventory.Tests.ps1",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 8004,
+      "cases": [
+        {
+          "Name": "classifies every tracked or non-ignored file in the current Tools tree",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects an unclassified top-level file even when a broad rule would match it",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects an unclassified nested file outside reviewed directory rules",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "fails when a derived module consumer is missing from usedBy",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects stale explicit paths",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "ignores tracked files deleted from the working tree during an in-progress move",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires explicit prerequisites metadata on entries and directory rules",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires retention policy for compatibility records",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires every non-null replacement to be an exact existing Tools path",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects historical entries without a reviewed manual entry point",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects unreviewed and missing historical manual entry-point paths",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects a reviewed manual root whose inventory entry is not a historical command",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "allows reviewed manual roots to retain themselves and exposes the resolved closure",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "uses a reviewed nested rule when exactly one rule matches",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "renders a useful Markdown file inventory",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "documents the command contract and supports Validate as an alias",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        }
+      ]
+    },
+    {
+      "path": "Tools\\Tests\\TestHarnessSourceContracts.Tests.ps1",
+      "passed": 221,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 12779,
+      "cases": [
+        {
+          "Name": "keeps ReFS index coverage inside the runner sandbox and skips a different filesystem",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the MTP fake backend behind the test-enabled build gate",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Terminal transcripts shell-free and provider scenes confined to owned fakes",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "uses private synthetic state and the canonical nonactivating capture helpers",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "admits the directory-cache cancellation Commands case without warning or window isolation only by exact selection",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Search documentation seeding UI-thread-only and refuses an active search",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "repaints programmatic Preferences tree selection before capturing its page",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps UIA observations and synthetic desktop interference free of physical input writes",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires process-filtered foreground evidence and a bounded private event drain",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ambient and negative-control cases in the noninteractive viewer inventory",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "validates Graph and preauthenticated upload targets before credential-bound dispatch",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps bearer values and opaque query values out of diagnostics and serialized header blocks",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Mouse in both manual Preferences projections and verifies live Apply persistence",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "documents every required draft-to-disk integration layer in the spec and project skill",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "documents and enforces bounded self-test timeout multipliers",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps scaled self-test timeouts finite and nonzero for nonzero bases",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "waits for runner-native self-test processes by direct process handle",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the manually dispatched shuffle repeat lane separate from the PR gate",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "separates ViewerPE read-only desktop observation from restoration write authority",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "gives ViewerPETests nested shell churn its own timeout budget",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerVLC dependency loading isolated from the process DLL directory",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "bounds multi-plugin metadata before host indexing and reference-counts shared localization owners",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps viewer threadpool module pins alive through the callback return boundary",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects viewer async work without module pins and impossible provider read counts",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerWeb security setup fail-closed and teardown outside DllMain",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerPE reader commitments exact and current terminal delivery recoverable",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerSpace close non-waiting with an honest runtime unload and shutdown gate",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "publishes authoritative ViewerSpace totals before root completion becomes visible",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "captures viewer payload fields before moving the payload into PostMessagePayload",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerText Save As source-first and transactionally committed",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps ViewerText async decode and clipboard work terminal and bounded",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires git identity before accepting self-test archive repo roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps self-test archive parent walking bounded by a named limit",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "scopes the self-test run mutex to the isolated self-test root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "lets native selftests consume the unified test root and run id directly",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "exposes native TestSandbox scratch acquisition separate from last_run artifacts",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "removes native self-test sandboxes without traversing directory reparse points",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps nested settings-save child artifacts shallow and removes them before audit",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "authorizes test roots centrally and fails closed before native mutation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes RedConfigureTests scratch through the unified TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes ViewerSqliteTests scratch through the unified TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes CrashHandlingTests scratch through the unified TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes Commands plugin-config scratch through native TestSandbox roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "recovers plugin-config debug tab traversal from logical focus position before first-control fallback",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps plugin-config tab traversal retries from sending an extra tab after a successful advance",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "waits for preview fallback text and source-pane focus together",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "separates configured preview publication from external desktop deactivation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "makes quick-search tests own pane sort and extension visibility",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps quick-search navigation expectations tied to visible match order",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Hot Paths browse page-settle failures diagnostic-rich",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "uses condition-based focus waiting for Viewers roundtrip category navigation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "retries Preferences focus acquisition during condition-based waits",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "waits for Plugins sort-search header rects before reorder-resize interactions",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "waits for Viewers sort-search header rects before reorder-resize interactions",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps broad Preferences focus paths on the shared focus helper",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "defers change-case folder focus restoration until modal teardown unwinds",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "retries transient selected-path lease observations to a diagnostic quiet point",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps broad Commands app navigation shell focus checks condition-based",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "makes the app Shortcuts navigation-shell fixture own its settings and window isolation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates the Preferences Keyboard reset live interaction fixture",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates the pane-filter DxUi surface fixture before global prompt discovery",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates both Compare navigation-shell fixtures before asserting restored focus",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates mouse-opened menu keyboard ordering and preserves split post diagnostics",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "reacquires the submenu placement cascade target after root-menu initialization",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "reports locked-desktop clipboard and foreground dependencies as explicit Commands skips",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Preferences category-tree UIA selection pinned to category-id selection",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Preferences debug category selection independent from transient snapshot capture",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Preferences category churn settled, attributable, and bounded under uncontended focus",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates Compare Directories wrap traversal and keeps failures diagnostic-rich",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "carries selected FolderView rename identity across bounded refresh interleavings",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes Commands long-path and high-cardinality fixtures through native TestSandbox roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps sort product-paint observation free of synthetic warm-up and invalidation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps pre-timer JSONL observations free of writer synchronization",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes ShellCommands shortcut save temp files through native TestSandbox roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes PerformanceTests2 scratch through the unified TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes BatchRename window fixture roots through native TestSandbox roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes ViewerPETests fixture files through the unified TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps shared TestSupport sandbox and environment policies explicit",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps viewer message pumping and typed snapshot polling on bounded shared support",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes Compare dummy filesystem scratch through native TestSandbox roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes Tools Pester scratch through the unified TestSandbox root",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps standalone vcpkg merge fixtures inside a unique marked TestSandbox run",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "preserves bounded Pester assertion and stack details in failed case reasons",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "gives retained Preferences page-state activation a broad-order settle budget",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "unwinds retained Plugins children before parent-grid UIA validation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps gated test sources inside TestSandbox instead of raw temp or profile roots",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes SettingsStore app files through the unified TestSandbox root during test runs",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps SettingsStore TestSandbox path overrides behind ENABLE_TESTS",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "moves Compare foreground service capture files into TestSandbox instead of process temp",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "wraps foreground search service selftest processes in a kill-on-close JobObject",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps broad-order foreground Search service failures process-diagnostic",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps foreground Search service stdout tests independent from hidden readiness requests",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the shared child-process runner contained, concurrently drained, and parity-tested",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps the legacy breadcrumb peer fixture suspended and self-contained",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "assigns interrupted-notice IDs inside the same mutex section as publication",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps local index snapshot reload timing advisory instead of a correctness ceiling",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps SQLite traversal-seed currentness-unproven state from being downgraded by metadata probes",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps foreground Search service status probes behind a condition-based status wait",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "lets delete-burst maintenance tests accept an already completed first idle window",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "drains Batch Rename central test tasks before provider teardown",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "scales named raw self-test waits through the timeout multiplier",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FileOperations popup fixtures inside the current self-test process",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes persistent View-to-Files menu hover through the menu bar root-switch path",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "centralizes the Commands real-input warning and guards every cursor-warp family",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "reuses one native warning across foreground suites and preserves it through Commands isolation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "opens the temporary menu-bar hover-switch popup through keyboard activation",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "parks real cursor away from DxUi popup initial hover in menu selftests",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "restores broad command-probe UI state and isolates modeless ownership fixtures",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Shortcuts live UIA search interaction message-pumped under broad order",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Compare Options close-reopen churn globally settled before live UIA reuse",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps File Operations speed-limit prompt churn ValuePattern checks condition-based",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps dialog prompt model and UIA checks condition-based under broad order",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Item Properties UIA interaction off the owning window thread and joins bounded workers",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps broad-order Commands fixtures pinned to the state each case owns",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Find destination/action button probes pinned to deterministic input state",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Find header-drag reorder failures diagnostic-rich",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Find reordered-sort restore checks diagnostic-rich under broad order",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Compare Directories lower-card scroll focus failures diagnostic-rich",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Connection Manager long-run open-close settled and diagnostic-rich",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps exact-run TestSandbox cleanup root-confined, dry-run gated, and ShouldProcess protected",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rejects retired outside-root cleanup in the unified runner",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "bypasses fatal error modal dialogs while self-tests are running",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Commands Preferences chunks namespace-self-contained",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps IconCache association LRU perf emission outside the association cache lock helper",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "bounds DirectoryInfoCache eviction when protected entries exceed the cache budget",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FolderView thumbnail WIC factory ownership local to the processing thread",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps IMAP summary repair budget exhaustion local to the current repair pass",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "clears FolderView incremental-search layout effects over the visual label text",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "matches FolderView incremental-search highlights against visual display names",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "cleans stale FolderView incremental-search drawing effects when search is inactive",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "exposes runner-native self-test case listing without executing case bodies",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "exposes native self-test repeat and seeded shuffle execution controls",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "reinitializes Commands UIA cache after explicit-order case listing",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates every Commands case before fixture dispatch",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "resets pane content and transient UI state between Commands explicit-order cases",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "rehydrates runtime plugins after the MTP deferred-unload probe",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps CompareDirectories seeded shuffle native through explicit case order",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FileOperations repeat coverage native instead of runner-only",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FolderView overlay perf sample sufficiency advisory",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "uses shared self-test result emission for ad hoc and state-machine cases",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "preserves partial self-test results when a case or suite crashes",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps injected classifier proof hooks explicit and debug-only",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps CompareDirectories runner-listed case names unique",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps CompareDirectories literal RunCase names listed for runner coverage",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "opens the file-operations custom speed-limit prompt asynchronously for self-tests",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FileOperations self-test case prefixes runnable",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FileOperations discovery perf counters race-free under worker concurrency",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "closes the discovery scope of every Local mutation entry point exactly once",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "gives every provider mutation entry point on a direct route one discovery scope",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps admitted CopyOnly MOVE on the bridge with source cleanup disabled",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Copy issue handling from converting PermanentDelete into a Recycle opt-out",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps FileOperations conflict routing in one arbiter and one engine policy builder",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps same-host overlap choices bounded, relation-scoped, and safely defaulted",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps cached Keep Both selected-root and descendant grants separate with native witnesses",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Riptide low-risk hardening invariants wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Floodgate data-safety invariants wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Microsoft Drive merge destination-metadata reuse and Release proof wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Delta reverify file-system safety fixes wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps possible file-operation artifact projections visible and recovery-free in FolderView Compare and Find",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Change Case discovery fail-closed and task updates token-owned",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "shares only safe File Operations durable-state file mechanics",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps R1c exact compensation independent from primary cancel and exposes committed cleanup debt",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps File Operations scheduler failure policy local and the worker start gate cancelable",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Curl reader and full-buffer writer waits stop-aware",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "isolates the destructive missing-directory hot-reload fixture from the shared settings run",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps bounded registry strings and canonical WSL discovery wired through Common",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps RedConfigure rectangular paste bound to visible row and culture identities",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Riptide test-credibility gaps closed",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps focus-independent GUI coverage behind the shared no-activation guard",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes application foreground requests through the cooperative no-activation policy",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps new native focus calls inside reviewed focus-sensitive test adapters",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "stops File Operations interaction immediately when foreground activation fails",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "serializes build and test artifacts and contains every shared process launch tree",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps IronLedger FolderView data-integrity guards wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 5 pack-and-delete output safety wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 5 local outputs transactional",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 5 archive extraction conflicts explicit and transactional",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 7 settings commits conflict-aware and recoverable",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 8 connection identity and authorization boundaries wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 13 local and Dummy provider mutations fail-before-change",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps production translation units independently compiled",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "TestConnectionCredentialPromptDestroysWindowOnModalQuit",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "never mounts a volume from native code and lets F7 consume only the harness-proved test-owned VHDX",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "agrees on the test-owned VHDX mount layout, F7 name and environment between the harness and native code",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps every link, mount, SUBST and share call in test code inside a sandbox-guarded allowlisted helper",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "flags the old F7 real-volume mount, an unguarded helper call and unallowlisted links",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "fails, never skips, a FileOps case whose loopback share alias the sandbox guard refuses",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "guards every link the FileSystem object-binding debug self-test creates",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "journals the Recycle Bin item every Local recycle progress sink sees created",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "purges a case's recycled items at every case and phase boundary, whatever the outcome",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "requires every recycle-bin batch phase to purge exactly the items its task recycled",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "deletes only a proven entry of the current user's Recycle Bin and never enumerates the bin",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "routes each host FileInfo consumer through the bounded cursor and checks query results and capacity",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "validates provider child components only at filesystem joins",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        },
+        {
+          "Name": "keeps provider work off UI state and retires a held scan through the existing reaper seam",
+          "Result": "Passed",
+          "FailureMessage": "",
+          "StackTrace": ""
+        }
+      ]
+    }
+  ]
+}

@@ -5,9 +5,11 @@
 #include <windows.h>
 
 #include "FileSystemPathIdentity.h"
+#include "LocalizationManager.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -21,6 +23,15 @@ struct NonRevertableFileOperationPromptCounts
     std::filesystem::path sampleFile;
     bool hasSampleFile = false;
 };
+
+enum class FileOperationCountNoun : uint8_t
+{
+    Item,
+    File,
+    Folder,
+};
+
+[[nodiscard]] std::wstring FormatFileOperationCountNoun(FileOperationCountNoun noun, unsigned long long count) noexcept;
 
 // Display-only: sourceIdentity may be supplied only for one captured endpoint
 // identity domain. Unknown/mixed domains use the bounded Multiple locations

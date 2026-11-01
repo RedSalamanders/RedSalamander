@@ -1,0 +1,28 @@
+{
+  "run_id": "20261101T104606Z-89908-22516b9259ea4450a7fb9a282023b137",
+  "scope": "Plan and tool-consumer metadata publication after qualified implementation; native receipts keep their original snapshot",
+  "documentation_check_run": "20261101T104129Z-78664-989551e02f6647f1b7586c1b90f6cc4e",
+  "documentation_passed": 102,
+  "documentation_failed": 0,
+  "qualified_source_snapshot_id": "eadb3ec0caa3f840950eae4eb9c60f6b993f2b5af28624f6a8f67b102292c56c",
+  "publication_source_snapshot_id": "ad1a81247fa01274cfc310a927141400d468dfbd67c5afbb133506642d0c8ab5",
+  "post_qualification_changed_paths": [
+    "Changes/2026-11-01-review-plan-acceptance.md",
+    "Specs/Plans/WIP/CodeReview_MainMerges_2026-10-28.md",
+    "Specs/Plans/WIP/CodeReview_MasterMerges_2026-10-05.md",
+    "Specs/Plans/WIP/README.md",
+    "Tools/tool-inventory.json"
+  ],
+  "pester_total": 17,
+  "pester_passed": 17,
+  "pester_failed": 0,
+  "pester_skipped": 0,
+  "xml_cases": 17,
+  "xml_failures": 0,
+  "xml_sha256": "29ef9523e00223893c49949c62aa0263810c4637eee441eaf1b6f0433979ae60",
+  "changelog": "passed",
+  "tool_inventory": "passed",
+  "whitespace": "passed",
+  "archive_violations": 0,
+  "raw_root": "Z:\\RedSalamander.Perf\\runs\\20261101T104606Z-89908-22516b9259ea4450a7fb9a282023b137\\scratch\\plan-publication"
+}

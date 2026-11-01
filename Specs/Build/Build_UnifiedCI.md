@@ -51,6 +51,11 @@ remains enabled; CodeQL uses explicit C/C++ build mode none, which does not invo
 Compiler-free CodeQL does not analyze generated code as completely as a build-based scan:
 [GitHub build-mode contract](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/manage-your-configuration/codeql-for-compiled-languages).
 
+The manual Flake Convergence workflow uploads governed evidence and live selftest artifacts,
+including hidden evidence metadata, only when its selected test root is available. It excludes
+completed-run scratch, selftest work trees and VHD/VHDX/AVHDX payloads; it never uploads the whole
+sandbox or uses a drive-root fallback. These upload exclusions preserve local retained evidence.
+
 Publication is an explicit trusted-main action, defaulting to prepare-only. Select an original successful
 qualify.yml run with complete matching receipts and retained ZIPs for both native architectures. Publication
 promotes those exact bytes without building, restamping, signing afterwards or substituting an older green

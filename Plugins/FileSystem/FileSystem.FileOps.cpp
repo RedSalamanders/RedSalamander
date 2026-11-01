@@ -46,7 +46,6 @@ namespace FileSystemInternal
 {
 // Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded while worker threads are running.
 const int kFileSystemModuleAnchor = 0;
-std::atomic<uint64_t> g_copyTempPathCounter{0};
 
 constexpr unsigned int kFileOpsMaxTransferWorkers   = 16u;
 constexpr unsigned int kFileOpsSchedulerWorkerSlots = kFileOpsMaxTransferWorkers + 1u;
@@ -2381,7 +2380,7 @@ struct FileIdentity final
 
 [[nodiscard]] std::wstring StripWin32ExtendedPrefix(std::wstring_view path)
 {
-    if (path.rfind(L"\\\\?\\UNC\\", 0) == 0)
+    if (Common::Paths::ClassifyWindowsPath(path) == Common::Paths::WindowsPathClass::ExtendedUnc)
     {
         return std::wstring(L"\\\\") + std::wstring(path.substr(8));
     }
@@ -2394,7 +2393,7 @@ struct FileIdentity final
 
 [[nodiscard]] std::wstring NtPathToWin32Path(std::wstring_view path)
 {
-    if (path.rfind(L"\\??\\UNC\\", 0) == 0)
+    if (OrdinalString::StartsWithNoCase(path, L"\\??\\UNC\\"))
     {
         return std::wstring(L"\\\\") + std::wstring(path.substr(8));
     }
@@ -2402,7 +2401,7 @@ struct FileIdentity final
     {
         return std::wstring(path.substr(4));
     }
-    if (path.rfind(L"\\\\?\\UNC\\", 0) == 0)
+    if (Common::Paths::ClassifyWindowsPath(path) == Common::Paths::WindowsPathClass::ExtendedUnc)
     {
         return std::wstring(L"\\\\") + std::wstring(path.substr(8));
     }
@@ -2420,7 +2419,16 @@ struct FileIdentity final
         return std::wstring(path);
     }
 
-    if (path.rfind(L"\\\\", 0) == 0)
+    const auto pathClass = Common::Paths::ClassifyWindowsPath(path);
+    if (pathClass == Common::Paths::WindowsPathClass::ExtendedUnc)
+    {
+        return std::wstring(L"\\??\\UNC\\") + std::wstring(path.substr(8u));
+    }
+    if (pathClass == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute || pathClass == Common::Paths::WindowsPathClass::ExtendedOther)
+    {
+        return std::wstring(L"\\??\\") + std::wstring(path.substr(4u));
+    }
+    if (pathClass == Common::Paths::WindowsPathClass::Unc)
     {
         return std::wstring(L"\\??\\UNC\\") + std::wstring(path.substr(2));
     }
@@ -4199,16 +4207,6 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
                                    HANDLE destinationFile,
                                    LPVOID context) noexcept;
 
-[[nodiscard]] std::wstring MakeCopyTempSiblingPath(std::wstring_view finalPath) noexcept
-{
-    const uint64_t counter = g_copyTempPathCounter.fetch_add(1u, std::memory_order_acq_rel);
-    return std::format(L"{}.rs_copy_tmp_{:08X}_{:08X}_{:016X}",
-                       finalPath,
-                       static_cast<unsigned int>(::GetCurrentProcessId()),
-                       static_cast<unsigned int>(::GetCurrentThreadId()),
-                       static_cast<unsigned long long>(counter));
-}
-
 void RollBackStagedProgress(OperationContext& context, CopyProgressContext& progress) noexcept
 {
     if (progress.lastItemBytesTransferred == 0u)
@@ -4455,10 +4453,10 @@ void MaybeReserveDestinationAllocation(const OperationContext& context,
     constexpr unsigned int kMaxStageAttempts = 32u;
     for (unsigned int attempt = 0u; attempt < kMaxStageAttempts; ++attempt)
     {
-        stagePath = MakeCopyTempSiblingPath(destination.display);
-        if (stagePath.empty())
+        hr = MakeStageSiblingPath(destination.display, L".rs_copy_tmp_", stagePath);
+        if (FAILED(hr))
         {
-            return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+            return hr;
         }
         hr = context.objectBinding->CreateExclusiveWriter(stagePath.c_str(), context.options, writer.put(), ownedStage.put());
         if (SUCCEEDED(hr))
@@ -5682,10 +5680,10 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
     constexpr unsigned int kMaxStageAttempts = 32u;
     for (unsigned int attempt = 0u; attempt < kMaxStageAttempts; ++attempt)
     {
-        stagePath = MakeCopyTempSiblingPath(destination.display);
-        if (stagePath.empty())
+        hr = MakeStageSiblingPath(destination.display, L".rs_copy_tmp_", stagePath);
+        if (FAILED(hr))
         {
-            return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+            return hr;
         }
         hr = context.objectBinding->CreateExclusiveLink(stagePath.c_str(), &information, context.options, ownedStage.put());
         if (SUCCEEDED(hr))
@@ -6104,10 +6102,10 @@ struct LocalCreatedDirectory final
     HRESULT hr                                   = E_UNEXPECTED;
     for (unsigned int attempt = 0u; attempt < kMaximumStageAttempts; ++attempt)
     {
-        stagePath = MakeCopyTempSiblingPath(destination.display);
-        if (stagePath.empty())
+        hr = MakeStageSiblingPath(destination.display, L".rs_copy_tmp_", stagePath);
+        if (FAILED(hr))
         {
-            return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+            return hr;
         }
         hr = context.objectBinding->CreateExclusiveDirectory(stagePath.c_str(), context.options, ownedStage.put());
         if (SUCCEEDED(hr))
@@ -11295,7 +11293,9 @@ HRESULT FileSystemInternal::ReadBoundLocalLink(HANDLE boundHandle, const FileSys
     // No target is resolved, opened, or rewritten, so a link into the copied tree keeps naming the
     // source location. The transform's roots and component mappings were validated above for ABI
     // hygiene only; the mapping enum's other values are reserved for an optional transform.
-    const std::wstring encodedTarget = ! parsed.printPath.empty() ? parsed.printPath : NtPathToWin32Path(parsed.substitutePath);
+    // PrintName is advisory display text and can disagree with the effective target. Preserve
+    // the substitute payload, including its relative spelling, instead of changing link meaning.
+    const std::wstring encodedTarget = parsed.isRelative ? parsed.substitutePath : NtPathToWin32Path(parsed.substitutePath);
     if (encodedTarget.empty())
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -11412,6 +11412,15 @@ HRESULT FileSystemInternal::CreateExclusiveLocalLink(const wchar_t* stagePath,
 void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
     const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool { return kFileSystemDebugCheck(condition, message, passed, failed); };
+
+    if (! check(Win32PathToNtPath(LR"(\\?\C:\fixtures\leaf)") == LR"(\??\C:\fixtures\leaf)" &&
+                    Win32PathToNtPath(LR"(\\?\unc\server\share\leaf)") == LR"(\??\UNC\server\share\leaf)" &&
+                    Win32PathToNtPath(LR"(\\server\share\leaf)") == LR"(\??\UNC\server\share\leaf)" &&
+                    Win32PathToNtPath(LR"(\??\C:\fixtures\leaf)") == LR"(\??\C:\fixtures\leaf)",
+                L"link targets must retain drive/UNC meaning across extended and NT prefixes"))
+    {
+        return;
+    }
 
     // Recursive workers borrow one selected item's facts. Exercise the production join with
     // explicit storage outcomes, including a published root with uncertain child cleanup.
@@ -11551,12 +11560,22 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
     const std::filesystem::path rootRelativeFileLink  = root / L"root-relative-file-link";
     const std::filesystem::path outsideTarget =
         root.parent_path() / std::format(L"RedSalamander-ObjectBinding-Outside-{}-{}.bin", GetCurrentProcessId(), GetTickCount64());
-    const std::filesystem::path outsideFileLink          = root / L"outside-file-link";
-    const std::filesystem::path stagePath                = root / L"stage.bin";
-    const std::filesystem::path publishedPath            = root / L"published.bin";
-    const std::filesystem::path abortStagePath           = root / L"abort-stage.bin";
-    const std::filesystem::path replaceStagePath         = root / L"replace-stage.bin";
-    const std::filesystem::path replaceDestinationPath   = root / L"replace-destination.bin";
+    const std::filesystem::path outsideFileLink        = root / L"outside-file-link";
+    const std::filesystem::path stagePath              = root / L"stage.bin";
+    const std::filesystem::path publishedPath          = root / L"published.bin";
+    const std::filesystem::path abortStagePath         = root / L"abort-stage.bin";
+    const std::filesystem::path replaceDestinationPath = root / (std::wstring(251u, L'r') + L".bin");
+    std::wstring boundedStagePath;
+    std::wstring secondStagePath;
+    if (! check(SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), L".rs_copy_tmp_", boundedStagePath)) &&
+                    SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), L".rs_copy_tmp_", secondStagePath)) &&
+                    boundedStagePath != secondStagePath && std::filesystem::path(boundedStagePath).parent_path() == root &&
+                    std::filesystem::path(boundedStagePath).filename().native().size() == 255u,
+                L"255-unit destination leaves need distinct bounded random stage names in the same parent"))
+    {
+        return;
+    }
+    const std::filesystem::path replaceStagePath         = boundedStagePath;
     const std::filesystem::path raceStagePath            = root / L"race-stage.bin";
     const std::filesystem::path raceDestinationPath      = root / L"race-destination.bin";
     const std::filesystem::path raceMovedPath            = root / L"race-original-moved.bin";
@@ -11592,8 +11611,8 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         static_cast<void>(DeleteFileW(stagePath.c_str()));
         static_cast<void>(DeleteFileW(publishedPath.c_str()));
         static_cast<void>(DeleteFileW(abortStagePath.c_str()));
-        static_cast<void>(DeleteFileW(replaceStagePath.c_str()));
-        static_cast<void>(DeleteFileW(replaceDestinationPath.c_str()));
+        static_cast<void>(DeleteFileW(ToExtendedPath(replaceStagePath.native()).c_str()));
+        static_cast<void>(DeleteFileW(ToExtendedPath(replaceDestinationPath.native()).c_str()));
         static_cast<void>(DeleteFileW(raceStagePath.c_str()));
         static_cast<void>(DeleteFileW(raceDestinationPath.c_str()));
         static_cast<void>(DeleteFileW(raceMovedPath.c_str()));
@@ -11775,6 +11794,19 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         });
         ReparsePointData data{};
         HRESULT hr = BuildSymlinkReparseData(std::wstring(targetText), relative, data);
+        if (SUCCEEDED(hr) && relative)
+        {
+            // Keep SubstituteName intact but make the advisory PrintName disagree. A copied
+            // link must still name the original relative target rather than this display label.
+            const auto* header      = reinterpret_cast<const ReparsePointHeader*>(data.buffer.data());
+            const auto* symlink     = reinterpret_cast<const SymbolicLinkReparseHeader*>(data.buffer.data() + sizeof(ReparsePointHeader));
+            const size_t printStart = sizeof(ReparsePointHeader) + sizeof(SymbolicLinkReparseHeader) + symlink->printOffset;
+            if (header->tag == IO_REPARSE_TAG_SYMLINK && symlink->printLength >= sizeof(wchar_t))
+            {
+                const wchar_t displayOnly = L'!';
+                std::memcpy(data.buffer.data() + printStart, &displayOnly, sizeof(displayOnly));
+            }
+        }
         if (SUCCEEDED(hr))
         {
             hr = WriteReparsePointData(linkPath.wstring(), data);
@@ -11994,16 +12026,23 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
 
     const auto writeFile = [&](const std::filesystem::path& path, std::byte firstByte) noexcept -> bool
     {
+        const std::wstring extendedPath = ToExtendedPath(path.native());
         wil::unique_hfile file(CreateFileW(
-            path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+            extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
         const std::array<std::byte, 4u> bytes{{firstByte, std::byte{0x42}, std::byte{0x43}, std::byte{0x44}}};
         DWORD written = 0u;
         return file && WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != FALSE && written == bytes.size();
     };
     const auto readFirstByte = [&](const std::filesystem::path& path, std::byte& firstByte) noexcept -> bool
     {
-        wil::unique_hfile file(CreateFileW(
-            path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        const std::wstring extendedPath = ToExtendedPath(path.native());
+        wil::unique_hfile file(CreateFileW(extendedPath.c_str(),
+                                           GENERIC_READ,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           nullptr,
+                                           OPEN_EXISTING,
+                                           FILE_ATTRIBUTE_NORMAL,
+                                           nullptr));
         DWORD read = 0u;
         return file && ReadFile(file.get(), &firstByte, sizeof(firstByte), &read, nullptr) != FALSE && read == sizeof(firstByte);
     };
@@ -12172,6 +12211,17 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         return;
     }
     replaceWriter.reset();
+    FileSystemBasicInformation hiddenMetadata{};
+    hiddenMetadata.sizeBytes = sizeof(hiddenMetadata);
+    if (! check(SUCCEEDED(replaceStage->GetBasicInformation(&hiddenMetadata)), L"replacement stage metadata must be readable"))
+    {
+        return;
+    }
+    hiddenMetadata.attributes |= FILE_ATTRIBUTE_HIDDEN;
+    if (! check(SUCCEEDED(replaceStage->SetBasicInformation(&hiddenMetadata)), L"hidden source metadata must apply before publication"))
+    {
+        return;
+    }
     publishResult           = {};
     publishResult.sizeBytes = sizeof(publishResult);
     published.reset();
@@ -12183,7 +12233,11 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         return;
     }
     std::byte firstByte{};
-    if (! check(readFirstByte(replaceDestinationPath, firstByte) && firstByte == std::byte{0x6e}, L"replacement destination should contain the staged bytes"))
+    const DWORD publishedAttributes = GetFileAttributesW(ToExtendedPath(replaceDestinationPath.native()).c_str());
+    if (! check(readFirstByte(replaceDestinationPath, firstByte) && firstByte == std::byte{0x6e}, L"replacement destination should contain the staged bytes") ||
+        ! check(publishedAttributes != INVALID_FILE_ATTRIBUTES && (publishedAttributes & FILE_ATTRIBUTE_HIDDEN) != 0u &&
+                    (publishedAttributes & FILE_ATTRIBUTE_TEMPORARY) == 0u,
+                L"staged overwrite must preserve source Hidden while removing the temporary writer hint"))
     {
         return;
     }
@@ -13662,7 +13716,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
             order.emplace_back(i);
         }
 
-        std::ranges::sort(order, [&](size_t a, size_t b) noexcept { return _wcsicmp(extendedPaths[a].c_str(), extendedPaths[b].c_str()) < 0; });
+        const FileSystemPathIdentity localPathIdentity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+        std::ranges::sort(
+            order, [&](size_t a, size_t b) noexcept { return CompareFileSystemPathsByComponents(localPathIdentity, extendedPaths[a], extendedPaths[b]) < 0; });
 
         // Build a dependency graph for overlapping inputs:
         // - If A is a prefix of B, we must delete B before A to avoid parent/child races.

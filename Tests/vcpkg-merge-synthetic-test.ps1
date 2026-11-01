@@ -19,7 +19,12 @@
 
 .NOTES
     The helper is imported from Tools\Modules\Build\VcpkgInstallSafety.psm1; this script
-    must not redefine Merge-RSVcpkgTripletSafe.
+    must not redefine Merge-RSVcpkgTripletSafe. All fixtures are created below a unique
+    marked TestSandbox run. SkipCleanup retains only that exact run for diagnosis.
+
+.PARAMETER SkipCleanup
+    Preserve this invocation's unique TestSandbox run after the synthetic cases complete.
+    Without this switch, the script removes only its exact run through the canonical no-follow cleaner.
 #>
 
 [CmdletBinding()]
@@ -31,6 +36,18 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\VcpkgInstallSafety.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force -ErrorAction Stop
+
+$runId = 'vcpkg-merge-synthetic-' + [guid]::NewGuid().ToString('N')
+$runContext = New-RSTestRunContext -RepoRoot $repoRoot -RunId $runId
+$fixtureBase = New-RSTestSandboxScratchDirectory `
+    -RepoRoot $repoRoot `
+    -Harness 'vcpkg-merge-synthetic' `
+    -Case 'fixtures' `
+    -RunId $runContext.RunId
+$script:caseNumber = 0
+$script:testRoot = $null
+[void](Assert-RSTestSandboxContainedPath -TestRoot $runContext.TestRoot -Path $fixtureBase -RequireDescendant)
 
 function New-TestFile {
     param([string]$Path, [string]$Content)
@@ -53,14 +70,13 @@ function Open-Lock {
         $Share)
 }
 
-$testRoot = Join-Path $repoRoot '.build\merge-synthetic-test'
 $failures = @()
 
 function Reset-TestRoot {
-    if (Test-Path -LiteralPath $testRoot) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
+    $script:caseNumber++
+    $script:testRoot = Join-Path $fixtureBase ('case-{0:D2}' -f $script:caseNumber)
+    [void](Assert-RSTestSandboxContainedPath -TestRoot $runContext.TestRoot -Path $script:testRoot -RequireDescendant)
+    New-Item -ItemType Directory -Path $script:testRoot -Force | Out-Null
 }
 
 try {
@@ -194,7 +210,7 @@ try {
         exit 1
     }
 } finally {
-    if (-not $SkipCleanup -and (Test-Path -LiteralPath $testRoot)) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not $SkipCleanup) {
+        Remove-RSTestSandboxExactRunDirectory -TestRoot $runContext.TestRoot -RunId $runContext.RunId
     }
 }

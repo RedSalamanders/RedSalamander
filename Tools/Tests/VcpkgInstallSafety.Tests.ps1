@@ -7,6 +7,7 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Build\VcpkgInstallSafety.psm1
 Import-Module $testRunPlanModule -Force -ErrorAction Stop
 Import-Module $helperModule -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\DxUiPaths.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 function New-RSTemporaryVcpkgInstallSafetyRoot {
     return (New-RSTestSandboxScratchDirectory `
@@ -109,8 +110,10 @@ Describe 'Vcpkg install safety helper' {
                 (Join-Path $versionDirectory 'alpha.json'),
                 '{"versions":[{"version-semver":"1.2.3","port-version":2,"git-tree":"0123456789abcdef"}]}')
 
-            { Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot } |
-                Should Not Throw
+            $available = Invoke-RSTestBlock {
+                Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot
+            }
+            $available.Succeeded | Should Be $true
         } finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -156,8 +159,10 @@ Describe 'Vcpkg install safety helper' {
                 (Join-Path $versionDirectory 'alpha.json'),
                 '{"versions":[{"version":"1.2.5","port-version":0,"git-tree":"fedcba9876543210"},{"version":"1.2.3","port-version":0,"git-tree":"0123456789abcdef"}]}')
 
-            { Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot } |
-                Should Not Throw
+            $available = Invoke-RSTestBlock {
+                Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot
+            }
+            $available.Succeeded | Should Be $true
         } finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -574,28 +579,128 @@ Describe 'Vcpkg dependency pins' {
         $silenced | Should Be $true
     }
 
-    $toolCheckout = Join-Path $repoRoot '.build\vcpkg-tool'
-    $toolCheckoutAtPin = $false
-    if (Test-Path -LiteralPath (Join-Path $toolCheckout 'versions\baseline.json') -PathType Leaf) {
-        $head = & git -C $toolCheckout rev-parse HEAD 2>$null
-        $toolCheckoutAtPin = ($LASTEXITCODE -eq 0) -and ([string]$head).Trim() -eq [string]$toolPin.commit
+    # These cases prove manifest data against immutable builtin-baseline Git objects.
+    # They do not qualify the current vcpkg executable checkout or bootstrap state.
+    $toolObjectStore = Join-Path $repoRoot '.build\vcpkg-tool'
+    $baselineCommit = [string]$manifest.'builtin-baseline'
+    if ($baselineCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'vcpkg builtin-baseline must be a full commit SHA before reading Git objects.' }
+    $baselinePaths = [System.Collections.Generic.List[string]]::new()
+    $packageNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $baselinePaths.Add('versions/baseline.json')
+    foreach ($dependency in @($manifest.dependencies)) {
+        if ($dependency -is [string] -or $null -eq $dependency.PSObject.Properties['version>=']) { continue }
+        [void]$packageNames.Add([string]$dependency.name)
+    }
+    foreach ($override in @($manifest.overrides)) { [void]$packageNames.Add([string]$override.name) }
+    foreach ($name in $packageNames) {
+        if ($name -cnotmatch '^[a-z0-9][a-z0-9.+-]*$') { throw "Unsafe vcpkg package name in manifest: '$name'" }
+        $prefix = $name.Substring(0, 1).ToLowerInvariant()
+        $baselinePaths.Add("versions/$prefix-/$name.json")
+    }
+    foreach ($relative in @(
+        'ports/aws-c-common/vcpkg.json',
+        'ports/aws-c-common/portfile.cmake',
+        'ports/aws-c-common/disable-internal-crt-option.patch'
+    )) { $baselinePaths.Add($relative) }
+    $baselinePaths = @($baselinePaths | Sort-Object -Unique)
+
+    # --no-lazy-fetch keeps partial/promisor clones offline. A missing commit/tree/blob is
+    # an explicit local-object prerequisite skip; an absent expected path or materialization error fails.
+    $baselineObjectUnavailableReason = $null
+    $baselineBlobIds = @{}
+    if (-not (Test-Path -LiteralPath (Join-Path $toolObjectStore '.git'))) {
+        $baselineObjectUnavailableReason = "No managed vcpkg Git object store is available at $toolObjectStore."
+    } else {
+        $commitCheck = @(& git --no-lazy-fetch -C $toolObjectStore cat-file -e "$baselineCommit^{commit}" 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            $message = $commitCheck -join "`n"
+            if ($message -match '(?i)not a valid object name|could not get object info|missing object|bad object|promisor remote|could not fetch') {
+                $baselineObjectUnavailableReason = "Pinned builtin-baseline commit $baselineCommit is absent locally: $message"
+            } else {
+                throw "Could not inspect pinned builtin-baseline commit ${baselineCommit}: $message"
+            }
+        } else {
+            foreach ($relative in $baselinePaths) {
+                $listing = @(& git --no-lazy-fetch -C $toolObjectStore ls-tree -r $baselineCommit -- $relative 2>&1)
+                if ($LASTEXITCODE -ne 0) {
+                    $message = $listing -join "`n"
+                    if ($message -match '(?i)missing|not a valid|bad object|unable to read|not a tree object|promisor remote') {
+                        $baselineObjectUnavailableReason = "Required pinned-baseline tree object for '$relative' is absent locally: $message"
+                        break
+                    }
+                    throw "Could not inspect pinned baseline path '$relative': $message"
+                }
+                $entry = @($listing | Where-Object { $_ -match "`t$([regex]::Escape($relative))$" })
+                if ($entry.Count -ne 1) { throw "Pinned baseline $baselineCommit does not contain exactly one expected file '$relative'." }
+                if ($entry[0] -notmatch '^100644 blob ([0-9a-f]{40})\t') { throw "Pinned baseline path '$relative' is not a regular blob: $($entry[0])" }
+                $blobId = $Matches[1]
+                $blobCheck = @(& git --no-lazy-fetch -C $toolObjectStore cat-file -e "$blobId^{blob}" 2>&1)
+                if ($LASTEXITCODE -ne 0) {
+                    $message = $blobCheck -join "`n"
+                    if ($message -match '(?i)missing|not a valid|bad object|unable to read|promisor remote') {
+                        $baselineObjectUnavailableReason = "Required pinned-baseline blob $blobId for '$relative' is absent locally: $message"
+                        break
+                    }
+                    throw "Could not read pinned baseline blob $blobId for '$relative': $message"
+                }
+                $baselineBlobIds[$relative] = $blobId
+            }
+        }
     }
 
-    It 'finds every floor and override in the pinned tool checkout''s version database' -Skip:(-not $toolCheckoutAtPin) {
-        # Capture the error text: under PowerShell 7, Pester 3.4's 'Should Not Throw' passes even when the block throws.
+    if ($baselineObjectUnavailableReason) { Write-Warning "Skipping immutable vcpkg baseline data cases: $baselineObjectUnavailableReason" }
+
+    # Allocate only inside an executing It, so an excluded Describe never creates scratch.
+    # Both data assertions share this fixture; it has no live tool/bootstrap authority.
+    $baselineFixtureState = @{ Value = $null }
+    $getBaselineFixture = {
+        if ($null -ne $baselineFixtureState.Value) { return $baselineFixtureState.Value }
+        if ($baselineObjectUnavailableReason) { throw $baselineObjectUnavailableReason }
+        $fixtureRoot = New-RSTemporaryVcpkgInstallSafetyRoot
+        $contentRoot = Join-Path $fixtureRoot 'pinned-baseline'
+        [void](New-Item -ItemType Directory -Path $contentRoot)
+        # Reuse the owner's raw Git reader in module scope. Per-OID reads avoid archive
+        # attribute traversal into unrelated missing objects in a partial clone.
+        $blobReader = Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -PassThru -ErrorAction Stop
+        foreach ($relative in $baselinePaths) {
+            $filePath = Resolve-RSVcpkgSafeChildPath -Root $contentRoot -Child $relative
+            [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($filePath))
+            [byte[]]$blobBytes = & $blobReader {
+                param($ObjectStore, $BlobId)
+                Invoke-RSValidationGitBinary -RepoRoot $ObjectStore -Argument @('--no-lazy-fetch', 'cat-file', 'blob', $BlobId)
+            } $toolObjectStore $baselineBlobIds[$relative]
+            [IO.File]::WriteAllBytes($filePath, $blobBytes)
+            $actualBlob = & git --no-lazy-fetch -C $toolObjectStore hash-object --no-filters -- $filePath
+            if ($LASTEXITCODE -ne 0 -or ([string]$actualBlob).Trim() -cne $baselineBlobIds[$relative]) {
+                throw "Pinned baseline file '$relative' does not match its immutable Git blob $($baselineBlobIds[$relative])."
+            }
+        }
+        $actualFiles = @(Get-ChildItem -LiteralPath $contentRoot -File -Recurse | ForEach-Object {
+            [IO.Path]::GetRelativePath($contentRoot, $_.FullName).Replace('\', '/')
+        } | Sort-Object)
+        if (($actualFiles -join "`n") -cne ($baselinePaths -join "`n")) {
+            throw "Pinned baseline fixture file set mismatch. Expected [$($baselinePaths -join ', ')], found [$($actualFiles -join ', ')]."
+        }
+        $baselineFixtureState.Value = [pscustomobject]@{ Root=$contentRoot; Baseline=$baselineCommit; BlobIds=$baselineBlobIds }
+        return $baselineFixtureState.Value
+    }
+
+    It 'finds every floor and override in the immutable builtin-baseline version database (data only)' -Skip:([bool]$baselineObjectUnavailableReason) {
+        $fixture = & $getBaselineFixture
         $errorMessage = $null
         try {
-            Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath (Join-Path $repoRoot 'vcpkg.json') -RegistryRoot $toolCheckout
+            Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath (Join-Path $repoRoot 'vcpkg.json') -RegistryRoot $fixture.Root
         } catch {
             $errorMessage = $_.Exception.Message
         }
         $errorMessage | Should BeNullOrEmpty
     }
 
-    It 'keeps the ARM64 compatibility overlay on the selected registry source and notices' -Skip:(-not $toolCheckoutAtPin) {
-        $baseline = Get-Content -LiteralPath (Join-Path $toolCheckout 'versions/baseline.json') -Raw | ConvertFrom-Json
+    It 'keeps the ARM64 compatibility overlay on the builtin-baseline source and notices (data only)' -Skip:([bool]$baselineObjectUnavailableReason) {
+        $fixture = & $getBaselineFixture
+        $baseline = Get-Content -LiteralPath (Join-Path $fixture.Root 'versions/baseline.json') -Raw | ConvertFrom-Json
         $overlayRoot = Join-Path $repoRoot 'Build/vcpkg-ports/aws-c-common'
-        $registryRoot = Join-Path $toolCheckout 'ports/aws-c-common'
+        $registryRoot = Join-Path $fixture.Root 'ports/aws-c-common'
         $overlay = Get-Content -LiteralPath (Join-Path $overlayRoot 'vcpkg.json') -Raw | ConvertFrom-Json
         $registry = Get-Content -LiteralPath (Join-Path $registryRoot 'vcpkg.json') -Raw | ConvertFrom-Json
         $overlay.version | Should Be $baseline.default.'aws-c-common'.baseline

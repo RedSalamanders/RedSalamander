@@ -85,7 +85,7 @@ void ViewerSpace::RetireDisplayedStorage(std::unique_ptr<ModelGeneration> displa
     if (includeDerived)
     {
         add(LayoutOwnedBytes());
-        add(AnalysisOwnedBytes());
+        add(AnalysisOwnedBytes(false));
     }
 
     storage->displayModel = std::move(displayModel);
@@ -468,6 +468,11 @@ void ViewerSpace::ContinueRefreshAdoption() noexcept
     });
 
     RefreshDisplayState& state = _refreshDisplayState.value();
+    if (state.selectionResolved)
+    {
+        AdoptWorkingModel();
+        return;
+    }
     if (! _refreshPathLookupStarted)
     {
         _refreshPathLookupStarted = true;
@@ -526,12 +531,14 @@ void ViewerSpace::ContinueRefreshAdoption() noexcept
         if (state.selectedItemId == state.viewNodeId)
         {
             _refreshResolvedSelectionId = _workingModel->rootNodeId;
+            state.selectionResolved     = true;
             AdoptWorkingModel();
             return;
         }
         if (state.selectedRelativePath.empty())
         {
             _refreshResolvedSelectionId = 0u;
+            state.selectionResolved     = true;
             AdoptWorkingModel();
             return;
         }
@@ -555,6 +562,7 @@ void ViewerSpace::ContinueRefreshAdoption() noexcept
             if (_refreshPathCandidates.empty())
             {
                 _refreshResolvedSelectionId = 0u;
+                state.selectionResolved     = true;
                 _model                      = previousModel;
                 restoreModel.release();
                 AdoptWorkingModel();
@@ -613,6 +621,7 @@ void ViewerSpace::ContinueRefreshAdoption() noexcept
     }
 
     _refreshResolvedSelectionId = _refreshPathCandidates.size() == 1u ? _refreshPathCandidates.front() : 0u;
+    state.selectionResolved     = true;
     _model                      = previousModel;
     restoreModel.release();
     AdoptWorkingModel();

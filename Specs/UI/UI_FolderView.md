@@ -275,6 +275,16 @@ drive disconnect preparation, destroy) settle nothing; the host ends a request w
 itself (FolderWindow ends a pending conflict inspection as stale when it clears the pane path or
 prepares the pane for a disconnect).
 
+Each enumeration generation owns a distinct stop source. Navigation, refresh, or cancellation requests
+stop for the superseded generation before its result can be published; the request is issued after the
+generation mutex is released. The worker passes that generation's token through the directory-cache
+borrow and uses it for subsequent enumeration work. Providers implementing
+`IFileSystemCancellableDirectoryEnumeration` must observe the callback and return
+`HRESULT_FROM_WIN32(ERROR_CANCELLED)` promptly. For legacy synchronous provider calls, the host's
+`SynchronousIoCancelWatch` may interrupt a pending synchronous Win32 I/O call on that worker after its
+grace interval. This does not guarantee cancellation of arbitrary provider waits or socket operations;
+an uncooperative in-process provider can still occupy the enumeration worker until its call returns.
+
 A watcher or cache refresh advances the enumeration generation without changing the navigation.
 `IsSameNavigationVisit(original, settled)` lets a waiting host follow the newer settlement of the same
 visit: it requires the same view lifetime, path visit, provider epoch and current-item ownership and
@@ -551,28 +561,33 @@ instead of inventing a numeric value.
 **Enumeration Contract (Plugin Only):**
 - The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate(..., pluginId, ...)`) and uses it as the only source of directory entries.
 - Each enumeration calls `IFileSystem::ReadDirectoryInfo(path, info.put())` to obtain an `IFilesInformation` result object.
-- The returned `FileInfo` buffer is traversed via `NextEntryOffset` (preferred) to build `FolderItem` entries.
-- `IFilesInformation::GetCount()` is an untrusted allocation hint. FolderView MUST clamp any reserve derived from it by the validated buffer size and a fixed implementation ceiling, and allocation/reserve work MUST remain inside the enumeration worker's exception boundary.
+- FolderView MUST check `GetCount`, `GetBufferSize`, `GetBuffer`, and `GetAllocatedSize` HRESULTs, require allocated capacity to cover committed bytes, and traverse exactly the reported count with `Common::Plugins::PackedFileInfoCursor` before reading entry fields.
+- A zero count with zero committed bytes is a valid empty directory even when allocated capacity is nonzero. A count/byte mismatch or malformed chain fails the enumeration; it MUST NOT publish a partial listing as complete.
+- `IFilesInformation::GetCount()` is an untrusted allocation hint. FolderView MUST clamp any reserve derived from it by the committed buffer size and a fixed implementation ceiling, and allocation/reserve work MUST remain inside the enumeration worker's exception boundary.
 
-**Traversal Example (NextEntryOffset):**
+**Traversal Example (Bounded Cursor):**
 ```cpp
 wil::com_ptr<IFilesInformation> info;
 THROW_IF_FAILED(fileSystem->ReadDirectoryInfo(folder.c_str(), info.put()));
 
-FileInfo* entry = nullptr;
-THROW_IF_FAILED(info->GetBuffer(&entry));
-
-while (entry != nullptr)
+unsigned long count = 0;
+unsigned long usedBytes = 0;
+unsigned long allocatedBytes = 0;
+THROW_IF_FAILED(info->GetCount(&count));
+THROW_IF_FAILED(info->GetBufferSize(&usedBytes));
+THROW_IF_FAILED(info->GetAllocatedSize(&allocatedBytes));
+if (allocatedBytes < usedBytes || (count == 0 && usedBytes != 0))
+    THROW_HR(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+FileInfo* buffer = nullptr;
+THROW_IF_FAILED(info->GetBuffer(&buffer));
+if (count != 0 && (buffer == nullptr || usedBytes < offsetof(FileInfo, FileName)))
+    THROW_HR(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+Common::Plugins::PackedFileInfoCursor cursor(buffer, usedBytes, count);
+for (unsigned long index = 0; index < count; ++index)
 {
+    const FileInfo* entry = nullptr;
+    THROW_IF_FAILED(cursor.Next(&entry));
     // Build FolderItem from entry->FileName + entry->FileNameSize, entry->FileAttributes, etc.
-
-    if (entry->NextEntryOffset == 0)
-    {
-        break;
-    }
-
-    entry = reinterpret_cast<FileInfo*>(
-        reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset);
 }
 ```
 

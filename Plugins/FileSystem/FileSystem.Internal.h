@@ -44,6 +44,10 @@ std::wstring_view GetPathLeaf(std::wstring_view path) noexcept;
 std::wstring GetPathDirectory(std::wstring_view path);
 [[nodiscard]] bool ContainsPathSeparator(std::wstring_view text) noexcept;
 
+// Candidate only: callers retain exclusive-create/conditional-rename authority for files,
+// directories and links. Unlike CreateUniqueSiblingFile this must not create a regular file.
+[[nodiscard]] HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view marker, std::wstring& path) noexcept;
+
 PathInfo MakePathInfo(const std::wstring& path);
 PathInfo MakePathInfo(const wchar_t* path);
 

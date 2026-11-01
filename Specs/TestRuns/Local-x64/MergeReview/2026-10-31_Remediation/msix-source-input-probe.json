@@ -1,0 +1,43 @@
+{
+  "runId": "20261031T163933Z-32156-98f6c5d951e247ecbdeb9b0d9da7556b",
+  "scratchRepo": "Z:\\RedSalamander.Perf\\runs\\20261031T163933Z-32156-98f6c5d951e247ecbdeb9b0d9da7556b\\scratch\\MsixAssets\\generator-byte-comparison\\repo",
+  "assets": [
+    {
+      "Name": "Square44x44Logo.png",
+      "TrackedSha256": "F44AAA35D28EB1D3B7EFE3EE4E8918BC4BE2DE121872AF8A0A74E79502087460",
+      "GeneratedSha256": "F44AAA35D28EB1D3B7EFE3EE4E8918BC4BE2DE121872AF8A0A74E79502087460",
+      "ByteIdentical": true
+    },
+    {
+      "Name": "Square150x150Logo.png",
+      "TrackedSha256": "1ABCF2E88E7A7059C97B712B040DE324F967446D2F20B15A02A0EDCBC3231DA8",
+      "GeneratedSha256": "1ABCF2E88E7A7059C97B712B040DE324F967446D2F20B15A02A0EDCBC3231DA8",
+      "ByteIdentical": true
+    },
+    {
+      "Name": "Wide310x150Logo.png",
+      "TrackedSha256": "9EF7F8D1809D3673B7233C434310D9641BEAD11E73821A732D9B67CAF28808A1",
+      "GeneratedSha256": "9EF7F8D1809D3673B7233C434310D9641BEAD11E73821A732D9B67CAF28808A1",
+      "ByteIdentical": true
+    },
+    {
+      "Name": "Square310x310Logo.png",
+      "TrackedSha256": "2570DCEB2E938404694E706B0D2E21960A3C1C9EA82D9A8281CCDADFDFDE6BCC",
+      "GeneratedSha256": "2570DCEB2E938404694E706B0D2E21960A3C1C9EA82D9A8281CCDADFDFDE6BCC",
+      "ByteIdentical": true
+    },
+    {
+      "Name": "StoreLogo.png",
+      "TrackedSha256": "4C2937C9154E499F019A90613B86FD8A9536122886C1CCEFFD6D5FE45448A9F0",
+      "GeneratedSha256": "4C2937C9154E499F019A90613B86FD8A9536122886C1CCEFFD6D5FE45448A9F0",
+      "ByteIdentical": true
+    }
+  ],
+  "sourceManifestSha256Before": "598406F2505DDD382FD8F54CB4D1FA1E31760BCAD944F1A7DE0EEE6658AF9830",
+  "sourceManifestSha256After": "598406F2505DDD382FD8F54CB4D1FA1E31760BCAD944F1A7DE0EEE6658AF9830",
+  "trackedManifestUnchanged": true,
+  "stagedManifestPath": "Z:\\RedSalamander.Perf\\runs\\20261031T163933Z-32156-98f6c5d951e247ecbdeb9b0d9da7556b\\scratch\\MsixAssets\\generator-byte-comparison\\repo\\.build\\AppPackages\\ManifestStaging\\probe\\Package.appxmanifest",
+  "stagedIdentityVersion": "7.0.1.0",
+  "stagedProcessorArchitecture": "x64",
+  "generatorOutput": []
+}

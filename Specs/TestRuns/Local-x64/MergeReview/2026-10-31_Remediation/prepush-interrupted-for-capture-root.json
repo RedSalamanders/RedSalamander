@@ -1,0 +1,9 @@
+{
+  "status": "INTERRUPTED_BY_OWNER",
+  "recorded_utc": "2026-10-31T16:24:16.6588134Z",
+  "reason": "Confirmed targeted deployment test stdout/stderr capture outside marked test sandbox; stop before further qualification, fix capture routing, preserve partial results",
+  "full_debug_build_receipt": "3c106a54b3be8afdc1d26e29830afeba4951f2100192fc7ae409318ef1f7aaf5",
+  "debug_build_zero_diagnostics": true,
+  "not_a_prepush_pass": true,
+  "control": "Ctrl-C sent only to owned exec81810; no manually killed processes"
+}

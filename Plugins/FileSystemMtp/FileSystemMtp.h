@@ -83,6 +83,7 @@ class FileSystemMtp final : public IFileSystem,
                             public IInformations,
                             public INavigationMenu,
                             public IFileSystemAtomicWriter,
+                            public IFileSystemDirectFinalCreateWriter,
                             public IDriveInfo
 {
 public:
@@ -199,6 +200,7 @@ public:
 
     // IFileSystemAtomicWriter (R3-1 / C9): the overwrite temp-sibling swap is atomic-final.
     HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
+    HRESULT STDMETHODCALLTYPE SupportsDirectFinalCreate(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
 
 protected:
     HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
@@ -252,9 +254,6 @@ private:
     [[nodiscard]] HRESULT CheckConnected() const noexcept;
     [[nodiscard]] bool CreatedObjectPuidUnsupported() const noexcept;
     void RecordCreatedObjectPuidProbe(bool supported) noexcept;
-    // I35 XP-01: the device refused the hidden create temp or its rename; new files upload directly.
-    [[nodiscard]] bool CreateTempRouteRefused() const noexcept;
-    void RecordCreateTempRouteRefused() noexcept;
     void AbandonBackendSessionLocked(const std::shared_ptr<FileSystemMtpInternal::IMtpBackend>& abandonedBackend) noexcept;
     [[nodiscard]] HRESULT CreateBackendWorkerLocked() noexcept;
     [[nodiscard]] std::wstring OverwriteJournalIdentityForPath(std::wstring_view normalizedPath) const noexcept;
@@ -337,7 +336,6 @@ private:
     wil::com_ptr<IHostConnections> _hostConnections;
     bool _disconnected                               = false;
     CreatedObjectPuidPolicy _createdObjectPuidPolicy = CreatedObjectPuidPolicy::Unknown;
-    bool _createTempRouteRefused                     = false;
 
     std::vector<MenuEntry> _menuEntries;
     std::vector<NavigationMenuItem> _menuEntryView;

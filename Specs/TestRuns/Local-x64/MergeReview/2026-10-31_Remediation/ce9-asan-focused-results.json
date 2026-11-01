@@ -1,0 +1,62 @@
+{
+  "scope": "ASan ordinary heap detector proof, plugin contracts and two noninteractive ViewerSpace cases; no Full/platform/foreground qualification",
+  "run_id": "20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "build_receipt_id": "b965fe5e1363857d80957ad96a19272971d6b50d4dc1a040673b8ce54c20fa8c",
+  "source_snapshot_id": "ce9a63824be65a183c7a6fb55f03eaecc93c5a0ae50df554ba14cfa7196087de",
+  "source_and_artifacts_stable": true,
+  "asan_limit": "Seed proves ordinary heap detection, not disabled STL container annotations",
+  "asan_environment": "ASAN_OPTIONS and ASAN_SAVE_DUMPS unset in contained children; diagnostics captured to owned stdout/stderr",
+  "exit_code": 0,
+  "cases": [
+    {
+      "case": "asan-seeded-heap-overflow",
+      "kind": "expected detector rejection",
+      "exit_code": 1,
+      "accepted": true,
+      "harness_error": "",
+      "duration_ms": 285,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\asan-seeded-heap-overflow.out.log",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\asan-seeded-heap-overflow.err.log",
+      "stderr_sha256": "5120793161df462235d669321d6b3d2e4a208abf61a66909f6e53710073b4e45"
+    },
+    {
+      "case": "plugin-contract",
+      "kind": "regression",
+      "exit_code": 0,
+      "accepted": true,
+      "harness_error": "",
+      "duration_ms": 78445,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\plugin-contract.out.log",
+      "stdout_sha256": "38789f4f1fd1dc924a382a8a44c9c7ca92dfb3ef0eb30d1ec1d30e715a402148",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\plugin-contract.err.log",
+      "stderr_sha256": "00e54f35482d629ae28e32fff5a3f5dcd3539eebe9ba3a6703369a494c68cc5c"
+    },
+    {
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "kind": "regression",
+      "exit_code": 0,
+      "accepted": true,
+      "harness_error": "",
+      "duration_ms": 42129,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\TestViewerSpaceAnalysisHostVirtualGridAndLifetime.out.log",
+      "stdout_sha256": "19a24eca221bc36038a0f4a5c7a33c0b7c87b1087d4acd4393fe1a475d436bc0",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\TestViewerSpaceAnalysisHostVirtualGridAndLifetime.err.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "kind": "regression",
+      "exit_code": 0,
+      "accepted": true,
+      "harness_error": "",
+      "duration_ms": 41234,
+      "stdout_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.out.log",
+      "stdout_sha256": "15d8eed1d2e56d46b87fbe465863ea2c1b631c97d61922ed950056ab3d563c92",
+      "stderr_path": "Z:\\RedSalamander.Perf\\runs\\20261031T195828Z-68940-0fd33ddbaad74b78b576e2063a85c3a5\\scratch\\process-temp\\TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.err.log",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

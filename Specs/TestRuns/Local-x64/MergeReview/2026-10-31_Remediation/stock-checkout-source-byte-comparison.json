@@ -1,0 +1,38 @@
+{
+  "utc": "2026-10-31T16:19:43.0024638Z",
+  "runId": "ck31-00ec6a71",
+  "method": "Direct source working-tree vs stock checkout SHA256 and byte length",
+  "entries": 3002,
+  "checkoutBytes": 944671717,
+  "rawMismatchCount": 4,
+  "firstMismatches": [
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/checks/merge-archive-inventory.txt",
+      "sourceBytes": 75,
+      "checkoutBytes": 76,
+      "sourceSha256": "f64984ff3a46e4fcd1c276fdfe146837bafef1df3e5361611c87ee964b1f52db",
+      "checkoutSha256": "3efa2dd0fcaf5642ce9503bf4e2e19e1f26526b2f95b4b03e098074735759cde"
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/checks/merge-governance-long-prefix-failed.txt",
+      "sourceBytes": 24336,
+      "checkoutBytes": 24337,
+      "sourceSha256": "834b107c8b5a62265ad77dd93c8cffb683b56bcc6ce58e4cddac86d4f9c3a576",
+      "checkoutSha256": "b9b7a794e83d67276bf60815ba712d6966251b1b7e9d9997a86df76fb8f901e8"
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/checks/merge-governance.txt",
+      "sourceBytes": 25197,
+      "checkoutBytes": 25198,
+      "sourceSha256": "61039ae7b668e2ae745a4e6b7b6a636ec356be1356b2b69a0031cde76331874b",
+      "checkoutSha256": "8dca818339d8491f9bf8e8056514d8859f725178b52e617204d5b4139b1d196b"
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/ReviewRemediation.md",
+      "sourceBytes": 29036,
+      "checkoutBytes": 29063,
+      "sourceSha256": "444b26c6ab7fc695f894e930e3ed46107b7234aae24509a5d3c1018db1de8551",
+      "checkoutSha256": "2c3854a99904675684979e9b7c68ff6a8b700ffa58d5562120198966332260b5"
+    }
+  ]
+}

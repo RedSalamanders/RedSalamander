@@ -1,0 +1,109 @@
+{
+  "runId": "sf-f65668c1",
+  "repo": "Z:\\src\\RedSalamander",
+  "checkoutRoot": "Z:\\RedSalamander.Perf\\runs\\sf-f65668c1\\scratch\\c\\c",
+  "temporaryIndex": "Z:\\RedSalamander.Perf\\runs\\sf-f65668c1\\scratch\\candidate.index",
+  "gitVersion": "git version 2.55.0.windows.3",
+  "config": {
+    "core.longpaths": "file:.git/config\ttrue",
+    "core.symlinks": "file:.git/config\tfalse",
+    "core.autocrlf": "file:C:/Program Files/Git/etc/gitconfig\ttrue",
+    "core.splitIndex": "<unset>",
+    "core.filemode": "file:.git/config\tfalse"
+  },
+  "invocationOverrides": [
+    "core.longpaths=false",
+    "core.symlinks=false",
+    "core.splitIndex=false"
+  ],
+  "headBefore": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+  "objectStoreDirectory": "Z:\\RedSalamander.Perf\\runs\\sf-f65668c1\\scratch\\objects",
+  "objectStoreUsesRepoReadOnlyAlternate": "Z:\\src\\RedSalamander\\.git\\objects",
+  "repoObjectStoreSha256Before": "6867993BCE35F54C0C8017DE3D5E1713E35E62B48BD950A4F0314719D85E7648",
+  "repoObjectStoreFileCountBefore": 641,
+  "repoObjectStoreBytesBefore": 555771906,
+  "repoObjectStoreSha256After": "6867993BCE35F54C0C8017DE3D5E1713E35E62B48BD950A4F0314719D85E7648",
+  "repoObjectStoreFileCountAfter": 641,
+  "repoObjectStoreBytesAfter": 555771906,
+  "repoObjectStoreUnchanged": true,
+  "isolatedObjectFileCount": 3,
+  "sourceIndexSha256Before": "06ECF052B17D43A29664B51250B3DB176C5C39E6AF747C6978CF57561C87EBB6",
+  "sourceStatusSha256Before": "9EBE45FDBCE12747AC678363034B902E672DF34A163A4AD5D7198BD89AB17B8B",
+  "attributesSha256Before": "536092E22D50D11B05A16C34DAC8D5B8A8E1C20536E149244C29E1AB9F2B6C81",
+  "sourceIndexSha256After": "06ECF052B17D43A29664B51250B3DB176C5C39E6AF747C6978CF57561C87EBB6",
+  "sourceStatusSha256After": "9EBE45FDBCE12747AC678363034B902E672DF34A163A4AD5D7198BD89AB17B8B",
+  "sourceStatusUnchanged": true,
+  "sharedIndexFilesBefore": [],
+  "sharedIndexFilesAfter": [],
+  "candidateIndexSha256BeforeAdd": "06ECF052B17D43A29664B51250B3DB176C5C39E6AF747C6978CF57561C87EBB6",
+  "candidateIndexSha256AfterAdd": "A86EC4F3AFF9A5C694A76495C85E6196AC453A823554D29A69B31560A33D8D7D",
+  "entries": 28099,
+  "modes": {
+    "100644": 28099
+  },
+  "unsupportedModes": [],
+  "nonzeroStages": 0,
+  "maxRelativePathChars": 200,
+  "maxRelativePath": "Specs/TestRuns/4cb089111a23/Continuation/2026-07-03_084000_folderview_warpdrive_gate_convergence_baton/source-snapshots/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.snapshot.md",
+  "maxCheckoutAbsolutePathChars": 251,
+  "maxCheckoutAbsolutePath": "Z:\\RedSalamander.Perf\\runs\\sf-f65668c1\\scratch\\c\\c\\Specs\\TestRuns\\4cb089111a23\\Continuation\\2026-07-03_084000_folderview_warpdrive_gate_convergence_baton\\source-snapshots\\Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.snapshot.md",
+  "checkoutFiles": 28099,
+  "checkoutDirectories": 4262,
+  "reparseEntries": [],
+  "hardlinkCountFailures": [],
+  "checkoutRoundTripEntries": 28099,
+  "checkoutRoundTripMismatches": [],
+  "alternateCheckoutStatusClean": false,
+  "immutableRelocationEntries": 3002,
+  "immutableRelocationTotalBytes": 944671687,
+  "immutableRelocationFailures": [],
+  "sourceHeadAfter": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+  "durationSeconds": 46.565,
+  "result": "pass",
+  "failure": null,
+  "checkoutRelocationBytes": 944671717,
+  "physicalAutocrlfDifferences": [
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/checks/merge-archive-inventory.txt",
+      "sourceSha256": "f64984ff3a46e4fcd1c276fdfe146837bafef1df3e5361611c87ee964b1f52db",
+      "checkoutSha256": "3efa2dd0fcaf5642ce9503bf4e2e19e1f26526b2f95b4b03e098074735759cde",
+      "sourceBytes": 75,
+      "checkoutBytes": 76
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/checks/merge-governance-long-prefix-failed.txt",
+      "sourceSha256": "834b107c8b5a62265ad77dd93c8cffb683b56bcc6ce58e4cddac86d4f9c3a576",
+      "checkoutSha256": "b9b7a794e83d67276bf60815ba712d6966251b1b7e9d9997a86df76fb8f901e8",
+      "sourceBytes": 24336,
+      "checkoutBytes": 24337
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/checks/merge-governance.txt",
+      "sourceSha256": "61039ae7b668e2ae745a4e6b7b6a636ec356be1356b2b69a0031cde76331874b",
+      "checkoutSha256": "8dca818339d8491f9bf8e8056514d8859f725178b52e617204d5b4139b1d196b",
+      "sourceBytes": 25197,
+      "checkoutBytes": 25198
+    },
+    {
+      "path": "Specs/TestRuns/4cb089111a23/Validation/v06/ReviewRemediation.md",
+      "sourceSha256": "444b26c6ab7fc695f894e930e3ed46107b7234aae24509a5d3c1018db1de8551",
+      "checkoutSha256": "2c3854a99904675684979e9b7c68ff6a8b700ffa58d5562120198966332260b5",
+      "sourceBytes": 29036,
+      "checkoutBytes": 29063
+    }
+  ],
+  "rawIdenticalRelocations": 2998,
+  "relocationAttributeParity": {
+    "ComparedPaths": 3002,
+    "ComparedAttributes": 6004,
+    "MismatchCount": 0,
+    "Mismatches": []
+  },
+  "objectStoreFingerprintMethod": "Sorted relative path, byte length and SHA-256 content; no timestamps.",
+  "alternateStatusAcceptance": "Diagnostic only. Acceptance uses exact clean-filter mode/OID/stage/path parity.",
+  "attributesSha256After": "536092E22D50D11B05A16C34DAC8D5B8A8E1C20536E149244C29E1AB9F2B6C81",
+  "sourceIndexUnchanged": true,
+  "sourceHeadUnchanged": true,
+  "attributesUnchanged": true,
+  "sharedIndexFilesUnchanged": true
+}

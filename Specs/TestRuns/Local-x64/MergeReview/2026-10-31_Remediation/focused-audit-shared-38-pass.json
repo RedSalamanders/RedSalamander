@@ -1,0 +1,66 @@
+{
+  "runId": "20261031T160149Z-72700-aa881d95f4da45b5b73c3370ba1996cc",
+  "testRoot": "Z:\\RedSalamander.Perf",
+  "runRoot": "Z:\\RedSalamander.Perf\\runs\\20261031T160149Z-72700-aa881d95f4da45b5b73c3370ba1996cc",
+  "temp": "Z:\\RedSalamander.Perf\\runs\\20261031T160149Z-72700-aa881d95f4da45b5b73c3370ba1996cc\\scratch\\focused-pester\\audit-and-shared-tooling",
+  "tmp": "Z:\\RedSalamander.Perf\\runs\\20261031T160149Z-72700-aa881d95f4da45b5b73c3370ba1996cc\\scratch\\focused-pester\\audit-and-shared-tooling",
+  "profile": {
+    "platform": "x64",
+    "configuration": "Debug"
+  },
+  "pesterVersion": "3.4.0",
+  "head": "6b6f5646be297fbc232d137f1df6a00c5cb74461",
+  "branch": "ej/review-remediation-20261031",
+  "sourceHashes": [
+    {
+      "path": "Tools/Tests/DocumentationDriftContracts.Tests.ps1",
+      "sha256": "84486B3B6E39C18CDDF8A7DFAAAE6AACB7C5911728C81DF3B4ADE2CF53F42BE7"
+    },
+    {
+      "path": "Tools/Tests/SharedToolingModules.Tests.ps1",
+      "sha256": "F789D001F56B188665B12495AE5AE0D5B50CD1611E63EE751685F32BF4C4D0B5"
+    },
+    {
+      "path": "Tools/Tests/TestSupport.psm1",
+      "sha256": "A433A95348A526229907FD15BEB6B8D4D85B565A7EC39E27799854289E61373E"
+    },
+    {
+      "path": "Tools/Modules/Auditing/RepositorySourceScanner.psm1",
+      "sha256": "AA23B73E304AC05501581073A4F059765E968D537E083193FB5B1148D9B27824"
+    },
+    {
+      "path": "Tools/Audit-ComctlReportSurfaces.ps1",
+      "sha256": "99C2D07B3C8885EFF6ED2FC1425F607C9D749A4868D2D9C5E706AAC7A1ED9DD9"
+    },
+    {
+      "path": "Tools/Audit-VisibleNativeSurfaces.ps1",
+      "sha256": "722EEEF3AFC403FAD17063F8B44500A963A153F3A7C23CDBB5F68C8612D1DDD3"
+    },
+    {
+      "path": "Tools/Audit-RemainingWin32UiDependencies.ps1",
+      "sha256": "01C85FD3DD1C8B407F8E00F287C3D5F12D6B2B3D701825318126A4B412E3E3E6"
+    },
+    {
+      "path": "Tools/tool-inventory.json",
+      "sha256": "6BF24B8E4201006A7C12816D2967EE9258BB2906E0F2103A206CF8BF382538C8"
+    },
+    {
+      "path": "Specs/UI/UI_VisibleNativeAudit.md",
+      "sha256": "CC22C5923BAC65A680EE1B605C6810C3330726AC6811A7C68637EAAAC26CE9D0"
+    }
+  ],
+  "scriptFiles": [
+    ".\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1",
+    ".\\Tools\\Tests\\SharedToolingModules.Tests.ps1"
+  ],
+  "excludeTag": "RequiresBuildToolchain",
+  "startedUtc": "2026-10-31T16:01:50.4284411+00:00",
+  "endedUtc": "2026-10-31T16:02:49.1587471+00:00",
+  "elapsedSeconds": 58.73,
+  "passed": 38,
+  "failed": 0,
+  "skipped": 0,
+  "total": 38,
+  "failures": [],
+  "transcript": "Z:\\RedSalamander.Perf\\runs\\20261031T160149Z-72700-aa881d95f4da45b5b73c3370ba1996cc\\scratch\\focused-pester\\audit-and-shared-tooling\\focused-pester-transcript.txt"
+}

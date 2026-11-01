@@ -133,7 +133,7 @@ See [File Operations](FileOperations.md) for behavior, confirmation, and failed-
 | `Ctrl+F8` | Change attributes |
 | `Alt+F5` | Pack (create ZIP) |
 | `Alt+F6` | Unpack (extract ZIP) |
-| `Ctrl+J` | Toggle File Operations Failed Items |
+| `Ctrl+J` | Toggle File Operation Issues |
 
 ## Search and compare
 

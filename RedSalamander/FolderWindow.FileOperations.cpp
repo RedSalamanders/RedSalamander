@@ -1130,6 +1130,18 @@ bool FileOperations::QualifiedEndpointsHaveSamePathContract(const QualifiedEndpo
            SamePathIdentityContract(*left.pathIdentity, *right.pathIdentity);
 }
 
+const FileSystemPathIdentity* FileOperations::SelectSharedDisplayPathIdentity(const QualifiedEndpoint& displayOwner,
+                                                                              const QualifiedEndpoint& candidate) noexcept
+{
+    if (! QualifiedEndpointsShareObjectIdentityDomainImpl(displayOwner, candidate) || ! displayOwner.pathIdentity || ! candidate.pathIdentity ||
+        ! displayOwner.pathIdentity->pathTextStableIdentity || ! candidate.pathIdentity->pathTextStableIdentity ||
+        ! SamePathIdentityContract(displayOwner.pathIdentity.value(), candidate.pathIdentity.value()))
+    {
+        return nullptr;
+    }
+    return &displayOwner.pathIdentity.value();
+}
+
 bool FileOperations::QualifiedEndpointsShareObjectIdentityDomain(const QualifiedEndpoint& left, const QualifiedEndpoint& right) noexcept
 {
     return QualifiedEndpointsShareObjectIdentityDomainImpl(left, right);
@@ -3719,13 +3731,15 @@ HRESULT FolderWindow::ExecuteViewerAction(const HostViewerActionRequest& request
     paths.reserve(request.pathCount);
     for (uint32_t index = 0u; index < request.pathCount; ++index)
         paths.emplace_back(request.paths[index]);
-    return StartFileOperationForResolvedPaths(pluginId,
-                                              context,
-                                              FILESYSTEM_DELETE,
-                                              std::move(paths),
-                                              request.action == HOST_VIEWER_RECYCLE ? FILESYSTEM_FLAG_USE_RECYCLE_BIN : FILESYSTEM_FLAG_NONE,
-                                              true,
-                                              taskId);
+    return StartFileOperationForResolvedPaths(
+        pluginId,
+        context,
+        FILESYSTEM_DELETE,
+        std::move(paths),
+        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE |
+                                     (request.action == HOST_VIEWER_RECYCLE ? FILESYSTEM_FLAG_USE_RECYCLE_BIN : FILESYSTEM_FLAG_NONE)),
+        true,
+        taskId);
 }
 
 HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourcePluginId,
@@ -5214,9 +5228,15 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                outcome->publication == FileOperations::PublicationState::Unknown;
     };
 
-    const auto notifyDestinationParentsChanged = [&](PaneState& dst) noexcept
+    IFileSystem* const sourceFileSystem      = task->_fileSystem.get();
+    IFileSystem* const destinationFileSystem = selectedAdmission->destination->fileSystem ? selectedAdmission->destination->fileSystem.get() : sourceFileSystem;
+    const DirectoryInfoCache::ContextKey sourceCacheContext =
+        DirectoryInfoCache::MakeContextKey(task->_sourcePluginId, task->_sourcePluginShortId, task->_sourceInstanceContext);
+    const DirectoryInfoCache::ContextKey destinationCacheContext = DirectoryInfoCache::MakeContextKey(
+        selectedAdmission->destination->pluginId, selectedAdmission->destination->pluginShortId, selectedAdmission->destination->instanceContext);
+    const auto notifyDestinationParentsChanged = [&](IFileSystem* fileSystem) noexcept
     {
-        if (! dst.fileSystem)
+        if (fileSystem == nullptr)
         {
             return;
         }
@@ -5236,7 +5256,7 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
             const auto parent = resolvedProviderParentForIndex(index, destination.value(), true);
             if (parent.has_value() && ! parent.value().empty())
             {
-                cache.NotifyFolderContentsChanged(dst.fileSystem.get(), parent.value());
+                cache.NotifyFolderContentsChanged(destinationCacheContext, parent.value());
                 forceRefreshVisibleFolder(parent.value());
             }
         }
@@ -5252,22 +5272,24 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
     };
 
     {
-        PaneState* dst         = destinationPane.has_value() ? &(destinationPane.value() == Pane::Left ? _leftPane : _rightPane) : nullptr;
-        const bool sameContext = dst != nullptr && CompareStringOrdinal(task->_sourcePluginId.c_str(), -1, dst->pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
-                                 NavigationLocation::EqualsNoCase(src.instanceContext, dst->instanceContext);
+        PaneState* dst = destinationPane.has_value() ? &(destinationPane.value() == Pane::Left ? _leftPane : _rightPane) : nullptr;
+        const bool sameContext =
+            destinationPane.has_value() &&
+            CompareStringOrdinal(task->_sourcePluginId.c_str(), -1, selectedAdmission->destination->pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
+            NavigationLocation::EqualsNoCase(task->_sourceInstanceContext, selectedAdmission->destination->instanceContext);
 
         switch (task->GetOperation())
         {
             case FILESYSTEM_COPY:
-                if (dst != nullptr && dst->fileSystem)
+                if (destinationFileSystem != nullptr)
                 {
-                    cache.NotifyFolderContentsChanged(dst->fileSystem.get(), selectedAdmission->destination->folder);
-                    notifyDestinationParentsChanged(*dst);
+                    cache.NotifyFolderContentsChanged(destinationCacheContext, selectedAdmission->destination->folder);
+                    notifyDestinationParentsChanged(destinationFileSystem);
                 }
                 forceRefreshVisibleFolder(selectedAdmission->destination->folder);
                 break;
             case FILESYSTEM_MOVE:
-                if (sameContext && src.fileSystem)
+                if (sameContext && sourceFileSystem != nullptr)
                 {
                     for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                     {
@@ -5277,46 +5299,46 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                         }
                         if (const auto destination = resolvedDestinationForIndex(index); destination.has_value())
                         {
-                            cache.NotifyPathMoved(src.fileSystem.get(), task->_sourcePaths[index], destination.value());
+                            cache.NotifyPathMoved(sourceCacheContext, task->_sourcePaths[index], destination.value());
                         }
                     }
                 }
                 else
                 {
-                    if (task->_fileSystem)
+                    if (sourceFileSystem != nullptr)
                     {
                         for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                         {
                             if (! isResolvedDirectoryShell(index) && sourceWasRemoved(index))
                             {
-                                cache.NotifyPathDeleted(task->_fileSystem.get(), task->_sourcePaths[index]);
+                                cache.NotifyPathDeleted(sourceCacheContext, task->_sourcePaths[index]);
                             }
                         }
                     }
-                    if (dst != nullptr && dst->fileSystem)
+                    if (destinationFileSystem != nullptr)
                     {
-                        cache.NotifyFolderContentsChanged(dst->fileSystem.get(), selectedAdmission->destination->folder);
-                        notifyDestinationParentsChanged(*dst);
+                        cache.NotifyFolderContentsChanged(destinationCacheContext, selectedAdmission->destination->folder);
+                        notifyDestinationParentsChanged(destinationFileSystem);
                     }
                 }
                 forceRefreshVisibleSourceParents();
                 forceRefreshVisibleFolder(selectedAdmission->destination->folder);
                 break;
             case FILESYSTEM_DELETE:
-                if (src.fileSystem)
+                if (sourceFileSystem != nullptr)
                 {
                     for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                     {
                         if (sourceWasRemoved(index))
                         {
-                            cache.NotifyPathDeleted(src.fileSystem.get(), task->_sourcePaths[index]);
+                            cache.NotifyPathDeleted(sourceCacheContext, task->_sourcePaths[index]);
                         }
                     }
                 }
                 forceRefreshVisibleSourceParents();
                 break;
             case FILESYSTEM_RENAME:
-                if (src.fileSystem)
+                if (sourceFileSystem != nullptr)
                 {
                     for (size_t index = 0; index < task->_sourcePaths.size(); ++index)
                     {
@@ -5324,7 +5346,7 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                         {
                             if (const auto destination = resolvedDestinationForIndex(index); destination.has_value())
                             {
-                                cache.NotifyPathMoved(src.fileSystem.get(), task->_sourcePaths[index], destination.value());
+                                cache.NotifyPathMoved(sourceCacheContext, task->_sourcePaths[index], destination.value());
                                 if (const auto parent = resolvedRenameParentForIndex(index); parent.has_value())
                                 {
                                     forceRefreshVisibleFolder(parent.value());

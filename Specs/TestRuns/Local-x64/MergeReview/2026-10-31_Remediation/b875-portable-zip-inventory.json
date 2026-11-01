@@ -1,0 +1,729 @@
+{
+  "run_id": "pkgfinalinv-89768-29411375",
+  "zip": {
+    "path": "Z:\\src\\RedSalamander\\.build\\AppPackages\\RedSalamander-7.0.1-x64-Portable.zip",
+    "sha256": "58fa66aa97e2a5ac07c9e2289dc793f930256e092e11f83dcbfbea49c7b04ca8",
+    "size_bytes": 26040657,
+    "signature": "UnknownError",
+    "entry_count": 175,
+    "entries": [
+      {
+        "path": "Lang/FileSystem-cs-CZ.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem-fr-FR.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem-sk-SK.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem7z-cs-CZ.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem7z-fr-FR.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem7z-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystem7z-sk-SK.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemCurl-cs-CZ.dll",
+        "size_bytes": 4096
+      },
+      {
+        "path": "Lang/FileSystemCurl-fr-FR.dll",
+        "size_bytes": 4096
+      },
+      {
+        "path": "Lang/FileSystemCurl-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemCurl-sk-SK.dll",
+        "size_bytes": 4096
+      },
+      {
+        "path": "Lang/FileSystemDummy-cs-CZ.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemDummy-fr-FR.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemDummy-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemDummy-sk-SK.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemGoogleDrive-cs-CZ.dll",
+        "size_bytes": 4096
+      },
+      {
+        "path": "Lang/FileSystemGoogleDrive-fr-FR.dll",
+        "size_bytes": 4096
+      },
+      {
+        "path": "Lang/FileSystemGoogleDrive-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemGoogleDrive-sk-SK.dll",
+        "size_bytes": 4096
+      },
+      {
+        "path": "Lang/FileSystemMicrosoftDrive-cs-CZ.dll",
+        "size_bytes": 8192
+      },
+      {
+        "path": "Lang/FileSystemMicrosoftDrive-fr-FR.dll",
+        "size_bytes": 8192
+      },
+      {
+        "path": "Lang/FileSystemMicrosoftDrive-ja-JP.dll",
+        "size_bytes": 6656
+      },
+      {
+        "path": "Lang/FileSystemMicrosoftDrive-sk-SK.dll",
+        "size_bytes": 8192
+      },
+      {
+        "path": "Lang/FileSystemMtp-cs-CZ.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemMtp-fr-FR.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemMtp-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemMtp-sk-SK.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemS3-cs-CZ.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemS3-fr-FR.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemS3-ja-JP.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/FileSystemS3-sk-SK.dll",
+        "size_bytes": 3584
+      },
+      {
+        "path": "Lang/RedConfigure-cs-CZ.dll",
+        "size_bytes": 13312
+      },
+      {
+        "path": "Lang/RedConfigure-ja-JP.dll",
+        "size_bytes": 11776
+      },
+      {
+        "path": "Lang/RedConfigure-sk-SK.dll",
+        "size_bytes": 13312
+      },
+      {
+        "path": "Lang/RedSalamander-cs-CZ.dll",
+        "size_bytes": 165376
+      },
+      {
+        "path": "Lang/RedSalamander-fr-FR.dll",
+        "size_bytes": 188416
+      },
+      {
+        "path": "Lang/RedSalamander-ja-JP.dll",
+        "size_bytes": 105472
+      },
+      {
+        "path": "Lang/RedSalamander-sk-SK.dll",
+        "size_bytes": 169984
+      },
+      {
+        "path": "Lang/Terminal-cs-CZ.dll",
+        "size_bytes": 11264
+      },
+      {
+        "path": "Lang/Terminal-fr-FR.dll",
+        "size_bytes": 12288
+      },
+      {
+        "path": "Lang/Terminal-ja-JP.dll",
+        "size_bytes": 8192
+      },
+      {
+        "path": "Lang/Terminal-sk-SK.dll",
+        "size_bytes": 11264
+      },
+      {
+        "path": "Lang/ViewerImgRaw-cs-CZ.dll",
+        "size_bytes": 12288
+      },
+      {
+        "path": "Lang/ViewerImgRaw-fr-FR.dll",
+        "size_bytes": 12800
+      },
+      {
+        "path": "Lang/ViewerImgRaw-ja-JP.dll",
+        "size_bytes": 9728
+      },
+      {
+        "path": "Lang/ViewerImgRaw-sk-SK.dll",
+        "size_bytes": 12288
+      },
+      {
+        "path": "Lang/ViewerPE-cs-CZ.dll",
+        "size_bytes": 8704
+      },
+      {
+        "path": "Lang/ViewerPE-fr-FR.dll",
+        "size_bytes": 9216
+      },
+      {
+        "path": "Lang/ViewerPE-ja-JP.dll",
+        "size_bytes": 7168
+      },
+      {
+        "path": "Lang/ViewerPE-sk-SK.dll",
+        "size_bytes": 8704
+      },
+      {
+        "path": "Lang/ViewerSpace-cs-CZ.dll",
+        "size_bytes": 14336
+      },
+      {
+        "path": "Lang/ViewerSpace-fr-FR.dll",
+        "size_bytes": 14848
+      },
+      {
+        "path": "Lang/ViewerSpace-ja-JP.dll",
+        "size_bytes": 12800
+      },
+      {
+        "path": "Lang/ViewerSpace-sk-SK.dll",
+        "size_bytes": 14848
+      },
+      {
+        "path": "Lang/ViewerSqlite-cs-CZ.dll",
+        "size_bytes": 9216
+      },
+      {
+        "path": "Lang/ViewerSqlite-fr-FR.dll",
+        "size_bytes": 10240
+      },
+      {
+        "path": "Lang/ViewerSqlite-ja-JP.dll",
+        "size_bytes": 7168
+      },
+      {
+        "path": "Lang/ViewerSqlite-sk-SK.dll",
+        "size_bytes": 9216
+      },
+      {
+        "path": "Lang/ViewerText-cs-CZ.dll",
+        "size_bytes": 20480
+      },
+      {
+        "path": "Lang/ViewerText-fr-FR.dll",
+        "size_bytes": 20480
+      },
+      {
+        "path": "Lang/ViewerText-ja-JP.dll",
+        "size_bytes": 16896
+      },
+      {
+        "path": "Lang/ViewerText-sk-SK.dll",
+        "size_bytes": 20480
+      },
+      {
+        "path": "Lang/ViewerVLC-cs-CZ.dll",
+        "size_bytes": 6144
+      },
+      {
+        "path": "Lang/ViewerVLC-fr-FR.dll",
+        "size_bytes": 6656
+      },
+      {
+        "path": "Lang/ViewerVLC-ja-JP.dll",
+        "size_bytes": 5120
+      },
+      {
+        "path": "Lang/ViewerVLC-sk-SK.dll",
+        "size_bytes": 6144
+      },
+      {
+        "path": "Lang/ViewerWeb-cs-CZ.dll",
+        "size_bytes": 8192
+      },
+      {
+        "path": "Lang/ViewerWeb-fr-FR.dll",
+        "size_bytes": 8704
+      },
+      {
+        "path": "Lang/ViewerWeb-ja-JP.dll",
+        "size_bytes": 6656
+      },
+      {
+        "path": "Lang/ViewerWeb-sk-SK.dll",
+        "size_bytes": 8192
+      },
+      {
+        "path": "Plugins/7zip.dll",
+        "size_bytes": 1845248
+      },
+      {
+        "path": "Plugins/aws-c-auth.dll",
+        "size_bytes": 228352
+      },
+      {
+        "path": "Plugins/aws-c-cal.dll",
+        "size_bytes": 68608
+      },
+      {
+        "path": "Plugins/aws-c-common.dll",
+        "size_bytes": 227840
+      },
+      {
+        "path": "Plugins/aws-c-compression.dll",
+        "size_bytes": 15872
+      },
+      {
+        "path": "Plugins/aws-c-event-stream.dll",
+        "size_bytes": 86528
+      },
+      {
+        "path": "Plugins/aws-c-http.dll",
+        "size_bytes": 365568
+      },
+      {
+        "path": "Plugins/aws-c-io.dll",
+        "size_bytes": 319488
+      },
+      {
+        "path": "Plugins/aws-c-mqtt.dll",
+        "size_bytes": 352768
+      },
+      {
+        "path": "Plugins/aws-c-s3.dll",
+        "size_bytes": 262144
+      },
+      {
+        "path": "Plugins/aws-c-sdkutils.dll",
+        "size_bytes": 105472
+      },
+      {
+        "path": "Plugins/aws-checksums.dll",
+        "size_bytes": 138240
+      },
+      {
+        "path": "Plugins/aws-cpp-sdk-core.dll",
+        "size_bytes": 1987072
+      },
+      {
+        "path": "Plugins/aws-cpp-sdk-s3-crt.dll",
+        "size_bytes": 2167296
+      },
+      {
+        "path": "Plugins/aws-cpp-sdk-s3tables.dll",
+        "size_bytes": 551936
+      },
+      {
+        "path": "Plugins/aws-crt-cpp.dll",
+        "size_bytes": 585216
+      },
+      {
+        "path": "Plugins/brotlicommon.dll",
+        "size_bytes": 137728
+      },
+      {
+        "path": "Plugins/brotlidec.dll",
+        "size_bytes": 52224
+      },
+      {
+        "path": "Plugins/FileSystem.dll",
+        "size_bytes": 1241600
+      },
+      {
+        "path": "Plugins/FileSystem7z.dll",
+        "size_bytes": 450048
+      },
+      {
+        "path": "Plugins/FileSystemCurl.dll",
+        "size_bytes": 874496
+      },
+      {
+        "path": "Plugins/FileSystemDummy.dll",
+        "size_bytes": 516608
+      },
+      {
+        "path": "Plugins/FileSystemGoogleDrive.dll",
+        "size_bytes": 571904
+      },
+      {
+        "path": "Plugins/FileSystemMicrosoftDrive.dll",
+        "size_bytes": 678400
+      },
+      {
+        "path": "Plugins/FileSystemMtp.dll",
+        "size_bytes": 675328
+      },
+      {
+        "path": "Plugins/FileSystemS3.dll",
+        "size_bytes": 806912
+      },
+      {
+        "path": "Plugins/jasper.dll",
+        "size_bytes": 307712
+      },
+      {
+        "path": "Plugins/jpeg8.dll",
+        "size_bytes": 784384
+      },
+      {
+        "path": "Plugins/lcms2-2.dll",
+        "size_bytes": 376320
+      },
+      {
+        "path": "Plugins/libcrypto-3-x64.dll",
+        "size_bytes": 5272064
+      },
+      {
+        "path": "Plugins/libcurl.dll",
+        "size_bytes": 909824
+      },
+      {
+        "path": "Plugins/libssh2.dll",
+        "size_bytes": 264192
+      },
+      {
+        "path": "Plugins/libssl-3-x64.dll",
+        "size_bytes": 867840
+      },
+      {
+        "path": "Plugins/nghttp2.dll",
+        "size_bytes": 157184
+      },
+      {
+        "path": "Plugins/pe-parse.dll",
+        "size_bytes": 400896
+      },
+      {
+        "path": "Plugins/raw_r.dll",
+        "size_bytes": 1163776
+      },
+      {
+        "path": "Plugins/spng.dll",
+        "size_bytes": 69632
+      },
+      {
+        "path": "Plugins/sqlite3.dll",
+        "size_bytes": 1119232
+      },
+      {
+        "path": "Plugins/Terminal.dll",
+        "size_bytes": 662016
+      },
+      {
+        "path": "Plugins/Terminal.dll.DxUi.json",
+        "size_bytes": 1824
+      },
+      {
+        "path": "Plugins/turbojpeg.dll",
+        "size_bytes": 989184
+      },
+      {
+        "path": "Plugins/ViewerImgRaw.dll",
+        "size_bytes": 1824256
+      },
+      {
+        "path": "Plugins/ViewerImgRaw.dll.DxUi.json",
+        "size_bytes": 1828
+      },
+      {
+        "path": "Plugins/ViewerPE.dll",
+        "size_bytes": 1674752
+      },
+      {
+        "path": "Plugins/ViewerPE.dll.DxUi.json",
+        "size_bytes": 1824
+      },
+      {
+        "path": "Plugins/ViewerSpace.dll",
+        "size_bytes": 2474496
+      },
+      {
+        "path": "Plugins/ViewerSpace.dll.DxUi.json",
+        "size_bytes": 1827
+      },
+      {
+        "path": "Plugins/ViewerSqlite.dll",
+        "size_bytes": 1637888
+      },
+      {
+        "path": "Plugins/ViewerSqlite.dll.DxUi.json",
+        "size_bytes": 1828
+      },
+      {
+        "path": "Plugins/ViewerText.dll",
+        "size_bytes": 2040832
+      },
+      {
+        "path": "Plugins/ViewerText.dll.DxUi.json",
+        "size_bytes": 1826
+      },
+      {
+        "path": "Plugins/ViewerVLC.dll",
+        "size_bytes": 515072
+      },
+      {
+        "path": "Plugins/ViewerVLC.dll.DxUi.json",
+        "size_bytes": 1825
+      },
+      {
+        "path": "Plugins/ViewerWeb.dll",
+        "size_bytes": 2443264
+      },
+      {
+        "path": "Plugins/ViewerWeb.dll.DxUi.json",
+        "size_bytes": 1825
+      },
+      {
+        "path": "Plugins/WebView2Loader.dll",
+        "size_bytes": 194912
+      },
+      {
+        "path": "Plugins/yyjson.dll",
+        "size_bytes": 260608
+      },
+      {
+        "path": "Plugins/z.dll",
+        "size_bytes": 87552
+      },
+      {
+        "path": "Plugins/TerminalRuntime/ghostty-vt.dll",
+        "size_bytes": 1973248
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-Aro.txt",
+        "size_bytes": 1072
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-Ghostty.txt",
+        "size_bytes": 1097
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-Pixels.txt",
+        "size_bytes": 6556
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-Unicode.txt",
+        "size_bytes": 2032
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-uucode-Bjoern-Hoehrmann.txt",
+        "size_bytes": 1137
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-uucode.txt",
+        "size_bytes": 1298
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-Wuffs.txt",
+        "size_bytes": 11372
+      },
+      {
+        "path": "Plugins/TerminalRuntime/LICENSE-Zig.txt",
+        "size_bytes": 1080
+      },
+      {
+        "path": "Plugins/TerminalRuntime/terminal-runtime-identity.json",
+        "size_bytes": 5194
+      },
+      {
+        "path": "Themes/CatppuccinFrappe.theme.json5",
+        "size_bytes": 4929
+      },
+      {
+        "path": "Themes/CatppuccinLatte.theme.json5",
+        "size_bytes": 4927
+      },
+      {
+        "path": "Themes/CatppuccinMocha.theme.json5",
+        "size_bytes": 4926
+      },
+      {
+        "path": "Themes/Dracula.theme.json5",
+        "size_bytes": 4711
+      },
+      {
+        "path": "Themes/ForestMist.theme.json5",
+        "size_bytes": 5499
+      },
+      {
+        "path": "Themes/NeonTokyo.theme.json5",
+        "size_bytes": 5680
+      },
+      {
+        "path": "Themes/PaperAndInk.theme.json5",
+        "size_bytes": 5488
+      },
+      {
+        "path": "Themes/RetroTerminal.theme.json5",
+        "size_bytes": 5345
+      },
+      {
+        "path": "Themes/SolarFlare.theme.json5",
+        "size_bytes": 5455
+      },
+      {
+        "path": "Themes/THIRD-PARTY-NOTICES.md",
+        "size_bytes": 1052
+      },
+      {
+        "path": "Themes/Ugly.theme.json5",
+        "size_bytes": 6699
+      },
+      {
+        "path": "Themes/Licenses/Catppuccin.LICENSE.txt",
+        "size_bytes": 1088
+      },
+      {
+        "path": "Themes/Licenses/Dracula.LICENSE.txt",
+        "size_bytes": 1101
+      },
+      {
+        "path": "blake3.dll",
+        "size_bytes": 86016
+      },
+      {
+        "path": "Common.dll",
+        "size_bytes": 966656
+      },
+      {
+        "path": "concrt140.dll",
+        "size_bytes": 367976
+      },
+      {
+        "path": "LICENSE.txt",
+        "size_bytes": 8899
+      },
+      {
+        "path": "msvcp140_1.dll",
+        "size_bytes": 35688
+      },
+      {
+        "path": "msvcp140_2.dll",
+        "size_bytes": 271728
+      },
+      {
+        "path": "msvcp140_atomic_wait.dll",
+        "size_bytes": 58816
+      },
+      {
+        "path": "msvcp140_codecvt_ids.dll",
+        "size_bytes": 31168
+      },
+      {
+        "path": "msvcp140.dll",
+        "size_bytes": 652224
+      },
+      {
+        "path": "README.txt",
+        "size_bytes": 1344
+      },
+      {
+        "path": "red.exe",
+        "size_bytes": 410624
+      },
+      {
+        "path": "RedLauncher.exe",
+        "size_bytes": 410624
+      },
+      {
+        "path": "RedMonitor-LICENSE.txt",
+        "size_bytes": 8600
+      },
+      {
+        "path": "RedSalamander.exe",
+        "size_bytes": 8641024
+      },
+      {
+        "path": "RedSalamander.exe.DxUi.json",
+        "size_bytes": 1829
+      },
+      {
+        "path": "RedSalamanderSearchService.exe",
+        "size_bytes": 1235456
+      },
+      {
+        "path": "SettingsStore.schema.json",
+        "size_bytes": 75827
+      },
+      {
+        "path": "sqlite3.dll",
+        "size_bytes": 1119232
+      },
+      {
+        "path": "vccorlib140.dll",
+        "size_bytes": 351592
+      },
+      {
+        "path": "vcruntime140_1.dll",
+        "size_bytes": 50624
+      },
+      {
+        "path": "vcruntime140_threads.dll",
+        "size_bytes": 38760
+      },
+      {
+        "path": "vcruntime140.dll",
+        "size_bytes": 176496
+      },
+      {
+        "path": "yyjson.dll",
+        "size_bytes": 260608
+      }
+    ],
+    "sidecars": [
+      "Plugins/Terminal.dll.DxUi.json",
+      "Plugins/ViewerImgRaw.dll.DxUi.json",
+      "Plugins/ViewerPE.dll.DxUi.json",
+      "Plugins/ViewerSpace.dll.DxUi.json",
+      "Plugins/ViewerSqlite.dll.DxUi.json",
+      "Plugins/ViewerText.dll.DxUi.json",
+      "Plugins/ViewerVLC.dll.DxUi.json",
+      "Plugins/ViewerWeb.dll.DxUi.json",
+      "RedSalamander.exe.DxUi.json"
+    ],
+    "forbidden": [],
+    "passed": true
+  },
+  "msi": null,
+  "msix_status": null,
+  "msix_input_comparison": null,
+  "failure": "System.Management.Automation.RuntimeException: Cannot index into a null array.\r\n   at System.Management.Automation.ExceptionHandlingOps.CheckActionPreference(FunctionContext funcContext, Exception exception)\r\n   at System.Management.Automation.Interpreter.ActionCallInstruction`2.Run(InterpretedFrame frame)\r\n   at System.Management.Automation.Interpreter.EnterTryCatchFinallyInstruction.Run(InterpretedFrame frame)\r\n   at System.Management.Automation.Interpreter.EnterTryCatchFinallyInstruction.Run(InterpretedFrame frame)"
+}

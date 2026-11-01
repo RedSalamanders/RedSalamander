@@ -1183,6 +1183,42 @@
         return reject(L"the French completed note or synthetic summary lost its known missing-file explanation");
     operations->DebugAppendCompletedTaskForSelfTest(failedSummary);
 
+    constexpr uint64_t localizedResultSummaryTaskId = 0xF26A202610100005ull;
+    FolderWindow::FileOperationState::CompletedTaskSummary localizedResultSummary{};
+    localizedResultSummary.taskId                        = localizedResultSummaryTaskId;
+    localizedResultSummary.resultSummaryResourceId       = IDS_FMT_FILEOPS_RESULT_STOPPED_COPIED;
+    localizedResultSummary.resultSummaryHasArguments     = true;
+    localizedResultSummary.resultSummaryArgument0        = 2u;
+    localizedResultSummary.resultSummaryArgument1        = 7u;
+    localizedResultSummary.resultSummaryLanguageRevision = Localization::GetLanguagePreferenceRevision();
+    localizedResultSummary.resultSummary                 = FormatStringResource(nullptr, IDS_FMT_FILEOPS_RESULT_STOPPED_COPIED, 2u, 7u);
+    const std::wstring frenchResultSummary               = localizedResultSummary.resultSummary;
+    operations->DebugAppendCompletedTaskForSelfTest(std::move(localizedResultSummary));
+
+    constexpr uint64_t interruptedNoticeTaskId = 0xF26A202610100006ull;
+    FolderWindow::FileOperationState::CompletedTaskSummary interruptedNotice{};
+    interruptedNotice.taskId                           = interruptedNoticeTaskId;
+    interruptedNotice.interruptedOperationId           = 0xA102u;
+    interruptedNotice.interruptedMoveNotice            = true;
+    interruptedNotice.interruptedMoveNoticeHasSummary  = true;
+    interruptedNotice.interruptedMoveNoticeExecuting   = true;
+    interruptedNotice.interruptedMoveNativeItemCount   = 3u;
+    interruptedNotice.interruptedMoveManagedItemCount  = 2u;
+    interruptedNotice.interruptedMoveCopyOnlyItemCount = 1u;
+    interruptedNotice.interruptedMoveSourceRootCount   = 4u;
+    interruptedNotice.resultSummaryLanguageRevision    = Localization::GetLanguagePreferenceRevision();
+    interruptedNotice.resultSummary                    = FormatStringResource(nullptr,
+                                                                              IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
+                                                                              interruptedNotice.interruptedOperationId,
+                                                                              LoadStringResource(nullptr, IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING),
+                                                                              interruptedNotice.interruptedMoveNativeItemCount,
+                                                                              interruptedNotice.interruptedMoveManagedItemCount,
+                                                                              interruptedNotice.interruptedMoveCopyOnlyItemCount,
+                                                                              interruptedNotice.interruptedMoveSourceRootCount);
+    interruptedNotice.lastDiagnosticMessage            = interruptedNotice.resultSummary;
+    const std::wstring frenchInterruptedNotice         = interruptedNotice.resultSummary;
+    operations->DebugAppendCompletedTaskForSelfTest(std::move(interruptedNotice));
+
     if (! applyCulture(L"en-US"))
         return reject(L"en-US could not be applied for the live-language check");
     const std::wstring englishFailed = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MISSING_FILE);
@@ -1201,6 +1237,24 @@
     if (! presentation || completed == presentation->end() || completed->facts.lastDiagnosticMessage != named[1].clipboardClearFailed)
         return reject(std::format(L"the completed card's Last note did not follow the language change: '{}'",
                                   presentation && completed != presentation->end() ? completed->facts.lastDiagnosticMessage : std::wstring{}));
+    const auto localizedResult =
+        presentation ? std::ranges::find_if(*presentation, [](const auto& item) noexcept { return item.facts.taskId == localizedResultSummaryTaskId; })
+                     : std::vector<FolderWindow::FileOperationState::CompletedTaskPresentation>::const_iterator{};
+    const std::wstring englishResultSummary = FormatStringResource(nullptr, IDS_FMT_FILEOPS_RESULT_STOPPED_COPIED, 2u, 7u);
+    if (! presentation || localizedResult == presentation->end() || frenchResultSummary == englishResultSummary ||
+        localizedResult->facts.resultSummary != englishResultSummary)
+        return reject(std::format(L"the completed result summary stayed '{}' after changing from French; expected '{}'",
+                                  presentation && localizedResult != presentation->end() ? localizedResult->facts.resultSummary : std::wstring{},
+                                  englishResultSummary));
+
+    const auto localizedNotice =
+        presentation ? std::ranges::find_if(*presentation, [](const auto& item) noexcept { return item.facts.taskId == interruptedNoticeTaskId; })
+                     : std::vector<FolderWindow::FileOperationState::CompletedTaskPresentation>::const_iterator{};
+    const std::wstring englishInterruptedNotice = FormatStringResource(
+        nullptr, IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY, 0xA102u, LoadStringResource(nullptr, IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING), 3u, 2u, 1u, 4u);
+    if (! presentation || localizedNotice == presentation->end() || frenchInterruptedNotice == englishInterruptedNotice ||
+        localizedNotice->facts.resultSummary != englishInterruptedNotice || localizedNotice->facts.lastDiagnosticMessage != englishInterruptedNotice)
+        return reject(L"the interrupted-Move result and Last diagnostic strings did not follow the English language change");
 
     // A running task's Last note is formatted when read, in the language shown.
     operations->RecordTaskDiagnostic(summaryTaskId,

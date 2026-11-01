@@ -1,4 +1,5 @@
 #include "FileSystem.Internal.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 
@@ -8,6 +9,25 @@
 
 namespace FileSystemInternal
 {
+HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view marker, std::wstring& path) noexcept
+{
+    path.clear();
+    const size_t separator = finalPath.find_last_of(L"\\/");
+    if (separator == std::wstring_view::npos || separator + 1u >= finalPath.size())
+    {
+        return E_INVALIDARG;
+    }
+    std::wstring leaf;
+    const HRESULT hr = Common::Paths::BuildUniqueSiblingName(finalPath.substr(separator + 1u), marker, std::wstring_view{}, 255u, leaf);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    path.assign(finalPath.substr(0u, separator + 1u));
+    path.append(leaf);
+    return S_OK;
+}
+
 namespace
 {
 void NormalizePathSeparators(std::wstring& path) noexcept
@@ -28,7 +48,7 @@ void NormalizePathSeparators(std::wstring& path) noexcept
 
 [[nodiscard]] bool IsUncExtendedPath(std::wstring_view path) noexcept
 {
-    return path.rfind(L"\\\\?\\UNC\\", 0) == 0;
+    return Common::Paths::ClassifyWindowsPath(path) == Common::Paths::WindowsPathClass::ExtendedUnc;
 }
 
 [[nodiscard]] bool IsPathSeparator(wchar_t ch) noexcept
@@ -321,7 +341,7 @@ namespace
 void AppendUncShareRootSeparator(std::wstring& extendedUnc)
 {
     constexpr std::wstring_view kPrefix = L"\\\\?\\UNC\\";
-    if (extendedUnc.size() <= kPrefix.size() || extendedUnc.compare(0u, kPrefix.size(), kPrefix) != 0)
+    if (extendedUnc.size() <= kPrefix.size() || ! IsUncExtendedPath(extendedUnc))
     {
         return;
     }
@@ -433,6 +453,8 @@ void RunDebugPathNormalizationSelfTest(unsigned int& passed, unsigned int& faile
           L"ToExtendedPath should append the trailing separator a UNC share root needs to open");
     check(ToExtendedPath(L"\\\\server\\share\\") == L"\\\\?\\UNC\\server\\share\\",
           L"ToExtendedPath should keep a UNC share root's existing trailing separator");
+    check(ToExtendedPath(L"\\\\?\\unc\\server\\share") == L"\\\\?\\unc\\server\\share\\",
+          L"ToExtendedPath should recognize lower-case extended UNC share roots");
     check(ToExtendedPath(L"\\\\?\\UNC\\server\\share") == L"\\\\?\\UNC\\server\\share\\",
           L"ToExtendedPath should append the trailing separator to an extended UNC share root");
     check(ToExtendedPath(L"\\\\server\\share\\dir") == L"\\\\?\\UNC\\server\\share\\dir",

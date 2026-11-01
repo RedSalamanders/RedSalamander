@@ -33,6 +33,13 @@ through the canonical native test-directory helper. The actual browser environme
 must still report the fixture's expected profile. Ordinary launches retain the
 normal application profile behavior.
 
+When test-profile admission fails, ViewerWeb must return the admission HRESULT from
+`Open`, retain an initialization status, log the HRESULT and submit the existing
+modeless error alert. It must not queue document loading or fall back to a user
+profile. The noninteractive security harness supplies an invalid, nonexistent
+profile beneath its marked run, verifies fail-closed `Open` and visible status, then
+restores the valid profile before exercising the real WebView2 environment.
+
 Module lifetime:
 - ViewerWeb owns a DLL-global shared `ICoreWebView2Environment` so multiple viewer instances do not each pay WebView2 environment startup cost.
 - ViewerWeb exports `RedSalamanderPluginShutdown()` to reset that shared environment, unregister the viewer window class, release its WIL-owned class brushes, and retry staged-file deletion as the required module quiet point. The hook is idempotent. `DllMain` process detach deliberately performs no COM release, GDI/container destruction, or staged-file I/O because those operations are forbidden under the loader lock.

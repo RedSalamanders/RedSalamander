@@ -37,6 +37,66 @@ constexpr std::wstring_view kIdentityLessByNameListWithoutIndexEnv = L"REDSALAMA
 // A test-only number of folders a delete by name holds at once (its tree then goes in chunks).
 constexpr std::wstring_view kIdentityLessByNameHoldBudgetEnv = L"REDSALAMANDER_FILEOPS_BYNAME_HOLD_BUDGET";
 
+struct LeftoverScanCompletionProbe final
+{
+    LeftoverScanCompletionProbe()                                              = default;
+    LeftoverScanCompletionProbe(const LeftoverScanCompletionProbe&)            = delete;
+    LeftoverScanCompletionProbe& operator=(const LeftoverScanCompletionProbe&) = delete;
+    LeftoverScanCompletionProbe(LeftoverScanCompletionProbe&&)                 = delete;
+    LeftoverScanCompletionProbe& operator=(LeftoverScanCompletionProbe&&)      = delete;
+
+    std::atomic_uint32_t delivered{0u};
+};
+
+LRESULT CALLBACK LeftoverScanCompletionProbeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    if (message == WM_NCCREATE)
+    {
+        const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create ? create->lpCreateParams : nullptr));
+        InitPostedPayloadWindow(hwnd);
+        return TRUE;
+    }
+    if (message == WndMsg::kLeftoverCleanupScanComplete)
+    {
+        auto* probe = reinterpret_cast<LeftoverScanCompletionProbe*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (probe != nullptr)
+        {
+            probe->delivered.fetch_add(1u, std::memory_order_relaxed);
+        }
+        // This probe deliberately accepts no completion; drain the opaque token and keep the
+        // message-only test window valid if a regression posts late.
+        static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+        return 0;
+    }
+    if (message == WM_NCDESTROY)
+    {
+        static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+[[nodiscard]] HWND CreateLeftoverScanCompletionProbeWindow(LeftoverScanCompletionProbe& probe) noexcept
+{
+    static ATOM atom = 0;
+    if (atom == 0)
+    {
+        WNDCLASSEXW windowClass{};
+        windowClass.cbSize        = sizeof(windowClass);
+        windowClass.lpfnWndProc   = LeftoverScanCompletionProbeWndProc;
+        windowClass.hInstance     = GetModuleHandleW(nullptr);
+        windowClass.lpszClassName = L"RedSalamander.SelfTest.LeftoverScanCompletionProbe";
+        atom                      = RegisterClassExW(&windowClass);
+        if (atom == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+        {
+            return nullptr;
+        }
+    }
+    return CreateWindowExW(
+        0u, L"RedSalamander.SelfTest.LeftoverScanCompletionProbe", L"", 0u, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), &probe);
+}
+
 [[nodiscard]] std::optional<IdentityLessSummary> FindIdentityLessSummary(FolderWindow::FileOperationState* operations, uint64_t taskId)
 {
     std::vector<IdentityLessSummary> summaries;
@@ -887,6 +947,9 @@ struct QueuedByNameDelete final
         ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.tmp", true, false},
         ShapeCase{L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0", true, false},
         ShapeCase{L"report.docx.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}", true, true},
+        ShapeCase{L"report.docx.rs_bak_0123456789abcdef0123456789abcdef", true, true},
+        ShapeCase{L"report.docx.rs_copy_tmp_0123456789abcdef0123456789abcdef", true, false},
+        ShapeCase{L"report.docx.rs_copy_tmp_01234567_89abcdef_0123456789abcdef", true, false},
         // Near misses stay ordinary.
         ShapeCase{L".rs-bak-0123456789abcdef-report.docx", false, false},
         ShapeCase{L".rs-bak-0123456789abcdef0123456789abcdefreport.docx", false, false},
@@ -896,6 +959,8 @@ struct QueuedByNameDelete final
         ShapeCase{L".report.docx.rs-mtp-overwrite-0123456789abcdef.tmp", false, false},
         ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.bin", false, false},
         ShapeCase{L"notes.rs_case_tmp_0123", false, false},
+        ShapeCase{L"report.docx.rs_bak_0123456789abcdef0123456789abcdeg", false, false},
+        ShapeCase{L"report.docx.rs_copy_tmp_0123456789abcdef0123456789abcde", false, false},
         // The case-only rename's temporary name is the whole leaf: no prefix, no suffix, 32 hex digits.
         ShapeCase{L"notes.rs_case_tmp_0123456789abcdef0123456789abcdef", false, false},
         ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdef.txt", false, false},
@@ -1071,14 +1136,25 @@ struct QueuedByNameDelete final
         ! TryCreateJunction(root / L"link", outside))
         return reject(L"fixtures (including the junction) unavailable");
 
-    const auto scan = [&](size_t maxFolders, size_t maxRows, size_t maxDepth, bool cancel, FolderWindow::LeftoverScanDebugResult& result) noexcept
-    { return FolderWindow::DebugScanLeftoversForSelfTest(state.fsLocal.get(), root, maxFolders, maxRows, maxDepth, cancel, result); };
+    const auto scan = [&](size_t maxFolders,
+                          size_t maxRows,
+                          size_t maxDepth,
+                          bool cancel,
+                          FolderWindow::LeftoverScanDebugResult& result,
+                          const std::filesystem::path& failReadDirectory = {}) noexcept
+    { return FolderWindow::DebugScanLeftoversForSelfTest(state.fsLocal.get(), root, maxFolders, maxRows, maxDepth, cancel, result, failReadDirectory); };
     const auto listed = [](const FolderWindow::LeftoverScanDebugResult& result, const std::filesystem::path& path) noexcept
     { return std::ranges::find(result.rows, path) != result.rows.end(); };
     const auto describe = [](const FolderWindow::LeftoverScanDebugResult& result)
     {
-        std::wstring text = std::format(
-            L"folderLimit={} rowLimit={} depthLimit={} canceled={} rows=[", result.folderLimit, result.rowLimit, result.depthLimit, result.canceled);
+        std::wstring text = std::format(L"folderLimit={} rowLimit={} depthLimit={} canceled={} incompleteFolders={} invalidNames={} firstError=0x{:08X} rows=[",
+                                        result.folderLimit,
+                                        result.rowLimit,
+                                        result.depthLimit,
+                                        result.canceled,
+                                        result.incompleteFolderCount,
+                                        result.invalidChildNameCount,
+                                        static_cast<unsigned long>(result.firstError));
         for (const std::filesystem::path& row : result.rows)
             text += row.filename().native() + L";";
         return text + L"]";
@@ -1089,7 +1165,7 @@ struct QueuedByNameDelete final
     if (FAILED(scan(4096u, 4096u, 32u, false, full)) || full.rows.size() != 4u || ! listed(full, top) || ! listed(full, middle) || ! listed(full, deep) ||
         ! listed(full, leftoverDir) || listed(full, inner) ||
         std::ranges::any_of(full.rows, [&](const std::filesystem::path& row) noexcept { return row.filename() == beyondLink.filename(); }) ||
-        full.folderLimit || full.rowLimit || full.depthLimit || full.canceled)
+        full.folderLimit || full.rowLimit || full.depthLimit || full.canceled || full.incompleteFolderCount != 0u || full.invalidChildNameCount != 0u)
         return reject(std::format(L"the unbounded walk listed the wrong rows: {}", describe(full)));
 
     // 2. Depth: two levels reach `sub` but not `deeper`, and say so.
@@ -1114,7 +1190,102 @@ struct QueuedByNameDelete final
     if (FAILED(scan(4096u, 4096u, 32u, true, stopped)) || ! stopped.rows.empty() || ! stopped.canceled)
         return reject(std::format(L"a stopped walk did not end at once: {}", describe(stopped)));
 
-    Debug::Perf::Emit(L"FileOps.SelfTest.LeftoverCleanupWalkBounds", L"full;depth;folders;items;stop", 0u, 5u, 0u, S_OK);
+    // 6. An unreadable child keeps rows already found and rows from independent branches, then reports
+    // one incomplete folder with the provider failure HRESULT. This makes a partial result visible
+    // without claiming that the traversal completed.
+    FolderWindow::LeftoverScanDebugResult partial{};
+    if (FAILED(scan(4096u, 4096u, 32u, false, partial, root / L"sub")) || partial.incompleteFolderCount != 1u ||
+        partial.firstError != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) || ! listed(partial, top) || ! listed(partial, leftoverDir) || listed(partial, middle) ||
+        listed(partial, deep) || listed(partial, inner))
+        return reject(std::format(L"the incomplete walk did not preserve the validated partial result: {}", describe(partial)));
+
+    FolderWindow::LeftoverScanDebugResult missing{};
+    if (FAILED(FolderWindow::DebugScanLeftoversForSelfTest(state.fsLocal.get(), root / L"missing", 4096u, 4096u, 32u, false, missing)) ||
+        missing.incompleteFolderCount != 1u || SUCCEEDED(missing.firstError) || ! missing.rows.empty())
+        return reject(std::format(L"a failed root scan was not reported as incomplete: {}", describe(missing)));
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.LeftoverCleanupWalkBounds", L"full;depth;folders;items;stop;partial;rootFailure", 0u, 7u, 0u, S_OK);
+    return true;
+}
+
+// Final retirement must return promptly while an untrusted provider is still inside its synchronous
+// directory read. Releasing the provider afterwards must retire exactly the worker-held COM reference
+// and must not deliver a completion to the message-only probe window.
+[[nodiscard]] bool RunFileOpsLeftoverScanWorkerRetirementChecks(SelfTestState& state) noexcept
+{
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"Leftover scan worker retirement: {}", reason));
+        return false;
+    };
+    wil::unique_handle entered(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_handle reaped(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! entered || ! reaped)
+    {
+        return reject(L"held-read/reaped events could not be created");
+    }
+
+    LeftoverScanCompletionProbe probe;
+    wil::unique_hwnd probeWindow(CreateLeftoverScanCompletionProbeWindow(probe));
+    if (! probeWindow)
+    {
+        return reject(L"message-only completion probe window could not be created");
+    }
+
+    auto providerOwner = std::make_unique<UncontainedNeverReturningFileSystem>("{}", true, true, true);
+    if (! providerOwner->BlockedReadReady())
+    {
+        return reject(L"provider held-read pipe could not be created");
+    }
+    UncontainedNeverReturningFileSystem* const provider = providerOwner.get();
+    provider->SetBlockReadDirectoryInfoForSelfTest(entered.get());
+    wil::com_ptr<IFileSystem> providerReference;
+    providerReference.attach(static_cast<IFileSystem*>(providerOwner.release()));
+
+    auto unblockProvider = wil::scope_exit([&]() noexcept
+    {
+        provider->ReleaseBlockedRead();
+        if (WaitForSingleObject(reaped.get(), 5000u) != WAIT_OBJECT_0)
+        {
+            Debug::Error(L"Leftover scan test worker did not reap after the provider gate was released.");
+        }
+    });
+
+    DWORD retirementElapsedMs = MAXDWORD;
+    const HRESULT retireHr    = FolderWindow::DebugRetireLeftoverScanWorkerForSelfTest(
+        providerReference.get(), state.tempRoot / L"leftover-held-provider", probeWindow.get(), entered.get(), reaped.get(), retirementElapsedMs);
+    if (FAILED(retireHr))
+    {
+        return reject(std::format(L"worker could not reach its held provider read (hr=0x{:08X})", static_cast<unsigned long>(retireHr)));
+    }
+    if (retirementElapsedMs > 200u || provider->ProviderOperationCallCount() != 1u || provider->ReferenceCountForSelfTest() != 2u)
+    {
+        return reject(std::format(L"final retirement blocked or dropped provider ownership (elapsedMs={}, calls={}, refs={})",
+                                  retirementElapsedMs,
+                                  provider->ProviderOperationCallCount(),
+                                  provider->ReferenceCountForSelfTest()));
+    }
+
+    provider->ReleaseBlockedRead();
+    static_cast<void>(unblockProvider.release());
+    const auto retired = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return WaitForSingleObject(reaped.get(), 0u) == WAIT_OBJECT_0; },
+                                                                       {.timeout = std::chrono::seconds{5}, .operationName = L"leftover scan worker reaper"});
+    MSG message{};
+    while (PeekMessageW(&message, probeWindow.get(), WndMsg::kLeftoverCleanupScanComplete, WndMsg::kLeftoverCleanupScanComplete, PM_REMOVE))
+    {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+    if (! retired.conditionMet || ! provider->WaitForBlockedReadReturn(1000u) || provider->ReferenceCountForSelfTest() != 1u ||
+        probe.delivered.load(std::memory_order_acquire) != 0u)
+    {
+        return reject(std::format(L"provider/context did not retire cleanly or a late completion was delivered (reaped={}, refs={}, messages={})",
+                                  retired.conditionMet ? 1u : 0u,
+                                  provider->ReferenceCountForSelfTest(),
+                                  probe.delivered.load(std::memory_order_acquire)));
+    }
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.LeftoverScanWorkerRetirement", L"held-provider;bounded-final-stop;context-release;no-late-post", 0u, 1u, 0u, S_OK);
     return true;
 }
 
@@ -2313,14 +2484,33 @@ struct QueuedByNameDelete final
                 reading.byNameCorroborated                     = false;
                 reading.pinnedDeleteIdentity.reset();
                 reading.providerPath = (std::filesystem::path(byName->providerPath) / L"x.bin").native();
-                holder               = std::make_unique<IdentityLessTask>(*operations);
-                holder->_taskId      = operations->AllocateLateQueueOrderKey();
-                holder->_admissionKey.store(holder->_taskId, std::memory_order_release);
-                holder->InstallPreparedMutationInterlockScopes({reading}, false);
-                operations->PublishPreparedMutationInterlock(*holder);
-                FolderWindow::FileOperationState::MutationInterlockRelations decided{};
-                decided.advisoryDecided = true;
-                operations->PublishMutationInterlockDecision(*holder, decided);
+                reading.providerPathKey.reset(); // The retargeted fixture deliberately exercises the exact keyless fallback.
+                bool rebuiltReadingAnchors = reading.endpoint.pathIdentity.has_value();
+                for (FileOperations::MutationInterlockAnchor& anchor : reading.anchors)
+                {
+                    rebuiltReadingAnchors =
+                        rebuiltReadingAnchors && anchor.authority &&
+                        TryGetFileSystemRelativePath(
+                            reading.endpoint.pathIdentity.value(), anchor.authority->retained.providerPath, reading.providerPath, anchor.relativePath);
+                    if (! rebuiltReadingAnchors)
+                    {
+                        break;
+                    }
+                    // Keep this fixture keyless on purpose while ensuring every retained authority
+                    // still denotes an ancestor of the child path.
+                    anchor.relativePathKey.reset();
+                }
+                if (rebuiltReadingAnchors)
+                {
+                    holder          = std::make_unique<IdentityLessTask>(*operations);
+                    holder->_taskId = operations->AllocateLateQueueOrderKey();
+                    holder->_admissionKey.store(holder->_taskId, std::memory_order_release);
+                    holder->InstallPreparedMutationInterlockScopes({reading}, false);
+                    operations->PublishPreparedMutationInterlock(*holder);
+                    FolderWindow::FileOperationState::MutationInterlockRelations decided{};
+                    decided.advisoryDecided = true;
+                    operations->PublishMutationInterlockDecision(*holder, decided);
+                }
             }
         }
         const uint64_t holderKey = holder ? holder->_admissionKey.load(std::memory_order_acquire) : 0u;

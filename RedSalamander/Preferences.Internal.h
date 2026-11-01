@@ -658,6 +658,9 @@ void MaybeResetWorkingConnectionsSettingsIfEmpty(Common::Settings::Settings& set
 namespace PrefsFileOperations
 {
 [[nodiscard]] const Common::Settings::FileOperationsSettings& GetFileOperationsSettingsOrDefault(const Common::Settings::Settings& settings) noexcept;
+void MergePreferencesOwnedFileOperationsSettings(Common::Settings::Settings& latest,
+                                                 const Common::Settings::FileOperationsSettings& baseline,
+                                                 const Common::Settings::FileOperationsSettings& working) noexcept;
 [[nodiscard]] Common::Settings::FileOperationsSettings* EnsureWorkingFileOperationsSettings(Common::Settings::Settings& settings) noexcept;
 void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& settings) noexcept;
 } // namespace PrefsFileOperations

@@ -52,6 +52,7 @@ FolderWindow uses `IFileSystem` plugins selected per-pane:
   - Otherwise the pane keeps its current plugin and interprets the path as that plugin’s path.
 - If the prefix is unknown or the plugin is unavailable, FolderWindow falls back to the default plugin (`plugins.currentFileSystemPluginId`, typically `builtin/file-system`).
 - When a pane switches plugins, FolderWindow cancels enumeration for that pane and unregisters the previous provider from `DirectoryInfoCache`. Logical-context state drains only when the last provider for that context goes away.
+- File-operation completion notifications use the source identity captured at admission and the destination identity captured with the admission. They must not re-resolve an unregistered task provider pointer: that fallback has no mount context and could leave the task's shared logical cache stale or target another context.
 - When switching to the `file` plugin, non-absolute paths are replaced with the default Windows drive root.
 - FolderWindow maintains both:
   - A **canonical location** string for persistence/history (`file`: Windows path; non-`file`: `<shortId>:<pluginPath>` or `<shortId>:<instanceContext>|<pluginPath>`).

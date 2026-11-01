@@ -1,0 +1,10 @@
+{
+  "run_id": "20261031T144803Z-79204-7e5e9ce943e4412ab050947fec665c60",
+  "raw_sha256": "42ae856531ccfc012efc85743b2b95026d7ceab7553a333bc73170a0bf7bb887",
+  "raw_rows": 33677,
+  "raw_bytes": 13113675,
+  "selected_rows": 12,
+  "selection": "Original-order classifier/512-key payload and legacy eligibility observation duration rows",
+  "scope": "Debug observations; injected peer observations are marked by fixture controls, not real process-snapshot timing",
+  "receipt": "c6b6a42d64f955e5297c9a1ceb38b8598d66998ac10d654073bfd5ff1b49d375"
+}

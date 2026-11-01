@@ -88,7 +88,7 @@ BEGIN
     IDS_VIEWERSPACE_HEADER_SIZE_FORMAT "{0} ({1:L} bajtov)"
     IDS_VIEWERSPACE_AGGREGATE_FOLDERS_FILES_FORMAT "Priečinky {0:L}, súbory {1:L}"
     IDS_VIEWERSPACE_AGGREGATE_FOLDERS_FORMAT "priečinky {0:L}"
-    IDS_VIEWERSPACE_AGGREGATE_FILES_FORMAT "{0:L} súbory"
+    IDS_VIEWERSPACE_AGGREGATE_FILES_FORMAT "Súbory: {0:L}"
     IDS_VIEWERSPACE_WATERMARK_SCAN_INCOMPLETE "Skenovanie nebolo dokončené"
     IDS_VIEWERSPACE_WATERMARK_IN_PROGRESS "Prebieha"
     IDS_VIEWERSPACE_CONTEXT_FOCUS_IN_PANE "Zaostrenie v paneli"
@@ -172,7 +172,7 @@ BEGIN
     IDS_VIEWERSPACE_EXPORT_CSV "CSV file"
     IDS_VIEWERSPACE_EXPORT_FAILED "The current view could not be exported: {0}"
     IDS_VIEWERSPACE_PROBLEMS "Scan problems"
-    IDS_VIEWERSPACE_PROBLEMS_SUMMARY "{0:L} folders could not be read. Some details may also be summarized as Other."
+    IDS_VIEWERSPACE_PROBLEMS_SUMMARY "Nečitateľné priečinky: {0:L}. Niektoré podrobnosti môžu byť tiež zhrnuté v položke Ostatné."
     IDS_VIEWERSPACE_PROBLEMS_NONE "No unreadable folders were recorded."
     IDS_VIEWERSPACE_OPEN_OTHER_PANE "Open folder in ot&her pane"
     IDS_VIEWERSPACE_WEIGHT_SIZE "Size"
@@ -198,7 +198,7 @@ BEGIN
     IDS_VIEWERSPACE_FILTERS "Type and age filters"
     IDS_VIEWERSPACE_TYPE_BREAKDOWN "File type breakdown"
     IDS_VIEWERSPACE_FILTER_HIGHLIGHT "Filter highlights · totals unchanged"
-    IDS_VIEWERSPACE_FILE_COUNT_FORMAT "{0:L} files"
+    IDS_VIEWERSPACE_FILE_COUNT_FORMAT "Súbory: {0:L}"
     IDS_VIEWERSPACE_SIZE_KNOWN_FORMAT "At least {0}"
     IDS_VIEWERSPACE_SCAN_RATE "{0:L} items/s"
     IDS_VIEWERSPACE_AGE_RECENT "Last 7 days"
@@ -239,7 +239,7 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_VIEWERSPACE_HEADER_PROBLEMS "{0} · {1:L} unreadable"
+    IDS_VIEWERSPACE_HEADER_PROBLEMS "{0} · nečitateľných: {1:L}"
 END
 
 STRINGTABLE

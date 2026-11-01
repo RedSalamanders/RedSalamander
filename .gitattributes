@@ -48,7 +48,7 @@ Specs/TestRuns/4cb089111a23/FileOps/20261003T182209Z-51656-126e7ed59f724fefae9d2
 Specs/TestRuns/4cb089111a23/FileOps/20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/FileOps/20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/FileOps/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/Plans/Done/I27/implementation/g/g1/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 # Predeclare only the I27 original-record subdirectory of future real Full runs.
 Specs/TestRuns/4cb089111a23/Validation/*/i27-final/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/Validation/2026-10-04_114600-containment/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
@@ -313,7 +313,7 @@ Specs/TestRuns/4cb089111a23/Commands/2026-09-21-conflict-visible-order/** -text 
 Specs/TestRuns/4cb089111a23/Commands/2026-09-21-throughput-reload-restart/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 
 # Preserve reviewed original console whitespace; never rewrite hashed diagnostics.
-Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/runner-console.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/Plans/Done/I27/implementation/g/g1/runner-console.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/FileOps/20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153/provenance/runner.txt whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/FileOps/20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d/provenance/runner.txt whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/FileOps/20261003T205140Z-42648-2508477ee1b24f0c93cbbac2200cf891/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
@@ -337,6 +337,9 @@ Specs/TestRuns/4cb089111a23/FileOps/20261003T232201Z-75488-0a7264eaad564dcd8aa10
 Specs/TestRuns/4cb089111a23/Validation/*/i27-final/runner.log whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/7d3a1247382a/FileOps/*-i37-*/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/7d3a1247382a/FileOps/*-i37-*/*.patch whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+# The renamed accounting packet keeps its exact policy; other i37 packets keep the rules above.
+Specs/TestRuns/7d3a1247382a/FileOps/f01/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/7d3a1247382a/FileOps/f01/*.patch whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 
 # ViewerSpace desktop-observer diagnostics retain original log, receipt and provenance bytes.
 Specs/TestRuns/Local-x64/Viewers/2026-10-16_125146_DesktopObservation/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
@@ -425,7 +428,7 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/**
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_145454_MigrationFocusedClosure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_145918_CiBootstrapFailure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_160430_CiMsbuildRootFailure/** -text -whitespace
-/Specs/TestRuns/4cb089111a23/Validation/2026-10-26_172200_CiNativeStandaloneFailure/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Validation/v01/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_192709_PublicFocusedClosure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_201045_CiArmBrowserProfileFailure/** -text -whitespace
 /Specs/TestRuns/Local-x64/CurlFixture/** -text -whitespace

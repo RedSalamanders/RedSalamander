@@ -46,7 +46,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "The trace is now capturing events in real-time." -ForegroundColor White
     Write-Host "Run your tests, then use stop-etw-trace.ps1 to stop and view results." -ForegroundColor White
     Write-Host ""
-    Write-Host "Note: RedSalamanderMonitor.exe has its own built-in ETW listener" -ForegroundColor Cyan
+    Write-Host "Note: the independently installed RedMonitor has its own built-in ETW listener" -ForegroundColor Cyan
     Write-Host "      and does not require this external trace session." -ForegroundColor Cyan
 } else {
     Write-Host "ERROR: Failed to start ETW trace session" -ForegroundColor Red

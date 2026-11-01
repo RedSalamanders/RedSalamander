@@ -1892,6 +1892,10 @@ private:
     std::condition_variable _enumerationCv;
     std::optional<std::filesystem::path> _pendingEnumerationPath;
     uint64_t _pendingEnumerationGeneration = 0;
+    // Guarded by _enumerationMutex. Each queued generation owns a distinct source so
+    // replacing/canceling it interrupts only work already bound to that generation.
+    std::stop_source _enumerationGenerationStopSource;
+    std::stop_source _pendingEnumerationStopSource{std::nostopstate};
     wil::com_ptr<IFileSystem> _pendingEnumerationFileSystem;
     std::wstring _pendingEnumerationPluginId;
     std::wstring _pendingEnumerationInstanceContext;

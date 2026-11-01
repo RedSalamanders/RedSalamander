@@ -108,6 +108,15 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: selftest-artifacts-nightly-shuffle
-          path: ${{ steps.test-root.outputs.path }}\
+          include-hidden-files: true
+          path: |
+            ${{ steps.test-root.outputs.path }}/evidence/
+            ${{ steps.test-root.outputs.path }}/runs/*/artifacts/selftest/
+            !${{ steps.test-root.outputs.path }}/runs/*/artifacts/selftest/**/work/**
+            !${{ steps.test-root.outputs.path }}/evidence/completed-runs/*/scratch/**
+            !${{ steps.test-root.outputs.path }}/evidence/completed-runs/*/artifacts/selftest/**/work/**
+            !${{ steps.test-root.outputs.path }}/**/*.vhd
+            !${{ steps.test-root.outputs.path }}/**/*.vhdx
+            !${{ steps.test-root.outputs.path }}/**/*.avhdx
           retention-days: 14
           if-no-files-found: error

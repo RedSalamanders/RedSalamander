@@ -9717,11 +9717,6 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             ApplyPendingViewerTextClassBackgroundBrush(_hWnd.get(), _hEdit.get(), _hHex.get());
 
             AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
-            if (! _embeddedMode)
-            {
-                _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
-                Layout(_hWnd.get());
-            }
             ShowWindow(_hWnd.get(), SW_SHOWNA);
         }
         else if (ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0)
@@ -9776,6 +9771,11 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             if (! _embeddedMode)
             {
                 _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+                if (_menuAttachResult.outcome != RedSalamander::ViewerMenuHost::AttachOutcome::Hosted)
+                {
+                    Debug::Warning(
+                        L"ViewerText: menu fallback outcome={} error={}", static_cast<unsigned>(_menuAttachResult.outcome), _menuAttachResult.fallbackError);
+                }
                 Layout(_hWnd.get());
             }
             ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
@@ -9829,6 +9829,11 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             if (! _embeddedMode)
             {
                 _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+                if (_menuAttachResult.outcome != RedSalamander::ViewerMenuHost::AttachOutcome::Hosted)
+                {
+                    Debug::Warning(
+                        L"ViewerText: menu fallback outcome={} error={}", static_cast<unsigned>(_menuAttachResult.outcome), _menuAttachResult.fallbackError);
+                }
                 Layout(_hWnd.get());
             }
             ShowWindow(_hWnd.get(), SW_SHOWNORMAL);

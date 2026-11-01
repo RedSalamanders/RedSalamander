@@ -108,8 +108,8 @@ Use the `build.ps1` PowerShell script for easy building:
 - `-Clean` : Perform clean build
 - `-Rebuild` : Rebuild all projects
 - `-MaxCpuCount` : Optional MSBuild worker limit; `0` uses the default
-- `-Msix` : Build an MSIX package after a successful Release build
-- `-Msi` : Build an MSI package after a successful Release build
+- `-Zip` : Build a portable ZIP after a successful Release build
+- `-GenerateWingetManifest` : Generate Winget manifests from the selected release ZIPs
 
 Build and test artifact lifecycles serialize only when they use the same
 repository, platform, and configuration. Disjoint profiles and worktrees can
@@ -157,7 +157,7 @@ The solution contains the following projects:
 
 - **Applications**: `RedSalamander`, `RedSalamanderSearchService`
 - **Standalone tools**: `RedConfigure`, `RedLauncher`
-- **Installer**: `RedSalamanderInstaller` (MSIX packaging)
+- **Portable distribution**: ZIP packaging and Winget manifest generation
 - **Shared library**: `Common`
 - **Plugins** (all under `Plugins\`):
   - **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemMtp`, `FileSystemDummy`
@@ -388,44 +388,26 @@ Notes:
 - `--storage-root=...`, `--store-backend=...`, and `--sqlite-path=...` can be used with `--run-foreground` or `--compact`.
 - `--storage-root=...` overrides the snapshot/storage root, which is useful for isolated self-tests and local service debugging.
 
-### MSIX Installer
+### Portable ZIP and Winget
 
-Build Release + MSIX in one command:
-
-```powershell
-.\build.ps1 -Msix
-```
-
-Or build/package separately:
+Build the portable Release ZIP for the selected architecture:
 
 ```powershell
-.\build.ps1 -Configuration Release
-msbuild Installer\msix\RedSalamanderInstaller.wapproj /p:Configuration=Release /p:Platform=x64
+.\build.ps1 -Configuration Release -Zip
 ```
 
-MSIX output is written to:
-
-```text
-.build\AppPackages\
-```
-
-See `Specs/Installer/Installer_Msix.md` for signing and deployment details.
-
-### MSI Installer
-
-Build Release + MSI in one command (requires WiX Toolset v6+):
+The ZIP is written beneath `.build\AppPackages\`. Generate a Winget manifest
+from the matching x64 and ARM64 archives with:
 
 ```powershell
-.\build.ps1 -Msi
+.\build.ps1 -Configuration Release -GenerateWingetManifest
 ```
 
-MSI output is written to:
-
-```text
-.build\AppPackages\
-```
-
-See `Specs/Installer/Installer_Msi.md` for details.
+The manual trusted-main publication workflow promotes ZIPs from a selected
+successful qualification run; its Winget operation consumes both architecture
+archives. See
+[`Specs/Installer/Installer_PortableZip.md`](Specs/Installer/Installer_PortableZip.md)
+and [`Specs/Installer/WingetIntegration.md`](Specs/Installer/WingetIntegration.md).
 
 ## vcpkg
 

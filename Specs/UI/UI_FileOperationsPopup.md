@@ -22,7 +22,7 @@ retains 562 static and ten protected captures, 512 reviewed image hashes and its
 V65 did not recapture these images. Native 192-DPI, external AT, consumer ARM64/ASan, I19 and H4
 remain separately limited; historical failures remain failures.
 
-The [I27](../Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md) follow-up's [frozen Release gallery](../Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/gallery.html)
+The [I27](../Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md) follow-up's [frozen Release gallery](../Plans/Done/I27/implementation/g/g1/gallery.html)
 publishes all 562 static and 13 protected original captures. Static rendering uses
 synthetic presentation workloads; the separate protected fixture qualifies real
 pointer, keyboard, Unicode selection/caret/focus and native 144-to-96-to-144 DPI
@@ -62,8 +62,10 @@ measured bounds; current French/native-DPI captures are linked above.
 retain the original clipping failure and the scoped qualification that first corrected it.
 
 Ordinary path rows retain their complete localized label and exact Unicode value in the tooltip,
-accessible name and HelpText on the same rectangle as the abbreviated painted path. Running
-Copy/Move destination rows describe the destination folder; completed rows describe the recorded
+accessible name and HelpText on the same rectangle as the abbreviated painted path.
+These rows compose that label/value through `IDS_FMT_FILEOPS_PATH_LABEL_AND_VALUE`, including the
+localized separator (English `From: <path>`, French `De : <path>`).
+Running Copy/Move destination rows describe the destination folder; completed rows describe the recorded
 destination file. Each task publishes one stable Source/Destination pair (owner decision Q7):
 `FileOperations.Task.<task>.Path.Source.0` is the region on the first displayed source row and
 `.Path.Destination` the destination row; neither is a durable file identity. A multi-stream Copy or
@@ -90,7 +92,12 @@ followed by the full path; only non-focusable informational regions use the Stat
 The workspace's multiline field MUST allow
 selection, exact selected-text copy and scrolling through the complete Unicode value. Initial selection
 covers the whole path with the viewport at its root; a separate Copy full path action always copies
-the whole value. Tab cycles within the editor and its copy/close actions. Hidden task actions and
+the whole value. Its accessible name MUST include both the localized row subject and the localized
+full-path label, so a screen reader does not announce every path as an unqualified "Full path".
+Copy success and failure MUST be announced to accessibility clients. Focus changes among the text,
+Copy and Close controls update the retained logical focus target and clear deferred initial-focus
+restoration; a later synchronization MUST NOT steal focus back to the text field. Tab cycles within
+the editor and its copy/close actions. Hidden task actions and
 default-decision shortcuts MUST NOT run while detail is open. Escape closes only detail and returns
 to the same live row, or, if that row disappeared, its task's disclosure (global Options only when
 the task is gone). Showing detail MUST NOT activate
@@ -213,6 +220,8 @@ records and informational tasks unchanged. Accepting requests cancellation of th
 tasks present when the engine snapshots its task list after confirmation. A task admitted
 while the confirmation is open is included if present in that snapshot; a later admission
 is not retroactively cancelled. Completed records and informational tasks are not dismissed.
+The blocking confirmation ignores auto-repeated Enter/Escape key-downs (bit 30); a held key
+that opened it cannot answer it. A fresh press after release uses the displayed default/escape action.
 By task state (I35 R9.7):
 
 | State when Cancel all is accepted | Result |
@@ -480,7 +489,10 @@ its current lifecycle state; a slow gate therefore appears as Preparing and late
 place. Clean routine work that completes before the deadline keeps its completed-history receipt
 without opening or focusing the popup. **Show File Operations** reveals a hidden live task
 immediately. The delay is not a Preference, and deterministic tests use a fake clock rather than
-sleeping.
+sleeping. A routine deadline or informational update does not restore a minimized popup or raise
+an existing popup in z-order; the task's retained card state is ready when the user restores it.
+An actionable decision or interrupted-Move notice may restore the popup immediately, and the
+explicit Show command always restores it.
 
 ### Confirmation surface
 
@@ -533,6 +545,11 @@ the card exposes the Skip discovery action, labeled `Skip counting`; selecting i
 discovery, releases discovery-ahead reservations and scheduler throttles, removes the action, and
 allows eligible transfer work to use the full task bandwidth/concurrency budget. The status remains
 `Running`; the skipped counting UI does not return while just-in-time enumeration continues.
+The active transfer progress sentence distinguishes bytes transferred from discovery counters and
+uses the shared localized item-count noun for its cardinal form; it MUST NOT append an English-only
+plural suffix or reuse the retired discovery-progress resource identity.
+The rate and ETA accessibility/summary phrase uses a positional localized format. Its unavailable
+rate and ETA labels use the same localized lead terms as their populated counterparts.
 
 A task whose selection is a single known file never presents this state during its transfer. Its
 exact byte total is published and its discovery scope closes before any payload moves, so the card
@@ -1143,6 +1160,9 @@ only within that published prompt; a replacement prompt MUST expose new consent 
 Aggregate/task progress and throughput graphs use stable
 role/task IDs. Progress controls expose a read-only UIA RangeValue contract with minimum `0`, maximum
 `100`, and the current displayed percentage. Throughput graphs expose a semantic Custom control.
+The progress control's UIA Name and the native failure surface's per-task line always expose the
+localized status, including **Running**. The visual card keeps its compact Running chip and does not
+repeat that status in its visual status line.
 The UIA fragment count MUST equal the popup's hosted-control debug counts; hidden or scrolled-out
 legacy hit targets MUST NOT leave duplicate semantic controls.
 
@@ -1151,7 +1171,8 @@ Keyboard behavior is:
 - `Tab` / `Shift+Tab` traverse hosted interactive controls in visual order.
 - Path-row Enter/Space and Ctrl+C follow the read-only detail contract above before task shortcuts.
 - `Enter` otherwise invokes the focused action or the actionable decision snapshot's explicit default.
-- Left/Right/Up/Down move between actions belonging to the same task when a neighbor exists.
+- Left/Right/Up/Down move between visible, enabled, focusable actions belonging to the same task,
+  skipping disabled/nonfocusable controls; traversal never crosses to another task.
 - `Space` activates the focused enabled control (standard button behavior): a task-details or
   throughput disclosure, scope Checkbox, decision or inspection control, and Cancel, Skip, the
   speed selector, Start now and every other task action, without changing task pause state.
@@ -1167,9 +1188,11 @@ Keyboard behavior is:
   cancel another task, or carry a detail-dismissal Escape into the parent popup. Repeated
   navigation keys retain their ordinary behavior.
 - For an actionable conflict/deferred-consent decision, `Escape` invokes that immutable snapshot's
-  Cancel action and never Cancel All. The bound decision is the focused task's decision; when focus
-  is on global controls or no task, `Enter`/`Escape` bind to a decision only if exactly one is
-  actionable. Focus on another present task without a published decision, including its loading
+  Cancel action only while its action control is visible in the list viewport, and never Cancel All.
+  When focus is on global controls or no task, `Enter` may bind to the sole actionable decision as
+  before; Escape binds only when that decision's card is visible. If it is offscreen, Escape hides
+  the popup without submitting an action. The bound decision is the focused task's decision. Focus
+  on another present task without a published decision, including its loading
   disclosure fallback, must not bind Enter/Escape to that decision. Focus on a task-owned focusable
   region (its path or scan-status region) is focus on that task exactly like focus on one of its
   buttons: Enter/Escape bind only to that task's own published decision, never to another task's.
@@ -1761,6 +1784,8 @@ as a separate wrapped body paragraph, including canceled and indeterminate outco
 one-line heading is not a substitute. The operation heading stays concise; the terminal status
 remains visible, and the full summary has its own accessible text region. The summary precedes
 diagnostics and paths, with height reserved for the progress indicator and actions below it.
+The summary retains its resource identity and typed arguments so the completed card re-renders it
+when the active language changes; it MUST NOT keep the language captured at completion.
 Outer scrolling exposes content taller than the work area. Current text layouts are cached by
 task, text, available width and font identity, and released when their task is collapsed,
 hidden by the completed group or footer-only mode, or removed;
@@ -1786,6 +1811,13 @@ and `Export issues`, as well as applicable retained-source recovery commands.
 `Export issues` writes the task report and opens it with its associated application. A failed
 save or open shows a localized, dismissible error on the File Operations popup, without
 dismissing the task or claiming the report was saved. Escaping the menu performs no export.
+The report uses `Common::Files::LocalFileTransaction` with `FailIfExists`: it writes to an
+exclusive temporary sibling and publishes only after all UTF-16 rows are written and flushed.
+A name collision never replaces an existing report, and write/flush/publish failure leaves no
+partial final report or transaction sibling. The returned report path and retention cleanup are
+updated only after commit. When Show log must fall back from a missing task path, directory
+enumeration and metadata inspection occur outside the File Operations state mutex; the mutex
+protects only the completed-summary snapshot.
 Explicit alert clear and popup destruction release that window-scoped overlay and its host
 entry before the popup HWND can be reused. The governed test route uses its owned output
 directory and suppresses external application launch; it still invokes the real menu and writer.
@@ -1835,7 +1867,9 @@ work area; minimized/zero-size notifications do not trigger growth, and the sync
 a reentrancy guard. When the complete form cannot fit, its label, edit and help/error occupy a
 measured scrolling body above fixed OK/Cancel actions. Focus reveals the edit; overflowing help
 can receive keyboard/UIA focus and scroll with arrows, Page Up/Down and Home/End. Full text is
-retained. The existing modal result, parser, default Enter/Escape and shutdown semantics remain unchanged.
+retained. The existing modal result, parser and default Enter/Escape semantics remain unchanged.
+When host prompt shutdown ends the modal loop, the prompt destroys its HWND on the owner thread while
+the DxUi host is still alive, so `WM_NCDESTROY` detaches the host before either member is destroyed.
 
 The existing settings/theme notification to the owning File Operations popup refreshes an open
 speed prompt's caption, labels, accessible edit name, buttons and active validation resource after
@@ -2337,7 +2371,7 @@ same owner/bucket/status/paths are still active. Decoration MUST NOT create an `
 content. The built-in local provider may use `GetFileAttributesExW`; provider paths use metadata-only
 `IFileSystemIO` calls and may leave size unknown.
 
-The Failed Items/Issues pane has one close contract regardless of whether close originates from its
+The Issues pane has one close contract regardless of whether close originates from its
 window chrome or the popup toggle: save view state and placement, hide (do not destroy) the pane, then
 restore active-pane FolderView focus when focus belonged to the hidden pane.
 
@@ -2388,7 +2422,7 @@ contracts MUST extend it when feasible. Current closeout fields cover:
 - Inline-F2 origin, reveal reason/deadline, ever-revealed state, and silent-clean-success suppression,
 - typed publication/verification/source-disposition/item-completion axes, retained-source badge, and
   clipboard-consumed detail state,
-- completed Open destination / Reveal item / Failed Items menu-action visibility,
+- completed Open destination / Reveal item / Issues menu-action visibility,
 - task collapsed/compact-row state, completed auto-collapse state, and compact progress visibility,
 - completed-group visibility, expanded state, total and per-result badge counts, group toggle/clear
   visibility, and per-task hidden-by-completed-group state,
@@ -2876,7 +2910,7 @@ association fallbacks.
 The earlier Inline Rename association was qualified in focused x64 Debug tests. The additional
 Batch Rename and exact Recycle carriers pass matched red-to-green x64 Release fixtures in
 [the September 26 evidence](../TestRuns/4cb089111a23/Validation/2026-09-26_exact-bound-results/README.md),
-including malformed receipt rejection. The [additional Recycle Skip round](../TestRuns/4cb089111a23/Validation/2026-09-27_recycle-skip-gallery/README.md)
+including malformed receipt rejection. The [additional Recycle Skip round](../TestRuns/4cb089111a23/Validation/v05/README.md)
 also passes: the real file remains intact, the result is separately `Skipped`, and task/popup/export
 retain `S_FALSE` completed-with-notes truth rather than a false failure or removal.
 Both carriers also pass the [broad x64 Debug/Release FileOps runs](../TestRuns/4cb089111a23/Validation/2026-09-27_default-family-dispatch/README.md).

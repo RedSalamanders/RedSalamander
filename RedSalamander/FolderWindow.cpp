@@ -52,7 +52,7 @@ constexpr UINT_PTR kPreviewPaneRefreshTimerId = 0x7250;
 
 LRESULT OnHostServicesMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    LRESULT result = 0;
+    LRESULT result = static_cast<LRESULT>(E_NOTIMPL);
     if (TryHandleHostServicesWindowMessage(hwnd, msg, wp, lp, result))
     {
         return result;
@@ -1411,6 +1411,9 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kHostClearCachedConnectionSecret: return OnHostServicesMessage(hwnd, msg, wp, lp);
         case WndMsg::kHostUpgradeFtpAnonymousToPassword: return OnHostServicesMessage(hwnd, msg, wp, lp);
         case WndMsg::kHostExecuteInPane: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostSetConnectionSecret: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostDeleteConnectionSecret: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostOpenViewer: return OnHostServicesMessage(hwnd, msg, wp, lp);
     }
 
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -2285,10 +2288,9 @@ void FolderWindow::OnDestroy()
 #endif
     CancelPendingPreviewPaneRefresh();
     _networkChangeSubscription.reset();
-    // I35 R7.5: the leftover listing's subfolder walk stops (and its window closes) with the panes; a
-    // walk still blocked in a canceled read is waited for here, never on an ordinary close.
+    // I35 R7.5: the leftover listing's UI resources close with the panes; any synchronous provider read
+    // remains owned by its off-UI reaper until it returns.
     CloseLeftoverCleanupDialog();
-    SweepRetiredLeftoverCleanupDialogs(true);
 
     ShutdownViewers();
 #ifdef ENABLE_TESTS

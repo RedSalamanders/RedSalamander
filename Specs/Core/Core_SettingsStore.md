@@ -986,6 +986,7 @@ object tokens are task state and are never persisted as Preferences.
 ### UI ownership
 
 - `Preferences -> File Operations` edits only the host-owned operational defaults above. Popup presentation and issues-pane view-state keys are written by their owning UI surfaces.
+- Whenever Preferences prunes an empty working `fileOperations` block, it MUST use the canonical `HasNonDefaultFileOperationsSettings` predicate so settings owned by the popup or Issues pane survive edits to unrelated Preferences options.
 - `Preferences -> Plugins -> File System` owns plugin-specific file-operation settings such as:
   - `concurrencyMode`
   - `copyMoveMaxConcurrency`

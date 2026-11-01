@@ -118,19 +118,54 @@ Describe 'Specification information architecture integration' {
 }
 
 Describe 'Visible native audit contracts' {
-    It 'keeps dependency trees outside the product scan and classifies every current residual' {
+    It 'handles empty and classified surfaces under StrictMode and rejects an unclassified dependency with its actual diagnostic' {
         $audit = Get-RSText -Path 'Tools\Audit-RemainingWin32UiDependencies.ps1'
 
         $audit | Should Match '\\vcpkg_installed\\'
         $audit | Should Not Match 'Common\\DxUi\\'
         $audit | Should Match 'Tests\\TestSupport\\TestSupport\.Tests\.DirectedSelfTestInputWarning\.h'
         $audit | Should Not Match 'Tests\\DxUiTests\\'
-        { & (Join-Path $repoRoot 'Tools\Audit-ComctlReportSurfaces.ps1') | Out-Null } | Should Not Throw
-        { & (Join-Path $repoRoot 'Tools\Audit-VisibleNativeSurfaces.ps1') | Out-Null } | Should Not Throw
-        { & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -FailOnFindings | Out-Null } | Should Not Throw
+
+        $comctlAudit = Invoke-RSTestBlock { & (Join-Path $repoRoot 'Tools\Audit-ComctlReportSurfaces.ps1') | Out-Null }
+        $visibleAudit = Invoke-RSTestBlock { & (Join-Path $repoRoot 'Tools\Audit-VisibleNativeSurfaces.ps1') | Out-Null }
+        $remainingAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -FailOnFindings
+        }
+        foreach ($entry in @(
+                [pscustomobject]@{ Name = 'Comctl report-surface audit'; Result = $comctlAudit },
+                [pscustomobject]@{ Name = 'Visible native-surface audit'; Result = $visibleAudit },
+                [pscustomobject]@{ Name = 'Remaining Win32 UI audit'; Result = $remainingAudit }
+            )) {
+            if (-not $entry.Result.Succeeded) {
+                $errorRecord = $entry.Result.Error
+                throw "$($entry.Name) failed: $($errorRecord.Exception.ToString())`r`n$($errorRecord.ScriptStackTrace)"
+            }
+            $entry.Result.Succeeded | Should Be $true
+        }
+
+        $remainingFindings = @($remainingAudit.Output)
+        $remainingFindings.Count | Should BeGreaterThan 0
+        foreach ($finding in $remainingFindings) {
+            ($null -ne $finding.PSObject.Properties['Allowed']) | Should Be $true
+            ($null -ne $finding.PSObject.Properties['Category']) | Should Be $true
+            ($null -ne $finding.PSObject.Properties['Path']) | Should Be $true
+        }
+        @($remainingFindings | Where-Object { -not $_.Allowed }).Count | Should Be 0
+
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester `
+            -Case ('win32-audit-unclassified-' + [guid]::NewGuid().ToString('N'))
+        $fixtureSource = Join-Path $fixture 'RedSalamander\Unclassified.cpp'
+        [void][IO.Directory]::CreateDirectory((Split-Path $fixtureSource))
+        [IO.File]::WriteAllText($fixtureSource, 'void Unclassified() { CreateFontW(nullptr); }')
+        $unclassifiedAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') `
+                -RepoRoot $fixture -FailOnFindings | Out-Null
+        }
+        $unclassifiedAudit.Succeeded | Should Be $false
+        $unclassifiedAudit.Error.Exception.Message | Should Match '1 unallowed finding'
+        $unclassifiedAudit.Error.ScriptStackTrace | Should Match 'Audit-RemainingWin32UiDependencies\.ps1'
     }
 }
-
 Describe 'Keyboard shortcut documentation drift contracts' {
     It 'binds the Alt+arrow folder-view chords to history and selected-name commands in code' {
         $source = Get-RSText -Path 'RedSalamander\ShortcutDefaults.cpp'
@@ -212,7 +247,9 @@ Describe 'Settings schema vs code key-coverage contracts' {
     It 'keeps the settings schema parseable as JSON' {
         $schemaPath = Join-Path $repoRoot 'Specs\SettingsStore.schema.json'
 
-        { Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json | Out-Null } | Should Not Throw
+        $parse = Invoke-RSTestBlock { Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json }
+        $parse.Succeeded | Should Be $true
+        @($parse.Output).Count | Should BeGreaterThan 0
     }
 
     It 'documents the Monitor filter mask default as 63 (six message types) in the schema' {

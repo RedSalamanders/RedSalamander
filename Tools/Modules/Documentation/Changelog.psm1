@@ -242,6 +242,32 @@ function Write-ChangelogStage([string] $Path, [string] $Text, [bool] $Bom) {
     try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
 }
 
+function Assert-ChangelogFragmentsDoNotOmitDuplicatePendingText([string]$Changelog, [object[]]$Fragments) {
+    $existing = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in (Split-Changelog $Changelog).Entries) {
+        [void]$existing.Add($entry)
+    }
+
+    $pendingByText = [Collections.Generic.Dictionary[string, Collections.Generic.List[string]]]::new([StringComparer]::Ordinal)
+    foreach ($fragment in $Fragments) {
+        $normalized = $fragment.Text.Trim() -replace '\r\n', "`n"
+        # An already-published identical entry is the interrupted-cleanup retry case. Keep
+        # that established idempotency while refusing a new fold that would discard one of
+        # multiple distinct fragment files with the same entry text.
+        if ($existing.Contains($normalized)) { continue }
+        if (-not $pendingByText.ContainsKey($normalized)) {
+            $pendingByText.Add($normalized, [Collections.Generic.List[string]]::new())
+        }
+        $pendingByText[$normalized].Add([string]$fragment.Name)
+    }
+
+    foreach ($names in $pendingByText.Values) {
+        if ($names.Count -gt 1) {
+            throw "Ambiguous duplicate changelog fragment text would omit a pending entry: $(@($names | ForEach-Object { 'Changes/' + $_ }) -join ', '). Keep both fragments and make their entries distinct before folding."
+        }
+    }
+}
+
 function Invoke-ChangelogFold([Parameter(Mandatory)][string] $Root) {
     $Root = [IO.Path]::GetFullPath($Root)
     $problems = Get-ChangelogProblems $Root
@@ -258,6 +284,7 @@ function Invoke-ChangelogFold([Parameter(Mandatory)][string] $Root) {
         if (-not $fragments.Count) { return 0 }
         $changelog = Join-Path $Root 'CHANGELOG.md'
         $original = Read-ChangelogText $changelog
+        Assert-ChangelogFragmentsDoNotOmitDuplicatePendingText $original $fragments
         $bytes = [IO.File]::ReadAllBytes($changelog)
         $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
         $merged = Merge-ChangelogFragments $original $fragments

@@ -19,6 +19,32 @@ Rename detection is disabled in both changed-set and inventory diffs. A staged o
 move of a grandfathered blob is an addition at its new path and must pass the current
 contract; exact old path identity is part of grandfathering.
 
+The stock-Windows path relocation maps exactly 3,002 historical files through
+`Specs/Testing/ProtectedPathRelocations.json`: 596 protected Done captures,
+1,394 continuation files already present at the archive contract baseline, and
+1,012 current-contract archive files. The continuation entries retain their
+ordinary archive-baseline identity checks. Only those 1,394 exact verified paths
+are omitted from changed-set and whole-inventory payload caps. The 1,012
+current-contract entries remain in the normal changed-set and inventory checks;
+their existing 2 MiB per-file and 5 MiB per-run limits are unchanged. Explicit
+`-RunPath` validation continues to apply the current limits and semantic checks.
+
+Each mapping pins its old/new path, mode, blob, and canonical Git-blob SHA-256
+to the source commit; continuation entries must also match the immutable archive
+baseline. The validator requires every old path to be absent and every mapped file
+to exist with exact identity, and rejects duplicate, changed, or unmapped siblings.
+Directory aliases shorten only physical path components; archived bytes, embedded
+run IDs, manifests, and provenance remain unchanged. No live resolver treats an
+alias as a historical run ID, and no ordinary archive cap or semantic rule is
+relaxed by this migration.
+
+Large exact relocation inventories use batched, fresh Git identity checks. Worktree hashing
+retains per-path attributes; staged identities come from NUL-delimited exact path/mode/blob rows.
+Canonical blob hashing groups measured blob sizes into 64 MiB normal batches, isolating a larger
+legacy blob for individual processing under the existing size guard. This bounds ordinary batch
+payloads rather than total process memory. No persistent cache, caller-provided bypass, wildcard
+admission, or reduced identity/cap check is permitted.
+
 The history-free source migration preserves the same boundary through parentless public baseline
 `4a9489e9cb2d1190528b8ec35971fba885fd7792` (tree `3fb1f79ac855236a8cc2e0bf9b348601ec8cd5f3`).
 It contains only 2,075 exact path/mode/blob matches between the pre-contract tree

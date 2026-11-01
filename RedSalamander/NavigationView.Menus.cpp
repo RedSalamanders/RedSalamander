@@ -15,6 +15,7 @@
 #include "Helpers.h"
 #include "IconCache.h"
 #include "MaskSyntax.h"
+#include "PathUtils.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
@@ -2391,12 +2392,36 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
         return false;
     }
 
-    FileInfo* entry  = nullptr;
-    const HRESULT hr = info->GetBuffer(&entry);
-    if (FAILED(hr) || entry == nullptr)
+    unsigned long entryCount = 0u;
+    HRESULT hr               = info->GetCount(&entryCount);
+    if (FAILED(hr))
     {
-        return true;
+        return false;
     }
+    unsigned long bufferSize = 0u;
+    hr                       = info->GetBufferSize(&bufferSize);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    FileInfo* entry = nullptr;
+    hr              = info->GetBuffer(&entry);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    unsigned long allocatedSize = 0u;
+    hr                          = info->GetAllocatedSize(&allocatedSize);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    if (allocatedSize < bufferSize || (entryCount == 0u && bufferSize != 0u) || (entryCount != 0u && entry == nullptr))
+    {
+        return false;
+    }
+
+    Common::Plugins::PackedFileInfoCursor cursor(entry, bufferSize, entryCount);
 
     constexpr size_t kMaxSiblingItems = static_cast<size_t>(ID_SIBLING_SEARCH - ID_SIBLING_BASE);
     const auto lessByName             = [](const std::filesystem::path& left, const std::filesystem::path& right)
@@ -2416,14 +2441,26 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
         return leftPreferred != rightPreferred ? leftPreferred : lessByName(left, right);
     };
 
-    while (entry != nullptr)
+    for (unsigned long entryIndex = 0u; entryIndex < entryCount; ++entryIndex)
     {
-        if ((entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        const FileInfo* current = nullptr;
+        hr                      = cursor.Next(&current);
+        if (FAILED(hr) || current == nullptr)
         {
-            const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
-            const std::wstring_view name(entry->FileName, nameChars);
+            siblings.clear();
+            return false;
+        }
+        if ((current->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            const size_t nameChars = static_cast<size_t>(current->FileNameSize) / sizeof(wchar_t);
+            const std::wstring_view name(current->FileName, nameChars);
             if (name != L"." && name != L"..")
             {
+                if (! Common::Paths::IsSingleChildPathComponent(name))
+                {
+                    siblings.clear();
+                    return false;
+                }
                 std::filesystem::path candidate = parentPath / std::wstring(name);
                 if (siblings.size() < kMaxSiblingItems)
                 {
@@ -2443,13 +2480,6 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
                 }
             }
         }
-
-        if (entry->NextEntryOffset == 0)
-        {
-            break;
-        }
-
-        entry = reinterpret_cast<FileInfo*>(reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset);
     }
 
     std::sort(siblings.begin(), siblings.end(), lessByName);

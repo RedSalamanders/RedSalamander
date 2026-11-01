@@ -1,142 +1,103 @@
-function Get-ClangFormatVersion([string]$exePath) {
-    if ([string]::IsNullOrWhiteSpace($exePath) -or -not (Test-Path $exePath)) {
-        return $null
-    }
+<#
+.SYNOPSIS
+    Formats tracked first-party C++ source with the repository-pinned clang-format.
 
-    $output = $null
-    try {
-        $output = & $exePath --version 2>$null
-    } catch {
-        return $null
-    }
+.DESCRIPTION
+    Selects tracked .cpp and .h files from RepositoryRoot while excluding vendor, specification,
+    and agent-plan trees. Acquires and verifies the exact formatter pinned by
+    Build/clang-format.json, then formats the selected files in place using .clang-format.
 
-    if ([string]::IsNullOrWhiteSpace($output)) {
-        return $null
-    }
+.PARAMETER RepositoryRoot
+    Repository checkout whose tracked source files are selected. Defaults to this script's
+    containing checkout.
 
-    if ($output -match '(?<ver>\d+\.\d+\.\d+)') {
-        return [version]$Matches['ver']
-    }
+.OUTPUTS
+    Text status. The selected tracked source files may be rewritten; the pinned formatter
+    cache is stored beneath .build/format.
 
-    return $null
+.NOTES
+    Requires PowerShell 7 and Git. A first run may download the pinned formatter wheel from
+    PyPI; later runs use the verified repository-local cache. Does not format vendored files,
+    archived specification evidence, or untracked files. Use -WhatIf to preview without
+    acquiring the formatter or changing source files. Primary consumer: local source formatting.
+
+.EXAMPLE
+    .\format-all.ps1 -WhatIf
+
+    Previews formatting of the tracked first-party source file set without installing the tool.
+
+.EXAMPLE
+    .\format-all.ps1
+
+    Formats tracked first-party C++ files with the pinned formatter.
+#>
+#Requires -Version 7.0
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
+param(
+    [string]$RepositoryRoot = $PSScriptRoot
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
+$trackedPaths = @(& git -C $repositoryRoot ls-files --cached -- '*.cpp' '*.h')
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not enumerate tracked C++ source files with Git.'
 }
 
-function Get-LatestVisualStudioInstallPath() {
-    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (-not (Test-Path $vswhere)) {
-        return $null
-    }
-
-    $path = (& $vswhere -latest -prerelease -products * -property installationPath 2>$null | Select-Object -First 1)
-    if (-not [string]::IsNullOrWhiteSpace($path)) {
-        return $path.Trim()
-    }
-
-    $path = (& $vswhere -latest -products * -property installationPath 2>$null | Select-Object -First 1)
-    if (-not [string]::IsNullOrWhiteSpace($path)) {
-        return $path.Trim()
-    }
-
-    return $null
-}
-
-function Get-VisualStudioClangFormatPath([string]$vsInstallPath) {
-    if ([string]::IsNullOrWhiteSpace($vsInstallPath)) {
-        return $null
-    }
-
-    $candidates = @(
-        "${vsInstallPath}\VC\Tools\Llvm\x64\bin\clang-format.exe",
-        "${vsInstallPath}\VC\Tools\Llvm\bin\clang-format.exe"
-    )
-
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            return $candidate
-        }
-    }
-
-    return $null
-}
-
-function Resolve-ClangFormat() {
-    $llvmProgramFiles = "${env:ProgramFiles}\LLVM\bin\clang-format.exe"
-    $pfVersion = Get-ClangFormatVersion $llvmProgramFiles
-
-    $vsPath = Get-VisualStudioClangFormatPath (Get-LatestVisualStudioInstallPath)
-    $vsVersion = Get-ClangFormatVersion $vsPath
-
-    if ($pfVersion -and $vsVersion) {
-        if ($pfVersion -gt $vsVersion) {
-            return @{
-                Path = $llvmProgramFiles
-                Version = $pfVersion
-                Source = "Program Files LLVM"
+$sourcePaths = @(
+    $trackedPaths |
+        Where-Object {
+            $_ -and
+            $_ -notmatch '^(?i:ThirdParty|Specs|advisor-plans|\.codex)/'
+        } |
+        Sort-Object -Unique |
+        ForEach-Object {
+            $path = Join-Path $repositoryRoot ($_ -replace '/', [IO.Path]::DirectorySeparatorChar)
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                $item = Get-Item -LiteralPath $path -Force
+                if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                    throw "Refusing to format a reparse-point source file: $_"
+                }
+                $path
             }
         }
-
-        return @{
-            Path = $vsPath
-            Version = $vsVersion
-            Source = "Visual Studio"
-        }
-    }
-
-    if ($pfVersion) {
-        return @{
-            Path = $llvmProgramFiles
-            Version = $pfVersion
-            Source = "Program Files LLVM"
-        }
-    }
-
-    if ($vsVersion) {
-        return @{
-            Path = $vsPath
-            Version = $vsVersion
-            Source = "Visual Studio"
-        }
-    }
-
-    $fromPath = (Get-Command clang-format -ErrorAction SilentlyContinue | Select-Object -First 1)
-    if ($fromPath -and (Test-Path $fromPath.Source)) {
-        $pathVersion = Get-ClangFormatVersion $fromPath.Source
-        return @{
-            Path = $fromPath.Source
-            Version = $pathVersion
-            Source = "PATH"
-        }
-    }
-
-    return $null
+)
+if ($sourcePaths.Count -eq 0) {
+    Write-Host 'No tracked first-party C++ source files are available to format.'
+    return
 }
 
-$clangFormat = Resolve-ClangFormat
-if (-not $clangFormat) {
-    throw "clang-format.exe not found. Install LLVM or the Visual Studio LLVM/Clang tools, or add clang-format to PATH."
+$pin = Get-Content -LiteralPath (Join-Path $repositoryRoot 'Build/clang-format.json') -Raw | ConvertFrom-Json
+if ($pin.version -cnotmatch '^\d+\.\d+\.\d+$') {
+    throw "The repository clang-format version is invalid: '$($pin.version)'."
+}
+$action = "Format $($sourcePaths.Count) tracked first-party C++ source files with clang-format $($pin.version)"
+if (-not $PSCmdlet.ShouldProcess($repositoryRoot, $action)) {
+    return
 }
 
-$versionText = "unknown"
-if ($clangFormat.Version) {
-    $versionText = $clangFormat.Version.ToString()
+$formatterInstaller = Join-Path $repositoryRoot 'Tools/Install-ClangFormat.ps1'
+$formatterPath = & $formatterInstaller
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$formatterPath)) {
+    throw 'The pinned clang-format installer did not return a usable executable path.'
 }
-Write-Host "Using clang-format ($($clangFormat.Source)): $($clangFormat.Path) (v$versionText)" -ForegroundColor Yellow
+$formatterPath = [IO.Path]::GetFullPath([string]$formatterPath)
+$versionOutput = @(& $formatterPath --version)
+if ($LASTEXITCODE -ne 0 -or ($versionOutput -join "`n") -notmatch "^clang-format version $([regex]::Escape([string]$pin.version))(?:\s|$)") {
+    throw "The formatter executable does not match pinned version $($pin.version): $formatterPath"
+}
 
-# Format all C++ files, excluding build/package directories
-Get-ChildItem -Recurse -Include *.cpp,*.h |
-    Where-Object {
-        $_.FullName -notmatch '\\(packages|vcpkg_installed|\.vs|\.build|Debug|Release|x64|out|\.git)\\'
-    } |
-    ForEach-Object {
-        Write-Host "Formatting: $($_.Name)" -ForegroundColor Cyan
-        & $clangFormat.Path -i --style=file $_.FullName
-
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  ✓ Success" -ForegroundColor Green
-        } else {
-            Write-Host "  ✗ Failed" -ForegroundColor Red
-        }
+$failures = [Collections.Generic.List[string]]::new()
+foreach ($sourcePath in $sourcePaths) {
+    Write-Host "Formatting: $([IO.Path]::GetRelativePath($repositoryRoot, $sourcePath))"
+    & $formatterPath -i --style=file $sourcePath
+    if ($LASTEXITCODE -ne 0) {
+        $failures.Add("$sourcePath (exit $LASTEXITCODE)")
     }
-
-Write-Host "`nFormatting complete!" -ForegroundColor Yellow
-Write-Host "Review changes with: git diff" -ForegroundColor Yellow
+}
+if ($failures.Count -gt 0) {
+    throw "clang-format failed for $($failures.Count) file(s):`n$($failures -join "`n")"
+}
+Write-Host "Formatted $($sourcePaths.Count) tracked first-party C++ source files with clang-format $($pin.version)."

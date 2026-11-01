@@ -73,6 +73,43 @@ function Assert-RSSequenceEqual {
     }
 }
 
+function Invoke-RSTestBlock {
+    <#
+    .SYNOPSIS
+        Executes a positive test action and reports terminating or promoted errors explicitly.
+    .DESCRIPTION
+        Returns the action output and failure record so positive success assertions do not
+        depend on Pester's version-specific `Should Not Throw` behavior.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock
+    )
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    $output = [System.Collections.Generic.List[object]]::new()
+    try {
+        $ErrorActionPreference = 'Stop'
+        foreach ($item in (& $ScriptBlock)) {
+            $output.Add($item)
+        }
+        return [pscustomobject]@{
+            Succeeded = $true
+            Output = @($output.ToArray())
+            Error = $null
+        }
+    } catch {
+        return [pscustomobject]@{
+            Succeeded = $false
+            Output = @($output.ToArray())
+            Error = $_
+        }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 function New-RSValidationGitFixture {
     <#
     .SYNOPSIS
@@ -141,6 +178,7 @@ function New-RSTestRunArchiveFixture {
 
 Export-ModuleMember -Function @(
     'Get-RSText',
+    'Invoke-RSTestBlock',
     'Assert-RSEqual',
     'Assert-RSSequenceEqual',
     'New-RSValidationGitFixture',

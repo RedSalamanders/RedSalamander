@@ -1542,7 +1542,7 @@ namespace FileOperationItemResultReducerSelfTestInternal
         });
 
         bool observedMutation    = false;
-        const ULONGLONG deadline = GetTickCount64() + 10'000ull;
+        const ULONGLONG deadline = GetTickCount64() + static_cast<ULONGLONG>(SelfTest::Scale(std::chrono::milliseconds{10'000}).count());
         while (! finished.load(std::memory_order_acquire) && GetTickCount64() < deadline)
         {
             if (mutationVisible())

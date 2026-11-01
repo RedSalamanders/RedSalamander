@@ -34,7 +34,7 @@ RedSalamander opens as a **dual-pane** window:
 - `Alt+Enter`: Properties
 - `Alt+F10`: Calculate Occupied Space
 - `Ctrl+F10`: Compare Directories (compare the two panes)
-- `Ctrl+J`: File Operations Failed Items
+- `Ctrl+J`: File Operation Issues
 - `Alt+F12`: Show Folders History
 - `F11`: Connect network drive
 - `F12`: Disconnect network drive

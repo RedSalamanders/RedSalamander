@@ -71,8 +71,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RedConfigure", "RedConfigur
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RedConfigure-ja-JP", "RedConfigure\Lang\ja-JP\RedConfigure-ja-JP.vcxproj", "{25272EAA-F0A5-5026-AFDE-0219ADF15EAC}"
 EndProject
-Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "RedSalamanderInstaller", "Installer\msix\RedSalamanderInstaller.wapproj", "{9A97489C-F552-4B8C-875A-199D3E5A1E3A}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
 		.clang-format = .clang-format
@@ -504,14 +502,6 @@ Global
 		{E9855F97-42DC-4B5F-9D96-5C3331933C47}.Release|ARM64.Build.0 = Release|ARM64
 		{E9855F97-42DC-4B5F-9D96-5C3331933C47}.Release|x64.ActiveCfg = Release|x64
 		{E9855F97-42DC-4B5F-9D96-5C3331933C47}.Release|x64.Build.0 = Release|x64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.ASan Debug|ARM64.ActiveCfg = ASan Debug|ARM64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.ASan Debug|x64.ActiveCfg = ASan Debug|x64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.Debug|ARM64.ActiveCfg = Debug|ARM64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.Debug|ARM64.Deploy.0 = Debug|ARM64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.Debug|x64.ActiveCfg = Debug|x64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.Release|ARM64.ActiveCfg = Release|ARM64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.Release|ARM64.Deploy.0 = Release|ARM64
-		{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.Release|x64.ActiveCfg = Release|x64
 		{87FB9A11-83CC-44D8-9FEC-9AA9D72667EF}.ASan Debug|ARM64.ActiveCfg = ASan Debug|ARM64
 		{87FB9A11-83CC-44D8-9FEC-9AA9D72667EF}.ASan Debug|ARM64.Build.0 = ASan Debug|ARM64
 		{87FB9A11-83CC-44D8-9FEC-9AA9D72667EF}.ASan Debug|x64.ActiveCfg = ASan Debug|x64

@@ -575,7 +575,7 @@ The initial Visual Studio tool-identity rejection and shallow-registry missing-t
 failure are retained; fetching the pinned checkout's full history resolves setup and
 all 35 dependencies install. An upstream LibRaw CMake unused-variable warning remains
 in the external dependency logs; it is not a product-build warning.
-[Reviewed Release PR packet](../../../TestRuns/4cb089111a23/Validation/2026-09-23_082913_release-pr/README.md)
+[Reviewed Release PR packet](../../../TestRuns/4cb089111a23/Validation/v02/README.md)
 retains full build/runner outputs, per-case results, immutable identities and all thirteen
 entry promotions. Complete setup and dependency logs remain at
 `C:/RedSalamander.Perf/evidence/i26-ui/release-20260923/`.
@@ -645,7 +645,7 @@ summary checks but fails the confirmation witness, 0/1 overall and audit zero. I
 276 shared images are byte-identical to baseline, one shared confirmation is black, eight are new
 summary fixtures and 27 baseline captures are missing after the failure.
 [Gallery and next clipping findings](implementation/2026-09-23-footer-summary-release/README.md)
-and [Release evidence](../../../TestRuns/4cb089111a23/Validation/2026-09-23_footer-summary-release/README.md)
+and [Release evidence](../../../TestRuns/4cb089111a23/Validation/v04/README.md)
 retain these qualified limits. Canonical FileOps run
 `20260923T105425Z-9612-799a01e299d5408e92a617fa88237d83` failed the immediate Start-now
 waiting-presentation assertion. Failed-family cleanup left its throttled task live, contaminating

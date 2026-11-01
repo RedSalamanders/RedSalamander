@@ -361,6 +361,13 @@ public:
         _readDirectorySnapshotRelease = release;
     }
 
+    void SetReadDirectoryInfoBlockingPipe(const HANDLE readPipe, const HANDLE entered, std::atomic<HRESULT>* result) noexcept
+    {
+        _readDirectoryBlockingPipe        = readPipe;
+        _readDirectoryBlockingPipeEntered = entered;
+        _readDirectoryBlockingPipeResult  = result;
+    }
+
     void SetReadDirectoryInfoEmpty() noexcept
     {
         _returnEmptyReadDirectoryInfo = true;
@@ -466,6 +473,23 @@ public:
         if (_failReadDirectoryInfo)
         {
             return _readDirectoryInfoFailureHr;
+        }
+
+        if (_readDirectoryBlockingPipe != nullptr)
+        {
+            if (_readDirectoryBlockingPipeEntered != nullptr)
+            {
+                SetEvent(_readDirectoryBlockingPipeEntered);
+            }
+            char byte            = 0;
+            DWORD bytesRead      = 0u;
+            const HRESULT result = ReadFile(_readDirectoryBlockingPipe, &byte, 1u, &bytesRead, nullptr) != FALSE ? (bytesRead == 0u ? E_UNEXPECTED : S_OK)
+                                                                                                                 : HRESULT_FROM_WIN32(GetLastError());
+            if (_readDirectoryBlockingPipeResult != nullptr)
+            {
+                _readDirectoryBlockingPipeResult->store(result, std::memory_order_release);
+            }
+            return result;
         }
 
         if (_readDirectoryInfoGate != nullptr &&
@@ -967,12 +991,15 @@ private:
     bool _overrideCapabilities           = false;
     HRESULT _capabilitiesHr              = S_OK;
     std::string _capabilitiesJson;
-    bool _failReadDirectoryInfo          = false;
-    HRESULT _readDirectoryInfoFailureHr  = E_FAIL;
-    HANDLE _readDirectoryInfoGate        = nullptr;
-    HANDLE _readDirectorySnapshotReady   = nullptr;
-    HANDLE _readDirectorySnapshotRelease = nullptr;
-    bool _returnEmptyReadDirectoryInfo   = false;
+    bool _failReadDirectoryInfo                            = false;
+    HRESULT _readDirectoryInfoFailureHr                    = E_FAIL;
+    HANDLE _readDirectoryInfoGate                          = nullptr;
+    HANDLE _readDirectorySnapshotReady                     = nullptr;
+    HANDLE _readDirectorySnapshotRelease                   = nullptr;
+    HANDLE _readDirectoryBlockingPipe                      = nullptr;
+    HANDLE _readDirectoryBlockingPipeEntered               = nullptr;
+    std::atomic<HRESULT>* _readDirectoryBlockingPipeResult = nullptr;
+    bool _returnEmptyReadDirectoryInfo                     = false;
     std::atomic_uint32_t _readDirectoryInfoCalls{0u};
     uint32_t _admissionProviderDelayUs      = 0u;
     std::atomic_uint32_t* _capabilityCalls  = nullptr;
@@ -1433,9 +1460,9 @@ private:
     record.taskId                           = 0x5001u;
     record.sourcePane                       = FileOperationMoveBreadcrumb::PaneHint::Right;
     record.destinationPane                  = FileOperationMoveBreadcrumb::PaneHint::Left;
-    record.admittedStrategies.nativeItems   = 2u;
-    record.admittedStrategies.managedItems  = 3u;
-    record.admittedStrategies.copyOnlyItems = 1u;
+    record.admittedStrategies.nativeItems   = 20u;
+    record.admittedStrategies.managedItems  = 30u;
+    record.admittedStrategies.copyOnlyItems = 10u;
     record.sourceRootCount                  = 17u;
     record.sourceRootSamplesTruncated       = true;
     for (size_t index = 0u; index < FileOperationMoveBreadcrumb::kMaximumPersistedSourceRootSamples; ++index)
@@ -1480,11 +1507,15 @@ private:
 
     std::vector<FileOperationMoveBreadcrumb::LoadedRecord> loaded;
     FileOperationMoveBreadcrumb::LoadStats stats{};
+    state.Require(SUCCEEDED(FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats)) && loaded.empty() && stats.activeWriterRecords == 1u &&
+                      FileOperationMoveBreadcrumb::Acknowledge(breadcrumbPath) == HRESULT_FROM_WIN32(ERROR_BUSY) && std::filesystem::exists(breadcrumbPath),
+                  L"A running writer's breadcrumb must neither become an interrupted notice nor be acknowledged by another host.");
+    state.Require(SUCCEEDED(breadcrumb.SimulateExitedWriterForSelfTest()), L"Restart fixture records an exited writer identity.");
     state.Require(SUCCEEDED(FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats)) && loaded.size() == 1u &&
                       loaded.front().record.phase == FileOperationMoveBreadcrumb::DurablePhase::Admitted && loaded.front().record.sourceRootCount == 17u &&
                       loaded.front().record.sourceRootSamples.size() == FileOperationMoveBreadcrumb::kMaximumPersistedSourceRootSamples &&
-                      loaded.front().record.sourceRootSamplesTruncated && loaded.front().record.admittedStrategies.nativeItems == 2u &&
-                      loaded.front().record.admittedStrategies.managedItems == 3u && loaded.front().record.admittedStrategies.copyOnlyItems == 1u &&
+                      loaded.front().record.sourceRootSamplesTruncated && loaded.front().record.admittedStrategies.nativeItems == 20u &&
+                      loaded.front().record.admittedStrategies.managedItems == 30u && loaded.front().record.admittedStrategies.copyOnlyItems == 10u &&
                       loaded.front().record.sourcePane == FileOperationMoveBreadcrumb::PaneHint::Right &&
                       loaded.front().record.destinationPane == FileOperationMoveBreadcrumb::PaneHint::Left,
                   L"Restart loading must preserve the admitted phase, pane roles, bounded root samples, and strategy counts.");
@@ -1575,7 +1606,8 @@ private:
         .representativePath = secondDestination,
     };
     FileOperationMoveBreadcrumb::Breadcrumb secondBreadcrumb;
-    state.Require(SUCCEEDED(FileOperationMoveBreadcrumb::Breadcrumb::Create(secondRecord, secondBreadcrumb)),
+    state.Require(SUCCEEDED(FileOperationMoveBreadcrumb::Breadcrumb::Create(secondRecord, secondBreadcrumb)) &&
+                      SUCCEEDED(secondBreadcrumb.SimulateExitedWriterForSelfTest()),
                   L"Multiple interrupted-Move projection should persist an independent second record.");
     const std::filesystem::path secondBreadcrumbPath = secondBreadcrumb.GetPath();
 

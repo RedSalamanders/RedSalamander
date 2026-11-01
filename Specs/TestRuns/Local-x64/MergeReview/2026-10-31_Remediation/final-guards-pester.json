@@ -1,0 +1,36 @@
+{
+  "schema": "codex.requested-tooling-validation.v1",
+  "run_id": "20261031T143753Z-55224-0a6f7d4844dc4f68bf92359c490e81cf",
+  "started_utc": "2026-10-31T15:37:53.2366697+01:00",
+  "elapsed_seconds": 24.974,
+  "test_root": "Z:\\RedSalamander.Perf",
+  "temp": "Z:\\RedSalamander.Perf\\runs\\20261031T143753Z-55224-0a6f7d4844dc4f68bf92359c490e81cf\\scratch\\requested-pester\\harness-and-release",
+  "tmp": "Z:\\RedSalamander.Perf\\runs\\20261031T143753Z-55224-0a6f7d4844dc4f68bf92359c490e81cf\\scratch\\requested-pester\\harness-and-release",
+  "pester": "3.4.0",
+  "tests": [
+    {
+      "path": "Tools\\Tests\\TestHarnessSourceContracts.Tests.ps1",
+      "passed": 221,
+      "failed": 0,
+      "skipped": 0,
+      "pending": 0,
+      "total": 221
+    },
+    {
+      "path": "Tools\\Tests\\ReleaseWorkflowPolicy.Tests.ps1",
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "pending": 0,
+      "total": 45
+    }
+  ],
+  "finished_utc": "2026-10-31T15:38:18.2146947+01:00",
+  "pester_total_passed": 266,
+  "changelog": {
+    "status": "PASSED",
+    "command": "Tools/Test-Changelog.ps1",
+    "message": "Changelog valid: 3 pending fragment(s).",
+    "read_only": true
+  }
+}

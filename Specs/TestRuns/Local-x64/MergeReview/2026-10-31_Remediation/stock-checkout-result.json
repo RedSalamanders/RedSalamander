@@ -1,0 +1,20 @@
+{
+  "git_version": "git version 2.55.0.windows.3",
+  "run_id": "ck31-ee447f66",
+  "checkout_root": "Z:\\RedSalamander.Perf\\runs\\ck31-ee447f66\\scratch\\c\\c",
+  "candidate_index_sha256": "bb3c79c2e1978278fe6fe4a1a7840cebebc2ba764282525c8f5050cb5b96b11a",
+  "source_index_sha256_before": "bb3c79c2e1978278fe6fe4a1a7840cebebc2ba764282525c8f5050cb5b96b11a",
+  "source_index_sha256_after": "bb3c79c2e1978278fe6fe4a1a7840cebebc2ba764282525c8f5050cb5b96b11a",
+  "source_index_unchanged": true,
+  "status_sha256_before": "71a47423500b21d7b4a9d128685e5a93a77596b6f81c64ee1aa510be37d5055b",
+  "status_sha256_after": "71a47423500b21d7b4a9d128685e5a93a77596b6f81c64ee1aa510be37d5055b",
+  "status_unchanged": true,
+  "tracked_entries": 27926,
+  "checked_out_files": 27926,
+  "max_repo_relative_path_chars": 200.0,
+  "max_checkout_absolute_path_chars": 253.0,
+  "core_longpaths": false,
+  "core_symlinks": false,
+  "hardlinks_used": false,
+  "exit_code": 0
+}

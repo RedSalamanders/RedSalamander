@@ -615,6 +615,28 @@ bool CheckViewerSpaceAnalysisUia(HWND viewerWindow,
             return fail(L"ViewerSpace UIA SelectionItemPattern reports the retained row selected after filter removal");
         }
 
+        if (FAILED(filterValue->SetValue(filterTargetValue.get())))
+            return fail(L"Analysis Escape fixture restores a nonempty filter");
+        PumpAnalysisFilterDebounce();
+        SendMessageW(initial.analysisHwnd, WM_KEYDOWN, VK_ESCAPE, 0u);
+        PumpAnalysisFilterDebounce();
+        WndMsg::ViewerSpacePerfDebugSnapshot escapeCleared{};
+        wil::unique_bstr escapeFilter;
+        if (! WaitForAnalysisBuild(viewerWindow, escapeCleared) || escapeCleared.analysisRowCount != initial.analysisRowCount ||
+            ! escapeCleared.analysisHost.visible || FAILED(filterValue->get_CurrentValue(escapeFilter.put())) ||
+            (escapeFilter && SysStringLen(escapeFilter.get()) != 0u))
+            return fail(L"First analysis Escape clears its filter and preserves the visible panel");
+        SendMessageW(initial.analysisHwnd, WM_KEYDOWN, VK_ESCAPE, 0u);
+        WndMsg::ViewerSpacePerfDebugSnapshot escapeHidden{};
+        if (! ReadViewerSpaceSnapshot(viewerWindow, escapeHidden) || escapeHidden.analysisHost.visible || ! IsWindow(viewerWindow) ||
+            escapeHidden.displayGeneration != initial.displayGeneration)
+            return fail(L"Second analysis Escape hides the panel without closing or rescanning the viewer");
+        // The public View -> Show analysis command restores the same host for the remaining UIA checks.
+        SendMessageW(viewerWindow, WM_COMMAND, 40008u, 0u);
+        if (! WaitForAnalysisBuild(viewerWindow, escapeHidden) || ! escapeHidden.analysisHost.visible ||
+            escapeHidden.analysisRowCount != initial.analysisRowCount)
+            return fail(L"The analysis panel reopens with its cleared complete projection");
+
         ViewerSpaceExport::Row exportRow;
         exportRow.name         = "=SUM(1,2)\".txt";
         exportRow.path         = "atlas/東京";

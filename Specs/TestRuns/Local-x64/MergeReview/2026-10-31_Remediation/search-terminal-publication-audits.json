@@ -1,0 +1,53 @@
+{
+  "schema": "review-remediation.publication-audits.v1",
+  "run_id": "20261101T112107Z-77332-9232be9ac9004c3892c84277a588e034",
+  "native_source_unchanged": "Documentation/evidence-only changes after merged-source Release and Compare verification",
+  "specification_audit": {
+    "run_id": "20261101T111511Z-81496-fd6818e9e50f42e5aab82d1d2aa0cbfc",
+    "head": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+    "summary": {
+      "TrackedAndUntrackedPaths": 28099,
+      "TestRunPaths": 20390,
+      "Files": 491,
+      "InScopeFiles": 442,
+      "NormativeFiles": 66,
+      "DirectWipFiles": 35,
+      "WipIndexEntries": 35,
+      "Findings": 48,
+      "BlockingFindings": 0
+    },
+    "raw_sha256": "a15ffcd934beb29a5c2d8ded5365b1f9a0c615e76ba5c581d6e6e010896d06bc"
+  },
+  "hosted_codeql": {
+    "head": "ff1c31470e0caf19cdfa5dcfae7f5bd75570f944",
+    "workflow_run": "41300004147",
+    "check_run": "124832174136",
+    "conclusion": "failure",
+    "severity": "2 high annotations",
+    "annotations": [
+      {
+        "path": "Specs/TestRuns/4cb089111a23/Continuation/c20/source-snapshots/Common_SearchServiceBroker.cpp",
+        "start_line": 594,
+        "end_line": 594,
+        "title": "Suspicious pointer scaling",
+        "message": "This pointer might have type [byte](1) (size 1), but this pointer arithmetic is done with type const wchar_t * (size 4)."
+      },
+      {
+        "path": "Specs/TestRuns/4cb089111a23/Continuation/c21/source-snapshots/Common_SearchServiceBroker.cpp",
+        "start_line": 594,
+        "end_line": 594,
+        "title": "Suspicious pointer scaling",
+        "message": "This pointer might have type [byte](1) (size 1), but this pointer arithmetic is done with type const wchar_t * (size 4)."
+      }
+    ],
+    "scope": "Unchanged historical source snapshots relocated for checkout compatibility; not compiled product inputs",
+    "disposition": "OPEN: retained failed check requires security-annotation disposition; no alert dismissed, query disabled or historical payload edited"
+  },
+  "pending": [
+    "Native ARM64 and WIC diagnosis",
+    "Physical-device/provider acceptance",
+    "Foreground, mixed-DPI, real AT and shutdown/logoff acceptance",
+    "Incoming I50 revision-2 findings including H5",
+    "Hosted CodeQL annotation disposition; Entire Gates status remains external"
+  ]
+}

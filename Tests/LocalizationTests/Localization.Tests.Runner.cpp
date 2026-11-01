@@ -102,6 +102,7 @@ bool TestSatelliteOverridesEmbeddedString() noexcept
     const auto previousRevision = Localization::GetLanguagePreferenceRevision();
     const HRESULT applyHr       = Localization::ApplyLanguagePreference(preference);
     Check(SUCCEEDED(applyHr), L"fr-FR language preference applies", success);
+    Check(Localization::GetEffectiveResourceCulture(instance) == L"fr-FR", L"effective culture follows the loaded owner satellite", success);
     const auto frenchRevision = Localization::GetLanguagePreferenceRevision();
     Check(frenchRevision != previousRevision, L"successful language application changes the cache revision", success);
     Check(SUCCEEDED(Localization::ApplyLanguagePreference(preference)) && Localization::GetLanguagePreferenceRevision() != frenchRevision,
@@ -160,6 +161,7 @@ bool TestSatelliteOverridesEmbeddedString() noexcept
     Localization::UnregisterResourceOwner(instance);
     const std::wstring unregistered = LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT);
     Check(unregistered == L"Embedded English test string", L"unregistered resource owner falls back to embedded English", success);
+    Check(Localization::GetEffectiveResourceCulture(instance) == L"en", L"unregistered owner reports the embedded fallback culture", success);
 
     Localization::LanguagePreference systemPreference;
     static_cast<void>(Localization::ApplyLanguagePreference(systemPreference));
@@ -249,6 +251,7 @@ bool TestInvalidCultureFallsBackToEmbedded() noexcept
     preference.culture    = L"zz-ZZ";
     const HRESULT applyHr = Localization::ApplyLanguagePreference(preference);
     Check(SUCCEEDED(applyHr), L"missing concrete culture preference applies", success);
+    Check(Localization::GetEffectiveResourceCulture(instance) == L"en", L"unavailable culture reports the embedded fallback culture", success);
 
     const std::wstring present = LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT);
     Check(present == L"Embedded English test string", L"missing culture satellite falls back to embedded English", success);
@@ -280,6 +283,43 @@ bool TestInvalidCultureFallsBackToEmbedded() noexcept
     Localization::LanguagePreference systemPreference;
     static_cast<void>(Localization::ApplyLanguagePreference(systemPreference));
     Localization::UnregisterResourceOwner(instance);
+    return success;
+}
+
+bool TestCardinalPluralCategoryMatrix() noexcept
+{
+    using Category = Localization::CardinalPluralCategory;
+    bool success   = true;
+    struct Case final
+    {
+        std::wstring_view culture;
+        uint64_t value;
+        Category expected;
+    };
+    constexpr Case cases[]{{L"en", 0u, Category::Other},
+                           {L"en-US", 1u, Category::One},
+                           {L"en-GB", 2u, Category::Other},
+                           {L"fr-FR", 0u, Category::One},
+                           {L"fr", 1u, Category::One},
+                           {L"fr-FR", 2u, Category::Other},
+                           {L"cs-CZ", 1u, Category::One},
+                           {L"cs-CZ", 2u, Category::Few},
+                           {L"cs-CZ", 4u, Category::Few},
+                           {L"cs-CZ", 5u, Category::Other},
+                           {L"cs-CZ", 21u, Category::Other},
+                           {L"sk-SK", 1u, Category::One},
+                           {L"sk-SK", 2u, Category::Few},
+                           {L"sk-SK", 4u, Category::Few},
+                           {L"sk-SK", 5u, Category::Other},
+                           {L"sk-SK", 21u, Category::Other},
+                           {L"ja-JP", 1u, Category::Other},
+                           {L"ja-JP", 21u, Category::Other}};
+    for (const Case& test : cases)
+    {
+        Check(Localization::SelectCardinalPluralCategory(test.culture, test.value) == test.expected,
+              L"integer cardinal category matches the selected culture rule",
+              success);
+    }
     return success;
 }
 
@@ -470,6 +510,8 @@ int wmain()
     success = TestInvalidCultureFallsBackToEmbedded() && success;
     std::wcout << L"[ RUN      ] TestUiLanguageSettings\n";
     success = TestUiLanguageSettings() && success;
+    std::wcout << L"[ RUN      ] TestCardinalPluralCategoryMatrix\n";
+    success = TestCardinalPluralCategoryMatrix() && success;
     std::wcout << (success ? L"LocalizationTests passed.\n" : L"LocalizationTests failed.\n");
     return success ? 0 : 1;
 }

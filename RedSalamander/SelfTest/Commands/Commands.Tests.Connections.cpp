@@ -644,8 +644,53 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
     {
         return false;
     }
-
     const size_t baselineRegistrations = HostGetTestSynchronousPayloadRegistrationCount();
+
+    wil::com_ptr<IHostViewers> hostViewers;
+    hr = GetHostServices()->QueryInterface(IID_PPV_ARGS(hostViewers.put()));
+    state.Require(SUCCEEDED(hr) && hostViewers,
+                  std::format(L"Host-services worker proof could not acquire IHostViewers (hr=0x{:08X}).", static_cast<unsigned long>(hr)));
+    const FolderWindow::Pane viewerPane                   = g_folderWindow.GetActivePane();
+    wil::com_ptr<IFileSystem> viewerFileSystem            = g_folderWindow.GetFileSystem(viewerPane);
+    const std::optional<std::filesystem::path> viewerPath = g_folderWindow.GetCurrentPath(viewerPane);
+    state.Require(hostViewers && viewerFileSystem && viewerPath.has_value(),
+                  L"Host-services worker proof could not acquire the active pane filesystem and path for a fail-closed OpenViewer dispatch.");
+    if (! hostViewers || ! viewerFileSystem || ! viewerPath.has_value())
+    {
+        return false;
+    }
+
+    struct OpenViewerRun final
+    {
+        OpenViewerRun()                                = default;
+        OpenViewerRun(const OpenViewerRun&)            = delete;
+        OpenViewerRun& operator=(const OpenViewerRun&) = delete;
+        OpenViewerRun(OpenViewerRun&&)                 = delete;
+        OpenViewerRun& operator=(OpenViewerRun&&)      = delete;
+
+        std::atomic<bool> completed{false};
+        HRESULT hr = E_PENDING;
+    } openViewerRun;
+    constexpr wchar_t kMissingViewerPluginId[] = L"selftest/no-such-viewer-plugin";
+    const std::wstring viewerPathText          = viewerPath.value().native();
+    HostViewerOpenRequest viewerRequest{};
+    viewerRequest.sizeBytes   = sizeof(viewerRequest);
+    viewerRequest.pluginId    = kMissingViewerPluginId;
+    viewerRequest.ownerWindow = mainWindow;
+    viewerRequest.fileSystem  = viewerFileSystem.get();
+    viewerRequest.focusedPath = viewerPathText.c_str();
+    std::jthread openViewerWorker([&](std::stop_token) noexcept
+    {
+        openViewerRun.hr = hostViewers->OpenViewer(&viewerRequest);
+        openViewerRun.completed.store(true, std::memory_order_release);
+    });
+    static_cast<void>(waitForWorker(openViewerRun.completed, L"OpenViewer fail-closed dispatch", [] noexcept {}));
+    openViewerWorker.join();
+    state.Require(FAILED(openViewerRun.hr),
+                  std::format(L"OpenViewer returned success for a missing viewer plugin instead of the host dispatch failure (hr=0x{:08X}).",
+                              static_cast<unsigned long>(openViewerRun.hr)));
+    state.Require(HostGetTestSynchronousPayloadRegistrationCount() == baselineRegistrations,
+                  L"Worker-thread OpenViewer dispatch left a live synchronous host payload behind.");
 
     const auto runWorkerPrompt = [&](HWND targetWindow, WPARAM closeKey, HostPromptResult expectedResult, std::wstring_view operation) noexcept
     {
@@ -662,7 +707,6 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             HostPromptResult result = HOST_PROMPT_RESULT_NONE;
             HWND overlay            = nullptr;
             bool ownedByMain        = false;
-            bool registrationActive = false;
             bool recoverySent       = false;
         } run;
 
@@ -674,8 +718,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
                 return;
             }
 
-            run.ownedByMain        = IsOwnedBy(run.overlay, mainWindow);
-            run.registrationActive = HostGetTestSynchronousPayloadRegistrationCount() == baselineRegistrations + 1u;
+            run.ownedByMain = IsOwnedBy(run.overlay, mainWindow);
             static_cast<void>(PostMessageW(run.overlay, WM_KEYDOWN, closeKey, 0));
             static_cast<void>(PostMessageW(run.overlay, WM_KEYUP, closeKey, 0));
 
@@ -728,7 +771,6 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
         automation.join();
         state.Require(run.overlay != nullptr, std::format(L"Worker-thread host prompt did not open during {}.", operation));
         state.Require(run.ownedByMain, std::format(L"Worker-thread host prompt did not use the main-window root during {}.", operation));
-        state.Require(run.registrationActive, std::format(L"Worker-thread host prompt did not retain exactly one synchronous payload during {}.", operation));
         state.Require(! run.recoverySent, std::format(L"Worker-thread host prompt required cancellation recovery during {}.", operation));
         state.Require(SUCCEEDED(run.hr),
                       std::format(L"Worker-thread host prompt failed during {} (hr=0x{:08X}).", operation, static_cast<unsigned long>(run.hr)));
@@ -773,6 +815,48 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
     const std::wstring profileName = std::format(L"Host Service ABI SelfTest {}", NewGuidText());
     ReplaceRuntimeConnectionsForSelfTest(MakeSelfTestConnectionProfile(profileName));
 
+    struct SecretRoundTrip final
+    {
+        SecretRoundTrip()                                  = default;
+        SecretRoundTrip(const SecretRoundTrip&)            = delete;
+        SecretRoundTrip& operator=(const SecretRoundTrip&) = delete;
+        SecretRoundTrip(SecretRoundTrip&&)                 = delete;
+        SecretRoundTrip& operator=(SecretRoundTrip&&)      = delete;
+
+        std::atomic<bool> completed{false};
+        HRESULT setHr            = E_FAIL;
+        HRESULT getHr            = E_FAIL;
+        HRESULT deleteHr         = E_FAIL;
+        HRESULT getAfterDeleteHr = E_PENDING;
+        bool matched             = false;
+    } secretRoundTrip;
+    const std::wstring expectedSecret = std::format(L"refresh-token-{}", NewGuidText());
+    std::jthread secretWorker([&](std::stop_token) noexcept
+    {
+        secretRoundTrip.setHr =
+            connections->SetConnectionSecret(profileName.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, expectedSecret.c_str(), FALSE);
+        wil::unique_cotaskmem_string actualSecret;
+        secretRoundTrip.getHr = connections->GetConnectionSecret(profileName.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, actualSecret.put());
+        secretRoundTrip.matched  = actualSecret && expectedSecret == actualSecret.get();
+        secretRoundTrip.deleteHr = connections->DeleteConnectionSecret(profileName.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, FALSE);
+        wil::unique_cotaskmem_string deletedSecret;
+        secretRoundTrip.getAfterDeleteHr =
+            connections->GetConnectionSecret(profileName.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, deletedSecret.put());
+        secretRoundTrip.completed.store(true, std::memory_order_release);
+    });
+    static_cast<void>(waitForWorker(secretRoundTrip.completed, L"connection-secret set/get/delete round-trip", [] noexcept {}));
+    secretWorker.join();
+    state.Require(SUCCEEDED(secretRoundTrip.setHr),
+                  std::format(L"Worker-thread SetConnectionSecret failed (hr=0x{:08X}).", static_cast<unsigned long>(secretRoundTrip.setHr)));
+    state.Require(
+        SUCCEEDED(secretRoundTrip.getHr) && secretRoundTrip.matched,
+        std::format(L"Worker-thread GetConnectionSecret did not return the secret just set (hr=0x{:08X}).", static_cast<unsigned long>(secretRoundTrip.getHr)));
+    state.Require(SUCCEEDED(secretRoundTrip.deleteHr),
+                  std::format(L"Worker-thread DeleteConnectionSecret failed (hr=0x{:08X}).", static_cast<unsigned long>(secretRoundTrip.deleteHr)));
+    state.Require(FAILED(secretRoundTrip.getAfterDeleteHr),
+                  std::format(L"Worker-thread GetConnectionSecret succeeded after DeleteConnectionSecret (hr=0x{:08X}).",
+                              static_cast<unsigned long>(secretRoundTrip.getAfterDeleteHr)));
+
     const auto runConnectionManager = [&](HWND requestedOwner, bool accept, HostConnectionManagerResult& result, std::wstring_view operation) noexcept
     {
         struct ConnectionManagerRun final
@@ -784,13 +868,12 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             ConnectionManagerRun& operator=(ConnectionManagerRun&&)      = delete;
 
             std::atomic<bool> completed{false};
-            HRESULT hr              = E_FAIL;
-            HWND window             = nullptr;
-            bool mainDisabled       = false;
-            bool topLevelUnowned    = false;
-            bool registrationActive = false;
-            bool actionSent         = false;
-            bool recoverySent       = false;
+            HRESULT hr           = E_FAIL;
+            HWND window          = nullptr;
+            bool mainDisabled    = false;
+            bool topLevelUnowned = false;
+            bool actionSent      = false;
+            bool recoverySent    = false;
         } run;
 
         std::jthread automation([&](std::stop_token) noexcept
@@ -807,10 +890,9 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
                 return;
             }
 
-            run.mainDisabled       = IsWindowEnabled(mainWindow) == FALSE;
-            run.topLevelUnowned    = ! IsOwnedBy(run.window, mainWindow);
-            run.registrationActive = HostGetTestSynchronousPayloadRegistrationCount() == baselineRegistrations + 1u;
-            run.actionSent         = PostMessageW(run.window, WM_COMMAND, MAKEWPARAM(accept ? IDOK : IDCANCEL, 0), 0) != FALSE;
+            run.mainDisabled    = IsWindowEnabled(mainWindow) == FALSE;
+            run.topLevelUnowned = ! IsOwnedBy(run.window, mainWindow);
+            run.actionSent      = PostMessageW(run.window, WM_COMMAND, MAKEWPARAM(accept ? IDOK : IDCANCEL, 0), 0) != FALSE;
 
             const auto recoveryDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2s);
             while (! run.completed.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < recoveryDeadline)
@@ -852,7 +934,6 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
         state.Require(run.window != nullptr, std::format(L"Connection Manager did not open during {}.", operation));
         state.Require(run.mainDisabled, std::format(L"Connection Manager did not disable the root owner during {}.", operation));
         state.Require(run.topLevelUnowned, std::format(L"Connection Manager modal facade unexpectedly became an owned tool window during {}.", operation));
-        state.Require(run.registrationActive, std::format(L"Connection Manager did not retain exactly one synchronous payload during {}.", operation));
         state.Require(run.actionSent, std::format(L"Connection Manager automation did not send its terminal action during {}.", operation));
         state.Require(! run.recoverySent, std::format(L"Connection Manager required cancellation recovery during {}.", operation));
         state.Require(IsWindowEnabled(mainWindow) != FALSE, std::format(L"Connection Manager did not restore the root owner during {}.", operation));
@@ -897,10 +978,25 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
     state.Require(TryHandleHostServicesWindowMessage(mainWindow, WndMsg::kHostShowConnectionManager, 0, staleToken, dispatchResult) &&
                       dispatchResult == static_cast<LRESULT>(E_POINTER),
                   L"Stale synchronous payload token was not rejected safely.");
-    dispatchResult = 0;
-    state.Require(TryHandleHostServicesWindowMessage(mainWindow, WndMsg::kHostShowPrompt, 0, (std::numeric_limits<LPARAM>::max)(), dispatchResult) &&
-                      dispatchResult == static_cast<LRESULT>(E_POINTER),
-                  L"Invalid synchronous payload token was not rejected safely.");
+    constexpr std::array synchronousHostMessages{
+        WndMsg::kHostShowPrompt,
+        WndMsg::kHostShowConnectionManager,
+        WndMsg::kHostGetConnectionJsonUtf8,
+        WndMsg::kHostGetConnectionSecret,
+        WndMsg::kHostSetConnectionSecret,
+        WndMsg::kHostDeleteConnectionSecret,
+        WndMsg::kHostPromptConnectionSecret,
+        WndMsg::kHostClearCachedConnectionSecret,
+        WndMsg::kHostUpgradeFtpAnonymousToPassword,
+        WndMsg::kHostOpenViewer,
+    };
+    for (const UINT message : synchronousHostMessages)
+    {
+        dispatchResult = 0;
+        state.Require(TryHandleHostServicesWindowMessage(mainWindow, message, 0, (std::numeric_limits<LPARAM>::max)(), dispatchResult) &&
+                          dispatchResult == static_cast<LRESULT>(E_POINTER),
+                      std::format(L"Forged LPARAM was not rejected safely for synchronous host message 0x{:04X}.", message));
+    }
     state.Require(HostGetTestSynchronousPayloadRegistrationCount() == baselineRegistrations,
                   L"Host-services worker proof left synchronous payload registrations behind.");
 

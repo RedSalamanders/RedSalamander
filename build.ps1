@@ -4,6 +4,8 @@
 .DESCRIPTION
     Builds the entire RedSalamander solution in Debug (default), Release, or ASan Debug configuration.
     Optionally builds a specific project if ProjectName is provided.
+    Captures native artifacts and provenance, optionally produces a portable ZIP,
+    and verifies those bytes before publishing a successful build receipt.
 .PARAMETER Configuration
     Build configuration: Debug, Release, or ASan Debug (default: Debug)
 .PARAMETER Platform
@@ -11,16 +13,18 @@
 .PARAMETER ProjectName
     Specific project to build. If not specified, builds the entire solution.
     Examples: "RedSalamander", "Common"
+.PARAMETER ProductionOnly
+    Build production projects without Tests or PoC (Release only); cannot be combined with Zip.
 .PARAMETER Clean
     Perform a clean build
 .PARAMETER Rebuild
     Rebuild all projects
 .PARAMETER MaxCpuCount
     Optional maximum MSBuild worker count. Zero uses MSBuild's default.
-.PARAMETER Msix
-    Build MSIX package after a successful build (Release only)
-.PARAMETER Msi
-    Build MSI package after a successful build (Release only, requires WiX Toolset)
+.PARAMETER Zip
+    Build a portable ZIP package after a successful build (Release only)
+.PARAMETER GenerateWingetManifest
+    Generate winget manifests from the x64 and ARM64 portable ZIP packages (Release only).
 .PARAMETER BuildNumber
     Override the build number shared by all modules in the current build invocation.
     Required for local official release builds. In CI, GITHUB_RUN_NUMBER is used automatically.
@@ -43,11 +47,8 @@
     .\build.ps1 -Configuration Release -Clean
     Clean build of entire solution in Release configuration
 .EXAMPLE
-    .\build.ps1 -Msix
-    Builds entire solution in Release and produces an MSIX package
-.EXAMPLE
-    .\build.ps1 -Msi
-    Builds entire solution in Release and produces an MSI installer
+    .\build.ps1 -Zip
+    Builds entire solution in Release and produces a portable ZIP package
 .EXAMPLE
     .\build.ps1 -Configuration Release -BuildNumber 183 -OfficialRelease
     Builds an official release-stamped binary set using CI/release build number 183
@@ -58,32 +59,26 @@ param(
     [Parameter(HelpMessage = "Build configuration (Debug or Release)")]
     [ValidateSet("Debug", "Release", "ASan Debug")]
     [string]$Configuration = "Debug",
-    
+
     [Parameter(HelpMessage = "Target platform (x64 or ARM64)")]
     [ValidateSet("x64", "ARM64")]
     [string]$Platform = "x64",
-    
+
     [Parameter(HelpMessage = "Specific project to build (builds entire solution if not specified)")]
     [string]$ProjectName = $null,
 
     [Parameter(HelpMessage = "Build the production solution projects, excluding Tests and PoC (Release only)")]
     [switch]$ProductionOnly,
-    
+
     [Parameter(HelpMessage = "Perform a clean build")]
     [switch]$Clean,
-    
+
     [Parameter(HelpMessage = "Rebuild all projects")]
     [switch]$Rebuild,
 
     [Parameter(HelpMessage = "Maximum MSBuild worker count (0 uses the default)")]
     [ValidateRange(0, 256)]
     [int]$MaxCpuCount = 0,
-
-    [Parameter(HelpMessage = "Build MSIX package after build (Release only)")]
-    [switch]$Msix,
-
-    [Parameter(HelpMessage = "Build MSI package after build (Release only, requires WiX Toolset)")]
-    [switch]$Msi,
 
     [Parameter(HelpMessage = "Build ZIP package after build (Release only)")]
     [switch]$Zip,
@@ -105,6 +100,9 @@ $ErrorActionPreference = "Stop"
 if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
 if ($ProductionOnly -and ($Configuration -ne 'Release' -or $ProjectName -or $Clean)) {
     throw 'ProductionOnly requires Release and cannot be combined with ProjectName or Clean.'
+}
+if ($ProductionOnly -and $Zip) {
+    throw 'ProductionOnly cannot create a ZIP because it excludes the package smoke-test host. Use a full Release build with -Zip.'
 }
 $nativeEntryElapsed = [Diagnostics.Stopwatch]::StartNew()
 Import-Module (Join-Path $PSScriptRoot 'Build/BuildConsole.psm1') -ErrorAction Stop
@@ -233,19 +231,16 @@ function Write-BuildBanner {
 }
 
 # Validate packaging options early so we fail fast before attempting a build.
-if ($Msix -and $Msi) {
-    Write-Error "Specify only one of -Msix or -Msi."
-    exit 1
-}
 
-if (($Msix -or $Msi -or $Zip) -and $ProjectName) {
+
+if ($Zip -and $ProjectName) {
     Write-Error "Packaging requires building the full solution. Remove -ProjectName."
     exit 1
 }
 
-$packageMode = if ($Msix) { "MSIX" } elseif ($Msi) { "MSI" } elseif ($Zip) { "ZIP" } else { "None" }
+$packageMode = if ($Zip) { "ZIP" } else { "None" }
 
-if ($Msix -or $Msi -or $Zip) {
+if ($Zip) {
     if (-not $PSBoundParameters.ContainsKey("Configuration")) {
         $Configuration = "Release"
     } elseif ($Configuration -ne "Release") {
@@ -263,7 +258,7 @@ if ($GenerateWingetManifest -and $Configuration -ne "Release") {
 # an official release may build test-enabled: neither by override nor by the non-Release default
 # that the effective tests setting below applies.
 $requestedDistributableTests = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
-if (($Msix -or $Msi -or $Zip -or $GenerateWingetManifest -or $OfficialRelease) -and
+if (($Zip -or $GenerateWingetManifest -or $OfficialRelease) -and
     ($requestedDistributableTests -ieq 'true' -or
      ([string]::IsNullOrWhiteSpace($requestedDistributableTests) -and $Configuration -ne 'Release'))) {
     Write-Error "Packaging and -OfficialRelease require a test-disabled build (Release, RSBuildEnableTests not 'true'); a test-enabled build is never distributable."
@@ -436,15 +431,15 @@ function Find-MSBuild {
             }
         }
     }
-    
+
     # Strategy 1: Try vswhere (preferred method for VS 2017+)
     $vswherePaths = @(
         "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
         "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
     )
-    
+
     $vswhere = $vswherePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-    
+
     if ($vswhere) {
         Write-Host "  Found vswhere: $vswhere" -ForegroundColor Gray
 
@@ -505,22 +500,22 @@ function Find-MSBuild {
             }
         }
     }
-    
+
     # Strategy 2: Search common Visual Studio installation paths
     Write-Host "  Searching Visual Studio installation paths..." -ForegroundColor Gray
-    
+
     $vsYears = @("2026", "2022")
     $vsEditions = @("Enterprise", "Professional", "Community", "BuildTools")
     $basePaths = @(
         "${env:ProgramFiles}\Microsoft Visual Studio",
         "${env:ProgramFiles(x86)}\Microsoft Visual Studio"
     )
-    
+
     foreach ($basePath in $basePaths) {
         foreach ($year in $vsYears) {
             foreach ($edition in $vsEditions) {
                 $msbuildPaths = @(Get-RSHostOrderedMSBuildRelativePaths | ForEach-Object { "$basePath\$year\$edition\$_" })
-                
+
                 foreach ($msbuildPath in $msbuildPaths) {
                     if (Test-Path $msbuildPath) {
                         return @{
@@ -536,7 +531,7 @@ function Find-MSBuild {
 
     # Strategy 3: Search PATH environment variable
     Write-Host "  Searching PATH environment variable..." -ForegroundColor Gray
-    
+
     $msbuildInPath = Get-Command msbuild.exe -ErrorAction SilentlyContinue
     if ($msbuildInPath) {
         return @{
@@ -545,13 +540,13 @@ function Find-MSBuild {
             Method = "PATH"
         }
     }
-    
+
     # Strategy 4: Use Developer Command Prompt environment
     Write-Host "  Checking Developer Command Prompt environment..." -ForegroundColor Gray
-    
+
     if ($env:VSINSTALLDIR) {
         $devMSBuildPaths = @(Get-RSHostOrderedMSBuildRelativePaths | ForEach-Object { "$env:VSINSTALLDIR\$_" })
-        
+
         foreach ($devPath in $devMSBuildPaths) {
             if (Test-Path $devPath) {
                 return @{
@@ -562,69 +557,10 @@ function Find-MSBuild {
             }
         }
     }
-    
+
     return $null
 }
 
-function Get-WappTargetPlatformVersion {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ProjectPath
-    )
-
-    $text = Get-Content -Path $ProjectPath -Raw
-    $match = [Regex]::Match($text, '<TargetPlatformVersion>\s*([^<]+)\s*</TargetPlatformVersion>')
-    if (-not $match.Success) {
-        return $null
-    }
-
-    return $match.Groups[1].Value.Trim()
-}
-
-function Test-UapPropsAvailable {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$TargetPlatformVersion
-    )
-
-    $uapPropsPath = Join-Path ${env:ProgramFiles(x86)} ("Windows Kits\\10\\DesignTime\\CommonConfiguration\\Neutral\\UAP\\{0}\\UAP.props" -f $TargetPlatformVersion)
-    return (Test-Path $uapPropsPath)
-}
-
-function Get-InstalledUapTargetPlatformVersions {
-    $uapRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\\10\\DesignTime\\CommonConfiguration\\Neutral\\UAP"
-    if (-not (Test-Path $uapRoot)) {
-        return @()
-    }
-
-    return Get-ChildItem -Path $uapRoot -Directory -ErrorAction SilentlyContinue |
-        ForEach-Object { $_.Name } |
-        Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' }
-}
-
-function Resolve-UapTargetPlatformVersion {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$WapProjPath
-    )
-
-    $requested = Get-WappTargetPlatformVersion -ProjectPath $WapProjPath
-    if ($requested -and (Test-UapPropsAvailable -TargetPlatformVersion $requested)) {
-        return $requested
-    }
-
-    $installed = Get-InstalledUapTargetPlatformVersions
-    if (-not $installed -or $installed.Count -eq 0) {
-        throw "Windows SDK folder containing 'UAP.props' was not found. Install the Windows 11 24H2 SDK (10.0.26100.0 UAP) or set TargetPlatformVersion to an installed version."
-    }
-
-    $selected = $installed | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
-    if ($requested) {
-        Write-Host "Windows SDK for UAP $requested not found; using installed UAP $selected." -ForegroundColor Yellow
-    }
-
-    return $selected
-}
 
 # Script-scope state is initialized before use: Run-AllTests and Test-Changes invoke this script under Set-StrictMode -Version Latest.
 $script:vcpkgOverlayTripletRefreshed = $false
@@ -1062,15 +998,15 @@ function Assert-BuildOutputProcessNotRunning {
     if ($Clean) {
         Write-Host "Cleaning..." -ForegroundColor Yellow
         $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $cleanParams -WorkingDirectory $SolutionDir
-        
+
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Clean failed, continuing with build..." -ForegroundColor Yellow
         }
         Write-Host "Building..." -ForegroundColor Yellow
     }
-    
+
     $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $buildParams -WorkingDirectory $SolutionDir
-    
+
     if ($LASTEXITCODE -ne 0) {
         $stopwatch.Stop()
         Write-Host ""
@@ -1081,40 +1017,18 @@ function Assert-BuildOutputProcessNotRunning {
         Write-Host "========================================" -ForegroundColor Red
         exit $LASTEXITCODE
     }
-    
+
     $stopwatch.Stop()
     $buildSourceSnapshotAfter = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
     if ($buildSourceSnapshotAfter.SnapshotId -ne $buildSourceSnapshotBefore.SnapshotId) {
         throw 'Repository source changed while the build was running; no success receipt was published.'
     }
-    Write-RSDxUiModuleProvenance -RepoRoot $SolutionDir -ArtifactManifestDir $artifactManifestDir -Platform $Platform -Configuration $Configuration
-    $buildArtifacts = @(Get-RSBuildArtifactRecords `
-            -RepoRoot $SolutionDir `
-            -BuildOutputDir $buildOutputDir `
-            -ArtifactManifestDir $artifactManifestDir `
-            -Configuration $Configuration `
-            -Platform $Platform `
-            -ProjectName $(if ($ProjectName) { $ProjectName } else { '' }) `
-            -ResolvedProjectPath $(if ($resolvedProjectPath) { $resolvedProjectPath } else { '' }))
-    $buildArtifacts += New-RSBuildArtifactRecord `
-        -RepoRoot $SolutionDir `
-        -LiteralPath $toolchainIdentityPath
-    $buildArtifacts = @($buildArtifacts | Sort-Object relative_path)
-    $receiptTestsEnabled = Test-RSBuildArtifactManifestTestsEnabled -ArtifactManifestDir $artifactManifestDir
-    $summaryArtifacts = if ($ProjectName) {
-        @($buildArtifacts | Where-Object {
-                [IO.Path]::GetFileNameWithoutExtension($_.relative_path) -eq $ProjectName
-            })
-    } else {
-        @($buildArtifacts | Where-Object role -eq 'launchable')
-    }
     $packageArtifacts = @()
 
     $packagingLock = $null
-    $stagedMsixManifest = $null
     $packageEvidenceBefore = @{}
     $appPackagesEvidenceRoot = Join-Path -Path $SolutionDir -ChildPath '.build\AppPackages'
-    if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+    if ($Zip -or $GenerateWingetManifest) {
         $appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `
             -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
             -Path $appPackagesEvidenceRoot
@@ -1124,7 +1038,7 @@ function Assert-BuildOutputProcessNotRunning {
             }
         }
     }
-    if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+    if ($Zip -or $GenerateWingetManifest) {
         $packagingScope = $artifactOperationScope.Clone()
         $packagingScope['coordination'] = 'packaging'
         $packagingLock = Enter-RSArtifactOperationLock `
@@ -1147,246 +1061,99 @@ function Assert-BuildOutputProcessNotRunning {
     }
 
     try {
-    if ($Msix) {
-        $msixAssetsScript = Join-Path -Path $SolutionDir -ChildPath "Installer\msix\GenerateAssets.ps1"
-        if (-not (Test-Path $msixAssetsScript)) {
-            Write-Error "MSIX assets generation script not found: $msixAssetsScript"
-            exit 1
-        }
-
-        Write-Host ""
-        Write-Host "Generating MSIX assets..." -ForegroundColor Yellow
-        try {
-            & $msixAssetsScript -Configuration $Configuration -Platform $Platform
-        }
-        catch {
-            Write-Error "MSIX assets generation failed: $_"
-            exit 1
-        }
-
-        $installerProject = Join-Path -Path $SolutionDir -ChildPath "Installer\msix\RedSalamanderInstaller.wapproj"
-        if (-not (Test-Path $installerProject)) {
-            Write-Error "MSIX packaging project not found: $installerProject"
-            exit 1
-        }
-
-        $msixVersionScript = Join-Path -Path $SolutionDir -ChildPath "Installer\msix\UpdateManifestVersion.ps1"
-        if (-not (Test-Path $msixVersionScript)) {
-            Write-Error "MSIX version update script not found: $msixVersionScript"
-            exit 1
-        }
-
-        try {
-            $stagedMsixManifest = & $msixVersionScript `
-                -Version $versionContext.PackagingVersion `
+        # Capture native bytes and module provenance before staging the portable package.
+        Write-RSDxUiModuleProvenance -RepoRoot $SolutionDir -ArtifactManifestDir $artifactManifestDir -Platform $Platform -Configuration $Configuration
+        $buildArtifacts = @(Get-RSBuildArtifactRecords `
+                -RepoRoot $SolutionDir `
+                -BuildOutputDir $buildOutputDir `
+                -ArtifactManifestDir $artifactManifestDir `
+                -Configuration $Configuration `
                 -Platform $Platform `
-                -Configuration $Configuration
+                -ProjectName $(if ($ProjectName) { $ProjectName } else { '' }) `
+                -ResolvedProjectPath $(if ($resolvedProjectPath) { $resolvedProjectPath } else { '' }))
+        $buildArtifacts += New-RSBuildArtifactRecord `
+            -RepoRoot $SolutionDir `
+            -LiteralPath $toolchainIdentityPath
+        $buildArtifacts = @($buildArtifacts | Sort-Object relative_path)
+        $receiptTestsEnabled = Test-RSBuildArtifactManifestTestsEnabled -ArtifactManifestDir $artifactManifestDir -RequireUniform
+        if (($Zip -or $GenerateWingetManifest -or $OfficialRelease) -and $receiptTestsEnabled) {
+            throw 'A distributable build contains a test-enabled output; no package receipt will be published.'
         }
-        catch {
-            Write-Error "MSIX manifest version update failed: $_"
-            exit 1
-        }
-
-        $targetPlatformVersion = $null
-        try {
-            $targetPlatformVersion = Resolve-UapTargetPlatformVersion -WapProjPath $installerProject
-        }
-        catch {
-            Write-Error "Failed to resolve Windows SDK TargetPlatformVersion for MSIX packaging: $_"
-            exit 1
-        }
-
-        Write-Host ""
-        Write-Host "Building MSIX package..." -ForegroundColor Yellow
-        $msixStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-        $msixParams = @(
-            $installerProject
-            "/t:Build"
-            "/p:Configuration=$Configuration"
-            "/p:Platform=$Platform"
-            "/p:TargetPlatformVersion=$targetPlatformVersion"
-            "/p:SolutionDir=$SolutionDirWithSlash"
-            "/p:RSAppxManifestPath=$stagedMsixManifest"
-            "/p:RSBuildEnableTests=false"
-            "/p:AppxPackageSigningEnabled=false"
-            "/p:GenerateAppInstallerFile=false"
-            "/p:AppxBundle=Never"
-            "/v:minimal"
-            "/nologo"
-        )
-
-        $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $msixParams -WorkingDirectory $SolutionDir
-
-        if ($LASTEXITCODE -ne 0) {
-            $msixStopwatch.Stop()
-            Write-Host ""
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host "MSIX Packaging Failed!" -ForegroundColor Red
-            Write-Host "Exit code: $LASTEXITCODE" -ForegroundColor Red
-            Write-Host "Packaging time: $($msixStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
-            Write-Host "========================================" -ForegroundColor Red
-            exit $LASTEXITCODE
+        $summaryArtifacts = if ($ProjectName) {
+            @($buildArtifacts | Where-Object {
+                    [IO.Path]::GetFileNameWithoutExtension($_.relative_path) -eq $ProjectName
+                })
+        } else {
+            @($buildArtifacts | Where-Object role -eq 'launchable')
         }
 
-        # The package also takes plugin and runtime binaries straight from the compiled profile;
-        # inspect what was packaged while the packaging lease is held and remove a rejected package.
-        # Re-check the whole repository chain for links right before anything can be removed.
-        $appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `
-            -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
-            -Path $appPackagesEvidenceRoot
-        foreach ($producedMsix in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -Filter *.msix -File -Recurse)) {
-            $producedDigest = (Get-FileHash -LiteralPath $producedMsix.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            if (-not $packageEvidenceBefore.ContainsKey($producedMsix.FullName) -or $packageEvidenceBefore[$producedMsix.FullName] -ne $producedDigest) {
-                Assert-RSProducedMsixHasNoTestSurface -LiteralPath $producedMsix.FullName -AppPackagesRoot $appPackagesEvidenceRoot
+        if ($Zip) {
+            $zipScript = Join-Path -Path $SolutionDir -ChildPath "Installer\\zip\\build-zip.ps1"
+            if (-not (Test-Path $zipScript)) {
+                Write-Error "ZIP build script not found: $zipScript"
+                exit 1
             }
-        }
 
-        $msixStopwatch.Stop()
-        Write-Host "MSIX packaging completed successfully! ($($msixStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
-    }
-
-    if ($Msi) {
-        $msiScript = Join-Path -Path $SolutionDir -ChildPath "Installer\msi\build-msi.ps1"
-        if (-not (Test-Path $msiScript)) {
-            Write-Error "MSI build script not found: $msiScript"
-            exit 1
-        }
-
-        $msiSymbolsScript = Join-Path -Path $SolutionDir -ChildPath "Installer\msi\build-msi-symbols.ps1"
-        if (-not (Test-Path $msiSymbolsScript)) {
-            Write-Error "MSI symbols build script not found: $msiSymbolsScript"
-            exit 1
-        }
-
-        Write-Host ""
-        Write-Host "Building MSI installer..." -ForegroundColor Yellow
-        $msiStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-        try {
-            $msiArgs = @(
-                "-Configuration", $Configuration,
-                "-Platform", $Platform,
-                "-BuildNumber", "$($versionContext.BuildNumber)"
-            )
-            & $msiScript @msiArgs
-        }
-        catch {
-            $msiStopwatch.Stop()
             Write-Host ""
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host "MSI Packaging Failed!" -ForegroundColor Red
-            Write-Host "Error: $_" -ForegroundColor Red
-            Write-Host "Packaging time: $($msiStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
-            Write-Host "========================================" -ForegroundColor Red
-            exit 1
-        }
+            Write-Host "Building ZIP package..." -ForegroundColor Yellow
+            $zipStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-        $msiStopwatch.Stop()
-        Write-Host "MSI packaging completed successfully! ($($msiStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
+            try {
+                & $zipScript -Configuration $Configuration -Platform $Platform -BuildNumber $versionContext.BuildNumber
+            }
+            catch {
+                $zipStopwatch.Stop()
+                Write-Host ""
+                Write-Host "========================================" -ForegroundColor Red
+                Write-Host "ZIP Packaging Failed!" -ForegroundColor Red
+                Write-Host "Error: $_" -ForegroundColor Red
+                Write-Host "Packaging time: $($zipStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
+                Write-Host "========================================" -ForegroundColor Red
+                exit 1
+            }
 
-        Write-Host ""
-        Write-Host "Building MSI symbols package (PDB)..." -ForegroundColor Yellow
-        $msiSymbolsStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-        try {
-            $msiSymbolsArgs = @(
-                "-Configuration", $Configuration,
-                "-Platform", $Platform,
-                "-BuildNumber", "$($versionContext.BuildNumber)"
-            )
-            & $msiSymbolsScript @msiSymbolsArgs
-        }
-        catch {
-            $msiSymbolsStopwatch.Stop()
-            Write-Host ""
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host "MSI Symbols Packaging Failed!" -ForegroundColor Red
-            Write-Host "Error: $_" -ForegroundColor Red
-            Write-Host "Packaging time: $($msiSymbolsStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
-            Write-Host "========================================" -ForegroundColor Red
-            exit 1
-        }
-
-        $msiSymbolsStopwatch.Stop()
-        Write-Host "MSI symbols packaging completed successfully! ($($msiSymbolsStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
-    }
-
-    if ($Zip) {
-        $zipScript = Join-Path -Path $SolutionDir -ChildPath "Installer\\zip\\build-zip.ps1"
-        if (-not (Test-Path $zipScript)) {
-            Write-Error "ZIP build script not found: $zipScript"
-            exit 1
-        }
-
-        Write-Host ""
-        Write-Host "Building ZIP package..." -ForegroundColor Yellow
-        $zipStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-        try {
-            & $zipScript -Configuration $Configuration -Platform $Platform -BuildNumber $versionContext.BuildNumber
-        }
-        catch {
             $zipStopwatch.Stop()
-            Write-Host ""
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host "ZIP Packaging Failed!" -ForegroundColor Red
-            Write-Host "Error: $_" -ForegroundColor Red
-            Write-Host "Packaging time: $($zipStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
-            Write-Host "========================================" -ForegroundColor Red
-            exit 1
+            Write-Host "ZIP packaging completed successfully! ($($zipStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
         }
 
-        $zipStopwatch.Stop()
-        Write-Host "ZIP packaging completed successfully! ($($zipStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
-    }
-
-    if ($GenerateWingetManifest) {
-        $wingetScript = Join-Path -Path $SolutionDir -ChildPath "Installer\\winget\\generate-manifest.ps1"
-        if (-not (Test-Path $wingetScript)) {
-            Write-Error "Winget manifest generation script not found: $wingetScript"
-            exit 1
-        }
-
-        Write-Host ""
-        Write-Host "Generating winget manifest..." -ForegroundColor Yellow
-
-        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
-        $packageVersion = $versionContext.PackagingVersion
-        $ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-x64-Portable.zip"
-        $Arm64ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-ARM64-Portable.zip"
-
-        try {
-            $wingetParams = @{
-                BuildNumber = $versionContext.BuildNumber
-                ZipPath = $ZipPath
-                Arm64ZipPath = $Arm64ZipPath
+        if ($GenerateWingetManifest) {
+            $wingetScript = Join-Path -Path $SolutionDir -ChildPath "Installer\\winget\\generate-manifest.ps1"
+            if (-not (Test-Path $wingetScript)) {
+                Write-Error "Winget manifest generation script not found: $wingetScript"
+                exit 1
             }
-            
-            & $wingetScript @wingetParams
-        }
-        catch {
+
             Write-Host ""
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host "Winget Manifest Generation Failed!" -ForegroundColor Red
-            Write-Host "Error: $_" -ForegroundColor Red
-            Write-Host "========================================" -ForegroundColor Red
-            exit 1
+            Write-Host "Generating winget manifest..." -ForegroundColor Yellow
+
+            $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
+            $packageVersion = $versionContext.PackagingVersion
+            $ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-x64-Portable.zip"
+            $Arm64ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-ARM64-Portable.zip"
+
+            try {
+                $wingetParams = @{
+                    BuildNumber = $versionContext.BuildNumber
+                    ZipPath = $ZipPath
+                    Arm64ZipPath = $Arm64ZipPath
+                }
+
+                & $wingetScript @wingetParams
+            }
+            catch {
+                Write-Host ""
+                Write-Host "========================================" -ForegroundColor Red
+                Write-Host "Winget Manifest Generation Failed!" -ForegroundColor Red
+                Write-Host "Error: $_" -ForegroundColor Red
+                Write-Host "========================================" -ForegroundColor Red
+                exit 1
+            }
         }
-    }
     }
     finally {
-        if (-not [string]::IsNullOrWhiteSpace($stagedMsixManifest)) {
-            $stagedMsixManifestDirectory = Resolve-RSGuardedRepositoryPath `
-                -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
-                -Path (Split-Path $stagedMsixManifest -Parent)
-            if (Test-Path -LiteralPath $stagedMsixManifestDirectory -PathType Container) {
-                Remove-Item -LiteralPath $stagedMsixManifestDirectory -Recurse -Force
-            }
-        }
         Exit-RSArtifactOperationLock -Lock $packagingLock
     }
-    
+
     if ($contaminationRepairAuthorized) {
         Clear-RSArtifactOperationContaminated `
             -RepoRoot $SolutionDir `
@@ -1400,16 +1167,16 @@ function Assert-BuildOutputProcessNotRunning {
             -Scope $sharedDependencyScope
     }
 
-    if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+    if ($Zip -or $GenerateWingetManifest) {
         if (-not (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container)) {
             throw "Requested packaging produced no AppPackages directory: $appPackagesEvidenceRoot"
         }
         # The packaging lease is released here: check only, never delete. The in-lease check
-        # already removed any rejected MSIX this run produced.
+        # already checked the newly produced portable ZIP.
         foreach ($file in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse | Sort-Object FullName)) {
             $currentDigest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             if (-not $packageEvidenceBefore.ContainsKey($file.FullName) -or $packageEvidenceBefore[$file.FullName] -ne $currentDigest) {
-                if ($file.Extension -ieq '.msix' -or $file.Extension -ieq '.zip') {
+                if ($file.Extension -ieq '.zip') {
                     Assert-RSShippingPackageHasNoTestSurface -LiteralPath $file.FullName
                 }
                 $packageArtifact = New-RSBuildArtifactRecord -RepoRoot $SolutionDir -LiteralPath $file.FullName
@@ -1423,6 +1190,19 @@ function Assert-BuildOutputProcessNotRunning {
     $buildSourceSnapshotFinal = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
     if ($buildSourceSnapshotFinal.SnapshotId -ne $buildSourceSnapshotBefore.SnapshotId) {
         throw 'Repository source changed while the selected build/package operation was running; no success receipt was published.'
+    }
+    # Staging-only packagers must not change the native closure or its provenance after
+    # capture. Reuse the canonical record reader and fail before publishing a stale receipt.
+    foreach ($capturedArtifact in $buildArtifacts) {
+        $currentArtifact = New-RSBuildArtifactRecord -RepoRoot $SolutionDir `
+            -LiteralPath (Join-Path $SolutionDir $capturedArtifact.relative_path)
+        if ($currentArtifact.sha256 -cne $capturedArtifact.sha256 -or
+            $currentArtifact.size_bytes -ne $capturedArtifact.size_bytes) {
+            throw "Build output changed after native artifact capture: $($capturedArtifact.relative_path)"
+        }
+    }
+    if ((Test-RSBuildArtifactManifestTestsEnabled -ArtifactManifestDir $artifactManifestDir -RequireUniform) -ne $receiptTestsEnabled) {
+        throw 'Build artifact test surface changed during packaging; no success receipt will be published.'
     }
     $receiptArtifacts = @(@($buildArtifacts) + @($packageArtifacts) | Sort-Object relative_path)
     $buildReceipt = New-RSBuildReceipt `

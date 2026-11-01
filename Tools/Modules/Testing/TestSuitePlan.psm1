@@ -152,8 +152,13 @@ function Get-RSTestRunPlan {
             [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedProductGallery = $Suite -eq 'Commands' -and $CaseFilter -ceq 'cmd_product_documentation_gallery' -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and [string]::IsNullOrEmpty($SelfTestOrderProofCase)
-        $allowsActivation = ($selfTest.Name -eq 'Commands' -and -not $ownedProductGallery) -or ($selfTest.Name -eq 'FileOperations' -and $CaseFilter -eq 'FileOps_VisualGalleryInteraction')
-        $requiresInteractiveDesktop = ($selfTest.Name -eq 'Commands' -and -not $ownedProductGallery) -or
+        $ownedDirectoryCacheCancellationCase = $Suite -eq 'Commands' -and
+            $CaseFilter -ceq 'cmd_directory_cache_invalidation_during_enumeration_is_retained' -and
+            [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and [string]::IsNullOrEmpty($SelfTestOrderProofCase)
+        $ownedCommandsNoActivation = $ownedProductGallery -or $ownedDirectoryCacheCancellationCase
+        $allowsActivation = ($selfTest.Name -eq 'Commands' -and -not $ownedCommandsNoActivation) -or
+            ($selfTest.Name -eq 'FileOperations' -and $CaseFilter -eq 'FileOps_VisualGalleryInteraction')
+        $requiresInteractiveDesktop = ($selfTest.Name -eq 'Commands' -and -not $ownedCommandsNoActivation) -or
             ($selfTest.Name -eq 'FileOperations' -and -not $ownedFolderProgressCase)
         $plan += New-RSTestRunPlanEntry `
             -Id $selfTest.Id `
@@ -249,8 +254,9 @@ function Get-RSTestRunPlan {
     # Suite PR is the pull-request gate: the CI standalone executables and tooling contracts
     # without the three in-product self-test suites (26-100 minutes each on hosted runners)
     # and without interactive-desktop entries, so it finishes in well under fifteen minutes.
-    # Suite CI is the push-to-main gate. Suite Full remains the broader local/closeout gate
-    # and additionally includes local product/performance suites; viewer suites belong to RedMonitor.
+    # Suite CI remains the explicit extended native-runner selection. Hosted main qualification is
+    # routed by the shared organization workflow; Suite Full is the broader local closeout gate.
+    # Both retain the separate local product/performance obligations; viewer suites belong to RedMonitor.
     if ($Suite -eq 'PR') {
         $plan = @($plan | Where-Object { $_.Kind -ne 'SelfTest' -and -not $_.RequiresInteractiveDesktop })
     }
