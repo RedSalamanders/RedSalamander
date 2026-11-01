@@ -1327,6 +1327,26 @@ struct IndexedInterlockAuthorityGroup
         });
     });
 }
+[[nodiscard]] bool DeferredDirectoryDeleteConflicts(const std::vector<FileOperations::MutationInterlockScope>& left,
+                                                    const std::vector<FileOperations::MutationInterlockScope>& right,
+                                                    uint64_t* comparisons) noexcept
+{
+    const auto deferredAgainst = [comparisons](const auto& directories, const auto& others) noexcept
+    {
+        return std::ranges::any_of(directories,
+                                   [&](const auto& directory) noexcept
+        {
+            return directory.deferredDirectoryDelete && std::ranges::any_of(others,
+                                                                            [&](const auto& other) noexcept
+            {
+                if (comparisons != nullptr)
+                    ++*comparisons;
+                return MutationScopesOverlap(directory, other);
+            });
+        });
+    };
+    return deferredAgainst(left, right) || deferredAgainst(right, left);
+}
 } // namespace
 
 namespace
@@ -1572,8 +1592,10 @@ bool FolderWindow::FileOperationState::MutationInterlocksPermit(const uint64_t t
             return true;
         // Transfer conflicts remain serialized even if an older caller supplies concurrent
         // consent. The advisory no longer offers that action for two transfers.
-        return ((candidate.isTransfer && published.admission->isTransfer) || ! candidate.relations.Allows(published.admission->key)) &&
-               TaskScopesOverlap(*candidate.scopes, *published.admission->scopes, comparisons, identityUnavailable);
+        return ((candidate.hasDeferredDirectoryDeletes || published.admission->hasDeferredDirectoryDeletes) &&
+                DeferredDirectoryDeleteConflicts(*candidate.scopes, *published.admission->scopes, &comparisons)) ||
+               (((candidate.isTransfer && published.admission->isTransfer) || ! candidate.relations.Allows(published.admission->key)) &&
+                TaskScopesOverlap(*candidate.scopes, *published.admission->scopes, comparisons, identityUnavailable));
     });
 }
 
@@ -1712,6 +1734,9 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         const uint64_t classifierStartedUs = captureOverlapCosts ? PerfNowUs() : 0u;
         const FileOperations::SameHostOverlapProblem problem =
             ClassifySameHostOverlap(*admission->scopes, *other.admission->scopes, byNameDelete, captureOverlapCosts ? &pairComparisons : nullptr);
+        const bool serializedDirectoryDelete =
+            (admission->hasDeferredDirectoryDeletes || other.admission->hasDeferredDirectoryDeletes) &&
+            DeferredDirectoryDeleteConflicts(*admission->scopes, *other.admission->scopes, captureOverlapCosts ? &pairComparisons : nullptr);
         if (captureOverlapCosts)
         {
             classifierElapsedUs += PerfElapsedUs(classifierStartedUs);
@@ -1722,6 +1747,7 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         {
             return;
         }
+        advice.serializedDirectoryDelete = advice.serializedDirectoryDelete || serializedDirectoryDelete;
         // I35 R7.3: the question names a delete by name first (it says what that delete does to this
         // task), whichever overlapping task was found first.
         const auto namesByNameDelete = [](const FileOperations::SameHostOverlapProblem value) noexcept
@@ -2344,6 +2370,7 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
             task.SetWaitingInQueue(false);
             EraseMutationInterlockAdmission(_preparedMutationInterlocks, admissionKey);
             _activeMutationInterlocks.push_back(ActiveMutationInterlock{.taskId = task._taskId, .task = &task, .admission = admission});
+            task._reservedOperation.store(true, std::memory_order_release);
             ++_activeOperations;
             task._perf.queueActiveOperations = _activeOperations;
             const uint64_t waitUs            = waited ? PerfElapsedUs(queueWaitStartUs) : 0u;
@@ -2417,6 +2444,7 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task, const std::sha
         {
             --_activeOperations;
         }
+        task._reservedOperation.store(false, std::memory_order_release);
     }
     NotifyQueueChanged();
 }

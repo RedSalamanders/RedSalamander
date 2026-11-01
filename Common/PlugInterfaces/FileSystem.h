@@ -1351,6 +1351,15 @@ interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept = 0;
 };
 
+// Optional bounded transfer of a directory metadata witness to an already-held
+// strict delete authority. Success retires the witness's kernel pin while its
+// immutable identity snapshot remains readable; active metadata readers return
+// ERROR_BUSY and no handoff takes place. This never grants mutation authority.
+interface __declspec(uuid("81cd70fe-c664-430e-8b87-dde9a2cb26b5")) __declspec(novtable) IFileSystemBoundObjectPinHandoff : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE TakeDirectoryReadPinFrom(IFileSystemBoundObject * witness) noexcept = 0;
+};
+
 // Optional exact-object content proof. The provider must read the already-bound object/revision;
 // it must never reopen a pathname. A proof is evidence only for optional post-publication
 // verification and can never authorize overwrite, skip, cleanup, or source deletion.

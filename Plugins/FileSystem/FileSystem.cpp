@@ -2791,6 +2791,7 @@ interface __declspec(uuid("c1884e97-02e5-4c89-99b0-a619e8f78625")) __declspec(no
         const wchar_t* destinationPath, BOOL replaceIfExists, FileSystemConditionalMutationResult* result) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult * result) noexcept            = 0;
     virtual HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE * duplicated) noexcept                            = 0;
+    virtual HRESULT STDMETHODCALLTYPE RetireDirectoryReadPin(const LocalObjectIdentityPayload* expected) noexcept   = 0;
 };
 
 constexpr size_t kBackupStreamHeaderBytes         = offsetof(WIN32_STREAM_ID, cStreamName);
@@ -3221,6 +3222,7 @@ constexpr std::wstring_view kStageCleanupDelayFiredEnvVar = L"REDSALAMANDER_FILE
 class LocalBoundObject final : public IFileSystemBoundObject,
                                public IFileSystemBoundMetadata,
                                public IFileSystemBoundContentProof,
+                               public IFileSystemBoundObjectPinHandoff,
                                public ILocalBoundObjectControl
 {
 public:
@@ -3237,6 +3239,8 @@ public:
           _committedSizeBytes(committedSizeBytes),
           _grantedFlags(grantedFlags),
           _ownedStage(ownedStage),
+          _consumableReadWitness(! ownedStage && kind == FILESYSTEM_BOUND_DIRECTORY &&
+                                 grantedFlags == static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA)),
           _path(std::move(path))
     {
     }
@@ -3274,6 +3278,12 @@ public:
         if (riid == __uuidof(ILocalBoundObjectControl))
         {
             *ppvObject = static_cast<ILocalBoundObjectControl*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemBoundObjectPinHandoff))
+        {
+            *ppvObject = static_cast<IFileSystemBoundObjectPinHandoff*>(this);
             AddRef();
             return S_OK;
         }
@@ -3502,6 +3512,9 @@ public:
         {
             return E_ACCESSDENIED;
         }
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
 
         FILE_BASIC_INFO basic{};
         if (GetFileInformationByHandleEx(_file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
@@ -3554,10 +3567,15 @@ public:
         {
             return E_INVALIDARG;
         }
-        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u)
         {
             return E_ACCESSDENIED;
         }
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
+        if (! _consumableReadWitness && ! _file)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         const HRESULT controlHr = FileSystemCheckOperationControl(options);
         if (FAILED(controlHr))
         {
@@ -3667,10 +3685,15 @@ public:
                                    const FileSystemOptions* options,
                                    FileSystemMetadataTransferResult* result) noexcept
     {
-        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u)
         {
             return E_ACCESSDENIED;
         }
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
+        if (! _consumableReadWitness && ! _file)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         const HRESULT controlHr = FileSystemCheckOperationControl(options);
         if (FAILED(controlHr))
         {
@@ -4087,6 +4110,8 @@ public:
         {
             return E_INVALIDARG;
         }
+        if (_consumableReadWitness)
+            return E_ACCESSDENIED;
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -4180,6 +4205,8 @@ public:
         {
             return resultHr;
         }
+        if (_consumableReadWitness)
+            return E_ACCESSDENIED;
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -4233,6 +4260,8 @@ public:
             return E_POINTER;
         }
         *duplicated = INVALID_HANDLE_VALUE;
+        if (_consumableReadWitness)
+            return E_ACCESSDENIED;
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -4248,8 +4277,71 @@ public:
         return S_OK;
     }
 
+    HRESULT STDMETHODCALLTYPE RetireDirectoryReadPin(const LocalObjectIdentityPayload* expected) noexcept override
+    {
+        if (! _consumableReadWitness || expected == nullptr || IsRetainedHandleIdentity(_identity) || std::memcmp(expected, &_identity, sizeof(_identity)) != 0)
+            return E_ACCESSDENIED;
+        std::scoped_lock lock(_witnessMutex);
+        if (! _file)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        if (_witnessReaders != 0u)
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        _file.reset();
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE TakeDirectoryReadPinFrom(IFileSystemBoundObject* witness) noexcept override
+    {
+        constexpr FileSystemBindFlags strictDirectoryDeleteFlags =
+            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE);
+        if (! witness || _consumableReadWitness || _ownedStage || _kind != FILESYSTEM_BOUND_DIRECTORY || _grantedFlags != strictDirectoryDeleteFlags ||
+            ! _file || IsRetainedHandleIdentity(_identity))
+            return E_ACCESSDENIED;
+        FileSystemBasicInformation basic{};
+        basic.sizeBytes       = sizeof(basic);
+        const HRESULT basicHr = GetBasicInformation(&basic);
+        if (FAILED(basicHr))
+            return basicHr;
+        if ((basic.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (basic.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        BOOL same            = FALSE;
+        const HRESULT sameHr = IsSameObject(witness, &same);
+        if (FAILED(sameHr))
+            return sameHr;
+        if (same == FALSE)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        wil::com_ptr<ILocalBoundObjectControl> control;
+        const HRESULT queryHr = witness->QueryInterface(__uuidof(ILocalBoundObjectControl), control.put_void());
+        if (FAILED(queryHr) || ! control)
+            return FAILED(queryHr) ? queryHr : E_UNEXPECTED;
+        return control->RetireDirectoryReadPin(&_identity);
+    }
+
 private:
     ~LocalBoundObject() = default;
+
+    // Only directory metadata witnesses can surrender their kernel pin. Track their
+    // synchronous reads separately from immutable COM snapshots; a busy handoff fails
+    // rather than waiting while a reader might call another bound object.
+    [[nodiscard]] bool BeginWitnessRead() noexcept
+    {
+        if (! _consumableReadWitness)
+            return true;
+        std::scoped_lock lock(_witnessMutex);
+        if (! _file)
+            return false;
+        ++_witnessReaders;
+        return true;
+    }
+
+    void EndWitnessRead() noexcept
+    {
+        if (_consumableReadWitness)
+        {
+            std::scoped_lock lock(_witnessMutex);
+            --_witnessReaders;
+        }
+    }
 
     [[nodiscard]] static HRESULT InitializeMutationResult(FileSystemConditionalMutationResult* result) noexcept
     {
@@ -4613,6 +4705,9 @@ private:
     uint64_t _committedSizeBytes      = std::numeric_limits<uint64_t>::max();
     FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;
     bool _ownedStage                  = false;
+    const bool _consumableReadWitness = false;
+    std::mutex _witnessMutex;
+    size_t _witnessReaders = 0u;
     std::wstring _path;
 };
 

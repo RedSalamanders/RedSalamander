@@ -10772,8 +10772,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 _buttons.push_back(collapseBtn);
 
                 float headerControlsLeft = collapseBtn.bounds.left;
-                if (! task.started && ! task.overlapQueued && ! task.waitingForIdentityInterlock && ! task.waitingForParallelTransferSlot &&
-                    ! task.waitingForExclusiveTransfer && (task.waitingForOthers || task.waitingInQueue))
+                if (! task.started && ! task.overlapQueued && (task.waitingForOthers || task.waitingInQueue))
                 {
                     const float queueButtonGap = DipsToPixels(3.0f, _dpi);
                     if (task.canMoveQueueDown)

@@ -2090,7 +2090,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     const auto monitors = GetFileOpsGalleryMonitors();
     if (! folder || monitors.empty() || output.empty() || ! SelfTest::EnsureDirectory(output))
         return false;
-    const HWND foreground    = GetForegroundWindow();
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+    {
+        AppendLog(std::format(L"WaitingCard: no-activation observation could not start (failure={})", static_cast<unsigned int>(desktop.Failure())));
+        return false;
+    }
     const auto previousTheme = folder->GetTheme();
     Localization::LanguagePreference previousLanguage{};
     if (g_settings.ui.has_value() && ! g_settings.ui.value().language.empty() && g_settings.ui.value().language != L"system")
@@ -2169,6 +2174,11 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                     }, {.timeout = SelfTest::Scale(std::chrono::milliseconds{2000}), .operationName = L"settle waiting-card text"});
                     if (! settled.conditionMet)
                         return false;
+                    if (! desktop.Sample())
+                    {
+                        AppendLog(std::format(L"WaitingCard: no-activation observation failed (failure={})", static_cast<unsigned int>(desktop.Failure())));
+                        return false;
+                    }
                     for (unsigned frame = 0u; frame < 12u; ++frame)
                     {
                         Debug::Perf::Scope repaint(L"FileOps.Popup.WaitingCard.FrameUs");
@@ -2220,6 +2230,31 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                     passed = correct && passed;
                     if (wait >= 3u)
                     {
+                        // The engine supplies edge eligibility independently of the reason for
+                        // waiting. Exercise the real painter and hosted controls without changing
+                        // the captured single-task scenarios or bypassing Start now's safety gate.
+                        auto reorderable           = task;
+                        reorderable.canMoveQueueUp = reorderable.canMoveQueueDown = true;
+                        renderer->DebugUpdateLiveVisualScenario({reorderable});
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        PopupLayoutDebugSnapshot reorderLayout{};
+                        reorderLayout.taskId       = task.taskId;
+                        const bool reorderVisible  = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), reorderLayout) &&
+                                                     reorderLayout.taskQueueMoveUpVisible && reorderLayout.taskQueueMoveDownVisible &&
+                                                     renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveUp, task.taskId) == 1u &&
+                                                     renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveDown, task.taskId) == 1u &&
+                                                     ! reorderLayout.taskStartNowVisible;
+                        reorderable.canMoveQueueUp = false;
+                        renderer->DebugUpdateLiveVisualScenario({reorderable});
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        const bool edgeVisible = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), reorderLayout) &&
+                                                 ! reorderLayout.taskQueueMoveUpVisible && reorderLayout.taskQueueMoveDownVisible &&
+                                                 renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveUp, task.taskId) == 0u &&
+                                                 renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveDown, task.taskId) == 1u &&
+                                                 ! reorderLayout.taskStartNowVisible;
+                        if (! reorderVisible || ! edgeVisible)
+                            AppendLog(std::format(L"WaitingCard: reorder controls failed wait={} both={} edge={}", wait, reorderVisible, edgeVisible));
+                        passed = reorderVisible && edgeVisible && passed;
                         renderer->DebugUpdateLiveVisualScenario({running});
                         RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
                         passed = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(waitingReasonId, text, help) &&
@@ -2228,7 +2263,10 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                 }
         }
     }
-    return passed && manifest.good() && GetForegroundWindow() == foreground;
+    const bool desktopSafe = desktop.Finish();
+    if (! desktopSafe)
+        AppendLog(std::format(L"WaitingCard: no-activation observation failed at finish (failure={})", static_cast<unsigned int>(desktop.Failure())));
+    return passed && manifest.good() && desktopSafe;
 }
 
 [[nodiscard]] bool CaptureFileOpsCardHierarchy(SelfTestState& state)

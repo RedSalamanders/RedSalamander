@@ -1,0 +1,2 @@
+- Let queued Local directory deletes retain a nonblocking identity witness until predecessors finish, then verify and pin the same directory for confirmation and deletion. Serialize overlapping host work, preserve deferred consent after readiness, and release strict leases before admitting successors.
+  - Retire each old directory metadata pin through a checked optional handoff so retained identity snapshots do not keep the task's own deleted directory pending; reject active readers and unavailable or mismatched authority before mutation.

@@ -15298,6 +15298,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(contracts.failure);
                 return true;
             }
+            if (! contracts.skipped.empty())
+            {
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::skipped, contracts.skipped);
+                NextStep(state, SelfTestState::Step::FileOps_SafetyRemediationContracts);
+                return false;
+            }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
             NextStep(state, SelfTestState::Step::FileOps_SafetyRemediationContracts);
             return false;
@@ -15465,6 +15471,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             {
                 Fail(admissionContracts.failure);
                 return true;
+            }
+            if (! admissionContracts.skipped.empty())
+            {
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::skipped, admissionContracts.skipped);
+                NextStep(state, SelfTestState::Step::FileOps_IdentityInterlockWaiting);
+                return false;
             }
             if (! RunFileOpsSameHostOverlapClassifierCostChecks(state) || ! RunFileOpsDeleteParentPinChecks(state) ||
                 ! RunFileOpsCrossRootSkipContractChecks(state) ||

@@ -10183,7 +10183,8 @@ public:
                 FileOperations::MutationInterlockAccess access,
                 bool bindingRequired,
                 bool retainDeleteAuthority,
-                RootBindingFacts* rootBinding = nullptr) noexcept
+                RootBindingFacts* rootBinding  = nullptr,
+                bool deferLocalDirectoryDelete = false) noexcept
     {
         if (rootBinding != nullptr)
         {
@@ -10307,13 +10308,85 @@ public:
         if (std::shared_ptr<const FileOperations::MutationInterlockAuthorityNode> existingRoot = findAuthorityNode(providerPath))
         {
             scope.root = std::move(existingRoot);
+            if (deferLocalDirectoryDelete)
+            {
+                const auto& witness = scope.root->retained.authority;
+                bool plainDirectory = false;
+                if (witness.kind == FILESYSTEM_BOUND_DIRECTORY)
+                {
+                    FileSystemBasicInformation basic{};
+                    basic.sizeBytes       = sizeof(basic);
+                    const HRESULT basicHr = witness.boundObject->GetBasicInformation(&basic);
+                    if (FAILED(basicHr))
+                        return basicHr;
+                    plainDirectory = (basic.attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u;
+                }
+                if (plainDirectory)
+                    scope.deferredDirectoryDelete = true;
+                else
+                {
+                    // An interned ancestor has metadata access only. Give this selected
+                    // root its own strict authority without changing the shared chain.
+                    ++_bindCount;
+                    auto strict = FileOperations::BindObjectAuthority(
+                        fileSystem, providerPath, endpoint.profileId, static_cast<FileSystemBindFlags>(kBindFlags | FILESYSTEM_BIND_DELETE));
+                    if (rootBinding != nullptr)
+                        *rootBinding = RootBindingFacts{.attempted = true, .state = strict.state, .status = strict.status};
+                    if (strict.state != FileOperations::ObjectBindingState::Bound)
+                        return FAILED(strict.status) ? strict.status : E_UNEXPECTED;
+                    bool sameObject      = false;
+                    bool sameRevision    = false;
+                    const HRESULT sameHr = FileOperations::CrossCheckBoundObjectIdentity(witness, strict.authority, sameObject, sameRevision);
+                    if (FAILED(sameHr))
+                        return sameHr;
+                    if (strict.authority.kind != witness.kind || ! sameObject || ! sameRevision)
+                        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                    scope.root = std::make_shared<FileOperations::MutationInterlockAuthorityNode>(FileOperations::MutationInterlockAuthorityNode{
+                        .endpoint = endpoint,
+                        .retained = {.providerPath = std::wstring(providerPath), .authority = std::move(strict.authority)},
+                        .parent   = scope.root->parent,
+                    });
+                }
+            }
         }
         else
         {
             const FileSystemBindFlags rootBindFlags =
-                retainDeleteAuthority ? static_cast<FileSystemBindFlags>(kBindFlags | FILESYSTEM_BIND_DELETE) : kBindFlags;
+                retainDeleteAuthority && ! deferLocalDirectoryDelete ? static_cast<FileSystemBindFlags>(kBindFlags | FILESYSTEM_BIND_DELETE) : kBindFlags;
             ++_bindCount;
             FileOperations::ObjectBindingResult root = FileOperations::BindObjectAuthority(fileSystem, providerPath, endpoint.profileId, rootBindFlags);
+            if (deferLocalDirectoryDelete && root.state == FileOperations::ObjectBindingState::Bound)
+            {
+                bool plainDirectory = false;
+                if (root.authority.kind == FILESYSTEM_BOUND_DIRECTORY)
+                {
+                    FileSystemBasicInformation basic{};
+                    basic.sizeBytes       = sizeof(basic);
+                    const HRESULT basicHr = root.authority.boundObject->GetBasicInformation(&basic);
+                    if (FAILED(basicHr))
+                        return basicHr;
+                    plainDirectory = (basic.attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u;
+                }
+                if (plainDirectory)
+                    scope.deferredDirectoryDelete = true;
+                else
+                {
+                    ++_bindCount;
+                    auto strict = FileOperations::BindObjectAuthority(
+                        fileSystem, providerPath, endpoint.profileId, static_cast<FileSystemBindFlags>(kBindFlags | FILESYSTEM_BIND_DELETE));
+                    if (strict.state == FileOperations::ObjectBindingState::Bound)
+                    {
+                        bool sameObject      = false;
+                        bool sameRevision    = false;
+                        const HRESULT sameHr = FileOperations::CrossCheckBoundObjectIdentity(root.authority, strict.authority, sameObject, sameRevision);
+                        if (FAILED(sameHr))
+                            return sameHr;
+                        if (strict.authority.kind != root.authority.kind || ! sameObject || ! sameRevision)
+                            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                    }
+                    root = std::move(strict);
+                }
+            }
             if (rootBinding != nullptr)
             {
                 *rootBinding = RootBindingFacts{.attempted = true, .state = root.state, .status = root.status};
@@ -10925,7 +10998,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                                              FileOperations::MutationInterlockAccess::WriteSource,
                                              exactDeleteAuthority,
                                              exactDeleteAuthority,
-                                             &rootBinding);
+                                             &rootBinding,
+                                             exactDeleteAuthority && FileOperations::IsLocalFileSystemEndpoint(typedPlan.endpoint));
                     const bool identityLessRoot =
                         byNameRouteAvailable && rootBinding.attempted && rootBinding.state == FileOperations::ObjectBindingState::Unsupported;
                     if (exactDeleteAuthority && hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && identityLessRoot)
@@ -11179,7 +11253,8 @@ HRESULT FolderWindow::FileOperationState::BuildPreparationFacts(uint64_t taskId,
             .endpointIndex              = static_cast<uint32_t>(endpointIndex),
             .providerPath               = scope.providerPath,
             .access                     = scope.access,
-            .exactDeleteAuthority       = scope.exactDeleteAuthority,
+            .exactDeleteAuthority       = scope.exactDeleteAuthority && ! scope.deferredDirectoryDelete,
+            .deferredDirectoryDelete    = scope.deferredDirectoryDelete,
             .conservativeIdentityDomain = scope.conservativeIdentityDomain,
         });
     }
@@ -11241,10 +11316,11 @@ HRESULT FolderWindow::FileOperationState::BuildPreparationFacts(uint64_t taskId,
 void FolderWindow::FileOperationState::Task::InstallPreparedMutationInterlockScopes(MutationInterlockScopes scopes,
                                                                                     const bool publishesUnderWriteSourceScopes) noexcept
 {
-    const uint64_t ownerStartedUs              = PerfNowUs();
-    auto admission                             = std::make_shared<MutationInterlockAdmission>();
-    admission->key                             = _admissionKey.load(std::memory_order_acquire);
-    admission->scopes                          = std::make_shared<const MutationInterlockScopes>(std::move(scopes));
+    const uint64_t ownerStartedUs          = PerfNowUs();
+    auto admission                         = std::make_shared<MutationInterlockAdmission>();
+    admission->key                         = _admissionKey.load(std::memory_order_acquire);
+    admission->scopes                      = std::make_shared<const MutationInterlockScopes>(std::move(scopes));
+    admission->hasDeferredDirectoryDeletes = std::ranges::any_of(*admission->scopes, [](const auto& scope) noexcept { return scope.deferredDirectoryDelete; });
     admission->publishesUnderWriteSourceScopes = publishesUnderWriteSourceScopes;
     admission->parallelNewFiles = ! admission->scopes->empty() && ! publishesUnderWriteSourceScopes &&
                                   std::ranges::all_of(*admission->scopes, [](const auto& scope) noexcept { return scope.independentNewFileTransfer; });
@@ -11681,7 +11757,8 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         }
     }
     // Record the consent as the modal did: the kind by origin, the nonce this task.
-    const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
+    const auto consentView                                                    = LoadSelectedAdmission();
+    const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = consentView->plans;
     if (! plans)
     {
         return E_UNEXPECTED;
@@ -11700,7 +11777,46 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
                 : FileOperations::ConsentKind::PermanentDelete;
         deletion->initialConsent = FileOperations::DestructiveConsentReceipt{.kind = kind, .taskNonce = _taskId};
     }
-    StorePlans(std::move(consented));
+    if (_reservedOperation.load(std::memory_order_acquire))
+    {
+        // The general plan store remains frozen after readiness. This reserved-only
+        // revision is built here by copying that exact view and adding receipts only.
+        if (_state == nullptr || _enteredOperation.load(std::memory_order_acquire) || ! consentView->interlock ||
+            ! consentView->interlock->hasDeferredDirectoryDeletes || _deferredDirectoryDeleteBindings.empty())
+            return E_UNEXPECTED;
+        auto selected   = std::make_shared<SelectedAdmissionView>(*consentView);
+        selected->plans = std::move(consented);
+        {
+            std::scoped_lock lock(_state->_queueMutex);
+            if (LoadSelectedAdmission() != consentView || ! _reservedOperation.load(std::memory_order_acquire) ||
+                _enteredOperation.load(std::memory_order_acquire))
+                return E_UNEXPECTED;
+            const bool active = std::ranges::any_of(
+                _state->_activeMutationInterlocks, [&](const auto& entry) noexcept { return entry.task == this && entry.admission == consentView->interlock; });
+            if (! active)
+                return E_UNEXPECTED;
+            _selectedAdmission.store(std::move(selected), std::memory_order_release);
+        }
+    }
+    else
+        StorePlans(std::move(consented));
+    const auto publishedPlans = LoadPlans();
+    if (! publishedPlans || publishedPlans->size() != plans->size())
+        return E_UNEXPECTED;
+    for (size_t index = 0u; index < plans->size(); ++index)
+    {
+        const auto* before = std::get_if<FileOperations::DeletePlan>(&(*plans)[index]);
+        if (! before || before->mode != FileOperations::DeleteMode::Permanent || before->initialConsent.has_value())
+            continue;
+        const auto* after = std::get_if<FileOperations::DeletePlan>(&(*publishedPlans)[index]);
+        const FileOperations::ConsentKind expectedKind =
+            before->origin == FileOperations::DeleteOrigin::PackCleanup || before->origin == FileOperations::DeleteOrigin::UnpackCleanup
+                ? FileOperations::ConsentKind::ArchiveDeleteAfter
+                : FileOperations::ConsentKind::PermanentDelete;
+        if (! after || ! after->initialConsent.has_value() || after->initialConsent.value().kind != expectedKind ||
+            after->initialConsent.value().taskNonce != _taskId)
+            return E_UNEXPECTED;
+    }
     _permanentDeleteConfirmationPending = false;
     return S_OK;
 }
@@ -12057,7 +12173,11 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
         _state->PublishPreparedMutationInterlock(*this);
     }
     // C1: a Permanent Delete confirms on its card once every selected root is pinned.
-    const HRESULT confirmationHr = RunPermanentDeleteConfirmation();
+    // Directory identities are ready for queueing, but their strict lease and
+    // confirmation must wait until predecessor operations have left admission.
+    const auto scopes                  = LoadMutationInterlockScopes();
+    const bool deferredDirectoryDelete = std::ranges::any_of(*scopes, [](const auto& scope) noexcept { return scope.deferredDirectoryDelete; });
+    const HRESULT confirmationHr       = deferredDirectoryDelete ? S_OK : RunPermanentDeleteConfirmation();
     if (FAILED(confirmationHr))
     {
         return confirmationHr;
@@ -12080,7 +12200,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
     {
         return snapshotHr;
     }
-    const HRESULT decisionHr = RunPreConsumptionDecisionGate();
+    const HRESULT decisionHr = deferredDirectoryDelete ? S_OK : RunPreConsumptionDecisionGate();
     if (FAILED(decisionHr))
     {
         return decisionHr;
@@ -12090,6 +12210,87 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
     return S_OK;
+}
+
+HRESULT FolderWindow::FileOperationState::Task::AcquireDeferredDirectoryDeleteAuthoritiesForExecution() noexcept
+{
+    Debug::Perf::Scope perf(L"FileOps.Delete.DirectoryLeaseUs");
+    uint64_t roots    = 0u;
+    const auto finish = [&](HRESULT hr) noexcept
+    {
+        perf.SetValue0(roots);
+        perf.SetValue1(_deferredDirectoryDeleteBindings.size());
+        perf.SetHr(hr);
+        return hr;
+    };
+    _deferredDirectoryDeleteBindings.clear();
+    bool complete       = false;
+    const auto rollback = wil::scope_exit([&]() noexcept
+    {
+        if (! complete)
+            _deferredDirectoryDeleteBindings.clear();
+    });
+    const auto scopes   = LoadMutationInterlockScopes();
+    for (const auto& scope : *scopes)
+    {
+        if (! scope.deferredDirectoryDelete)
+            continue;
+        ++roots;
+        if (CancelRequestedDurable())
+            return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        if (! scope.root || ! scope.root->retained.authority.boundObject)
+            return finish(E_UNEXPECTED);
+        constexpr FileSystemBindFlags flags =
+            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE);
+        // The metadata witness is never mutation authority: compare the newly opened
+        // strict grant with the still-retained object before retaining it for execution.
+        auto strict         = FileOperations::BindObjectAuthority(_fileSystem.get(), scope.providerPath, scope.endpoint.profileId, flags);
+        const auto& witness = scope.root->retained.authority;
+        if (witness.kind != FILESYSTEM_BOUND_DIRECTORY || witness.identity.objectId.empty() || witness.identity.pathProfileId.empty())
+            return finish(E_UNEXPECTED);
+        if (strict.state != FileOperations::ObjectBindingState::Bound)
+            return finish(FAILED(strict.status) ? strict.status : E_UNEXPECTED);
+        bool sameObject      = false;
+        bool sameRevision    = false;
+        const HRESULT sameHr = FileOperations::CrossCheckBoundObjectIdentity(witness, strict.authority, sameObject, sameRevision);
+        if (FAILED(sameHr))
+            return finish(sameHr);
+        if (strict.authority.kind != FILESYSTEM_BOUND_DIRECTORY || ! sameObject || ! sameRevision)
+            return finish(HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+        FileSystemBasicInformation basic{};
+        basic.sizeBytes       = sizeof(basic);
+        const HRESULT basicHr = strict.authority.boundObject->GetBasicInformation(&basic);
+        if (FAILED(basicHr))
+            return finish(basicHr);
+        if ((basic.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+            return finish(HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+        _deferredDirectoryDeleteBindings.emplace_back(
+            FileOperations::RetainedPathAuthority{.providerPath = scope.providerPath, .authority = std::move(strict.authority)});
+    }
+    // All strict grants are checked first. Only then retire each metadata pin; a busy
+    // reader rejects the handoff without mutation and the caller releases the grants.
+    for (const auto& scope : *scopes)
+    {
+        if (! scope.deferredDirectoryDelete)
+            continue;
+        const auto strict = std::ranges::find_if(_deferredDirectoryDeleteBindings,
+                                                 [&](const auto& entry) noexcept
+        {
+            return entry.authority.identity.pathProfileId == scope.endpoint.profileId &&
+                   EquivalentPath(scope.endpoint.pathIdentity.value(), entry.providerPath, scope.providerPath);
+        });
+        if (strict == _deferredDirectoryDeleteBindings.end())
+            return finish(E_UNEXPECTED);
+        wil::com_ptr<IFileSystemBoundObjectPinHandoff> handoff;
+        const HRESULT queryHr = strict->authority.boundObject->QueryInterface(IID_PPV_ARGS(handoff.addressof()));
+        if (FAILED(queryHr) || ! handoff)
+            return finish(FAILED(queryHr) ? queryHr : E_UNEXPECTED);
+        const HRESULT handoffHr = handoff->TakeDirectoryReadPinFrom(scope.root->retained.authority.boundObject.get());
+        if (FAILED(handoffHr))
+            return finish(handoffHr);
+    }
+    complete = true;
+    return finish(S_OK);
 }
 
 void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToken) noexcept
@@ -12260,9 +12461,9 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     PublishLifecyclePhase(TaskLifecyclePhase::Waiting);
     SetWaitingInQueue(_waitForOthers.load(std::memory_order_acquire));
 
-    auto operationEntry          = _state->EnterOperation(*this, stopToken);
-    const auto acceptedAdmission = std::move(operationEntry.accepted);
-    const bool canStart          = operationEntry.outcome == FileOperationState::OperationEntryOutcome::Entered;
+    auto operationEntry    = _state->EnterOperation(*this, stopToken);
+    auto acceptedAdmission = std::move(operationEntry.accepted);
+    const bool canStart    = operationEntry.outcome == FileOperationState::OperationEntryOutcome::Entered;
 
     // No longer waiting in queue (either we got our turn or were cancelled)
     SetWaitingInQueue(false);
@@ -12271,6 +12472,39 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     {
         completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
         return;
+    }
+
+    // Admission reserves conflicts but does not mark execution entered. Confirm and
+    // run the pre-consumption gate only after strict directory grants are held.
+    const auto deferredScopes          = acceptedAdmission->interlock->scopes;
+    const bool deferredDirectoryDelete = std::ranges::any_of(*deferredScopes, [](const auto& scope) noexcept { return scope.deferredDirectoryDelete; });
+    if (deferredDirectoryDelete)
+    {
+        HRESULT deferredHr = AcquireDeferredDirectoryDeleteAuthoritiesForExecution();
+        if (SUCCEEDED(deferredHr))
+        {
+            PublishLifecyclePhase(TaskLifecyclePhase::AwaitingAcceptance);
+            deferredHr = RunPermanentDeleteConfirmation();
+        }
+        if (SUCCEEDED(deferredHr))
+            deferredHr = RunPreConsumptionDecisionGate();
+        if (SUCCEEDED(deferredHr) && CancelRequestedDurable())
+            deferredHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        if (SUCCEEDED(deferredHr))
+        {
+            auto confirmed = LoadSelectedAdmission();
+            if (! confirmed->interlock || confirmed->interlock != acceptedAdmission->interlock)
+                deferredHr = E_UNEXPECTED;
+            else
+                acceptedAdmission = std::move(confirmed);
+        }
+        if (FAILED(deferredHr))
+        {
+            _deferredDirectoryDeleteBindings.clear();
+            _state->LeaveOperation(*this, acceptedAdmission);
+            completeAndPost(deferredHr);
+            return;
+        }
     }
 
     _enteredOperationTick.store(GetTickCount64(), std::memory_order_release);
@@ -12295,6 +12529,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     {
         _enteredOperation.store(false, std::memory_order_release);
         _enteredOperationTick.store(0, std::memory_order_release);
+        _deferredDirectoryDeleteBindings.clear();
         _state->LeaveOperation(*this, acceptedAdmission);
         completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
         return;
@@ -12311,6 +12546,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         CloseDiscovery();
         _enteredOperation.store(false, std::memory_order_release);
         _enteredOperationTick.store(0, std::memory_order_release);
+        _deferredDirectoryDeleteBindings.clear();
         _state->LeaveOperation(*this, acceptedAdmission);
         completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
         return;
@@ -12915,6 +13151,8 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
 
     _enteredOperation.store(false, std::memory_order_release);
     _enteredOperationTick.store(0, std::memory_order_release);
+    // Workers have quiesced. Release strict leases before admitting successors.
+    _deferredDirectoryDeleteBindings.clear();
     _state->LeaveOperation(*this, acceptedAdmission);
     _state->PostCompleted(*this);
 }
@@ -13057,7 +13295,7 @@ void FolderWindow::FileOperationState::Task::SetWaitForOthers(bool wait) noexcep
     if (state)
     {
         std::scoped_lock lock(state->_queueMutex);
-        if (_enteredOperation.load(std::memory_order_acquire))
+        if (_enteredOperation.load(std::memory_order_acquire) || _reservedOperation.load(std::memory_order_acquire))
         {
             return;
         }
@@ -13068,7 +13306,7 @@ void FolderWindow::FileOperationState::Task::SetWaitForOthers(bool wait) noexcep
         return;
     }
 
-    if (_enteredOperation.load(std::memory_order_acquire))
+    if (_enteredOperation.load(std::memory_order_acquire) || _reservedOperation.load(std::memory_order_acquire))
     {
         return;
     }
@@ -13177,6 +13415,11 @@ bool FolderWindow::FileOperationState::Task::HasStarted() const noexcept
 bool FolderWindow::FileOperationState::Task::HasEnteredOperation() const noexcept
 {
     return _enteredOperation.load(std::memory_order_acquire);
+}
+
+bool FolderWindow::FileOperationState::Task::HasReservedOperation() const noexcept
+{
+    return _reservedOperation.load(std::memory_order_acquire);
 }
 
 ULONGLONG FolderWindow::FileOperationState::Task::GetEnteredOperationTick() const noexcept
@@ -23068,6 +23311,20 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
+        wil::com_ptr<IFileSystemBoundObject> deleteAuthority = retainedScope->root->retained.authority.boundObject;
+        if (retainedScope->deferredDirectoryDelete)
+        {
+            const auto strict = std::ranges::find_if(_deferredDirectoryDeleteBindings,
+                                                     [&](const auto& entry) noexcept
+            {
+                return entry.authority.identity.pathProfileId == deletePlan.endpoint.profileId &&
+                       EquivalentPath(deletePlan.endpoint.pathIdentity.value(), entry.providerPath, sourcePath);
+            });
+            if (strict == _deferredDirectoryDeleteBindings.end() || ! strict->authority.boundObject)
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            deleteAuthority = strict->authority.boundObject;
+        }
+
         FileSystemOptions deleteOptions{};
         InitializeFileSystemOptions(deleteOptions, perItemCookie);
         FileSystemFlags deleteFlags = deletePlan.recursive ? FILESYSTEM_FLAG_RECURSIVE : FILESYSTEM_FLAG_NONE;
@@ -23093,7 +23350,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
         else
 #endif
         {
-            deleteHr = retainedScope->root->retained.authority.boundObject->DeleteIfUnchanged(deleteFlags, &deleteOptions, &mutationResult);
+            deleteHr = deleteAuthority->DeleteIfUnchanged(deleteFlags, &deleteOptions, &mutationResult);
         }
         const FileOperations::ManagedCleanupAttemptDisposition disposition = FileOperations::ClassifyManagedCleanupMutation({
             .status               = deleteHr,

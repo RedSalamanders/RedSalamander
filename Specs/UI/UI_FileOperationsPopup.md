@@ -627,7 +627,11 @@ example "This task may remove items that task #3 is still reading." Its actions 
 these tasks** (the default and Enter action), **Run at the same time**, and **Don't start** (Escape).
 Run is present only when every disclosed relation fits the fixed bound and applies only to the named
 concurrently-live task IDs; another undisclosed overlap still asks independently. When an overlapping
-task may delete an item by name (I35 R7.3: a delete by name, or a Recycle whose escalation could), Run
+relation contains a Local plain-directory Permanent Delete, Run is absent in both directions, even
+for an overlapping read: its strict confirmation and mutation lease requires serialized host
+admission for that scope. Stale concurrent consent cannot bypass this rule, while disjoint scopes
+remain eligible. When an overlapping task may delete an item by name (I35 R7.3: a delete by name,
+or a Recycle whose escalation could), Run
 is never offered and that task is named first: "Task #3 may delete by name an item that this task writes
 or changes, or a folder that holds it. The two cannot run at the same time: queued, this task starts once
 task #3 has ended, and what it writes to may be gone by then." (or "reads"). Queue keeps the task
@@ -646,8 +650,12 @@ waits and the interlock wait itself remain silent. Read/read overlaps and clearl
 neither does the conservative wait of a provider without bound objects (its interlock cannot prove
 which objects two paths name, so it serializes without naming a problem).
 
-A Permanent Delete asks its confirmation on the card, not in a modal at ingress: once Preparing has
-pinned every selected root the card shows "Permanent delete" with the question the modal used
+A Permanent Delete asks its confirmation on the card, not in a modal at ingress. A Local
+plain-directory task first queues with a nonblocking metadata identity witness, then reserves
+overlapping admission and acquires checked strict Delete handles after its predecessors finish.
+It shows Preparing (`AwaitingAcceptance`) while confirming that reserved task; execution has not
+entered, and queue-reorder and Start now actions cannot change the reservation. With every selected
+root strictly pinned, the card shows "Permanent delete" with the question the modal used
 ("Permanently delete {what} from {where}. This cannot be undone."), and its actions are **Cancel**
 (first, the default and Escape action) and **Permanently delete**. Cancel ends the task as canceled
 before any mutation and leaves no completed-history success entry; Permanently delete lets the task

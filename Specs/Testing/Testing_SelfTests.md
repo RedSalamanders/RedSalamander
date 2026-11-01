@@ -1114,6 +1114,21 @@ Environment variables may select alternate test inputs such as profile names, bu
   Recycle failure for item completion, while retaining the original Recycle HRESULT only as historical
   prompt context. A Local recursive permanent-delete partial child failure must retain the selected
   root as a known non-commit even when already-admitted children were removed.
+- Queued Local directory Delete coverage must prove that its metadata identity witness does not
+  block predecessor publication, that a queued root replacement refuses before walking either tree,
+  and that partial strict acquisition releases earlier leases. After readiness is frozen, deferred
+  confirmation must publish its exact task consent receipt without changing the active interlock.
+  Confirmed directories and regular files retain strict pathname pins; releasing the directory lease
+  must precede successor admission. Both directions of overlapping directory Delete admission must
+  reject stale concurrent consent, including read-source overlaps, without serializing disjoint scopes.
+  The optional pin handoff must reject an outstanding metadata read without retiring the witness,
+  preserve immutable identity after successful retirement, reject unrelated objects and mixed grants,
+  and permit legacy directory disposition/name recreation while this task's old snapshot remains alive.
+- Synthetic File Operations producer fixtures clean up every exact task ID they create, on success
+  and failure, so the following idle-state witness never inherits their completion summaries.
+  Waiting-card captures use `ScopedNonActivatingDesktopObserver` to reject process-owned activation
+  while allowing unrelated desktop activity; capacity and identity waits retain eligible queue-order
+  controls while suppressing unsafe Start now actions.
 - The copy-merge popup fixture must inspect the live actionable conflict card before accepting its
   decision: `Waiting for your decision` and question/context are visible and unclipped, semantic
   prompt regions precede actions, loading is false, discovery/transfer indicators are absent, and

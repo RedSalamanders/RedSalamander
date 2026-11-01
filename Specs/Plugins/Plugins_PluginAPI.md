@@ -100,6 +100,19 @@ smaller reviewed prefix.
 
 ### File-system typed route ABI
 
+`IFileSystemBoundObjectPinHandoff` (`81cd70fe-c664-430e-8b87-dde9a2cb26b5`) is an optional,
+separately queried interface; existing bound-object IIDs and vtables retain their slots.
+`TakeDirectoryReadPinFrom` transfers the lifetime pin of a pure no-follow, read-metadata directory
+witness to an already-held pure Delete/read-metadata authority for the same persistent object.
+It grants no capability. Local verifies identity, kind and non-reparse state; unrelated objects,
+files, owned stages and mixed grants cannot consume the witness. Outstanding synchronous metadata
+reads return `ERROR_BUSY` without retiring its pin. Success closes the witness's kernel handle while
+its immutable identity snapshot remains usable; later handle-based metadata calls fail with
+`ERROR_INVALID_HANDLE`. Read-only witnesses cannot escape through private raw-handle or mutation
+controls. The host checks every strict root before requesting any handoff and aborts before consent
+or mutation on failure, including an older provider's `E_NOINTERFACE`. See the Delete contract in
+`Specs/FileSystem/FileSystem_FileOperations.md` for reservation, confirmation and release ordering.
+
 `IFileSystemRouteCapabilities` (`{1e924d87-2e62-4ab4-9f37-c565d465f25e}`)
 is a separate interface queried from `IFileSystem`. It is the sole executable
 route-capability authority for the current source-tree/release generation.

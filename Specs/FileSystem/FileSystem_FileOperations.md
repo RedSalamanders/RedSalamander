@@ -1544,18 +1544,39 @@ and Replace link. A destructive button is never offered merely because an HRESUL
 Recycle and Permanent are distinct `DeletePlan` modes. Permanent Delete requires fresh explicit
 consent and confirmation-to-mutation identity continuity. Admission makes no provider call for it:
 it decides native authority from the provider's binding interface alone and gathers the
-confirmation's words from the pane listing. When exact host binding exists, Preparing pins each
-selected root no-follow on the task thread (the retained delete authority), then asks the
-confirmation on the task card in the words the modal used (Cancel rightmost and default, Permanently
-delete); after the answer it binds each confirmed pathname again and requires the object/revision
-identity to match the pinned root before recording the consent receipt, and execution calls
-`DeleteIfUnchanged` on the retained authority. It never confirms one object and later deletes a
-pathname replacement: the object the user confirms is the pinned one, and a pathname that no longer
-names it refuses with `ERROR_REVISION_MISMATCH` before any mutation. The pinned roots stay pinned
-(no-follow, write and delete sharing denied) while the card waits for the answer, so on Local a
-pathname swap in that window is itself refused with a sharing violation and the re-check guards
-only a provider whose pin is weaker; a cancelled confirmation ends the task as canceled with nothing
-mutated and releases them. A provider
+confirmation's words from the pane listing. When exact host binding exists, the task retains each
+selected root no-follow. Local plain directories initially retain a metadata identity witness,
+without a strict Delete handle: a queued Delete must not prevent its predecessor from publishing a
+staged child. Overlap advice and queueing therefore precede the directory confirmation. Once all
+predecessors have ended, active admission reserves every conflicting scope pair, including reads,
+and the task acquires strict Delete handles. Each new handle must agree with its still-retained
+witness through `CrossCheckBoundObjectIdentity`, kind and non-reparse checks before any contents walk.
+A changed, missing or unopenable root refuses before confirmation or mutation; metadata authority
+never receives `DeleteIfUnchanged`. Files, links, native-authority and corroborated-by-name routes
+retain their existing binding rules. Mixed selections retain the ordinary strict file/link pins
+while queued.
+
+After every strict directory grant has been checked, `IFileSystemBoundObjectPinHandoff` retires this
+task's old metadata kernel pins before confirmation. Existing immutable snapshots keep identity
+facts, not a second open directory handle. Local counted metadata reads make handoff fail with
+`ERROR_BUSY` before mutation; no handle is retired while a read or its temporary reopened handles
+remain active. A missing handoff interface fails safely and never enables a by-name fallback.
+The retired witness still supports `GetSnapshot` and `IsSameObject`; handle-based metadata reads fail
+with `ERROR_INVALID_HANDLE`. This prevents the task's own stale snapshots from delaying legacy
+directory disposition. Independent peer or external handles retain ordinary Windows delete-pending
+semantics and can delay name reuse; handoff does not revoke another operation's authority.
+
+With the strict roots held, the task asks confirmation on its card in the words the modal used
+(Cancel rightmost and default, Permanently delete); after the answer it binds each confirmed pathname
+again and requires the object/revision identity to match before recording the consent receipt.
+For a reserved directory task, only this validated task-scoped receipt may be added to its frozen
+plans; the destination, active interlock and all other accepted intent remain immutable. The
+pre-consumption gate runs after that receipt is published, and execution calls `DeleteIfUnchanged`
+on the strict authority. It never confirms one object and later deletes a pathname replacement.
+The strict Local roots deny write and delete sharing throughout confirmation and mutation, so a
+pathname swap during the question or re-check is refused. Cancellation or failure releases the strict
+bindings before active admission is withdrawn or successors are notified. `FileOps.Delete.DirectoryLeaseUs`
+records the checked acquisition cost. A provider
 without host binding supports Permanent Delete through its contract-tested native mutation (plan
 `nativeAuthority`): admission finds no bound object (`Unsupported`), records no ingress snapshot and
 no exact-delete interlock authority (the interlock's confirmation-to-mutation continuity check applies

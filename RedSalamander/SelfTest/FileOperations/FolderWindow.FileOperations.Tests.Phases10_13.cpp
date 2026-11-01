@@ -1188,6 +1188,7 @@ case SelfTestState::Step::Phase10_PermanentDelete:
             Fail(L"Failed to create recursive permanent-delete fixture.");
             return true;
         }
+        SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(true);
         HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         state.taskC = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_DELETE,
@@ -1204,6 +1205,8 @@ case SelfTestState::Step::Phase10_PermanentDelete:
         HostClearTestPromptResultOverride();
         if (! state.taskC.has_value())
         {
+            ReleaseFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest();
+            SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(false);
             Fail(L"Failed to start recursive exact-authority permanent-delete task.");
             return true;
         }
@@ -1212,6 +1215,31 @@ case SelfTestState::Step::Phase10_PermanentDelete:
     }
 
     if (state.stepState == 5)
+    {
+        if (! HasFileOpsPermanentDeleteBeforeRecheckPauseEnteredForSelfTest())
+        {
+            if (state.taskC.has_value() && state.completedTasks.contains(state.taskC.value()))
+            {
+                Fail(L"The directory Delete completed before its strict confirmation lease was observed.");
+                return true;
+            }
+            return false;
+        }
+        const std::filesystem::path renamed = delDir / L"recursive-delete-renamed";
+        const BOOL moved                    = MoveFileExW(recursiveDeleteRoot.c_str(), renamed.c_str(), MOVEFILE_WRITE_THROUGH);
+        const DWORD moveError               = GetLastError();
+        ReleaseFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest();
+        SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(false);
+        if (moved != FALSE || moveError != ERROR_SHARING_VIOLATION)
+        {
+            Fail(std::format(L"The confirmed directory Delete must retain its strict root lease (moved={}, error={}).", moved != FALSE, moveError));
+            return true;
+        }
+        state.stepState = 6;
+        return false;
+    }
+
+    if (state.stepState == 6)
     {
         const auto completed = state.taskC.has_value() ? state.completedTasks.find(state.taskC.value()) : state.completedTasks.end();
         if (completed == state.completedTasks.end())
@@ -1225,7 +1253,7 @@ case SelfTestState::Step::Phase10_PermanentDelete:
                              static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
-        state.stepState = 6;
+        state.stepState = 7;
     }
 
     std::error_code ec;

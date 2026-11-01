@@ -277,6 +277,8 @@ struct MutationInterlockScope
     std::vector<MutationInterlockAnchor> anchors;
     MutationInterlockAccess access = MutationInterlockAccess::WriteSource;
     bool exactDeleteAuthority      = false;
+    // Local directory identity witness only; strict delete authority is acquired after admission.
+    bool deferredDirectoryDelete = false;
     // Exact identity is explicitly unsupported. Keep domain-wide serialization unless both
     // scopes qualify for distinct new-file admission below. Namespace keys never grant object authority.
     bool conservativeIdentityDomain = false;
@@ -324,6 +326,7 @@ struct PreparationScopeFact final
     std::wstring providerPath;
     MutationInterlockAccess access  = MutationInterlockAccess::WriteSource;
     bool exactDeleteAuthority       = false;
+    bool deferredDirectoryDelete    = false;
     bool conservativeIdentityDomain = false;
     bool byNameCorroborated         = false; // I35 R7.3: deleted by name after its own consent
 };
@@ -1302,6 +1305,7 @@ struct FolderWindow::FileOperationState
         bool parallelNewFiles                = false;
         bool isTransfer                      = false;
         bool hasDataTransfers                = false;
+        bool hasDeferredDirectoryDeletes     = false;
     };
 
     struct AdmissionDestinationInputs final
@@ -1848,6 +1852,7 @@ struct FolderWindow::FileOperationState
 
         bool HasStarted() const noexcept;
         bool HasEnteredOperation() const noexcept;
+        bool HasReservedOperation() const noexcept;
         [[nodiscard]] TaskLifecyclePhase GetLifecyclePhase() const noexcept;
         [[nodiscard]] std::shared_ptr<const PreparationSnapshot> LoadPreparationSnapshot() const noexcept;
         ULONGLONG GetEnteredOperationTick() const noexcept;
@@ -1951,6 +1956,7 @@ struct FolderWindow::FileOperationState
                                                                   uint64_t totalBytes) noexcept;
         HRESULT PrepareForExecution() noexcept;
         HRESULT PrepareMutationInterlockScopes() noexcept;
+        HRESULT AcquireDeferredDirectoryDeleteAuthoritiesForExecution() noexcept;
         void InstallPreparedMutationInterlockScopes(MutationInterlockScopes scopes, bool publishesUnderWriteSourceScopes) noexcept;
         [[nodiscard]] std::shared_ptr<const MutationInterlockAdmission> LoadMutationInterlockAdmission() const noexcept;
         [[nodiscard]] std::shared_ptr<const MutationInterlockScopes> LoadMutationInterlockScopes() const noexcept;
@@ -2156,6 +2162,9 @@ struct FolderWindow::FileOperationState
         std::atomic<uint64_t> _invalidTerminalStoreRejectCount{0u};
 
         std::atomic<bool> _waitForOthers{false};
+        std::atomic<bool> _reservedOperation{false};
+        // Worker-owned; every binding is released before withdrawing the active interlock.
+        std::vector<FileOperations::RetainedPathAuthority> _deferredDirectoryDeleteBindings;
         std::atomic<bool> _overlapQueued{false};
         std::atomic<bool> _hasPublishedLiveOutput{false};
         std::atomic<bool> _liveOutputIndexOverflowed{false};
@@ -2803,12 +2812,13 @@ struct FolderWindow::FileOperationState
         uint64_t latestQueueOrderKey = 0u;
         // I35 R7.3: an overlapping pair involves a delete by name. That delete deletes exactly the tree
         // it pinned, so the two tasks never run at the same time.
-        bool byNameDelete        = false;
-        bool serializedTransfers = false;
+        bool byNameDelete              = false;
+        bool serializedTransfers       = false;
+        bool serializedDirectoryDelete = false;
 
         [[nodiscard]] bool CanRunConcurrently() const noexcept
         {
-            return ! byNameDelete && ! serializedTransfers && ! relationOverflow && relationCount > 0u;
+            return ! byNameDelete && ! serializedTransfers && ! serializedDirectoryDelete && ! relationOverflow && relationCount > 0u;
         }
     };
     struct ActiveMutationInterlock final

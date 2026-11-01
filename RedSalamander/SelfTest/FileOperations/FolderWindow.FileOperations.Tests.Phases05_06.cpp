@@ -11787,11 +11787,11 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
             return false;
         }
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) ||
+            PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) ||
             prompt->defaultAction != Task::ConflictAction::Proceed || prompt->escapeAction != Task::ConflictAction::Cancel ||
             prompt->overlapTaskId != state.taskA.value())
         {
-            fail(std::format(L"{}: the warning must name the overlapping Copy (task {}) with Queue (default), Run, and Don't start "
+            fail(std::format(L"{}: the directory Delete warning must name the overlapping Copy (task {}) with Queue (default) and Don't start "
                              L"(bucket={}, named task={}).",
                              label,
                              state.taskA.value(),
@@ -13076,6 +13076,14 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
                 slow->RequestCancel();
             }
             slowCanceled = true;
+        }
+        if (const auto prompt = TryGetConflictPromptCopy(state.fileOps->FindTask(state.taskB.value())); prompt.has_value())
+        {
+            releaseAll();
+            Fail(std::format(L"R4A02 late publisher: the predecessor Copy must publish without a conflict (bucket={}, hr=0x{:08X}).",
+                             static_cast<unsigned int>(prompt.value().bucket),
+                             static_cast<unsigned long>(prompt.value().status)));
+            return true;
         }
         const auto copyDone   = state.completedTasks.find(state.taskB.value());
         const auto removeDone = state.completedTasks.find(state.taskA.value());

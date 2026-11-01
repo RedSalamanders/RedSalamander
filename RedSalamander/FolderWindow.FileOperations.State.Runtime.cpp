@@ -2827,7 +2827,7 @@ void FolderWindow::FileOperationState::ApplyQueueMode(bool queue) noexcept
             continue;
         }
 
-        if (! task->HasEnteredOperation())
+        if (! task->HasEnteredOperation() && ! task->HasReservedOperation())
         {
             task->SetWaitForOthers(true);
             continue;
@@ -2846,7 +2846,8 @@ bool FolderWindow::FileOperationState::RunQueuedTaskNow(uint64_t taskId) noexcep
     }
 
     Task* task = FindTask(taskId);
-    if (! task || task->CancelRequestedDurable() || task->HasEnteredOperation() || (! task->IsWaitingForOthers() && ! task->IsWaitingInQueue()))
+    if (! task || task->CancelRequestedDurable() || task->HasEnteredOperation() || task->HasReservedOperation() ||
+        (! task->IsWaitingForOthers() && ! task->IsWaitingInQueue()))
     {
         return false;
     }
@@ -2875,7 +2876,8 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
     waiting.reserve(tasks.size());
     for (Task* task : tasks)
     {
-        if (task && ! task->CancelRequestedDurable() && ! task->HasEnteredOperation() && (task->IsWaitingForOthers() || task->IsWaitingInQueue()))
+        if (task && ! task->CancelRequestedDurable() && ! task->HasEnteredOperation() && ! task->HasReservedOperation() &&
+            (task->IsWaitingForOthers() || task->IsWaitingInQueue()))
         {
             waiting.push_back(task);
         }
@@ -2901,8 +2903,8 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
 
     {
         std::scoped_lock lock(_queueMutex);
-        if ((*current)->HasEnteredOperation() || adjacent->HasEnteredOperation() || (! (*current)->IsWaitingForOthers() && ! (*current)->IsWaitingInQueue()) ||
-            (! adjacent->IsWaitingForOthers() && ! adjacent->IsWaitingInQueue()))
+        if ((*current)->HasEnteredOperation() || (*current)->HasReservedOperation() || adjacent->HasEnteredOperation() || adjacent->HasReservedOperation() ||
+            (! (*current)->IsWaitingForOthers() && ! (*current)->IsWaitingInQueue()) || (! adjacent->IsWaitingForOthers() && ! adjacent->IsWaitingInQueue()))
         {
             return false;
         }
