@@ -1,0 +1,1 @@
+- Clean up all owned synthetic completion records after the File Operations issue-text fixture so later safety checks start with an empty task history.
