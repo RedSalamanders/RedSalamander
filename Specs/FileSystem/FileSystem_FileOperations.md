@@ -607,6 +607,8 @@ root's traversal completes without an independent failure; a previously observed
 turns a later traversal failure into a Skip. Unknown publication and retained or uncertain stage debt
 take precedence over that witness. Root and descendant Skips retain their distinct result semantics;
 `S_FALSE` alone is not a Skip, including when publication succeeded but verification was unavailable.
+An explicit directory-shell conflict Skip participates in that witness, with a selected-root Skip
+distinguished from a skipped descendant; a failed sibling walk still takes precedence.
 Copy-only Move never performs source deletion, so its source remains Retained on a failed bridge
 attempt or uncertain stage cleanup even when destination publication is unknown or already occurred.
 A skip-only partial result with known publication and no stage debt retains its explicit Skip;

@@ -15516,12 +15516,14 @@ struct CrossFileSystemBridge
     TerminalSkip terminalSkip = TerminalSkip::None;
 
     // Total bytes is best-effort: if unknown, keep 0.
-    uint64_t totalBytes                        = 0;
-    uint64_t completedBytes                    = 0;
-    unsigned long skippedDirectoryReparseCount = 0;
-    unsigned long skippedFileReparseCount      = 0;
-    bool rootDirectoryReparseSkipped           = false;
-    bool unsupportedReparseEncountered         = false;
+    uint64_t totalBytes                         = 0;
+    uint64_t completedBytes                     = 0;
+    unsigned long skippedDirectoryReparseCount  = 0;
+    unsigned long skippedFileReparseCount       = 0;
+    unsigned long skippedDirectoryConflictCount = 0;
+    bool rootDirectoryConflictSkipped           = false;
+    bool rootDirectoryReparseSkipped            = false;
+    bool unsupportedReparseEncountered          = false;
     std::atomic<bool> anyDestinationPublished{false};
     std::atomic<bool> destinationPublicationUnknown{false};
     // Set once a created folder could not be bound again by its path (a destination without FileIdInfo, such as the
@@ -17234,7 +17236,15 @@ struct CrossFileSystemBridge
                     }
                     continue;
                 }
-                if (promptHr == S_FALSE || FAILED(promptHr))
+                if (promptHr == S_FALSE)
+                {
+                    // Directory shells run on the traversal owner; preserve this specific
+                    // decision until the whole walk has completed without a failure.
+                    ++skippedDirectoryConflictCount;
+                    rootDirectoryConflictSkipped = rootDirectoryConflictSkipped || sourcePath == rootSourcePath;
+                    return S_FALSE;
+                }
+                if (FAILED(promptHr))
                 {
                     return promptHr;
                 }
@@ -22238,11 +22248,11 @@ struct CrossFileSystemBridge
             {
                 return dirHr;
             }
-            if (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedFileConflictCount.load(std::memory_order_acquire) > 0)
+            if (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedDirectoryConflictCount > 0 ||
+                skippedFileConflictCount.load(std::memory_order_acquire) > 0)
             {
-                // Some child files were skipped at a conflict prompt; the tree is not a
-                // full copy. Caller treats PARTIAL as "source preserved" for MOVE.
-                terminalSkip = TerminalSkip::Descendant;
+                // Publish a Skip-only witness only after the directory walk succeeded.
+                terminalSkip = rootDirectoryConflictSkipped ? TerminalSkip::Root : TerminalSkip::Descendant;
                 return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
             }
             return dirHr;

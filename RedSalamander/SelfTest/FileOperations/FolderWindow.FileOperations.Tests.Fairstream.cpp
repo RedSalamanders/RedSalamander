@@ -3609,6 +3609,8 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
     const std::filesystem::path destSibling      = destRoot / L"sibling.txt";
     const std::filesystem::path referenceDir     = localDest / L"reference";
     const std::filesystem::path blockerReference = referenceDir / L"blocked.bin";
+    const std::filesystem::path rootControlDest  = state.tempRoot / L"riptide-bridge-root-dir-file-skip-dst";
+    const std::filesystem::path rootBlocker      = rootControlDest / L"riptide-bridge-dir-file-skip-src";
     constexpr size_t kBlockerBytes               = 77u;
     constexpr std::string_view kSiblingBytes     = "sibling-ok";
 
@@ -3861,6 +3863,128 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
         }
 
         Debug::Perf::Emit(L"FileOps.SelfTest.RiptideBridgeDirVsFileSkip", L"", completed->second.conflictPromptCount, 0, 0, completed->second.hr);
+        if (! RecreateEmptyDirectory(rootControlDest) || ! WriteFilledTestFile(rootBlocker, kBlockerBytes, 0x3Cu) ||
+            ! FilesEqualBytes(rootBlocker, blockerReference) || GetDirectoryEntryCount(state.fsLocal.get(), rootControlDest.native()) != 1u)
+        {
+            Fail(L"Riptide bridge root dir-vs-file Skip could not seed its exact blocker.");
+            return true;
+        }
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 rootControlDest,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Riptide bridge root dir-vs-file Skip failed to start.");
+            return true;
+        }
+        state.stepState = 4;
+        return false;
+    }
+
+    if (state.stepState == 4)
+    {
+        if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+        {
+            if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
+            {
+                if (prompt->bucket != Task::ConflictBucket::TypeMismatch || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) ||
+                    ! EqualsIgnoreCase(prompt->destinationPath, rootBlocker.wstring()) ||
+                    ! task->SubmitConflictDecision(prompt.value().generation, Task::ConflictAction::Skip, false))
+                {
+                    Fail(L"Riptide bridge root dir-vs-file Skip lacked its exact current TypeMismatch decision.");
+                    return true;
+                }
+                state.stepState = 5;
+                return false;
+            }
+        }
+        if (state.taskA.has_value() && state.completedTasks.contains(state.taskA.value()))
+        {
+            Fail(L"Riptide bridge root dir-vs-file Skip completed before its conflict question.");
+            return true;
+        }
+        return false;
+    }
+
+    if (state.stepState == 5)
+    {
+        if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+        {
+            if (TryGetConflictPromptCopy(task).has_value())
+            {
+                return false;
+            }
+        }
+        state.stepState = 6;
+        return false;
+    }
+
+    if (state.stepState == 6)
+    {
+        if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+        {
+            if (TryGetConflictPromptCopy(task).has_value())
+            {
+                Fail(L"Riptide bridge root dir-vs-file Skip raised another question.");
+                return true;
+            }
+        }
+        const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+        if (completed == state.completedTasks.end())
+        {
+            return false;
+        }
+
+        if (completed->second.hr != S_FALSE || completed->second.conflictPromptCount != 1u || completed->second.progressCompletedBytes != 0u ||
+            state.fileOps->HasActiveOperations() || state.fileOps->FindTask(state.taskA.value()) || completed->second.sourceItemResults.size() != 1u ||
+            ! completed->second.sourceItemResults.front().has_value())
+        {
+            Fail(L"Riptide bridge root dir-vs-file Skip did not finish quietly with one question and zero copied bytes.");
+            return true;
+        }
+        const auto& result = completed->second.sourceItemResults.front().value();
+        // Admission may consume the root Skip before the bridge runs; either route
+        // must positively establish that no destination publication occurred.
+        if ((result.publication != FileOperations::PublicationState::NotAttempted && result.publication != FileOperations::PublicationState::NotPublished) ||
+            result.sourceDisposition != FileOperations::SourceDisposition::Retained || result.completion != FileOperations::ItemCompletion::Skipped ||
+            result.status != S_FALSE || ! FilesEqualBytes(rootBlocker, blockerReference) ||
+            GetDirectoryEntryCount(state.fsLocal.get(), rootControlDest.native()) != 1u || GetDirectoryEntryCount(state.fsDummy.get(), dummyRoot) != 2u ||
+            GetDirectoryEntryCount(state.fsDummy.get(), dummyBlockedDir) != 1u)
+        {
+            Fail(std::format(L"Riptide bridge root dir-vs-file Skip changed its source, destination or typed outcome: publication={} source={} completion={} "
+                             L"status=0x{:08X}.",
+                             static_cast<unsigned int>(result.publication),
+                             static_cast<unsigned int>(result.sourceDisposition),
+                             static_cast<unsigned int>(result.completion),
+                             static_cast<unsigned long>(result.status)));
+            return true;
+        }
+        wil::com_ptr<IFileSystemIO> dummyIo;
+        std::string blockedBytes;
+        std::string siblingBytes;
+        if (! state.fsDummy.try_query_to(dummyIo.put()) || ! ReadFileTextFsIo(dummyIo, std::filesystem::path(dummyBlockedChild), blockedBytes) ||
+            blockedBytes != "blocked-child" || ! ReadFileTextFsIo(dummyIo, std::filesystem::path(dummySibling), siblingBytes) || siblingBytes != kSiblingBytes)
+        {
+            Fail(L"Riptide bridge root dir-vs-file Skip changed its source bytes.");
+            return true;
+        }
+        AppendLog(std::format(L"Riptide selected-root directory Skip publication={} source={} completion={} prompts={} copiedBytes={} status=0x{:08X}.",
+                              static_cast<unsigned int>(result.publication),
+                              static_cast<unsigned int>(result.sourceDisposition),
+                              static_cast<unsigned int>(result.completion),
+                              completed->second.conflictPromptCount,
+                              completed->second.progressCompletedBytes,
+                              static_cast<unsigned long>(result.status)));
         NextStep(state, SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch);
         return false;
     }
