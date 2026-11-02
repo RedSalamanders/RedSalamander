@@ -6809,7 +6809,7 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         const auto pruneIfEmpty = [](const std::filesystem::path& path) noexcept
         {
             std::error_code ec;
-            if (! std::filesystem::is_directory(path, ec) || ec)
+            if (! Common::Testing::IsExistingTestSandboxPathReparseFree(path, ec) || ec || ! std::filesystem::is_directory(path, ec) || ec)
             {
                 return false;
             }
@@ -6837,13 +6837,7 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
             return;
         }
 
-        std::error_code ec;
-        const std::filesystem::path markerPath = testRoot / std::wstring(Common::Testing::kTestSandboxMarkerFileName);
-        if (! std::filesystem::remove(markerPath, ec) || ec)
-        {
-            return;
-        }
-        static_cast<void>(pruneIfEmpty(testRoot));
+        // The approved root and its ownership marker outlive each run, including when the root is otherwise empty.
     }
     catch (const std::bad_alloc&)
     {

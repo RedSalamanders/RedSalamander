@@ -5633,6 +5633,14 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     const std::filesystem::path alternateRoot = std::move(state.fileOpsAlternateVolumeRoot);
     static_cast<void>(SelfTest::RemoveAll(alternateRoot));
     PruneEmptyAlternateVolumeSandboxParents(alternateRoot);
+    const auto sandboxBase = Common::Testing::GetDedicatedExternalTestSandboxBase(alternateRoot, Common::Testing::kTestSandboxDirectoryName);
+    std::error_code sandboxEc;
+    if (! sandboxBase.has_value() || ! Common::Testing::HasValidTestSandboxMarker(sandboxBase.value()) ||
+        ! Common::Testing::IsExistingTestSandboxPathReparseFree(sandboxBase.value(), sandboxEc) || sandboxEc)
+    {
+        Fail(L"R4-A19 alternate-volume sandbox root or ownership marker was not preserved after cleanup.");
+        return true;
+    }
     RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::DiscoveryScope_LeafCopy);
     return false;

@@ -1043,7 +1043,9 @@ Environment variables may select alternate test inputs such as profile names, bu
   and persists no preference. Each volume task selects four regular files with missing destination
   leaves and must have a qualified new-file data admission; both admissions must be active during
   the observed overlap. The fixture temporarily ensures at least eight shared file permits and restores
-  the previous limit after worker quiet. It does not claim recursive directory discovery, which the
+  the previous limit after worker quiet. Alternate-volume cleanup preserves the approved sandbox root
+  and its ownership marker and prunes only empty, reparse-free run parents; the case verifies the
+  root and marker remain valid after cleanup. It does not claim recursive directory discovery, which the
   separate wide-tree and multiple-folder cases cover. Overlapping progress, exact byte/file checks, the 1.35-times-isolated
   throughput gate and the 30-second ceiling remain required. Its Local Copy and permanent-Delete phases must recreate bounded
   unique children beneath the acquired File Operations sandbox, set and restore the Local provider

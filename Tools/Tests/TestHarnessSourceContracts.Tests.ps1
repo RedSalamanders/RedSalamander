@@ -916,7 +916,10 @@ Describe 'Test harness source contracts' {
         $fileOps | Should Match 'TestSandboxPathEquals\(configuredRoot,\s*authorizedRoot\.value\(\)\)'
         $fileOps | Should Match 'alternateVolumeSandbox'
         $fileOps | Should Match 'PruneEmptyAlternateVolumeSandboxParents'
-        $fileOps | Should Match 'kTestSandboxMarkerFileName'
+        $prune = [regex]::Match($fileOps, '(?s)void PruneEmptyAlternateVolumeSandboxParents\(const std::filesystem::path& sandboxRoot\) noexcept\s*\{.*?(?=\[\[nodiscard\]\] std::optional<std::filesystem::path> TryCreateAlternateWritableVolumeSelfTestRoot)').Value
+        $prune | Should Not BeNullOrEmpty
+        $prune | Should Match 'IsExistingTestSandboxPathReparseFree'
+        $prune | Should Not Match 'kTestSandboxMarkerFileName|pruneIfEmpty\(testRoot\)|remove\(testRoot'
         $fileOps | Should Not Match 'RedSalamanderCrossVolumeSelfTest_'
     }
 
