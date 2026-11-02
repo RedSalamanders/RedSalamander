@@ -19516,6 +19516,14 @@ struct CrossFileSystemBridge
             {
                 destinationPublicationUnknown.store(true, std::memory_order_release);
             }
+            // A new-name final writer reports an appeared occupant as a known non-commit.
+            // The outer collision handler owns the question and any eventual failure; logging
+            // an error here would leave a false problem after the user chooses Skip.
+            if ((txn.useAtomicFinalWriter || txn.useDirectFinalWriter) && ! txn.overwriteGranted &&
+                (hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)))
+            {
+                return hr;
+            }
             if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && identityLessReplace)
             {
                 task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
