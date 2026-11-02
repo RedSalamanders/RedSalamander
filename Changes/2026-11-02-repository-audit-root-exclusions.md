@@ -1,0 +1,1 @@
+- Fix repository source audits incorrectly excluding every finding when a checkout is located beneath a directory named `.build`.

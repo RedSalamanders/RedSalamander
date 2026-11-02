@@ -20,6 +20,13 @@
 #include <variant>
 #include <vector>
 
+#ifdef ENABLE_TESTS
+namespace FolderWindowFileOperationsStateInternal
+{
+struct SelfTestPausePoint;
+}
+#endif
+
 namespace FileOperations
 {
 enum class SameHostOverlapProblem : uint8_t;
@@ -2104,6 +2111,7 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _workerReleased{false};
 #ifdef ENABLE_TESTS
         std::atomic<bool> _debugWorkerStartGateWaiting{false};
+        std::atomic<std::shared_ptr<FolderWindowFileOperationsStateInternal::SelfTestPausePoint>> _debugPostBeginDiscoveryGate;
 #endif
         std::function<void(uint64_t completedItems, uint64_t totalItems)> _externalProgressCallback;
         std::mutex _batchRenameArtifactPromptMutex;

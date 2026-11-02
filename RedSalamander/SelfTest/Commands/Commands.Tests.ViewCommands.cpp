@@ -32401,9 +32401,32 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         const uint32_t before = enumCount.load(std::memory_order_acquire);
         FocusFolderViewPane(FolderWindow::Pane::Left);
+        const bool focusLeftBefore = g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left;
+        const bool hiddenBefore    = g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left);
+        const auto selectedBefore  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+        const auto refreshBefore   = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES, 0), 0);
-        state.Require(WaitForAtomicAtLeast(enumCount, before + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                      L"Enumeration did not refresh after showing hidden names while pane filter is active.");
+        const bool refreshed = WaitForAtomicAtLeast(enumCount, before + 1u, SelfTest::Scale(std::chrono::milliseconds{3000}));
+        if (! refreshed)
+        {
+            Trace(std::format(L"Show hidden under filter: focusLeftBefore={} focusLeftAfter={} hiddenBefore={} hiddenAfter={} selectedBefore={} "
+                              L"selectedAfter={} enumBefore={} enumAfter={} forceRefreshBefore={} forceRefreshAfter={} a={} b={} c={} filterActive={}.",
+                              focusLeftBefore,
+                              g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left,
+                              hiddenBefore,
+                              g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left),
+                              selectedBefore,
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                              before,
+                              enumCount.load(std::memory_order_acquire),
+                              refreshBefore,
+                              g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"b.log"),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"c.txt"),
+                              g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left)));
+        }
+        state.Require(refreshed, L"Enumeration did not refresh after showing hidden names while pane filter is active.");
     }
 
     const FolderView::NameFilterState filterState = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);

@@ -220,7 +220,9 @@ attributes, creation time, listed index) until its own deletion through that ver
 program can rename it, turn it into a link or replace it meanwhile, and no path below a held folder can
 be redirected; folders are held top-down, a level at a time. Each file and link is opened no-follow
 through its held folders, sharing only reads, and deleted through that handle once its facts equal the
-listed ones. Files and links go first (a chunk's folders taken in turn, so entries deleted at the same
+listed ones. That handle requests attribute-write access only when the listed entry is readonly and
+may require the separately consented readonly clear and rollback; the readonly bit is among the facts
+checked on the same handle, so a changed bit refuses deletion. Files and links go first (a chunk's folders taken in turn, so entries deleted at the same
 time rarely share a folder), then folders deepest level first, each pass on the shared File Operations
 scheduler with the provider's delete concurrency; at most 1,024 folders are held at once
 (plus the chain above them): a larger tree goes in chunks of sibling subtrees that fit, a subtree that
@@ -3441,7 +3443,11 @@ The File Operations selftest and provider-contract matrix cover:
   receipt; `Delete_IdentityLessPinnedTreeConcurrentWriter`); a folder over a test-only entry bound is
   refused at Preparing with its plain reason and no card (`Delete_IdentityLessPinnedTreeBudget`); a
   listed file changed or removed at that pause stops the delete with nothing deleted and a known
-  non-commit receipt (`Delete_IdentityLessPinnedTreeChangedEntry`); a refused Recycle escalated by name
+  non-commit receipt (`Delete_IdentityLessPinnedTreeChangedEntry`). Its private ACL variants durably
+  save the OS-creation descriptor before reapplying the new fixture's existing DACL/protection as a
+  seed, then save a separate seeded baseline before fault injection. Surviving objects are restored
+  and checked against that exact seeded baseline after worker quiet; failures retain the sandbox and
+  available private backups. This is fixture initialization, not restoration of a user's ACL; a refused Recycle escalated by name
   stops on a file written at that pause and reports the same partial delete
   (`Delete_IdentityLessPinnedTreeEscalationPartial`); a listed folder swapped for a junction at that
   pause, with a listing that reports no file index and a decoy forged with the listed file's facts, never
@@ -3550,7 +3556,10 @@ coherently. Verification weighting and selected-root result reduction remain unc
 `DiscoveryScope_FolderLiveProgress` copies real nested files through serial, overwrite, parallel,
 bridge and Verify routes and checks exact counts/bytes, independent destination content, actual
 advancing meter pixels, delayed finalization and known-size Publishing. Separate controls cover
-open traversal, empty roots and publication followed by committed-error/proof failure.
+open traversal, empty roots and publication followed by committed-error/proof failure. The open
+traversal capture holds its selected sequential producer after a positive open listing report and
+requires the same task checkpoint throughout capture; it releases the bounded, cancellation-aware
+test hold before draining the operation.
 `DiscoveryScope_MultipleFoldersLiveProgress` covers real concurrent selected roots and zero-payload
 file links. Its Native `CopyItems` API control uses the production reducer on a non-admitted task;
 it does not bypass the product's Bulk Copy admission policy or claim a product Bulk popup route.

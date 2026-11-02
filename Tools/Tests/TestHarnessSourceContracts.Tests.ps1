@@ -3845,16 +3845,39 @@ Specs\TestRuns\local_scratch
 
         # One governed provider call is one discovery scope. A single-root entry point reports and
         # closes its own root; a bulk entry point aggregates its roots and closes the call once.
-        # A mutation entry point that can leave a caller's scope open forever is the defect this
-        # guards, so each one must carry its closing construct.
+        # CopyItem's legacy and budget adapters delegate the same call to one owner;
+        # neither adapter may bypass that owner or publish a second closure.
         $closureByEntryPoint = @{
-            'CopyItem'    = 'ReportTopLevelDiscovery'
             'MoveItem'    = 'ReportTopLevelDiscovery'
             'CopyItems'   = 'ReportCallDiscoveryClosed'
             'MoveItems'   = 'ReportCallDiscoveryClosed'
             'DeleteItem'  = 'ReportDeleteDiscoveryClosed'
             'DeleteItems' = 'ReportDeleteDiscoveryClosed'
         }
+
+        $legacyCopy = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::CopyItem\([\s\S]*?\n\}\r?\n')
+        $budgetCopy = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::CopyItemWithTaskBudget\([\s\S]*?\n\}\r?\n')
+        $copyImpl = [regex]::Match($source, 'HRESULT\s+FileSystem::CopyItemImpl\([\s\S]*?\n\}\r?\n')
+        foreach ($body in @($legacyCopy, $budgetCopy, $copyImpl)) { $body.Success | Should Be $true }
+        $legacyRoute = 'return\s+CopyItemImpl\(sourcePath,\s*destinationPath,\s*flags,\s*options,\s*callback,\s*cookie,\s*nullptr\);'
+        $budgetRoute = 'return\s+CopyItemImpl\(sourcePath,\s*destinationPath,\s*flags,\s*options,\s*callback,\s*cookie,\s*budget\);'
+        $legacyCopy.Value | Should Match $legacyRoute
+        $budgetCopy.Value | Should Match $budgetRoute
+        ($legacyCopy.Value -replace 'CopyItemImpl\(', 'OtherImpl(') | Should Not Match $legacyRoute
+        ($budgetCopy.Value -replace ',\s*budget\);', ', nullptr);') | Should Not Match $budgetRoute
+        foreach ($body in @($legacyCopy.Value, $budgetCopy.Value)) {
+            $body | Should Not Match 'ReportRawDiscoveryProgress|ReportTopLevelDiscovery|scope_exit'
+        }
+        $copyImpl.Value | Should Match 'SingleDiscoveryState\s+discovery'
+        $copyImpl.Value | Should Match 'context\.singleDiscovery\s*=\s*&discovery'
+        $copyImpl.Value | Should Match 'scope_exit\([\s\S]*?ReportRawDiscoveryProgress\(context,\s*0u,\s*0u,\s*0u,\s*0u,\s*true\)'
+        $copyImpl.Value | Should Match 'ReportTopLevelDiscovery'
+        $copyImpl.Value | Should Match 'recursiveDiscoveryOwner[\s\S]*?discovery\.closeAttempted[\s\S]*?break'
+        $moveBody = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::MoveItem\([\s\S]*?\n\}\r?\n')
+        $moveBody.Success | Should Be $true
+        $moveBody.Value | Should Match 'SingleDiscoveryState\s+discovery'
+        $moveBody.Value | Should Match 'context\.singleDiscovery\s*=\s*&discovery'
+        $moveBody.Value | Should Match 'scope_exit\([\s\S]*?ReportRawDiscoveryProgress\(context,\s*0u,\s*0u,\s*0u,\s*0u,\s*true\)'
 
         foreach ($entryPoint in $closureByEntryPoint.Keys) {
             # The return type and the qualified name are sometimes split across lines.

@@ -794,12 +794,14 @@ Environment variables may select alternate test inputs such as profile names, bu
   suites and family/phase/prefix selections: their admission, storage, shutdown
   and UIA witnesses share foreground invariants. The only reviewed lease
   exceptions are `-Suite FileOps` with the exact, case-sensitive
-  `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`
-  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`,
+  `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`
+  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
-  `FileOps_SelectionShapeLocal` or `FileOps_SelectionShapeSmb` case filter and no flaky/order proof injection.
+  `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, or `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
+  the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
+  the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   they require no foreground assertion, UIA, clipboard or pointer input. Casing
   near-misses, wildcards, multiple-case filters and unknown names fail closed to
@@ -1305,6 +1307,13 @@ Environment variables may select alternate test inputs such as profile names, bu
   the Local `DeleteItems` with a folder and two items below it twenty times, each with a bounded wait: the
   parallel delete parks when a worker finds nothing ready, and the step that makes the parent ready must wake
   it.
+- `Phase7_SharedPerItemScheduler` uses two nonqualified copies of twelve selected files and two selected
+  directories. It observes the second task waiting for exclusive admission while the first has concurrent
+  per-item work and completed progress, then cancels the first. A bounded, cancellation-aware test checkpoint
+  holds the second immediately after discovery starts so the test can stop discovery before dispatch; it then
+  requires concurrent per-item work and completed progress in that task before cancelling it. Both completed
+  receipts must retain the partial and cancelled-item outcomes, and cleanup releases the checkpoint before
+  waiting for workers. Qualified shared admission and exclusive fairness have separate admission controls.
 - I35 NAS nested Copy. `R0fSmb_NestedTreeCopyToShare` (R0f-SMB family) copies, through the host and the
   Local provider's own walker (Verify Off), a tree of four folder levels with files at every level, an
   empty folder and a folder of 300 small files to a unique child of `path.smb.primary`

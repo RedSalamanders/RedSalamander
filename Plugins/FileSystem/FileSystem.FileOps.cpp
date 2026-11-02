@@ -1415,6 +1415,29 @@ struct DeleteDiscoveryState final
     uint64_t discoveredDirectories = 0;
 };
 
+// Singular calls retain the last reported totals and whether closure was attempted.
+// The callback runs under this mutex so concurrent reports cannot overtake closure.
+struct SingleDiscoveryState final
+{
+    SingleDiscoveryState()                                       = default;
+    SingleDiscoveryState(const SingleDiscoveryState&)            = delete;
+    SingleDiscoveryState(SingleDiscoveryState&&)                 = delete;
+    SingleDiscoveryState& operator=(const SingleDiscoveryState&) = delete;
+    SingleDiscoveryState& operator=(SingleDiscoveryState&&)      = delete;
+    ~SingleDiscoveryState()                                      = default;
+
+    std::mutex mutex;
+    uint64_t bytes       = 0;
+    uint64_t files       = 0;
+    uint64_t directories = 0;
+    uint32_t queued      = 0;
+    bool closeAttempted  = false;
+    bool callbackFailed  = false;
+    std::optional<uint8_t> expectedKind;
+    bool expectedDirectoryAttribute = false;
+    std::wstring expectedRoot;
+};
+
 // One governed bulk call is one discovery scope, because the caller supplies one operation-control
 // cookie for the whole call and has no way to tell one selected root's scope from another's. Each
 // root's traversal still produces its own cumulative stream starting at zero, so the call adds those
@@ -1571,6 +1594,7 @@ struct OperationContext
     DeleteDiscoveryState* deleteDiscovery = nullptr;
     // Set only by a bulk entry point, where several selected roots share one governed call scope.
     RootDiscoveryTranslation* discoveryTranslation = nullptr;
+    SingleDiscoveryState* singleDiscovery          = nullptr;
     NativeFileWorkCallState ownedFileWorkCall;
     NativeFileWorkCallState* fileWorkCall               = &ownedFileWorkCall;
     NativeFileWorkLeafState* fileWorkLeaf               = nullptr; // borrowed only for the outer logical-leaf retry scope
@@ -6011,6 +6035,24 @@ HRESULT ReportRawDiscoveryProgress(OperationContext& context,
         return S_OK;
     }
 
+    std::unique_lock<std::mutex> singleLock;
+    if (context.singleDiscovery != nullptr)
+    {
+        SingleDiscoveryState& state = *context.singleDiscovery;
+        singleLock                  = std::unique_lock(state.mutex);
+        if (state.closeAttempted)
+            return S_OK;
+        state.bytes           = (std::max)(state.bytes, discoveredBytes);
+        state.files           = (std::max)(state.files, discoveredFiles);
+        state.directories     = (std::max)(state.directories, discoveredDirectories);
+        state.queued          = queuedItems;
+        discoveredBytes       = state.bytes;
+        discoveredFiles       = state.files;
+        discoveredDirectories = state.directories;
+        if (traversalClosed)
+            state.closeAttempted = true;
+    }
+
     FileSystemDiscoveryProgress progress{};
     progress.sizeBytes             = sizeof(progress);
     progress.discoveredBytes       = discoveredBytes;
@@ -6018,7 +6060,22 @@ HRESULT ReportRawDiscoveryProgress(OperationContext& context,
     progress.discoveredDirectories = discoveredDirectories;
     progress.queuedItems           = queuedItems;
     progress.traversalClosed       = traversalClosed ? TRUE : FALSE;
-    return context.options->operationControl->FileSystemReportDiscoveryProgress(&progress, context.options->operationControlCookie);
+    const HRESULT reportHr         = context.options->operationControl->FileSystemReportDiscoveryProgress(&progress, context.options->operationControlCookie);
+    if (context.singleDiscovery != nullptr && FAILED(reportHr))
+        context.singleDiscovery->callbackFailed = true;
+    return reportHr;
+}
+
+[[nodiscard]] HRESULT ValidateSingleDiscoveryShape(OperationContext& context, const PathInfo& source, LocalCopyPathKind kind, DWORD attributes) noexcept
+{
+    if (context.singleDiscovery == nullptr || ! context.singleDiscovery->expectedKind.has_value())
+        return S_OK;
+    if (! OrdinalString::EqualsNoCase(context.singleDiscovery->expectedRoot, source.extended))
+        return S_OK;
+    return static_cast<uint8_t>(kind) == context.singleDiscovery->expectedKind.value() &&
+                   IsDirectory(attributes) == context.singleDiscovery->expectedDirectoryAttribute
+               ? S_OK
+               : HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
 }
 
 // Every traversal reports through here. A single-root call passes its own cumulative totals straight
@@ -6070,7 +6127,12 @@ void ReportCallDiscoveryClosed(OperationContext& context, CallDiscoveryAggregato
         context, aggregate.discoveredBytes, aggregate.discoveredFiles, aggregate.discoveredDirectories, aggregate.queuedItems, true));
 }
 
-[[nodiscard]] HRESULT ReportTopLevelDiscovery(OperationContext& context, const std::wstring& sourcePath, bool recursiveDirectoryOwnsDiscovery) noexcept
+[[nodiscard]] HRESULT ReportTopLevelDiscovery(OperationContext& context,
+                                              const std::wstring& sourcePath,
+                                              bool recursiveDirectoryOwnsDiscovery,
+                                              bool* recursiveOwner         = nullptr,
+                                              LocalCopyPathKind* rootKind  = nullptr,
+                                              bool* rootDirectoryAttribute = nullptr) noexcept
 {
     if (context.options == nullptr || context.options->operationControl == nullptr)
     {
@@ -6084,26 +6146,53 @@ void ReportCallDiscoveryClosed(OperationContext& context, CallDiscoveryAggregato
         return HRESULT_FROM_WIN32(::GetLastError());
     }
 
-    const bool directory          = IsDirectory(data.dwFileAttributes);
-    const bool recursiveDirectory = recursiveDirectoryOwnsDiscovery && directory && ! IsReparsePoint(data.dwFileAttributes);
+#ifdef ENABLE_TESTS
+    {
+        // Exercise an observed reparse attribute on exactly one synthetic root,
+        // while requiring a real no-follow Local directory binding first.
+        static std::mutex selfTestMutex;
+        std::scoped_lock lock(selfTestMutex);
+        constexpr std::wstring_view variable = L"REDSALAMANDER_FILEOPS_TEST_DISCOVERY_REPARSE_SOURCE";
+        const std::wstring selected          = GetSelfTestEnvironmentString(variable);
+        if (context.type == FILESYSTEM_COPY && ! selected.empty() && OrdinalString::EqualsNoCase(selected, sourcePath) && IsDirectory(data.dwFileAttributes) &&
+            ! IsReparsePoint(data.dwFileAttributes) && context.objectBinding)
+        {
+            constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+            wil::com_ptr<IFileSystemBoundObject> bound;
+            FileSystemBoundObjectSnapshot snapshot{};
+            snapshot.sizeBytes = sizeof(snapshot);
+            if (SUCCEEDED(context.objectBinding->BindObject(sourcePath.c_str(), bindFlags, bound.put())) && bound && SUCCEEDED(bound->GetSnapshot(&snapshot)) &&
+                snapshot.kind == FILESYSTEM_BOUND_DIRECTORY && SetEnvironmentVariableW(variable.data(), nullptr) != FALSE)
+            {
+                data.dwFileAttributes |= FILE_ATTRIBUTE_REPARSE_POINT;
+            }
+        }
+    }
+#endif
+
+    const bool directory   = IsDirectory(data.dwFileAttributes);
+    LocalCopyPathKind kind = directory ? LocalCopyPathKind::RegularDirectory : LocalCopyPathKind::RegularFile;
+    if (context.type == FILESYSTEM_COPY && IsReparsePoint(data.dwFileAttributes))
+    {
+        const HRESULT kindHr = ClassifyLocalCopyPathKind(sourcePath, data.dwFileAttributes, kind);
+        if (FAILED(kindHr))
+            return kindHr;
+    }
+    const bool recursiveDirectory = recursiveDirectoryOwnsDiscovery && kind == LocalCopyPathKind::RegularDirectory;
+    if (recursiveOwner != nullptr)
+        *recursiveOwner = recursiveDirectory;
+    if (rootKind != nullptr)
+        *rootKind = kind;
+    if (rootDirectoryAttribute != nullptr)
+        *rootDirectoryAttribute = directory;
     if (recursiveDirectory)
     {
         // The recursive copy walker owns the root and descendant cumulative totals.
         return S_OK;
     }
 
-    bool literalCopyLink = false;
-    if (context.type == FILESYSTEM_COPY && IsReparsePoint(data.dwFileAttributes))
-    {
-        LocalCopyPathKind kind = LocalCopyPathKind::RegularFile;
-        const HRESULT kindHr   = ClassifyLocalCopyPathKind(sourcePath, data.dwFileAttributes, kind);
-        if (FAILED(kindHr))
-        {
-            return kindHr;
-        }
-        literalCopyLink = kind == LocalCopyPathKind::SemanticLink;
-    }
-    const uint64_t fileBytes = directory || literalCopyLink ? 0u : (static_cast<uint64_t>(data.nFileSizeHigh) << 32u) | data.nFileSizeLow;
+    const bool literalCopyLink = context.type == FILESYSTEM_COPY && kind == LocalCopyPathKind::SemanticLink;
+    const uint64_t fileBytes   = directory || literalCopyLink ? 0u : (static_cast<uint64_t>(data.nFileSizeHigh) << 32u) | data.nFileSizeLow;
     return ReportDiscoveryProgress(context, fileBytes, directory ? 0u : 1u, directory ? 1u : 0u, 1u, true);
 }
 
@@ -6492,9 +6581,10 @@ HRESULT CopyDirectoryInternal(OperationContext& context,
     const auto restoreFileWorkLeaf                = wil::scope_exit([&]() noexcept { context.fileWorkLeaf = previousFileWorkLeaf; });
     const bool ownsBudget                         = sharedBudget == nullptr;
     RecursiveCopySerialBudget& budget             = sharedBudget != nullptr ? *sharedBudget : localBudget;
+    bool discoveryStarted                         = false;
     const auto emitBudgetOnExit                   = wil::scope_exit([&]() noexcept
     {
-        if (ownsBudget)
+        if (ownsBudget && (discoveryStarted || context.singleDiscovery == nullptr))
         {
             static_cast<void>(ReportDiscoveryProgress(context, budget.discoveredBytes, budget.discoveredFiles, budget.discoveredDirectories, 0u, true));
             Debug::Perf::Emit(L"FileOps.CopyRecursiveSerial.MaxTraversalDepth", L"", 0u, budget.maxDepth, Common::FileOperations::kTraversalMaxDepth, S_OK);
@@ -6504,6 +6594,12 @@ HRESULT CopyDirectoryInternal(OperationContext& context,
                               budget.maxRetainedAncestorMetadataBytes,
                               Common::FileOperations::kTraversalMaxMetadataBytes,
                               S_OK);
+        }
+        else if (ownsBudget)
+        {
+            // A failed root setup may be retried by the caller; retain its known
+            // totals without finalizing the call before that decision.
+            static_cast<void>(ReportDiscoveryProgress(context, budget.discoveredBytes, budget.discoveredFiles, budget.discoveredDirectories, 0u, false));
         }
     });
     ++budget.discoveredDirectories;
@@ -6562,6 +6658,7 @@ HRESULT CopyDirectoryInternal(OperationContext& context,
     {
         return returnFailure(hr);
     }
+    discoveryStarted = true;
 
     // A grant that authorized this directory's own destination conflict must not leak into
     // the subtree: every child conflict below prompts on its own.
@@ -6837,6 +6934,9 @@ HRESULT CopyPathInternal(OperationContext& context, const PathInfo& source, cons
     {
         return kindHr;
     }
+    const HRESULT shapeHr = ValidateSingleDiscoveryShape(context, source, sourceKind, attributes);
+    if (FAILED(shapeHr))
+        return shapeHr;
     if (sourceKind == LocalCopyPathKind::SemanticLink)
     {
         if (context.reparsePointPolicy == FileSystemReparsePointPolicy::Skip)
@@ -6963,6 +7063,9 @@ struct RecursiveCopyWorkItem
     {
         return returnFailure(kindHr);
     }
+    const HRESULT shapeHr = ValidateSingleDiscoveryShape(rootContext, source, sourceKind, attributes);
+    if (FAILED(shapeHr))
+        return returnFailure(shapeHr);
     if (sourceKind != LocalCopyPathKind::RegularDirectory)
     {
         return CopyPathInternal(rootContext, source, destination, bytesCopied);
@@ -6975,7 +7078,22 @@ struct RecursiveCopyWorkItem
     // I35 S2 (R6.6): at concurrency 1 the single worker copies in listing order while the producer
     // lists ahead (bounded by the queue), so the directory's discovery closes when its listing ends.
     const unsigned int concurrency = std::max(1u, std::min<unsigned int>(requestedConcurrency, kMaxWorkers));
-    if (! GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
+    bool forceSerialForSelfTest    = false;
+#ifdef ENABLE_TESTS
+    {
+        // Consume only the selected synthetic source. This never changes global
+        // scheduler availability or another call's dispatch policy.
+        static std::mutex selfTestMutex;
+        std::scoped_lock lock(selfTestMutex);
+        constexpr std::wstring_view variable = L"REDSALAMANDER_FILEOPS_TEST_SERIAL_COPY_SOURCE";
+        const std::wstring selected          = GetSelfTestEnvironmentString(variable);
+        if (! selected.empty() && OrdinalString::EqualsNoCase(selected, source.extended))
+        {
+            forceSerialForSelfTest = SetEnvironmentVariableW(variable.data(), nullptr) != FALSE;
+        }
+    }
+#endif
+    if (forceSerialForSelfTest || ! GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
     {
         Debug::Perf::EmitCounter(L"FileOps.CopyRecursiveParallel.SerialFallback.SchedulerUnavailable");
         return CopyDirectoryInternal(rootContext, source, destination, bytesCopied);
@@ -7849,6 +7967,19 @@ struct RecursiveCopyWorkItem
     const auto retryFailedDirectory =
         [&](OperationContext& context, const RecursiveCopyWorkItem& item, RecursiveCopyWorkItem& selectedItem, HRESULT& itemHr) noexcept -> bool
     {
+        if (context.singleDiscovery != nullptr)
+        {
+            bool discoveryClosed = false;
+            {
+                std::scoped_lock lock(context.singleDiscovery->mutex);
+                discoveryClosed = context.singleDiscovery->closeAttempted || context.singleDiscovery->callbackFailed;
+            }
+            if (discoveryClosed)
+            {
+                completeWithError(itemHr);
+                return false;
+            }
+        }
         if (parallel.stopOnErrorRequested.load(std::memory_order_acquire))
         {
             // R6.7: a worker's failure already stopped the walk; never ask again or turn it into a
@@ -8208,10 +8339,14 @@ struct RecursiveCopyWorkItem
     }
     if (! discoveryClosureReported)
     {
-        // A walk that failed or stopped before its last listing closes its scope here, once.
-        discoveryClosureReported        = true;
+        // A singular root that failed before listing may still be retried by the
+        // outer conflict decision. Leave it open until that decision is final.
+        const bool deferPrewalkFailure =
+            rootContext.singleDiscovery != nullptr && FAILED(producerHr) && ! rootListingDone && discoveredFiles == 0u && discoveredDirectories == 1u;
+        discoveryClosureReported        = ! deferPrewalkFailure;
         const uint32_t finalQueuedItems = queuedWorkEntries();
-        const HRESULT discoveryCloseHr  = ReportDiscoveryProgress(rootContext, discoveredBytes, discoveredFiles, discoveredDirectories, finalQueuedItems, true);
+        const HRESULT discoveryCloseHr =
+            ReportDiscoveryProgress(rootContext, discoveredBytes, discoveredFiles, discoveredDirectories, finalQueuedItems, ! deferPrewalkFailure);
         if (FAILED(discoveryCloseHr))
         {
             completeWithError(discoveryCloseHr);
@@ -8344,6 +8479,9 @@ struct RecursiveCopyWorkItem
     {
         return kindHr;
     }
+    const HRESULT shapeHr = ValidateSingleDiscoveryShape(context, source, sourceKind, attributes);
+    if (FAILED(shapeHr))
+        return shapeHr;
     // I35 S2 (R6.6): a recursive directory always takes the producer/worker walker, one worker
     // included, so its discovery closes at its listing's end; CopyDirectoryInternal stays the
     // fallback when no scheduler workers are available.
@@ -10808,13 +10946,11 @@ struct ByNameTreeWalk final
 {
     snapshot               = {};
     const auto openStarted = metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    wil::unique_handle handle(::CreateFileW(extendedPath.c_str(),
-                                            DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
-                                            FILE_SHARE_READ,
-                                            nullptr,
-                                            OPEN_EXISTING,
-                                            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                            nullptr));
+    // Only a listed readonly entry may need an attribute clear and rollback.
+    // The same-handle facts check below refuses a changed readonly bit.
+    const DWORD desiredAccess = DELETE | FILE_READ_ATTRIBUTES | ((listed.attributes & FILE_ATTRIBUTE_READONLY) != 0u ? FILE_WRITE_ATTRIBUTES : 0u);
+    wil::unique_handle handle(::CreateFileW(
+        extendedPath.c_str(), desiredAccess, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
     const DWORD openError = handle ? ERROR_SUCCESS : ::GetLastError();
     if (metrics.enabled)
         metrics.open.Record(openStarted);
@@ -12716,6 +12852,9 @@ HRESULT FileSystem::CopyItemImpl(const wchar_t* sourcePath,
 
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_COPY, flags, options, callback, cookie, 1, reparsePointPolicy);
+    SingleDiscoveryState discovery{};
+    context.singleDiscovery    = &discovery;
+    const auto closeDiscovery  = wil::scope_exit([&]() noexcept { static_cast<void>(ReportRawDiscoveryProgress(context, 0u, 0u, 0u, 0u, true)); });
     context.taskTransferBudget = budget;
     context.objectBinding      = static_cast<IFileSystemObjectBinding*>(this);
     ReportNativeFileWork(context, FileSystemFileWorkPhase::ScopeSupported);
@@ -12744,7 +12883,16 @@ HRESULT FileSystem::CopyItemImpl(const wchar_t* sourcePath,
         if (FAILED(budgetHr))
             return budgetHr;
     }
-    itemHr = ReportTopLevelDiscovery(context, source.extended, context.recursive);
+    bool recursiveDiscoveryOwner   = false;
+    LocalCopyPathKind initialKind  = LocalCopyPathKind::RegularFile;
+    bool initialDirectoryAttribute = false;
+    itemHr = ReportTopLevelDiscovery(context, source.extended, context.recursive, &recursiveDiscoveryOwner, &initialKind, &initialDirectoryAttribute);
+    if (SUCCEEDED(itemHr) && context.options != nullptr && context.options->operationControl != nullptr)
+    {
+        discovery.expectedKind               = static_cast<uint8_t>(initialKind);
+        discovery.expectedDirectoryAttribute = initialDirectoryAttribute;
+        discovery.expectedRoot               = source.extended;
+    }
     if (SUCCEEDED(itemHr))
     {
         PathInfo selectedDestination = destination;
@@ -12764,6 +12912,15 @@ HRESULT FileSystem::CopyItemImpl(const wchar_t* sourcePath,
             if (! callback || IsCancellationHr(itemHr))
             {
                 break;
+            }
+
+            // Once this call published final tree discovery, a fresh traversal under
+            // the same cookie would make that final snapshot false. Per-item retries
+            // remain in the walker; callers may start a fresh governed call instead.
+            {
+                std::scoped_lock lock(discovery.mutex);
+                if (discovery.callbackFailed || (recursiveDiscoveryOwner && discovery.closeAttempted))
+                    break;
             }
 
             FileSystemItemMutationResult attemptMutation{};
@@ -12883,7 +13040,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItem(const wchar_t* sourcePath,
 
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_MOVE, flags, options, callback, cookie, 1, reparsePointPolicy);
-    context.objectBinding = static_cast<IFileSystemObjectBinding*>(this);
+    SingleDiscoveryState discovery{};
+    context.singleDiscovery   = &discovery;
+    const auto closeDiscovery = wil::scope_exit([&]() noexcept { static_cast<void>(ReportRawDiscoveryProgress(context, 0u, 0u, 0u, 0u, true)); });
+    context.objectBinding     = static_cast<IFileSystemObjectBinding*>(this);
 
     const PathInfo source      = MakePathInfo(sourcePath);
     const PathInfo destination = MakePathInfo(destinationPath);

@@ -4459,10 +4459,22 @@ case SelfTestState::Step::Phase7_DeleteItemsNestedRootsWake:
 }
 case SelfTestState::Step::Phase7_SharedPerItemScheduler:
 {
+    const auto failPhase = [&](std::wstring_view message) noexcept
+    {
+        if (state.taskB.has_value() && state.fileOps)
+        {
+            if (auto* task = state.fileOps->FindTask(state.taskB.value()))
+            {
+                if (const auto gate = task->_debugPostBeginDiscoveryGate.load(std::memory_order_acquire))
+                    gate->Release();
+            }
+        }
+        Fail(message);
+    };
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 240'000ull))
     {
-        Fail(L"Phase7_SharedPerItemScheduler timed out.");
+        failPhase(L"Phase7_SharedPerItemScheduler timed out.");
         return true;
     }
 
@@ -4592,25 +4604,25 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
 
         if (! RecreateEmptyDirectory(srcDir) || ! RecreateEmptyDirectory(dstA) || ! RecreateEmptyDirectory(dstB))
         {
-            Fail(L"Failed to reset shared scheduler directories.");
+            failPhase(L"Failed to reset shared scheduler directories.");
             return true;
         }
 
         if (! CreateDeleteTree(slowFolder, 6, 50, 1))
         {
-            Fail(L"Failed to create slow directory tree for shared scheduler test.");
+            failPhase(L"Failed to create slow directory tree for shared scheduler test.");
             return true;
         }
 
         if (! RecreateEmptyDirectory(smallFolder))
         {
-            Fail(L"Failed to create small folder for shared scheduler test.");
+            failPhase(L"Failed to create small folder for shared scheduler test.");
             return true;
         }
 
         if (! WriteTestFile(smallFolder / L"inside.bin", 1024))
         {
-            Fail(L"Failed to write small folder test file.");
+            failPhase(L"Failed to write small folder test file.");
             return true;
         }
 
@@ -4619,21 +4631,21 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
             const std::filesystem::path file = srcDir / std::format(L"f_{:02}.bin", i);
             if (! WriteTestFile(file, kFileBytes))
             {
-                Fail(L"Failed to write shared scheduler test file.");
+                failPhase(L"Failed to write shared scheduler test file.");
                 return true;
             }
         }
 
         if (! state.folderWindow)
         {
-            Fail(L"Missing FolderWindow for shared scheduler test.");
+            failPhase(L"Missing FolderWindow for shared scheduler test.");
             return true;
         }
 
         FolderView* folderView = TryGetFolderView(state.folderWindow, FolderWindow::Pane::Left);
         if (! folderView)
         {
-            Fail(L"Failed to locate left FolderView for shared scheduler test.");
+            failPhase(L"Failed to locate left FolderView for shared scheduler test.");
             return true;
         }
 
@@ -4705,7 +4717,7 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
                                                  FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
-            Fail(L"Failed to start shared scheduler copy task A.");
+            failPhase(L"Failed to start shared scheduler copy task A.");
             return true;
         }
 
@@ -4714,7 +4726,7 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
         return false;
     }
 
-    if (state.stepState == 4)
+    if (state.stepState == 6)
     {
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
@@ -4730,7 +4742,7 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
 
         if (! itA->second.discoverySkipped || ! itB->second.discoverySkipped)
         {
-            Fail(L"Expected shared scheduler tasks to have discovery-ahead skipped.");
+            failPhase(L"Expected shared scheduler tasks to have discovery-ahead skipped.");
             return true;
         }
 
@@ -4747,11 +4759,11 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
         // remain explicitly Canceled; a task-wide ERROR_CANCELLED would hide prior publication.
         if (itA->second.hr != partialHr || itB->second.hr != partialHr || ! hasCanceledItem(itA->second) || ! hasCanceledItem(itB->second))
         {
-            Fail(std::format(L"Expected partial/canceled shared scheduler tasks. A=0x{:08X} B=0x{:08X} canceledA={} canceledB={}",
-                             static_cast<unsigned long>(itA->second.hr),
-                             static_cast<unsigned long>(itB->second.hr),
-                             hasCanceledItem(itA->second),
-                             hasCanceledItem(itB->second)));
+            failPhase(std::format(L"Expected partial/canceled shared scheduler tasks. A=0x{:08X} B=0x{:08X} canceledA={} canceledB={}",
+                                  static_cast<unsigned long>(itA->second.hr),
+                                  static_cast<unsigned long>(itB->second.hr),
+                                  hasCanceledItem(itA->second),
+                                  hasCanceledItem(itB->second)));
             return true;
         }
 
@@ -4759,6 +4771,73 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
         return false;
     }
 
+    if (state.stepState == 4 || state.stepState == 5)
+    {
+        if (! state.taskA.has_value() || ! state.taskB.has_value())
+            return false;
+        auto* task = state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+        if (! task)
+        {
+            if (state.completedTasks.contains(state.taskB.value()))
+            {
+                failPhase(L"Task B completed before its gated discovery and cancellation witnesses.");
+                return true;
+            }
+            return false;
+        }
+        const auto gate = task->_debugPostBeginDiscoveryGate.load(std::memory_order_acquire);
+        if (! gate)
+        {
+            failPhase(L"Task B lost its post-discovery gate.");
+            return true;
+        }
+        if (gate->HasTimedOut())
+        {
+            gate->Release();
+            failPhase(L"Task B post-discovery gate timed out.");
+            return true;
+        }
+        if (state.stepState == 4)
+        {
+            if (! gate->HasEntered() || state.completedTasks.find(state.taskA.value()) == state.completedTasks.end())
+                return false;
+            task->SkipDiscovery();
+            const bool skipped = task->_discoverySkipped.load(std::memory_order_acquire);
+            AppendLog(std::format(
+                L"Phase7 exclusive handoff: A={} completed, B={} entered post-discovery gate, skip={}", state.taskA.value(), state.taskB.value(), skipped));
+            gate->Release();
+            if (! skipped)
+            {
+                failPhase(L"Task B did not accept the discovery skip at its gated open checkpoint.");
+                return true;
+            }
+            state.stepState = 5;
+            return false;
+        }
+        unsigned int maxConcurrency = 0;
+        size_t inFlight             = 0;
+        unsigned long completed = 0, files = 0, folders = 0;
+        {
+            std::scoped_lock lock(task->_progressMutex, task->_perItemInFlightCallsMutex);
+            maxConcurrency = task->_perItemMaxConcurrency;
+            inFlight       = task->_perItemInFlightCallCount;
+            completed      = task->_progressCompletedItems;
+            files          = task->_completedTopLevelFiles;
+            folders        = task->_completedTopLevelFolders;
+        }
+        if (maxConcurrency <= 1u || inFlight <= 1u || completed == 0)
+            return false;
+        if (static_cast<uint64_t>(files) + static_cast<uint64_t>(folders) != completed)
+        {
+            failPhase(L"Task B just-in-time discovery counts mismatch.");
+            return true;
+        }
+        AppendLog(std::format(
+            L"Phase7 exclusive handoff: B={} maxConcurrency={} inFlight={} completed={}", state.taskB.value(), maxConcurrency, inFlight, completed));
+        task->RequestCancel();
+        state.stepState = 6;
+        return false;
+    }
     if (! state.taskA.has_value())
     {
         return false;
@@ -4769,6 +4848,11 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
     Task* taskB = state.taskB.has_value() && state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
     if (! taskA)
     {
+        if (state.completedTasks.contains(state.taskA.value()))
+        {
+            failPhase(L"Task A completed before the exclusive queue and cancellation witnesses.");
+            return true;
+        }
         return false;
     }
 
@@ -4811,7 +4895,7 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
         {
             if (state.markerTick != 0 && nowTick >= state.markerTick && (nowTick - state.markerTick) > 15'000ull)
             {
-                Fail(L"Expected >1 in-flight per-item calls for task A but did not observe them.");
+                failPhase(L"Expected >1 in-flight per-item calls for task A but did not observe them.");
                 return true;
             }
             return false;
@@ -4822,7 +4906,7 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
             state.baselineThreadCount = GetProcessThreadCount();
             if (state.baselineThreadCount == 0)
             {
-                Fail(L"Failed to snapshot process thread count after starting task A.");
+                failPhase(L"Failed to snapshot process thread count after starting task A.");
                 return true;
             }
 
@@ -4843,22 +4927,56 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
             const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
                                                                        FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
-            state.taskB = StartFileOperationAndGetId(state.fileOps,
-                                                     FILESYSTEM_COPY,
-                                                     FolderWindow::Pane::Left,
-                                                     FolderWindow::Pane::Right,
-                                                     state.fsLocal,
-                                                     std::move(sourcePaths),
-                                                     dstB,
-                                                     flags,
-                                                     false,
-                                                     kInitialLimit,
-                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem);
+            // The worker's pre-consumption callback holds B until its post-discovery
+            // checkpoint is attached. A may finish at any time after this sample.
+            using GateTask  = FolderWindow::FileOperationState::Task;
+            auto preGate    = std::make_shared<FolderWindowFileOperationsStateInternal::SelfTestPausePoint>();
+            auto postGate   = std::make_shared<FolderWindowFileOperationsStateInternal::SelfTestPausePoint>();
+            auto workerTask = std::make_shared<std::atomic<GateTask*>>(nullptr);
+            preGate->Set(true);
+            postGate->Set(true);
+            const auto releasePreGate = wil::scope_exit([&]() noexcept { preGate->Release(); });
+            state.taskB               = StartFileOperationAndGetId(state.fileOps,
+                                                                   FILESYSTEM_COPY,
+                                                                   FolderWindow::Pane::Left,
+                                                                   FolderWindow::Pane::Right,
+                                                                   state.fsLocal,
+                                                                   std::move(sourcePaths),
+                                                                   dstB,
+                                                                   flags,
+                                                                   false,
+                                                                   kInitialLimit,
+                                                                   FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                   false,
+                                                                   nullptr,
+                                                                   {},
+                                                                   std::nullopt,
+                                                                   {},
+                                                                   [preGate, workerTask]() noexcept -> HRESULT
+            {
+                preGate->PauseUntil(30'000u,
+                                    [&]() noexcept
+                {
+                    const auto* task = workerTask->load(std::memory_order_acquire);
+                    return task && task->CancelRequestedDurable();
+                });
+                return preGate->HasTimedOut() ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : S_OK;
+            });
             if (! state.taskB.has_value())
             {
-                Fail(L"Failed to start shared scheduler copy task B.");
+                preGate->Release();
+                failPhase(L"Failed to start shared scheduler copy task B.");
                 return true;
             }
+            auto* queuedTask = state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+            if (! queuedTask)
+            {
+                preGate->Release();
+                failPhase(L"Failed to attach the shared scheduler checkpoint to task B.");
+                return true;
+            }
+            workerTask->store(queuedTask, std::memory_order_release);
+            queuedTask->_debugPostBeginDiscoveryGate.store(postGate, std::memory_order_release);
 
             state.markerTick = 0;
             state.stepState  = 3;
@@ -4868,124 +4986,61 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
 
     if (state.stepState == 3)
     {
-        if (! state.taskB.has_value())
-        {
-            return false;
-        }
-
-        taskB = state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
         if (! taskB)
-        {
             return false;
-        }
-
-        if (taskB->_discoveryAheadActive.load(std::memory_order_acquire) && ! taskB->_discoverySkipped.load(std::memory_order_acquire))
-        {
-            taskB->SkipDiscovery();
-        }
-
-        if (state.markerTick == 0 && taskA->HasStarted() && taskB->HasStarted())
-        {
-            state.markerTick = nowTick;
-        }
-
-        unsigned int maxConcA           = 0;
-        unsigned int maxConcB           = 0;
-        size_t inFlightA                = 0;
-        size_t inFlightB                = 0;
-        unsigned long completedItemsA   = 0;
-        unsigned long completedItemsB   = 0;
-        unsigned long completedFilesA   = 0;
-        unsigned long completedFilesB   = 0;
-        unsigned long completedFoldersA = 0;
-        unsigned long completedFoldersB = 0;
+        unsigned int maxConcurrency = 0;
+        size_t inFlight             = 0;
+        unsigned long completed = 0, files = 0, folders = 0;
         {
             std::scoped_lock lock(taskA->_progressMutex, taskA->_perItemInFlightCallsMutex);
-            maxConcA          = taskA->_perItemMaxConcurrency;
-            inFlightA         = taskA->_perItemInFlightCallCount;
-            completedItemsA   = taskA->_progressCompletedItems;
-            completedFilesA   = taskA->_completedTopLevelFiles;
-            completedFoldersA = taskA->_completedTopLevelFolders;
+            maxConcurrency = taskA->_perItemMaxConcurrency;
+            inFlight       = taskA->_perItemInFlightCallCount;
+            completed      = taskA->_progressCompletedItems;
+            files          = taskA->_completedTopLevelFiles;
+            folders        = taskA->_completedTopLevelFolders;
         }
-        {
-            std::scoped_lock lock(taskB->_progressMutex, taskB->_perItemInFlightCallsMutex);
-            maxConcB          = taskB->_perItemMaxConcurrency;
-            inFlightB         = taskB->_perItemInFlightCallCount;
-            completedItemsB   = taskB->_progressCompletedItems;
-            completedFilesB   = taskB->_completedTopLevelFiles;
-            completedFoldersB = taskB->_completedTopLevelFolders;
-        }
-
-        if (maxConcA <= 1u || maxConcB <= 1u)
-        {
+        if (! taskB->_waitingForExclusiveTransfer.load(std::memory_order_acquire) || maxConcurrency <= 1u || inFlight <= 1u || completed == 0 ||
+            ! taskA->_discoverySkipped.load(std::memory_order_acquire))
             return false;
-        }
-
-        if (inFlightA == 0u || inFlightB == 0u)
+        if (taskB->_enteredOperation.load(std::memory_order_acquire))
         {
-            if (state.markerTick != 0 && nowTick >= state.markerTick && (nowTick - state.markerTick) > 15'000ull)
-            {
-                Fail(L"Expected both tasks to have in-flight per-item calls but did not observe them.");
-                return true;
-            }
-            return false;
-        }
-
-        if (state.baselineThreadCount != 0)
-        {
-            const size_t threadsNow = GetProcessThreadCount();
-            if (threadsNow == 0)
-            {
-                Fail(L"Failed to read process thread count during shared scheduler test.");
-                return true;
-            }
-
-            const size_t delta                       = (threadsNow >= state.baselineThreadCount) ? (threadsNow - state.baselineThreadCount) : 0;
-            constexpr size_t kMaxExpectedThreadDelta = FolderWindow::FileOperationState::Task::kMaxInFlightFiles;
-            if (delta > kMaxExpectedThreadDelta)
-            {
-                Fail(std::format(L"Shared scheduler thread delta too high after starting task B: baseline={} now={} delta={}.",
-                                 state.baselineThreadCount,
-                                 threadsNow,
-                                 delta));
-                return true;
-            }
-
-            state.baselineThreadCount = 0;
-        }
-
-        const bool skippedA = taskA->_discoverySkipped.load(std::memory_order_acquire);
-        const bool skippedB = taskB->_discoverySkipped.load(std::memory_order_acquire);
-        if (! skippedA || ! skippedB)
-        {
-            return false;
-        }
-
-        if (completedItemsA == 0 || completedItemsB == 0)
-        {
-            return false;
-        }
-
-        const uint64_t totalA = static_cast<uint64_t>(completedFilesA) + static_cast<uint64_t>(completedFoldersA);
-        const uint64_t totalB = static_cast<uint64_t>(completedFilesB) + static_cast<uint64_t>(completedFoldersB);
-        if (totalA != completedItemsA || totalB != completedItemsB)
-        {
-            Fail(std::format(L"Just-in-time discovery counts mismatch: A items={} files={} folders={} / B items={} files={} folders={}",
-                             completedItemsA,
-                             completedFilesA,
-                             completedFoldersA,
-                             completedItemsB,
-                             completedFilesB,
-                             completedFoldersB));
+            failPhase(L"Task B entered while task A held the exclusive transfer admission.");
             return true;
         }
-
+        if (static_cast<uint64_t>(files) + static_cast<uint64_t>(folders) != completed)
+        {
+            failPhase(L"Task A just-in-time discovery counts mismatch.");
+            return true;
+        }
+        const size_t threadsNow = GetProcessThreadCount();
+        if (threadsNow == 0)
+        {
+            failPhase(L"Failed to read process thread count during shared scheduler test.");
+            return true;
+        }
+        const size_t delta = threadsNow >= state.baselineThreadCount ? threadsNow - state.baselineThreadCount : 0;
+        if (delta > FolderWindow::FileOperationState::Task::kMaxInFlightFiles)
+        {
+            failPhase(std::format(L"Shared scheduler thread delta too high: baseline={} now={} delta={}.", state.baselineThreadCount, threadsNow, delta));
+            return true;
+        }
+        const auto gate = taskB->_debugPostBeginDiscoveryGate.load(std::memory_order_acquire);
+        if (! gate)
+        {
+            failPhase(L"Task B lost its pre-armed post-discovery checkpoint.");
+            return true;
+        }
+        AppendLog(std::format(L"Phase7 exclusive handoff: A={} maxConcurrency={} inFlight={} completed={}, B={} waiting exclusive",
+                              state.taskA.value(),
+                              maxConcurrency,
+                              inFlight,
+                              completed,
+                              state.taskB.value()));
         taskA->RequestCancel();
-        taskB->RequestCancel();
-        state.stepState = 4;
+        state.markerTick = 0;
+        state.stepState  = 4;
         return false;
     }
-
     return false;
 }
 case SelfTestState::Step::Phase7_ParallelDeleteKnobs:

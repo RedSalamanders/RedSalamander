@@ -384,7 +384,7 @@ and focused tests.
 
 | Module | Responsibility |
 |---|---|
-| `Modules/Auditing/RepositorySourceScanner.psm1` | Deterministic repository source discovery and match scanning. |
+| `Modules/Auditing/RepositorySourceScanner.psm1` | Deterministic repository source discovery and match scanning with repository-relative exclusions. |
 | `Modules/Documentation/Changelog.psm1` | Shared Changes validation, exact-fold comparison with a base, deterministic merge, duplicate-pending-entry refusal, staged publication and retry-safe cleanup. |
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
