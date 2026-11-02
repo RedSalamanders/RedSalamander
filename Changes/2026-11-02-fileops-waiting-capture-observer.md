@@ -1,0 +1,1 @@
+- Observe owned activation throughout the File Operations waiting-card capture without treating a switch between other applications as a fixture failure.
