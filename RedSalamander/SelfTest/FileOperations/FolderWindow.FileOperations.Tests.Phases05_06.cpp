@@ -5310,9 +5310,83 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
 
 case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 {
+    struct R4A19ScopeCounts final
+    {
+        size_t read = 0u, write = 0u, publish = 0u;
+        size_t conservative = 0u, anchored = 0u, independent = 0u;
+    };
+    struct R4A19AdmissionDiagnostic final
+    {
+        bool captured = false, waitA = false, waitB = false, activeA = false, activeB = false;
+        bool identityWaitA = false, identityWaitB = false, slotWaitA = false, slotWaitB = false, exclusiveWaitA = false, exclusiveWaitB = false;
+        bool parallelA = false, parallelB = false, overlap = false, byNameDelete = false;
+        bool pairFound = false, pairDomain = false, pairContract = false, pairSameRoot = false, pairSameParent = false;
+        bool leftConservative = false, rightConservative = false, leftAnchored = false, rightAnchored = false;
+        bool leftIndependent = false, rightIndependent = false;
+        unsigned int leftRole = 0u, rightRole = 0u, advisory = 0u;
+        uint64_t comparisons = 0u, advisoryComparisons = 0u, captureUs = 0u;
+        R4A19ScopeCounts a, b;
+    };
+    // Only scalar facts persist between UI ticks; no bound-object authority or path is retained.
+    static R4A19AdmissionDiagnostic diagnostic;
+    const auto logDiagnostic = [&]() noexcept
+    {
+        AppendLog(std::format(L"R4-A19 admission diagnostic: captured={} waitA={} waitB={} activeA={} activeB={} parallelA={} parallelB={} "
+                              L"A(read/write/publish={}/{}/{} conservative={} anchored={} independent={}) "
+                              L"B(read/write/publish={}/{}/{} conservative={} anchored={} independent={}) "
+                              L"overlap={} comparisons={} advisory={} advisoryComparisons={} byNameDelete={} captureUs={}",
+                              diagnostic.captured,
+                              diagnostic.waitA,
+                              diagnostic.waitB,
+                              diagnostic.activeA,
+                              diagnostic.activeB,
+                              diagnostic.parallelA,
+                              diagnostic.parallelB,
+                              diagnostic.a.read,
+                              diagnostic.a.write,
+                              diagnostic.a.publish,
+                              diagnostic.a.conservative,
+                              diagnostic.a.anchored,
+                              diagnostic.a.independent,
+                              diagnostic.b.read,
+                              diagnostic.b.write,
+                              diagnostic.b.publish,
+                              diagnostic.b.conservative,
+                              diagnostic.b.anchored,
+                              diagnostic.b.independent,
+                              diagnostic.overlap,
+                              diagnostic.comparisons,
+                              diagnostic.advisory,
+                              diagnostic.advisoryComparisons,
+                              diagnostic.byNameDelete,
+                              diagnostic.captureUs));
+        AppendLog(std::format(L"R4-A19 overlapping pair: found={} roles={}/{} conservative={}/{} anchored={}/{} independent={}/{} "
+                              L"sameDomain={} samePathContract={} sameRoot={} sameParent={}",
+                              diagnostic.pairFound,
+                              diagnostic.leftRole,
+                              diagnostic.rightRole,
+                              diagnostic.leftConservative,
+                              diagnostic.rightConservative,
+                              diagnostic.leftAnchored,
+                              diagnostic.rightAnchored,
+                              diagnostic.leftIndependent,
+                              diagnostic.rightIndependent,
+                              diagnostic.pairDomain,
+                              diagnostic.pairContract,
+                              diagnostic.pairSameRoot,
+                              diagnostic.pairSameParent));
+        AppendLog(std::format(L"R4-A19 wait reasons: identity={}/{} sharedSlot={}/{} exclusive={}/{}",
+                              diagnostic.identityWaitA,
+                              diagnostic.identityWaitB,
+                              diagnostic.slotWaitA,
+                              diagnostic.slotWaitB,
+                              diagnostic.exclusiveWaitA,
+                              diagnostic.exclusiveWaitB));
+    };
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
+        logDiagnostic();
         Fail(L"R4A19_DiscoveryIndependentVolumes timed out.");
         return true;
     }
@@ -5335,6 +5409,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 
     if (state.stepState == 0u)
     {
+        diagnostic = {};
         // Queue is the product default. This control measures independent
         // operations, so it must establish Parallel admission explicitly rather
         // than inheriting a previous case's mode or racing the first worker.
@@ -5576,8 +5651,72 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             std::scoped_lock lock(taskB->_progressMutex);
             completedB = taskB->_progressCompletedBytes;
         }
-        const auto admissionA         = taskA->LoadMutationInterlockAdmission();
-        const auto admissionB         = taskB->LoadMutationInterlockAdmission();
+        const auto admissionA = taskA->LoadMutationInterlockAdmission();
+        const auto admissionB = taskB->LoadMutationInterlockAdmission();
+        if (! diagnostic.captured && admissionA && admissionB && admissionA->scopes && admissionB->scopes &&
+            (taskA->IsWaitingInQueue() || taskB->IsWaitingInQueue() || (taskA->HasEnteredOperation() && taskB->HasEnteredOperation())))
+        {
+            const auto captureStarted = std::chrono::steady_clock::now();
+            using Access              = FileOperations::MutationInterlockAccess;
+            const auto count          = [](const auto& scopes) noexcept
+            {
+                R4A19ScopeCounts result;
+                for (const auto& scope : scopes)
+                {
+                    result.read += scope.access == Access::ReadSource;
+                    result.write += scope.access == Access::WriteSource;
+                    result.publish += scope.access == Access::PublishDestination;
+                    result.conservative += scope.conservativeIdentityDomain;
+                    result.anchored += ! scope.anchors.empty();
+                    result.independent += scope.independentNewFileTransfer;
+                }
+                return result;
+            };
+            diagnostic.waitA          = taskA->IsWaitingInQueue();
+            diagnostic.waitB          = taskB->IsWaitingInQueue();
+            diagnostic.activeA        = taskA->HasEnteredOperation();
+            diagnostic.activeB        = taskB->HasEnteredOperation();
+            diagnostic.identityWaitA  = taskA->_waitingForIdentityInterlock.load(std::memory_order_acquire);
+            diagnostic.identityWaitB  = taskB->_waitingForIdentityInterlock.load(std::memory_order_acquire);
+            diagnostic.slotWaitA      = taskA->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
+            diagnostic.slotWaitB      = taskB->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
+            diagnostic.exclusiveWaitA = taskA->_waitingForExclusiveTransfer.load(std::memory_order_acquire);
+            diagnostic.exclusiveWaitB = taskB->_waitingForExclusiveTransfer.load(std::memory_order_acquire);
+            diagnostic.parallelA      = admissionA->parallelNewFiles;
+            diagnostic.parallelB      = admissionB->parallelNewFiles;
+            diagnostic.a              = count(*admissionA->scopes);
+            diagnostic.b              = count(*admissionB->scopes);
+            diagnostic.overlap  = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(*admissionA->scopes, *admissionB->scopes, diagnostic.comparisons);
+            diagnostic.advisory = static_cast<unsigned int>(FileOperations::DebugClassifySameHostOverlapForSelfTest(
+                *admissionA->scopes, *admissionB->scopes, diagnostic.byNameDelete, diagnostic.advisoryComparisons));
+            for (const auto& left : *admissionA->scopes)
+            {
+                for (const auto& right : *admissionB->scopes)
+                {
+                    if (! FileOperations::DebugMutationScopesOverlapForSelfTest(left, right))
+                        continue;
+                    diagnostic.pairFound         = true;
+                    diagnostic.leftRole          = static_cast<unsigned int>(left.access);
+                    diagnostic.rightRole         = static_cast<unsigned int>(right.access);
+                    diagnostic.leftConservative  = left.conservativeIdentityDomain;
+                    diagnostic.rightConservative = right.conservativeIdentityDomain;
+                    diagnostic.leftAnchored      = ! left.anchors.empty();
+                    diagnostic.rightAnchored     = ! right.anchors.empty();
+                    diagnostic.leftIndependent   = left.independentNewFileTransfer;
+                    diagnostic.rightIndependent  = right.independentNewFileTransfer;
+                    diagnostic.pairDomain        = FileOperations::QualifiedEndpointsShareObjectIdentityDomain(left.endpoint, right.endpoint);
+                    diagnostic.pairContract      = FileOperations::QualifiedEndpointsHaveSamePathContract(left.endpoint, right.endpoint);
+                    diagnostic.pairSameRoot      = FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint);
+                    diagnostic.pairSameParent    = left.independentParentKey.has_value() && right.independentParentKey.has_value() &&
+                                                   left.independentParentKey.value() == right.independentParentKey.value();
+                    break;
+                }
+                if (diagnostic.pairFound)
+                    break;
+            }
+            diagnostic.captureUs = Debug::Perf::ElapsedUs(captureStarted);
+            diagnostic.captured  = true;
+        }
         const bool qualifiedAndActive = admissionA && admissionB && admissionA->parallelNewFiles && admissionB->parallelNewFiles &&
                                         admissionA->hasDataTransfers && admissionB->hasDataTransfers &&
                                         state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value());
@@ -5602,6 +5741,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         ! verifyFiles(dSource, dDestination) || completedA->second.discoveredTotalBytes != kTaskBytes ||
         completedB->second.discoveredTotalBytes != kTaskBytes || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
     {
+        logDiagnostic();
         Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} "
                          L"hrB=0x{:08X} overlap={} "
                          L"bytesA={}/{} bytesB={}/{} isolatedC={} isolatedD={} "

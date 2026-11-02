@@ -2,6 +2,21 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Validate exact filtered hosted diagnostic cases without promoting repository coverage.",
+      "usage": "Imported by the project CI adapter for its two fixed explicit diagnostic scopes.",
+      "usedBy": ["Tools/Invoke-ProjectCi.ps1"],
+      "prerequisites": ["PowerShell 7", "marked TestSandbox", "verified full-solution receipt"],
+      "sideEffects": ["Reads exact archived runner and native case evidence"],
+      "outputs": ["Validated filtered diagnostic selection and evidence"],
+      "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
+      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"],
+      "replacement": null
+    },
+    {
       "purpose": "Acquire the pinned native formatter without Python, with checksum and executable validation.",
       "prerequisites": [
         "PowerShell 7",
@@ -1936,6 +1951,7 @@
         ".github/workflows/ci.yml",
         ".github/workflows/nightly-flake.yml",
         "Tools/Run-AllTests.ps1",
+        "Tools/Invoke-ProjectCi.ps1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
@@ -2418,7 +2434,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation with ancestral public-snapshot fallback when the implicit legacy baseline is missing, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
@@ -5056,10 +5072,11 @@
       "lifecycle": "active",
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
       "visibility": "public",
-      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Native local work uses canonical build/test entry points.",
+      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Qualification alone permits fixed CommandsHandoff and FileOpsVolumes filtered diagnostics, which never publish regression receipts. Native local work uses canonical build/test entry points.",
       "tests": [
         "Tools/Tests/ToolingGovernance.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/VcpkgBootstrap.Tests.ps1"
       ],
       "usedBy": [
@@ -5069,6 +5086,7 @@
       ],
       "outputs": [
         "Governed RedSalamander.Perf evidence and regression receipt",
+        "Filtered diagnostic coverage marker and runner output without a regression receipt",
         ".build production ZIP and source-bound receipt",
         "GitHub job output paths",
         "Pinned tool/registry and platform-private installed dependencies beneath .build"

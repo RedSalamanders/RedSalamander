@@ -9491,18 +9491,48 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
                           admission.sentInputCount,
                           admission.foregroundRequestAccepted));
     }
-    state.Require(activated && foregroundAfter == inputWindow,
-                  std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}, "
-                              L"stage={}, error={}, heldKey={}, sent={}, requestAccepted={}.",
-                              context,
-                              reinterpret_cast<uintptr_t>(foregroundAfter),
-                              foregroundProcess,
-                              reinterpret_cast<uintptr_t>(inputWindow),
-                              admission.stage,
-                              admission.win32Error,
-                              admission.heldKey,
-                              admission.sentInputCount,
-                              admission.foregroundRequestAccepted));
+    if (! activated || foregroundAfter != inputWindow)
+    {
+        DWORD selfSession                 = 0u;
+        DWORD foregroundSession           = 0u;
+        const bool selfSessionKnown       = ProcessIdToSessionId(GetCurrentProcessId(), &selfSession) != FALSE;
+        const bool foregroundSessionKnown = foregroundProcess != 0u && ProcessIdToSessionId(foregroundProcess, &foregroundSession) != FALSE;
+        const DWORD foregroundThread      = GetWindowThreadProcessId(foregroundAfter, nullptr);
+        state.Require(false,
+                      std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}, "
+                                  L"stage={}, error={}, heldKey={}, sent={}, requestAccepted={}, guardEvaluated={}, guardPassed={}, requestAttempted={}, "
+                                  L"targetValid={}, targetThread={}, targetPid={}, warningValid={}, warningVisible={}, warningThread={}, warningPid={}, "
+                                  L"currentThread={}, selfPid={}, foregroundThread={}, selfSessionKnown={}, selfSession={}, foregroundSessionKnown={}, "
+                                  L"foregroundSession={}, currentDesktopAvailable={}, foregroundDesktopAvailable={}.",
+                                  context,
+                                  reinterpret_cast<uintptr_t>(foregroundAfter),
+                                  foregroundProcess,
+                                  reinterpret_cast<uintptr_t>(inputWindow),
+                                  admission.stage,
+                                  admission.win32Error,
+                                  admission.heldKey,
+                                  admission.sentInputCount,
+                                  admission.foregroundRequestAccepted,
+                                  admission.activationGuardEvaluated,
+                                  admission.activationGuardPassed,
+                                  admission.foregroundRequestAttempted,
+                                  IsWindow(inputWindow) != FALSE,
+                                  admission.activationTargetThread,
+                                  admission.activationTargetProcess,
+                                  admission.activationWarningValid,
+                                  admission.activationWarningVisible,
+                                  admission.activationWarningThread,
+                                  admission.activationWarningProcess,
+                                  GetCurrentThreadId(),
+                                  GetCurrentProcessId(),
+                                  foregroundThread,
+                                  selfSessionKnown,
+                                  selfSession,
+                                  foregroundSessionKnown,
+                                  foregroundSession,
+                                  GetThreadDesktop(GetCurrentThreadId()) != nullptr,
+                                  foregroundThread != 0u && GetThreadDesktop(foregroundThread) != nullptr));
+    }
     if (! state.failure.empty())
     {
         return false;

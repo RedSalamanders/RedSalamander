@@ -1,5 +1,12 @@
 # Unified organization CI contract
 
+The manual native suite defaults to Full and may explicitly select CommandsHandoff or
+FileOpsVolumes, each mapped to one fixed diagnostic case. The adapter permits filtered runner
+exit 2 only after validating the exact archived native cases, quarantine state, profile and
+source-bound full-solution receipt. It labels that result filtered and NOT_EVALUATED for
+repository coverage and creates no regression or production receipt. Other phases reject these
+scopes before mutation; the pinned native matrix, desktop lease and build contracts still apply.
+
 This specification owns the project's CI routing. The versioned implementation and policy tests live in
 [RedSalamanders/.github](https://github.com/RedSalamanders/.github). The exact reviewed full commit is recorded
 in .ci/project.json and every reusable workflow caller. Update those pins together through a reviewed PR.

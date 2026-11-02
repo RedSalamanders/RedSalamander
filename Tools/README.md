@@ -1,5 +1,10 @@
 # Repository tooling
 
+The manual native suite defaults to Full. Its explicit CommandsHandoff and FileOpsVolumes
+choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
+after checking exact archived native results, quarantine state and source-bound receipt.
+These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
+
 The Full tooling deployment fixture bounds its contained targeted compiler operation to
 60 minutes; product performance budgets remain independent. See the
 [rebuild and receipt contract](../Specs/Build/Build_Toolchain.md).
@@ -369,7 +374,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Test-TerminalEngineRound4Closeout.ps1` | Historical closeout command | Reauthenticates the frozen Round-4 selection evidence. |
 | `Test-Changelog.ps1` | Public read-only validator | Checks fragment names/content and the changelog; pending fragments are expected. -Base refuses any CHANGELOG.md change that is not an exact fold of fragments the merge base holds (PrePush: origin/main; CI: HEAD^1); -RequireFolded checks a finished fold. |
 | `Test-ChangelogWorkflow.ps1` | Internal tooling fixture entrypoint | Runs shared behavior fixtures (local Git repositories and a bare remote) in the existing marked sandbox through the Changelog Pester adapter. |
-| `Test-TestRunArchive.ps1` | Public evidence command | Validates changed, staged, complete, or paired Terminal VT `Specs/TestRuns` archives, including area schemas and identity/performance bindings. |
+| `Test-TestRunArchive.ps1` | Public evidence command | Validates changed, staged, complete, or paired Terminal VT `Specs/TestRuns` archives, including area schemas and identity/performance bindings; the public ancestral snapshot supplies missing implicit relocation-baseline identities. |
 | `TestRunPlan.ps1` | Internal compatibility loader | Preserves sealed historical test paths; current callers import `Modules/Testing/TestRunPlan.psm1`. |
 | `tool-inventory.json` | Tooling-governance data | Machine-readable contract consumed by the validator and tests. |
 | `validation-impact.json` | Trusted-validation policy data | Reviewed path-to-impact/build mapping, including executable `Specs` data; specific rules accumulate and unknown relevant JSON/JSON5 widens to Full. |
@@ -412,6 +417,7 @@ and focused tests.
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters, bounded Pester failure/skip case normalization, and result classification. |
 | `Modules/Testing/TestQuarantine.psm1` | Quarantine policy parsing, status, and metadata-preserving repair planning. |
 | `Modules/Testing/TestMachineResources.psm1` | Schema validation, non-secret capability digesting, and scoped environment projection for per-machine Connection Manager, SMB, MTP, and alternate local-root resources. |
+| `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates source-bound exact-case hosted diagnostic evidence without promoting repository coverage. |
 | `Modules/Testing/TestRunArchive.psm1` | Archived evidence structure/content validation, area-schema dispatch, complete JSONL validation, and paired Terminal VT admission comparison. |
 | `Modules/Testing/TestRunPlan.Common.psm1` | Stable plan entries, canonical validation-plan digests, path normalization, run identities, and process snapshots. |
 | `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface. |

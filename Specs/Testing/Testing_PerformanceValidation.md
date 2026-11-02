@@ -1089,6 +1089,9 @@ restores the prior limit after worker quiet. This control does not claim recursi
 `FileOps.SelfTest.R4A19.{ProviderControl,ProviderCancel,IndependentVolumes,IndependentVolumeCIsolatedUs,IndependentVolumeDIsolatedUs}`.
 Earlier independent-volume runs that selected recursive directory roots are not a paired timing
 baseline for this regular-file admission scenario.
+The fixture captures one bounded scalar admission/interlock witness while both tasks are present and
+reports it only on failure or timeout. It retains no paths or bound authority across ticks; its measured
+capture cost is included in the unchanged concurrent interval and reported with the failure witness.
 The fake-MTP fixture, whose route the host bridge traverses, lists its one source folder at once, so
 since I35 S2 its scope closes when that folder is listed: it requires closure before the last byte
 (open-discovery bytes below the total), zero growth after closure, zero discovery starvation, and

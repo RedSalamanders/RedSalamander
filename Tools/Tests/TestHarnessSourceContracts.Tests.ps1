@@ -392,12 +392,17 @@ Describe 'Test harness source contracts' {
 
     It 'keeps foreground admission diagnostics in the Commands failure summary' {
         $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
-        $failure = [regex]::Match($source, '(?s)state\.Require\(activated && foregroundAfter == inputWindow,.*?\);')
+        $failure = [regex]::Match($source, '(?s)if \(! activated \|\| foregroundAfter != inputWindow\).*?state\.Require\(false,.*?\);')
         $failure.Success | Should Be $true
-        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted')) {
+        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted',
+                'activationGuardEvaluated', 'activationGuardPassed', 'foregroundRequestAttempted',
+                'activationTargetThread', 'activationTargetProcess', 'activationWarningValid',
+                'activationWarningVisible', 'activationWarningThread', 'activationWarningProcess')) {
             $failure.Value | Should Match ([regex]::Escape('admission.' + $field))
         }
         $source | Should Match 'TryActivateOwnedWindow\(inputWindow, false, &admission\)'
+        $warning = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
+        $warning | Should Match '(?s)foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
     }
 
     It 'keeps repeated shuffle qualification manual and separate from the PR gate' {

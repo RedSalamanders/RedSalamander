@@ -1,4 +1,5 @@
 name: Manual Native Suite
+run-name: "Manual native ${{ inputs.scope }} (${{ inputs.configuration }})"
 on:
   workflow_dispatch:
     inputs:
@@ -7,6 +8,11 @@ on:
         type: choice
         options: [Debug, Release, ASan Debug]
         default: Release
+      scope:
+        description: Full qualification or one explicitly filtered diagnostic
+        type: choice
+        options: [Full, CommandsHandoff, FileOpsVolumes]
+        default: Full
 permissions:
   contents: read
 concurrency:
@@ -18,4 +24,4 @@ jobs:
     with:
       engine_ref: e32cf9f9b29f4e817decb09e1be44be7fc1a94de
       configuration: ${{ inputs.configuration }}
-      scope: Full
+      scope: ${{ inputs.scope }}

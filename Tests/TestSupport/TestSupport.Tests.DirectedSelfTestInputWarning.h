@@ -30,11 +30,20 @@ class DirectedSelfTestInputWarning final
 public:
     struct ForegroundAdmissionDiagnostics final
     {
-        const wchar_t* stage           = L"not-started";
-        DWORD win32Error               = ERROR_SUCCESS;
-        int heldKey                    = 0;
-        UINT sentInputCount            = 0u;
-        bool foregroundRequestAccepted = false;
+        const wchar_t* stage            = L"not-started";
+        DWORD win32Error                = ERROR_SUCCESS;
+        int heldKey                     = 0;
+        UINT sentInputCount             = 0u;
+        bool foregroundRequestAccepted  = false;
+        bool activationGuardEvaluated   = false;
+        bool activationGuardPassed      = false;
+        bool foregroundRequestAttempted = false;
+        DWORD activationTargetThread    = 0u;
+        DWORD activationTargetProcess   = 0u;
+        bool activationWarningVisible   = false;
+        bool activationWarningValid     = false;
+        DWORD activationWarningThread   = 0u;
+        DWORD activationWarningProcess  = 0u;
     };
 
     explicit DirectedSelfTestInputWarning(HWND owner = nullptr, bool enabled = true) noexcept
@@ -127,21 +136,39 @@ public:
     [[nodiscard]] static bool TryActivateOwnedWindow(HWND target, bool requireHotkey = false, ForegroundAdmissionDiagnostics* diagnostics = nullptr) noexcept
     {
         ForegroundAdmissionDiagnostics localDiagnostics{};
-        auto& observed       = diagnostics ? *diagnostics : localDiagnostics;
-        observed             = {};
-        observed.stage       = L"ownership-warning-or-activation-guard";
-        const HWND warning   = _activeWindow.load(std::memory_order_acquire);
-        DWORD processId      = 0u;
-        const DWORD threadId = GetWindowThreadProcessId(target, &processId);
+        auto& observed                    = diagnostics ? *diagnostics : localDiagnostics;
+        observed                          = {};
+        observed.stage                    = L"ownership-warning-or-activation-guard";
+        const HWND warning                = _activeWindow.load(std::memory_order_acquire);
+        DWORD processId                   = 0u;
+        const DWORD threadId              = GetWindowThreadProcessId(target, &processId);
+        observed.activationTargetThread   = threadId;
+        observed.activationTargetProcess  = processId;
+        observed.activationWarningValid   = IsWindow(warning) != FALSE;
+        observed.activationWarningVisible = IsWindowVisible(warning) != FALSE;
+        observed.activationWarningThread  = GetWindowThreadProcessId(warning, &observed.activationWarningProcess);
         if (ScopedWindowActivationBlocker::IsActiveForCurrentThread() || ! warning || ! IsWindowVisible(warning) || ! target ||
             processId != GetCurrentProcessId() || threadId != GetCurrentThreadId())
             return false;
         ForegroundHotkeyRequest request{.target = target, .warning = warning, .threadId = threadId};
-        if (! requireHotkey && request.Activate())
+        if (! requireHotkey)
         {
-            observed.stage                     = L"direct-activation";
-            observed.foregroundRequestAccepted = request.foregroundRequestAccepted;
-            return true;
+            const bool directActivated          = request.Activate();
+            observed.foregroundRequestAccepted  = request.foregroundRequestAccepted;
+            observed.activationGuardEvaluated   = request.activationGuardEvaluated;
+            observed.activationGuardPassed      = request.activationGuardPassed;
+            observed.foregroundRequestAttempted = request.foregroundRequestAttempted;
+            observed.activationTargetThread     = request.activationTargetThread;
+            observed.activationTargetProcess    = request.activationTargetProcess;
+            observed.activationWarningVisible   = request.activationWarningVisible;
+            observed.activationWarningValid     = request.activationWarningValid;
+            observed.activationWarningThread    = request.activationWarningThread;
+            observed.activationWarningProcess   = request.activationWarningProcess;
+            if (directActivated)
+            {
+                observed.stage = L"direct-activation";
+                return true;
+            }
         }
 
         // This nontext key is consumed by the registration on the owned target.
@@ -249,9 +276,18 @@ public:
         }
         if (! request.handled)
             return false;
-        observed.foregroundRequestAccepted = request.foregroundRequestAccepted;
-        const bool activated               = request.activated && GetForegroundWindow() == target;
-        observed.stage                     = activated ? L"hotkey-activation" : L"hotkey-activation-refused";
+        observed.foregroundRequestAccepted  = request.foregroundRequestAccepted;
+        observed.activationGuardEvaluated   = request.activationGuardEvaluated;
+        observed.activationGuardPassed      = request.activationGuardPassed;
+        observed.foregroundRequestAttempted = request.foregroundRequestAttempted;
+        observed.activationTargetThread     = request.activationTargetThread;
+        observed.activationTargetProcess    = request.activationTargetProcess;
+        observed.activationWarningVisible   = request.activationWarningVisible;
+        observed.activationWarningValid     = request.activationWarningValid;
+        observed.activationWarningThread    = request.activationWarningThread;
+        observed.activationWarningProcess   = request.activationWarningProcess;
+        const bool activated                = request.activated && GetForegroundWindow() == target;
+        observed.stage                      = activated ? L"hotkey-activation" : L"hotkey-activation-refused";
         return activated;
     }
 
@@ -266,23 +302,43 @@ private:
 
     struct ForegroundHotkeyRequest final
     {
-        HWND target                    = nullptr;
-        HWND warning                   = nullptr;
-        DWORD threadId                 = 0u;
-        UINT_PTR id                    = 0u;
-        bool handled                   = false;
-        bool activated                 = false;
-        bool foregroundRequestAccepted = false;
+        HWND target                     = nullptr;
+        HWND warning                    = nullptr;
+        DWORD threadId                  = 0u;
+        UINT_PTR id                     = 0u;
+        bool handled                    = false;
+        bool activated                  = false;
+        bool foregroundRequestAccepted  = false;
+        bool activationGuardEvaluated   = false;
+        bool activationGuardPassed      = false;
+        bool foregroundRequestAttempted = false;
+        DWORD activationTargetThread    = 0u;
+        DWORD activationTargetProcess   = 0u;
+        bool activationWarningVisible   = false;
+        bool activationWarningValid     = false;
+        DWORD activationWarningThread   = 0u;
+        DWORD activationWarningProcess  = 0u;
 
         [[nodiscard]] bool Activate() noexcept
         {
-            DWORD currentOwner = 0u;
-            if (GetWindowThreadProcessId(target, &currentOwner) != threadId || currentOwner != GetCurrentProcessId() || ! IsWindowVisible(warning))
+            activationGuardPassed      = false;
+            activationGuardEvaluated   = true;
+            foregroundRequestAttempted = false;
+            foregroundRequestAccepted  = false;
+            activationTargetProcess    = 0u;
+            activationTargetThread     = GetWindowThreadProcessId(target, &activationTargetProcess);
+            activationWarningVisible   = IsWindowVisible(warning) != FALSE;
+            activationWarningValid     = IsWindow(warning) != FALSE;
+            activationWarningProcess   = 0u;
+            activationWarningThread    = GetWindowThreadProcessId(warning, &activationWarningProcess);
+            if (activationTargetThread != threadId || activationTargetProcess != GetCurrentProcessId() || ! activationWarningVisible)
                 return false;
+            activationGuardPassed = true;
             ShowWindow(target, SW_SHOWNORMAL);
             BringWindowToTop(target);
             SetActiveWindow(target);
-            foregroundRequestAccepted = Common::RequestForegroundWindow(target) != FALSE;
+            foregroundRequestAttempted = true;
+            foregroundRequestAccepted  = Common::RequestForegroundWindow(target) != FALSE;
             SetFocus(target);
             SetWindowPos(target, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
             SetWindowPos(target, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);

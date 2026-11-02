@@ -560,6 +560,46 @@ Describe 'TestRuns archive contract' {
             Where-Object { $_ -eq 'FileSize' }).Count | Should Be 1
     }
 
+    It 'uses only an ancestral published snapshot when the implicit legacy baseline is missing' {
+        $fixture = New-RSGrandfatheredRelocationFixture
+        $missing = '1111111111111111111111111111111111111111'
+        $manifest = Get-Content -LiteralPath $fixture.Manifest -Raw | ConvertFrom-Json
+        $manifest.test_run_archive_baseline_commit = $missing
+        $manifest.entries[0].baseline_commit = $missing
+        [IO.File]::WriteAllText($fixture.Manifest, ($manifest | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
+        $head = (& git -C $fixture.Root rev-parse HEAD).Trim()
+        $tree = (& git -C $fixture.Root rev-parse "$($fixture.Baseline)^{tree}").Trim()
+        $unrelated = (& git -C $fixture.Root commit-tree $tree -m 'unrelated identical snapshot').Trim()
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to create unrelated snapshot fixture.' }
+        $results = & (Get-Module TestRunArchive) {
+            param($root, $source, $missingCommit, $headCommit, $unrelatedCommit)
+            $oldBaseline = $script:RSTestRunArchiveRelocationBaselineCommit
+            $oldImported = $script:RSTestRunArchiveImportedBaselineCommit
+            try {
+                $script:RSTestRunArchiveRelocationBaselineCommit = $missingCommit
+                $script:RSTestRunArchiveImportedBaselineCommit = $source
+                $positive = Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $root -ExpectedSourceCommit $source -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+                $explicit = Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $root -ExpectedSourceCommit $source -ExpectedBaselineCommit $missingCommit -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+                $script:RSTestRunArchiveImportedBaselineCommit = '2222222222222222222222222222222222222222'
+                $absent = Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $root -ExpectedSourceCommit $source -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+                $script:RSTestRunArchiveImportedBaselineCommit = $headCommit
+                $wrongTree = Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $root -ExpectedSourceCommit $source -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+                $script:RSTestRunArchiveImportedBaselineCommit = $unrelatedCommit
+                $unrelated = Get-RSTestRunArchiveGrandfatheredRelocationState -RepoRoot $root -ExpectedSourceCommit $source -ExpectedPathCount 1 -ExpectedCurrentPathCount 0
+                [pscustomobject]@{ Positive=$positive; Explicit=$explicit; Absent=$absent; WrongTree=$wrongTree; Unrelated=$unrelated }
+            } finally {
+                $script:RSTestRunArchiveRelocationBaselineCommit = $oldBaseline
+                $script:RSTestRunArchiveImportedBaselineCommit = $oldImported
+            }
+        } $fixture.Root $fixture.Baseline $missing $head $unrelated
+        $results.Positive.IsValid | Should Be $true
+        @($results.Positive.Paths).Count | Should Be 1
+        foreach ($failure in @($results.Explicit, $results.Absent, $results.WrongTree, $results.Unrelated)) {
+            $failure.IsValid | Should Be $false
+            @($failure.Paths).Count | Should Be 0
+        }
+    }
+
     It 'rejects changed bytes, duplicate old copies, mode drift, and unreviewed relocation siblings' {
         foreach ($mutation in @('bytes', 'duplicate', 'mode', 'sibling')) {
             $fixture = New-RSGrandfatheredRelocationFixture

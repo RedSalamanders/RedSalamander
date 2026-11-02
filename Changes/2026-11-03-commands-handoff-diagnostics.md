@@ -1,0 +1,1 @@
+- Record the owned-window guard, foreground request and desktop-session facts when a Commands test cannot acquire its required foreground window.
