@@ -484,6 +484,8 @@ the writer can delete bytes, and permits the writer to lock, remove, and rebuild
 `.build/<platform>/<configuration>`. Re-attestation republishes a verified receipt for
 that same profile before any artifact reader is admitted. Release and ARM64 validation
 must never mutate x64 Debug as a hidden side effect.
+The nested deployment build uses the same bounded MSBuild fan-out as the Full suite;
+its timeout, real output removal, restaging assertions, and receipt checks remain in force.
 
 Later Startrail affected/resume phases do not change build authority until their own
 normative activation gates land. A plan checkbox alone does not activate those modes.
