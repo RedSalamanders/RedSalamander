@@ -196,7 +196,10 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
 class CrossProviderCaseScope final
 {
 public:
-    CrossProviderCaseScope(SelfTestState& state, FolderWindow::FileOperationState* operations) noexcept : _state(state), _operations(operations)
+    CrossProviderCaseScope(SelfTestState& state, FolderWindow::FileOperationState* operations, bool* strictDrainSucceeded = nullptr) noexcept
+        : _state(state),
+          _operations(operations),
+          _strictDrainSucceeded(strictDrainSucceeded)
     {
         _verify        = EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy;
         _autoDismiss   = operations->GetAutoDismissSuccess();
@@ -208,6 +211,17 @@ public:
     ~CrossProviderCaseScope()
     {
         const bool quiet = CancelOutstandingSelfTestOperations(_operations);
+        if (_strictDrainSucceeded)
+        {
+            *_strictDrainSucceeded = quiet;
+            if (! quiet)
+            {
+                // XP-01 holds a process-wide environment lease and plugin module. Keep both alive
+                // until owned workers join even when normal bounded cancellation failed.
+                AppendLog(L"XP-01 bounded cancellation failed; shutting down the owned File Operations state before releasing MTP.");
+                _operations->Shutdown();
+            }
+        }
         for (const uint64_t taskId : tasks)
         {
             if (quiet)
@@ -229,13 +243,14 @@ public:
 private:
     SelfTestState& _state;
     FolderWindow::FileOperationState* _operations = nullptr;
+    bool* _strictDrainSucceeded                   = nullptr;
     HWND _originalPopup                           = nullptr;
     bool _verify                                  = false;
     bool _autoDismiss                             = false;
 };
 } // namespace
 
-[[nodiscard]] bool RunFileOpsCrossProviderMtpNewFileChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunFileOpsCrossProviderMtpNewFileChecksIsolated(SelfTestState& state, bool& strictDrainSucceeded) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
     {
@@ -296,7 +311,7 @@ private:
     if (FAILED(mtpDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
         return reject(L"fake-MTP destination folder could not be created");
 
-    CrossProviderCaseScope scope(state, operations);
+    CrossProviderCaseScope scope(state, operations, &strictDrainSucceeded);
     EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = false;
     const auto summary = RunCrossProviderTransfer(state, operations, scope.tasks, mtp, {file, tree}, std::filesystem::path(kMtpDestination), false);
     if (! summary.has_value())
@@ -604,6 +619,9 @@ private:
 
     // The fake device replaces the observed PUID during the replacement upload. A fresh
     // generation must ask again; choosing Skip preserves the newer occupant, not the old grant.
+    // Recovery must retain the identified temp and its contents beside the newer occupant.
+    // The metrics below observe recovery branches; the Compare journal fixtures separately
+    // check the retained journal file and are not replaced by this object-safety control.
     const std::filesystem::path changedSource = root / L"guard-race.bin";
     if (! WriteFilledTestFile(changedSource, 4'097u, 0x53u))
         return reject(L"changed-occupant source unavailable");
@@ -615,6 +633,15 @@ private:
     hr = createConfiguredMtp(changedOptions, changedMtp, changedIo, changedDirectories);
     if (FAILED(hr) || ! changedDirectories || FAILED(changedDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
         return reject(L"changed-occupant fake MTP setup failed");
+    constexpr std::array<std::string_view, 4u> kRecoveryMetrics{"mtp.overwrite.journal_temp_identity_recorded",
+                                                                "mtp.overwrite.delete_original_failed",
+                                                                "mtp.overwrite.journal_replay_destination_identity_rejected",
+                                                                "mtp.overwrite.journal_replay_stale_quarantined"};
+    const std::array<HRESULT, 4u> recoveryExpected{S_OK, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), HRESULT_FROM_WIN32(ERROR_INVALID_DATA), S_OK};
+    std::array<std::vector<PerfMetricSample>, kRecoveryMetrics.size()> recoveryBefore;
+    for (size_t index = 0u; index < kRecoveryMetrics.size(); ++index)
+        if (! TryReadPerfMetricSamples(kRecoveryMetrics[index], recoveryBefore[index]))
+            return reject(L"changed-occupant recovery metrics baseline unavailable");
     const auto changedSummary     = RunCrossProviderTransferAnsweringConflict(state,
                                                                               operations,
                                                                               scope.tasks,
@@ -629,16 +656,61 @@ private:
                                                                               FolderWindow::FileOperationState::Task::ConflictAction::Skip);
     const auto changedDestination = std::filesystem::path(kMtpDestination) / changedSource.filename();
     std::string changedBytes;
-    const char* changedProperties  = nullptr;
-    const std::wstring changedPath = changedDestination.native();
-    const bool changedIdentity     = SUCCEEDED(changedIo->GetItemProperties(changedPath.c_str(), &changedProperties)) && changedProperties != nullptr &&
-                                     std::string_view(changedProperties).find("-replaced") != std::string_view::npos;
-    const auto changedChildren     = ListCrossProviderChildNames(changedMtp.get(), std::filesystem::path(kMtpDestination).wstring());
+    const auto changedChildren = ListCrossProviderChildNames(changedMtp.get(), std::filesystem::path(kMtpDestination).wstring());
+    const auto temp            = std::ranges::find_if(
+        changedChildren, [](const std::wstring& name) noexcept { return name.starts_with(L".guard-race.bin.rs-mtp-overwrite-") && name.ends_with(L".tmp"); });
+    const bool exactChildren = changedChildren.size() == 2u && temp != changedChildren.end() &&
+                               std::ranges::count_if(changedChildren, [](const std::wstring& name) noexcept { return name == L"guard-race.bin"; }) == 1 &&
+                               std::ranges::count_if(changedChildren, [](const std::wstring& name) noexcept {
+        return name.starts_with(L".guard-race.bin.rs-mtp-overwrite-") && name.ends_with(L".tmp");
+    }) == 1;
+    const std::filesystem::path tempDestination = temp != changedChildren.end() ? std::filesystem::path(kMtpDestination) / *temp : std::filesystem::path{};
+    std::array<std::string, 2u> persistentIds;
+    bool identityRead = exactChildren;
+    if (identityRead)
+    {
+        const std::array<std::filesystem::path, 2u> identityPaths{changedDestination, tempDestination};
+        for (size_t index = 0u; index < identityPaths.size(); ++index)
+        {
+            const char* properties = nullptr;
+            if (FAILED(changedIo->GetItemProperties(identityPaths[index].c_str(), &properties)) || properties == nullptr)
+            {
+                identityRead = false;
+                break;
+            }
+            const auto object = Common::Json::ParseObjectDocument(properties, 0u);
+            const auto id     = object ? Common::Json::GetStringMember(object.root, "persistentId", Common::Json::MemberRequirement::Required)
+                                       : Common::Json::MemberResult<std::string_view>{};
+            if (! id.HasValue() || id.value.empty())
+            {
+                identityRead = false;
+                break;
+            }
+            persistentIds[index] = id.value;
+        }
+    }
+    const bool changedIdentity = identityRead && persistentIds[0].ends_with("-replaced") && persistentIds[0] != persistentIds[1];
+    bool recoveryMetricsValid  = true;
+    for (size_t index = 0u; index < kRecoveryMetrics.size(); ++index)
+    {
+        std::vector<PerfMetricSample> after;
+        if (! TryReadPerfMetricSamples(kRecoveryMetrics[index], after) || after.size() != recoveryBefore[index].size() + 1u ||
+            after.back().hr != recoveryExpected[index])
+        {
+            AppendLog(std::format(L"XP-01 changed-occupant recovery metric {} missing or unexpected", index));
+            recoveryMetricsValid = false;
+        }
+    }
+    std::string tempBytes;
+    std::string expectedTempBytes;
+    const bool tempContents = exactChildren && ReadFileTextFsIo(changedIo, tempDestination, tempBytes) &&
+                              ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), changedSource, expectedTempBytes) && tempBytes.size() == 4'097u &&
+                              tempBytes == expectedTempBytes;
     std::error_code changedSourceError;
     const bool changedSourceExists = std::filesystem::exists(changedSource, changedSourceError);
     if (! changedSummary.has_value() || changedSummary->skippedItemCount != 1u || changedSummary->errorCount == 0u || ! changedIdentity || changedSourceError ||
-        ! changedSourceExists || ! ReadFileTextFsIo(changedIo, changedDestination, changedBytes) || changedBytes != "replaced occupant" ||
-        changedChildren.size() != 1u)
+        ! changedSourceExists || ! ReadFileTextFsIo(changedIo, changedDestination, changedBytes) || changedBytes != "replaced occupant" || ! exactChildren ||
+        ! tempContents || ! recoveryMetricsValid)
     {
         AppendLog(std::format(L"XP-01 changed occupant: summary={} skipped={} errors={} changedIdentity={} bytes={} children={}",
                               changedSummary.has_value(),
@@ -686,6 +758,67 @@ private:
     }
     Debug::Perf::Emit(L"FileOps.SelfTest.CrossProviderMtpNewFile", L"local-to-mtp=new-file+new-folder;no-temp-left", 0u, 2u, 0u, S_OK);
     return true;
+}
+
+[[nodiscard]] bool RunFileOpsCrossProviderMtpNewFileChecks(SelfTestState& state) noexcept
+{
+    auto* const operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    if (! operations || ! CancelOutstandingSelfTestOperations(operations))
+    {
+        AppendLog(L"XP-01 requires an initial worker quiet point before redirecting MTP journal state.");
+        return false;
+    }
+
+    try
+    {
+        std::wstring id;
+        if (FAILED(Common::Settings::CreateConnectionProfileId(id)) || id.empty())
+        {
+            AppendLog(L"XP-01 could not create an isolated journal sandbox identifier.");
+            return false;
+        }
+        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::FileOperations, std::format(L"xp01-mtp-journal-{}", id));
+        std::error_code emptyError;
+        if (! sandbox.IsValid() || ! std::filesystem::is_empty(sandbox.root, emptyError) || emptyError)
+        {
+            AppendLog(L"XP-01 isolated journal sandbox is unavailable or not empty.");
+            return false;
+        }
+        using RedSalamander::TestSupport::ReadEnvironmentValue;
+        using RedSalamander::TestSupport::ScopedEnvironmentVariable;
+        const auto original = ReadEnvironmentValue(L"LOCALAPPDATA");
+        if (original.error != ERROR_SUCCESS)
+        {
+            AppendLog(L"XP-01 could not capture the original journal environment.");
+            return false;
+        }
+        bool strictDrainSucceeded = true;
+        bool casePassed           = false;
+        {
+            const std::wstring sandboxPath = sandbox.root.wstring();
+            const ScopedEnvironmentVariable journalEnvironment(L"LOCALAPPDATA", sandboxPath);
+            // The inner call owns every fake instance and its module. Its strict scope joins
+            // owned workers before those objects and this environment lease are released.
+            casePassed = RunFileOpsCrossProviderMtpNewFileChecksIsolated(state, strictDrainSucceeded);
+        }
+        const auto restored = ReadEnvironmentValue(L"LOCALAPPDATA");
+        if (restored.error != ERROR_SUCCESS || restored.value != original.value)
+        {
+            AppendLog(L"XP-01 could not verify restoration of the journal environment.");
+            return false;
+        }
+        return casePassed && strictDrainSucceeded;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::system_error& error)
+    {
+        // Environment ownership is a fixture boundary; report the failure after RAII restoration.
+        Debug::Error(L"XP-01 isolated journal environment failed: {}", error.code().value());
+        return false;
+    }
 }
 
 [[nodiscard]] bool RunFileOpsVerifyAvailabilityChecks(SelfTestState& state) noexcept
