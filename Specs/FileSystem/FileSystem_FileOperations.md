@@ -609,6 +609,9 @@ take precedence over that witness. Root and descendant Skips retain their distin
 `S_FALSE` alone is not a Skip, including when publication succeeded but verification was unavailable.
 An explicit directory-shell conflict Skip participates in that witness, with a selected-root Skip
 distinguished from a skipped descendant; a failed sibling walk still takes precedence.
+A selected reparse-tagged root that binds no-follow as a directory uses the same completed-directory
+Skip classification as an ordinary directory root. A skipped descendant is not a skipped root, and a
+failed walk or independent unknown publication or stage debt never becomes Skip-only partial work.
 Copy-only Move never performs source deletion, so its source remains Retained on a failed bridge
 attempt or uncertain stage cleanup even when destination publication is unknown or already occurred.
 A skip-only partial result with known publication and no stage debt retains its explicit Skip;

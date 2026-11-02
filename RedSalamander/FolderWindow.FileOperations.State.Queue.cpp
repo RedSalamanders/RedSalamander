@@ -284,6 +284,23 @@ unsigned long TakeFileOpsBridgeInjectFileReparseAttemptsForSelfTest() noexcept
     return g_fileOpsBridgeInjectFileReparseAttempts.exchange(0u, std::memory_order_acq_rel);
 }
 
+void SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeInjectRootDirectoryReparseAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeInjectedRootBoundDirectoryCount.store(0u, std::memory_order_release);
+    g_fileOpsBridgeInjectRootDirectoryReparseCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeInjectRootDirectoryReparseAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeInjectRootDirectoryReparseAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+unsigned long TakeFileOpsBridgeInjectedRootBoundDirectoryCountForSelfTest() noexcept
+{
+    return g_fileOpsBridgeInjectedRootBoundDirectoryCount.exchange(0u, std::memory_order_acq_rel);
+}
+
 void SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride policy) noexcept
 {
     g_fileOpsBridgeReparsePolicyOverride.store(static_cast<int>(policy), std::memory_order_release);

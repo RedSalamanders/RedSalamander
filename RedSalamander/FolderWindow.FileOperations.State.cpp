@@ -154,6 +154,9 @@ std::atomic<bool> g_fileOpsBridgeInjectHostileChildNames{false};
 std::atomic<unsigned long> g_fileOpsBridgeInjectHostileChildNameAttempts{0};
 std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseCount{0};
 std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseAttempts{0};
+std::atomic<unsigned long> g_fileOpsBridgeInjectRootDirectoryReparseCount{0};
+std::atomic<unsigned long> g_fileOpsBridgeInjectRootDirectoryReparseAttempts{0};
+std::atomic<unsigned long> g_fileOpsBridgeInjectedRootBoundDirectoryCount{0};
 std::atomic<int> g_fileOpsBridgeReparsePolicyOverride{-1};
 std::atomic<unsigned long> g_fileOpsBridgeReplacePublishedDestinationAttempts{0};
 std::mutex g_fileOpsBridgeCommittedErrorMutex;
@@ -15514,6 +15517,9 @@ struct CrossFileSystemBridge
     };
     // Written only by the traversal owner after the selected root's work has quiesced.
     TerminalSkip terminalSkip = TerminalSkip::None;
+#ifdef ENABLE_TESTS
+    bool rootDirectoryReparseInjected = false;
+#endif
 
     // Total bytes is best-effort: if unknown, keep 0.
     uint64_t totalBytes                         = 0;
@@ -20228,11 +20234,13 @@ struct CrossFileSystemBridge
     HRESULT CopyLink(const std::wstring& sourcePath,
                      std::wstring destinationPath,
                      bool sourceIsDirectory,
-                     uint64_t directoryDepth   = 0u,
-                     bool* traverseAsDirectory = nullptr,
-                     bool* enqueueAsFile       = nullptr) noexcept
+                     uint64_t directoryDepth      = 0u,
+                     bool* traverseAsDirectory    = nullptr,
+                     bool* enqueueAsFile          = nullptr,
+                     bool* traversedRootDirectory = nullptr) noexcept
     {
-        const HRESULT status = CopyLinkOnce(sourcePath, destinationPath, sourceIsDirectory, directoryDepth, traverseAsDirectory, enqueueAsFile);
+        const HRESULT status =
+            CopyLinkOnce(sourcePath, destinationPath, sourceIsDirectory, directoryDepth, traverseAsDirectory, enqueueAsFile, traversedRootDirectory);
         ReportFileWork(FileSystemFileWorkPhase::Terminal,
                        sourcePath,
                        destinationPath,
@@ -20250,7 +20258,8 @@ struct CrossFileSystemBridge
                          bool sourceIsDirectory,
                          uint64_t directoryDepth,
                          bool* traverseAsDirectory,
-                         bool* enqueueAsFile) noexcept
+                         bool* enqueueAsFile,
+                         bool* traversedRootDirectory) noexcept
     {
         const bool isRoot   = traverseAsDirectory == nullptr;
         const auto skipLink = [&]() noexcept -> HRESULT
@@ -20320,12 +20329,22 @@ struct CrossFileSystemBridge
         }
         if (classification.authority.kind == FILESYSTEM_BOUND_DIRECTORY)
         {
+#ifdef ENABLE_TESTS
+            if (traversedRootDirectory != nullptr && rootDirectoryReparseInjected)
+            {
+                g_fileOpsBridgeInjectedRootBoundDirectoryCount.fetch_add(1u, std::memory_order_acq_rel);
+            }
+#endif
             // Name-surrogate tags are links; other directory reparse tags remain a
             // directory namespace and are traversed without following another target.
             if (traverseAsDirectory != nullptr)
             {
                 *traverseAsDirectory = true;
                 return S_OK;
+            }
+            if (traversedRootDirectory != nullptr)
+            {
+                *traversedRootDirectory = true;
             }
             return CopyDirectorySequential(sourcePath, destinationPath, directoryDepth);
         }
@@ -22209,6 +22228,15 @@ struct CrossFileSystemBridge
             }
         }
 
+#ifdef ENABLE_TESTS
+        // Test-only routing seam: the real provider must still bind this directory no-follow.
+        if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+            ConsumeBridgeCounterForSelfTest(g_fileOpsBridgeInjectRootDirectoryReparseCount, g_fileOpsBridgeInjectRootDirectoryReparseAttempts))
+        {
+            attributes |= FILE_ATTRIBUTE_REPARSE_POINT;
+            rootDirectoryReparseInjected = true;
+        }
+#endif
         const bool isDirectory        = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         const bool isReparse          = (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
         rootVerificationNotApplicable = isDirectory || isReparse;
@@ -22226,9 +22254,29 @@ struct CrossFileSystemBridge
         {
             return discoveryHr;
         }
+        const auto finishDirectory = [&](HRESULT dirHr) noexcept -> HRESULT
+        {
+            if (FAILED(dirHr))
+            {
+                return dirHr;
+            }
+            if (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedDirectoryConflictCount > 0 ||
+                skippedFileConflictCount.load(std::memory_order_acquire) > 0)
+            {
+                // Publish a Skip-only witness only after the directory walk succeeded.
+                terminalSkip = rootDirectoryConflictSkipped ? TerminalSkip::Root : TerminalSkip::Descendant;
+                return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+            }
+            return dirHr;
+        };
         if (isReparse)
         {
-            const HRESULT linkHr = CopyLink(sourcePath, destinationPath, isDirectory);
+            bool traversedRootDirectory = false;
+            const HRESULT linkHr        = CopyLink(sourcePath, destinationPath, isDirectory, 0u, nullptr, nullptr, &traversedRootDirectory);
+            if (traversedRootDirectory)
+            {
+                return finishDirectory(linkHr);
+            }
             if (FAILED(linkHr))
             {
                 return linkHr;
@@ -22243,19 +22291,7 @@ struct CrossFileSystemBridge
         }
         if (isDirectory)
         {
-            const HRESULT dirHr = CopyDirectory(sourcePath, destinationPath);
-            if (FAILED(dirHr))
-            {
-                return dirHr;
-            }
-            if (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedDirectoryConflictCount > 0 ||
-                skippedFileConflictCount.load(std::memory_order_acquire) > 0)
-            {
-                // Publish a Skip-only witness only after the directory walk succeeded.
-                terminalSkip = rootDirectoryConflictSkipped ? TerminalSkip::Root : TerminalSkip::Descendant;
-                return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-            }
-            return dirHr;
+            return finishDirectory(CopyDirectory(sourcePath, destinationPath));
         }
 
         // The selected root is one known regular file. Its exact size is not readable until the

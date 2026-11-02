@@ -3185,6 +3185,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     static_cast<void>(TakeFileOpsBridgeInjectHostileChildNameAttemptsForSelfTest());
     SetFileOpsBridgeInjectFileReparseForSelfTest(0);
     static_cast<void>(TakeFileOpsBridgeInjectFileReparseAttemptsForSelfTest());
+    SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(0);
     SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride::None);
     SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN);
     FolderWindowFileOperationsStateInternal::g_fileOpsProgressIoGateForSelfTest.Release();

@@ -3985,7 +3985,156 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
                               completed->second.conflictPromptCount,
                               completed->second.progressCompletedBytes,
                               static_cast<unsigned long>(result.status)));
-        NextStep(state, SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch);
+        state.stepState = 7;
+        return false;
+    }
+
+    if (state.stepState >= 7 && state.stepState <= 12)
+    {
+        // A real Local directory is bound no-follow; the narrow seam changes only its
+        // selected-root attribute observation. Both child type-mismatch variants must
+        // keep their sibling work while classifying the selected root as partially skipped.
+        const bool childDirectory                 = state.stepState <= 9;
+        const unsigned int phase                  = childDirectory ? state.stepState - 7u : state.stepState - 10u;
+        const auto sourceRoot                     = state.tempRoot / (childDirectory ? L"riptide-reparse-dir-child" : L"riptide-reparse-file-child");
+        const auto sourceBlocked                  = sourceRoot / L"blocked";
+        const auto sourcePayload                  = childDirectory ? sourceBlocked / L"inside.txt" : sourceBlocked;
+        const auto sourceSibling                  = sourceRoot / L"sibling.txt";
+        const std::wstring destinationParent      = childDirectory ? L"/riptide-reparse-dir-dst" : L"/riptide-reparse-file-dst";
+        const std::wstring destinationRoot        = destinationParent + L"/" + sourceRoot.filename().wstring();
+        const std::wstring destinationBlocked     = destinationRoot + L"/blocked";
+        const std::wstring destinationSibling     = destinationRoot + L"/sibling.txt";
+        constexpr std::string_view kBlockedSource = "reparse-blocked-source";
+        constexpr std::string_view kBlocker       = "reparse-existing-blocker";
+        constexpr std::string_view kSibling       = "reparse-copied-sibling";
+
+        if (phase == 0u)
+        {
+            wil::com_ptr<IFileSystemIO> localIo;
+            if (! state.fsLocal.try_query_to(localIo.put()))
+            {
+                Fail(L"Riptide selected reparse-directory Skip could not acquire Local IO.");
+                return true;
+            }
+            if (! RecreateEmptyDirectory(sourceRoot) || (childDirectory && ! SelfTest::EnsureDirectory(sourceBlocked)) ||
+                ! WriteFileTextFsIo(localIo, sourcePayload, kBlockedSource) || ! WriteFileTextFsIo(localIo, sourceSibling, kSibling) ||
+                ! EnsureDummyFolderExists(state.fsDummy.get(), destinationParent) || ! EnsureDummyFolderExists(state.fsDummy.get(), destinationRoot) ||
+                (childDirectory ? ! DummyWriteTextFile(state.fsDummy.get(), destinationBlocked, kBlocker)
+                                : ! EnsureDummyFolderExists(state.fsDummy.get(), destinationBlocked)))
+            {
+                Fail(L"Riptide selected reparse-directory Skip could not seed its exact source and destination.");
+                return true;
+            }
+            SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(1u);
+            state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                     FILESYSTEM_COPY,
+                                                     FolderWindow::Pane::Left,
+                                                     FolderWindow::Pane::Right,
+                                                     state.fsLocal,
+                                                     {sourceRoot},
+                                                     std::filesystem::path(destinationParent),
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     false,
+                                                     0,
+                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                     false,
+                                                     state.fsDummy);
+            if (! state.taskA.has_value())
+            {
+                SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(0u);
+                Fail(L"Riptide selected reparse-directory Skip could not start.");
+                return true;
+            }
+            ++state.stepState;
+            return false;
+        }
+        if (phase == 1u)
+        {
+            if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+            {
+                if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
+                {
+                    if (prompt->bucket != Task::ConflictBucket::TypeMismatch || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) ||
+                        ! EqualsIgnoreCase(prompt->destinationPath, destinationBlocked) ||
+                        ! task->SubmitConflictDecision(prompt->generation, Task::ConflictAction::Skip, false))
+                    {
+                        Fail(L"Riptide selected reparse-directory Skip lacked its exact current TypeMismatch decision.");
+                        return true;
+                    }
+                    ++state.stepState;
+                    return false;
+                }
+            }
+            if (state.taskA.has_value() && state.completedTasks.contains(state.taskA.value()))
+            {
+                Fail(L"Riptide selected reparse-directory Skip completed before its question.");
+                return true;
+            }
+            return false;
+        }
+        if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+        {
+            if (TryGetConflictPromptCopy(task).has_value())
+                return false;
+        }
+        const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+        if (completed == state.completedTasks.end() || state.fileOps->HasActiveOperations() || state.fileOps->FindTask(state.taskA.value()))
+            return false;
+        const auto attempts         = TakeFileOpsBridgeInjectRootDirectoryReparseAttemptsForSelfTest();
+        const auto boundDirectories = TakeFileOpsBridgeInjectedRootBoundDirectoryCountForSelfTest();
+        SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(0u);
+        wil::com_ptr<IFileSystemIO> localIo;
+        wil::com_ptr<IFileSystemIO> dummyIo;
+        std::string sourceBytes;
+        std::string sourceSiblingBytes;
+        std::string destinationSiblingBytes;
+        std::string blockerBytes;
+        unsigned long blockerAttributes = 0u;
+        if (! state.fsLocal.try_query_to(localIo.put()) || ! state.fsDummy.try_query_to(dummyIo.put()) ||
+            FAILED(dummyIo->GetAttributes(destinationBlocked.c_str(), &blockerAttributes)))
+        {
+            Fail(L"Riptide selected reparse-directory Skip could not inspect the exact blocker.");
+            return true;
+        }
+        const DWORD sourceRootAttributes = GetFileAttributesW(sourceRoot.c_str());
+        const auto& items                = completed->second.sourceItemResults;
+        if (attempts != 1u || boundDirectories != 1u || completed->second.hr != S_FALSE || completed->second.conflictPromptCount != 1u ||
+            completed->second.progressCompletedBytes != kSibling.size() || items.size() != 1u || ! items.front().has_value() ||
+            items.front()->publication != FileOperations::PublicationState::Published ||
+            items.front()->sourceDisposition != FileOperations::SourceDisposition::Retained ||
+            items.front()->completion != FileOperations::ItemCompletion::Skipped || items.front()->status != S_FALSE ||
+            sourceRootAttributes == INVALID_FILE_ATTRIBUTES ||
+            (sourceRootAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY ||
+            ((blockerAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u) == childDirectory ||
+            GetDirectoryEntryCount(state.fsLocal.get(), sourceRoot.native()) != 2u ||
+            (childDirectory && GetDirectoryEntryCount(state.fsLocal.get(), sourceBlocked.native()) != 1u) ||
+            GetDirectoryEntryCount(state.fsDummy.get(), destinationParent) != 1u || GetDirectoryEntryCount(state.fsDummy.get(), destinationRoot) != 2u ||
+            (! childDirectory && GetDirectoryEntryCount(state.fsDummy.get(), destinationBlocked) != 0u) ||
+            ! ReadFileTextFsIo(localIo, sourcePayload, sourceBytes) || sourceBytes != kBlockedSource ||
+            ! ReadFileTextFsIo(localIo, sourceSibling, sourceSiblingBytes) || sourceSiblingBytes != kSibling ||
+            ! ReadFileTextFsIo(dummyIo, std::filesystem::path(destinationSibling), destinationSiblingBytes) || destinationSiblingBytes != kSibling ||
+            (childDirectory && (! ReadFileTextFsIo(dummyIo, std::filesystem::path(destinationBlocked), blockerBytes) || blockerBytes != kBlocker)))
+        {
+            Fail(std::format(L"Riptide selected reparse-directory {} Skip lost its exact outcome or inventory (injected={} bound={}).",
+                             childDirectory ? L"child-directory" : L"child-file",
+                             attempts,
+                             boundDirectories));
+            return true;
+        }
+        AppendLog(
+            std::format(L"Riptide selected reparse-directory {} Skip: injected={} bound={} prompts={} copiedBytes={} publication={} source={} completion={}.",
+                        childDirectory ? L"child-directory" : L"child-file",
+                        attempts,
+                        boundDirectories,
+                        completed->second.conflictPromptCount,
+                        completed->second.progressCompletedBytes,
+                        static_cast<unsigned int>(items.front()->publication),
+                        static_cast<unsigned int>(items.front()->sourceDisposition),
+                        static_cast<unsigned int>(items.front()->completion)));
+        if (childDirectory)
+            state.stepState = 10;
+        else
+            NextStep(state, SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch);
         return false;
     }
 
