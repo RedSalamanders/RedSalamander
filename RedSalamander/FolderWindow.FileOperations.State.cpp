@@ -15506,6 +15506,15 @@ struct CrossFileSystemBridge
     bool renameMerge = false;
     std::atomic<bool> rootSourceRemoved{false};
 
+    enum class TerminalSkip : uint8_t
+    {
+        None,
+        Root,
+        Descendant
+    };
+    // Written only by the traversal owner after the selected root's work has quiesced.
+    TerminalSkip terminalSkip = TerminalSkip::None;
+
     // Total bytes is best-effort: if unknown, keep 0.
     uint64_t totalBytes                        = 0;
     uint64_t completedBytes                    = 0;
@@ -22214,7 +22223,13 @@ struct CrossFileSystemBridge
             {
                 return linkHr;
             }
-            return linkHr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
+            if (linkHr == S_FALSE &&
+                (rootDirectoryReparseSkipped || skippedFileConflictCount.load(std::memory_order_acquire) > 0u || skippedFileReparseCount > 0u))
+            {
+                terminalSkip = TerminalSkip::Root;
+                return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+            }
+            return linkHr;
         }
         if (isDirectory)
         {
@@ -22227,6 +22242,7 @@ struct CrossFileSystemBridge
             {
                 // Some child files were skipped at a conflict prompt; the tree is not a
                 // full copy. Caller treats PARTIAL as "source preserved" for MOVE.
+                terminalSkip = TerminalSkip::Descendant;
                 return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
             }
             return dirHr;
@@ -22236,9 +22252,10 @@ struct CrossFileSystemBridge
         // source binds, so this root's byte total and its closure are published there, before any
         // writer, stage or payload work. The exit guard above stays the idempotent terminal fallback.
         const HRESULT fileHr = CopyFile(sourcePath, destinationPath, true);
-        if (fileHr == S_FALSE)
+        if (fileHr == S_FALSE && skippedFileConflictCount.load(std::memory_order_acquire) > 0u)
         {
             // Single top-level file skipped at its conflict prompt.
+            terminalSkip = TerminalSkip::Root;
             return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
         return fileHr;
@@ -24721,17 +24738,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
         struct QualifiedItemMutationResult final
         {
-            HRESULT hr                                       = E_NOTIMPL;
-            unsigned long bridgeSkippedDirectoryReparseCount = 0;
-            bool bridgeRootDirectoryReparseSkipped           = false;
-            bool bridgeUnsupportedReparse                    = false;
-            bool hostBridgeAttempt                           = false;
-            bool providerMutationAttempted                   = false;
-            bool managedSourceRetained                       = false;
-            bool managedCleanupIndeterminate                 = false;
-            bool ownedStageCleanupIndeterminate              = false;
-            FileOperations::VerificationState verification   = FileOperations::VerificationState::NotRequested;
-            bool verificationNotApplicableForSelectedRoot    = false;
+            HRESULT hr                                             = E_NOTIMPL;
+            unsigned long bridgeSkippedDirectoryReparseCount       = 0;
+            bool bridgeRootDirectoryReparseSkipped                 = false;
+            bool bridgeUnsupportedReparse                          = false;
+            bool hostBridgeAttempt                                 = false;
+            CrossFileSystemBridge::TerminalSkip bridgeTerminalSkip = CrossFileSystemBridge::TerminalSkip::None;
+            bool providerMutationAttempted                         = false;
+            bool managedSourceRetained                             = false;
+            bool managedCleanupIndeterminate                       = false;
+            bool ownedStageCleanupIndeterminate                    = false;
+            FileOperations::VerificationState verification         = FileOperations::VerificationState::NotRequested;
+            bool verificationNotApplicableForSelectedRoot          = false;
             std::optional<FileOperations::PublicationState> bridgePublication;
             QualifiedItemFailurePhase failurePhase      = QualifiedItemFailurePhase::None;
             HRESULT failureStatus                       = S_OK;
@@ -24899,6 +24917,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                      transferPlan->destinationEndpoint.verificationWriterDigestProof);
                         executionPhase                            = FileOperationItemResultReducer::ExecutionPhase::MutationPossible;
                         const HRESULT bridgeHr                    = bridge.TraverseAndPublishPath(sourceText, destinationItemText);
+                        result.bridgeTerminalSkip                 = bridge.terminalSkip;
                         result.bridgeSkippedDirectoryReparseCount = bridge.skippedDirectoryReparseCount + bridge.skippedFileReparseCount;
                         result.bridgeRootDirectoryReparseSkipped  = bridge.rootDirectoryReparseSkipped;
                         result.bridgeUnsupportedReparse           = bridge.unsupportedReparseEncountered;
@@ -25567,10 +25586,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                          OwnedStageDispositionIsIndeterminate(mutationResult.ownedStageDisposition);
                             const bool bridgeUnknown   = mutationResult.bridgePublication == FileOperations::PublicationState::Unknown;
                             const bool bridgePublished = mutationResult.bridgePublication == FileOperations::PublicationState::Published;
-                            // Only an executor success converted to a descendant-Skip partial is
-                            // skip-only. Independent unknown publication or stage debt wins.
+                            // Only a terminal traversal witness establishes Skip-only partial work.
+                            // Independent unknown publication or stage debt wins.
+                            const bool bridgeSkipOnly       = mutationResult.bridgeTerminalSkip != CrossFileSystemBridge::TerminalSkip::None;
                             const bool bridgeUnsafeToReplay = mutationResult.hostBridgeAttempt && FAILED(itemHr) && ! task.IsCancellationOutcome(itemHr) &&
-                                                              (bridgeUnknown || bridgeStageDebt || (bridgePublished && ! consumedChildSkip));
+                                                              (bridgeUnknown || bridgeStageDebt || (bridgePublished && ! bridgeSkipOnly));
                             if (bridgeUnsafeToReplay)
                             {
                                 if (continueOnError)
@@ -25728,12 +25748,16 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
                             const bool traversalLimitReached = traversalLimitReachedForCall(
                                 itemHr, traversalLimitGenerationBefore, _bridgeTraversalLimitHitCount.load(std::memory_order_acquire));
+                            const bool skipObserved =
+                                mutationResult.hostBridgeAttempt ? bridgeSkipOnly : cookie.explicitSkipObserved.load(std::memory_order_acquire);
                             const QualifiedItemTerminalDisposition terminal =
-                                classifyQualifiedItemTerminal(itemHr,
-                                                              traversalLimitReached,
-                                                              mutationResult.managedCleanupIndeterminate || mutationResult.ownedStageCleanupIndeterminate,
-                                                              mutationResult.verification,
-                                                              cookie.explicitSkipObserved.load(std::memory_order_acquire));
+                                mutationResult.hostBridgeAttempt && mutationResult.bridgeTerminalSkip == CrossFileSystemBridge::TerminalSkip::Root
+                                    ? QualifiedItemTerminalDisposition::Skipped
+                                    : classifyQualifiedItemTerminal(itemHr,
+                                                                    traversalLimitReached,
+                                                                    mutationResult.managedCleanupIndeterminate || mutationResult.ownedStageCleanupIndeterminate,
+                                                                    mutationResult.verification,
+                                                                    skipObserved);
                             if (terminal == QualifiedItemTerminalDisposition::Canceled)
                             {
                                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);
