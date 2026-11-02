@@ -3994,16 +3994,17 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
         // A real Local directory is bound no-follow; the narrow seam changes only its
         // selected-root attribute observation. Both child type-mismatch variants must
         // keep their sibling work while classifying the selected root as partially skipped.
-        const bool childDirectory                 = state.stepState <= 9;
-        const unsigned int phase                  = childDirectory ? state.stepState - 7u : state.stepState - 10u;
-        const auto sourceRoot                     = state.tempRoot / (childDirectory ? L"riptide-reparse-dir-child" : L"riptide-reparse-file-child");
-        const auto sourceBlocked                  = sourceRoot / L"blocked";
-        const auto sourcePayload                  = childDirectory ? sourceBlocked / L"inside.txt" : sourceBlocked;
-        const auto sourceSibling                  = sourceRoot / L"sibling.txt";
-        const std::wstring destinationParent      = childDirectory ? L"/riptide-reparse-dir-dst" : L"/riptide-reparse-file-dst";
-        const std::wstring destinationRoot        = destinationParent + L"/" + sourceRoot.filename().wstring();
-        const std::wstring destinationBlocked     = destinationRoot + L"/blocked";
-        const std::wstring destinationSibling     = destinationRoot + L"/sibling.txt";
+        const bool childDirectory = state.stepState <= 9;
+        const unsigned int phase  = childDirectory ? state.stepState - 7u : state.stepState - 10u;
+        const auto sourceRoot     = state.tempRoot / (childDirectory ? L"riptide-reparse-dir-child" : L"riptide-reparse-file-child");
+        const auto sourceBlocked  = sourceRoot / L"blocked";
+        const auto sourcePayload  = childDirectory ? sourceBlocked / L"inside.txt" : sourceBlocked;
+        const auto sourceSibling  = sourceRoot / L"sibling.txt";
+        // Match Dummy's published preferred separator for exact prompt-path assertions.
+        const std::wstring destinationParent      = childDirectory ? L"\\riptide-reparse-dir-dst" : L"\\riptide-reparse-file-dst";
+        const std::wstring destinationRoot        = destinationParent + L"\\" + sourceRoot.filename().wstring();
+        const std::wstring destinationBlocked     = destinationRoot + L"\\blocked";
+        const std::wstring destinationSibling     = destinationRoot + L"\\sibling.txt";
         constexpr std::string_view kBlockedSource = "reparse-blocked-source";
         constexpr std::string_view kBlocker       = "reparse-existing-blocker";
         constexpr std::string_view kSibling       = "reparse-copied-sibling";
@@ -4054,11 +4055,21 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
             {
                 if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
                 {
-                    if (prompt->bucket != Task::ConflictBucket::TypeMismatch || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) ||
-                        ! EqualsIgnoreCase(prompt->destinationPath, destinationBlocked) ||
-                        ! task->SubmitConflictDecision(prompt->generation, Task::ConflictAction::Skip, false))
+                    const bool typeMismatch        = prompt->bucket == Task::ConflictBucket::TypeMismatch;
+                    const bool noOverwrite         = ! PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite);
+                    const bool expectedDestMatches = EqualsIgnoreCase(prompt->destinationPath, destinationBlocked);
+                    const bool submitAccepted      = typeMismatch && noOverwrite && expectedDestMatches &&
+                                                     task->SubmitConflictDecision(prompt->generation, Task::ConflictAction::Skip, false);
+                    if (! submitAccepted)
                     {
-                        Fail(L"Riptide selected reparse-directory Skip lacked its exact current TypeMismatch decision.");
+                        Fail(std::format(L"Riptide selected reparse-directory Skip decision failed: bucket={} status=0x{:08X} generation={} "
+                                         L"expectedDestMatches={} noOverwrite={} submitAccepted={}.",
+                                         static_cast<unsigned int>(prompt->bucket),
+                                         static_cast<unsigned long>(prompt->status),
+                                         prompt->generation,
+                                         expectedDestMatches,
+                                         noOverwrite,
+                                         submitAccepted));
                         return true;
                     }
                     ++state.stepState;
