@@ -1,0 +1,1 @@
+- Keep historical-review banner provenance visible by excluding Markdown link, image, math and escape constructs from the bounded banner body.

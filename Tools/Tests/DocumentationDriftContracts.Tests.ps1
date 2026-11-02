@@ -352,10 +352,9 @@ Describe 'Historical audit governance contracts' {
         $opening = Get-RSMarkdownCommentDelimiterMask -Text $match.Groups['banner'].Value
         if ($opening -match '(?m)^ {0,3}>[ \t]*(`{3,}|~{3,})') { return $false }
         if ($opening -match '(?m)^ {0,3}>[ \t]*>') { return $false }
-        # A quoted line beginning with '[' may start a non-rendered link-reference
-        # definition, including a multiline or escaped label. Reject that bounded
-        # banner form conservatively instead of trying to parse Markdown labels.
-        if ($opening -match '(?m)^ {0,3}>[ \t]*\[') { return $false }
+        # This bounded banner uses plain provenance, never bracket, math or escape syntax.
+        # Link titles, destinations, images and reference labels are not visible provenance.
+        if ($match.Groups['banner'].Value.IndexOfAny([char[]]'[]$\') -ge 0) { return $false }
         # Reference definitions may also be nested inside a list item.
         if ($opening -match '(?m)^ {0,3}>[ \t]*(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)') { return $false }
         # The supported banner format excludes raw HTML. This one historical
@@ -391,6 +390,12 @@ Describe 'Historical audit governance contracts' {
         (Test-ReviewSnapshotBanner $later $false) | Should Be $true
         $warning = '> [!IMPORTANT]' + "`n" + '> **Historical snapshot — not a live work queue.** '
         $metadata = 'Reviewed repository commit `eb779e0bd836` (31 October 2026). Live work: Specs/Plans/WIP/README.md.'
+        (Test-ReviewSnapshotBanner ($warning + '[details](/synthetic "' + $metadata + '")' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '[details](/synthetic/' + $metadata + ')' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '![image](/synthetic "' + $metadata + '")' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\[' + $metadata + '\]' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '$\phantom{' + $metadata + '}$' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\' + $metadata + "`n") $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '> [' + $metadata + ']: /synthetic' + "`n") $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '>   [Reviewed repository commit `eb779e0bd836`' + "`n" + '> (31 October 2026) Specs/Plans/WIP/README.md]: /synthetic' + "`n") $false) | Should Be $false
         (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '> [escaped \] ' + $metadata + ']: /synthetic' + "`n") $false) | Should Be $false
