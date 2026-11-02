@@ -2238,6 +2238,8 @@ struct FolderWindow::FileOperationState
         // Published with the task. Its identity never changes while UI and provider workers observe it.
         std::stop_source _stopSource;
         const std::stop_token _stopToken{_stopSource.get_token()};
+        // Owned only during execution; cleared after worker quiet and before queue release.
+        wil::com_ptr<IFileSystemTaskTransferBudget> _taskTransferBudget;
         std::mutex _pauseMutex;
         std::condition_variable _pauseCv;
 

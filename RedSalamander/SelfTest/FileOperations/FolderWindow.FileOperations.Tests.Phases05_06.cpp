@@ -5324,6 +5324,14 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     const std::filesystem::path cBase            = state.tempRoot / L"r4-a19-independent-c";
     const std::filesystem::path cSource          = cBase / L"source-c";
     const std::filesystem::path cDestination     = cBase / L"destination-c";
+    const auto selectedFiles                     = [&](const std::filesystem::path& source)
+    {
+        std::vector<std::filesystem::path> files;
+        files.reserve(kFileCount);
+        for (unsigned int index = 0u; index < kFileCount; ++index)
+            files.push_back(source / std::format(L"payload-{:02}.bin", index));
+        return files;
+    };
 
     if (state.stepState == 0u)
     {
@@ -5332,6 +5340,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         // than inheriting a previous case's mode or racing the first worker.
         state.r4A19IndependentQueueModeOriginal = state.fileOps->GetQueueNewTasks();
         state.fileOps->SetQueueNewTasks(false);
+        BeginSelfTestSharedTransferLimit(state, (std::max)(2u * kFileCount, FileOperations::GetSharedParallelTransferLimit()));
         AppendLog(std::format(L"R4-A19 independent-volume admission: originalQueue={} fixtureQueue={}",
                               state.r4A19IndependentQueueModeOriginal.value(),
                               state.fileOps->GetQueueNewTasks()));
@@ -5372,9 +5381,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {cSource},
+                                                                  selectedFiles(cSource),
                                                                   cDestination,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value())
@@ -5416,17 +5425,16 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         }
         return std::pair{source.value(), destination.value()};
     };
-    const auto verifyTree = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
+    const auto verifyFiles = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
     {
-        const std::filesystem::path copied = destinationRoot / source.filename();
-        if (CountFilesRecursive(copied) != kFileCount)
+        if (CountFilesRecursive(destinationRoot) != kFileCount)
         {
             return false;
         }
         for (unsigned int index = 0u; index < kFileCount; ++index)
         {
             const std::filesystem::path leaf = std::format(L"payload-{:02}.bin", index);
-            if (! FilesEqualBytes(source / leaf, copied / leaf))
+            if (! FilesEqualBytes(source / leaf, destinationRoot / leaf))
             {
                 return false;
             }
@@ -5444,7 +5452,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         state.r4A19VolumeCIsolatedUs = completed->second.completionTick >= state.r4A19ScenarioStartTick
                                            ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
                                            : 0u;
-        if (FAILED(completed->second.hr) || ! verifyTree(cSource, cDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
+        if (FAILED(completed->second.hr) || ! verifyFiles(cSource, cDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeCIsolatedUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 primary isolated control failed: hr=0x{:08X} "
@@ -5471,9 +5479,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {operationPaths.value().first},
+                                                                  selectedFiles(operationPaths.value().first),
                                                                   operationPaths.value().second,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value())
@@ -5495,7 +5503,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         state.r4A19VolumeDIsolatedUs = completed->second.completionTick >= state.r4A19ScenarioStartTick
                                            ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
                                            : 0u;
-        if (FAILED(completed->second.hr) || ! verifyTree(dSource, dDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
+        if (FAILED(completed->second.hr) || ! verifyFiles(dSource, dDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeDIsolatedUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 alternate isolated control failed: hr=0x{:08X} "
@@ -5528,9 +5536,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {cSource},
+                                                                  selectedFiles(cSource),
                                                                   cDestination,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         state.taskB                  = StartFileOperationAndGetId(state.fileOps,
@@ -5538,9 +5546,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {operationPaths.value().first},
+                                                                  selectedFiles(operationPaths.value().first),
                                                                   operationPaths.value().second,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
@@ -5568,8 +5576,13 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             std::scoped_lock lock(taskB->_progressMutex);
             completedB = taskB->_progressCompletedBytes;
         }
+        const auto admissionA         = taskA->LoadMutationInterlockAdmission();
+        const auto admissionB         = taskB->LoadMutationInterlockAdmission();
+        const bool qualifiedAndActive = admissionA && admissionB && admissionA->parallelNewFiles && admissionB->parallelNewFiles &&
+                                        admissionA->hasDataTransfers && admissionB->hasDataTransfers &&
+                                        state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value());
         state.r4A19IndependentProgressOverlap =
-            state.r4A19IndependentProgressOverlap || (taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
+            state.r4A19IndependentProgressOverlap || (qualifiedAndActive && taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
     }
 
     const auto completedA = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
@@ -5585,8 +5598,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             : 0u;
     const uint64_t slowerIsolatedUs = (std::max)(state.r4A19VolumeCIsolatedUs, state.r4A19VolumeDIsolatedUs);
     const uint64_t concurrentGateUs = (slowerIsolatedUs * 135u + 99u) / 100u;
-    if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyTree(cSource, cDestination) ||
-        ! verifyTree(dSource, dDestination) || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
+    if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyFiles(cSource, cDestination) ||
+        ! verifyFiles(dSource, dDestination) || completedA->second.discoveredTotalBytes != kTaskBytes ||
+        completedB->second.discoveredTotalBytes != kTaskBytes || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
     {
         Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} "
                          L"hrB=0x{:08X} overlap={} "
@@ -5619,6 +5633,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     const std::filesystem::path alternateRoot = std::move(state.fileOpsAlternateVolumeRoot);
     static_cast<void>(SelfTest::RemoveAll(alternateRoot));
     PruneEmptyAlternateVolumeSandboxParents(alternateRoot);
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::DiscoveryScope_LeafCopy);
     return false;
 }
@@ -14306,9 +14321,16 @@ case SelfTestState::Step::Phase5_DiscoverySkipContinues:
         }
         {
             std::scoped_lock lock(taskA->_progressMutex);
+            state.pauseResumeBaselineItems = taskA->_progressCompletedItems;
             state.pauseResumeBaselineBytes = taskA->_progressCompletedBytes;
         }
         taskA->SetDesiredSpeedLimit(4096u);
+        Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.DiscoverySkipRelease",
+                                    L"",
+                                    (released - requested) * 1000ull,
+                                    state.pauseResumeBaselineItems,
+                                    state.pauseResumeBaselineBytes,
+                                    S_OK);
         state.stepState = 4;
         return false;
     }
@@ -14859,71 +14881,40 @@ case SelfTestState::Step::BR3_CancelQueuePausedTransfer:
 }
 case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
 {
+    using Task              = FolderWindow::FileOperationState::Task;
+    auto& ioGate            = FolderWindowFileOperationsStateInternal::g_fileOpsProgressIoGateForSelfTest;
     const ULONGLONG nowTick = GetTickCount64();
-    if (HasTimedOut(state, nowTick))
+    if (HasTimedOut(state, nowTick) || ioGate.TimedOut())
     {
-        const auto summarizeTask = [&](std::optional<std::uint64_t> idOpt) -> std::wstring
-        {
-            if (! idOpt.has_value() || ! state.fileOps)
-            {
-                return L"(missing)";
-            }
-
-            const std::uint64_t id                       = idOpt.value();
-            FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(id);
-            if (! task)
-            {
-                return std::format(L"id={} (missing)", id);
-            }
-
-            unsigned long totalItems     = 0;
-            unsigned long completedItems = 0;
-            {
-                std::scoped_lock lock(task->_progressMutex);
-                totalItems     = task->_progressTotalItems;
-                completedItems = task->_progressCompletedItems;
-            }
-
-            return std::format(L"id={} entered={} started={} qpause={} discoveryAhead={} discoveryClosed={} discoverySkipped={} items={}/{}",
-                               id,
-                               task->HasEnteredOperation(),
-                               task->HasStarted(),
-                               task->IsQueuePaused(),
-                               task->_discoveryAheadActive.load(std::memory_order_acquire),
-                               task->_discoveryClosed.load(std::memory_order_acquire),
-                               task->_discoverySkipped.load(std::memory_order_acquire),
-                               completedItems,
-                               totalItems);
-        };
-
-        Fail(std::format(L"Phase5_SwitchParallelToWaitDuringDiscovery timed out. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
+        Fail(std::format(L"Parallel-to-Queue transfer witness timed out at step {} (gate timed out={}).", state.stepState, ioGate.TimedOut()));
         return true;
     }
 
-    const FileSystemFlags flags                  = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    const std::filesystem::path sourceA          = state.tempRoot / L"discovery-a";
-    const std::filesystem::path sourceB          = state.tempRoot / L"discovery-b";
-    const std::filesystem::path destinationA     = state.tempRoot / L"discovery-switch-dst-a";
-    const std::filesystem::path destinationB     = state.tempRoot / L"discovery-switch-dst-b";
-    constexpr uint64_t kSpeedLimitBytesPerSecond = 64u;
+    const std::filesystem::path sourceA      = state.tempRoot / L"queue-switch-file-a.bin";
+    const std::filesystem::path sourceB      = state.tempRoot / L"queue-switch-file-b.bin";
+    const std::filesystem::path destinationA = state.tempRoot / L"discovery-switch-dst-a";
+    const std::filesystem::path destinationB = state.tempRoot / L"discovery-switch-dst-b";
+    // Exceed the largest permitted bridge buffer so each transfer must perform
+    // a positive partial stage write before it can complete.
+    constexpr uint64_t kFixtureBytes             = 20ull * 1024ull * 1024ull;
+    constexpr uint64_t kSpeedLimitBytesPerSecond = 4ull * 1024ull * 1024ull;
 
     if (state.stepState == 0)
     {
         state.queuePausedTask.reset();
+        BeginSelfTestSharedTransferLimit(state, (std::max)(2u, FileOperations::GetSharedParallelTransferLimit()));
         state.fileOps->ApplyQueueMode(false);
-
-        // Bounded producer queues plus a low transfer rate keep both single-pass traversals open
-        // long enough to exercise the Parallel -> Queue transition deterministically.
-        const std::string config =
-            R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1,"deleteMaxConcurrency":1,"deleteRecycleBinMaxConcurrency":1,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048})json";
-        static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), config));
-
-        if (! RecreateEmptyDirectory(destinationA) || ! RecreateEmptyDirectory(destinationB))
+        if (! RecreateEmptyDirectory(destinationA) || ! RecreateEmptyDirectory(destinationB) || ! WriteTestFile(sourceA, kFixtureBytes) ||
+            ! WriteTestFile(sourceB, kFixtureBytes))
         {
-            Fail(L"Failed to reset destinations for the Parallel-to-Queue discovery test.");
+            Fail(L"Failed to stage independent regular-file transfers for the queue-mode test.");
             return true;
         }
-
+        if (! ioGate.Arm())
+        {
+            Fail(L"A previous transfer checkpoint is still active.");
+            return true;
+        }
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -14931,7 +14922,7 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
                                                  state.fsLocal,
                                                  {sourceA},
                                                  destinationA,
-                                                 flags,
+                                                 FILESYSTEM_FLAG_NONE,
                                                  false,
                                                  kSpeedLimitBytesPerSecond);
         state.taskB = StartFileOperationAndGetId(state.fileOps,
@@ -14941,54 +14932,56 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
                                                  state.fsLocal,
                                                  {sourceB},
                                                  destinationB,
-                                                 flags,
+                                                 FILESYSTEM_FLAG_NONE,
                                                  false,
                                                  kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
-            Fail(L"Failed to start local copy tasks for the Parallel-to-Queue discovery test.");
+            Fail(L"Failed to start independent regular-file transfers for the queue-mode test.");
             return true;
         }
-
         state.stepState = 1;
         return false;
     }
 
-    FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
-    FolderWindow::FileOperationState::Task* taskB = state.fileOps->FindTask(state.taskB.value());
+    Task* const taskA = state.fileOps->FindTask(state.taskA.value());
+    Task* const taskB = state.fileOps->FindTask(state.taskB.value());
     if (! taskA || ! taskB)
     {
-        return false;
+        Fail(L"A queue-mode transfer disappeared before the held I/O witness completed.");
+        return true;
     }
-
     if (state.stepState == 1)
     {
-        if (taskA->HasEnteredOperation() && taskB->HasEnteredOperation())
+        if (! ioGate.HasEntered(state.taskA.value()) || ! ioGate.HasEntered(state.taskB.value()))
+            return false;
+        const auto admissionA = taskA->LoadMutationInterlockAdmission();
+        const auto admissionB = taskB->LoadMutationInterlockAdmission();
+        if (! admissionA || ! admissionB || ! admissionA->parallelNewFiles || ! admissionB->parallelNewFiles || ! admissionA->hasDataTransfers ||
+            ! admissionB->hasDataTransfers || ! state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value()))
         {
-            state.fileOps->ApplyQueueMode(true);
-            state.stepState = 2;
+            Fail(L"The held Copy tasks must have simultaneous qualified new-file data admissions.");
+            return true;
         }
+        // Retain both real transfers while switching mode. The manual pause on the eventual
+        // queue predecessor stays until the resume phase, so it cannot complete and unqueue its peer.
+        taskA->SetPaused(true);
+        taskB->SetPaused(true);
+        state.fileOps->ApplyQueueMode(true);
+        ioGate.Release();
+        state.stepState = 2;
         return false;
     }
-
     if (state.stepState == 2)
     {
         const bool aPaused = taskA->IsQueuePaused();
         const bool bPaused = taskB->IsQueuePaused();
-        if (aPaused == bPaused)
-        {
+        if (aPaused == bPaused || taskA->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u ||
+            taskB->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u)
             return false;
-        }
-
-        state.queuePausedTask                              = aPaused ? state.taskA : state.taskB;
-        FolderWindow::FileOperationState::Task* pausedTask = aPaused ? taskA : taskB;
-
-        if (! pausedTask->_discoveryAheadActive.load(std::memory_order_acquire))
-        {
-            return false;
-        }
-
-        pausedTask->SkipDiscovery();
+        state.queuePausedTask  = aPaused ? state.taskA : state.taskB;
+        Task* const pausedTask = aPaused ? taskA : taskB;
+        pausedTask->SetPaused(false); // Only Queue mode now holds this task.
         {
             std::scoped_lock lock(pausedTask->_progressMutex);
             state.pauseResumeBaselineItems = pausedTask->_progressCompletedItems;
@@ -14999,59 +14992,25 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
         return false;
     }
 
-    if (! state.queuePausedTask.has_value())
+    Task* const pausedTask = state.fileOps->FindTask(state.queuePausedTask.value());
+    if (! pausedTask || ! pausedTask->IsQueuePaused() || pausedTask->IsPaused())
     {
-        return false;
+        Fail(L"The selected transfer must remain paused solely by Queue mode.");
+        return true;
     }
-
-    FolderWindow::FileOperationState::Task* pausedTask = state.fileOps->FindTask(state.queuePausedTask.value());
-    if (! pausedTask)
-    {
+    if (nowTick >= state.markerTick && nowTick - state.markerTick < 500ull)
         return false;
-    }
-
-    const bool discoveryStill = pausedTask->_discoveryAheadActive.load(std::memory_order_acquire);
-    if (discoveryStill)
-    {
-        return false;
-    }
-
-    if (state.markerTick != 0 && nowTick >= state.markerTick && (nowTick - state.markerTick) < 500ull)
-    {
-        return false;
-    }
-
     {
         std::scoped_lock lock(pausedTask->_progressMutex);
         if (pausedTask->_progressCompletedItems != state.pauseResumeBaselineItems || pausedTask->_progressCompletedBytes != state.pauseResumeBaselineBytes)
         {
-            // Queue mode is observed at bounded provider progress checkpoints. A callback already
-            // in flight when the mode changes may publish its final chunk before blocking. Move the
-            // baseline forward and require a complete quiet window; continuous mutation will still
-            // hit the enclosing test deadline instead of being mistaken for an immediate pause.
+            // A progress callback already in flight can finish once; require a full quiet window.
             state.pauseResumeBaselineItems = pausedTask->_progressCompletedItems;
             state.pauseResumeBaselineBytes = pausedTask->_progressCompletedBytes;
             state.markerTick               = nowTick;
             return false;
         }
     }
-
-    const ULONGLONG skipRequestedTick       = pausedTask->_discoverySkipRequestedTick.load(std::memory_order_acquire);
-    const ULONGLONG reservationReleasedTick = pausedTask->_discoveryReservationReleasedTick.load(std::memory_order_acquire);
-    if (skipRequestedTick == 0u || reservationReleasedTick < skipRequestedTick)
-    {
-        Fail(L"Skip discovery did not atomically release the host discovery-ahead reservation.");
-        return true;
-    }
-    const ULONGLONG releaseLatencyMs = reservationReleasedTick - skipRequestedTick;
-    if (releaseLatencyMs > 50ull)
-    {
-        Fail(std::format(L"Skip discovery release latency was {}ms (limit 50ms).", releaseLatencyMs));
-        return true;
-    }
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.DiscoverySkipRelease", L"", releaseLatencyMs * 1000ull, state.pauseResumeBaselineItems, state.pauseResumeBaselineBytes, S_OK);
-
     NextStep(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
     return false;
 }
@@ -15098,6 +15057,10 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
     if (state.stepState == 0)
     {
         state.fileOps->ApplyQueueMode(false);
+        if (auto* task = state.fileOps->FindTask(state.taskA.value()))
+            task->SetPaused(false);
+        if (auto* task = state.fileOps->FindTask(state.taskB.value()))
+            task->SetPaused(false);
         state.stepState = 1;
         return false;
     }
@@ -15213,6 +15176,7 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
         return false;
     }
 
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::Phase6_PopupRateSmoothing);
     return false;
 }

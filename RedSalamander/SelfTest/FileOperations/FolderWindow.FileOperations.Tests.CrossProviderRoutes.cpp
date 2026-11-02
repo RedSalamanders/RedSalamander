@@ -421,8 +421,8 @@ private:
 
     // If another writer takes the new name after discovery, the direct exclusive create reports a
     // known no-commit conflict. Skip preserves that occupant; Overwrite re-enters the guarded PUID swap.
-    const std::filesystem::path skipRaceSource      = root / L"race-skip-source.bin";
-    const std::filesystem::path overwriteRaceSource = root / L"race-overwrite-source.bin";
+    const std::filesystem::path skipRaceSource      = root / L"appeared-skip.bin";
+    const std::filesystem::path overwriteRaceSource = root / L"appeared-overwrite.bin";
     if (! WriteFilledTestFile(skipRaceSource, 2'048u, 0x31u) || ! WriteFilledTestFile(overwriteRaceSource, 2'049u, 0x32u))
     {
         return reject(L"appeared-occupant sources unavailable");
@@ -446,10 +446,21 @@ private:
                                                                            std::filesystem::path(kMtpDestination),
                                                                            FolderWindow::FileOperationState::Task::ConflictAction::Skip);
     std::string skipOccupant;
-    const auto skipDestination = std::filesystem::path(kMtpDestination) / kSkipRaceLeaf;
-    if (! skipRaceSummary.has_value() || skipRaceSummary->skippedItemCount != 1u || skipRaceSummary->errorCount != 0u ||
-        ! ReadFileTextFsIo(skipRaceIo, skipDestination, skipOccupant) || skipOccupant != "concurrent occupant preserved")
+    const auto skipDestination     = std::filesystem::path(kMtpDestination) / kSkipRaceLeaf;
+    const bool skipOccupantRead    = ReadFileTextFsIo(skipRaceIo, skipDestination, skipOccupant);
+    const bool skipOccupantMatches = skipOccupantRead && skipOccupant == "concurrent occupant preserved";
+    if (! skipRaceSummary.has_value() || skipRaceSummary->skippedItemCount != 1u || skipRaceSummary->errorCount != 0u || ! skipOccupantMatches)
     {
+        AppendLog(std::format(
+            L"XP-01 direct-create Skip witness: summary={} hr=0x{:08X} skipped={} errors={} occupantRead={} occupantBytes={} occupantMatches={} diagnostics={}",
+            skipRaceSummary.has_value(),
+            static_cast<unsigned long>(skipRaceSummary.has_value() ? skipRaceSummary->resultHr : E_PENDING),
+            skipRaceSummary.has_value() ? skipRaceSummary->skippedItemCount : 0u,
+            skipRaceSummary.has_value() ? skipRaceSummary->errorCount : 0u,
+            skipOccupantRead,
+            skipOccupant.size(),
+            skipOccupantMatches,
+            skipRaceSummary.has_value() ? DescribeCrossProviderDiagnostics(skipRaceSummary.value()) : std::wstring{}));
         return reject(L"direct-create collision Skip must preserve the appeared occupant and follow the ordinary conflict prompt");
     }
 

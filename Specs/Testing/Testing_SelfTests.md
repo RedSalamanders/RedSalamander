@@ -606,6 +606,7 @@ Environment variables may select alternate test inputs such as profile names, bu
 - `Phase6_LocalBandwidthThrottle` must measure whole-copy duration from the worker's published operation start, not the first UI observation. Its fixture deliberately defers the first observation by at least 500 ms while continuing to pump messages, so delayed polling cannot shorten the measured runtime. Preserve the 250 ms duration-lead allowance, sampled throughput checks and 250 ms cancellation limit; report observation delay separately from duration.
 - Its cancellation clock starts immediately before `RequestCancel`, includes the call itself, and ends at the actual UI completion callback. Retain ordered handler-entry, request, call-return and callback ticks; emit their diagnostics only after delivery. Handler setup and a worker-only cancellation measurement must not replace that unchanged 250 ms callback gate.
 - The R4A02 queue-after and don't-start fixtures hold the predecessor Copy at the existing test-only publication pause until the Delete is observed waiting in the overlap queue or completing explicit cancellation. Provider latency alone must not establish that state. Preserve the final nonzero wait-count, ordering, source-preservation and cancellation assertions; release and disable the pause on failure and after the decision witness.
+- FileOps fixtures that temporarily change the shared transfer limit across UI ticks use the runner's saved-value helper and runtime settings owner; cleanup releases any real progress gate and drains workers before restoring the original limit. The test-only progress gate observes current task identities after actual positive bridge writes and before presentation throttling, remains cancellation-aware and bounded, and never supplies product admission authority. Source contracts protect these ownership boundaries; runtime assertions still prove the behavior.
 - A test-enabled Release selftest that asserts an info-level File Operations diagnostic must explicitly enable that diagnostic level for the case and restore the captured settings afterward. It must not wait for an info record while relying on Release's intentionally disabled default.
 - Loopback FTP fixture LIST serialization appends the fixed wire grammar directly and uses bounded decimal conversion for file sizes. Independent literal-byte oracles cover directories, known/unknown and maximum sizes, UTF-8 names, empty/missing/custom listings and fixture mutation; the 4,097-file, 64-render byte oracle remains. Entry lookup retains its original 298 checks plus the maximum-size oracle (299 total); Copy traversal retains all 142 checks. Do not cache mutable directory snapshots, omit rows, reduce the eight 4,096-file controls or change socket/operation deadlines.
 - FileSystemCurl selftest compilation and its exported selftest entry point use `ENABLE_TESTS`, so the same provider proof runs in Debug and an explicitly test-enabled Release build while an ordinary production Release omits the export. The provider proof must use bounded loopback FTP endpoints and the public cross-connection Move path to cover both a `226` upload that retains a strict prefix and a complete-upload control. It must assert the staged `STOR`/`SIZE`/cleanup command shape, source/final/staging byte state, `ERROR_PARTIAL_COPY` on the short case, success on the control, bounded teardown, and mutation sensitivity when the independent staged-size comparison is bypassed.
@@ -1027,8 +1028,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   proves mutation-before-close with exact discovered bytes/files; `Phase5_DiscoveryCancelLatencyLocal`
   proves bounded cancellation; `Phase5_DiscoverySkipContinues` proves the one-way mode switch on a
   Local traversal that is still producing (a provider that holds its whole plan, such as Dummy, closes
-  before its first byte and leaves nothing to skip); and
-  `Phase5_SwitchParallelToWaitDuringDiscovery` proves Skip does not bypass global Queue waiting.
+  before its first byte and leaves nothing to skip), including the <= 50 ms reservation-release
+  witness and the unchanged queued neighbor. The historical
+  `Phase5_SwitchParallelToWaitDuringDiscovery` case holds two qualified independent Local file
+  transfers inside real I/O, then proves one is quiet for 500 ms under Queue mode; its paired
+  `Phase5_SwitchWaitToParallelResume` case proves progress resumes after Parallel is restored.
   Popup/source-contract coverage must keep task, aggregate, compact-row, and taskbar progress plus ETA
   indeterminate while discovery is open and expose `Counting while working` after Skip. Tests must not
   restore retired pre-calculation threads, settings, callbacks, or `Calculating` task state.
@@ -1036,7 +1040,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   independent-volume fixtures. The independent-volume control explicitly selects Parallel admission
   before starting either operation and restores the exact previous Queue/Parallel mode on normal,
   failed and cancelled phase exit. It changes only future-task admission, reschedules no live task
-  and persists no preference. Overlapping progress, exact byte/tree checks, the 1.35-times-isolated
+  and persists no preference. Each volume task selects four regular files with missing destination
+  leaves and must have a qualified new-file data admission; both admissions must be active during
+  the observed overlap. The fixture temporarily ensures at least eight shared file permits and restores
+  the previous limit after worker quiet. It does not claim recursive directory discovery, which the
+  separate wide-tree and multiple-folder cases cover. Overlapping progress, exact byte/file checks, the 1.35-times-isolated
   throughput gate and the 30-second ceiling remain required. Its Local Copy and permanent-Delete phases must recreate bounded
   unique children beneath the acquired File Operations sandbox, set and restore the Local provider
   configuration, wait for typed task completion, verify exact bytes/files and destination/source
@@ -2578,7 +2586,9 @@ Every Commands junction fixture removes its own link without following it and ch
 
 The provider matrix must agree with FileSystem7z's existing dual-separator route/name contract, while retaining preferred slash, case sensitivity and single-child-name rejection checks. Every gallery capture and its final event drain must retain the no-activation predicate and report the last attempted observation, availability and error on failure. Splitter diagnostics distinguish logical and physical pointer coordinates and hit-window identities. The deferred-consent matrix reports the risk and each observed typed fact/action/scope field without changing the expected policy. Local independent-volume qualification requires the declared, marked alternate root and the runner's explicit opt-in; never convert an environment-blocked mandatory case into success.
 
-The synthetic deferred-consent matrix establishes Move context when it requests source retention. A separate EFS Copy control must withhold and reject that Move-only action, retain the pending prompt after rejection, and accept its published Continue action. The fake-MTP discovery fixture binds a unique marked-sandbox profile before loading its backend, retains that environment lease through copy/cancellation, and verifies exact restoration; it must not replay the caller's journal.
+The connection-override popup fixture may hold accepted bridge writer work through the normal reveal delay; elapsed-time metrics that include this checkpoint declare `candidateCheckpoint=heldForPopup` and cannot support an unperturbed throughput comparison.
+
+The synthetic deferred-consent matrix establishes Move context when it requests source retention. Its per-item controls select Apply-to-all false even when that option is offered, so every item must publish its own prompt; separate scoped-cache controls retain their Apply-to-all coverage. A separate EFS Copy control must withhold and reject that Move-only action, retain the pending prompt after rejection, and accept its published Continue action. The fake-MTP discovery fixture binds a unique marked-sandbox profile before loading its backend, retains that environment lease through copy/cancellation, and verifies exact restoration; it must not replay the caller's journal.
 
 Viewer child-process waits must service the parent's bounded message queue so an owned warning stays responsive while the child runs. The existing contained-timeout fixture also uses a hidden message-only timer to prove queue servicing without acquiring focus or changing its 100 ms child timeout. Artifact rotation must unlink disposable prior links without following them, remove read-only disposable entries, and preserve the current last run when cleanup or rename fails. A guarded fixture entrypoint rejects unmarked/drive/active roots; native controls retain exact outside-target bytes and a locked-file failure canary. A regression's expected failing receipt does not qualify the implementation.
 

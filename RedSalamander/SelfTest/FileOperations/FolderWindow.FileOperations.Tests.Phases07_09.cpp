@@ -1326,6 +1326,7 @@ case SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf:
 
     if (state.stepState == 0)
     {
+        BeginSelfTestSharedTransferLimit(state, kCandidateConcurrency);
         state.taskA.reset();
         state.taskB.reset();
         state.copyMoveConcurrencyPerfRunStartTick        = 0;
@@ -1439,6 +1440,7 @@ case SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf:
                           state.copyMoveConcurrencyPerfBaselineMaxActive,
                           state.copyMoveConcurrencyPerfCandidateMaxActive));
 
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::Phase7_AutoConcurrencyHints);
     return false;
 }
@@ -2038,6 +2040,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
 
     if (state.stepState == 0)
     {
+        BeginSelfTestSharedTransferLimit(state, 16u);
         // Release intentionally disables informational File Operations diagnostics by default.
         // This case asserts the emitted auto-concurrency record, so enable that level for the
         // case; the family cleanup restores the settings snapshot captured during setup.
@@ -2256,6 +2259,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
                           state.autoConcurrencyAutoConfigured,
                           state.autoDeleteConfigured));
 
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines);
     return false;
 }

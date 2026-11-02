@@ -2116,7 +2116,17 @@ remain in force for every operation family. Eligible host transfers resolve dest
 and bind the source before acquiring a shared file permit; a raced existing target requires an
 exclusive permit. Shared permits precede connection permits and span staging, bytes, publication,
 verification and source/stage cleanup. RAII returns capacity on failure and cancellation. Opaque
-provider Copy calls reserve the budget exclusively and receive the current cap in their options;
+provider Copy calls without cooperative support reserve the task budget opaquely and receive the
+current cap in their options. A nonqualified data-transfer job owns one outer exclusive reservation,
+not one reservation per selected root. Cooperative Local Copy calls receive per-call participants:
+their actual file and literal-link operations acquire task-owned tokens sharing the live process
+limit, while each participant also respects its resolved provider concurrency cap. This allows
+multiple roots of the same task to make progress without multiplying their combined file budget.
+The host's managed bridge uses that same group for its file permits. An opaque participant waits for
+all group files to drain and blocks later file permits until it returns; cancellation wakes or bounds
+waiting acquisitions, and RAII retains the group and outer reservation until all tokens are released.
+Live decreases admit no new file above the current limit while existing tokens drain; increases wake
+waiters. The optional COM interface and borrowed lifetimes are specified in `Plugins_PluginAPI.md`.
 Native-only rename moves use their existing path/object interlocks without claiming data capacity;
 an unrelated rename remains admissible while all data slots are occupied.
 

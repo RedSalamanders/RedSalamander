@@ -209,6 +209,7 @@ SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoint;
 SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
+SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
 
 namespace
 {
@@ -3774,6 +3775,86 @@ public:
         ExclusiveTransfer,
     };
 
+    // Protected exclusively by the limiter mutex. An outer ExclusiveTransfer
+    // permit must outlive this group's workers and all group permits.
+    struct TransferGroup final
+    {
+        struct Participant final
+        {
+            unsigned int active = 0;
+            unsigned int limit  = 1;
+        };
+        struct Waiter final
+        {
+            Participant* participant = nullptr;
+            bool opaque              = false;
+        };
+        unsigned int activeFiles = 0;
+        bool opaque              = false;
+        std::deque<Waiter*> waiters;
+    };
+
+    class GroupPermit final
+    {
+    public:
+        GroupPermit() noexcept = default;
+        GroupPermit(ConnectionConcurrencyLimiter* limiter,
+                    std::shared_ptr<TransferGroup> group,
+                    std::shared_ptr<TransferGroup::Participant> participant,
+                    bool opaque) noexcept
+            : _limiter(limiter),
+              _group(std::move(group)),
+              _participant(std::move(participant)),
+              _opaque(opaque)
+        {
+        }
+        GroupPermit(const GroupPermit&)            = delete;
+        GroupPermit& operator=(const GroupPermit&) = delete;
+        GroupPermit(GroupPermit&& other) noexcept
+            : _limiter(std::exchange(other._limiter, nullptr)),
+              _group(std::move(other._group)),
+              _participant(std::move(other._participant)),
+              _opaque(other._opaque)
+        {
+        }
+        GroupPermit& operator=(GroupPermit&& other) noexcept
+        {
+            if (this != &other)
+            {
+                Release();
+                _limiter     = std::exchange(other._limiter, nullptr);
+                _group       = std::move(other._group);
+                _participant = std::move(other._participant);
+                _opaque      = other._opaque;
+            }
+            return *this;
+        }
+        ~GroupPermit() noexcept
+        {
+            Release();
+        }
+        explicit operator bool() const noexcept
+        {
+            return _limiter != nullptr;
+        }
+
+    private:
+        void Release() noexcept
+        {
+            if (_limiter)
+            {
+                _limiter->ReleaseGroup(*_group, _participant.get(), _opaque);
+                _limiter = nullptr;
+                _group.reset();
+                _participant.reset();
+            }
+        }
+        ConnectionConcurrencyLimiter* _limiter = nullptr;
+        std::shared_ptr<TransferGroup> _group;
+        std::shared_ptr<TransferGroup::Participant> _participant;
+        bool _opaque = false;
+    };
+
     class Permit final
     {
     public:
@@ -3873,6 +3954,18 @@ public:
         unsigned int paused       = 0u;
         bool exclusive            = false;
     };
+    struct GroupSnapshot final
+    {
+        unsigned int activeFiles       = 0;
+        unsigned int participantActive = 0;
+        size_t waiters                 = 0;
+        bool opaque                    = false;
+    };
+    [[nodiscard]] GroupSnapshot DebugGroup(const TransferGroup& group, const TransferGroup::Participant& participant) noexcept
+    {
+        std::scoped_lock lock(_mutex);
+        return {group.activeFiles, participant.active, group.waiters.size(), group.opaque};
+    }
     [[nodiscard]] TransferSnapshot DebugTransfers() noexcept
     {
         std::scoped_lock lock(_mutex);
@@ -3947,7 +4040,93 @@ public:
         return permit;
     }
 
+    template <typename CancelPredicate>
+    [[nodiscard]] GroupPermit AcquireGroup(const std::shared_ptr<TransferGroup>& group,
+                                           const std::shared_ptr<TransferGroup::Participant>& participant,
+                                           bool opaque,
+                                           CancelPredicate&& shouldCancel) noexcept
+    {
+        Debug::Perf::Scope perf(L"FileOps.SharedTransfers.GroupAcquireUs");
+        perf.SetHr(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        if (! group)
+            return {};
+        std::unique_lock lock(_mutex);
+        TransferGroup::Waiter ticket{participant.get(), opaque};
+        group->waiters.push_back(&ticket);
+        const auto retire = wil::scope_exit([&]() noexcept
+        {
+            const auto found = std::ranges::find(group->waiters, &ticket);
+            if (found != group->waiters.end())
+                group->waiters.erase(found);
+            _cv.notify_all();
+        });
+        for (;;)
+        {
+            // The caller's operation-control callback can enter host code.
+            lock.unlock();
+            const bool cancelled = shouldCancel();
+            lock.lock();
+            if (cancelled)
+                return {};
+            TransferGroup::Waiter* selected = nullptr;
+            for (TransferGroup::Waiter* waiting : group->waiters)
+            {
+                if (waiting->opaque)
+                {
+                    if (! group->opaque && group->activeFiles == 0u)
+                        selected = waiting;
+                    break; // An older opaque request reserves the next drain.
+                }
+                if (! group->opaque && group->activeFiles < SharedTransferLimit() && waiting->participant &&
+                    waiting->participant->active < waiting->participant->limit)
+                {
+                    selected = waiting;
+                    break;
+                }
+            }
+            if (selected == &ticket)
+            {
+                if (opaque)
+                    group->opaque = true;
+                else
+                {
+                    ++group->activeFiles;
+                    ++participant->active;
+                }
+                perf.SetValue0(group->activeFiles);
+                perf.SetValue1(SharedTransferLimit());
+                perf.SetHr(S_OK);
+                return GroupPermit(this, group, participant, opaque);
+            }
+            _cv.wait_for(lock, std::chrono::milliseconds(100));
+        }
+    }
+
+    void NarrowGroupParticipant(TransferGroup::Participant& participant, unsigned int limit) noexcept
+    {
+        {
+            std::scoped_lock lock(_mutex);
+            participant.limit = std::min(participant.limit, limit);
+        }
+        _cv.notify_all();
+    }
+
 private:
+    void ReleaseGroup(TransferGroup& group, TransferGroup::Participant* participant, bool opaque) noexcept
+    {
+        {
+            std::scoped_lock lock(_mutex);
+            if (opaque)
+                group.opaque = false;
+            else if (group.activeFiles != 0u)
+            {
+                --group.activeFiles;
+                if (participant && participant->active != 0u)
+                    --participant->active;
+            }
+        }
+        _cv.notify_all();
+    }
     struct Entry final
     {
         uint32_t maxCopyMove      = 1;
@@ -4057,6 +4236,167 @@ ConnectionConcurrencyLimiter& GetConnectionConcurrencyLimiter() noexcept
     static ConnectionConcurrencyLimiter limiter;
     return limiter;
 }
+
+class TaskTransferBudget final : public IFileSystemTaskTransferBudget
+{
+    struct Owner final
+    {
+        explicit Owner(ConnectionConcurrencyLimiter::Permit permit) noexcept
+            : outer(std::move(permit)),
+              group(std::make_shared<ConnectionConcurrencyLimiter::TransferGroup>())
+        {
+        }
+        Owner(const Owner&)            = delete;
+        Owner(Owner&&)                 = delete;
+        Owner& operator=(const Owner&) = delete;
+        Owner& operator=(Owner&&)      = delete;
+        ConnectionConcurrencyLimiter::Permit outer;
+        std::shared_ptr<ConnectionConcurrencyLimiter::TransferGroup> group;
+    };
+    class Token final : public IUnknown
+    {
+    public:
+        Token(IFileSystemTaskTransferBudget* owner, ConnectionConcurrencyLimiter::GroupPermit permit) noexcept : _owner(owner), _permit(std::move(permit))
+        {
+        }
+        Token(const Token&)            = delete;
+        Token(Token&&)                 = delete;
+        Token& operator=(const Token&) = delete;
+        Token& operator=(Token&&)      = delete;
+        HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** result) noexcept override
+        {
+            if (! result)
+                return E_POINTER;
+            *result = nullptr;
+            if (riid != __uuidof(IUnknown))
+                return E_NOINTERFACE;
+            *result = static_cast<IUnknown*>(this);
+            AddRef();
+            return S_OK;
+        }
+        ULONG STDMETHODCALLTYPE AddRef() noexcept override
+        {
+            return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+        }
+        ULONG STDMETHODCALLTYPE Release() noexcept override
+        {
+            const ULONG remaining = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+            if (! remaining)
+                delete this;
+            return remaining;
+        }
+
+    private:
+        std::atomic_ulong _refs{1u};
+        // Destroy the group permit before its owner releases the outer permit.
+        wil::com_ptr<IFileSystemTaskTransferBudget> _owner;
+        ConnectionConcurrencyLimiter::GroupPermit _permit;
+    };
+
+public:
+    explicit TaskTransferBudget(ConnectionConcurrencyLimiter::Permit outer) noexcept
+        : _owner(std::make_shared<Owner>(std::move(outer))),
+          _participant(std::make_shared<ConnectionConcurrencyLimiter::TransferGroup::Participant>())
+    {
+        _participant->limit = 16u;
+    }
+    TaskTransferBudget(const TaskTransferBudget&)            = delete;
+    TaskTransferBudget(TaskTransferBudget&&)                 = delete;
+    TaskTransferBudget& operator=(const TaskTransferBudget&) = delete;
+    TaskTransferBudget& operator=(TaskTransferBudget&&)      = delete;
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** result) noexcept override
+    {
+        if (! result)
+            return E_POINTER;
+        *result = nullptr;
+        if (riid != __uuidof(IUnknown) && riid != __uuidof(IFileSystemTaskTransferBudget))
+            return E_NOINTERFACE;
+        *result = static_cast<IFileSystemTaskTransferBudget*>(this);
+        AddRef();
+        return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (! remaining)
+            delete this;
+        return remaining;
+    }
+    HRESULT STDMETHODCALLTYPE CreateParticipant(uint32_t maxConcurrentFiles, IFileSystemTaskTransferBudget** participant) noexcept override
+    {
+        if (! participant)
+            return E_POINTER;
+        *participant = nullptr;
+        if (maxConcurrentFiles == 0u || maxConcurrentFiles > 16u)
+            return E_INVALIDARG;
+        auto* child = new (std::nothrow) TaskTransferBudget(_owner, maxConcurrentFiles);
+        if (! child)
+            return E_OUTOFMEMORY;
+        *participant = child;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE NarrowParticipantLimit(uint32_t maxConcurrentFiles) noexcept override
+    {
+        if (maxConcurrentFiles == 0u || maxConcurrentFiles > 16u)
+            return E_INVALIDARG;
+        GetConnectionConcurrencyLimiter().NarrowGroupParticipant(*_participant, maxConcurrentFiles);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE AcquireFile(IFileSystemOperationControl* control, void* cookie, IUnknown** permit) noexcept override
+    {
+        return Acquire(false, control, cookie, permit);
+    }
+    HRESULT STDMETHODCALLTYPE AcquireOpaque(IFileSystemOperationControl* control, void* cookie, IUnknown** permit) noexcept override
+    {
+        return Acquire(true, control, cookie, permit);
+    }
+#ifdef ENABLE_TESTS
+    [[nodiscard]] ConnectionConcurrencyLimiter::GroupSnapshot DebugSnapshotForSelfTest() noexcept
+    {
+        return GetConnectionConcurrencyLimiter().DebugGroup(*_owner->group, *_participant);
+    }
+#endif
+
+private:
+    TaskTransferBudget(std::shared_ptr<Owner> owner, uint32_t limit) noexcept
+        : _owner(std::move(owner)),
+          _participant(std::make_shared<ConnectionConcurrencyLimiter::TransferGroup::Participant>())
+    {
+        _participant->limit = limit;
+    }
+    HRESULT Acquire(bool opaque, IFileSystemOperationControl* control, void* cookie, IUnknown** result) noexcept
+    {
+        if (! result)
+            return E_POINTER;
+        *result           = nullptr;
+        HRESULT controlHr = S_OK;
+        auto permit       = GetConnectionConcurrencyLimiter().AcquireGroup(_owner->group,
+                                                                           _participant,
+                                                                           opaque,
+                                                                           [&]() noexcept
+        {
+            if (! control)
+                return false;
+            BOOL cancelled = FALSE;
+            controlHr      = control->FileSystemShouldAbort(&cancelled, cookie);
+            return FAILED(controlHr) || cancelled != FALSE;
+        });
+        if (! permit)
+            return FAILED(controlHr) ? controlHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        auto* token = new (std::nothrow) Token(this, std::move(permit));
+        if (! token)
+            return E_OUTOFMEMORY;
+        *result = token;
+        return S_OK;
+    }
+    std::atomic_ulong _refs{1u};
+    std::shared_ptr<Owner> _owner;
+    std::shared_ptr<ConnectionConcurrencyLimiter::TransferGroup::Participant> _participant;
+};
 
 [[nodiscard]] std::optional<DWORD> Win32ErrorFromHRESULT(HRESULT hr) noexcept
 {
@@ -12524,6 +12864,28 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         }
     }
 
+    if (acceptedAdmission->interlock && acceptedAdmission->interlock->hasDataTransfers && ! acceptedAdmission->interlock->parallelNewFiles)
+    {
+        auto outer = GetConnectionConcurrencyLimiter().AcquireTransfer(true, [&]() noexcept { return CancelRequestedDurable(); });
+        if (! outer)
+        {
+            _deferredDirectoryDeleteBindings.clear();
+            _state->LeaveOperation(*this, acceptedAdmission);
+            completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+            return;
+        }
+        auto* budget = new (std::nothrow) TaskTransferBudget(std::move(outer));
+        if (! budget)
+        {
+            outer = {};
+            _deferredDirectoryDeleteBindings.clear();
+            _state->LeaveOperation(*this, acceptedAdmission);
+            completeAndPost(E_OUTOFMEMORY);
+            return;
+        }
+        _taskTransferBudget.attach(budget);
+    }
+
     _enteredOperationTick.store(GetTickCount64(), std::memory_order_release);
     _enteredOperation.store(true, std::memory_order_release);
     PublishLifecyclePhase(TaskLifecyclePhase::Running);
@@ -12546,6 +12908,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     {
         _enteredOperation.store(false, std::memory_order_release);
         _enteredOperationTick.store(0, std::memory_order_release);
+        _taskTransferBudget.reset();
         _deferredDirectoryDeleteBindings.clear();
         _state->LeaveOperation(*this, acceptedAdmission);
         completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
@@ -12563,6 +12926,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         CloseDiscovery();
         _enteredOperation.store(false, std::memory_order_release);
         _enteredOperationTick.store(0, std::memory_order_release);
+        _taskTransferBudget.reset();
         _deferredDirectoryDeleteBindings.clear();
         _state->LeaveOperation(*this, acceptedAdmission);
         completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
@@ -13097,12 +13461,12 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
             L"FileOps.Conflict.WaitUs", L"", perfStats.conflictWaitUs, progressSnapshot.completedBytes, progressSnapshot.itemCompletedCallbackCount, hr);
         Debug::Perf::Emit(
             L"FileOps.Conflict.MetadataUs", L"", perfStats.conflictMetadataUs.load(std::memory_order_acquire), perfStats.conflictPromptCount, 0u, hr);
-        Debug::Perf::Emit(L"FileOps.Conflict.ConvergenceWaitUs",
-                          L"",
-                          perfStats.conflictConvergenceWaitUs,
-                          progressSnapshot.completedBytes,
-                          progressSnapshot.itemCompletedCallbackCount,
-                          hr);
+        Debug::Perf::EmitDurationUs(L"FileOps.Conflict.ConvergenceWaitUs",
+                                    L"",
+                                    perfStats.conflictConvergenceWaitUs,
+                                    progressSnapshot.completedBytes,
+                                    progressSnapshot.itemCompletedCallbackCount,
+                                    hr);
         Debug::Perf::Emit(L"FileOps.Conflict.PromptCount", L"", 0u, perfStats.conflictPromptCount, 0u, hr);
         Debug::Perf::Emit(L"FileOps.Consent.WaitUs", L"", perfStats.consentWaitUs, progressSnapshot.completedBytes, perfStats.consentPromptCount, hr);
         Debug::Perf::Emit(L"FileOps.Consent.PromptCount", L"", 0u, perfStats.consentPromptCount, 0u, hr);
@@ -13169,6 +13533,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     _enteredOperation.store(false, std::memory_order_release);
     _enteredOperationTick.store(0, std::memory_order_release);
     // Workers have quiesced. Release strict leases before admitting successors.
+    _taskTransferBudget.reset();
     _deferredDirectoryDeleteBindings.clear();
     _state->LeaveOperation(*this, acceptedAdmission);
     _state->PostCompleted(*this);
@@ -18769,6 +19134,15 @@ struct CrossFileSystemBridge
         {
 #ifdef ENABLE_TESTS
             // Both bridge pump shapes report only after a real positive Write.
+            // Queue-mode coverage requires a partial owned-stage write. The
+            // popup precedence fixture explicitly opts into any positive write.
+            if (fileCompletedBytes > 0u &&
+                ((txn.useIdentityOwnedStage && fileCompletedBytes < fileTotalBytes) || g_fileOpsProgressIoGateForSelfTest.AllowsAnyPositiveWrite()))
+            {
+                g_fileOpsProgressIoGateForSelfTest.Pause(task._taskId, [&]() noexcept { return task.CancelRequestedDurable(); });
+                if (CancelRequested())
+                    return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
             // The exact owned-child arm proves unpublished stage bytes and parks
             // the worker; its release preserves the normal cancellation cleanup.
             if (txn.useIdentityOwnedStage && fileCompletedBytes > 0u && fileCompletedBytes < fileTotalBytes)
@@ -19535,10 +19909,21 @@ struct CrossFileSystemBridge
         // shared budget exclusively; new names retain atomic no-replace publication.
         const bool exclusive =
             txn.overwriteGranted || txn.replaceReadOnlyGranted || txn.replaceLinkGranted || txn.expectedDestination || txn.replaceExpectation.has_value();
-        auto sharedPermit = GetConnectionConcurrencyLimiter().AcquireTransfer(
-            exclusive, [&]() noexcept { return task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested(); });
-        if (! sharedPermit)
-            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        ConnectionConcurrencyLimiter::Permit sharedPermit;
+        wil::com_ptr<IUnknown> groupPermit;
+        if (task._taskTransferBudget)
+        {
+            const HRESULT budgetHr = task._taskTransferBudget->AcquireFile(&task, cookie, groupPermit.put());
+            if (FAILED(budgetHr) || ! groupPermit)
+                return FAILED(budgetHr) ? budgetHr : E_UNEXPECTED;
+        }
+        else
+        {
+            sharedPermit = GetConnectionConcurrencyLimiter().AcquireTransfer(
+                exclusive, [&]() noexcept { return task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested(); });
+            if (! sharedPermit)
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
         ConnectionConcurrencyLimiter::Permit permit1;
         ConnectionConcurrencyLimiter::Permit permit2;
         const HRESULT hrPermits = AcquireCopyMovePermits(permit1, permit2);
@@ -23850,6 +24235,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             }
         }
 
+        // Cooperative providers receive their own cap independently of the live
+        // process budget, so a later settings increase can admit more leaf work.
+        const unsigned int providerMaxConcurrencyBudget = _perItemMaxConcurrencyBudget;
         if (isTransferOperation && (! selectedAdmission->interlock || selectedAdmission->interlock->hasDataTransfers))
             _perItemMaxConcurrencyBudget = std::min(_perItemMaxConcurrencyBudget, FileOperations::GetSharedParallelTransferLimit());
         _perItemMaxConcurrency = std::min<unsigned int>(_perItemMaxConcurrencyBudget, static_cast<unsigned int>(_perItemTotalItems));
@@ -24492,13 +24880,40 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     }
 
                     FileSystemOptions options{};
-                    auto sharedPermit = GetConnectionConcurrencyLimiter().AcquireTransfer(
-                        true, [&]() noexcept { return _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });
-                    if (! sharedPermit)
-                        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                     InitializeFileSystemOptions(options, static_cast<void*>(&cookie));
+                    ConnectionConcurrencyLimiter::Permit sharedPermit;
+                    wil::com_ptr<IUnknown> opaquePermit;
+                    wil::com_ptr<IFileSystemCooperativeCopy> cooperative;
+                    wil::com_ptr<IFileSystemTaskTransferBudget> participant;
+                    if (_taskTransferBudget)
+                    {
+                        static_cast<void>(_fileSystem->QueryInterface(IID_PPV_ARGS(cooperative.put())));
+                        if (cooperative)
+                        {
+                            options.copyMoveMaxConcurrency = std::clamp(providerMaxConcurrencyBudget, 1u, 16u);
+                            const HRESULT participantHr    = _taskTransferBudget->CreateParticipant(options.copyMoveMaxConcurrency, participant.put());
+                            if (FAILED(participantHr) || ! participant)
+                                return FAILED(participantHr) ? participantHr : E_UNEXPECTED;
+                        }
+                        else
+                        {
+                            const HRESULT permitHr = _taskTransferBudget->AcquireOpaque(this, &cookie, opaquePermit.put());
+                            if (FAILED(permitHr) || ! opaquePermit)
+                                return FAILED(permitHr) ? permitHr : E_UNEXPECTED;
+                        }
+                    }
+                    else
+                    {
+                        sharedPermit = GetConnectionConcurrencyLimiter().AcquireTransfer(
+                            true, [&]() noexcept { return _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });
+                        if (! sharedPermit)
+                            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                    }
                     result.providerMutationAttempted = true;
                     executionPhase                   = FileOperationItemResultReducer::ExecutionPhase::MutationPossible;
+                    if (cooperative)
+                        return cooperative->CopyItemWithTaskBudget(
+                            sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, &cookie, participant.get());
                     return _fileSystem->CopyItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                 });
                 return result;
@@ -26531,6 +26946,544 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferBudgetForSelfT
         failure = L"An exclusive transfer must release its reservation at teardown.";
         return false;
     }
+    // Exercise the actual task-group limiter independently of UI and provider
+    // scheduling. Every waiter is observed under the limiter's own lock.
+    using Group = ConnectionConcurrencyLimiter::TransferGroup;
+    const auto acquireSeed =
+        [](ConnectionConcurrencyLimiter& groupLimiter, const std::shared_ptr<Group>& group, const std::shared_ptr<Group::Participant>& participant) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + 3s;
+        return groupLimiter.AcquireGroup(group, participant, false, [&]() noexcept { return std::chrono::steady_clock::now() >= deadline; });
+    };
+    for (const uint32_t limit : {1u, 4u, 16u})
+    {
+        ConnectionConcurrencyLimiter groupLimiter;
+        groupLimiter.ConfigureSharedTransfers(limit);
+        auto group = std::make_shared<Group>();
+        auto a     = std::make_shared<Group::Participant>();
+        auto b     = std::make_shared<Group::Participant>();
+        a->limit = b->limit = 16u;
+        std::vector<ConnectionConcurrencyLimiter::GroupPermit> held;
+        for (uint32_t index = 0; index < limit; ++index)
+            held.push_back(acquireSeed(groupLimiter, group, index % 2u ? b : a));
+        std::atomic<bool> stop{false};
+        std::atomic<bool> granted{false};
+        std::binary_semaphore release{0};
+        std::jthread worker([&]() noexcept
+        {
+            auto permit = groupLimiter.AcquireGroup(group, b, false, [&]() noexcept { return stop.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                granted.store(true, std::memory_order_release);
+                release.acquire();
+            }
+        });
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            stop.store(true, std::memory_order_release);
+            if (worker.joinable())
+            {
+                release.release();
+                worker.join();
+            }
+        });
+        if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *a).waiters == 1u; }) ||
+            groupLimiter.DebugGroup(*group, *a).activeFiles != limit || granted.load(std::memory_order_acquire))
+        {
+            failure = L"Task-group file capacity must block the next participant at limits 1, 4 and 16.";
+            return false;
+        }
+        held.pop_back();
+        if (! waitFor([&]() noexcept { return granted.load(std::memory_order_acquire); }))
+        {
+            failure = L"Releasing task-group capacity must admit the waiting participant.";
+            return false;
+        }
+        release.release();
+        worker.join();
+        held.clear();
+        if (groupLimiter.DebugGroup(*group, *a).activeFiles != 0u)
+        {
+            failure = L"Task-group file permits must drain completely.";
+            return false;
+        }
+    }
+
+    {
+        ConnectionConcurrencyLimiter groupLimiter;
+        groupLimiter.ConfigureSharedTransfers(4u);
+        auto group  = std::make_shared<Group>();
+        auto a      = std::make_shared<Group::Participant>();
+        auto b      = std::make_shared<Group::Participant>();
+        a->limit    = 1u;
+        b->limit    = 4u;
+        auto firstA = acquireSeed(groupLimiter, group, a);
+        std::atomic<bool> stop{false};
+        std::atomic<bool> secondA{false};
+        std::atomic<bool> firstBGranted{false};
+        std::binary_semaphore release{0};
+        std::binary_semaphore releaseB{0};
+        std::jthread waitingB;
+        std::jthread waitingA([&]() noexcept
+        {
+            auto permit = groupLimiter.AcquireGroup(group, a, false, [&]() noexcept { return stop.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                secondA.store(true, std::memory_order_release);
+                release.acquire();
+            }
+        });
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            stop.store(true, std::memory_order_release);
+            if (waitingA.joinable())
+            {
+                release.release();
+                waitingA.join();
+            }
+            if (waitingB.joinable())
+            {
+                releaseB.release();
+                waitingB.join();
+            }
+        });
+        if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *a).waiters == 1u; }))
+        {
+            failure = L"A participant at its own cap must queue its next file.";
+            return false;
+        }
+        waitingB = std::jthread([&]() noexcept
+        {
+            auto permit = groupLimiter.AcquireGroup(group, b, false, [&]() noexcept { return stop.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                firstBGranted.store(true, std::memory_order_release);
+                releaseB.acquire();
+            }
+        });
+        if (! waitFor([&]() noexcept { return firstBGranted.load(std::memory_order_acquire); }) || secondA.load(std::memory_order_acquire) ||
+            groupLimiter.DebugGroup(*group, *a).activeFiles != 2u)
+        {
+            failure = L"A participant at its cap must not block another participant's available capacity.";
+            return false;
+        }
+        firstA = {};
+        if (! waitFor([&]() noexcept { return secondA.load(std::memory_order_acquire); }))
+        {
+            failure = L"Releasing a participant slot must wake its queued file.";
+            return false;
+        }
+        release.release();
+        waitingA.join();
+        releaseB.release();
+        waitingB.join();
+    }
+
+    {
+        ConnectionConcurrencyLimiter groupLimiter;
+        groupLimiter.ConfigureSharedTransfers(4u);
+        auto group = std::make_shared<Group>();
+        auto a     = std::make_shared<Group::Participant>();
+        auto b     = std::make_shared<Group::Participant>();
+        a->limit = b->limit  = 4u;
+        auto firstGroupFile  = acquireSeed(groupLimiter, group, a);
+        auto secondGroupFile = acquireSeed(groupLimiter, group, b);
+        std::atomic<bool> stop{false}, opaqueGranted{false}, fileGranted{false};
+        std::binary_semaphore releaseOpaque{0}, releaseFile{0};
+        std::jthread opaque([&]() noexcept
+        {
+            auto permit = groupLimiter.AcquireGroup(group, a, true, [&]() noexcept { return stop.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                opaqueGranted.store(true, std::memory_order_release);
+                releaseOpaque.acquire();
+            }
+        });
+        std::jthread later;
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            stop.store(true, std::memory_order_release);
+            if (opaque.joinable())
+            {
+                releaseOpaque.release();
+                opaque.join();
+            }
+            if (later.joinable())
+            {
+                releaseFile.release();
+                later.join();
+            }
+        });
+        if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *a).waiters == 1u; }))
+        {
+            failure = L"An opaque task-group call must wait for active file permits.";
+            return false;
+        }
+        later = std::jthread([&]() noexcept
+        {
+            auto permit = groupLimiter.AcquireGroup(group, b, false, [&]() noexcept { return stop.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                fileGranted.store(true, std::memory_order_release);
+                releaseFile.acquire();
+            }
+        });
+        if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *a).waiters == 2u; }) || fileGranted.load(std::memory_order_acquire))
+        {
+            failure = L"A queued opaque call must reserve the next task-group drain.";
+            return false;
+        }
+        firstGroupFile  = {};
+        secondGroupFile = {};
+        if (! waitFor([&]() noexcept { return opaqueGranted.load(std::memory_order_acquire); }) || fileGranted.load(std::memory_order_acquire) ||
+            ! groupLimiter.DebugGroup(*group, *a).opaque)
+        {
+            failure = L"The opaque task-group call must run alone before later file work.";
+            return false;
+        }
+        releaseOpaque.release();
+        opaque.join();
+        if (! waitFor([&]() noexcept { return fileGranted.load(std::memory_order_acquire); }))
+        {
+            failure = L"Completing an opaque call must admit the next file.";
+            return false;
+        }
+        releaseFile.release();
+        later.join();
+    }
+
+    {
+        ConnectionConcurrencyLimiter groupLimiter;
+        groupLimiter.ConfigureSharedTransfers(4u);
+        auto group = std::make_shared<Group>();
+        auto a     = std::make_shared<Group::Participant>();
+        auto b     = std::make_shared<Group::Participant>();
+        a->limit = b->limit = 4u;
+        std::vector<ConnectionConcurrencyLimiter::GroupPermit> held;
+        for (unsigned int index = 0; index < 4u; ++index)
+            held.push_back(acquireSeed(groupLimiter, group, index % 2u ? b : a));
+        std::atomic<bool> stop{false}, granted{false};
+        std::binary_semaphore release{0};
+        std::jthread waiter([&]() noexcept
+        {
+            auto permit = groupLimiter.AcquireGroup(group, b, false, [&]() noexcept { return stop.load(std::memory_order_acquire); });
+            if (permit)
+            {
+                granted.store(true, std::memory_order_release);
+                release.acquire();
+            }
+        });
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            stop.store(true, std::memory_order_release);
+            if (waiter.joinable())
+            {
+                release.release();
+                waiter.join();
+            }
+        });
+        if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *a).waiters == 1u; }))
+        {
+            failure = L"A task-group waiter must queue at its original global limit.";
+            return false;
+        }
+        groupLimiter.ConfigureSharedTransfers(1u);
+        held.erase(held.begin() + 1, held.end());
+        if (groupLimiter.DebugGroup(*group, *a).activeFiles != 1u || granted.load(std::memory_order_acquire))
+        {
+            failure = L"Lowering a task-group limit must drain existing files before admitting another.";
+            return false;
+        }
+        groupLimiter.ConfigureSharedTransfers(2u);
+        if (! waitFor([&]() noexcept { return granted.load(std::memory_order_acquire); }))
+        {
+            failure = L"Raising a task-group limit must wake an already waiting file.";
+            return false;
+        }
+        release.release();
+        waiter.join();
+    }
+
+    {
+        ConnectionConcurrencyLimiter groupLimiter;
+        groupLimiter.ConfigureSharedTransfers(1u);
+        auto group         = std::make_shared<Group>();
+        auto participant   = std::make_shared<Group::Participant>();
+        participant->limit = 4u;
+        auto held          = acquireSeed(groupLimiter, group, participant);
+        std::array<std::atomic<bool>, 3> cancelWaiter{};
+        std::array<std::atomic<bool>, 3> granted{};
+        std::array<std::jthread, 3> workers;
+        std::counting_semaphore<3> release{0};
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            for (auto& cancelOne : cancelWaiter)
+                cancelOne.store(true, std::memory_order_release);
+            for (auto& worker : workers)
+                if (worker.joinable())
+                    release.release();
+            for (auto& worker : workers)
+                if (worker.joinable())
+                    worker.join();
+        });
+        for (size_t index = 0; index < workers.size(); ++index)
+        {
+            workers[index] = std::jthread([&, index]() noexcept
+            {
+                auto permit =
+                    groupLimiter.AcquireGroup(group, participant, false, [&]() noexcept { return cancelWaiter[index].load(std::memory_order_acquire); });
+                if (permit)
+                {
+                    granted[index].store(true, std::memory_order_release);
+                    release.acquire();
+                }
+            });
+            if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *participant).waiters == index + 1u; }))
+            {
+                failure = L"Task-group cancellation control could not establish ordered waiters.";
+                return false;
+            }
+        }
+        cancelWaiter[0].store(true, std::memory_order_release);
+        cancelWaiter[2].store(true, std::memory_order_release);
+        if (! waitFor([&]() noexcept { return groupLimiter.DebugGroup(*group, *participant).waiters == 1u; }))
+        {
+            failure = L"Cancelling head and non-head group waiters must retire both tickets.";
+            return false;
+        }
+        workers[0].join();
+        workers[2].join();
+        if (granted[0].load(std::memory_order_acquire) || granted[2].load(std::memory_order_acquire))
+        {
+            failure = L"Cancelled group waiters must never acquire a permit.";
+            return false;
+        }
+        held = {};
+        if (! waitFor([&]() noexcept { return granted[1].load(std::memory_order_acquire); }))
+        {
+            failure = L"A surviving group waiter must progress after cancelled tickets are removed.";
+            return false;
+        }
+        release.release();
+        workers[1].join();
+    }
+
+    {
+        auto& processLimiter = GetConnectionConcurrencyLimiter();
+        const auto before    = processLimiter.DebugTransfers();
+        if (before.shared != 0u || before.exclusive || before.waitingExclusive != 0u || before.waitingShared != 0u)
+        {
+            failure = L"Task-group lifetime control requires a quiet process transfer limiter.";
+            return false;
+        }
+        const auto deadline = std::chrono::steady_clock::now() + 3s;
+        auto outer          = processLimiter.AcquireTransfer(true, [&]() noexcept { return std::chrono::steady_clock::now() >= deadline; });
+        if (! outer)
+        {
+            failure = L"Task-group lifetime control could not reserve the process budget.";
+            return false;
+        }
+        wil::com_ptr<IFileSystemTaskTransferBudget> budget;
+        auto* created = new (std::nothrow) TaskTransferBudget(std::move(outer));
+        if (! created)
+        {
+            failure = L"Task-group lifetime control could not allocate its budget.";
+            return false;
+        }
+        budget.attach(created);
+        wil::com_ptr<IFileSystemTaskTransferBudget> participant;
+        const HRESULT participantHr = budget->CreateParticipant(4u, participant.put());
+        if (FAILED(participantHr) || ! participant)
+        {
+            failure = L"Task-group lifetime control could not create its child participant.";
+            return false;
+        }
+        wil::com_ptr<IUnknown> token;
+        struct DeadlineControl final : IFileSystemOperationControl
+        {
+            std::chrono::steady_clock::time_point deadline;
+            HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+            {
+                if (! abort)
+                    return E_POINTER;
+                *abort = std::chrono::steady_clock::now() >= deadline ? TRUE : FALSE;
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode*, void*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+        } control;
+        control.deadline = std::chrono::steady_clock::now() + 3s;
+        const HRESULT hr = participant->AcquireFile(&control, nullptr, token.put());
+        if (FAILED(hr) || ! token)
+        {
+            failure = L"Task-group lifetime control could not acquire its child token.";
+            return false;
+        }
+        budget.reset();
+        participant.reset();
+        if (! processLimiter.DebugTransfers().exclusive)
+        {
+            failure = L"A live child token must retain its task's process-wide reservation.";
+            return false;
+        }
+        token.reset();
+        if (processLimiter.DebugTransfers().exclusive)
+        {
+            failure = L"The last child token must release its task's process-wide reservation.";
+            return false;
+        }
+    }
+
+    {
+        auto& processLimiter = GetConnectionConcurrencyLimiter();
+        const auto before    = processLimiter.DebugTransfers();
+        if (before.shared != 0u || before.exclusive || before.waitingExclusive != 0u || before.waitingShared != 0u)
+        {
+            failure = L"Participant narrowing control requires a quiet process transfer limiter.";
+            return false;
+        }
+        const uint32_t previousLimit = processLimiter.SharedTransferLimit();
+        const auto restoreLimit      = wil::scope_exit([&]() noexcept { processLimiter.ConfigureSharedTransfers(previousLimit); });
+        processLimiter.ConfigureSharedTransfers(4u);
+        const auto outerDeadline = std::chrono::steady_clock::now() + 3s;
+        auto outer               = processLimiter.AcquireTransfer(true, [&]() noexcept { return std::chrono::steady_clock::now() >= outerDeadline; });
+        if (! outer)
+        {
+            failure = L"Participant narrowing control could not reserve the process budget.";
+            return false;
+        }
+        auto* created = new (std::nothrow) TaskTransferBudget(std::move(outer));
+        if (! created)
+        {
+            failure = L"Participant narrowing control could not allocate its budget.";
+            return false;
+        }
+        wil::com_ptr<IFileSystemTaskTransferBudget> budget;
+        budget.attach(created);
+        wil::com_ptr<IFileSystemTaskTransferBudget> a, b;
+        if (FAILED(budget->CreateParticipant(2u, a.put())) || ! a || FAILED(budget->CreateParticipant(4u, b.put())) || ! b ||
+            a->NarrowParticipantLimit(0u) != E_INVALIDARG || a->NarrowParticipantLimit(17u) != E_INVALIDARG)
+        {
+            failure = L"Participant narrowing must reject zero and limits above sixteen.";
+            return false;
+        }
+        struct CancelControl final : IFileSystemOperationControl
+        {
+            CancelControl() noexcept                       = default;
+            CancelControl(const CancelControl&)            = delete;
+            CancelControl(CancelControl&&)                 = delete;
+            CancelControl& operator=(const CancelControl&) = delete;
+            CancelControl& operator=(CancelControl&&)      = delete;
+            std::atomic<bool> cancelled{false};
+            std::chrono::steady_clock::time_point deadline;
+            HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+            {
+                if (! abort)
+                    return E_POINTER;
+                *abort = cancelled.load(std::memory_order_acquire) || std::chrono::steady_clock::now() >= deadline ? TRUE : FALSE;
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode*, void*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+        } controlA, controlB, seedControl;
+        controlA.deadline = controlB.deadline = std::chrono::steady_clock::time_point::max();
+        seedControl.deadline                  = std::chrono::steady_clock::now() + 3s;
+        wil::com_ptr<IUnknown> firstParticipantFile, secondParticipantFile;
+        if (FAILED(a->AcquireFile(&seedControl, nullptr, firstParticipantFile.put())) || ! firstParticipantFile ||
+            FAILED(a->AcquireFile(&seedControl, nullptr, secondParticipantFile.put())) || ! secondParticipantFile || FAILED(a->NarrowParticipantLimit(1u)) ||
+            created->DebugSnapshotForSelfTest().activeFiles != 2u || FAILED(a->NarrowParticipantLimit(4u)))
+        {
+            failure = L"Narrowing must preserve live holders and may not fail while they drain.";
+            return false;
+        }
+        std::atomic<bool> aReturned{false}, aGranted{false}, bGranted{false};
+        std::atomic<HRESULT> aHr{E_PENDING};
+        std::binary_semaphore releaseB{0};
+        std::jthread waitingA([&]() noexcept
+        {
+            wil::com_ptr<IUnknown> token;
+            const HRESULT hr = a->AcquireFile(&controlA, nullptr, token.put());
+            aHr.store(hr, std::memory_order_release);
+            aGranted.store(static_cast<bool>(token), std::memory_order_release);
+            aReturned.store(true, std::memory_order_release);
+        });
+        std::jthread waitingB;
+        const auto finish = wil::scope_exit([&]() noexcept
+        {
+            controlA.cancelled.store(true, std::memory_order_release);
+            controlB.cancelled.store(true, std::memory_order_release);
+            if (waitingA.joinable())
+                waitingA.join();
+            if (waitingB.joinable())
+            {
+                releaseB.release();
+                waitingB.join();
+            }
+        });
+        if (! waitFor([&]() noexcept { return created->DebugSnapshotForSelfTest().waiters == 1u; }) || aGranted.load(std::memory_order_acquire))
+        {
+            failure = L"A later narrowing call must not raise the participant cap or revoke active holders.";
+            return false;
+        }
+        waitingB = std::jthread([&]() noexcept
+        {
+            wil::com_ptr<IUnknown> token;
+            if (SUCCEEDED(b->AcquireFile(&controlB, nullptr, token.put())) && token)
+            {
+                bGranted.store(true, std::memory_order_release);
+                releaseB.acquire();
+            }
+        });
+        if (! waitFor([&]() noexcept { return bGranted.load(std::memory_order_acquire); }) || aGranted.load(std::memory_order_acquire) ||
+            created->DebugSnapshotForSelfTest().activeFiles != 3u)
+        {
+            failure = L"A narrowed participant must not block another participant's available capacity.";
+            return false;
+        }
+        controlA.cancelled.store(true, std::memory_order_release);
+        if (! waitFor([&]() noexcept { return aReturned.load(std::memory_order_acquire); }))
+        {
+            failure = L"Cancelling a narrowed participant waiter must complete promptly.";
+            return false;
+        }
+        waitingA.join();
+        if (aHr.load(std::memory_order_acquire) != HRESULT_FROM_WIN32(ERROR_CANCELLED) || aGranted.load(std::memory_order_acquire) ||
+            created->DebugSnapshotForSelfTest().waiters != 0u)
+        {
+            failure = L"A cancelled narrowed participant must retire its waiter without a permit.";
+            return false;
+        }
+        releaseB.release();
+        waitingB.join();
+        firstParticipantFile.reset();
+        secondParticipantFile.reset();
+        if (created->DebugSnapshotForSelfTest().activeFiles != 0u)
+        {
+            failure = L"Participant narrowing control must release all file permits.";
+            return false;
+        }
+        a.reset();
+        b.reset();
+        budget.reset();
+        if (processLimiter.DebugTransfers().exclusive)
+        {
+            failure = L"Participant narrowing control must release its outer reservation.";
+            return false;
+        }
+    }
+
     Debug::Perf::EmitValue(L"FileOps.SelfTest.SharedTransfers.BudgetContracts", 1u, S_OK);
     return true;
 }

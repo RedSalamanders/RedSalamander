@@ -5808,6 +5808,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemCooperativeCopy))
+    {
+        *ppvObject = static_cast<IFileSystemCooperativeCopy*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemObjectBinding))
     {
         *ppvObject = static_cast<IFileSystemObjectBinding*>(this);

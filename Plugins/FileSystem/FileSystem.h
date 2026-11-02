@@ -115,6 +115,7 @@ private:
 };
 
 class FileSystem final : public IFileSystem,
+                         public IFileSystemCooperativeCopy,
                          public FileSystemRouteCapabilitiesBase,
                          public IFileSystemObjectBinding,
                          public IFileSystemIdentityDelete,
@@ -170,6 +171,13 @@ public:
                                        const FileSystemOptions* options = nullptr,
                                        IFileSystemCallback* callback    = nullptr,
                                        void* cookie                     = nullptr) noexcept override;
+    HRESULT STDMETHODCALLTYPE CopyItemWithTaskBudget(const wchar_t* sourcePath,
+                                                     const wchar_t* destinationPath,
+                                                     FileSystemFlags flags,
+                                                     const FileSystemOptions* options,
+                                                     IFileSystemCallback* callback,
+                                                     void* cookie,
+                                                     IFileSystemTaskTransferBudget* budget) noexcept override;
     HRESULT STDMETHODCALLTYPE MoveItem(const wchar_t* sourcePath,
                                        const wchar_t* destinationPath,
                                        FileSystemFlags flags,
@@ -278,6 +286,14 @@ protected:
 
 private:
     ~FileSystem();
+
+    HRESULT CopyItemImpl(const wchar_t* sourcePath,
+                         const wchar_t* destinationPath,
+                         FileSystemFlags flags,
+                         const FileSystemOptions* options,
+                         IFileSystemCallback* callback,
+                         void* cookie,
+                         IFileSystemTaskTransferBudget* budget) noexcept;
 
     static constexpr wchar_t kPluginId[]      = L"builtin/file-system";
     static constexpr wchar_t kPluginShortId[] = L"file";

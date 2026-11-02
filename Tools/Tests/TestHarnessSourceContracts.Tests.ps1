@@ -2674,6 +2674,31 @@ Specs\TestRuns\local_scratch
         $reacquiredIndex | Should BeGreaterThan $queuedCancelIndex
     }
 
+    It 'keeps FileOperations tick-spanning transfer fixtures under their runtime and cleanup owners' {
+        $runner = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+        $phase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
+        $state = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
+        $private = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Private.h'
+
+        # The asynchronous fixture spans ticks, so its retained original value must
+        # be restored only after workers drain, including the failure cleanup path.
+        $runner | Should Match 'void\s+SetSelfTestSharedTransferLimit\([\s\S]*?owner\.ApplyFileOperationSettings\(\)'
+        $runner | Should Match 'BeginSelfTestSharedTransferLimit\([\s\S]*?GetSharedParallelTransferLimit\(\)'
+        $runner | Should Match 'RestoreSelfTestSharedTransferLimit\([\s\S]*?sharedTransferLimitOriginal\.reset\(\)[\s\S]*?SetSelfTestSharedTransferLimit\(original\)'
+        $runner | Should Match 'g_fileOpsProgressIoGateForSelfTest\.Release\(\)[\s\S]*?CancelOutstandingSelfTestOperations\(state\.fileOps\)[\s\S]*?RestoreSelfTestSharedTransferLimit\(state\)'
+
+        # Accepted writer work reaches the gate before presentation throttling.
+        # Queue coverage requires a partial owned stage; popup coverage opts in
+        # explicitly, while cancellation and bounded cleanup retain their owner.
+        $state | Should Match 'const auto maybeReportProgress[\s\S]*?#ifdef ENABLE_TESTS[\s\S]*?if \(fileCompletedBytes > 0u &&[\s\S]*?txn\.useIdentityOwnedStage && fileCompletedBytes < fileTotalBytes[\s\S]*?g_fileOpsProgressIoGateForSelfTest\.Pause\(task\._taskId'
+        $checkpointIndex = $state.IndexOf('g_fileOpsProgressIoGateForSelfTest.Pause(task._taskId')
+        $throttleIndex = $state.IndexOf('(nowTick - lastProgressTick) < ProgressIntervalMs()', $checkpointIndex)
+        $checkpointIndex | Should BeGreaterThan -1
+        $throttleIndex | Should BeGreaterThan $checkpointIndex
+        $private | Should Match 'struct SelfTestProgressIoGate[\s\S]*?std::chrono::seconds\(30\)[\s\S]*?cancelled\(\)'
+        $phase05 | Should Match 'ioGate\.HasEntered\(state\.taskA\.value\(\)\)[\s\S]{0,150}ioGate\.HasEntered\(state\.taskB\.value\(\)\)'
+    }
+
     It 'keeps FileOperations popup fixtures inside the current self-test process' {
         $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
         $phase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'

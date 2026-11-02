@@ -1078,6 +1078,8 @@ struct SelfTestState
     // C0_LocalKnownNoCommitReceipts holds the moved file open (no FILE_SHARE_DELETE) until the task ends.
     wil::unique_hfile c0LocalLockedHandle;
 
+    // The process-wide limit override spans asynchronous ticks and is restored after workers drain.
+    std::optional<uint32_t> sharedTransferLimitOriginal;
     bool fileOperationsBackedUp = false;
     std::optional<Common::Settings::FileOperationsSettings> fileOperationsOriginal;
     bool appThemeBackedUp = false;
@@ -2841,6 +2843,33 @@ void RestoreIndependentVolumeQueueMode(SelfTestState& state) noexcept
         state.fileOps->SetQueueNewTasks(original);
 }
 
+// This tick-spanning fixture publishes through the runtime owner without changing persisted settings.
+// A local scope guard cannot span presentation ticks; cleanup drains workers before restoration.
+void SetSelfTestSharedTransferLimit(uint32_t limit) noexcept
+{
+    Common::Settings::Settings settings{};
+    settings.fileOperations.emplace().maxParallelTransfers = limit;
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    owner.ApplyFileOperationSettings();
+}
+
+void BeginSelfTestSharedTransferLimit(SelfTestState& state, uint32_t limit) noexcept
+{
+    if (! state.sharedTransferLimitOriginal.has_value())
+        state.sharedTransferLimitOriginal = FileOperations::GetSharedParallelTransferLimit();
+    SetSelfTestSharedTransferLimit(limit);
+}
+
+void RestoreSelfTestSharedTransferLimit(SelfTestState& state) noexcept
+{
+    if (! state.sharedTransferLimitOriginal.has_value())
+        return;
+    const uint32_t original = state.sharedTransferLimitOriginal.value();
+    state.sharedTransferLimitOriginal.reset();
+    SetSelfTestSharedTransferLimit(original);
+}
+
 void BeginPhase(SelfTestState& state, SelfTestState::Step step) noexcept
 {
     RestoreIndependentVolumeQueueMode(state);
@@ -3158,6 +3187,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     static_cast<void>(TakeFileOpsBridgeInjectFileReparseAttemptsForSelfTest());
     SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride::None);
     SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN);
+    FolderWindowFileOperationsStateInternal::g_fileOpsProgressIoGateForSelfTest.Release();
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
     SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
     ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
@@ -3207,6 +3237,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
         }
         return false;
     }
+    RestoreSelfTestSharedTransferLimit(state);
     if (state.batchRenameExactAutoAcceptBefore.has_value())
     {
         HostResetPromptShutdown();

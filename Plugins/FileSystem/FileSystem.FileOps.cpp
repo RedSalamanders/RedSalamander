@@ -1591,6 +1591,9 @@ struct OperationContext
     const wchar_t* progressDestination                      = nullptr;
 
     ParallelOperationState* parallel = nullptr;
+    // Optional budget-only state; callback, cancellation and result state remain
+    // owned by this call's ParallelOperationState.
+    IFileSystemTaskTransferBudget* taskTransferBudget = nullptr;
 
     ULONGLONG lastProgressReportTick = 0;
 
@@ -4101,6 +4104,36 @@ void InitializeOperationContext(OperationContext& context,
     context.reparseRootDestinationPath.clear();
 }
 
+// Synchronous budget-wait probe includes the provider call's local stop state.
+// The host invokes it without holding its budget mutex.
+struct CopyBudgetCancelProbe final : IFileSystemOperationControl
+{
+    explicit CopyBudgetCancelProbe(OperationContext& operation) noexcept : context(operation)
+    {
+    }
+    CopyBudgetCancelProbe(const CopyBudgetCancelProbe&)            = delete;
+    CopyBudgetCancelProbe(CopyBudgetCancelProbe&&)                 = delete;
+    CopyBudgetCancelProbe& operator=(const CopyBudgetCancelProbe&) = delete;
+    CopyBudgetCancelProbe& operator=(CopyBudgetCancelProbe&&)      = delete;
+    HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+    {
+        if (! abort)
+            return E_POINTER;
+        const HRESULT hr = CheckCancel(context);
+        *abort           = FAILED(hr) ? TRUE : FALSE;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode*, void*) noexcept override
+    {
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+    {
+        return E_NOTIMPL;
+    }
+    OperationContext& context;
+};
+
 class ScopedCopyMoveTransferSlot final
 {
 public:
@@ -4117,6 +4150,23 @@ public:
 
     [[nodiscard]] HRESULT Acquire(OperationContext& context) noexcept
     {
+        if (context.taskTransferBudget)
+        {
+            CopyBudgetCancelProbe probe(context);
+            const HRESULT hr = context.taskTransferBudget->AcquireFile(&probe, nullptr, _budgetPermit.put());
+            if (FAILED(hr) || ! _budgetPermit)
+                return FAILED(hr) ? hr : E_UNEXPECTED;
+            // Retain the call-local active count for bandwidth accounting. The
+            // task budget is the only blocking gate for cooperative calls.
+            if (context.parallel)
+            {
+                _parallel = context.parallel;
+                std::scoped_lock lock(_parallel->copyMoveTransferMutex);
+                ++_parallel->activeCopyMoveTransfers;
+                _acquired = true;
+            }
+            return S_OK;
+        }
         ParallelOperationState* parallel = context.parallel;
         if (! parallel)
         {
@@ -4150,6 +4200,7 @@ public:
     {
         if (! _acquired || ! _parallel)
         {
+            _budgetPermit.reset();
             return;
         }
 
@@ -4164,11 +4215,13 @@ public:
         _parallel->copyMoveTransferCv.notify_one();
         _parallel = nullptr;
         _acquired = false;
+        _budgetPermit.reset();
     }
 
 private:
     ParallelOperationState* _parallel = nullptr;
-    bool _acquired                    = false;
+    wil::com_ptr<IUnknown> _budgetPermit;
+    bool _acquired = false;
 };
 
 HRESULT GetFileSizeBytes(const std::wstring& path, uint64_t* sizeBytes) noexcept
@@ -5888,6 +5941,14 @@ PreserveReparsePointInternal(
 
     *bytesCopied = 0;
 
+    ScopedCopyMoveTransferSlot budgetSlot;
+    if (context.taskTransferBudget)
+    {
+        const HRESULT budgetHr = budgetSlot.Acquire(context);
+        if (FAILED(budgetHr))
+            return budgetHr;
+    }
+
     HRESULT hr = SetProgressPaths(context, source.display.c_str(), destination.display.c_str());
     if (FAILED(hr))
     {
@@ -7012,6 +7073,7 @@ struct RecursiveCopyWorkItem
             context, rootContext.type, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
         context.options                    = sharedOptionsState;
         context.parallel                   = &parallel;
+        context.taskTransferBudget         = rootContext.taskTransferBudget;
         context.fileWorkCall               = rootContext.fileWorkCall;
         context.totalBytes                 = 0; // discovery totals are reported by this same traversal
         context.progressStreamId           = progressStreamId;
@@ -12602,6 +12664,30 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
                                                IFileSystemCallback* callback,
                                                void* cookie) noexcept
 {
+    return CopyItemImpl(sourcePath, destinationPath, flags, options, callback, cookie, nullptr);
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::CopyItemWithTaskBudget(const wchar_t* sourcePath,
+                                                             const wchar_t* destinationPath,
+                                                             FileSystemFlags flags,
+                                                             const FileSystemOptions* options,
+                                                             IFileSystemCallback* callback,
+                                                             void* cookie,
+                                                             IFileSystemTaskTransferBudget* budget) noexcept
+{
+    if (! budget)
+        return E_POINTER;
+    return CopyItemImpl(sourcePath, destinationPath, flags, options, callback, cookie, budget);
+}
+
+HRESULT FileSystem::CopyItemImpl(const wchar_t* sourcePath,
+                                 const wchar_t* destinationPath,
+                                 FileSystemFlags flags,
+                                 const FileSystemOptions* options,
+                                 IFileSystemCallback* callback,
+                                 void* cookie,
+                                 IFileSystemTaskTransferBudget* budget) noexcept
+{
     if (! sourcePath || ! destinationPath)
     {
         return E_POINTER;
@@ -12630,7 +12716,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
 
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_COPY, flags, options, callback, cookie, 1, reparsePointPolicy);
-    context.objectBinding = static_cast<IFileSystemObjectBinding*>(this);
+    context.taskTransferBudget = budget;
+    context.objectBinding      = static_cast<IFileSystemObjectBinding*>(this);
     ReportNativeFileWork(context, FileSystemFileWorkPhase::ScopeSupported);
 
     const PathInfo source      = MakePathInfo(sourcePath);
@@ -12651,7 +12738,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
     HRESULT itemHr       = S_OK;
 
     const unsigned int maxConcurrency = ResolveCopyMoveConcurrencyLimit(copyMoveMaxConcurrency, options, kMaxCopyMoveMaxConcurrency, concurrencyMode);
-    itemHr                            = ReportTopLevelDiscovery(context, source.extended, context.recursive);
+    if (budget)
+    {
+        const HRESULT budgetHr = budget->NarrowParticipantLimit(std::min(maxConcurrency, 16u));
+        if (FAILED(budgetHr))
+            return budgetHr;
+    }
+    itemHr = ReportTopLevelDiscovery(context, source.extended, context.recursive);
     if (SUCCEEDED(itemHr))
     {
         PathInfo selectedDestination = destination;
