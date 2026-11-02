@@ -3831,6 +3831,16 @@ Specs\TestRuns\local_scratch
             'DeleteItems' = 'ReportDeleteDiscoveryClosed'
         }
 
+        foreach ($name in @('CopyItem', 'MoveItem')) {
+            $body = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::' + $name + '\([\s\S]*?\n\}\r?\n')
+            $body.Success | Should Be $true
+            $body.Value | Should Match 'SingleDiscoveryState\s+discovery'
+            $body.Value | Should Match 'context\.singleDiscovery\s*=\s*&discovery'
+            $body.Value | Should Match 'scope_exit\([\s\S]*?ReportRawDiscoveryProgress\(context,\s*0u,\s*0u,\s*0u,\s*0u,\s*true\)'
+        }
+        $copyBody = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::CopyItem\([\s\S]*?\n\}\r?\n')
+        $copyBody.Value | Should Match 'recursiveDiscoveryOwner[\s\S]*?discovery\.closeAttempted[\s\S]*?break'
+
         foreach ($entryPoint in $closureByEntryPoint.Keys) {
             # The return type and the qualified name are sometimes split across lines.
             $pattern = 'HRESULT STDMETHODCALLTYPE\s+FileSystem::' + $entryPoint + '\([\s\S]*?\n\}\r?\n'

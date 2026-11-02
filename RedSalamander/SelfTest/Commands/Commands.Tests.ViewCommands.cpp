@@ -23614,8 +23614,8 @@ struct FolderViewDummyPluginHandles
     },
                                                  SelfTest::Scale(10000ms)),
                   L"Fresh post-Close ViewerSpace scan failed to settle exact provider totals after stale-token delivery.");
-    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", closeReuseMetricOffset) == 1u,
-                  L"Same-window restore before Close did not use exactly one cache hit.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", closeReuseMetricOffset) == 0u,
+                  L"The interrupted same-window restore must not report a completed cache hit.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", postCloseMetricOffset) == 0u,
                   L"Fresh post-Close window recorded a ViewerSpace cache hit.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 1u,
@@ -25866,7 +25866,8 @@ struct FolderViewDummyPluginHandles
     uint64_t bookkeepingHigh = 0u;
     struct Cycle final
     {
-        uint64_t openUs = 0u, firstMeaningfulPaintUs = 0u, retainedUs = 0u, adoptionUs = 0u, closeUs = 0u, closeWorkingSet = 0u, closePrivate = 0u;
+        uint64_t openUs = 0u, warmOpenUs = 0u, firstMeaningfulPaintUs = 0u, retainedUs = 0u, adoptionUs = 0u, closeUs = 0u, closeWorkingSet = 0u,
+                 closePrivate = 0u;
         uint64_t ownedBytes = 0u, cacheBytes = 0u, restoreBytes = 0u, generation = 0u;
         size_t directories = 0u, files = 0u;
     };
@@ -25926,25 +25927,27 @@ struct FolderViewDummyPluginHandles
         for (size_t i = 0u; i < cycles.size(); ++i)
         {
             const Cycle& c = cycles[i];
-            cycleJson.append(std::format(
-                L"    {{\"cycle\":{},\"openSettleUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},\"adoptionSettleUs\":{},\"closeUs\":{},"
-                L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
-                L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
-                i + 1u,
-                c.openUs,
-                c.firstMeaningfulPaintUs,
-                c.retainedUs,
-                c.adoptionUs,
-                c.closeUs,
-                c.closeWorkingSet,
-                c.closePrivate,
-                c.ownedBytes,
-                c.cacheBytes,
-                c.restoreBytes,
-                c.generation,
-                c.directories,
-                c.files,
-                i + 1u < cycles.size() ? L",\n" : L"\n"));
+            cycleJson.append(std::format(L"    "
+                                         L"{{\"cycle\":{},\"openSettleUs\":{},\"warmOpenUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
+                                         L"\"adoptionSettleUs\":{},\"closeUs\":{},"
+                                         L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
+                                         L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
+                                         i + 1u,
+                                         c.openUs,
+                                         c.warmOpenUs,
+                                         c.firstMeaningfulPaintUs,
+                                         c.retainedUs,
+                                         c.adoptionUs,
+                                         c.closeUs,
+                                         c.closeWorkingSet,
+                                         c.closePrivate,
+                                         c.ownedBytes,
+                                         c.cacheBytes,
+                                         c.restoreBytes,
+                                         c.generation,
+                                         c.directories,
+                                         c.files,
+                                         i + 1u < cycles.size() ? L",\n" : L"\n"));
         }
 
         std::wstring artifact;
@@ -26003,15 +26006,17 @@ struct FolderViewDummyPluginHandles
                             lastObserved.drawItemCount,
                             lastObserved.analysisRowCount));
         }
-        artifact.append(std::format(
-            L"  \"pendingCycle\":{{\"openSettleUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},\"adoptionSettleUs\":{},\"closeUs\":{}}},\n"
-            L"  \"cycles\":[\n{}  ]\n}}\n",
-            activeCycle.openUs,
-            activeCycle.firstMeaningfulPaintUs,
-            activeCycle.retainedUs,
-            activeCycle.adoptionUs,
-            activeCycle.closeUs,
-            cycleJson));
+        artifact.append(std::format(L"  "
+                                    L"\"pendingCycle\":{{\"openSettleUs\":{},\"warmOpenUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
+                                    L"\"adoptionSettleUs\":{},\"closeUs\":{}}},\n"
+                                    L"  \"cycles\":[\n{}  ]\n}}\n",
+                                    activeCycle.openUs,
+                                    activeCycle.warmOpenUs,
+                                    activeCycle.firstMeaningfulPaintUs,
+                                    activeCycle.retainedUs,
+                                    activeCycle.adoptionUs,
+                                    activeCycle.closeUs,
+                                    cycleJson));
         const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"viewer_space_memory_20_cycle_metrics.json");
         const bool artifactWritten               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifact);
         SelfTest::AppendSuiteTrace(
@@ -26057,7 +26062,7 @@ struct FolderViewDummyPluginHandles
                                                                             [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
         {
             observe(s);
-            const bool cacheReady = index == 0u ? s.scanCacheSnapshotBytes > 0u : s.scanCacheRestoreBytes > 0u;
+            const bool cacheReady = s.scanCacheSnapshotBytes > 0u && s.scanCacheRestoreBytes == 0u;
             return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.cacheRestorePhase == 0u && ! s.layoutBuildActive &&
                    ! s.layoutDirty && ! s.analysisBuildActive && ! s.layoutAnimationActive && s.drawItemCount > 0u && s.analysisRowCount > 0u &&
                    s.firstMeaningfulPaintUs > 0u && s.presentedLayoutGeneration == s.layoutGeneration && cacheReady;
@@ -26087,10 +26092,39 @@ struct FolderViewDummyPluginHandles
             writePartialArtifact(L"open-settle");
             return false;
         }
-        if (index > 0u)
+        state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", cycleMetricScanOffset) == hitsBefore,
+                      std::format(L"ViewerSpace cycle {} fresh window unexpectedly used the scan cache.", index + 1u));
+        if (! state.failure.empty())
         {
-            state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", cycleMetricScanOffset) > hitsBefore,
-                          std::format(L"ViewerSpace cycle {} did not reopen from the scan cache.", index + 1u));
+            writePartialArtifact(L"cold-open-cache");
+            return false;
+        }
+
+        // The cache belongs to the live window: exercise a warm restore before F5 and Close.
+        const std::uintmax_t warmMetricOffset = FolderViewPerfMetricScanOffset();
+        const uint64_t warmHitsBefore         = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", warmMetricOffset);
+        failurePhase                          = L"warm-open-settle";
+        failurePhaseStartedAt                 = std::chrono::steady_clock::now();
+        const auto warmStartedAt              = std::chrono::steady_clock::now();
+        const bool reopened                   = ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace memory cycle warm reopen", root, probe);
+        const bool warmSettled                = reopened && WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                                                           opened,
+                                                                                           [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
+        {
+            observe(s);
+            return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.cacheRestorePhase == 0u && ! s.layoutBuildActive &&
+                   ! s.layoutDirty && ! s.analysisBuildActive && ! s.layoutAnimationActive && s.drawItemCount > 0u && s.analysisRowCount > 0u &&
+                   s.firstMeaningfulPaintUs > 0u && s.presentedLayoutGeneration == s.layoutGeneration && s.scanCacheRestoreBytes > 0u;
+        },
+                                                                            remaining(deadline));
+        activeCycle.warmOpenUs                = Debug::Perf::ElapsedUs(warmStartedAt);
+        Debug::Perf::Emit(L"viewer.space.memory.cycle_warm_open_us", L"20-cycle", activeCycle.warmOpenUs, index + 1u, warmSettled ? 1u : 0u);
+        state.Require(warmSettled && FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", warmMetricOffset) == warmHitsBefore + 1u,
+                      std::format(L"ViewerSpace cycle {} did not complete exactly one same-window cache restore.", index + 1u));
+        if (! warmSettled || ! state.failure.empty())
+        {
+            writePartialArtifact(L"warm-open-settle");
+            return false;
         }
 
         const WndMsg::ViewerSpacePerfDebugSnapshot displayed = opened;
@@ -26211,7 +26245,8 @@ struct FolderViewDummyPluginHandles
         closeWorkingSet.push_back(afterClose.workingSetBytes);
         closePrivate.push_back(afterClose.privateBytes);
         cycles.push_back(Cycle{.openUs                 = openUs,
-                               .firstMeaningfulPaintUs = opened.firstMeaningfulPaintUs,
+                               .warmOpenUs             = activeCycle.warmOpenUs,
+                               .firstMeaningfulPaintUs = activeCycle.firstMeaningfulPaintUs,
                                .retainedUs             = retainedUs,
                                .adoptionUs             = adoptionUs,
                                .closeUs                = closeUs,
@@ -26268,27 +26303,29 @@ struct FolderViewDummyPluginHandles
     for (size_t i = 0u; i < cycles.size(); ++i)
     {
         const Cycle& c = cycles[i];
-        cycleJson.append(std::format(L"    "
-                                     L"{{\"cycle\":{},\"openPhase\":\"{}\",\"openSettleUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
-                                     L"\"adoptionSettleUs\":{},\"closeUs\":{},"
-                                     L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
-                                     L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
-                                     i + 1u,
-                                     i == 0u ? L"initial-full-scan-cache-seed" : L"cached-reopen",
-                                     c.openUs,
-                                     c.firstMeaningfulPaintUs,
-                                     c.retainedUs,
-                                     c.adoptionUs,
-                                     c.closeUs,
-                                     c.closeWorkingSet,
-                                     c.closePrivate,
-                                     c.ownedBytes,
-                                     c.cacheBytes,
-                                     c.restoreBytes,
-                                     c.generation,
-                                     c.directories,
-                                     c.files,
-                                     i + 1u < cycles.size() ? L",\n" : L"\n"));
+        cycleJson.append(
+            std::format(L"    "
+                        L"{{\"cycle\":{},\"openPhase\":\"{}\",\"openSettleUs\":{},\"warmOpenUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
+                        L"\"adoptionSettleUs\":{},\"closeUs\":{},"
+                        L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
+                        L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
+                        i + 1u,
+                        L"cold-open",
+                        c.openUs,
+                        c.warmOpenUs,
+                        c.firstMeaningfulPaintUs,
+                        c.retainedUs,
+                        c.adoptionUs,
+                        c.closeUs,
+                        c.closeWorkingSet,
+                        c.closePrivate,
+                        c.ownedBytes,
+                        c.cacheBytes,
+                        c.restoreBytes,
+                        c.generation,
+                        c.directories,
+                        c.files,
+                        i + 1u < cycles.size() ? L",\n" : L"\n"));
     }
     std::wstring artifact;
     artifact.append(L"{\n  \"scenario\":\"viewer_space_memory_20_cycle_convergence\",\n");
@@ -32324,9 +32361,32 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         const uint32_t before = enumCount.load(std::memory_order_acquire);
         FocusFolderViewPane(FolderWindow::Pane::Left);
+        const bool focusLeftBefore = g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left;
+        const bool hiddenBefore    = g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left);
+        const auto selectedBefore  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+        const auto refreshBefore   = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES, 0), 0);
-        state.Require(WaitForAtomicAtLeast(enumCount, before + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                      L"Enumeration did not refresh after showing hidden names while pane filter is active.");
+        const bool refreshed = WaitForAtomicAtLeast(enumCount, before + 1u, SelfTest::Scale(std::chrono::milliseconds{3000}));
+        if (! refreshed)
+        {
+            Trace(std::format(L"Show hidden under filter: focusLeftBefore={} focusLeftAfter={} hiddenBefore={} hiddenAfter={} selectedBefore={} "
+                              L"selectedAfter={} enumBefore={} enumAfter={} forceRefreshBefore={} forceRefreshAfter={} a={} b={} c={} filterActive={}.",
+                              focusLeftBefore,
+                              g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left,
+                              hiddenBefore,
+                              g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left),
+                              selectedBefore,
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                              before,
+                              enumCount.load(std::memory_order_acquire),
+                              refreshBefore,
+                              g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"b.log"),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"c.txt"),
+                              g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left)));
+        }
+        state.Require(refreshed, L"Enumeration did not refresh after showing hidden names while pane filter is active.");
     }
 
     const FolderView::NameFilterState filterState = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);

@@ -2377,7 +2377,11 @@ These retain the existing completion-wait quantization and do not establish fina
 16-MiB/s throttle, 8-MiB bridge buffer and Native slow-commit settings. Additional count-ink captures
 and bounded later-child sampling attempts are disclosed capture workload. Open traversal uses a
 separate sequential open-discovery route (32 nonempty sibling folders, 32 files/33 folders/64 MiB
-at 2 MiB/s, beyond the four-directory listing lookahead). Compare matched per-route
+at 2 MiB/s, beyond the four-directory listing lookahead). A source- and task-qualified test checkpoint
+holds that sequential traversal after a real positive open listing report through the ink capture;
+the case witnesses the checkpoint before and after capture, releases it on every exit, and observes
+cancellation and a bounded timeout. This hold is disclosed capture workload, not a throughput result.
+Compare matched per-route
 operation/progress callback and paint samples. These new observation routes bound their harness
 message batch to eight rather than the default
 1,024, while retaining 100-ms sampling, the 650-ms finalization witness and 1,500-ms native delay.

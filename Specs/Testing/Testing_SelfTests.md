@@ -761,13 +761,16 @@ Environment variables may select alternate test inputs such as profile names, bu
   suites and family/phase/prefix selections: their admission, storage, shutdown
   and UIA witnesses share foreground invariants. The only reviewed lease
   exceptions are `-Suite FileOps` with the exact, case-sensitive
-  `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`
+  `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`
   `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
-  `FileOps_SelectionShapeLocal` or `FileOps_SelectionShapeSmb` case filter and no flaky/order proof injection.
+  `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, or `Delete_IdentityLessPinnedTreeChangedEntry`
+  case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
+  the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
+  the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
   they require no foreground assertion, UIA, clipboard or pointer input. Casing
   near-misses, wildcards, multiple-case filters and unknown names fail closed to
   the existing lease. This does not grant activation. Keep

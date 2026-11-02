@@ -6138,33 +6138,12 @@ case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader:
         return false;
     }
 
-    using Task = FolderWindow::FileOperationState::Task;
-    Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
-    if (state.stepState == 1u)
+    auto* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+    if (TryGetConflictPromptCopy(task).has_value())
     {
-        const auto prompt = TryGetConflictPromptCopy(task);
-        if (! prompt.has_value())
-        {
-            const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
-            if (completed != state.completedTasks.end())
-            {
-                SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
-                Fail(std::format(L"Causeway worker failure completed without exposing its real status; hr=0x{:08X}.",
-                                 static_cast<unsigned long>(completed->second.hr)));
-                return true;
-            }
-            return false;
-        }
-        if (prompt->status != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) || prompt->status == HRESULT_FROM_WIN32(ERROR_CANCELLED) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip))
-        {
-            SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
-            Fail(std::format(L"Causeway worker failure was not preserved (prompt status=0x{:08X}).", static_cast<unsigned long>(prompt->status)));
-            return true;
-        }
-        task->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Skip, false);
-        state.stepState = 2u;
-        return false;
+        SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
+        Fail(L"Causeway published directory failure unexpectedly exposed a replay decision.");
+        return true;
     }
 
     const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
@@ -6174,11 +6153,67 @@ case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader:
     }
     const unsigned long attempts = TakeFileOpsBridgeFailNextFileCopyAttemptsForSelfTest();
     SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
-    if (attempts != 1u || completed->second.hr != S_FALSE)
+    if (attempts != 1u || completed->second.hr != E_ACCESSDENIED || completed->second.conflictPromptCount != 0u ||
+        completed->second.sourceItemResults.size() != 1u || ! completed->second.sourceItemResults.front().has_value())
     {
-        Fail(std::format(L"Causeway worker-failure propagation expected one failure followed by an intentional Skip; attempts={} hr=0x{:08X}.",
+        Fail(std::format(L"Causeway worker-failure propagation expected one terminal access denial without a prompt; attempts={} hr=0x{:08X}.",
                          attempts,
                          static_cast<unsigned long>(completed->second.hr)));
+        return true;
+    }
+
+    const auto& result = completed->second.sourceItemResults.front().value();
+    if (result.publication != FileOperations::PublicationState::Published || result.sourceDisposition != FileOperations::SourceDisposition::Retained ||
+        result.completion != FileOperations::ItemCompletion::Failed || result.status != E_ACCESSDENIED)
+    {
+        Fail(L"Causeway worker failure lost its published, source-retained, failed outcome.");
+        return true;
+    }
+    constexpr std::string_view kPayload = "causeway-worker-failure-payload";
+    wil::com_ptr<IFileSystemIO> dummyIo;
+    wil::com_ptr<IFileSystemIO> localIo;
+    if (! state.fsDummy.try_query_to(dummyIo.put()) || ! state.fsLocal.try_query_to(localIo.put()) ||
+        GetDirectoryEntryCount(state.fsDummy.get(), std::wstring(kDummyRoot)) != 8u || GetDirectoryEntryCount(state.fsLocal.get(), localDest.native()) != 1u)
+    {
+        Fail(L"Causeway worker failure did not retain its source and destination root inventories.");
+        return true;
+    }
+    for (unsigned int i = 0u; i < 8u; ++i)
+    {
+        std::string sourceBytes;
+        const auto source = std::filesystem::path(std::wstring(kDummyRoot) + std::format(L"/payload-{:02}.bin", i));
+        if (! ReadFileTextFsIo(dummyIo, source, sourceBytes) || sourceBytes != kPayload)
+        {
+            Fail(L"Causeway worker failure changed a source payload.");
+            return true;
+        }
+    }
+    const std::filesystem::path publishedRoot = localDest / L"causeway-worker-failure-src";
+    std::error_code ec;
+    const DWORD rootAttributes = GetFileAttributesW(publishedRoot.c_str());
+    if (rootAttributes == INVALID_FILE_ATTRIBUTES || (rootAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (rootAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    {
+        Fail(L"Causeway worker failure did not retain its published directory root.");
+        return true;
+    }
+    for (std::filesystem::directory_iterator it(publishedRoot, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        const auto path        = it->path();
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        bool expected          = false;
+        for (unsigned int i = 0u; i < 8u; ++i)
+            expected = expected || path.filename() == std::format(L"payload-{:02}.bin", i);
+        std::string destinationBytes;
+        if (! expected || attributes == INVALID_FILE_ATTRIBUTES || (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u ||
+            ! ReadFileTextFsIo(localIo, path, destinationBytes) || destinationBytes != kPayload)
+        {
+            Fail(L"Causeway worker failure left an unexpected or incomplete destination entry.");
+            return true;
+        }
+    }
+    if (ec)
+    {
+        Fail(L"Causeway worker failure could not enumerate its published directory.");
         return true;
     }
 

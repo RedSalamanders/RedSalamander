@@ -1791,7 +1791,33 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
 
         return false;
     };
-    state.Require(waitForStableBaseline(), L"Failed to capture the baseline navigation-view state before select-next shell-stability validation.");
+    const bool baselineReady = waitForStableBaseline();
+    if (! baselineReady)
+    {
+        NavigationViewDebugSnapshot observed{};
+        const bool snapshotReady = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, observed);
+        const auto currentPath   = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        Trace(std::format(L"Select-next baseline: snapshot={} pathMatches={} navPathMatches={} focusTarget={} edit={} history={} suggest={} fullPath={} "
+                          L"fullPathEdit={} visibleChildren={} paneFocus={} itemFocus={} items={} expectedItems={} selected={} enumerations={} refreshes={}.",
+                          snapshotReady,
+                          currentPath.has_value() && OrdinalString::EqualsNoCasePath(currentPath.value(), root),
+                          observed.currentPathText == root.wstring(),
+                          static_cast<unsigned int>(observed.focusTarget),
+                          observed.editMode,
+                          observed.historyDropdownVisible,
+                          observed.editSuggestPopupVisible,
+                          observed.fullPathPopupVisible,
+                          observed.fullPathPopupEditMode,
+                          observed.visibleChildWindowCount,
+                          g_folderWindow.GetFocusedFolderViewHwnd() == folderView,
+                          g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"a.txt",
+                          g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                          baselineItemCount,
+                          g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                          enumCount.load(std::memory_order_acquire),
+                          g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left)));
+    }
+    state.Require(baselineReady, L"Failed to capture the baseline navigation-view state before select-next shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;

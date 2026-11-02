@@ -2,6 +2,8 @@
 
 #include "FolderWindow.FileOperationsInternal.h"
 
+#include <utility>
+
 namespace FolderWindowFileOperationsStateInternal
 {
 #ifdef ENABLE_TESTS
@@ -17,6 +19,11 @@ struct SelfTestPausePoint final
     std::atomic<bool> entered{false};
     std::atomic<bool> releaseRequested{false};
     std::atomic<unsigned int> activeWaiters{0u};
+    std::atomic<bool> timedOut{false};
+    std::mutex targetMutex;
+    std::wstring targetSource;
+    std::atomic<uint64_t> targetTask{0u};
+    bool targetClaimed = false;
 
     void Set(bool isEnabled) noexcept
     {
@@ -24,6 +31,7 @@ struct SelfTestPausePoint final
         {
             entered.store(false, std::memory_order_release);
             releaseRequested.store(false, std::memory_order_release);
+            timedOut.store(false, std::memory_order_release);
             enabled.store(true, std::memory_order_release);
             return;
         }
@@ -37,15 +45,38 @@ struct SelfTestPausePoint final
         return entered.load(std::memory_order_acquire);
     }
 
+    [[nodiscard]] bool HasTimedOut() const noexcept
+    {
+        return timedOut.load(std::memory_order_acquire);
+    }
+
+    // A synthetic source path claims exactly one task before it starts running;
+    // callers must release and drain the previous waiter before arming again.
+    [[nodiscard]] bool ArmForSource(std::wstring_view source) noexcept
+    {
+        std::scoped_lock lock(targetMutex);
+        if (source.empty() || targetClaimed || activeWaiters.load(std::memory_order_acquire) != 0u || enabled.load(std::memory_order_acquire))
+            return false;
+        targetSource.assign(source);
+        targetTask.store(0u, std::memory_order_release);
+        Set(true);
+        return true;
+    }
+
+    [[nodiscard]] bool HasEnteredForTask(uint64_t taskId) const noexcept
+    {
+        return taskId != 0u && targetTask.load(std::memory_order_acquire) == taskId && HasEntered();
+    }
+
     void Release() noexcept
     {
         enabled.store(false, std::memory_order_release);
         releaseRequested.store(true, std::memory_order_release);
     }
 
-    void Pause(ULONGLONG bailoutMs) noexcept
+    template <typename CancelPredicate> void PauseUntil(ULONGLONG bailoutMs, CancelPredicate&& cancelled) noexcept
     {
-        if (! enabled.load(std::memory_order_acquire))
+        if (! enabled.load(std::memory_order_acquire) || cancelled())
         {
             return;
         }
@@ -55,14 +86,38 @@ struct SelfTestPausePoint final
         entered.store(true, std::memory_order_release);
         const auto clearEntered   = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
         const ULONGLONG startTick = GetTickCount64();
-        while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire))
+        while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire) && ! cancelled())
         {
             const ULONGLONG nowTick = GetTickCount64();
             if (nowTick >= startTick && (nowTick - startTick) > bailoutMs)
             {
+                timedOut.store(true, std::memory_order_release);
                 break;
             }
             Sleep(1);
+        }
+    }
+
+    void Pause(ULONGLONG bailoutMs) noexcept
+    {
+        PauseUntil(bailoutMs, []() noexcept { return false; });
+    }
+
+    template <typename CancelPredicate>
+    void PauseForSource(std::wstring_view source, uint64_t taskId, ULONGLONG bailoutMs, CancelPredicate&& cancelled) noexcept
+    {
+        {
+            std::scoped_lock lock(targetMutex);
+            if (! enabled.load(std::memory_order_acquire) || targetClaimed || targetSource != source || taskId == 0u ||
+                (targetTask.load(std::memory_order_acquire) != 0u && targetTask.load(std::memory_order_relaxed) != taskId))
+                return;
+            targetClaimed = true;
+            targetTask.store(taskId, std::memory_order_release);
+        }
+        PauseUntil(bailoutMs, std::forward<CancelPredicate>(cancelled));
+        {
+            std::scoped_lock lock(targetMutex);
+            targetClaimed = false;
         }
     }
 };
@@ -159,6 +214,7 @@ extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoin
 extern SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 extern SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
+extern SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts;
 extern std::atomic<DWORD> g_fileOpsInlineRenameAdmissionThreadId;

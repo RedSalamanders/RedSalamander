@@ -1258,6 +1258,17 @@ copy reports nothing for its root, because the walker owns the root and descenda
 conditional delete reports its closed record for files only, because a bound directory delete
 continues into a recursive removal that owns its own accounting.
 
+Required-argument rejection and malformed option headers occur before the provider accepts a
+discovery scope; in particular, malformed headers are never used to read callback fields.
+For a valid singular Local Copy or Move, the provider retains one call-owned closure state from
+accepted arguments through worker quiescence. A failed callback is still a closure attempt; it is
+not retried as another closure. A recursive Copy may resolve a root setup conflict before discovery
+is final. After a recursive call publishes its final discovery record, it never starts a new
+whole-tree traversal under that cookie: a later failure retains its original result and mutation
+truth. Item-level retries already owned by the walker remain available, as does a new governed call. If a
+subsequent root probe observes a different object kind or directory attribute after the initial
+discovery classification, Local refuses that attempt with ERROR_FILE_INVALID. This comparison is
+not an object-identity pin and does not remove later filesystem races.
 Discovery describes what a call had to discover, not what it moved. A Move of a directory is one
 rename that relocates the whole subtree without enumerating it, so that root contributes one
 directory and no descendant files or bytes, while a Copy of the same directory walks it and reports

@@ -46,8 +46,8 @@ function Get-RSRepositorySourceFiles {
         Enumerates source files from selected repository roots.
 
     .DESCRIPTION
-        Centralizes recursive source discovery, extension filtering, excluded tree
-        filtering, and stable ordering for repository audit commands.
+        Centralizes recursive source discovery, extension filtering, repository-relative
+        excluded tree filtering, and stable ordering for repository audit commands.
     #>
     [CmdletBinding()]
     param(
@@ -65,6 +65,10 @@ function Get-RSRepositorySourceFiles {
         [string[]]$ExcludedRelativePaths = @()
     )
 
+    $repositoryItem = Get-Item -LiteralPath $RepositoryRoot -Force
+    if (($repositoryItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw 'Repository root is a reparse point.'
+    }
     $resolvedRoot = (Resolve-Path -LiteralPath $RepositoryRoot).Path
     $extensionSet = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::OrdinalIgnoreCase)
@@ -85,8 +89,21 @@ function Get-RSRepositorySourceFiles {
     $files = [System.Collections.Generic.List[IO.FileInfo]]::new()
     foreach ($sourceRoot in $SourceRoots) {
         $rootPath = Join-Path $resolvedRoot $sourceRoot
+        $rootRelative = [IO.Path]::GetRelativePath($resolvedRoot, [IO.Path]::GetFullPath($rootPath))
+        if ([IO.Path]::IsPathRooted($rootRelative) -or $rootRelative -eq '..' -or $rootRelative.StartsWith('..' + [IO.Path]::DirectorySeparatorChar)) {
+            throw "Source root escapes the repository: $sourceRoot"
+        }
         if (! (Test-Path -LiteralPath $rootPath -PathType Container)) {
             continue
+        }
+        # Check each selected-root component so a parent junction cannot redirect it.
+        $rootComponentPath = $resolvedRoot
+        foreach ($component in ($rootRelative -split '[\\/]' | Where-Object { $_ -and $_ -ne '.' })) {
+            $rootComponentPath = Join-Path $rootComponentPath $component
+            $rootItem = Get-Item -LiteralPath $rootComponentPath -Force
+            if (($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Repository source root contains a reparse point: $sourceRoot"
+            }
         }
 
         foreach ($file in (Get-ChildItem -LiteralPath $rootPath -Recurse -File)) {
@@ -96,8 +113,15 @@ function Get-RSRepositorySourceFiles {
 
             $excluded = $false
             $fullPath = [IO.Path]::GetFullPath($file.FullName)
+            $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $fullPath).Replace('/', '\')
+            if ([IO.Path]::IsPathRooted($relativePath) -or $relativePath -eq '..' -or $relativePath.StartsWith('..\')) {
+                throw "Source file escapes the repository: $fullPath"
+            }
+            # Prefix a separator so root-relative segments match the same fragment
+            # syntax as descendants, without including any checkout ancestor.
+            $relativeFragmentPath = '\' + $relativePath
             foreach ($fragment in $ExcludedPathFragments) {
-                if ($fullPath.IndexOf($fragment, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                if ($relativeFragmentPath.IndexOf($fragment, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
                     $excluded = $true
                     break
                 }
@@ -105,11 +129,11 @@ function Get-RSRepositorySourceFiles {
             if ($excluded) {
                 continue
             }
+            if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Repository source file is a reparse point: $relativePath"
+            }
 
             if ($excludedRelativeSet.Count -gt 0) {
-                $relativePath = ConvertTo-RSRepositoryRelativePath `
-                    -RepositoryRoot $resolvedRoot `
-                    -Path $file.FullName
                 if ($excludedRelativeSet.Contains($relativePath)) {
                     continue
                 }

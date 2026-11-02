@@ -6,13 +6,17 @@ Import-Module (Join-Path $repoRoot 'Tools\Modules\Auditing\RepositorySourceScann
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Reporting\TestRunReporting.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Reporting\SourceLineMeasurement.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
 
 Describe 'Repository source scanner module' {
     It 'normalizes paths and applies extension, tree, and file exclusions once' {
-        $root = Join-Path $TestDrive 'scanner'
+        # A checkout may itself live beneath .build; only paths inside it are excluded.
+        $root = Join-Path $TestDrive '.build\scanner'
         New-Item -ItemType Directory -Path (Join-Path $root 'Source\Nested') -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $root 'Source\Generated') -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $root 'Source\.build') -Force | Out-Null
         '    TOKEN alpha   ' | Set-Content -LiteralPath (Join-Path $root 'Source\One.cpp') -Encoding UTF8
+        'TOKEN ignored build output' | Set-Content -LiteralPath (Join-Path $root 'Source\.build\Generated.cpp') -Encoding UTF8
         'TOKEN beta' | Set-Content -LiteralPath (Join-Path $root 'Source\Nested\Two.h') -Encoding UTF8
         'TOKEN ignored extension' | Set-Content -LiteralPath (Join-Path $root 'Source\Nested\Three.txt') -Encoding UTF8
         'TOKEN ignored tree' | Set-Content -LiteralPath (Join-Path $root 'Source\Generated\Four.cpp') -Encoding UTF8
@@ -22,7 +26,7 @@ Describe 'Repository source scanner module' {
             -SourceRoots @('Source') `
             -Extensions @('.cpp', '*.h') `
             -Patterns @(@{ Name = 'Token'; Pattern = 'TOKEN' }) `
-            -ExcludedPathFragments @('\Generated\') `
+            -ExcludedPathFragments @('\Generated\', '\.build\') `
             -ExcludedRelativePaths @('Source\Nested\Two.h') `
             -PathSeparator Slash)
 
@@ -31,6 +35,66 @@ Describe 'Repository source scanner module' {
         $matches[0].Path | Should Be 'Source/One.cpp'
         $matches[0].LineNumber | Should Be 1
         $matches[0].Line | Should Be 'TOKEN alpha'
+        $escapeMessage = ''
+        try {
+            [void](Get-RSRepositorySourceFiles -RepositoryRoot $root -SourceRoots @('..\outside') -Extensions @('.cpp'))
+        } catch {
+            $escapeMessage = $_.Exception.Message
+        }
+        $escapeMessage | Should Match 'Source root escapes the repository'
+    }
+    It 'rejects a junction at <Name> before scanning it' -TestCases @(
+        @{ Name = 'the repository root'; Link = ''; SourceRoot = 'Source'; TargetSubdirectory = 'Source' },
+        @{ Name = 'the selected source root'; Link = 'Source'; SourceRoot = 'Source'; TargetSubdirectory = '' },
+        @{ Name = 'a selected root ancestor'; Link = 'Parent'; SourceRoot = 'Parent\Source'; TargetSubdirectory = 'Source' }
+    ) {
+        param($Name, $Link, $SourceRoot, $TargetSubdirectory)
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('scanner-link-' + [guid]::NewGuid().ToString('N'))
+        $repository = Join-Path $fixture 'repository'
+        $target = Join-Path $fixture 'target'
+        $targetSource = if ($TargetSubdirectory) { Join-Path $target $TargetSubdirectory } else { $target }
+        [void][IO.Directory]::CreateDirectory($targetSource)
+        [IO.File]::WriteAllText((Join-Path $targetSource 'witness.cpp'), 'TOKEN')
+        $junction = if ($Link) { Join-Path $repository $Link } else { $repository }
+        [void][IO.Directory]::CreateDirectory((Split-Path $junction))
+        [void](New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $target)
+        $message = ''
+        try { [void](Get-RSRepositorySourceFiles -RepositoryRoot $repository -SourceRoots @($SourceRoot) -Extensions @('.cpp')) }
+        catch { $message = $_.Exception.Message }
+        $message | Should Match 'reparse point'
+    }
+
+    It 'does not enumerate a descendant junction' {
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('scanner-descendant-' + [guid]::NewGuid().ToString('N'))
+        $source = Join-Path $fixture 'repository\Source'
+        $target = Join-Path $fixture 'target'
+        [void][IO.Directory]::CreateDirectory($source)
+        [void][IO.Directory]::CreateDirectory($target)
+        [IO.File]::WriteAllText((Join-Path $source 'owned.cpp'), 'owned')
+        [IO.File]::WriteAllText((Join-Path $target 'must-not-read.cpp'), 'redirected')
+        [void](New-RSTestSandboxLink -ItemType Junction -Path (Join-Path $source 'redirected') -Target $target)
+        $files = @(Get-RSRepositorySourceFiles -RepositoryRoot (Join-Path $fixture 'repository') -SourceRoots @('Source') -Extensions @('.cpp'))
+        $files.Count | Should Be 1
+        $files[0].Name | Should Be 'owned.cpp'
+    }
+
+    It 'rejects a source file symbolic link when the host permits its creation' {
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('scanner-file-link-' + [guid]::NewGuid().ToString('N'))
+        $source = Join-Path $fixture 'repository\Source'
+        [void][IO.Directory]::CreateDirectory($source)
+        $target = Join-Path $fixture 'target.cpp'
+        [IO.File]::WriteAllText($target, 'redirected')
+        try {
+            [void](New-RSTestSandboxLink -ItemType SymbolicLink -Path (Join-Path $source 'redirected.cpp') -Target $target)
+        } catch {
+            if ($_.Exception.Message -notmatch 'privilege|1314') { throw }
+            Write-Warning 'File symbolic link creation is unavailable on this host; the file-link rejection was not exercised.'
+            return
+        }
+        $message = ''
+        try { [void](Get-RSRepositorySourceFiles -RepositoryRoot (Join-Path $fixture 'repository') -SourceRoots @('Source') -Extensions @('.cpp')) }
+        catch { $message = $_.Exception.Message }
+        $message | Should Match 'Source file is a reparse point'
     }
 }
 

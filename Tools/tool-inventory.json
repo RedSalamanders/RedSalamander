@@ -1837,7 +1837,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Centralize repository source discovery and stable relative-path conversion for audit commands.",
+      "purpose": "Centralize repository source discovery, repository-relative tree exclusions, and stable relative-path conversion for audit commands.",
       "usage": "Import from repository source-audit entry points instead of duplicating recursive scan policy.",
       "usedBy": [
         "Tools/Audit-ComctlReportSurfaces.ps1",
@@ -2779,7 +2779,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, one exact static product-documentation Commands exception and eight exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite.",
+      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, one exact static product-documentation Commands exception and ten exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite.",
       "usage": "Loaded through the TestRunPlan facade; current commands and inventory tooling consume Get-RSTestRunPlan through that facade, Full's first writer inherits the caller-selected platform/configuration, and Commands family selection is limited to -Suite Commands iteration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",

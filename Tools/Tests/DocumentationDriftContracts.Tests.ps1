@@ -144,7 +144,6 @@ Describe 'Visible native audit contracts' {
         }
 
         $remainingFindings = @($remainingAudit.Output)
-        $remainingFindings.Count | Should BeGreaterThan 0
         foreach ($finding in $remainingFindings) {
             ($null -ne $finding.PSObject.Properties['Allowed']) | Should Be $true
             ($null -ne $finding.PSObject.Properties['Category']) | Should Be $true
@@ -152,8 +151,24 @@ Describe 'Visible native audit contracts' {
         }
         @($remainingFindings | Where-Object { -not $_.Allowed }).Count | Should Be 0
 
-        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester `
+        $fixtureParent = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester `
             -Case ('win32-audit-unclassified-' + [guid]::NewGuid().ToString('N'))
+        # The checkout's ancestors may be named .build; only its own build output is excluded.
+        $fixture = Join-Path $fixtureParent '.build\checkout'
+        [void][IO.Directory]::CreateDirectory($fixture)
+        $emptyAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings
+        }
+        $emptyAudit.Succeeded | Should Be $true
+        @($emptyAudit.Output).Count | Should Be 0
+        $allowedFixture = Join-Path $fixture 'RedSalamander\FolderView.Icons.cpp'
+        [void][IO.Directory]::CreateDirectory((Split-Path $allowedFixture))
+        [IO.File]::WriteAllText($allowedFixture, 'void Allowed() { GetDC(nullptr); }')
+        $allowedAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings
+        }
+        $allowedAudit.Succeeded | Should Be $true
+        @($allowedAudit.Output | Where-Object { $_.Allowed -and $_.Category -eq 'HDC text/selection bridge' }).Count | Should Be 1
         $fixtureSource = Join-Path $fixture 'RedSalamander\Unclassified.cpp'
         [void][IO.Directory]::CreateDirectory((Split-Path $fixtureSource))
         [IO.File]::WriteAllText($fixtureSource, 'void Unclassified() { CreateFontW(nullptr); }')
@@ -164,6 +179,25 @@ Describe 'Visible native audit contracts' {
         $unclassifiedAudit.Succeeded | Should Be $false
         $unclassifiedAudit.Error.Exception.Message | Should Match '1 unallowed finding'
         $unclassifiedAudit.Error.ScriptStackTrace | Should Match 'Audit-RemainingWin32UiDependencies\.ps1'
+
+        # Exercise the other scanner consumers from the same checkout-under-.build.
+        # Their scripts derive the root from PSScriptRoot, so copy only these test inputs.
+        $fixtureTools = Join-Path $fixture 'Tools'
+        $fixtureModules = Join-Path $fixtureTools 'Modules\Auditing'
+        [void][IO.Directory]::CreateDirectory($fixtureModules)
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools\Modules\Auditing\RepositorySourceScanner.psm1') -Destination $fixtureModules
+        foreach ($name in @('Audit-ComctlReportSurfaces.ps1', 'Audit-VisibleNativeSurfaces.ps1')) {
+            Copy-Item -LiteralPath (Join-Path $repoRoot "Tools\$name") -Destination $fixtureTools
+        }
+        [IO.File]::WriteAllText($fixtureSource, 'SysListView32 SysTreeView32 CreateFontW(nullptr);')
+        $comctlFixture = Invoke-RSTestBlock { & (Join-Path $fixtureTools 'Audit-ComctlReportSurfaces.ps1') }
+        $comctlFixture.Succeeded | Should Be $false
+        $comctlFixture.Error.Exception.Message | Should Match 'Comctl report-surface audit is out of date'
+        $visibleFixture = Invoke-RSTestBlock { & (Join-Path $fixtureTools 'Audit-VisibleNativeSurfaces.ps1') }
+        $visibleFixture.Succeeded | Should Be $false
+        $visibleFixture.Error.Exception.Message | Should Match 'Visible-native audit is out of date'
+        $typographyFixture = @(& (Join-Path $repoRoot 'Tools\Get-VisibleTypographyAudit.ps1') -RepoRoot $fixture)
+        @($typographyFixture | Where-Object { $_.Category -eq 'CreateFontW' -and $_.Path -match 'Unclassified\.cpp$' }).Count | Should Be 1
     }
 }
 Describe 'Keyboard shortcut documentation drift contracts' {

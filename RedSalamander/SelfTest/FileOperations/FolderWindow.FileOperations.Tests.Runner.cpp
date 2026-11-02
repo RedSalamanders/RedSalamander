@@ -96,6 +96,7 @@
 #include "FolderWindow.FileOperations.Tests.OwnedShutdown.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
+#include "HandleIo.h"
 #include "HostServices.h"
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
@@ -3155,6 +3156,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(0);
     SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride::None);
     SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN);
+    FolderWindowFileOperationsStateInternal::g_fileOpsBridgeOpenListingPausePoint.Release();
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
     SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
     ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
@@ -7121,8 +7123,10 @@ struct DummyReentrantWatchCallback final : public IFileSystemDirectoryWatchCallb
 // stream itself rather than the host's view of it: the host clamps a regressing cumulative value
 // to a zero delta and counts late discovery without rejecting either, so a provider that reports
 // out of order, or never closes, passes any test that only checks return codes.
-struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
+struct DirectApiDiscoveryRecorder : IFileSystemOperationControl
 {
+    virtual ~DirectApiDiscoveryRecorder() = default;
+
     struct Event final
     {
         uint64_t bytes       = 0;
@@ -7133,6 +7137,10 @@ struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
 
     std::mutex mutex;
     std::vector<Event> events;
+    HRESULT reportResult = S_OK;
+    bool failOnlyAtClose = false;
+    std::filesystem::path destinationExpectedAbsentAtClose;
+    bool closedBeforeDestination = false;
 
     HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void* /*cookie*/) noexcept override
     {
@@ -7160,7 +7168,10 @@ struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
         }
         std::scoped_lock lock(mutex);
         events.push_back(Event{progress->discoveredBytes, progress->discoveredFiles, progress->discoveredDirectories, progress->traversalClosed != FALSE});
-        return S_OK;
+        if (progress->traversalClosed != FALSE && ! destinationExpectedAbsentAtClose.empty())
+            closedBeforeDestination =
+                GetFileAttributesW(destinationExpectedAbsentAtClose.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+        return failOnlyAtClose && progress->traversalClosed == FALSE ? S_OK : reportResult;
     }
 };
 

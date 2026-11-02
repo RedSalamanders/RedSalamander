@@ -211,6 +211,7 @@ SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoint;
 SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
+SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 
 namespace
 {
@@ -19812,7 +19813,17 @@ struct CrossFileSystemBridge
                 }
             }
         }
-        return ReportDiscovery(0u, false);
+        const HRESULT discoveryHr = ReportDiscovery(0u, false);
+#ifdef ENABLE_TESTS
+        // This sequential listing owns no queue lock. Hold the selected traversal
+        // after its real positive open report until the capture finishes or cancels.
+        if (SUCCEEDED(discoveryHr) && discoveredFiles > 0u && discoveredBytes > 0u)
+        {
+            g_fileOpsBridgeOpenListingPausePoint.PauseForSource(
+                rootSourcePath, task._taskId, 30'000u, [&]() noexcept { return task.CancelRequestedDurable(); });
+        }
+#endif
+        return discoveryHr;
     }
 
     void MaybeCloseSequentialDiscovery() noexcept

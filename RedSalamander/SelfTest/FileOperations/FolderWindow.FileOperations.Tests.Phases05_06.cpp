@@ -6584,6 +6584,455 @@ case SelfTestState::Step::DiscoveryScope_LocalDirectApi:
         return options;
     };
 
+    // A valid call that cannot inspect its source still owns one closed scope.
+    // Exercise the public legacy adapters separately; neither operation may create a destination.
+    {
+        const std::wstring missing     = (sourceRoot / L"missing.bin").wstring();
+        const std::wstring destination = (base / L"missing-destination.bin").wstring();
+        DirectApiDiscoveryRecorder copyRecorder{};
+        FileSystemOptions copyOptions = makeOptions(copyRecorder);
+        const HRESULT copyHr          = state.fsLocal->CopyItem(missing.c_str(), destination.c_str(), flags, &copyOptions, nullptr, nullptr);
+        DirectApiDiscoveryRecorder moveRecorder{};
+        FileSystemOptions moveOptions = makeOptions(moveRecorder);
+        const HRESULT moveHr          = state.fsLocal->MoveItem(missing.c_str(), destination.c_str(), flags, &moveOptions, nullptr, nullptr);
+        if (SUCCEEDED(copyHr) || SUCCEEDED(moveHr))
+        {
+            Fail(std::format(L"{}: missing-source singular Copy or Move unexpectedly succeeded.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem missing source", copyRecorder, {0u, 0u, 0u}));
+        appendDefect(DescribeDiscoveryScopeDefect(L"MoveItem missing source", moveRecorder, {0u, 0u, 0u}));
+
+        DirectApiDiscoveryRecorder invalidRecorder{};
+        FileSystemOptions invalidOptions = makeOptions(invalidRecorder);
+        const HRESULT nullSourceHr       = state.fsLocal->CopyItem(nullptr, destination.c_str(), flags, &invalidOptions, nullptr, nullptr);
+        invalidOptions.sizeBytes         = 0u;
+        const HRESULT invalidOptionsHr   = state.fsLocal->CopyItem(missing.c_str(), destination.c_str(), flags, &invalidOptions, nullptr, nullptr);
+        if (nullSourceHr != E_POINTER || SUCCEEDED(invalidOptionsHr) || ! invalidRecorder.events.empty())
+        {
+            Fail(std::format(L"{}: rejected ABI arguments unexpectedly entered a discovery scope.", label));
+            return true;
+        }
+    }
+
+    // Regular-file discovery must close before publication. A rejected closure
+    // callback is still one attempted closure and must stop the mutation.
+    {
+        if (! seedSelection())
+        {
+            Fail(std::format(L"{}: could not seed singular Copy fixture.", label));
+            return true;
+        }
+        const std::filesystem::path destination = base / L"singular-copy.bin";
+        DirectApiDiscoveryRecorder recorder{};
+        recorder.destinationExpectedAbsentAtClose = destination;
+        FileSystemOptions options                 = makeOptions(recorder);
+        const HRESULT hr                          = state.fsLocal->CopyItem(leafA.c_str(), destination.c_str(), flags, &options, nullptr, nullptr);
+        if (FAILED(hr) || ! recorder.closedBeforeDestination || ! FileSizeEquals(destination, kLeafBytesA))
+        {
+            Fail(std::format(L"{}: singular Copy did not close discovery before publication.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem file", recorder, {kLeafBytesA, 1u, 0u}));
+
+        const std::filesystem::path refused = base / L"refused-copy.bin";
+        DirectApiDiscoveryRecorder failingRecorder{};
+        failingRecorder.reportResult     = E_ACCESSDENIED;
+        FileSystemOptions failingOptions = makeOptions(failingRecorder);
+        const HRESULT failure            = state.fsLocal->CopyItem(leafA.c_str(), refused.c_str(), flags, &failingOptions, nullptr, nullptr);
+        std::error_code existsError;
+        if (failure != E_ACCESSDENIED || std::filesystem::exists(refused, existsError) || existsError)
+        {
+            Fail(std::format(L"{}: rejected discovery callback did not stop singular Copy.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem rejected discovery", failingRecorder, {kLeafBytesA, 1u, 0u}));
+
+        const std::filesystem::path nullOptionsDestination = base / L"null-options-copy.bin";
+        const HRESULT nullOptionsHr = state.fsLocal->CopyItem(leafB.c_str(), nullOptionsDestination.c_str(), flags, nullptr, nullptr, nullptr);
+        if (FAILED(nullOptionsHr) || ! FileSizeEquals(nullOptionsDestination, kLeafBytesB))
+        {
+            Fail(std::format(L"{}: Copy with null options failed (hr=0x{:08X}).", label, static_cast<unsigned long>(nullOptionsHr)));
+            return true;
+        }
+
+        // Replace the file synchronously when its final record is delivered: the
+        // next root probe must not turn a closed file scope into a tree walk.
+        struct ShapeChangeRecorder final : DirectApiDiscoveryRecorder
+        {
+            std::filesystem::path source;
+            std::filesystem::path junctionTarget;
+            bool changed = false;
+            HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* cookie) noexcept override
+            {
+                const HRESULT hr = DirectApiDiscoveryRecorder::FileSystemReportDiscoveryProgress(progress, cookie);
+                if (SUCCEEDED(hr) && progress != nullptr && progress->traversalClosed != FALSE)
+                    changed = DeleteFileW(source.c_str()) != FALSE &&
+                              (junctionTarget.empty() ? CreateDirectoryW(source.c_str(), nullptr) != FALSE : TryCreateJunction(source, junctionTarget));
+                return hr;
+            }
+        } shapeRecorder;
+        const std::filesystem::path shapeSource      = base / L"shape-change.bin";
+        const std::filesystem::path shapeDestination = base / L"shape-destination.bin";
+        if (! WriteTestFile(shapeSource, 97u))
+        {
+            Fail(std::format(L"{}: could not seed source shape change.", label));
+            return true;
+        }
+        shapeRecorder.source           = shapeSource;
+        FileSystemOptions shapeOptions = makeOptions(shapeRecorder);
+        const HRESULT shapeHr          = state.fsLocal->CopyItem(shapeSource.c_str(), shapeDestination.c_str(), flags, &shapeOptions, nullptr, nullptr);
+        existsError.clear();
+        if (! shapeRecorder.changed || shapeHr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) || std::filesystem::exists(shapeDestination, existsError) ||
+            existsError)
+        {
+            Fail(std::format(L"{}: a file changed to a directory after closure was not refused (hr=0x{:08X}).", label, static_cast<unsigned long>(shapeHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem file-to-directory", shapeRecorder, {97u, 1u, 0u}));
+
+        const std::filesystem::path linkSource      = base / L"shape-link-source.bin";
+        const std::filesystem::path linkTarget      = base / L"shape-link-target";
+        const std::filesystem::path linkDestination = base / L"shape-link-destination";
+        if (! RecreateEmptyDirectory(linkTarget) || ! WriteTestFile(linkSource, 97u))
+        {
+            Fail(std::format(L"{}: could not seed source link change.", label));
+            return true;
+        }
+        ShapeChangeRecorder linkRecorder{};
+        linkRecorder.source           = linkSource;
+        linkRecorder.junctionTarget   = linkTarget;
+        FileSystemOptions linkOptions = makeOptions(linkRecorder);
+        const HRESULT linkHr          = state.fsLocal->CopyItem(linkSource.c_str(), linkDestination.c_str(), flags, &linkOptions, nullptr, nullptr);
+        existsError.clear();
+        if (! linkRecorder.changed || linkHr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) || std::filesystem::exists(linkDestination, existsError) || existsError)
+        {
+            Fail(std::format(
+                L"{}: a file changed to a sandbox junction after closure was not refused (hr=0x{:08X}).", label, static_cast<unsigned long>(linkHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem file-to-junction", linkRecorder, {97u, 1u, 0u}));
+
+        struct DirectoryChangeRecorder final : DirectApiDiscoveryRecorder
+        {
+            std::filesystem::path source;
+            bool changed = false;
+            HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+            {
+                if (! abort)
+                    return E_POINTER;
+                *abort = FALSE;
+                if (! changed)
+                    changed = RemoveDirectoryW(source.c_str()) != FALSE && WriteTestFile(source, 97u);
+                return S_OK;
+            }
+        } directoryRecorder;
+        const std::filesystem::path directorySource      = base / L"shape-directory";
+        const std::filesystem::path directoryDestination = base / L"shape-directory-destination";
+        if (! RecreateEmptyDirectory(directorySource))
+        {
+            Fail(std::format(L"{}: could not seed directory shape change.", label));
+            return true;
+        }
+        directoryRecorder.source           = directorySource;
+        FileSystemOptions directoryOptions = makeOptions(directoryRecorder);
+        const HRESULT directoryHr = state.fsLocal->CopyItem(directorySource.c_str(), directoryDestination.c_str(), flags, &directoryOptions, nullptr, nullptr);
+        existsError.clear();
+        if (! directoryRecorder.changed || directoryHr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) ||
+            std::filesystem::exists(directoryDestination, existsError) || existsError)
+        {
+            Fail(std::format(
+                L"{}: a directory changed to a file before traversal was not refused (hr=0x{:08X}).", label, static_cast<unsigned long>(directoryHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem directory-to-file", directoryRecorder, {0u, 0u, 0u}));
+
+        struct CancelRecorder final : DirectApiDiscoveryRecorder
+        {
+            HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+            {
+                if (! abort)
+                    return E_POINTER;
+                *abort = TRUE;
+                return S_OK;
+            }
+        } cancelRecorder;
+        const std::filesystem::path cancelSource      = base / L"cancel-source";
+        const std::filesystem::path cancelDestination = base / L"cancel-destination";
+        if (! RecreateEmptyDirectory(cancelSource))
+        {
+            Fail(std::format(L"{}: could not seed prewalk cancellation.", label));
+            return true;
+        }
+        FileSystemOptions cancelOptions = makeOptions(cancelRecorder);
+        const HRESULT cancelHr          = state.fsLocal->CopyItem(cancelSource.c_str(), cancelDestination.c_str(), flags, &cancelOptions, nullptr, nullptr);
+        existsError.clear();
+        if (cancelHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || std::filesystem::exists(cancelDestination, existsError) || existsError)
+        {
+            Fail(std::format(L"{}: prewalk cancellation was not preserved (hr=0x{:08X}).", label, static_cast<unsigned long>(cancelHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem prewalk cancellation", cancelRecorder, {0u, 0u, 0u}));
+
+        // Only the initial observed attribute is injected. The provider consumes
+        // the exact path only after its real no-follow binding says DIRECTORY;
+        // this is not a claim about an actual cloud or reparse-backed device.
+        constexpr std::wstring_view kObservedReparse    = L"REDSALAMANDER_FILEOPS_TEST_DISCOVERY_REPARSE_SOURCE";
+        const std::filesystem::path observedRoot        = base / L"observed-reparse";
+        const std::filesystem::path observedSource      = observedRoot / L"source";
+        const std::filesystem::path observedDestination = observedRoot / L"destination";
+        if (! RecreateEmptyDirectory(observedSource) || ! WriteTestFile(observedSource / L"a.bin", 97u) || ! WriteTestFile(observedSource / L"b.bin", 103u))
+        {
+            Fail(std::format(L"{}: could not seed observed-reparse control.", label));
+            return true;
+        }
+        const std::wstring observedExtended = MakeExtendedPathForSelfTest(observedSource);
+        RedSalamander::TestSupport::ScopedEnvironmentVariable observedAttribute(kObservedReparse, observedExtended);
+        DirectApiDiscoveryRecorder observedRecorder{};
+        FileSystemOptions observedOptions = makeOptions(observedRecorder);
+        const HRESULT observedHr      = state.fsLocal->CopyItem(observedSource.c_str(), observedDestination.c_str(), flags, &observedOptions, nullptr, nullptr);
+        const auto remainingAttribute = RedSalamander::TestSupport::ReadEnvironmentValue(kObservedReparse);
+        if (FAILED(observedHr) || remainingAttribute.error != ERROR_SUCCESS || remainingAttribute.value.has_value() ||
+            ! FileSizeEquals(observedDestination / L"a.bin", 97u) || ! FileSizeEquals(observedDestination / L"b.bin", 103u))
+        {
+            Fail(std::format(L"{}: observed-reparse DIRECTORY control failed (hr=0x{:08X}, consumed={}).",
+                             label,
+                             static_cast<unsigned long>(observedHr),
+                             ! remainingAttribute.value.has_value()));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem observed-reparse directory", observedRecorder, {200u, 2u, 1u}));
+    }
+
+    // The serial fallback must leave a failed root setup open while the outer
+    // conflict decision chooses Keep Both, Retry, Skip or Cancel.
+    {
+        struct SerialConflictCallback : IFileSystemCallback
+        {
+            virtual ~SerialConflictCallback() = default;
+
+            FileSystemIssueAction decision = FileSystemIssueAction::Cancel;
+            std::wstring blocker;
+            unsigned int issues = 0u;
+            bool removed        = false;
+            HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation,
+                                                         unsigned long,
+                                                         unsigned long,
+                                                         uint64_t,
+                                                         uint64_t,
+                                                         const wchar_t*,
+                                                         const wchar_t*,
+                                                         uint64_t,
+                                                         uint64_t,
+                                                         FileSystemOptions*,
+                                                         uint64_t,
+                                                         void*) noexcept override
+            {
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemItemCompleted(FileSystemOperation,
+                                                              unsigned long,
+                                                              const wchar_t*,
+                                                              const wchar_t*,
+                                                              HRESULT,
+                                                              const FileSystemItemMutationResult*,
+                                                              FileSystemOptions*,
+                                                              void*) noexcept override
+            {
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemShouldCancel(BOOL* cancel, void*) noexcept override
+            {
+                if (! cancel)
+                    return E_POINTER;
+                *cancel = FALSE;
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemIssue(FileSystemOperation,
+                                                      const wchar_t*,
+                                                      const wchar_t*,
+                                                      HRESULT,
+                                                      FileSystemIssueAction* action,
+                                                      IFileSystemBoundObject** expected,
+                                                      FileSystemOptions*,
+                                                      void*) noexcept override
+            {
+                if (! action || ! expected)
+                    return E_POINTER;
+                ++issues;
+                *expected = nullptr;
+                if (decision == FileSystemIssueAction::Retry)
+                    removed = DeleteFileW(blocker.c_str()) != FALSE;
+                *action = decision;
+                return S_OK;
+            }
+        };
+        constexpr std::wstring_view kSerialSource = L"REDSALAMANDER_FILEOPS_TEST_SERIAL_COPY_SOURCE";
+        constexpr std::array decisions{
+            FileSystemIssueAction::KeepBoth, FileSystemIssueAction::Retry, FileSystemIssueAction::Skip, FileSystemIssueAction::Cancel};
+        for (size_t index = 0; index < decisions.size(); ++index)
+        {
+            const std::filesystem::path root        = base / std::format(L"serial-conflict-{}", index);
+            const std::filesystem::path source      = root / L"source";
+            const std::filesystem::path destination = root / L"destination";
+            if (! RecreateEmptyDirectory(source) || ! WriteTestFile(source / L"child.bin", 97u) || ! WriteTestFile(destination, 31u))
+            {
+                Fail(std::format(L"{}: could not seed serial conflict fixture.", label));
+                return true;
+            }
+            const std::wstring sourceText      = source.wstring();
+            const std::wstring destinationText = destination.wstring();
+            const std::wstring selected        = MakeExtendedPathForSelfTest(sourceText);
+            RedSalamander::TestSupport::ScopedEnvironmentVariable serial(kSerialSource, selected);
+            SerialConflictCallback callback{};
+            callback.decision = decisions[index];
+            callback.blocker  = destinationText;
+            DirectApiDiscoveryRecorder recorder{};
+            FileSystemOptions options          = makeOptions(recorder);
+            const HRESULT hr                   = state.fsLocal->CopyItem(sourceText.c_str(), destinationText.c_str(), flags, &options, &callback, nullptr);
+            const auto remaining               = RedSalamander::TestSupport::ReadEnvironmentValue(kSerialSource);
+            const bool successful              = decisions[index] == FileSystemIssueAction::KeepBoth || decisions[index] == FileSystemIssueAction::Retry;
+            const std::filesystem::path copied = decisions[index] == FileSystemIssueAction::KeepBoth ? root / L"destination (2)" : destination;
+            if (remaining.error != ERROR_SUCCESS || remaining.value.has_value() || callback.issues != 1u || (successful != SUCCEEDED(hr)) ||
+                (decisions[index] == FileSystemIssueAction::Retry && ! callback.removed) || (successful && ! FileSizeEquals(copied / L"child.bin", 97u)) ||
+                (decisions[index] != FileSystemIssueAction::Retry && ! FileSizeEquals(destination, 31u)))
+            {
+                Fail(std::format(L"{}: serial root-conflict case {} failed (hr=0x{:08X}, issues={}, seamConsumed={}).",
+                                 label,
+                                 index,
+                                 static_cast<unsigned long>(hr),
+                                 callback.issues,
+                                 ! remaining.value.has_value()));
+                return true;
+            }
+            appendDefect(DescribeDiscoveryScopeDefect(
+                L"serial root conflict", recorder, successful ? ExpectedDiscoveryTotals{97u, 1u, 1u} : ExpectedDiscoveryTotals{0u, 0u, 1u}));
+        }
+
+        // A rejected final record is still final; do not replay the tree under
+        // its already closed cookie or replace the callback's failure.
+        const std::filesystem::path closedRoot        = base / L"recursive-closure-refusal";
+        const std::filesystem::path closedSource      = closedRoot / L"source";
+        const std::filesystem::path closedDestination = closedRoot / L"destination";
+        if (! RecreateEmptyDirectory(closedSource) || ! WriteTestFile(closedSource / L"child.bin", 97u))
+        {
+            Fail(std::format(L"{}: could not seed recursive closure refusal.", label));
+            return true;
+        }
+        DirectApiDiscoveryRecorder recorder{};
+        recorder.reportResult     = E_ACCESSDENIED;
+        recorder.failOnlyAtClose  = true;
+        FileSystemOptions options = makeOptions(recorder);
+        SerialConflictCallback callback{};
+        callback.decision = FileSystemIssueAction::Retry;
+        const HRESULT hr  = state.fsLocal->CopyItem(closedSource.c_str(), closedDestination.c_str(), flags, &options, &callback, nullptr);
+        if (hr != E_ACCESSDENIED || callback.issues != 0u)
+        {
+            Fail(std::format(L"{}: rejected final discovery was replayed or changed HRESULT (hr=0x{:08X}, issues={}).",
+                             label,
+                             static_cast<unsigned long>(hr),
+                             callback.issues));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"recursive rejected closure", recorder, {97u, 1u, 1u}));
+
+        // Hold the real Local file at its zero-byte opening callback while the
+        // producer lists its only directory. Closure must arrive while held.
+        struct HeldFileCallback final : SerialConflictCallback
+        {
+            wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            std::atomic<bool> waiting{false};
+            HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation,
+                                                         unsigned long,
+                                                         unsigned long,
+                                                         uint64_t,
+                                                         uint64_t,
+                                                         const wchar_t*,
+                                                         const wchar_t*,
+                                                         uint64_t itemTotal,
+                                                         uint64_t itemDone,
+                                                         FileSystemOptions*,
+                                                         uint64_t,
+                                                         void*) noexcept override
+            {
+                if (itemTotal > 0u && itemDone == 0u)
+                {
+                    waiting.store(true, std::memory_order_release);
+                    SetEvent(entered.get());
+                    const DWORD wait = WaitForSingleObject(release.get(), 10'000u);
+                    waiting.store(false, std::memory_order_release);
+                    if (wait != WAIT_OBJECT_0)
+                        return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+                }
+                return S_OK;
+            }
+        } held;
+        struct CloseEventRecorder final : DirectApiDiscoveryRecorder
+        {
+            wil::unique_handle closed{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            HANDLE entered = nullptr; // borrowed from the held callback until worker join
+            HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* cookie) noexcept override
+            {
+                if (progress != nullptr && progress->traversalClosed != FALSE && WaitForSingleObject(entered, 10'000u) != WAIT_OBJECT_0)
+                    return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+                const HRESULT hr = DirectApiDiscoveryRecorder::FileSystemReportDiscoveryProgress(progress, cookie);
+                if (progress != nullptr && progress->traversalClosed != FALSE)
+                    SetEvent(closed.get());
+                return hr;
+            }
+        } liveRecorder;
+        const std::filesystem::path liveRoot        = base / L"recursive-held";
+        const std::filesystem::path liveSource      = liveRoot / L"source";
+        const std::filesystem::path liveDestination = liveRoot / L"destination";
+        if (! held.entered || ! held.release || ! liveRecorder.closed || ! RecreateEmptyDirectory(liveSource) ||
+            ! WriteTestFile(liveSource / L"child.bin", 64u * 1024u))
+        {
+            Fail(std::format(L"{}: could not seed held recursive Copy.", label));
+            return true;
+        }
+        liveRecorder.entered          = held.entered.get();
+        FileSystemOptions liveOptions = makeOptions(liveRecorder);
+        std::atomic<HRESULT> liveResult{E_PENDING};
+        std::jthread worker;
+        try
+        {
+            worker = std::jthread([&]() noexcept {
+                liveResult.store(state.fsLocal->CopyItem(liveSource.c_str(), liveDestination.c_str(), flags, &liveOptions, &held, nullptr),
+                                 std::memory_order_release);
+            });
+        }
+        // Thread construction can throw at this noexcept self-test boundary;
+        // allocation failure remains fatal and other start failures fail the case.
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::system_error& error)
+        {
+            Debug::Error(L"Could not start held discovery Copy worker: {}", error.code().value());
+            Fail(std::format(L"{}: could not start held recursive Copy.", label));
+            return true;
+        }
+        const auto releaseWorker   = wil::scope_exit([&]() noexcept
+        {
+            SetEvent(held.release.get());
+            if (worker.joinable())
+                worker.join();
+        });
+        const bool entered         = WaitForSingleObject(held.entered.get(), 10'000u) == WAIT_OBJECT_0;
+        const bool closedWhileHeld = entered && WaitForSingleObject(liveRecorder.closed.get(), 10'000u) == WAIT_OBJECT_0 &&
+                                     held.waiting.load(std::memory_order_acquire) && liveResult.load(std::memory_order_acquire) == E_PENDING;
+        SetEvent(held.release.get());
+        worker.join();
+        if (! closedWhileHeld || FAILED(liveResult.load(std::memory_order_acquire)) || ! FileSizeEquals(liveDestination / L"child.bin", 64u * 1024u))
+        {
+            Fail(std::format(L"{}: recursive discovery did not close while the file opening was held.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"recursive held opening", liveRecorder, {64u * 1024u, 1u, 1u}));
+    }
+
     // Bulk Copy: four selected roots, three of them plain files and one a recursive directory.
     if (! seedSelection() || ! RecreateEmptyDirectory(copyDest))
     {
