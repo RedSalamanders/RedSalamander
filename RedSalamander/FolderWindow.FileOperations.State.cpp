@@ -22576,12 +22576,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
         if (cleanupIndeterminate)
         {
-            result.publication       = partialPublication.value_or(FileOperations::PublicationState::Unknown);
-            result.sourceDisposition = result.publication == FileOperations::PublicationState::Published && _operation == FILESYSTEM_MOVE
-                                           ? FileOperations::SourceDisposition::Unknown
-                                           : FileOperations::SourceDisposition::Retained;
-            result.completion        = FileOperations::ItemCompletion::Indeterminate;
-            result.status            = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            result.publication = partialPublication.value_or(FileOperations::PublicationState::Unknown);
+            result.sourceDisposition =
+                result.publication == FileOperations::PublicationState::Published && _operation == FILESYSTEM_MOVE && ! managedSourceRetained
+                    ? FileOperations::SourceDisposition::Unknown
+                    : FileOperations::SourceDisposition::Retained;
+            result.completion = FileOperations::ItemCompletion::Indeterminate;
+            result.status     = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         else if (validMutation)
         {
@@ -22593,6 +22594,23 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             // mutation committed (for example, a directory Copy that skipped one child).
             // The reducer keeps publication/source truth independent from completion.
             applyProviderReduction(receiptState, status, skipped, partiallySkipped);
+        }
+        else if (partialPublication.has_value() && FAILED(status) && ! IsCancellationOutcome(status) && ! skipped && ! partiallySkipped &&
+                 (partialPublication.value() == FileOperations::PublicationState::Unknown ||
+                  partialPublication.value() == FileOperations::PublicationState::Published ||
+                  result.ownedStageDisposition == FileOperations::OwnedStageDisposition::Retained ||
+                  OwnedStageDispositionIsIndeterminate(result.ownedStageDisposition)))
+        {
+            // Bridge publication is an independent fact; source retention is not success.
+            result.publication       = partialPublication.value();
+            result.sourceDisposition = (_operation == FILESYSTEM_COPY || managedSourceRetained) ? FileOperations::SourceDisposition::Retained
+                                                                                                : FileOperations::SourceDisposition::Unknown;
+            result.completion =
+                result.publication == FileOperations::PublicationState::Unknown || OwnedStageDispositionIsIndeterminate(result.ownedStageDisposition)
+                    ? FileOperations::ItemCompletion::Indeterminate
+                    : FileOperations::ItemCompletion::Failed;
+            if (result.completion == FileOperations::ItemCompletion::Indeterminate)
+                result.status = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         else if (partiallyFailed)
         {
@@ -22626,7 +22644,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             // which object was consumed nor whether the accepted source still exists.
             applyProviderReduction(FileOperationItemResultReducer::ReceiptState::Missing, status, false, false);
         }
-        else if (succeeded || managedSourceRetained)
+        else if (succeeded || (managedSourceRetained && SUCCEEDED(status)))
         {
             // A successful directory merge can publish nothing. The bridge's exact
             // mutation facts stay authoritative even when the requested intent is fulfilled.
@@ -22678,7 +22696,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             result.status     = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         if (verification == FileOperations::VerificationState::Failed || verification == FileOperations::VerificationState::Canceled ||
-            verification == FileOperations::VerificationState::Unavailable)
+            (verification == FileOperations::VerificationState::Unavailable && SUCCEEDED(status) && ! skipped && ! partiallySkipped))
         {
             result.publication       = FileOperations::PublicationState::Published;
             result.sourceDisposition = FileOperations::SourceDisposition::Retained;
@@ -24706,6 +24724,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             unsigned long bridgeSkippedDirectoryReparseCount = 0;
             bool bridgeRootDirectoryReparseSkipped           = false;
             bool bridgeUnsupportedReparse                    = false;
+            bool hostBridgeAttempt                           = false;
             bool providerMutationAttempted                   = false;
             bool managedSourceRetained                       = false;
             bool managedCleanupIndeterminate                 = false;
@@ -24851,6 +24870,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                 {
                     if (useCrossFileSystemBridge)
                     {
+                        result.hostBridgeAttempt = true;
                         CrossFileSystemBridge bridge(*this,
                                                      *_fileSystem,
                                                      *effectiveDestinationFileSystem,
@@ -25538,6 +25558,28 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                             callCompletedBytes                             = finishedCall.completedBytes;
                             callTotalItems                                 = finishedCall.totalItems;
                             callDiscoveredBytes                            = cookie.lastDiscoveredBytes;
+
+                            // A bridge carries publication and owned-stage truth directly, not via
+                            // a native provider receipt. Never replay an uncertain or committed
+                            // primary, nor leave retained stage debt behind for a new attempt.
+                            const bool bridgeStageDebt = mutationResult.ownedStageDisposition == OwnedStageDisposition::Retained ||
+                                                         OwnedStageDispositionIsIndeterminate(mutationResult.ownedStageDisposition);
+                            const bool bridgeUnknown   = mutationResult.bridgePublication == FileOperations::PublicationState::Unknown;
+                            const bool bridgePublished = mutationResult.bridgePublication == FileOperations::PublicationState::Published;
+                            // Only an executor success converted to a descendant-Skip partial is
+                            // skip-only. Independent unknown publication or stage debt wins.
+                            const bool bridgeUnsafeToReplay = mutationResult.hostBridgeAttempt && FAILED(itemHr) && ! task.IsCancellationOutcome(itemHr) &&
+                                                              (bridgeUnknown || bridgeStageDebt || (bridgePublished && ! consumedChildSkip));
+                            if (bridgeUnsafeToReplay)
+                            {
+                                if (continueOnError)
+                                {
+                                    itemPartiallyFailed = true;
+                                    hadPartialFailure.store(true, std::memory_order_release);
+                                    break;
+                                }
+                                return itemHr;
+                            }
 
                             if (FAILED(mutationResult.hr) && mutationResult.providerMutationAttempted)
                             {

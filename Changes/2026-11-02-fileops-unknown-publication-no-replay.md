@@ -1,0 +1,1 @@
+- Prevent a failed bridge transfer with unknown or already published output, or retained stage debt, from replaying the primary operation. Keep failed and uncertain outcomes distinct from successful copies whose sources were retained.

@@ -749,12 +749,64 @@ private:
                                                                                   FILESYSTEM_MOVE);
     const std::filesystem::path partialDestination = std::filesystem::path(kMtpDestination) / partialMoveSource.filename();
     std::string partialBytes;
-    const auto partialWriteCalls = readWriteCallCount(partialIo.get(), partialDestination.native());
-    if (! partialSummary.has_value() || partialSummary->unknownPublicationItemCount != 1u || partialSummary->errorCount == 0u ||
-        partialSummary->retainedSourceCount != 1u || ! std::filesystem::exists(partialMoveSource) || ! partialWriteCalls.has_value() ||
-        partialWriteCalls.value() != 1u || ! ReadFileTextFsIo(partialIo, partialDestination, partialBytes) || partialBytes.size() != 17u)
+    std::string partialMoveSourceBytes;
+    const auto partialWriteCalls  = readWriteCallCount(partialIo.get(), partialDestination.native());
+    const auto partialCompletion  = scope.tasks.empty() ? state.completedTasks.end() : state.completedTasks.find(scope.tasks.back());
+    const bool partialCommitError = partialSummary.has_value() && std::ranges::any_of(partialSummary->issueDiagnostics, [](const auto& issue) noexcept {
+        return issue.category == L"bridge.commit" && issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error && issue.status == E_FAIL;
+    });
+    if (! partialSummary.has_value() || partialSummary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) || partialSummary->indeterminateItemCount != 1u ||
+        partialSummary->unknownPublicationItemCount != 1u || partialSummary->errorCount == 0u || partialSummary->retainedSourceCount != 1u ||
+        ! partialCommitError || partialCompletion == state.completedTasks.end() || partialCompletion->second.conflictPromptCount != 0u ||
+        ! std::filesystem::exists(partialMoveSource) || ! partialWriteCalls.has_value() || partialWriteCalls.value() != 1u ||
+        ! ReadFileTextFsIo(partialIo, partialDestination, partialBytes) || partialBytes != std::string(17u, '\x4B') ||
+        ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialMoveSource, partialMoveSourceBytes) ||
+        partialMoveSourceBytes != std::string(4'096u, '\x4B'))
     {
         return reject(L"partial direct Commit must retain the source, preserve partial destination bytes, and report Unknown without retry");
+    }
+
+    // Copy has no source-removal phase, but the same ambiguous direct commit must not offer
+    // Retry or start another upload: retain the partial object and report the original error.
+    const std::filesystem::path partialCopySource = root / L"partial-copy-source.bin";
+    if (! WriteFilledTestFile(partialCopySource, 4'098u, 0x5Cu))
+        return reject(L"partial direct-create Copy source unavailable");
+    wil::com_ptr<IFileSystem> partialCopyMtp;
+    wil::com_ptr<IFileSystemIO> partialCopyIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> partialCopyDirectories;
+    const std::string partialCopyOptions = R"json({"directCreateFailOncePathContains":"partial-copy-source.bin","directCreateFailAfterBytes":17})json";
+    hr                                   = createConfiguredMtp(partialCopyOptions, partialCopyMtp, partialCopyIo, partialCopyDirectories);
+    if (FAILED(hr) || ! partialCopyDirectories || FAILED(partialCopyDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+        return reject(L"partial direct-create Copy fake MTP setup failed");
+    const auto partialCopySummary     = RunCrossProviderTransferFrom(state,
+                                                                     operations,
+                                                                     scope.tasks,
+                                                                     state.fsLocal,
+                                                                     partialCopyMtp,
+                                                                     {partialCopySource},
+                                                                     std::filesystem::path(kMtpDestination),
+                                                                     false,
+                                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                                     FILESYSTEM_COPY);
+    const auto partialCopyDestination = std::filesystem::path(kMtpDestination) / partialCopySource.filename();
+    const auto partialCopyWriteCalls  = readWriteCallCount(partialCopyIo.get(), partialCopyDestination.native());
+    const auto partialCopyCompletion  = scope.tasks.empty() ? state.completedTasks.end() : state.completedTasks.find(scope.tasks.back());
+    const bool partialCopyCommitError = partialCopySummary.has_value() && std::ranges::any_of(partialCopySummary->issueDiagnostics,
+                                                                                              [](const auto& issue) noexcept
+    { return issue.category == L"bridge.commit" && issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error && issue.status == E_FAIL; });
+    std::error_code partialCopySourceError;
+    const bool partialCopySourceExists = std::filesystem::exists(partialCopySource, partialCopySourceError);
+    std::string partialCopyBytes;
+    std::string partialCopySourceBytes;
+    if (! partialCopySummary.has_value() || partialCopySummary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) ||
+        partialCopySummary->indeterminateItemCount != 1u || partialCopySummary->unknownPublicationItemCount != 1u || partialCopySummary->errorCount == 0u ||
+        partialCopySummary->retainedSourceCount != 1u || ! partialCopyCommitError || partialCopyCompletion == state.completedTasks.end() ||
+        partialCopyCompletion->second.conflictPromptCount != 0u || partialCopySourceError || ! partialCopySourceExists || ! partialCopyWriteCalls.has_value() ||
+        partialCopyWriteCalls.value() != 1u || ! ReadFileTextFsIo(partialCopyIo, partialCopyDestination, partialCopyBytes) ||
+        partialCopyBytes != std::string(17u, '\x5C') || ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialCopySource, partialCopySourceBytes) ||
+        partialCopySourceBytes != std::string(4'098u, '\x5C'))
+    {
+        return reject(L"partial direct Copy Commit must retain the source and partial bytes, report Unknown, and never offer or perform Retry");
     }
     Debug::Perf::Emit(L"FileOps.SelfTest.CrossProviderMtpNewFile", L"local-to-mtp=new-file+new-folder;no-temp-left", 0u, 2u, 0u, S_OK);
     return true;

@@ -595,6 +595,16 @@ path mutation occurred; these remain ordinary conflicts for the user to resolve.
 `Commit()` may have left partial destination content and is reported as publication Unknown, with no
 automatic retry or path-based cleanup. A managed Move without exact publication proof keeps its
 source even when the destination reports successful Commit; it is a copied result with source retained.
+The bridge's own publication and stage facts also guard the outer item executor: a failed attempt
+with Unknown or Published final publication, or a Retained, Unknown or RetainedIncomplete owned stage,
+must not enter a generic conflict decision or replay the primary operation. Preserve each independent
+publication, source and stage fact and the original failure phase and status. Continue-on-error may
+advance to a different item without replaying this one; an explicit descendant Skip and cancellation
+retain their existing terminal handling. A failed, known NotPublished attempt with no retained or
+uncertain stage remains eligible for the ordinary conflict policy.
+A skip-only partial result with known publication and no stage debt retains its explicit Skip;
+independent unknown publication or stage debt takes precedence. An Unavailable verification result
+from a sibling cannot turn a failed or indeterminate directory result into a completed publication.
 
 For ordinary built-in Local Copy of a regular file to an absent destination name, the provider uses
 the visible direct-final publication shape: it creates the final leaf exclusively, retains the exact
