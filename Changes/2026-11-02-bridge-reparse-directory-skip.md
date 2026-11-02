@@ -1,0 +1,1 @@
+- Preserve descendant Skip outcomes when a reparse-tagged selected root binds as a directory and is traversed.

@@ -2527,3 +2527,6 @@ Synthetic Local storage-probe overrides and their route caches are test-thread s
 probe must never install a process-wide pointer to stack state or save/replace the production
 route cache. The native Local route fixture also exercises a second thread with its own hooks
 and cache, and verifies that neither thread changes the other's synthetic identities.
+
+
+Selected-root non-name-surrogate directory-reparse controls may inject the observed reparse attribute of an owned ordinary directory, but must retain its real no-follow bound DIRECTORY authority. Require exactly one injected root observation and one selected-root bound-directory classification, then assert descendant file and directory conflict Skip outcomes, copied sibling bytes, unchanged source/blocker inventories, worker quiet and hook disarming. This seam does not create or validate an operating-system cloud reparse tag.
