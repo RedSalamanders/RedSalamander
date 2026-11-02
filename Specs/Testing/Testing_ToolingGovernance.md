@@ -93,6 +93,8 @@ as files in that directory.
 Positive exception checks MUST capture the action result and assert `Succeeded`; do not
 use `Should Not Throw`, whose behavior varies across supported Pester versions. A shared
 negative control must prove a deliberately thrown error produces a failed positive result.
+Negative exception checks must inspect the captured failure or specify the expected
+message, so version-specific matching of a bare `Should Throw` cannot obscure the result.
 The test-source guard parses executable syntax for both positional and parameter forms of
 that unreliable assertion in the current tooling cohort; comments and explanatory string literals
 are not violations. The SHA-256-sealed Gate0/Round4 reproduction inputs are excluded using the sole

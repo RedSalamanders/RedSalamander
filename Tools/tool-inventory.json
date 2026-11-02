@@ -5082,8 +5082,8 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide focused Pester regression coverage for repository tooling or a source contract.",
-      "usage": "Executed by the Tools Pester lane in the canonical CI and Full test plans.",
+      "purpose": "Provide focused Pester regression coverage for repository tooling, bounded native-build fixtures, and source contracts.",
+      "usage": "Executed by the Tools Pester lane in the canonical CI and Full test plans; build-toolchain cases use Full's tagged artifact-mutating entry and its receipt-bound platform, configuration, and build number.",
       "usedBy": [
         "Tools/Run-AllTests.ps1"
       ],
@@ -5092,10 +5092,12 @@
         "Repository working tree"
       ],
       "sideEffects": [
-        "May create isolated fixtures beneath the shared test sandbox"
+        "May create isolated fixtures beneath the shared test sandbox",
+        "RequiresBuildToolchain fixtures may replace outputs and receipts only for the runner-selected platform/configuration"
       ],
       "outputs": [
-        "Pester pass/fail result"
+        "Pester pass/fail result",
+        "Selected-profile build/runtime outputs and receipts from tagged artifact-mutating fixtures"
       ],
       "ownerSpec": "Specs/Testing/Testing_TestCoverage.md",
       "tests": [
