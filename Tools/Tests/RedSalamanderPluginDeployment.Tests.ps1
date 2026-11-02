@@ -87,10 +87,11 @@ function Invoke-RSTargetedBuildForDeploymentTest {
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
     $stdoutLog = Join-Path $buildLogDir "pester-targeted-plugin-deployment-$timestamp.out.log"
     $stderrLog = Join-Path $buildLogDir "pester-targeted-plugin-deployment-$timestamp.err.log"
+    $fullBuildArguments = Get-RSBuildScriptArguments -Suite Full -Configuration $Configuration -Platform $Platform
     try {
         $exitCode = Invoke-RSStreamingProcess `
             -FilePath 'pwsh.exe' `
-            -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $buildScript, '-ProjectName', 'RedSalamander', '-Configuration', $Configuration, '-Platform', $Platform, '-MaxCpuCount', '1') `
+            -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $buildScript, '-ProjectName', 'RedSalamander', '-Configuration', $Configuration, '-Platform', $Platform, '-MaxCpuCount', [string]$fullBuildArguments.MaxCpuCount) `
             -WorkingDirectory $repoRoot `
             -LogPath $stdoutLog `
             -ErrorLogPath $stderrLog `
