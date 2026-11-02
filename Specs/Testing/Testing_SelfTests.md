@@ -337,8 +337,9 @@ reviewed focused-case arguments. `ToolsPesterTests` excludes
 `ToolsPesterBuildToolchain` entry, which declares profile artifact mutation and receipt
 invalidation. The runner passes its selected platform/configuration through isolated
 process environment inputs, and the deployment test must delete, build, lock, and inspect
-only that exact profile. No hidden build-toolchain Pester case may execute inside a
-read-only entry, and no Release or ARM64 plan may silently mutate x64 Debug.
+only that exact profile. Its contained targeted compiler operation has a 60-minute guard,
+independent of product performance budgets. No hidden build-toolchain Pester case may
+execute inside a read-only entry, and no Release or ARM64 plan may silently mutate x64 Debug.
 
 ### Workspace barriers and entry fingerprints (Phase 3 active)
 
@@ -383,7 +384,11 @@ still satisfy every exact identity.
 The artifact-mutating Tools Pester lane MUST be first in the canonical Full plan and use
 PowerShell 7. Before launch, `Run-AllTests.ps1` MUST verify the current epoch barrier,
 suspend the selected receipt pointer, persist a `mutating` epoch, and invalidate every
-intersecting promotion. Artifact readers MUST reject mutating, interrupted, epoch-mismatched,
+intersecting promotion. Before suspension, the runner MUST validate the pre-mutation receipt's
+single positive Windows build number, pass it as scoped `RS_VALIDATION_BUILD_NUMBER`,
+and restore the caller's environment. The deployment writer MUST pass that exact number to its
+targeted build and check the resulting receipt, even when a CI run number differs.
+Artifact readers MUST reject mutating, interrupted, epoch-mismatched,
 or receipt-mismatched state. After the writer completes, the runner MUST rebuild/re-attest
 the same full-solution profile, byte-verify that receipt, publish a create-only
 content-addressed epoch decision, atomically switch run state back to `stable`, and

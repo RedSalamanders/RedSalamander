@@ -1,5 +1,13 @@
 # Repository tooling
 
+The Full tooling deployment fixture bounds its contained targeted compiler operation to
+60 minutes; product performance budgets remain independent. See the
+[rebuild and receipt contract](../Specs/Build/Build_Toolchain.md).
+
+Artifact-writing fixtures receive the verified receipt's build number through the
+runner-owned `RS_VALIDATION_BUILD_NUMBER` process value. Their targeted rebuild and
+subsequent full-profile re-attestation retain that same number.
+
 The root build captures native artifact and DxUi provenance after native compilation, then
 verifies captured bytes and uniform test-surface metadata before receipt publication. ZIP
 staging must preserve that native closure; see [build evidence authority](../Specs/Build/Build_Toolchain.md#build-evidence-authority-operation-startrail-implemented).

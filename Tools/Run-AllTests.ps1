@@ -1871,7 +1871,7 @@ function Assert-RSRunnerArtifactReadBarrier {
 }
 
 function Invoke-RSRunnerStandaloneValidationEntry {
-    param([Parameter(Mandatory = $true)][object]$Entry, [switch]$DeferEvidence)
+    param([Parameter(Mandatory = $true)][object]$Entry, [switch]$DeferEvidence, [int]$ArtifactBuildNumber = 0)
 
     Write-Header "Running: $($Entry.Name)"
     if ($null -ne $validationEvidenceRun) {
@@ -1888,6 +1888,10 @@ function Invoke-RSRunnerStandaloneValidationEntry {
     if (@($Entry.ArtifactWriteIds).Count -gt 0) {
         $profileEnvironment['RS_VALIDATION_PLATFORM'] = $Platform
         $profileEnvironment['RS_VALIDATION_CONFIGURATION'] = $Configuration
+        if ($ArtifactBuildNumber -lt 1 -or $ArtifactBuildNumber -gt 65535) {
+            throw 'An artifact writer requires the validated pre-mutation build number.'
+        }
+        $profileEnvironment['RS_VALIDATION_BUILD_NUMBER'] = $ArtifactBuildNumber
     }
     $previousProfileEnvironment = @{}
     try {
@@ -1950,22 +1954,25 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
         Write-Host "BLOCKED ATTESTATION: artifact writer '$($artifactMutator.Id)' cannot open from an unstable epoch." -ForegroundColor Red
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }
+    $buildNumberArgument = @($preMutationReceipt.build_arguments | Where-Object { $_ -clike 'build-number=*' })
+    $reattestBuildNumber = 0
+    if ($buildNumberArgument.Count -ne 1 -or
+        $buildNumberArgument[0] -cnotmatch '^build-number=[0-9]+$' -or
+        -not [int]::TryParse(($buildNumberArgument[0] -replace '^build-number=', ''), [ref]$reattestBuildNumber) -or
+        $reattestBuildNumber -lt 1 -or $reattestBuildNumber -gt 65535) {
+        Write-Host 'BLOCKED ATTESTATION: the pre-mutation receipt does not bind one valid build number.' -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
     # Fail closed before the writer can delete or replace any selected-profile byte.
     # A crash after this point leaves no usable receipt and a durable mutating epoch.
     Suspend-RSBuildReceipt -BuildOutputDir $buildOutputDir
     $receipt = $null
     $artifactEpoch = Start-RSValidationArtifactMutation -Run $validationEvidenceRun `
         -Plan $validationPlan -WrittenArtifactId @($artifactMutator.ArtifactWriteIds)
-    $mutationExecution = Invoke-RSRunnerStandaloneValidationEntry -Entry $artifactMutator -DeferEvidence
+    $mutationExecution = Invoke-RSRunnerStandaloneValidationEntry -Entry $artifactMutator -DeferEvidence -ArtifactBuildNumber $reattestBuildNumber
     if ($mutationExecution.Result.ExitCode -ne 0) { $overallExitCode = 1 }
 
     Write-Header "Re-attesting profile after: $($artifactMutator.Name)"
-    $buildNumberArgument = @($preMutationReceipt.build_arguments | Where-Object { $_ -match '^build-number=([0-9]+)$' } | Select-Object -First 1)
-    if ($buildNumberArgument.Count -ne 1) {
-        Write-Host 'BLOCKED ATTESTATION: the pre-mutation receipt does not bind one build number.' -ForegroundColor Red
-        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
-    }
-    $reattestBuildNumber = [int]($buildNumberArgument[0] -replace '^build-number=', '')
     $reattestEnvironmentOverrides = Get-RSBuildEnvironmentOverrides -Suite $Suite
     $previousReattestEnvironment = @{}
     foreach ($key in @($reattestEnvironmentOverrides.Keys)) {

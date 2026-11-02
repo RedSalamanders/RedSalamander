@@ -5162,7 +5162,7 @@ Specs\TestRuns\local_scratch
         $vcpkgInstall | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
         $vcpkgInstall | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$sharedDependencyScope'
         $deploymentTest | Should Match 'Invoke-RSStreamingProcess[\s\S]*?-DelegateArtifactOperation'
-        $deploymentTest | Should Match '-TimeoutMilliseconds \(15 \* 60 \* 1000\)'
+        $deploymentTest | Should Match '-TimeoutMilliseconds \(60 \* 60 \* 1000\)'
         $deploymentTest | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentTest | Should Not Match 'ReadToEndAsync|\.Result'
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'

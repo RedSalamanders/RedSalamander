@@ -159,7 +159,9 @@ $ApplyLegacySandboxCleanup = $false
             $deployment.Substring($start, $end - $start).Replace('$script:selected', '$local:selected'))
         $previousPlatform = $env:RS_VALIDATION_PLATFORM
         $previousConfiguration = $env:RS_VALIDATION_CONFIGURATION
+        $previousBuildNumber = $env:RS_VALIDATION_BUILD_NUMBER
         try {
+            $env:RS_VALIDATION_BUILD_NUMBER = '533'
             foreach ($Platform in @('x64', 'ARM64')) {
                 foreach ($Configuration in @('Debug', 'Release', 'ASan Debug')) {
                     $env:RS_VALIDATION_PLATFORM = $Platform
@@ -179,9 +181,60 @@ $ApplyLegacySandboxCleanup = $false
             $rejected = $false
             try { & $deploymentPreflight } catch { $rejected = $true }
             $rejected | Should Be $true
+            $env:RS_VALIDATION_PLATFORM = 'x64'
+            $env:RS_VALIDATION_CONFIGURATION = 'Release'
+            foreach ($invalidNumber in @('', '0', '65536', 'not-a-number')) {
+                $env:RS_VALIDATION_BUILD_NUMBER = $invalidNumber
+                $rejected = $false
+                try { & $deploymentPreflight } catch { $rejected = $true }
+                $rejected | Should Be $true
+            }
+            $env:RS_VALIDATION_BUILD_NUMBER = '533'
+            & $deploymentPreflight
+            $deploymentTokens = $null; $deploymentErrors = $null
+            $deploymentAst = [Management.Automation.Language.Parser]::ParseFile(
+                (Join-Path $repoRoot 'Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1'),
+                [ref]$deploymentTokens, [ref]$deploymentErrors)
+            @($deploymentErrors).Count | Should Be 0
+            $afterAll = $deploymentAst.Find({ param($node)
+                $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'AfterAll'
+            }, $true)
+            $null -eq $afterAll | Should Be $false
+            $afterAllBody = $afterAll.CommandElements[1].ScriptBlock.Extent.Text
+            $afterAllBody = $afterAllBody.Substring(1, $afterAllBody.Length - 2).Replace(
+                '$script:deploymentArtifactOperation', '$local:deploymentArtifactOperation')
+            $cleanup = [scriptblock]::Create($afterAllBody)
+            & {
+                Set-StrictMode -Version Latest
+                $local:deploymentArtifactOperationLock = $null
+                $local:deploymentArtifactOperationScope = $null
+                $env:RS_VALIDATION_BUILD_NUMBER = '0'
+                $primaryMessage = ''
+                try { & $deploymentPreflight } catch { $primaryMessage = $_.Exception.Message }
+                finally { . $cleanup }
+                $primaryMessage | Should Be 'RS_VALIDATION_BUILD_NUMBER must be the validated pre-mutation receipt build number.'
+                $null -eq $local:deploymentArtifactOperationLock | Should Be $true
+                $null -eq $local:deploymentArtifactOperationScope | Should Be $true
+
+                $expectedLock = [pscustomobject]@{ id = 'fixture-lock' }
+                $observation = [pscustomobject]@{ Calls = 0; Lock = $null }
+                function Exit-RSArtifactOperationLock {
+                    param($Lock)
+                    $observation.Calls++
+                    $observation.Lock = $Lock
+                }
+                $local:deploymentArtifactOperationLock = $expectedLock
+                $local:deploymentArtifactOperationScope = [pscustomobject]@{ id = 'fixture-scope' }
+                . $cleanup
+                $observation.Calls | Should Be 1
+                [object]::ReferenceEquals($observation.Lock, $expectedLock) | Should Be $true
+                $null -eq $local:deploymentArtifactOperationLock | Should Be $true
+                $null -eq $local:deploymentArtifactOperationScope | Should Be $true
+            }
         } finally {
             $env:RS_VALIDATION_PLATFORM = $previousPlatform
             $env:RS_VALIDATION_CONFIGURATION = $previousConfiguration
+            $env:RS_VALIDATION_BUILD_NUMBER = $previousBuildNumber
         }
     }
 
@@ -210,6 +263,86 @@ $ApplyLegacySandboxCleanup = $false
             $scheduled = & $scheduler $scenario.Entries @{}
             ($scheduled.Early -join ',') | Should Be ($scenario.Early -join ',')
             ($scheduled.Late -join ',') | Should Be ($scenario.Late -join ',')
+        }
+    }
+
+    It 'passes the frozen build number only during an artifact writer and restores it on failure' {
+        $tokens = $null; $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $runnerFunction = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Invoke-RSRunnerStandaloneValidationEntry'
+        }, $true)
+        $null -eq $runnerFunction | Should Be $false
+        $runnerText = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'))
+        $numberStart = $runnerText.IndexOf('$buildNumberArgument = @($preMutationReceipt.build_arguments', [StringComparison]::Ordinal)
+        $numberEnd = $runnerText.IndexOf('# Fail closed before the writer', $numberStart, [StringComparison]::Ordinal)
+        if ($numberStart -lt 0 -or $numberEnd -le $numberStart) { throw 'Missing actual receipt build-number validation.' }
+        $numberValidation = $runnerText.Substring($numberStart, $numberEnd - $numberStart).Replace(
+            'exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)', "throw 'blocked receipt'")
+        $parseReceiptNumber = [scriptblock]::Create('param($preMutationReceipt)' + [Environment]::NewLine + $numberValidation + [Environment]::NewLine + '$reattestBuildNumber')
+        (& $parseReceiptNumber ([pscustomobject]@{ build_arguments = @('build-number=533') })) | Should Be 533
+        foreach ($badReceipt in @(
+                [pscustomobject]@{ build_arguments = @('build-number=533', 'build-number=bad') },
+                [pscustomobject]@{ build_arguments = @('build-number=0') },
+                [pscustomobject]@{ build_arguments = @('build-number=65536') },
+                [pscustomobject]@{ build_arguments = @('build-number=bad') })) {
+            $caughtMessage = ''
+            try { & $parseReceiptNumber $badReceipt } catch { $caughtMessage = $_.Exception.Message }
+            $caughtMessage | Should Be 'blocked receipt'
+        }
+        & {
+            . ([scriptblock]::Create($runnerFunction.Extent.Text))
+            $validationEvidenceRun = $null
+            $Platform = 'x64'; $Configuration = 'Release'
+            $failureClassificationEnabled = $false
+            $artifactRoot = ''; $initialWorkspaceSnapshot = [pscustomobject]@{ snapshot_id = 'same' }
+            $observation = [pscustomobject]@{ Calls = 0; BuildNumber = ''; CiNumber = ''; Throw = $false }
+            function Write-Header { param($Message) }
+            function Assert-RSRunnerArtifactReadBarrier { param($Entry) }
+            function Invoke-RSTestPlanEntry {
+                param($Entry, $RepoRoot, $ArtifactRoot)
+                $observation.Calls++
+                $observation.BuildNumber = [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process')
+                $observation.CiNumber = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
+                if ($observation.Throw) { throw 'fixture writer failure' }
+                return [pscustomobject]@{ ExitCode = 0 }
+            }
+            function Add-RSTestResultClassification { param($Result) return $Result }
+            function Import-RSRunnerValidationModules {}
+            function Publish-RSRunnerWorkspaceSnapshot { param($Label) return [pscustomobject]@{ snapshot_id = 'same' } }
+            function Get-RSObjectValue { param($Object, $Names, $DefaultValue) return $DefaultValue }
+            $entry = [pscustomobject]@{ Id = 'fixture.writer'; Name = 'fixture'; Kind = 'Pester'; Path = ''; Arguments = @(); ArtifactWriteIds = @('profile') }
+            $previousNumber = [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process')
+            $previousCi = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'prior', 'Process')
+                [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', '64', 'Process')
+                [void](Invoke-RSRunnerStandaloneValidationEntry -Entry $entry -DeferEvidence -ArtifactBuildNumber 533)
+                $observation.Calls | Should Be 1
+                $observation.BuildNumber | Should Be '533'
+                $observation.CiNumber | Should Be '64'
+                [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process') | Should Be 'prior'
+                $observation.Throw = $true
+                $caughtMessage = ''
+                try { Invoke-RSRunnerStandaloneValidationEntry -Entry $entry -DeferEvidence -ArtifactBuildNumber 533 } catch { $caughtMessage = $_.Exception.Message }
+                $caughtMessage | Should Be 'fixture writer failure'
+                $observation.Calls | Should Be 2
+                $observation.BuildNumber | Should Be '533'
+                [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process') | Should Be 'prior'
+                foreach ($invalid in @(0, 65536)) {
+                    $caughtMessage = ''
+                    try { Invoke-RSRunnerStandaloneValidationEntry -Entry $entry -DeferEvidence -ArtifactBuildNumber $invalid } catch { $caughtMessage = $_.Exception.Message }
+                    $caughtMessage | Should Be 'An artifact writer requires the validated pre-mutation build number.'
+                    $observation.Calls | Should Be 2
+                    [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process') | Should Be 'prior'
+                }
+            } finally {
+                [Environment]::SetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', $previousNumber, 'Process')
+                [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', $previousCi, 'Process')
+            }
         }
     }
 
@@ -279,7 +412,7 @@ $ApplyLegacySandboxCleanup = $false
         $deployment | Should Match '''\.build\\\{0\}\\\{1\}'' -f \$selectedPlatform, \$selectedConfiguration'
         $deployment | Should Not Match '\.build\\x64\\Debug'
         $deployment | Should Match '''-Configuration'', \$Configuration, ''-Platform'', \$Platform'
-        $deployment | Should Match 'Invoke-RSTargetedBuildForDeploymentTest -Platform \$selectedPlatform -Configuration \$selectedConfiguration'
+        $deployment | Should Match 'Invoke-RSTargetedBuildForDeploymentTest -Platform \$selectedPlatform -Configuration \$selectedConfiguration -BuildNumber \$selectedBuildNumber'
     }
 
 It 'binds post-writer fingerprints to the restored receipt and matches seeded Resume construction' {
@@ -608,6 +741,8 @@ Describe 'Run-AllTests plan helper' {
         $runnerSource | Should Match 'Complete-RSValidationArtifactMutation'
         $runnerSource | Should Match 'New-RSRunnerEntryFingerprintRecord -ExecutionEntries \$testPlan'
         $runnerSource | Should Match 're-attested profile failed byte-for-byte receipt verification'
+        $runnerSource | Should Match '(?s)preMutationReceipt\.build_arguments.+valid build number.+Suspend-RSBuildReceipt.+ArtifactBuildNumber \$reattestBuildNumber'
+        $runnerSource | Should Match "(?s)RS_VALIDATION_BUILD_NUMBER.+Invoke-RSTestPlanEntry.+finally.+previousProfileEnvironment"
         $runnerSource | Should Match '(?s)Re-attesting profile after:.+Get-RSBuildEnvironmentOverrides -Suite \$Suite.+SetEnvironmentVariable\(\$key, \[string\]\$reattestEnvironmentOverrides\[\$key\], ''Process''\).+build\.ps1.+finally.+SetEnvironmentVariable\(\$key, \$previousReattestEnvironment\[\$key\], ''Process''\)'
         $runnerSource | Should Match '(?s)Re-attesting profile after:.+build\.ps1''\) -Configuration \$Configuration -Platform \$Platform.+-MaxCpuCount 4'
     }
