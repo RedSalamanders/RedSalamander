@@ -15605,6 +15605,8 @@ struct CrossFileSystemBridge
     bool connectionLimitsInitialized = false;
 
     std::atomic<uint64_t>* completedBytesAtomic = nullptr;
+    // Bandwidth accounts actual writes, including retransmission; logical progress does not.
+    std::atomic<uint64_t> physicalWrittenBytes{0u};
 
     ULONGLONG startTick = 0;
     FileSystemOptions options{};
@@ -17755,8 +17757,7 @@ struct CrossFileSystemBridge
                         // at a deterministic readback checkpoint.
                         g_fileOpsVerificationReadbackPausePoint.Pause(5'000ull);
 #endif
-                        const uint64_t transferredBytes =
-                            completedBytesAtomic != nullptr ? completedBytesAtomic->load(std::memory_order_acquire) : completedBytes;
+                        const uint64_t transferredBytes = physicalWrittenBytes.load(std::memory_order_acquire);
                         ThrottleThreadSafe(transferredBytes + completedAfter);
                     }
                     if (SUCCEEDED(hr) && fileVerifiedBytes != expectedSizeBytes)
@@ -17817,7 +17818,7 @@ struct CrossFileSystemBridge
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
             const uint64_t completedAfter   = completedBefore + expectedSizeBytes;
-            const uint64_t transferredBytes = completedBytesAtomic != nullptr ? completedBytesAtomic->load(std::memory_order_acquire) : completedBytes;
+            const uint64_t transferredBytes = physicalWrittenBytes.load(std::memory_order_acquire);
             // An opaque provider proof may complete in one callback, but its verified byte
             // count still shares the configured data budget with transfer work.
             ThrottleThreadSafe(transferredBytes + completedAfter);
@@ -18380,6 +18381,7 @@ struct CrossFileSystemBridge
                                      unsigned long chunkBytes,
                                      uint64_t fileTotalBytes,
                                      uint64_t& fileCompletedBytes,
+                                     uint64_t& fileProgressHighWater,
                                      std::atomic<uint64_t>& overallCompletedBytes,
                                      uint64_t& writeUs,
                                      ReportProgressFn&& reportProgress) noexcept
@@ -18424,13 +18426,20 @@ struct CrossFileSystemBridge
             }
             fileCompletedBytes += bytesWritten;
 
-            const uint64_t previousOverall = overallCompletedBytes.fetch_add(bytesWritten, std::memory_order_acq_rel);
-            if (previousOverall > (std::numeric_limits<uint64_t>::max)() - static_cast<uint64_t>(bytesWritten))
+            const uint64_t logicalDelta    = fileCompletedBytes > fileProgressHighWater ? fileCompletedBytes - fileProgressHighWater : 0u;
+            fileProgressHighWater          = (std::max)(fileProgressHighWater, fileCompletedBytes);
+            const uint64_t previousOverall = overallCompletedBytes.fetch_add(logicalDelta, std::memory_order_acq_rel);
+            if (previousOverall > (std::numeric_limits<uint64_t>::max)() - logicalDelta)
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
-            const uint64_t overallAfter = previousOverall + static_cast<uint64_t>(bytesWritten);
-            const bool forceProgress    = fileTotalBytes > 0 && fileCompletedBytes >= fileTotalBytes;
+            const uint64_t overallAfter   = previousOverall + logicalDelta;
+            const uint64_t physicalBefore = physicalWrittenBytes.fetch_add(bytesWritten, std::memory_order_acq_rel);
+            if (physicalBefore > (std::numeric_limits<uint64_t>::max)() - static_cast<uint64_t>(bytesWritten))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
+            const bool forceProgress = fileTotalBytes > 0 && fileCompletedBytes >= fileTotalBytes;
 
             const HRESULT hrProgress = reportProgress(overallAfter, forceProgress);
             if (FAILED(hrProgress))
@@ -18438,7 +18447,7 @@ struct CrossFileSystemBridge
                 return hrProgress;
             }
 
-            ThrottleThreadSafe(overallAfter);
+            ThrottleThreadSafe(physicalBefore + static_cast<uint64_t>(bytesWritten));
         }
         return S_OK;
     }
@@ -18561,6 +18570,8 @@ struct CrossFileSystemBridge
                            finalStatus);
         });
         constexpr unsigned int kMaxReplaceRePrompts = 2u;
+        // One file owns its high-water across attempts; retries never add the same logical bytes twice.
+        uint64_t fileProgressHighWater = 0u;
         for (unsigned int attempt = 0u;; ++attempt)
         {
             bool replaceRefused = false;
@@ -18570,6 +18581,7 @@ struct CrossFileSystemBridge
                                                          bufferBytesIn,
                                                          progressStreamId,
                                                          overallCompletedBytes,
+                                                         fileProgressHighWater,
                                                          adoptFileSizeAsTotalWhenUnknown,
                                                          publishSelectedLeafDiscovery,
                                                          replaceRefused);
@@ -19076,7 +19088,8 @@ struct CrossFileSystemBridge
                                std::byte* bufferIn,
                                unsigned long bufferBytesIn,
                                uint64_t progressStreamId,
-                               std::atomic<uint64_t>& overallCompletedBytes) noexcept
+                               std::atomic<uint64_t>& overallCompletedBytes,
+                               uint64_t& fileProgressHighWater) noexcept
     {
         const std::wstring& sourcePath                                                  = txn.sourcePath;
         const std::wstring& destinationPath                                             = txn.destinationPath;
@@ -19240,8 +19253,15 @@ struct CrossFileSystemBridge
                     static_cast<void>(proofHasher->Update(std::span<const std::byte>(bufferIn, bytesRead)));
                 }
 
-                const HRESULT hrWrite =
-                    WriteChunk(*writer, bufferIn, bytesRead, fileTotalBytes, fileCompletedBytes, overallCompletedBytes, copyPerf.writeUs, maybeReportProgress);
+                const HRESULT hrWrite = WriteChunk(*writer,
+                                                   bufferIn,
+                                                   bytesRead,
+                                                   fileTotalBytes,
+                                                   fileCompletedBytes,
+                                                   fileProgressHighWater,
+                                                   overallCompletedBytes,
+                                                   copyPerf.writeUs,
+                                                   maybeReportProgress);
                 if (FAILED(hrWrite))
                 {
                     return hrWrite;
@@ -19414,6 +19434,7 @@ struct CrossFileSystemBridge
                                     slotBytesRead,
                                     fileTotalBytes,
                                     fileCompletedBytes,
+                                    fileProgressHighWater,
                                     overallCompletedBytes,
                                     writerWriteUs,
                                     maybeReportProgress);
@@ -19517,11 +19538,12 @@ struct CrossFileSystemBridge
                 destinationPublicationUnknown.store(true, std::memory_order_release);
             }
             // A new-name final writer reports an appeared occupant as a known non-commit.
-            // The outer collision handler owns the question and any eventual failure; logging
-            // an error here would leave a false problem after the user chooses Skip.
+            // Bounded re-admission owns the fresh authority check and question; logging an
+            // error here would leave a false problem after the user chooses Skip.
             if ((txn.useAtomicFinalWriter || txn.useDirectFinalWriter) && ! txn.overwriteGranted &&
                 (hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)))
             {
+                replaceRefused = true;
                 return hr;
             }
             if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && identityLessReplace)
@@ -19865,6 +19887,7 @@ struct CrossFileSystemBridge
                                    unsigned long bufferBytesIn,
                                    uint64_t progressStreamId,
                                    std::atomic<uint64_t>& overallCompletedBytes,
+                                   uint64_t& fileProgressHighWater,
                                    bool adoptFileSizeAsTotalWhenUnknown,
                                    bool publishSelectedLeafDiscovery,
                                    bool& replaceRefused) noexcept
@@ -19969,7 +19992,7 @@ struct CrossFileSystemBridge
         {
             return hr;
         }
-        hr = Pump(txn, bufferIn, bufferBytesIn, progressStreamId, overallCompletedBytes);
+        hr = Pump(txn, bufferIn, bufferBytesIn, progressStreamId, overallCompletedBytes, fileProgressHighWater);
         if (FAILED(hr))
         {
             return hr;
@@ -22076,6 +22099,11 @@ struct CrossFileSystemBridge
 
     HRESULT CopyDirectory(const std::wstring& sourcePath, std::wstring destinationPath) noexcept
     {
+#ifdef ENABLE_TESTS
+        // Capture the actual call denominator and logical total after its workers have drained.
+        const auto accountingWitness = wil::scope_exit([&]() noexcept
+        { Debug::Perf::Emit(L"FileOps.SelfTest.BridgeDirectoryAccounting", std::format(L"taskId={}", task._taskId), 0u, totalBytes, completedBytes, S_OK); });
+#endif
         const unsigned int withinFolderBudget = ComputeWithinFolderBudget();
         if (withinFolderBudget <= 1u)
         {

@@ -1539,6 +1539,19 @@ callback, that status carries no exact destination authority. The host may still
 Both, Skip, Skip All, or Cancel when otherwise valid, but MUST withhold Overwrite, Replace read-only,
 and Replace link. A destructive button is never offered merely because an HRESULT resembles Exists.
 
+A no-overwrite atomic-final or direct-final writer may report an appeared occupant as a known
+non-commit. The bridge may re-admit that item through its bounded collision loop after releasing
+the attempt's permits and writer. Re-admission reads the current occupant and applies the ordinary
+destructive-action authority policy before offering Overwrite; an identity-less conditional replacement
+still requires the observed occupant expectation and a writer that accepts it. Exhaustion or cancellation
+retains the existing failure or cancellation path; no generic provider-returned collision gains authority.
+
+For a file retried within that bridge call, logical transfer progress adds only newly observed written
+bytes above that file's highest previous attempt, including partial failed attempts. This high-water is
+a written-byte observation, not a publication or source-stability receipt: source mutation between
+attempts can change the bytes or size. The separate physical byte count includes every retransmitted
+write for bandwidth pacing; verification remains separately counted under the same bandwidth budget.
+
 ## Delete and Recycle
 
 Recycle and Permanent are distinct `DeletePlan` modes. Permanent Delete requires fresh explicit

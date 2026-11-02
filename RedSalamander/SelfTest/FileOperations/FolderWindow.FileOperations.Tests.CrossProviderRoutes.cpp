@@ -118,7 +118,10 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
     std::vector<std::filesystem::path> sources,
     const std::filesystem::path& destinationFolder,
     FolderWindow::FileOperationState::Task::ConflictAction action,
-    FileSystemOperation operationType = FILESYSTEM_COPY)
+    FileSystemOperation operationType                                                  = FILESYSTEM_COPY,
+    uint64_t* maximumObservedProgress                                                  = nullptr,
+    const std::function<bool()>& beforeDecision                                        = {},
+    std::optional<FolderWindow::FileOperationState::Task::ConflictAction> secondAction = std::nullopt)
 {
     const bool localSource = source.get() == state.fsLocal.get();
     const auto admitted    = StartFileOperationAndGetId(operations,
@@ -140,25 +143,36 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
     }
     const uint64_t taskId = admitted.value();
     tasks.push_back(taskId);
-    bool answered   = false;
-    const auto done = RedSalamander::TestSupport::PumpMessagesUntil(
+    std::optional<uint64_t> answeredGeneration;
+    unsigned int answeredCount = 0u;
+    const auto done            = RedSalamander::TestSupport::PumpMessagesUntil(
         [&]() noexcept
     {
         FolderWindow::FileOperationState::Task* task = operations->FindTask(taskId);
+        if (task && maximumObservedProgress)
+        {
+            std::scoped_lock lock(task->_progressMutex);
+            *maximumObservedProgress = (std::max)(*maximumObservedProgress, task->_progressCompletedBytes);
+        }
         if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
         {
-            if (answered || ! task || ! task->SubmitConflictDecision(prompt->generation, action, false))
+            if (answeredGeneration == prompt->generation)
+                return false; // The worker has not yet retired the accepted generation.
+            if (answeredCount > 1u || (answeredCount == 1u && ! secondAction.has_value()) || ! task ||
+                (answeredCount == 0u && beforeDecision && ! beforeDecision()) ||
+                ! task->SubmitConflictDecision(prompt->generation, answeredCount == 0u ? action : secondAction.value(), false))
             {
                 AppendLog(L"Cross-provider direct-create conflict prompt could not be answered exactly once.");
                 return true;
             }
-            answered = true;
+            answeredGeneration = prompt->generation;
+            ++answeredCount;
             return false;
         }
         return state.completedTasks.contains(taskId) && task == nullptr;
     },
         {.timeout = SelfTest::Scale(kCrossProviderWait), .operationName = L"cross-provider direct-create conflict resolution"});
-    if (! done.conditionMet || ! state.completedTasks.contains(taskId) || ! answered)
+    if (! done.conditionMet || ! state.completedTasks.contains(taskId) || answeredCount != (secondAction.has_value() ? 2u : 1u))
     {
         return std::nullopt;
     }
@@ -488,6 +502,152 @@ private:
         ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), overwriteRaceSource, overwriteExpected) || overwriteRaceBytes != overwriteExpected)
     {
         return reject(L"explicit Overwrite after a direct-create collision must use the existing guarded replacement route");
+    }
+
+    // One real directory call carries both files through the same bridge. The injected first
+    // commit collides after the bytes were written, so the accepted replacement replays that
+    // file while the logical task total must count it only once.
+    constexpr uint64_t kRetryBytes          = 8'192u;
+    constexpr uint64_t kPeerBytes           = 4'096u;
+    const std::filesystem::path batchSource = root / L"retry-batch";
+    const std::filesystem::path retrySource = batchSource / L"appeared-batch.bin";
+    const std::filesystem::path peerSource  = batchSource / L"peer.bin";
+    if (! RecreateEmptyDirectory(batchSource) || ! WriteFilledTestFile(retrySource, kRetryBytes, 0x51u) || ! WriteFilledTestFile(peerSource, kPeerBytes, 0x52u))
+    {
+        return reject(L"multi-file retry source unavailable");
+    }
+    wil::com_ptr<IFileSystem> batchMtp;
+    wil::com_ptr<IFileSystemIO> batchIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> batchDirectories;
+    hr = createConfiguredMtp(R"json({"directCreateRaceOncePathContains":"appeared-batch.bin"})json", batchMtp, batchIo, batchDirectories);
+    if (FAILED(hr) || ! batchDirectories || FAILED(batchDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+        return reject(L"multi-file retry fake MTP setup failed");
+    const auto batchDestination = std::filesystem::path(kMtpDestination) / batchSource.filename();
+    const auto retryDestination = batchDestination / retrySource.filename();
+    const auto peerDestination  = batchDestination / peerSource.filename();
+    std::vector<PerfMetricSample> copyMetricsBefore;
+    std::vector<PerfMetricSample> accountingBefore;
+    if (! TryReadPerfMetricSamples("FileOps.Bridge.Copy", copyMetricsBefore) ||
+        ! TryReadPerfMetricSamples("FileOps.SelfTest.BridgeDirectoryAccounting", accountingBefore))
+        return reject(L"multi-file retry accounting baseline unavailable");
+    bool sawExpectedOccupant         = false;
+    uint64_t maximumObservedProgress = 0u;
+    const auto batchSummary          = RunCrossProviderTransferAnsweringConflict(state,
+                                                                                 operations,
+                                                                                 scope.tasks,
+                                                                                 state.fsLocal,
+                                                                                 batchMtp,
+                                                                                 {batchSource},
+                                                                                 std::filesystem::path(kMtpDestination),
+                                                                                 FolderWindow::FileOperationState::Task::ConflictAction::Overwrite,
+                                                                                 FILESYSTEM_COPY,
+                                                                                 &maximumObservedProgress,
+                                                                                 [&]() noexcept
+    {
+        std::string occupant;
+        const char* properties  = nullptr;
+        const std::wstring path = retryDestination.native();
+        sawExpectedOccupant     = ReadFileTextFsIo(batchIo, retryDestination, occupant) && occupant == "concurrent occupant preserved" &&
+                                  SUCCEEDED(batchIo->GetItemProperties(path.c_str(), &properties)) && properties != nullptr &&
+                                  std::string_view(properties).find("\"persistentId\":\"puid-") != std::string_view::npos;
+        return sawExpectedOccupant;
+    });
+    std::vector<PerfMetricSample> copyMetricsAfter;
+    std::vector<PerfMetricSample> accountingAfter;
+    std::string retryBytes;
+    std::string peerBytes;
+    std::string expectedRetry;
+    std::string expectedPeer;
+    const auto completed       = scope.tasks.empty() ? state.completedTasks.end() : state.completedTasks.find(scope.tasks.back());
+    uint64_t physicalCopyBytes = 0u;
+    const bool haveCopyMetrics = TryReadPerfMetricSamples("FileOps.Bridge.Copy", copyMetricsAfter) && copyMetricsAfter.size() >= copyMetricsBefore.size();
+    const bool accountingValid = TryReadPerfMetricSamples("FileOps.SelfTest.BridgeDirectoryAccounting", accountingAfter) &&
+                                 accountingAfter.size() == accountingBefore.size() + 1u && accountingAfter.back().value0 == 0u &&
+                                 accountingAfter.back().value1 == kRetryBytes + kPeerBytes && accountingAfter.back().hr == S_OK;
+    size_t retryCopySamples    = 0u;
+    size_t peerCopySamples     = 0u;
+    if (haveCopyMetrics)
+        for (size_t index = copyMetricsBefore.size(); index < copyMetricsAfter.size(); ++index)
+        {
+            physicalCopyBytes += copyMetricsAfter[index].value0;
+            retryCopySamples += copyMetricsAfter[index].value0 == kRetryBytes ? 1u : 0u;
+            peerCopySamples += copyMetricsAfter[index].value0 == kPeerBytes ? 1u : 0u;
+        }
+    const auto batchChildren = ListCrossProviderChildNames(batchMtp.get(), batchDestination.wstring());
+    if (! batchSummary.has_value() || batchSummary->resultHr != S_OK || batchSummary->errorCount != 0u || ! sawExpectedOccupant ||
+        completed == state.completedTasks.end() || completed->second.progressCompletedBytes != kRetryBytes + kPeerBytes ||
+        maximumObservedProgress > kRetryBytes + kPeerBytes || ! accountingValid || ! haveCopyMetrics || physicalCopyBytes != 2u * kRetryBytes + kPeerBytes ||
+        retryCopySamples != 2u || peerCopySamples != 1u || batchChildren.size() != 2u || ! ReadFileTextFsIo(batchIo, retryDestination, retryBytes) ||
+        ! ReadFileTextFsIo(batchIo, peerDestination, peerBytes) || ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), retrySource, expectedRetry) ||
+        ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), peerSource, expectedPeer) || retryBytes != expectedRetry || peerBytes != expectedPeer)
+    {
+        AppendLog(std::format(L"XP-01 multi-file retry: summary={} occupant={} completed={} logical={} maxLogical={} accounting={} accountingBefore={} "
+                              L"accountingAfter={} rawTotal={} rawLogical={} physical={} metric={} replaySamples={} "
+                              L"peerSamples={} children={}",
+                              batchSummary.has_value(),
+                              sawExpectedOccupant,
+                              completed != state.completedTasks.end(),
+                              completed != state.completedTasks.end() ? completed->second.progressCompletedBytes : 0u,
+                              maximumObservedProgress,
+                              accountingValid,
+                              accountingBefore.size(),
+                              accountingAfter.size(),
+                              accountingAfter.empty() ? 0u : accountingAfter.back().value0,
+                              accountingAfter.empty() ? 0u : accountingAfter.back().value1,
+                              physicalCopyBytes,
+                              haveCopyMetrics,
+                              retryCopySamples,
+                              peerCopySamples,
+                              batchChildren.size()));
+        return reject(L"multi-file late-collision retry must preserve logical progress, physical replay and exact destination contents");
+    }
+
+    // The fake device replaces the observed PUID during the replacement upload. A fresh
+    // generation must ask again; choosing Skip preserves the newer occupant, not the old grant.
+    const std::filesystem::path changedSource = root / L"guard-race.bin";
+    if (! WriteFilledTestFile(changedSource, 4'097u, 0x53u))
+        return reject(L"changed-occupant source unavailable");
+    wil::com_ptr<IFileSystem> changedMtp;
+    wil::com_ptr<IFileSystemIO> changedIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> changedDirectories;
+    const std::string changedOptions =
+        R"json({"directCreateRaceOncePathContains":"guard-race.bin","replaceDestinationDuringOverwriteUpload":"/Fake Phone/Internal Storage/xp01/guard-race.bin"})json";
+    hr = createConfiguredMtp(changedOptions, changedMtp, changedIo, changedDirectories);
+    if (FAILED(hr) || ! changedDirectories || FAILED(changedDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+        return reject(L"changed-occupant fake MTP setup failed");
+    const auto changedSummary     = RunCrossProviderTransferAnsweringConflict(state,
+                                                                              operations,
+                                                                              scope.tasks,
+                                                                              state.fsLocal,
+                                                                              changedMtp,
+                                                                              {changedSource},
+                                                                              std::filesystem::path(kMtpDestination),
+                                                                              FolderWindow::FileOperationState::Task::ConflictAction::Overwrite,
+                                                                              FILESYSTEM_COPY,
+                                                                              nullptr,
+                                                                              {},
+                                                                              FolderWindow::FileOperationState::Task::ConflictAction::Skip);
+    const auto changedDestination = std::filesystem::path(kMtpDestination) / changedSource.filename();
+    std::string changedBytes;
+    const char* changedProperties  = nullptr;
+    const std::wstring changedPath = changedDestination.native();
+    const bool changedIdentity     = SUCCEEDED(changedIo->GetItemProperties(changedPath.c_str(), &changedProperties)) && changedProperties != nullptr &&
+                                     std::string_view(changedProperties).find("-replaced") != std::string_view::npos;
+    const auto changedChildren     = ListCrossProviderChildNames(changedMtp.get(), std::filesystem::path(kMtpDestination).wstring());
+    std::error_code changedSourceError;
+    const bool changedSourceExists = std::filesystem::exists(changedSource, changedSourceError);
+    if (! changedSummary.has_value() || changedSummary->skippedItemCount != 1u || changedSummary->errorCount == 0u || ! changedIdentity || changedSourceError ||
+        ! changedSourceExists || ! ReadFileTextFsIo(changedIo, changedDestination, changedBytes) || changedBytes != "replaced occupant" ||
+        changedChildren.size() != 1u)
+    {
+        AppendLog(std::format(L"XP-01 changed occupant: summary={} skipped={} errors={} changedIdentity={} bytes={} children={}",
+                              changedSummary.has_value(),
+                              changedSummary.has_value() ? changedSummary->skippedItemCount : 0u,
+                              changedSummary.has_value() ? changedSummary->errorCount : 0u,
+                              changedIdentity,
+                              changedBytes.size(),
+                              changedChildren.size()));
+        return reject(L"changed PUID must be re-prompted and the newer occupant preserved after Skip");
     }
 
     // A partial upload is not a known conflict. E_FAIL must leave the item Unknown and non-retryable.

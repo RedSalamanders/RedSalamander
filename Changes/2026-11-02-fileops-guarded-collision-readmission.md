@@ -1,0 +1,1 @@
+- Recheck appeared destination occupants through bounded, authority-guarded bridge admission and keep retry progress distinct from retransmitted bandwidth. Runtime validation remains pending.
