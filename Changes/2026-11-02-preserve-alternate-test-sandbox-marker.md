@@ -1,0 +1,1 @@
+- Preserve an authorized alternate test sandbox and its ownership marker after pruning empty run-owned directories.

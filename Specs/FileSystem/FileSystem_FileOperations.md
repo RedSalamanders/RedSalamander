@@ -595,6 +595,25 @@ path mutation occurred; these remain ordinary conflicts for the user to resolve.
 `Commit()` may have left partial destination content and is reported as publication Unknown, with no
 automatic retry or path-based cleanup. A managed Move without exact publication proof keeps its
 source even when the destination reports successful Commit; it is a copied result with source retained.
+The bridge's own publication and stage facts also guard the outer item executor: a failed attempt
+with Unknown or Published final publication, or a Retained, Unknown or RetainedIncomplete owned stage,
+must not enter a generic conflict decision or replay the primary operation. Preserve each independent
+publication, source and stage fact and the original failure phase and status. Continue-on-error may
+advance to a different item without replaying this one; an explicit descendant Skip and cancellation
+retain their existing terminal handling. A failed, known NotPublished attempt with no retained or
+uncertain stage remains eligible for the ordinary conflict policy.
+Bridge Skip-only partial outcomes use an attempt-local terminal witness produced after the selected
+root's traversal completes without an independent failure; a previously observed Skip alone never
+turns a later traversal failure into a Skip. Unknown publication and retained or uncertain stage debt
+take precedence over that witness. Root and descendant Skips retain their distinct result semantics;
+`S_FALSE` alone is not a Skip, including when publication succeeded but verification was unavailable.
+An explicit directory-shell conflict Skip participates in that witness, with a selected-root Skip
+distinguished from a skipped descendant; a failed sibling walk still takes precedence.
+Copy-only Move never performs source deletion, so its source remains Retained on a failed bridge
+attempt or uncertain stage cleanup even when destination publication is unknown or already occurred.
+A skip-only partial result with known publication and no stage debt retains its explicit Skip;
+independent unknown publication or stage debt takes precedence. An Unavailable verification result
+from a sibling cannot turn a failed or indeterminate directory result into a completed publication.
 
 For ordinary built-in Local Copy of a regular file to an absent destination name, the provider uses
 the visible direct-final publication shape: it creates the final leaf exclusively, retains the exact
@@ -1538,6 +1557,19 @@ If a provider returns a collision to the outer item executor without consuming t
 callback, that status carries no exact destination authority. The host may still offer Retry, Keep
 Both, Skip, Skip All, or Cancel when otherwise valid, but MUST withhold Overwrite, Replace read-only,
 and Replace link. A destructive button is never offered merely because an HRESULT resembles Exists.
+
+A no-overwrite atomic-final or direct-final writer may report an appeared occupant as a known
+non-commit. The bridge may re-admit that item through its bounded collision loop after releasing
+the attempt's permits and writer. Re-admission reads the current occupant and applies the ordinary
+destructive-action authority policy before offering Overwrite; an identity-less conditional replacement
+still requires the observed occupant expectation and a writer that accepts it. Exhaustion or cancellation
+retains the existing failure or cancellation path; no generic provider-returned collision gains authority.
+
+For a file retried within that bridge call, logical transfer progress adds only newly observed written
+bytes above that file's highest previous attempt, including partial failed attempts. This high-water is
+a written-byte observation, not a publication or source-stability receipt: source mutation between
+attempts can change the bytes or size. The separate physical byte count includes every retransmitted
+write for bandwidth pacing; verification remains separately counted under the same bandwidth budget.
 
 ## Delete and Recycle
 
