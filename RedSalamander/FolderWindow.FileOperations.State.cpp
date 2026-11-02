@@ -22576,13 +22576,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
         if (cleanupIndeterminate)
         {
-            result.publication = partialPublication.value_or(FileOperations::PublicationState::Unknown);
-            result.sourceDisposition =
-                result.publication == FileOperations::PublicationState::Published && _operation == FILESYSTEM_MOVE && ! managedSourceRetained
-                    ? FileOperations::SourceDisposition::Unknown
-                    : FileOperations::SourceDisposition::Retained;
-            result.completion = FileOperations::ItemCompletion::Indeterminate;
-            result.status     = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            result.publication       = partialPublication.value_or(FileOperations::PublicationState::Unknown);
+            result.sourceDisposition = result.publication == FileOperations::PublicationState::Published && _operation == FILESYSTEM_MOVE &&
+                                               strategy != FileOperations::OperationStrategy::CopyOnly && ! managedSourceRetained
+                                           ? FileOperations::SourceDisposition::Unknown
+                                           : FileOperations::SourceDisposition::Retained;
+            result.completion        = FileOperations::ItemCompletion::Indeterminate;
+            result.status            = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         else if (validMutation)
         {
@@ -22603,8 +22603,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
         {
             // Bridge publication is an independent fact; source retention is not success.
             result.publication       = partialPublication.value();
-            result.sourceDisposition = (_operation == FILESYSTEM_COPY || managedSourceRetained) ? FileOperations::SourceDisposition::Retained
-                                                                                                : FileOperations::SourceDisposition::Unknown;
+            result.sourceDisposition = (_operation == FILESYSTEM_COPY || strategy == FileOperations::OperationStrategy::CopyOnly || managedSourceRetained)
+                                           ? FileOperations::SourceDisposition::Retained
+                                           : FileOperations::SourceDisposition::Unknown;
             result.completion =
                 result.publication == FileOperations::PublicationState::Unknown || OwnedStageDispositionIsIndeterminate(result.ownedStageDisposition)
                     ? FileOperations::ItemCompletion::Indeterminate

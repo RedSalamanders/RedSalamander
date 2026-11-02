@@ -602,6 +602,8 @@ publication, source and stage fact and the original failure phase and status. Co
 advance to a different item without replaying this one; an explicit descendant Skip and cancellation
 retain their existing terminal handling. A failed, known NotPublished attempt with no retained or
 uncertain stage remains eligible for the ordinary conflict policy.
+Copy-only Move never performs source deletion, so its source remains Retained on a failed bridge
+attempt or uncertain stage cleanup even when destination publication is unknown or already occurred.
 A skip-only partial result with known publication and no stage debt retains its explicit Skip;
 independent unknown publication or stage debt takes precedence. An Unavailable verification result
 from a sibling cannot turn a failed or indeterminate directory result into a completed publication.

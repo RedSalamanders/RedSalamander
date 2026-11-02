@@ -755,14 +755,40 @@ private:
     const bool partialCommitError = partialSummary.has_value() && std::ranges::any_of(partialSummary->issueDiagnostics, [](const auto& issue) noexcept {
         return issue.category == L"bridge.commit" && issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error && issue.status == E_FAIL;
     });
+    std::error_code partialSourceError;
+    const bool partialSourceExists       = std::filesystem::exists(partialMoveSource, partialSourceError);
+    const bool partialDestinationRead    = ReadFileTextFsIo(partialIo, partialDestination, partialBytes);
+    const bool partialSourceRead         = ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialMoveSource, partialMoveSourceBytes);
+    const bool partialDestinationMatches = partialBytes == std::string(17u, '\x4B');
+    const bool partialSourceMatches      = partialMoveSourceBytes == std::string(4'096u, '\x4B');
     if (! partialSummary.has_value() || partialSummary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) || partialSummary->indeterminateItemCount != 1u ||
         partialSummary->unknownPublicationItemCount != 1u || partialSummary->errorCount == 0u || partialSummary->retainedSourceCount != 1u ||
-        ! partialCommitError || partialCompletion == state.completedTasks.end() || partialCompletion->second.conflictPromptCount != 0u ||
-        ! std::filesystem::exists(partialMoveSource) || ! partialWriteCalls.has_value() || partialWriteCalls.value() != 1u ||
-        ! ReadFileTextFsIo(partialIo, partialDestination, partialBytes) || partialBytes != std::string(17u, '\x4B') ||
-        ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialMoveSource, partialMoveSourceBytes) ||
-        partialMoveSourceBytes != std::string(4'096u, '\x4B'))
+        ! partialCommitError || partialCompletion == state.completedTasks.end() || partialCompletion->second.conflictPromptCount != 0u || partialSourceError ||
+        ! partialSourceExists || ! partialWriteCalls.has_value() || partialWriteCalls.value() != 1u || ! partialDestinationRead ||
+        ! partialDestinationMatches || ! partialSourceRead || ! partialSourceMatches)
     {
+        AppendLog(std::format(L"XP-01 partial Move: summary={} hr=0x{:08X} unknown={} indeterminate={} retained={} errors={} commitError={} "
+                              L"completion={} prompts={} sourceExists={} sourceError={} writesPresent={} writes={} destinationRead={} destinationSize={} "
+                              L"destinationMatches={} sourceRead={} sourceSize={} sourceMatches={}",
+                              partialSummary.has_value(),
+                              partialSummary ? static_cast<unsigned long>(partialSummary->resultHr) : 0ul,
+                              partialSummary ? partialSummary->unknownPublicationItemCount : 0u,
+                              partialSummary ? partialSummary->indeterminateItemCount : 0u,
+                              partialSummary ? partialSummary->retainedSourceCount : 0u,
+                              partialSummary ? partialSummary->errorCount : 0u,
+                              partialCommitError,
+                              partialCompletion != state.completedTasks.end(),
+                              partialCompletion != state.completedTasks.end() ? partialCompletion->second.conflictPromptCount : 0u,
+                              partialSourceExists,
+                              partialSourceError.value(),
+                              partialWriteCalls.has_value(),
+                              partialWriteCalls.value_or(0u),
+                              partialDestinationRead,
+                              partialBytes.size(),
+                              partialDestinationMatches,
+                              partialSourceRead,
+                              partialMoveSourceBytes.size(),
+                              partialSourceMatches));
         return reject(L"partial direct Commit must retain the source, preserve partial destination bytes, and report Unknown without retry");
     }
 
@@ -798,14 +824,39 @@ private:
     const bool partialCopySourceExists = std::filesystem::exists(partialCopySource, partialCopySourceError);
     std::string partialCopyBytes;
     std::string partialCopySourceBytes;
+    const bool partialCopyDestinationRead    = ReadFileTextFsIo(partialCopyIo, partialCopyDestination, partialCopyBytes);
+    const bool partialCopySourceRead         = ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialCopySource, partialCopySourceBytes);
+    const bool partialCopyDestinationMatches = partialCopyBytes == std::string(17u, '\x5C');
+    const bool partialCopySourceMatches      = partialCopySourceBytes == std::string(4'098u, '\x5C');
     if (! partialCopySummary.has_value() || partialCopySummary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) ||
         partialCopySummary->indeterminateItemCount != 1u || partialCopySummary->unknownPublicationItemCount != 1u || partialCopySummary->errorCount == 0u ||
         partialCopySummary->retainedSourceCount != 1u || ! partialCopyCommitError || partialCopyCompletion == state.completedTasks.end() ||
         partialCopyCompletion->second.conflictPromptCount != 0u || partialCopySourceError || ! partialCopySourceExists || ! partialCopyWriteCalls.has_value() ||
-        partialCopyWriteCalls.value() != 1u || ! ReadFileTextFsIo(partialCopyIo, partialCopyDestination, partialCopyBytes) ||
-        partialCopyBytes != std::string(17u, '\x5C') || ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialCopySource, partialCopySourceBytes) ||
-        partialCopySourceBytes != std::string(4'098u, '\x5C'))
+        partialCopyWriteCalls.value() != 1u || ! partialCopyDestinationRead || ! partialCopyDestinationMatches || ! partialCopySourceRead ||
+        ! partialCopySourceMatches)
     {
+        AppendLog(std::format(L"XP-01 partial Copy: summary={} hr=0x{:08X} unknown={} indeterminate={} retained={} errors={} commitError={} "
+                              L"completion={} prompts={} sourceExists={} sourceError={} writesPresent={} writes={} destinationRead={} destinationSize={} "
+                              L"destinationMatches={} sourceRead={} sourceSize={} sourceMatches={}",
+                              partialCopySummary.has_value(),
+                              partialCopySummary ? static_cast<unsigned long>(partialCopySummary->resultHr) : 0ul,
+                              partialCopySummary ? partialCopySummary->unknownPublicationItemCount : 0u,
+                              partialCopySummary ? partialCopySummary->indeterminateItemCount : 0u,
+                              partialCopySummary ? partialCopySummary->retainedSourceCount : 0u,
+                              partialCopySummary ? partialCopySummary->errorCount : 0u,
+                              partialCopyCommitError,
+                              partialCopyCompletion != state.completedTasks.end(),
+                              partialCopyCompletion != state.completedTasks.end() ? partialCopyCompletion->second.conflictPromptCount : 0u,
+                              partialCopySourceExists,
+                              partialCopySourceError.value(),
+                              partialCopyWriteCalls.has_value(),
+                              partialCopyWriteCalls.value_or(0u),
+                              partialCopyDestinationRead,
+                              partialCopyBytes.size(),
+                              partialCopyDestinationMatches,
+                              partialCopySourceRead,
+                              partialCopySourceBytes.size(),
+                              partialCopySourceMatches));
         return reject(L"partial direct Copy Commit must retain the source and partial bytes, report Unknown, and never offer or perform Retry");
     }
     Debug::Perf::Emit(L"FileOps.SelfTest.CrossProviderMtpNewFile", L"local-to-mtp=new-file+new-folder;no-temp-left", 0u, 2u, 0u, S_OK);
