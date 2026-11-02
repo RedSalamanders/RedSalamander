@@ -1063,6 +1063,9 @@ one-listing folder has closed discovery by then).
 The fixed-volume control copies four 4-MiB files independently on marker-authorized C and D roots at
 16 MiB/s, then repeats both concurrently. It emits
 `FileOps.SelfTest.R4A19.{ProviderControl,ProviderCancel,IndependentVolumes,IndependentVolumeCIsolatedUs,IndependentVolumeDIsolatedUs}`.
+The fixture captures one bounded scalar admission/interlock witness while both tasks are present and
+reports it only on failure or timeout. It retains no paths or bound authority across ticks; its measured
+capture cost is included in the unchanged concurrent interval and reported with the failure witness.
 The fake-MTP fixture, whose route the host bridge traverses, lists its one source folder at once, so
 since I35 S2 its scope closes when that folder is listed: it requires closure before the last byte
 (open-discovery bytes below the total), zero growth after closure, zero discovery starvation, and

@@ -5310,9 +5310,68 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
 
 case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 {
+    struct R4A19ScopeCounts final
+    {
+        size_t read = 0u, write = 0u, publish = 0u;
+        size_t conservative = 0u, anchored = 0u;
+    };
+    struct R4A19AdmissionDiagnostic final
+    {
+        bool captured = false, waitA = false, waitB = false, activeA = false, activeB = false;
+        bool overlap = false, byNameDelete = false;
+        bool pairFound = false, pairDomain = false, pairContract = false, pairSameRoot = false;
+        bool leftConservative = false, rightConservative = false, leftAnchored = false, rightAnchored = false;
+        unsigned int leftRole = 0u, rightRole = 0u, advisory = 0u;
+        uint64_t comparisons = 0u, advisoryComparisons = 0u, captureUs = 0u;
+        R4A19ScopeCounts a, b;
+    };
+    // Only scalar facts persist between UI ticks; no bound-object authority or path is retained.
+    static R4A19AdmissionDiagnostic diagnostic;
+    const auto logDiagnostic = [&]() noexcept
+    {
+        AppendLog(std::format(L"R4-A19 admission diagnostic: captured={} waitA={} waitB={} activeA={} activeB={} "
+                              L"A(read/write/publish={}/{}/{} conservative={} anchored={}) "
+                              L"B(read/write/publish={}/{}/{} conservative={} anchored={}) "
+                              L"overlap={} comparisons={} advisory={} advisoryComparisons={} byNameDelete={} captureUs={} "
+                              L"independentFieldsAvailable=false waitReasonFlagsAvailable=false",
+                              diagnostic.captured,
+                              diagnostic.waitA,
+                              diagnostic.waitB,
+                              diagnostic.activeA,
+                              diagnostic.activeB,
+                              diagnostic.a.read,
+                              diagnostic.a.write,
+                              diagnostic.a.publish,
+                              diagnostic.a.conservative,
+                              diagnostic.a.anchored,
+                              diagnostic.b.read,
+                              diagnostic.b.write,
+                              diagnostic.b.publish,
+                              diagnostic.b.conservative,
+                              diagnostic.b.anchored,
+                              diagnostic.overlap,
+                              diagnostic.comparisons,
+                              diagnostic.advisory,
+                              diagnostic.advisoryComparisons,
+                              diagnostic.byNameDelete,
+                              diagnostic.captureUs));
+        AppendLog(std::format(L"R4-A19 overlapping pair: found={} roles={}/{} conservative={}/{} anchored={}/{} "
+                              L"sameDomain={} samePathContract={} sameRoot={}",
+                              diagnostic.pairFound,
+                              diagnostic.leftRole,
+                              diagnostic.rightRole,
+                              diagnostic.leftConservative,
+                              diagnostic.rightConservative,
+                              diagnostic.leftAnchored,
+                              diagnostic.rightAnchored,
+                              diagnostic.pairDomain,
+                              diagnostic.pairContract,
+                              diagnostic.pairSameRoot));
+    };
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
+        logDiagnostic();
         Fail(L"R4A19_DiscoveryIndependentVolumes timed out.");
         return true;
     }
@@ -5327,6 +5386,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 
     if (state.stepState == 0u)
     {
+        diagnostic = {};
         // Queue is the product default. This control measures independent
         // operations, so it must establish Parallel admission explicitly rather
         // than inheriting a previous case's mode or racing the first worker.
@@ -5568,6 +5628,59 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             std::scoped_lock lock(taskB->_progressMutex);
             completedB = taskB->_progressCompletedBytes;
         }
+        const auto admissionA = taskA->LoadMutationInterlockAdmission();
+        const auto admissionB = taskB->LoadMutationInterlockAdmission();
+        if (! diagnostic.captured && admissionA && admissionB && admissionA->scopes && admissionB->scopes &&
+            (taskA->IsWaitingInQueue() || taskB->IsWaitingInQueue() || (taskA->HasEnteredOperation() && taskB->HasEnteredOperation())))
+        {
+            const auto captureStarted = std::chrono::steady_clock::now();
+            using Access              = FileOperations::MutationInterlockAccess;
+            const auto count          = [](const auto& scopes) noexcept
+            {
+                R4A19ScopeCounts result;
+                for (const auto& scope : scopes)
+                {
+                    result.read += scope.access == Access::ReadSource;
+                    result.write += scope.access == Access::WriteSource;
+                    result.publish += scope.access == Access::PublishDestination;
+                    result.conservative += scope.conservativeIdentityDomain;
+                    result.anchored += ! scope.anchors.empty();
+                }
+                return result;
+            };
+            diagnostic.waitA    = taskA->IsWaitingInQueue();
+            diagnostic.waitB    = taskB->IsWaitingInQueue();
+            diagnostic.activeA  = taskA->HasEnteredOperation();
+            diagnostic.activeB  = taskB->HasEnteredOperation();
+            diagnostic.a        = count(*admissionA->scopes);
+            diagnostic.b        = count(*admissionB->scopes);
+            diagnostic.overlap  = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(*admissionA->scopes, *admissionB->scopes, diagnostic.comparisons);
+            diagnostic.advisory = static_cast<unsigned int>(FileOperations::DebugClassifySameHostOverlapForSelfTest(
+                *admissionA->scopes, *admissionB->scopes, diagnostic.byNameDelete, diagnostic.advisoryComparisons));
+            for (const auto& left : *admissionA->scopes)
+            {
+                for (const auto& right : *admissionB->scopes)
+                {
+                    if (! FileOperations::DebugMutationScopesOverlapForSelfTest(left, right))
+                        continue;
+                    diagnostic.pairFound         = true;
+                    diagnostic.leftRole          = static_cast<unsigned int>(left.access);
+                    diagnostic.rightRole         = static_cast<unsigned int>(right.access);
+                    diagnostic.leftConservative  = left.conservativeIdentityDomain;
+                    diagnostic.rightConservative = right.conservativeIdentityDomain;
+                    diagnostic.leftAnchored      = ! left.anchors.empty();
+                    diagnostic.rightAnchored     = ! right.anchors.empty();
+                    diagnostic.pairDomain        = FileOperations::QualifiedEndpointsShareObjectIdentityDomain(left.endpoint, right.endpoint);
+                    diagnostic.pairContract      = FileOperations::QualifiedEndpointsHaveSamePathContract(left.endpoint, right.endpoint);
+                    diagnostic.pairSameRoot      = FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint);
+                    break;
+                }
+                if (diagnostic.pairFound)
+                    break;
+            }
+            diagnostic.captureUs = Debug::Perf::ElapsedUs(captureStarted);
+            diagnostic.captured  = true;
+        }
         state.r4A19IndependentProgressOverlap =
             state.r4A19IndependentProgressOverlap || (taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
     }
@@ -5588,6 +5701,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyTree(cSource, cDestination) ||
         ! verifyTree(dSource, dDestination) || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
     {
+        logDiagnostic();
         Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} "
                          L"hrB=0x{:08X} overlap={} "
                          L"bytesA={}/{} bytesB={}/{} isolatedC={} isolatedD={} "

@@ -1284,7 +1284,9 @@ Set-StrictMode -Version Latest
         $nightly | Should Match '(?m)^  workflow_dispatch:'
         $nightly | Should Not Match '(?m)^  schedule:'
         $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
-        $nightly | Should Match '(?m)^      scope: Full\s*$'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes\]'
+        $nightly | Should Match '(?m)^        default: Full\s*$'
+        $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $pin = [regex]::Escape($engineRef)
         $workflow | Should Not Match 'build-reusable\.yml|run_full_tests:|test_suite:'
         $native = Get-Content (Join-Path $repoRoot '.github/workflows/qualify.yml') -Raw
@@ -2885,5 +2887,85 @@ Describe 'Administrative sandbox cleanup live-owner protection' {
         } finally {
             Remove-RSTestSandboxExactRunDirectory -TestRoot $testRoot -RunId $runId
         }
+    }
+}
+
+Describe 'Hosted filtered diagnostic evidence' {
+    BeforeAll {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+    }
+    BeforeEach {
+        $selection = Get-RSHostedDiagnosticSelection -Scope FileOpsVolumes
+        $runId = '20261103T000000Z-1234-0123456789abcdef0123456789abcdef'
+        $start = [DateTimeOffset]'2026-11-03T00:00:00Z'; $end = $start.AddMinutes(1)
+        $expectedExe = 'Z:\synthetic\RedSalamander.exe'
+        $summary = @{ executable=$expectedExe; run_started_utc='2026-11-03T00:00:01Z'; run_ended_utc='2026-11-03T00:00:02Z'; schema='red-salamander.run-all-tests.v1'; run_id=$runId; suite='FileOps'; case_filter=$selection.case; platform='ARM64'; configuration='Release'; exit_code=2; passed=3; failed=0; skipped=0; total=3;
+            quarantine=@{ is_valid=$true; has_blocking_entries=$false; active_count=0; active_entries=@(); invalid_count=0; invalid_entries=@(); errors=@() } }
+        $native = @{ suite='FileOperations'; passed=3; failed=0; skipped=0; cases=@(
+            @{name='Setup';status='passed'}, @{name=$selection.case;status='passed'}, @{name='Cleanup_RestorePluginConfig';status='passed'}) }
+        $invoke = { Test-RSHostedDiagnosticOutcome -ExitCode 2 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $true -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end }
+    }
+    It 'maps only the two reviewed exact diagnostic cases' {
+        (Get-RSHostedDiagnosticSelection CommandsHandoff).case | Should Be 'cmd_pane_selection_select_next_keeps_navigation_shell_stable'
+        $selection.case | Should Be 'R4A19_DiscoveryIndependentVolumes'
+        { Get-RSHostedDiagnosticSelection -Scope Other } | Should Throw 'does not belong to the set'
+    }
+    It 'rejects diagnostic scope outside Qualification before loading an engine' {
+        { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Static -EngineRoot 'missing-engine' -QualificationScope CommandsHandoff } | Should Throw 'only valid for explicit Qualification'
+    }
+    It 'accepts one passing filtered case with clean companion results and quarantine' {
+        (& $invoke) | Should Be $true
+    }
+    It 'accepts the exact Commands case without inventing FileOps setup phases' {
+        $selection=Get-RSHostedDiagnosticSelection CommandsHandoff
+        $summary.suite='Commands'; $summary.case_filter=$selection.case; $summary.passed=1; $summary.total=1
+        $native=@{suite='Commands';passed=1;failed=0;skipped=0;cases=@(@{name=$selection.case;status='passed'})}
+        (& $invoke) | Should Be $true
+    }
+    It 'requires one safe runner-owned ID and rejects duplicate or traversal text' {
+        (Get-RSHostedDiagnosticRunId -Output "  Run id:    $runId") | Should Be $runId
+        { Get-RSHostedDiagnosticRunId -Output "Run id: ../bad" } | Should Throw 'Expected one exact runner-owned diagnostic run ID'
+        { Get-RSHostedDiagnosticRunId -Output "Run id: $runId`nRun id: $runId" } | Should Throw 'Expected one exact runner-owned diagnostic run ID'
+        { Read-RSHostedDiagnosticEvidence -TestRoot 'Z:\RedSalamander.Perf' -RunId '../bad' -Selection $selection } | Should Throw 'Invalid diagnostic run ID'
+    }
+    It 'rejects a modified selection before resolving any evidence path' {
+        $selection.native='../bad'
+        { Read-RSHostedDiagnosticEvidence -TestRoot 'Z:\RedSalamander.Perf' -RunId $runId -Selection $selection } | Should Throw 'Unknown hosted diagnostic selection'
+    }
+    It 'rejects an exit other than filtered 2 and untrusted receipt' {
+        { Test-RSHostedDiagnosticOutcome -ExitCode 0 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $true -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end } | Should Throw 'Filtered runner, profile, or source receipt'
+        { Test-RSHostedDiagnosticOutcome -ExitCode 2 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $false -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end } | Should Throw 'Filtered runner, profile, or source receipt'
+    }
+    It 'rejects wrong profile, run ID or case' {
+        $summary.platform='x64'; { & $invoke } | Should Throw 'Filtered runner, profile, or source receipt'
+        $summary.platform='ARM64'; $summary.run_id='other'; { & $invoke } | Should Throw 'Filtered runner, profile, or source receipt'
+        $summary.run_id=$runId; $summary.case_filter='other'; { & $invoke } | Should Throw 'Filtered runner, profile, or source receipt'
+    }
+    It 'rejects a foreign executable and stale, malformed, or unordered invocation times' {
+        $summary.executable='Z:\other\RedSalamander.exe'; { & $invoke } | Should Throw 'Diagnostic executable or invocation window'
+        $summary.executable=$expectedExe; $summary.run_started_utc='2026-11-02T23:59:59Z'; { & $invoke } | Should Throw 'outside the invocation window'
+        $summary.run_started_utc='not-a-time'; { & $invoke } | Should Throw 'summary time is invalid'
+        $summary.run_started_utc='2026-11-03T00:00:03Z'; { & $invoke } | Should Throw 'outside the invocation window'
+        $summary.run_started_utc='2026-11-03T00:00:01Z'; $summary.run_ended_utc='2026-11-03T00:01:01Z'; { & $invoke } | Should Throw 'outside the invocation window'
+    }
+    It 'rejects wrong native suite, missing cleanup and inconsistent counts' {
+        $native.suite='Commands'; { & $invoke } | Should Throw 'Native diagnostic result is incomplete'
+        $native.suite='FileOperations'; $native.cases=@(@{name='Setup';status='passed'},@{name=$selection.case;status='passed'}); $native.passed=2
+        { & $invoke } | Should Throw 'Required FileOps setup or cleanup'
+        $native.cases=@(@{name='Setup';status='passed'},@{name=$selection.case;status='passed'},@{name='Cleanup_RestorePluginConfig';status='passed'})
+        { & $invoke } | Should Throw 'Native diagnostic cases'
+    }
+    It 'rejects an unrelated native case in the filtered selection' {
+        $native.cases += @{name='unexpected';status='passed'}; $native.passed=4; $summary.passed=4; $summary.total=4
+        { & $invoke } | Should Throw 'Unexpected native cases'
+    }
+    It 'rejects exit 2 with no cases, failed cases, or skipped cleanup' {
+        $native.cases=@(); $native.passed=0; { & $invoke } | Should Throw 'exact selected native case'
+        $native.cases=@(@{name=$selection.case;status='failed'}); $native.passed=0; $native.failed=1; { & $invoke } | Should Throw 'exact selected native case'
+        $native.cases=@(@{name='Setup';status='passed'},@{name=$selection.case;status='passed'},@{name='Cleanup_RestorePluginConfig';status='skipped'}); $native.passed=2; $native.failed=0; $native.skipped=1; { & $invoke } | Should Throw 'Required FileOps setup or cleanup'
+    }
+    It 'rejects missing or blocking quarantine evidence' {
+        $summary.quarantine=@{}; { & $invoke } | Should Throw 'quarantine state'
+        $summary.quarantine=@{is_valid=$true;has_blocking_entries=$true;invalid_count=0;errors=@()}; { & $invoke } | Should Throw 'quarantine state'
     }
 }

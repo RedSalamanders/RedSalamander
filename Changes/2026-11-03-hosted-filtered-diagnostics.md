@@ -1,0 +1,1 @@
+- Add two explicit hosted diagnostic scopes with exact case and evidence checks while retaining Full as the manual native-suite default.
