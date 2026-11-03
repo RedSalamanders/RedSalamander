@@ -1,0 +1,1769 @@
+{
+  "schema": "r0e-evidence-packet-v1",
+  "scope": "15 focused case processes; not Full or network performance",
+  "machineHash": "4cb089111a23",
+  "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+  "selectionRule": "All original FileOps.SelfTest.R0e metric rows in original order, exact bytes; per-row source offset and SHA256",
+  "assessment200": {
+    "baseline": "main269",
+    "candidate": "pr200",
+    "baselineSamplesUs": [
+      775252,
+      785280,
+      788857,
+      796476,
+      797404
+    ],
+    "candidateSamplesUs": [
+      791500,
+      797837,
+      822569,
+      836510,
+      852655
+    ],
+    "baselineP95Us": 797404,
+    "candidateP95Us": 852655,
+    "thresholdUs": 1196106.0,
+    "passed": true,
+    "baselineOutcomeSha256": "8b3180de82f53fcd71f91ed282c1ace00d3fdbed760351bc3380b5a484b2343c",
+    "candidateOutcomeSha256": "4fa437e5ee88b0c54eee75cce2d31a56f2a51d6a9889a3778df02797a57498fe",
+    "scope": "R0e in-process capability/admission containment; not network or general throughput."
+  },
+  "assessment201": {
+    "baseline": "main269",
+    "candidate": "pr201",
+    "baselineSamplesUs": [
+      775252,
+      785280,
+      788857,
+      796476,
+      797404
+    ],
+    "candidateSamplesUs": [
+      777634,
+      792923,
+      797139,
+      809638,
+      839815
+    ],
+    "baselineP95Us": 797404,
+    "candidateP95Us": 839815,
+    "thresholdUs": 1196106.0,
+    "passed": true,
+    "baselineOutcomeSha256": "8b3180de82f53fcd71f91ed282c1ace00d3fdbed760351bc3380b5a484b2343c",
+    "candidateOutcomeSha256": "eaf183ef18d4234dc15b90bccbb75d194e67bd228f4de75edb580495fce1b5f7",
+    "scope": "R0e in-process capability/admission containment; not network or general throughput."
+  },
+  "samples": [
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "da799e6f2731eb0fbae5072f32c829c22f4a99a1e40fe9b8cdb8123fb1454e63",
+        "bytes": 887
+      },
+      "runId": "20261103T011643Z-46224-77a9e68d49924eabbaddd1394c4ce372",
+      "rawMetric": {
+        "bytes": 2491233,
+        "rows": 6708,
+        "sha256": "8ef8711d7bf96372699cdf2c95d3d263ce01327d1edd27278c3d326cdc483270"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "e6b3569fd018deffe932e431a4b34e3b9dfc8f65d845d2a08accffdbbaac4126",
+        "bytes": 16059
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "CapabilityParseCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 788857
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:17:16.5106841Z",
+      "rawLog": {
+        "sha256": "6469d3e4438de6a1759a055a7b3e5683a6c414b103934710fa2b5ed050fba220",
+        "bytes": 3630
+      },
+      "side": "main269",
+      "selected": {
+        "bytes": 2989,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "07b54e9747bb6bef543ac8fcb19ff47760883111ae2b6472c9c8ce15f8fe9cb8",
+            "offset": 1752402,
+            "line": 4626,
+            "length": 406
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "02d2bee67241ec1d8d8a655059eb288189b85a104342c318fbc888ed657ac21c",
+            "offset": 1752808,
+            "line": 4627,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "40b9c411143c84dd7491f4e95ead24c412604ddecb268e82fbb2e7d2d269ed30",
+            "offset": 1753180,
+            "line": 4628,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "6852a7e136c885eeb1076927b45b8318136ca40875146fa5c8d3ee1dd5619ac1",
+            "offset": 1753550,
+            "line": 4629,
+            "length": 366
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "64373ec8a8c25a3339ece01d75043269404511504ec96a908ab96f82eafbc165",
+            "offset": 1753916,
+            "line": 4630,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "c43492939a4024a9348027e36bd981c46406ca86beab3345d6fde7d755a04a0b",
+            "offset": 1754287,
+            "line": 4631,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "7b2b74278edb5a5c29184f3de5c394cd4a9fc2450b677f0be8c7fbe4e34ea420",
+            "offset": 1754660,
+            "line": 4632,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "f82a7e43ec2360df930e4aa1eb2bd1a633b8a839e271e18c68c90441c858d3e2",
+            "offset": 1755029,
+            "line": 4633,
+            "length": 362
+          }
+        ],
+        "file": "main269-01.jsonl",
+        "sha256": "b25f8bc30cf44b123916ee940ee5a7a972f16918e5a403aa641299fb2dd0bb7c"
+      },
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "sample": 1,
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "runnerEndUtc": "2026-11-03T01:17:37.5510339Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "fb750b57139100b87aff4638bb10d6a38c58dad2da4d7ee487b1244773e2b952",
+        "bytes": 888
+      },
+      "runId": "20261103T011749Z-66648-9be29e299d594257a65228d1b3483ec2",
+      "rawMetric": {
+        "bytes": 2494601,
+        "rows": 6733,
+        "sha256": "6939154ffeba74b75647821c7226c097afbfab5bcaed60c80e00bf6dff3a2db2"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "2e8aca0894d05fea58b25569162bf12cc4c97ec7eedf726355018e195d7160de",
+        "bytes": 16060
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "CapabilityParseCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 796476
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:18:21.4511062Z",
+      "rawLog": {
+        "sha256": "c6012eea0de2a0979a088712946f884c27f28158772d863bf9bafcb69edde3c6",
+        "bytes": 3630
+      },
+      "side": "main269",
+      "selected": {
+        "bytes": 2981,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "73ffc14b7ef4578211066a33eea4c130b5ac13dc23ea2cb30659dd40db3531d2",
+            "offset": 1747721,
+            "line": 4626,
+            "length": 405
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "8b0246c87620a69340fcb4b68a59e287e2a31a595a27871010129e22c83197a9",
+            "offset": 1748126,
+            "line": 4627,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "57cc16f231c7451878d79dbb9957ccc0ff4effaf10ac687da74ddfaa0a48ff45",
+            "offset": 1748497,
+            "line": 4628,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "37bb8a25b6cff050e380d434f5af3591b6d6bc1484ea0d2b07de62fc4212579e",
+            "offset": 1748866,
+            "line": 4629,
+            "length": 365
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "4b7865aaa397485374d4ab91c44782837cbf38037efc8fa8c434561a9c769e36",
+            "offset": 1749231,
+            "line": 4630,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "d282a408783b0187d7fe80810b461c0a3a9e1481bd1f1a1b80daa9d8dc812636",
+            "offset": 1749601,
+            "line": 4631,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "4b5cc506f71330f8f285734eb40da43ab683e4c47e4816a1ab34285f414f7b4f",
+            "offset": 1749973,
+            "line": 4632,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "0beabe59a2f3af03c3c4dc40c9ffec8baee3c8b15d475004e176df5ac3112cb1",
+            "offset": 1750341,
+            "line": 4633,
+            "length": 361
+          }
+        ],
+        "file": "main269-02.jsonl",
+        "sha256": "e0d4bffb8ea80fd4d1c1504e118e9345bfdcbe020dbcae28f9b062c0a4069df8"
+      },
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "sample": 2,
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "runnerEndUtc": "2026-11-03T01:18:42.1542852Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "c98c27f257e73a3c1dfcd9f11235a665b1314c37a363e5c64622758700ee34ca",
+        "bytes": 888
+      },
+      "runId": "20261103T011853Z-97520-ee67bec33013492a8872c54b705eed29",
+      "rawMetric": {
+        "bytes": 2485827,
+        "rows": 6711,
+        "sha256": "f12bc2ff73a9e598e659239be78519bbfbbebb0783797f81c94bbdb086fc777f"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "3be21323cbb493f609d361dda1ad8faaa67646e0e25494e75e4fbcd553a64b8f",
+        "bytes": 16060
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "CapabilityParseCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 775252
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:19:25.786868Z",
+      "rawLog": {
+        "sha256": "ef7c4ffb7eed53c60ad5ae16d5ab50352a5ff6cfa31ce0c263a1441ef35e2ac2",
+        "bytes": 3629
+      },
+      "side": "main269",
+      "selected": {
+        "bytes": 2981,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "62070285a39e8237a60305ec194da8c67d75be4c68f4108d7a23fae93a5279f5",
+            "offset": 1747800,
+            "line": 4626,
+            "length": 405
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "506c812071ecb94fc5a7f14ed20e00f5d378f0b7cad9693b914a6b104adba59e",
+            "offset": 1748205,
+            "line": 4627,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "39af0d7019c8a884a60d4f4cf120c06f42ed3cd13653707e8d3f5932a1f01138",
+            "offset": 1748576,
+            "line": 4628,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "33b4bcf151b9715bced9678667fbfad797a16f4d5a5cd1d343af4bbf73bee689",
+            "offset": 1748945,
+            "line": 4629,
+            "length": 365
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "203657472f123a565fb0b9b714e7a2803b56ad97aa41d656d5e2d7e49cb47b15",
+            "offset": 1749310,
+            "line": 4630,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "2fcddc4fceb2d44e108115841c4f17e3d4ba33ec79122eb6f63723e09209c04b",
+            "offset": 1749680,
+            "line": 4631,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "7e82bd93607ecf1e9c2450a256eed8c6cdf7499778d23efd03521a23dc51559a",
+            "offset": 1750052,
+            "line": 4632,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "8863705b684e14833a33f5b4f24b819fc781b87df6a3885ef1804c1ecff8c804",
+            "offset": 1750420,
+            "line": 4633,
+            "length": 361
+          }
+        ],
+        "file": "main269-03.jsonl",
+        "sha256": "7bfcbc7f892cc17c3be93e40f7462dec22359f7a8e4eacee57dd8568482d000f"
+      },
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "sample": 3,
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "runnerEndUtc": "2026-11-03T01:19:46.259382Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "a895e08a6afffdd79c8401784f44fa84c1c650c7360fca258fe3294db5f4204d",
+        "bytes": 887
+      },
+      "runId": "20261103T011957Z-90352-09d94974c68c45dd98f5ce626a41803d",
+      "rawMetric": {
+        "bytes": 2495573,
+        "rows": 6719,
+        "sha256": "3e47d300b7f6e437cba53f7963d628ea42ef9585c88349e6e289bf0fd65fe231"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "aa5911bed71fbe4faeddbb14b932616d0af9a26b0157156830f0de0314986090",
+        "bytes": 16059
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "CapabilityParseCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 797404
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:20:30.807519Z",
+      "rawLog": {
+        "sha256": "e24bd2de539009345d5a112aeb5584c6554a515dcbef601e09a909d418191c0b",
+        "bytes": 3629
+      },
+      "side": "main269",
+      "selected": {
+        "bytes": 2989,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "6ece4e8d5069123063faf587199df160978c0f6a61dce00dd64f6ef7bbe19ade",
+            "offset": 1752350,
+            "line": 4626,
+            "length": 406
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "0fb756eefe3f796e1a5f93b9b6005436722b32e322f84345abad9248e1708311",
+            "offset": 1752756,
+            "line": 4627,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "05b19265d25ebf12bcb657cae70384a8d3ca76ae7e28ccb52a8bb92c9ebf2a4f",
+            "offset": 1753128,
+            "line": 4628,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "f524528c9d34881c48f45d924e15da3b666e01b1dc1c44a39b69c79b4466b965",
+            "offset": 1753498,
+            "line": 4629,
+            "length": 366
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "cc71385a201509bd2ebf3b5407434960f2a0a60deb33d3ffca69d8686ffd0e11",
+            "offset": 1753864,
+            "line": 4630,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "eb203a6edc0269240a33e1c563d276119278ec8a896a99c5513c10a5a4fcebd5",
+            "offset": 1754235,
+            "line": 4631,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "bc55dd800ad5d52ac02a80c435e4d1c06023f666b1a63f559e8b72bc0fe43724",
+            "offset": 1754608,
+            "line": 4632,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "98b060b50e185f026b12d4d37f6493f409f02a2bd0dfc8995ff01e6be9adb0ec",
+            "offset": 1754977,
+            "line": 4633,
+            "length": 362
+          }
+        ],
+        "file": "main269-04.jsonl",
+        "sha256": "53db99ebab6905129884d2a0b6ccafdab3b0fb6718530627792d43227a6699c0"
+      },
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "sample": 4,
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "runnerEndUtc": "2026-11-03T01:20:51.5567296Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "b79b2ea8a0372b52806a2eab5e376a78057b45e2fbf6bcb9bf750480987f5afa",
+        "bytes": 888
+      },
+      "runId": "20261103T012103Z-99020-bcf564ce90964fbc8eb00b51a999bfc4",
+      "rawMetric": {
+        "bytes": 2479039,
+        "rows": 6693,
+        "sha256": "ce47ca33f1a5edb89d342bc5621f33c719f09c3715042022aa5fca9c2c3ede23"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "6eee6f313a425d5a647a6642599950413c91ea6db0ddeedaf83d02ab7ff4ad5c",
+        "bytes": 16060
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "CapabilityParseCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 785280
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:21:35.9798263Z",
+      "rawLog": {
+        "sha256": "f9bc1d642c391a7c645e73694155d427c3e4368be861244a6a8a02db5074a919",
+        "bytes": 3629
+      },
+      "side": "main269",
+      "selected": {
+        "bytes": 2983,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "f66d09a22b22befdcf3a14e8b1ce7e8d1fa67fcbc7cd6171c9a363edef799079",
+            "offset": 1747798,
+            "line": 4626,
+            "length": 405
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "0a15fdb2094fbc38801703c5e18b10d796ba7f143a687b3006fe5c874860a9e2",
+            "offset": 1748203,
+            "line": 4627,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "0638317779713d77210710c75db38487a32950e8cf6b03a52b89e3dfcff488d5",
+            "offset": 1748576,
+            "line": 4628,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "fea26382b1c6d40eaa24627cffecc064ccd50fa073120d628d8bbda73661462f",
+            "offset": 1748945,
+            "line": 4629,
+            "length": 365
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "185739630262d284718cd14dac35c0fcb6999112ac61c47df627d7273b70c6ba",
+            "offset": 1749310,
+            "line": 4630,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "0bcf6389eec25a7ff25d600679e7aec8819759e4b339a12783361b5da1745c19",
+            "offset": 1749680,
+            "line": 4631,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "a3c723767f5c0ce51f877e931d0dbea2f04d76b05421798e89f7a7d43e70acc4",
+            "offset": 1750052,
+            "line": 4632,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "0a379c5d63f9d3967621d4c5ab767cd60221b588e25bb8de890e6d39a235648c",
+            "offset": 1750420,
+            "line": 4633,
+            "length": 361
+          }
+        ],
+        "file": "main269-05.jsonl",
+        "sha256": "27efd525cee683ef90c508ccd4f46b0e208e9c9d06d75746becb1708591e59a6"
+      },
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "sample": 5,
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "runnerEndUtc": "2026-11-03T01:21:56.5033983Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "b29d6b6b5d75bda4aa8edf96da74ae63258c1242a9356e953dc75abba9149377",
+        "bytes": 888
+      },
+      "runId": "20261103T012231Z-105092-ca2e6cca739d4a1d815144ffb12f4206",
+      "rawMetric": {
+        "bytes": 2501430,
+        "rows": 6717,
+        "sha256": "252132bcd9b996e6ccffceedb701ae3bc3f1ea1a15183e13d66b8ba9f1545d11"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "f7980511f7335a5dc0eb6aa12a489701d73eabfced3359866d0be1c7d0c9db4c",
+        "bytes": 16050
+      },
+      "metrics": {
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 822569
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:23:04.2994172Z",
+      "rawLog": {
+        "sha256": "444ef1cdbc6e3fb1aac373ec77e5a8f402f3876178f4984916c2d6a85a38962f",
+        "bytes": 3617
+      },
+      "side": "pr200",
+      "selected": {
+        "bytes": 2997,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "afd454b93ac7794a46167c3416d9e2b730b12e931725e0f0cf4b4d7dbb12f482",
+            "offset": 1756949,
+            "line": 4626,
+            "length": 407
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "c1a77230cfcaa7ee25035153b186651777cc0afd42378c64f8e0b4f11532b2b8",
+            "offset": 1757356,
+            "line": 4627,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "c0e8a0792555f1a81d7ab0fe273d9391d0ba7f270d3dfba0c9ba4179e8621621",
+            "offset": 1757729,
+            "line": 4628,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "48d5144c6dbe30da98da9f2fb5b39cd4cce79b693ac31bece7ba0b5f2955538a",
+            "offset": 1758100,
+            "line": 4629,
+            "length": 367
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "32410da347c8b4d7e2e1304bfd22c2779c9169e5f20718cb8c01accfbb521a3f",
+            "offset": 1758467,
+            "line": 4630,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "d5dcc73a9b44a9e54088a26507b2948d15b2234b4f791207d1fe42be2c961f7d",
+            "offset": 1758839,
+            "line": 4631,
+            "length": 374
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "c0ebc239d5e203a4b2fffaaa768688b2f71c9c5dbf53451a65de053514b54c4d",
+            "offset": 1759213,
+            "line": 4632,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "36df24c8695aa0272d8ce9af1944873ed3306086d268dfeec87d442793625713",
+            "offset": 1759583,
+            "line": 4633,
+            "length": 363
+          }
+        ],
+        "file": "pr200-01.jsonl",
+        "sha256": "df8c87010381a067b8fb5540245682163569f9bd66f866023b3cd25d06ba9cf9"
+      },
+      "receipt": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+      "snapshot": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+      "sample": 1,
+      "head": "1c31697a03962c81fda514f155fd39e446f880e2",
+      "runnerEndUtc": "2026-11-03T01:23:25.8766372Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "ddf7aa4d8f534b387d8c42edaf86e8752f044a8b86a3d327ce085fcebf16e09b",
+        "bytes": 888
+      },
+      "runId": "20261103T012337Z-63232-0243c23acd5148da839697d11a697a26",
+      "rawMetric": {
+        "bytes": 2493983,
+        "rows": 6713,
+        "sha256": "af2e82b75e67216a5abf66685113b774cf9964c55bdd576295421cb61dc68368"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "14ce1a4160a5e03039fe9441384da028b086d87a7e55b3d6d114d30cda86077e",
+        "bytes": 16047
+      },
+      "metrics": {
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 836510
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:24:09.9144485Z",
+      "rawLog": {
+        "sha256": "882473ab340363f96bc13759809bd1a625e8fb1fa25a743df9031c5ce08ce7f0",
+        "bytes": 3615
+      },
+      "side": "pr200",
+      "selected": {
+        "bytes": 2989,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "a66906b659d3792e1ae0a36fd9f40c99bcba3f7189e55f05af743b5a8b95c297",
+            "offset": 1752423,
+            "line": 4626,
+            "length": 406
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "e61eba05db6d4364978f84ebcff8c1a05c2ea20700334edaec333dc896931645",
+            "offset": 1752829,
+            "line": 4627,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "b12167e19e7266ba2dc25f51e0497cff120de089ddf224d0cf194254a84e0adb",
+            "offset": 1753201,
+            "line": 4628,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "16bd238f7c14d60449595a5c703190a5e9d6f997ae8abab3920340bbcba6d36d",
+            "offset": 1753571,
+            "line": 4629,
+            "length": 366
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "4c83e4c5f4cb8d85bfcfbdf4afab5081854fd35c41949f39fff5b02df5672d37",
+            "offset": 1753937,
+            "line": 4630,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "99805f477b016896b8e87b76d4773180a9fdc8867b9cfab81fb7f454ca92d423",
+            "offset": 1754308,
+            "line": 4631,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "1a7ccfc60a2cadc153f5c9968b1fd92e4564a1a1e46de2c5238338415366d485",
+            "offset": 1754681,
+            "line": 4632,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "420967fdb8b45c69c08ad7e2df9df7a4abb7cef42c3414f4352ac00075e8a973",
+            "offset": 1755050,
+            "line": 4633,
+            "length": 362
+          }
+        ],
+        "file": "pr200-02.jsonl",
+        "sha256": "2b57fa0a07185a000a6f63d6b997420ee4260ad87cec69facae995db756d7572"
+      },
+      "receipt": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+      "snapshot": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+      "sample": 2,
+      "head": "1c31697a03962c81fda514f155fd39e446f880e2",
+      "runnerEndUtc": "2026-11-03T01:24:30.4408404Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "e0608b814ff06b9738ec26c4bdbb2fa5d40981f152c2a7a955d0e06636e5389a",
+        "bytes": 887
+      },
+      "runId": "20261103T012441Z-37796-cfaa53c25a6a4825a956b80bac4ff4d2",
+      "rawMetric": {
+        "bytes": 2489490,
+        "rows": 6718,
+        "sha256": "d6576ca0c29c907fff36485821eb6fb78e6043178cd19d038c98134b98787b71"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "39dce478274b6bd9b2956ec65135b054f6969235b7f801ce25fcaa851e0396ea",
+        "bytes": 16046
+      },
+      "metrics": {
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 852655
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:25:14.4696457Z",
+      "rawLog": {
+        "sha256": "c6407e2f7c2943ebb6d24978a9f616793b3152aae770fa44e3e34c06443db37f",
+        "bytes": 3615
+      },
+      "side": "pr200",
+      "selected": {
+        "bytes": 2981,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "aae1813470c5a9d4420d5b72fd017c00b49d36196a9075ab71a6a1afb59a319d",
+            "offset": 1747753,
+            "line": 4626,
+            "length": 405
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "d832d8d6a5f4bf6ada2c8a17ae5db21c05ae0827c42b53a0fcb9731d92946344",
+            "offset": 1748158,
+            "line": 4627,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "6f4811edd4c7c4bd805f6bf491e9a67f5905e1bfcf5924a6ecd4c96a32b542cf",
+            "offset": 1748529,
+            "line": 4628,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "8d8f45a874119473520571aa01d3680acb94afe1bbb3df5c5f98ede08c097294",
+            "offset": 1748898,
+            "line": 4629,
+            "length": 365
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "eb0b65acf0cc8ccdadeb165878bbb371ad7acf204311a585fe919322658c3774",
+            "offset": 1749263,
+            "line": 4630,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "9381699cb0703e2e093381af2d6fad6a781a7b731f43e8495577d819cfb8fc76",
+            "offset": 1749633,
+            "line": 4631,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "0726018cb3623a2d501bc4b8ca72ab310dbdfc861efa5d44ace8ff001e47415b",
+            "offset": 1750005,
+            "line": 4632,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "d7c2d0409730d73ff2ceddaf8bed6111274fd9197cacb92647f3a7c051f3d00d",
+            "offset": 1750373,
+            "line": 4633,
+            "length": 361
+          }
+        ],
+        "file": "pr200-03.jsonl",
+        "sha256": "d5af525dc0dcbf134aef644719e43fd8231fa342d82596c627f0dbfdb78c3fad"
+      },
+      "receipt": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+      "snapshot": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+      "sample": 3,
+      "head": "1c31697a03962c81fda514f155fd39e446f880e2",
+      "runnerEndUtc": "2026-11-03T01:25:35.1222382Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "a44921545e15085c7c0510a578c4dee50f72c786599eec1feaab7120716dcc06",
+        "bytes": 889
+      },
+      "runId": "20261103T012546Z-101556-de3878dd3bb54e78a2e3bdf881b7a60b",
+      "rawMetric": {
+        "bytes": 2504389,
+        "rows": 6710,
+        "sha256": "6307427b20d4a916e2b2cbdf6d74f1b4a91a1c521ab8c1acb2f04db525b99b5c"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "e982efd36528fe88943dea705ef145c610b06d5f224267555d6c7f19640cf436",
+        "bytes": 16051
+      },
+      "metrics": {
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 797837
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:26:19.0644407Z",
+      "rawLog": {
+        "sha256": "43b5a3d0363479345984f239c1f080118797bda24049379617da683a11c1a487",
+        "bytes": 3617
+      },
+      "side": "pr200",
+      "selected": {
+        "bytes": 3005,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "64132e6d1a9842fb54c2d02beae36fb3f2e96f3496497c6e7e4cf2b1e23f2b69",
+            "offset": 1761568,
+            "line": 4626,
+            "length": 408
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "45defd2a3527773a2040e74a6ce50c5d4b8568c55f84b8546615928add88604a",
+            "offset": 1761976,
+            "line": 4627,
+            "length": 374
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "25d195833a82a56431fb3f3cb4c4a8fec879c81cd25817b63effbee4bf885f51",
+            "offset": 1762350,
+            "line": 4628,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "b2d10e6aff74fa362d361b1a1afcdf2b884b871c6d93c64085022ebe34d37319",
+            "offset": 1762722,
+            "line": 4629,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "1493ff9d7256d44c654571cd0bc3a2b6d8b5e1177c69cbf125984cb0b13bb785",
+            "offset": 1763090,
+            "line": 4630,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "8a585cd69b4c84cd8843134de7992e78f96f5603742f05fea2664250ec2c0676",
+            "offset": 1763463,
+            "line": 4631,
+            "length": 375
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "d7890c092482a0d580edcc03894e07cce80dcd4120e5c4c4ff7832917c253d9c",
+            "offset": 1763838,
+            "line": 4632,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "36f2f341a14089b1ef1e07131830277ed21ad701fcbc693ae16750e30151dbca",
+            "offset": 1764209,
+            "line": 4633,
+            "length": 364
+          }
+        ],
+        "file": "pr200-04.jsonl",
+        "sha256": "597fa45bb163d4986499ce5650b3a617dc7f23007ed5b1e9f156ef7445dc0a21"
+      },
+      "receipt": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+      "snapshot": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+      "sample": 4,
+      "head": "1c31697a03962c81fda514f155fd39e446f880e2",
+      "runnerEndUtc": "2026-11-03T01:26:39.8742218Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "d2818d38a09d1cbddd355c7572df4119062fe606f448d683cc31de844bafa627",
+        "bytes": 888
+      },
+      "runId": "20261103T012651Z-62660-1b721e4a3d4e47619cf9992900180a59",
+      "rawMetric": {
+        "bytes": 2508610,
+        "rows": 6718,
+        "sha256": "fcdaa3ea5ca051671239c87d632a60afc38fa785bf951d5764d5bb4952cc73fe"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "e8bd892ad823579b205f6ea74888a1be1e52cb5d3ef9bf24ccee45bd4f311fc8",
+        "bytes": 16047
+      },
+      "metrics": {
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "RouteContainmentUs": 791500
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:27:24.4440396Z",
+      "rawLog": {
+        "sha256": "7fe23ee9f4be2ddb13b0b333b608688b80056f17d700bb824df8397068c54815",
+        "bytes": 3615
+      },
+      "side": "pr200",
+      "selected": {
+        "bytes": 3005,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "960fa32f15e08d3eb7c6cccab495a6c663ff7e42085002594eac36331b1dfb61",
+            "offset": 1761580,
+            "line": 4626,
+            "length": 408
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "789e5c86f41b3908074f5ada4dfbe1ebeb0e79cb29fedae31e47b233d9c52924",
+            "offset": 1761988,
+            "line": 4627,
+            "length": 374
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "c6eb9a7d7f6c07a0b600c55bdf8b37e4fd782a2ddf4889387b54d3903ad11b99",
+            "offset": 1762362,
+            "line": 4628,
+            "length": 372
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "a2a6ad93d232aefd05d9d3b41f070f7c884161017e9c68d8011f4495c17e5352",
+            "offset": 1762734,
+            "line": 4629,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "9113d0298946663cac6c55dc9f60f1e4662ddc9cdafaab33d93fbce0b68fe2d8",
+            "offset": 1763102,
+            "line": 4630,
+            "length": 373
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "4b70bd92f55b179eadcefdcf94100b479770a5755e162b80a7d79a7f22ffc3e4",
+            "offset": 1763475,
+            "line": 4631,
+            "length": 375
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "03a9c2dcef2d472591c9d49a4f457563727a89d02f7806e8dfcc308c53b3efac",
+            "offset": 1763850,
+            "line": 4632,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "249ff64162a0ab2dbab9a7aa11df0ed6ea33b0d8de6467efc5fb5d66ceed59b7",
+            "offset": 1764221,
+            "line": 4633,
+            "length": 364
+          }
+        ],
+        "file": "pr200-05.jsonl",
+        "sha256": "3986bb817dc6b63740b46aa46c0518c23e696af5a4070fd8959b72313727e33d"
+      },
+      "receipt": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+      "snapshot": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+      "sample": 5,
+      "head": "1c31697a03962c81fda514f155fd39e446f880e2",
+      "runnerEndUtc": "2026-11-03T01:27:45.2170587Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "f7e2fb36623a7009567e6be3db00159a3be2f51e2573925498c07c28a267139d",
+        "bytes": 888
+      },
+      "runId": "20261103T012901Z-96948-adf126c1d5e14b09a0f5c3675537f3a9",
+      "rawMetric": {
+        "bytes": 2464234,
+        "rows": 6707,
+        "sha256": "3abc09071eb4b14ed1b18b15e777282b64bed367a7111c9ec1975b8980fd5ee4"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "21f6166ee7c11aa7559325593becd2fc368b50bf0806fbf31b7f757084b48ec8",
+        "bytes": 16057
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RouteContainmentUs": 839815
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:29:34.5469942Z",
+      "rawLog": {
+        "sha256": "b7c91c75860a61869ee0c43f5d09d32dfe65bc8ef9fe4cadf21a3c8db5f78e39",
+        "bytes": 3627
+      },
+      "side": "pr201",
+      "selected": {
+        "bytes": 2957,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "13071dfbe8cec5d9f907ea1e3b1b3891c84e9335e24368b7874bec47226ef934",
+            "offset": 1734505,
+            "line": 4628,
+            "length": 402
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "8564c6aa0825ecb543641de1944368ad80c1e942f9b029c9f497d31dd6a01039",
+            "offset": 1734907,
+            "line": 4629,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "db1bf0be9a1483c2ea66e4dc485552f0539b81c47dcaf5092cb9baefbdb04d94",
+            "offset": 1735275,
+            "line": 4630,
+            "length": 366
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "1a96257b0039609ce944628e6eed6e9f1ad5cb17e75743823e4934b0e0e10d26",
+            "offset": 1735641,
+            "line": 4631,
+            "length": 362
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "d34d381573fff56aeec682016d2b72248cfe9e60b736575e3e1bd6c4160a12bb",
+            "offset": 1736003,
+            "line": 4632,
+            "length": 367
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "19f3d5f6c99ace7fef9a560a0d03b7267d523d57af1dda3b06645fb37841da56",
+            "offset": 1736370,
+            "line": 4633,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "5fd7f3e2d43add6732cb46ba80f91eb25ebefe3636b10174e55c3b9330e41c94",
+            "offset": 1736739,
+            "line": 4634,
+            "length": 365
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "e845d6830ffcf169de173c7e06637a01c0bcc37f5ab6279928e8983fcd719a66",
+            "offset": 1737104,
+            "line": 4635,
+            "length": 358
+          }
+        ],
+        "file": "pr201-01.jsonl",
+        "sha256": "216073fb226d29083a23e1d0a34bcda17c7c256f818da49ce2cc3f1cb3064058"
+      },
+      "receipt": "b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170",
+      "snapshot": "0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820",
+      "sample": 1,
+      "head": "333c1a90c68da966e41451f4204f536eef183d4b",
+      "runnerEndUtc": "2026-11-03T01:29:55.5688234Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "f7e5cdf3db6aa350b64fcc71a1ef6cc3731b8373f29111c6c97b4ec42e4b4623",
+        "bytes": 889
+      },
+      "runId": "20261103T013007Z-111448-4f7503934be64d50bddea199e932ada9",
+      "rawMetric": {
+        "bytes": 2476892,
+        "rows": 6708,
+        "sha256": "3217ccee88127d32a439dd0312ca8a48162d9337d519779a4c2b292d99c9e04e"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "e66150944875d97c5e1d349f5342edb14806cef6e47c32a0d2c005b17465966b",
+        "bytes": 16061
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RouteContainmentUs": 797139
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:30:40.9640923Z",
+      "rawLog": {
+        "sha256": "d61c0331ebf5d1824154b7e5c896825cff7041a74920920c5e222088d15697d5",
+        "bytes": 3629
+      },
+      "side": "pr201",
+      "selected": {
+        "bytes": 2973,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "5e86069d148bea4cdfe91986c620da21b2ea17a901fed61b64eb6ed40ee9b4c8",
+            "offset": 1743703,
+            "line": 4628,
+            "length": 404
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "c76c84c50925eaf1043bd79e85b3c852fd989e0c6261a93ea88e2ad6f9585ba5",
+            "offset": 1744107,
+            "line": 4629,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "66cbbc74585bdd269004fbe306e599b6d85e079340e370fb3bbffbd71eb45709",
+            "offset": 1744477,
+            "line": 4630,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "1cd9c7d3e03977aa0b9951a0519752c0fe04909326c3648ab86da6e7fb18fc75",
+            "offset": 1744845,
+            "line": 4631,
+            "length": 364
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "62b4e372e558e7d3819f3600dd4d20845fed1e0f70ea10d00e68de712ccdda81",
+            "offset": 1745209,
+            "line": 4632,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "aed0129f466cdb3c861162b3eff1931c670642d5b4acd25e8b90cb0741e9de5b",
+            "offset": 1745578,
+            "line": 4633,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "6af83875a87c917d8a1630af285e4fe34bafe583f808984be03cac017feb0ff0",
+            "offset": 1745949,
+            "line": 4634,
+            "length": 367
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "4ccd1d158d89574e163f414a07fe435c9aafe6c7c3375779e71d8b41e2b797eb",
+            "offset": 1746316,
+            "line": 4635,
+            "length": 360
+          }
+        ],
+        "file": "pr201-02.jsonl",
+        "sha256": "1c653b91b997e088d096693d611391cd09fce5c8b453491e4726bf380a5d2780"
+      },
+      "receipt": "b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170",
+      "snapshot": "0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820",
+      "sample": 2,
+      "head": "333c1a90c68da966e41451f4204f536eef183d4b",
+      "runnerEndUtc": "2026-11-03T01:31:02.1832895Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "b883a320b28dbc55d9374542555b94eb8692fa831e11f8f869e7f1e9f801bfa8",
+        "bytes": 888
+      },
+      "runId": "20261103T013113Z-33576-1b592e5e8a904c8da9a1808c0e43024d",
+      "rawMetric": {
+        "bytes": 2477816,
+        "rows": 6710,
+        "sha256": "f8c680be898f12267c01a7f9cfdd90d2fac9a0506b5fefd4bd9c90822cbf79c3"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "11c1921fae19f8fbe61c7f848b3a40451dfff48d040d91106f8cd62c9f3c948e",
+        "bytes": 16057
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RouteContainmentUs": 777634
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:31:46.5603871Z",
+      "rawLog": {
+        "sha256": "2744babebcba84d07a619fc3c462dc7432f8009dc4248ceed3568740f49e2782",
+        "bytes": 3627
+      },
+      "side": "pr201",
+      "selected": {
+        "bytes": 2973,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "cb1c67c4d781f79ff442ace07445679cd28dc5d5a082dbe57ada65a783a0990e",
+            "offset": 1743753,
+            "line": 4628,
+            "length": 404
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "96b01c58076a0eac2ce2cbbbd965fe4f1b7d795e815b0a8859ba634a880b794a",
+            "offset": 1744157,
+            "line": 4629,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "a6e559fb35b1ba0b4573166cab000b6900d724a382953519c909be86f0e91854",
+            "offset": 1744527,
+            "line": 4630,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "c2b280a53217cbe312200b19576586a650a6b242d9ffb66289b33565e0fad04b",
+            "offset": 1744895,
+            "line": 4631,
+            "length": 364
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "ad961cddbfebc57872bc65a62e7973dec4bae44a67e31e55d613c9495ec5e969",
+            "offset": 1745259,
+            "line": 4632,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "a64c0a8c76a2b87600349270539268a768661498c3c9dc69dc39ca2b1f98afb0",
+            "offset": 1745628,
+            "line": 4633,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "2b5928c75614016c8050f6458538b3932ed0dbe846c5f251069526b4d5a1c32b",
+            "offset": 1745999,
+            "line": 4634,
+            "length": 367
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "93759e4e607f189473fec7a268d546e74a84d3be750a9100fb627b1e73839f6e",
+            "offset": 1746366,
+            "line": 4635,
+            "length": 360
+          }
+        ],
+        "file": "pr201-03.jsonl",
+        "sha256": "f68bae8d72b47b76608948b3647c9739c3c9351b5f3a5820421d163ffa786186"
+      },
+      "receipt": "b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170",
+      "snapshot": "0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820",
+      "sample": 3,
+      "head": "333c1a90c68da966e41451f4204f536eef183d4b",
+      "runnerEndUtc": "2026-11-03T01:32:07.7698533Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "ffc3c622c504eaffae08d7380dd65a6882a06d8a44f48e1f8b1ebd8d2deeea78",
+        "bytes": 889
+      },
+      "runId": "20261103T013219Z-118380-34e425d80f064073a58b6014525e6e46",
+      "rawMetric": {
+        "bytes": 2474411,
+        "rows": 6702,
+        "sha256": "81e8e5b2b4bd36cac2a3ff4baf05cde4ef2a4647125cbe6626ef2e7ce0585b92"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "14647d7cdbfb1e37d13b96dccae70c3bd9dc5ca8971a70a1737d14a318de4757",
+        "bytes": 16061
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RouteContainmentUs": 792923
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:32:52.199271Z",
+      "rawLog": {
+        "sha256": "abceb37e9511f4c7bf199b94ef467d7f1d398ff9dcc2bd6e3bd1138b0403343b",
+        "bytes": 3629
+      },
+      "side": "pr201",
+      "selected": {
+        "bytes": 2971,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "0be06eb94f05fe5db3b5f165223fff5adb4ba7c04a8206dbb20c11d889cf7ce3",
+            "offset": 1743759,
+            "line": 4628,
+            "length": 404
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "97227ae57dac56d71196d5838ae0beb94ee6547560df9a5db0ba133b0bcd1da9",
+            "offset": 1744163,
+            "line": 4629,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "6bfee3444bab36a81f14f858dc807b5cc741c8e554ba894eee41af71ac47f646",
+            "offset": 1744533,
+            "line": 4630,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "917d436b2da2c60ed4ecd8ea3ec7c0e14ff6527a4e84cbdf6c2edebcd327bea0",
+            "offset": 1744901,
+            "line": 4631,
+            "length": 362
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "de6259edfe8818014d9047695621f06bf3af80f0a8604e7d637e172b3094bded",
+            "offset": 1745263,
+            "line": 4632,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "cace04f8ea1d14cbbcd6b0656c416d6dbf06feaa6004105da8e8174bab85748f",
+            "offset": 1745632,
+            "line": 4633,
+            "length": 371
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "e465e351dc45e9b270c5e06a97cdd1badfdbd0f93dc3815dffd3fe8fedc8184c",
+            "offset": 1746003,
+            "line": 4634,
+            "length": 367
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "1f82f5b7a9df59e8cae27bda5d6ffa2e405cb51bc0cda617ec65033bc0b4e23d",
+            "offset": 1746370,
+            "line": 4635,
+            "length": 360
+          }
+        ],
+        "file": "pr201-04.jsonl",
+        "sha256": "f5eeb2de8cbf78f09ccbe6d112ff35a10d0c9ffa86923cdce0852d61008290f7"
+      },
+      "receipt": "b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170",
+      "snapshot": "0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820",
+      "sample": 4,
+      "head": "333c1a90c68da966e41451f4204f536eef183d4b",
+      "runnerEndUtc": "2026-11-03T01:33:13.2856609Z"
+    },
+    {
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed"
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed"
+        }
+      ],
+      "rawResult": {
+        "sha256": "6b61c7418ff41c316224f4af5a40eb486f958bf9851b31dec8522b7571236b41",
+        "bytes": 887
+      },
+      "runId": "20261103T013324Z-46116-82327cf7d9be4af089577fc9227cbaf4",
+      "rawMetric": {
+        "bytes": 2468882,
+        "rows": 6704,
+        "sha256": "46cff796c9494ec1dda7e044a3976d3baa6eb59c051c46a6913623c27f98e816"
+      },
+      "runnerExit": 2,
+      "rawRunner": {
+        "sha256": "0aa67e417ce3af8e28a34a31a7cdae9ca9155a92fb0c7ca11a91505326a5158a",
+        "bytes": 16056
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RouteContainmentUs": 809638
+      },
+      "machineHash": "4cb089111a23",
+      "runnerStartUtc": "2026-11-03T01:33:58.3738928Z",
+      "rawLog": {
+        "sha256": "f743c6e5f784c8548096a2c97b758519f25870520a6635e334de670cf0108776",
+        "bytes": 3627
+      },
+      "side": "pr201",
+      "selected": {
+        "bytes": 2965,
+        "rowMap": [
+          {
+            "metric": "FileOps.SelfTest.R0e.RouteContainmentUs",
+            "sha256": "ab633e3a9fa2610f547e34ee9eda98a0c21636c5cb998cafa92db0a104589060",
+            "offset": 1739130,
+            "line": 4628,
+            "length": 403
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseWorkUs",
+            "sha256": "2cd4d3fc66c3d44f9caaf220aafb40ddb3627196fdaf4fd0c9144d30d43fd2ae",
+            "offset": 1739533,
+            "line": 4629,
+            "length": 369
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionWorkUs",
+            "sha256": "fb3f7fb2c34f8499c6f82d49c4fef665e90394792ba80382f942b5df9c3f9bda",
+            "offset": 1739902,
+            "line": 4630,
+            "length": 367
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectionChecksUs",
+            "sha256": "081203c85a223ff7576e1537b36b6e01e1a4584e494c1b83d4109a5decece898",
+            "offset": 1740269,
+            "line": 4631,
+            "length": 363
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.CapabilityParseCount",
+            "sha256": "1ffb7eef4d46171b2c37cc6006ed85c1519d8f6900177186176ff19df229801e",
+            "offset": 1740632,
+            "line": 4632,
+            "length": 368
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.AdmissionDecisionCount",
+            "sha256": "e9e9804a5e7cc1e1f15a18d47671cd27256c87912b9b24d876790f70e0cc229f",
+            "offset": 1741000,
+            "line": 4633,
+            "length": 370
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.RejectedUncontainedCount",
+            "sha256": "ac0a1847395e2f6aaf4c8a2086bcb5edf43439888673ef2b325e4088989016ee",
+            "offset": 1741370,
+            "line": 4634,
+            "length": 366
+          },
+          {
+            "metric": "FileOps.SelfTest.R0e.ProviderCallCount",
+            "sha256": "1e31947c0ad25f5444ea59d9692e4ffd50714b4c63ad5af1a441ce7710827067",
+            "offset": 1741736,
+            "line": 4635,
+            "length": 359
+          }
+        ],
+        "file": "pr201-05.jsonl",
+        "sha256": "74c9e62a472883c57a2f9a029c52ff08655ef7e65dcc81fdb42f34e2fd619c9d"
+      },
+      "receipt": "b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170",
+      "snapshot": "0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820",
+      "sample": 5,
+      "head": "333c1a90c68da966e41451f4204f536eef183d4b",
+      "runnerEndUtc": "2026-11-03T01:34:19.0577444Z"
+    }
+  ]
+}

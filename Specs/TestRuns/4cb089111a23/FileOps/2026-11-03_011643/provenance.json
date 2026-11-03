@@ -1,0 +1,62 @@
+{
+  "scope": "External proof references; raw artifacts remain retained outside this packet",
+  "items": [
+    {
+      "artifact": "r0e-main269-x64-release-embedded-receipt.json",
+      "bytes": 91870,
+      "sha256": "5db2295f5f9482021541f04e2ba192843d0856da90ab71e1e422151b668a0e80"
+    },
+    {
+      "artifact": "pr200-1c31697a-diagnostic1-x64-release-build-receipt.json",
+      "bytes": 89426,
+      "sha256": "6de885129c1a10f428623dbcae6798dbfdb44de5a3def0fa8327c12b88a6af5a"
+    },
+    {
+      "artifact": "pr201-333c1a90-diagnostic1-x64-release-build-receipt.json",
+      "bytes": 91306,
+      "sha256": "7d79c9c363fdbec050c4ebc8e4d262e095b36e498bfebff1d04bfdf8444d638d"
+    },
+    {
+      "artifact": "r0e-paired-current-five-process.ps1",
+      "bytes": 7009,
+      "sha256": "c15ea9d67b0579f6c36d0def954e82fb16569f53a844e51d76b4116341cc3a94"
+    },
+    {
+      "artifact": "r0e-paired-current-assess.ps1",
+      "bytes": 4126,
+      "sha256": "84343a22104b66c8b36f8ca6b5b53dc332d6a2935a65cc567ecc1ba4febf204b"
+    },
+    {
+      "artifact": "r0e-paired-current-assess-v2.ps1",
+      "bytes": 4165,
+      "sha256": "203a225333289508c9427711b4932e0dfdc898902b1fe23f4b32bc50b0a62798"
+    },
+    {
+      "artifact": "r0e-committed-1c31-333c-compatibility.json",
+      "bytes": 849,
+      "sha256": "51fe4b52fe095446a4d0ca96b2afa73c0a74fd3e2147c9dea98375cda96eb56e"
+    },
+    {
+      "artifact": "r0e-paired-quiet2-main269-wrapper.log",
+      "bytes": 10835,
+      "sha256": "389d1515ba03872a3460b7404ef7d560dd66becec96f14ec12c8fc5f162e56a5"
+    },
+    {
+      "artifact": "r0e-paired-quiet2-pr200-wrapper.log",
+      "bytes": 10823,
+      "sha256": "771bedc471237e26ffc5404dd2142f33e5cbc6b47228a06271419ec9a46bfd5f"
+    },
+    {
+      "artifact": "r0e-paired-quiet2-pr201-wrapper.log",
+      "bytes": 10823,
+      "sha256": "6112cc7559a35335567d2b7670286275d5edfa1c3c7c5da6285f92024844e637"
+    }
+  ],
+  "quietWindow": {
+    "release": "2026-11-03T01:35:21Z",
+    "drainBasis": "Root coordination observation and peer acknowledgement; not a native timestamp",
+    "drain": "2026-11-03T01:34:40Z",
+    "basis": "Root coordination observation; not recorded by native metric",
+    "window": "2026-11-03 01:16–01:41 UTC (minute precision)"
+  }
+}
