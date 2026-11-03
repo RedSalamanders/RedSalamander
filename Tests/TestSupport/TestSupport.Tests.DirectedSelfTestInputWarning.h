@@ -28,8 +28,36 @@ namespace RedSalamander::TestSupport
 class DirectedSelfTestInputWarning final
 {
 public:
+    struct ForegroundThreadEvidence final
+    {
+        DWORD threadId = 0u;
+        bool guiKnown  = false;
+        DWORD guiError = ERROR_SUCCESS;
+        GUITHREADINFO gui{.cbSize = sizeof(GUITHREADINFO)};
+        bool desktopKnown  = false;
+        DWORD desktopError = ERROR_SUCCESS;
+    };
+
+    struct ForegroundAttemptEvidence final
+    {
+        bool observed                   = false;
+        bool blockerActiveBeforeRequest = false;
+        bool requestAccepted            = false;
+        HWND foregroundBefore           = nullptr;
+        HWND foregroundAfter            = nullptr;
+        DWORD foregroundBeforePid       = 0u;
+        DWORD foregroundAfterPid        = 0u;
+        bool lastInputKnown             = false;
+        DWORD lastInputTick             = 0u;
+        DWORD requestTick               = 0u;
+        ForegroundThreadEvidence targetThread;
+        ForegroundThreadEvidence foregroundThread;
+    };
+
     struct ForegroundAdmissionDiagnostics final
     {
+        ForegroundAttemptEvidence directAttempt;
+        ForegroundAttemptEvidence hotkeyAttempt;
         const wchar_t* stage            = L"not-started";
         DWORD win32Error                = ERROR_SUCCESS;
         int heldKey                     = 0;
@@ -154,6 +182,7 @@ public:
         if (! requireHotkey)
         {
             const bool directActivated          = request.Activate();
+            observed.directAttempt              = request.attempt;
             observed.foregroundRequestAccepted  = request.foregroundRequestAccepted;
             observed.activationGuardEvaluated   = request.activationGuardEvaluated;
             observed.activationGuardPassed      = request.activationGuardPassed;
@@ -276,6 +305,7 @@ public:
         }
         if (! request.handled)
             return false;
+        observed.hotkeyAttempt              = request.attempt;
         observed.foregroundRequestAccepted  = request.foregroundRequestAccepted;
         observed.activationGuardEvaluated   = request.activationGuardEvaluated;
         observed.activationGuardPassed      = request.activationGuardPassed;
@@ -302,6 +332,7 @@ private:
 
     struct ForegroundHotkeyRequest final
     {
+        ForegroundAttemptEvidence attempt;
         HWND target                     = nullptr;
         HWND warning                    = nullptr;
         DWORD threadId                  = 0u;
@@ -319,8 +350,24 @@ private:
         DWORD activationWarningThread   = 0u;
         DWORD activationWarningProcess  = 0u;
 
+        static void CaptureThread(DWORD thread, ForegroundThreadEvidence& evidence) noexcept
+        {
+            evidence.threadId = thread;
+            if (thread == 0u)
+                return;
+            SetLastError(ERROR_SUCCESS);
+            evidence.guiKnown = GetGUIThreadInfo(thread, &evidence.gui) != FALSE;
+            if (! evidence.guiKnown)
+                evidence.guiError = GetLastError();
+            SetLastError(ERROR_SUCCESS);
+            evidence.desktopKnown = GetThreadDesktop(thread) != nullptr;
+            if (! evidence.desktopKnown)
+                evidence.desktopError = GetLastError();
+        }
+
         [[nodiscard]] bool Activate() noexcept
         {
+            attempt                    = {};
             activationGuardPassed      = false;
             activationGuardEvaluated   = true;
             foregroundRequestAttempted = false;
@@ -337,8 +384,22 @@ private:
             ShowWindow(target, SW_SHOWNORMAL);
             BringWindowToTop(target);
             SetActiveWindow(target);
-            foregroundRequestAttempted = true;
-            foregroundRequestAccepted  = Common::RequestForegroundWindow(target) != FALSE;
+            attempt.observed             = true;
+            attempt.foregroundBefore     = GetForegroundWindow();
+            const DWORD foregroundThread = GetWindowThreadProcessId(attempt.foregroundBefore, &attempt.foregroundBeforePid);
+            LASTINPUTINFO input{.cbSize = sizeof(LASTINPUTINFO)};
+            attempt.lastInputKnown = GetLastInputInfo(&input) != FALSE;
+            attempt.requestTick    = GetTickCount();
+            if (attempt.lastInputKnown)
+                attempt.lastInputTick = input.dwTime;
+            CaptureThread(threadId, attempt.targetThread);
+            CaptureThread(foregroundThread, attempt.foregroundThread);
+            attempt.blockerActiveBeforeRequest = ScopedWindowActivationBlocker::IsActiveForCurrentThread();
+            foregroundRequestAttempted         = true;
+            foregroundRequestAccepted          = Common::RequestForegroundWindow(target) != FALSE;
+            attempt.requestAccepted            = foregroundRequestAccepted;
+            attempt.foregroundAfter            = GetForegroundWindow();
+            static_cast<void>(GetWindowThreadProcessId(attempt.foregroundAfter, &attempt.foregroundAfterPid));
             SetFocus(target);
             SetWindowPos(target, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
             SetWindowPos(target, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);

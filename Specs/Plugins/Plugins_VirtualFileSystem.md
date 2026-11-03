@@ -1134,6 +1134,12 @@ Normative rules:
 - Missing, malformed, unstable, or unsupported typed name identity semantics are
   unavailable or a provider contract violation. Predictive planners reject before
   mutation rather than guessing.
+- For a path identity accepting backslashes, canonical parent derivation preserves the
+  terminating separator of an absolute drive root, extended drive root, or structurally
+  supported Win32 volume-GUID filesystem root; that root has no parent. A bare volume device spelling
+  is not the directory root. This is a lexical boundary, not a grant to open a path or
+  an equivalence between distinct provider roots; UNC and slash-only provider semantics
+  remain governed by their existing contracts.
 - The canonical composite child-name helper invokes `ValidateChildName`, `JoinPath`,
   and `GetChildNameCollisionKey` against one retained typed-route generation and
   copies every output before return. Provider Invalid preserves its exact failure;

@@ -31,6 +31,7 @@
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
 #include "PackedFileInfoBuffer.h"
+#include "PathUtils.h"
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/FactoryImpl.h"
 #include "PlugInterfaces/FileSystem.h"
@@ -2488,6 +2489,67 @@ void CheckOrdinalComponentKeyUnitParity(const FileSystemPathIdentity& identity, 
 
 void TestTypedRouteValidatorContracts(bool& success) noexcept
 {
+    {
+        const FileSystemPathIdentity local = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+        struct ParentCase final
+        {
+            std::wstring_view child;
+            std::wstring_view expected;
+        };
+        constexpr std::array cases{
+            ParentCase{LR"(C:\child)", LR"(C:\)"},
+            ParentCase{LR"(C:/child)", LR"(C:/)"},
+            ParentCase{LR"(\\?\C:\child)", LR"(\\?\C:\)"},
+            ParentCase{LR"(\\?\C:/child)", LR"(\\?\C:/)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent\child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent/child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\child\\)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)"},
+            ParentCase{LR"(\\?\Volume{not-a-guid}\child)", LR"(\\?\Volume{not-a-guid}\)"},
+            ParentCase{LR"(\\server\share\child)", LR"(\\server\share)"},
+            ParentCase{LR"(\\?\UNC\server\share\child)", LR"(\\?\UNC\server\share)"},
+        };
+        for (const auto& entry : cases)
+        {
+            std::wstring parent;
+            Check(TryGetFileSystemParentPath(local, entry.child, parent) && parent == entry.expected,
+                  std::format(L"Canonical parent preserves the root boundary for {}", entry.child).c_str(),
+                  success);
+        }
+        for (const std::wstring_view root :
+             {LR"(C:\)", LR"(\\?\C:\)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)", LR"(\\server\share)", LR"(\\?\UNC\server\share)"})
+        {
+            std::wstring parent;
+            Check(! TryGetFileSystemParentPath(local, root, parent) && parent.empty(), L"A supported Windows filesystem root has no parent", success);
+        }
+        std::wstring repeatedRootParent;
+        Check(! TryGetFileSystemParentPath(local, LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\\)", repeatedRootParent) && repeatedRootParent.empty(),
+              L"Repeated root separators cannot traverse above the filesystem root",
+              success);
+        constexpr auto volumeRoot   = LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)";
+        constexpr auto volumeDevice = LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef})";
+        Check(Common::Paths::IsSupportedLocalFileOperationPath(volumeRoot) && ! Common::Paths::IsSupportedLocalFileOperationPath(volumeDevice) &&
+                  ! EquivalentPath(local, volumeRoot, volumeDevice) && ! Common::Paths::IsSupportedLocalFileOperationPath(LR"(\\.\C:\child)") &&
+                  ! Common::Paths::IsSupportedLocalFileOperationPath(LR"(\\?\GLOBALROOT\Device\HarddiskVolume1\child)"),
+              L"Filesystem roots remain distinct from bare volumes and rejected device namespaces",
+              success);
+        std::wstring malformedParent;
+        Check(! Common::Paths::IsSupportedLocalFileOperationPath(LR"(\\?\Volume{unclosed\child)") &&
+                  TryGetFileSystemParentPath(local, LR"(\\?\Volume{unclosed\child)", malformedParent) && malformedParent == LR"(\\?\Volume{unclosed)",
+              L"An incomplete volume token retains generic parent semantics and is outside Local's operation envelope",
+              success);
+        FileSystemPathIdentity slashOnly = local;
+        slashOnly.preferredSeparator     = L'/';
+        slashOnly.acceptedSeparators     = L"/";
+        std::wstring slashParent;
+        Check(TryGetFileSystemParentPath(slashOnly, L"/bucket/folder/item", slashParent) && slashParent == L"/bucket/folder",
+              L"Slash-only provider parent semantics remain unchanged",
+              success);
+        Check(TryGetFileSystemParentPath(slashOnly, LR"(\\?\C:\child)", slashParent) == false,
+              L"Slash-only identities do not interpret Win32 backslashes as separators",
+              success);
+    }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::None);
         const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");

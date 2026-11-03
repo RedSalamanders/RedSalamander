@@ -1,0 +1,1 @@
+- Record separate owned foreground-handoff attempt and thread-state diagnostics when interactive self-test admission fails, preserving the existing focus requirements.

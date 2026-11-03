@@ -403,6 +403,16 @@ Describe 'Test harness source contracts' {
         $source | Should Match 'TryActivateOwnedWindow\(inputWindow, false, &admission\)'
         $warning = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
         $warning | Should Match '(?s)foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
+        $warning | Should Match '(?s)directActivated\s*=\s*request\.Activate\(\);\s*observed\.directAttempt\s*=\s*request\.attempt'
+        $warning | Should Match '(?s)if \(! request\.handled\)\s*return false;\s*observed\.hotkeyAttempt\s*=\s*request\.attempt'
+        $warning | Should Match '(?s)blockerActiveBeforeRequest\s*=\s*ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\);\s*foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
+        $warning | Should Match '(?s)bool Activate\(\) noexcept\s*\{\s*attempt\s*=\s*\{\};\s*activationGuardPassed\s*=\s*false;'
+        $failure.Value | Should Match 'traceAttempt\(L"direct", admission\.directAttempt\)'
+        $failure.Value | Should Match 'traceAttempt\(L"hotkey", admission\.hotkeyAttempt\)'
+        foreach ($field in @('lastInputKnown', 'lastInputTick', 'requestTick', 'threadId', 'guiKnown', 'guiError', 'desktopKnown', 'desktopError',
+                'hwndActive', 'hwndFocus', 'hwndMenuOwner', 'hwndMoveSize')) {
+            $failure.Value | Should Match ([regex]::Escape($field))
+        }
     }
 
     It 'keeps repeated shuffle qualification manual and separate from the PR gate' {

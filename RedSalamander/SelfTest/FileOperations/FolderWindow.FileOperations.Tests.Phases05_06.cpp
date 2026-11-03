@@ -5498,6 +5498,33 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             AppendLog(std::format(L"Independent-volume destination operation path refused: {}", refusal));
             return std::nullopt;
         }
+
+        // The probe may bind only the freshly verified, test-owned filesystem root.
+        // Stop before binding if lexical parent traversal does not reach that exact spelling.
+        const FileSystemPathIdentity identity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+        std::wstring ancestor                 = source.value().native();
+        while (ancestor != volume)
+        {
+            std::wstring parent;
+            if (! TryGetFileSystemParentPath(identity, ancestor, parent) || parent.size() >= ancestor.size())
+            {
+                AppendLog(L"R4-A19 owned-volume root probe: parent walk did not reach the verified root.");
+                return std::nullopt;
+            }
+            ancestor = std::move(parent);
+        }
+        {
+            constexpr FileSystemBindFlags flags               = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+            const FileOperations::ObjectBindingResult binding = FileOperations::BindObjectAuthority(state.fsLocal.get(), ancestor, L"local-win32", flags);
+            const bool boundDirectory = binding.state == FileOperations::ObjectBindingState::Bound && binding.status == S_OK && binding.authority.boundObject &&
+                                        binding.authority.kind == FILESYSTEM_BOUND_DIRECTORY;
+            AppendLog(std::format(L"R4-A19 owned-volume root probe: state={} hr=0x{:08X} boundDirectory={}.",
+                                  static_cast<unsigned int>(binding.state),
+                                  static_cast<unsigned long>(binding.status),
+                                  boundDirectory));
+            if (! boundDirectory)
+                return std::nullopt;
+        }
         return std::pair{source.value(), destination.value()};
     };
     const auto verifyFiles = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
