@@ -48,11 +48,13 @@ Do not copy a public ABI definition, generated inventory, mutable count, depende
 ## Plan lifecycle
 
 - New scoped work lives in `Specs/Plans/WIP/` and is indexed exactly once as `ACTIVE`, `HOLD`, `DECISION`, or `RETIRED`.
+- Documentation surveys and improvement plans use that same indexed location. Do not create a parallel root queue. The [retired August advisor survey](Plans/Done/AdvisorSurvey_Index_2026-08-25.md) has one current residual owner, [I58](Plans/WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
 - A WIP index `Rank` is unique and never reused, including an ID that an archived plan claims in its Done H1 (`# <ID> ...`). Done text is frozen, so the active plan takes a new ID on a clash.
 - WIP files cannot override current contracts. An implementation plan must name the normative specs it expects to change.
 - Durable requirements discovered during work move into the appropriate domain contract before closeout.
 - A completed plan moves to `Specs/Plans/Done/`; it is then immutable history. Corrections to current behavior belong in current specs or a new WIP, never by rewriting Done history.
 - The same closeout change adds the exact new Done path to the reviewed `Test-RSProtectedDoneHistory` additional-path allowlist and its focused admission test; the test also rejects an unreviewed sibling path. This authorizes only that new immutable file and does not permit modifying existing Done history.
+- The six August advisor-survey records have individual exact-file admission after the 2026-11-03 retirement and relocation. Focused controls reject date-shifted siblings and additional companions. Their original instructions and TODO rows are frozen history; admission does not close I58 or qualify product work.
 - The [I55 CI implementation record](Plans/Done/CI_OrganizationStandardization_2026-10-29.md) has exact-file admission after the owner's implementation/hosted-acceptance split. [I56](Plans/WIP/CI_HostedAcceptance_2026-10-31.md) retains failed, unavailable and pending qualification; admission does not close that follow-up or qualify a release.
 - The [2026-10-16 File Operations card hierarchy record](Plans/Done/FileOperations_CardInformationHierarchy_2026-10-16.md) uses this exact-file admission; adjacent dates and additional companion artifacts remain unreviewed.
 - The [October 20 waiting-card record](Plans/Done/FileOperations_WaitingCards_2026-10-20.md) has exact-file admission with sibling and companion rejection; its scoped validation does not establish Full or platform qualification.

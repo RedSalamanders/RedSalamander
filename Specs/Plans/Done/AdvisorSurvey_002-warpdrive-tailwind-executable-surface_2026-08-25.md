@@ -1,3 +1,24 @@
+# Retired advisor survey record
+
+> **NON-NORMATIVE RETIRED RECORD.** Archived on 2026-11-03 after reconciliation against current source.
+> No remaining executable work is owned by this file. Follow the single residual owner,
+> [I58: planning lifecycle and owner reconciliation](../WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
+> All executor instructions, TODO rows, dependencies and checkboxes in the original survey below are frozen history.
+> They do not authorize product changes, qualification runs, or access to the human-managed scratch note.
+
+## Archive provenance
+
+- **State:** RETIRED; superseded survey, not a claim that every surveyed product task is complete.
+- **Archived:** 2026-11-03
+- **Original path:** `advisor-plans/002-warpdrive-tailwind-executable-surface.md`
+- **Source commit:** `269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1`
+- **Original Git blob:** `efc772deb8da7a28b36a4aefb4518297a8413022`
+- **Original file SHA-256:** `92ea2254c4e72d06e02fa349a5799c575504302a58ea910d26e9624be4283b52`
+- **Recovery:** `git show 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1:advisor-plans/002-warpdrive-tailwind-executable-surface.md`
+
+## Frozen original survey
+
+<!-- original-advisor-survey:start -->
 # Plan 002: Make WarpDrive/Tailwind/thumbnail the only live FolderView-perf contract
 
 > **SUPERSEDED IN PART (2026-08-25).** The operator overrode “keep WarpDrive as one SIZE-WAIVER master.” The diary is frozen at `Specs/Plans/Done/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md`. Live closeout is `Specs/Plans/WIP/Operation_FolderView_WarpDrive_RemainingCloseout_2026-08-25.md` (I2). Retired continuation batons live in Done, not WIP. Do not merge the remainder back into one master. Tailwind/I1 pointer hygiene below remains useful if those files still name the old WIP path.

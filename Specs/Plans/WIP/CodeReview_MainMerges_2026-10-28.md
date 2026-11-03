@@ -752,7 +752,7 @@ present before, but first visible or first reachable through a revision 2 change
 | L40 | Tooling | new | CONFIRMED | Changelog fold drops a distinct fragment whose text equals any Unreleased entry, then deletes its file. | `Tools/Modules/Documentation/Changelog.psm1:94-101` |
 | L41 | Tooling | new | AGENT | `New-RSTestSandboxLink` validates a relative `-Path` against the process directory but creates it against the PowerShell location. | `Tools/Modules/Testing/TestSandbox.psm1:341-396` |
 | L42 | Build | new | AGENT | `RSVerifyRedMonitorClient` spawns `pwsh` (~1.1 s) for each of 114 projects on every build. | `Directory.Build.targets:327-329` |
-| L43 | Repo hygiene | new | CONFIRMED | Public repo now tracks 19,500 evidence files (pack 502 MB); the private NAS hostname appears in 3 Done plans and 27 evidence files; `advisor-plans/` (agent executor plans) and `.codex/config.toml` (`workspace-write`, `network_access = true`) were published. | `Specs/TestRuns`, `Specs/Plans/Done`, `advisor-plans/`, `.codex/config.toml` |
+| L43 | Repo hygiene | new | CONFIRMED | The review snapshot recorded 19,500 evidence files (pack 502 MB), a private NAS hostname in 3 Done plans and 27 evidence files, and published agent executor plans/configuration. On 2026-11-03 the six survey files were retired into Done and their documentation remainder indexed as I58. This resolves the parallel planning location only; content/privacy and evidence-retention decisions remain open. | `Specs/TestRuns`, `Specs/Plans/Done`, [retired advisor survey](../Done/AdvisorSurvey_Index_2026-08-25.md), `.codex/config.toml` |
 | L44 | Repo hygiene | pre-existing | CONFIRMED | Two different files share the name `FolderWindow.FileOperations.Tests.OwnedShutdown.cpp` (compiled hooks in `RedSalamander/`, included fixture in `SelfTest/FileOperations/`); `vcpkg.json` homepage typo `Redsalamanderse`. | `RedSalamander/RedSalamander.vcxproj:413,530`; `vcpkg.json:4` |
 | L45 | Build | new | CONFIRMED (reading) | `Verify-RedMonitorClient.ps1` rejects any reparse point up to the drive root, so a checkout below a junction or OneDrive placeholder fails every build; it needs `pwsh` on PATH even for IDE builds (with L42). | `Tools/Verify-RedMonitorClient.ps1`, `Directory.Build.targets:327-329` |
 | L46 | Monitor removal | new | AGENT | Dangling RedSalamanderMonitor remnants (none breaks the build): dead `g_redSalamanderMonitor*` and `kColorTextView*` constants, stale tool/test lists, ETW scripts that still say "launch RedSalamanderMonitor", docs. `.sln`, projects, installers and workflows are clean. | `Common/Helpers.h:1392-1393`, `Common/WindowMessages.h:1051-1054`, `init-etw-trace.ps1`, `start-etw-trace.ps1`, `stop-etw-trace.ps1`, `docs/SettingsFile.md`, `docs/Preferences.md`, `docs/dev/Diagnostics.md` |
@@ -951,7 +951,8 @@ The current owner decisions above and implementation ledger answer or conservati
     MSIX carry build receipts and test sidecars, or use the ZIP allow-list (L48)?
 12. **Public repository content (H4, L43).** Must the repository stay cloneable on stock Windows git
     (`core.longpaths=false`)? If yes, the 607 long evidence paths must be shortened or moved. Should the
-    public repo carry the 19,500 evidence files under `Specs/TestRuns`, `advisor-plans/` and
+    public repo carry the recorded evidence collection under `Specs/TestRuns`, the
+    [retired advisor survey](../Done/AdvisorSurvey_Index_2026-08-25.md) and
     `.codex/config.toml` (which grants agents network access)? Should the private NAS hostname be
     replaced by a fixture name in published plans and evidence?
 13. **Shell.** Should direct-mutation commands (Change Attributes, Create Directory, Edit/New File,

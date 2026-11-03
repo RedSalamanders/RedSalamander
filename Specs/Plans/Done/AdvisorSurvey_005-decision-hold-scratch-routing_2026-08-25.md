@@ -1,3 +1,24 @@
+# Retired advisor survey record
+
+> **NON-NORMATIVE RETIRED RECORD.** Archived on 2026-11-03 after reconciliation against current source.
+> No remaining executable work is owned by this file. Follow the single residual owner,
+> [I58: planning lifecycle and owner reconciliation](../WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
+> All executor instructions, TODO rows, dependencies and checkboxes in the original survey below are frozen history.
+> They do not authorize product changes, qualification runs, or access to the human-managed scratch note.
+
+## Archive provenance
+
+- **State:** RETIRED; superseded survey, not a claim that every surveyed product task is complete.
+- **Archived:** 2026-11-03
+- **Original path:** `advisor-plans/005-decision-hold-scratch-routing.md`
+- **Source commit:** `269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1`
+- **Original Git blob:** `8190a126949a5156a11476c146d49a545caf3a27`
+- **Original file SHA-256:** `cab6ee2473371ee9316c14c1af3f433c45607771e7f3da71eb886d473fc15c00`
+- **Recovery:** `git show 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1:advisor-plans/005-decision-hold-scratch-routing.md`
+
+## Frozen original survey
+
+<!-- original-advisor-survey:start -->
 # Plan 005: Route WhimFiles, Parallax, Atlas, and unique Notes_Scratch items
 
 > **Executor instructions**: Follow this plan step by step. Run every
