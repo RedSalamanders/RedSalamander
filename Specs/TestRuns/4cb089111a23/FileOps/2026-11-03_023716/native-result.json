@@ -1,0 +1,32 @@
+{
+  "head": "e2c334a73bfb29b1a335683cc6e8eaad30d5f01e",
+  "runId": "20261103T023716Z-110272-0fe226667fbb423aa9295075177570f7",
+  "receiptId": "be8948ecc835c77d20b2d7938e5428e03cbdeadfe4f45983e8764de7b551323f",
+  "receiptSha256": "28D93EF5B4BCCB7642540E34E9763F327907686EEDA3CBBBFA673D58413A771E",
+  "sourceSnapshotId": "ea9a23995ce0314915f809d57627a474729bcc5081cfc992a6b8f0d0452f38d3",
+  "argument": "--package-smoke",
+  "processExit": 0,
+  "elapsedMs": 582,
+  "okCount": 1577,
+  "failedCount": 0,
+  "parentChecks": 12,
+  "rootChecks": 5,
+  "profileChecks": 7,
+  "missingRequiredChecks": 0,
+  "sourceClean": true,
+  "receiptVerifiedAfter": true,
+  "passed": true,
+  "files": [
+    {
+      "sha256": "5D7AD15BCD3435437DAA47629CFC2236A71EF64D851F887D87438C64E00030CD",
+      "name": "stdout.log",
+      "bytes": 187213
+    },
+    {
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "name": "stderr.log",
+      "bytes": 0
+    }
+  ],
+  "coverage": "Focused local executable; not package or Full qualification"
+}

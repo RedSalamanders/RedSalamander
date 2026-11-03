@@ -1,0 +1,34 @@
+{
+  "rawEvidence": [
+    {
+      "role": "result.json",
+      "bytes": 1081,
+      "sha256": "F078A1D19E5806B8B8CB37BA0416A99DFA7D5FADF7F9E94FA02339A4F218F935"
+    },
+    {
+      "role": "stdout.log",
+      "bytes": 187213,
+      "sha256": "5D7AD15BCD3435437DAA47629CFC2236A71EF64D851F887D87438C64E00030CD"
+    },
+    {
+      "role": "stderr.log",
+      "bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    }
+  ],
+  "receipt": {
+    "bytes": 89427,
+    "sha256": "28D93EF5B4BCCB7642540E34E9763F327907686EEDA3CBBBFA673D58413A771E"
+  },
+  "sourceLocations": [
+    {
+      "file": "Tests/PluginContractTests/PluginContract.Tests.Runner.cpp",
+      "line": 2517
+    },
+    {
+      "file": "Tests/PluginContractTests/PluginContract.Tests.Runner.cpp",
+      "line": 2567
+    }
+  ],
+  "notes": "Raw originals and byte-verified receipt remain externally in the private governed evidence root."
+}

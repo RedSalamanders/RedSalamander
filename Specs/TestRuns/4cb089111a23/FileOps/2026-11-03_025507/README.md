@@ -1,0 +1,5 @@
+# FileOps popup idle cadence, scoped x64 Release
+
+On 2026-11-03, the current PR200 head e2c334a73bfb29b1a335683cc6e8eaad30d5f01e completed the focused `FileOps_PopupIdleCadence` case. The unmodified native results record Setup, case and cleanup all passed (3/0/0), repeat 1 and timeout scale 1. The wrapper ran 02:54:32.731–02:56:05.277 UTC; the native suite started 02:55:07.181 UTC. Its exit 2 indicates scoped coverage, not Full qualification. Receipt and source snapshot identities and raw source hashes are in provenance.json.
+
+The original case requires a 100 ms active timer with at least six ticks; waiting scenarios use a 1000 ms interval with at most two ticks and three snapshots; completed idle requires zero ticks. Its other checks cover progress settlement, path-detail motion, engine prompt/pause, re-arming and fallback wake. Selected trace lines and every PopupCadence metric are byte-exact ordered excerpts; provenance binds each original one-based line and raw file. They do not establish general UI performance, an A/B comparison, or Full qualification. Full raw files remain in the approved local evidence store.

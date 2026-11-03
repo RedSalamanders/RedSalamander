@@ -1,0 +1,31 @@
+[ RUN      ] Step3: typed route validator and provider capabilities
+[       OK ] Canonical parent preserves the root boundary for C:\child
+[       OK ] Canonical parent preserves the root boundary for C:/child
+[       OK ] Canonical parent preserves the root boundary for \\?\C:\child
+[       OK ] Canonical parent preserves the root boundary for \\?\C:/child
+[       OK ] Canonical parent preserves the root boundary for \\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\child
+[       OK ] Canonical parent preserves the root boundary for \\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent\child
+[       OK ] Canonical parent preserves the root boundary for \\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/child
+[       OK ] Canonical parent preserves the root boundary for \\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent/child
+[       OK ] Canonical parent preserves the root boundary for \\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\child\\
+[       OK ] Canonical parent preserves the root boundary for \\?\Volume{not-a-guid}\child
+[       OK ] Canonical parent preserves the root boundary for \\server\share\child
+[       OK ] Canonical parent preserves the root boundary for \\?\UNC\server\share\child
+[       OK ] A supported Windows filesystem root has no parent
+[       OK ] A supported Windows filesystem root has no parent
+[       OK ] A supported Windows filesystem root has no parent
+[       OK ] A supported Windows filesystem root has no parent
+[       OK ] A supported Windows filesystem root has no parent
+[       OK ] Repeated root separators cannot traverse above the filesystem root
+[       OK ] Filesystem roots remain distinct from bare volumes and rejected device namespaces
+[       OK ] An incomplete volume token retains generic parent semantics and is outside Local's operation envelope
+[       OK ] Slash-only provider parent semantics remain unchanged
+[       OK ] Slash-only identities do not interpret Win32 backslashes as separators
+[       OK ] Backslash-only parent respects namespace separators for \\?\C:\child
+[       OK ] Backslash-only parent respects namespace separators for /\?\C:\child
+[       OK ] Backslash-only parent respects namespace separators for \/?\C:\child
+[       OK ] Backslash-only parent respects namespace separators for \\?/C:\child
+[       OK ] Backslash-only parent respects namespace separators for //?/C:\child
+[       OK ] Backslash-only parent respects namespace separators for \\?\C:/child
+[       OK ] Backslash-only parent respects namespace separators for \\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/child
+PluginContractTests package smoke passed.

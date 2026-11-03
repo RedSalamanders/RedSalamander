@@ -1,0 +1,1 @@
+- Preserve focused filesystem-root parent smoke checks with source-bound evidence.

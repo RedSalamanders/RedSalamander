@@ -1,0 +1,3 @@
+# Filesystem root checks
+
+Run-context UTC start names this folder (2026-11-03 02:37:16 UTC), not completion time. The existing PluginContractTests --package-smoke invocation passed 1,577 checks with zero failures, process exit 0. The selected original stdout lines are individual Check assertions, not separate test cases: 12 parent, five root, seven backslash-profile, and five additional checks, plus the Step3 and final result lines. Synthetic path spellings are test data. Full original stdout, stderr, receipt and result remain in governed private evidence; selection offsets and hashes permit exact reconstruction. The manifest excludes itself. This does not establish Full, package qualification, or a timing result.

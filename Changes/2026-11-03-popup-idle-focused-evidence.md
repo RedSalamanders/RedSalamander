@@ -1,0 +1,1 @@
+- Record the focused x64 Release FileOps popup idle cadence run, including its native case results and source-bound metrics; broader qualification remains pending.

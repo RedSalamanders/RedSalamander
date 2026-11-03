@@ -1,0 +1,41 @@
+{
+  "files": [
+    {
+      "bytes": 20,
+      "sha256": "E97602AB9CAC70102245345C5AB0FC9830DF8B17F1072B188265A662A3A547AE",
+      "name": ".gitattributes"
+    },
+    {
+      "bytes": 1081,
+      "sha256": "F078A1D19E5806B8B8CB37BA0416A99DFA7D5FADF7F9E94FA02339A4F218F935",
+      "name": "native-result.json"
+    },
+    {
+      "bytes": 934,
+      "sha256": "8D8B740F6D6A69F53EEF7AE557B73CECBE4414EC8762B6B81850EEDD696E4B31",
+      "name": "provenance.json"
+    },
+    {
+      "bytes": 724,
+      "sha256": "B14507F67F9ECE388CA542AFA9F7543FD24FE626FAEFF6FA03E6DE9D448695F0",
+      "name": "README.md"
+    },
+    {
+      "bytes": 2669,
+      "sha256": "3C2F877E1648CE6F883CA5FB432024F5D950BBBCDC8C866549D9E4915CCBF6A6",
+      "name": "selected-checks.txt"
+    },
+    {
+      "bytes": 5822,
+      "sha256": "B5B39592D2A7530A344A760216EB26CD9C5384767C9E69A91F27B2B1F98043D5",
+      "name": "selection.json"
+    },
+    {
+      "bytes": 674,
+      "sha256": "EB78F19AEFC0285891B1BC5928B3A46DC7A87FB88FA7A4CB8AC2EF35257144EB",
+      "name": "summary.json"
+    }
+  ],
+  "schema": "curated-evidence-manifest-v1",
+  "selfExcluded": true
+}

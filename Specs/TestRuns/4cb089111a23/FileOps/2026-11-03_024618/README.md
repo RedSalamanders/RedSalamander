@@ -1,0 +1,5 @@
+# NAS scale failure
+
+Run-context UTC start names this folder (2026-11-03 02:46:18 UTC), not completion time. This is a FAILED focused case: Setup and Cleanup passed; selected case failed. The 2,466-entry NAS walk timed out at 60,017 ms, with no completion; local loopback and chunk controls passed. The timed NAS observation ended at 02:52:15.414 UTC. Reported SDK copies began at 02:53:27.7 UTC, more than 72 seconds later, and overlapped final wrapper processing. The whole run is not claimed quiet.
+
+The NAS walk recorded budget 8 and peak 8, 1,412 opens/facts, 1,346 dispositions and three parallel passes. Child-walk cancellation was observed after timeout; cleanup passed. Stage duration sums overlap workers and do not establish wall-clock or server latency. No network cause, throughput gain, or paired-comparison claim is made. Large original evidence and receipt remain in the private governed evidence root. Selection maps bind original bytes; the manifest excludes itself. This is not Full qualification.

@@ -1,0 +1,16 @@
+{
+  "runId": "20261103T023716Z-110272-0fe226667fbb423aa9295075177570f7",
+  "sourceHead": "e2c334a73bfb29b1a335683cc6e8eaad30d5f01e",
+  "sourceSnapshot": "ea9a23995ce0314915f809d57627a474729bcc5081cfc992a6b8f0d0452f38d3",
+  "receiptId": "be8948ecc835c77d20b2d7938e5428e03cbdeadfe4f45983e8764de7b551323f",
+  "receiptSha256": "28D93EF5B4BCCB7642540E34E9763F327907686EEDA3CBBBFA673D58413A771E",
+  "rawResultSha256": "F078A1D19E5806B8B8CB37BA0416A99DFA7D5FADF7F9E94FA02339A4F218F935",
+  "argument": "--package-smoke",
+  "processExit": 0,
+  "okCount": 1577,
+  "failedCount": 0,
+  "sourceClean": true,
+  "receiptVerifiedAfter": true,
+  "passed": true,
+  "selectedCheckLines": 31
+}

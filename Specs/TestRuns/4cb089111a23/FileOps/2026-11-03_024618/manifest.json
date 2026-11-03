@@ -1,0 +1,46 @@
+{
+  "files": [
+    {
+      "bytes": 20,
+      "sha256": "E97602AB9CAC70102245345C5AB0FC9830DF8B17F1072B188265A662A3A547AE",
+      "name": ".gitattributes"
+    },
+    {
+      "bytes": 1110,
+      "sha256": "34B2E2F08CCDF95838B95BE3AE3C545784CDF4B297F49F1918A103695C971DDC",
+      "name": "native-results.json"
+    },
+    {
+      "bytes": 1915,
+      "sha256": "F74A3AD7B89099FE50233AB19475B5905601C278F8BBFFC932C0151AB923C8DA",
+      "name": "provenance.json"
+    },
+    {
+      "bytes": 1017,
+      "sha256": "F2599DDA1B91F68727BCE1EBED6079FDD7D8A47C460A1F83FD8AA27F457B83C3",
+      "name": "README.md"
+    },
+    {
+      "bytes": 24630,
+      "sha256": "CFF7E67CF689D105D2F6B64824E928EB38645665C5ED15EAF70822BED0377D81",
+      "name": "selected-metrics.jsonl"
+    },
+    {
+      "bytes": 1496,
+      "sha256": "EFFCFF411B44DB0F442416D1E1FD76B7E29367A3C5DF780FD731C7F08E26038F",
+      "name": "selected-trace.txt"
+    },
+    {
+      "bytes": 12904,
+      "sha256": "7EE99506E58B91A1C9B981AEF62BDE782D84E8FAB7407E639E878A4B8447CADC",
+      "name": "selection.json"
+    },
+    {
+      "bytes": 857,
+      "sha256": "7118940B40C16BBB880F783C5E9A88CF35352B8DB764B8F82E4182ABBB2EADC7",
+      "name": "summary.json"
+    }
+  ],
+  "schema": "curated-evidence-manifest-v1",
+  "selfExcluded": true
+}

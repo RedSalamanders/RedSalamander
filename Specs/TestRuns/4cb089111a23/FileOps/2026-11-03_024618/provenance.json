@@ -1,0 +1,56 @@
+{
+  "rawEvidence": [
+    {
+      "bytes": 1110,
+      "sha256": "34B2E2F08CCDF95838B95BE3AE3C545784CDF4B297F49F1918A103695C971DDC",
+      "role": "fileops\\results.json"
+    },
+    {
+      "bytes": 8308,
+      "sha256": "8650F22D5D19540ED991BEBF8C36BF1D9931B86085D1CBE42289B570F36203CD",
+      "role": "fileops\\trace.txt"
+    },
+    {
+      "bytes": 17354293,
+      "sha256": "D7113D513C8E18B9F12FC9EE8327FB1324E4AFCF8F58F7C84D7D78919489D2BC",
+      "role": "perf\\perf_metrics.jsonl"
+    },
+    {
+      "bytes": 16499,
+      "sha256": "66AB2FA04731DD192010CEC02D46FBE05C4A63C46DE1C94D4AAC730DF160CA12",
+      "role": "run-all-tests-results.json"
+    },
+    {
+      "bytes": 1674,
+      "sha256": "90F29B92BB9A12DE0640CAA99975E7976614CE37B2ACB8E47D7F69A5B3BEA58A",
+      "role": "results.json"
+    },
+    {
+      "bytes": 22980,
+      "sha256": "2886D275B772BEFE6BB5F16AB465A51730E3AF765D939E42FAD2D9A021D82D82",
+      "role": "trace.txt"
+    },
+    {
+      "bytes": 91306,
+      "sha256": "38FE0F33FED70FF2CD35C80750550A1B92E70033D1FBD3FD41729F9D6412EF41",
+      "role": "nas-scale-dynamic-v2-adf40ea6-adf-quiet1-receipt.json"
+    },
+    {
+      "bytes": 20517,
+      "sha256": "69FC3844E3BB84099ED1B9677240659BD1A8828FD0FC2D49597A4173404F9CB9",
+      "role": "nas-scale-dynamic-v2-adf40ea6-adf-quiet1-result.json"
+    },
+    {
+      "bytes": 4596,
+      "sha256": "A50D79DC5377CA179E79969104E9CE43A9231F6BDEF006BBC2CED8F276F60CBF",
+      "role": "nas-scale-dynamic-v2-adf40ea6-adf-quiet1.log"
+    }
+  ],
+  "preservationManifest": {
+    "role": "preservation manifest",
+    "bytes": 1758,
+    "sha256": "74E7D7C60B28004336208D03051BADA9D40311C059421C4080F6449D43A50551"
+  },
+  "traceEncoding": "UTF-16LE, selected byte slices lack BOM; decode explicitly",
+  "notes": "Raw originals remain externally in the private governed evidence root. Runner and receipt bytes are separate from the selected trace/metrics."
+}

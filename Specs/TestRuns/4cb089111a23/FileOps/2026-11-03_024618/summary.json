@@ -1,0 +1,30 @@
+{
+  "runId": "20261103T024618Z-106976-7c9a98c4faaf462d960c726ed8225b36",
+  "runStartedUtc": "2026-11-03T02:46:55.214Z",
+  "sourceHead": "adf40ea6281353eeaf0093c0a65c4fa616183b2f",
+  "sourceSnapshot": "8de939639b495a06bd4c6be5a7bd47bf38593f06b943166eccc30708532b23be",
+  "receiptId": "2f5e1229e2b93129e658b09d47c2aff7bab16bb8bbf99a072a2b367be84fb1ca",
+  "profile": "x64 Release",
+  "machineHash": "4cb089111a23",
+  "timeoutScale": 1,
+  "counts": {
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+  },
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed"
+    },
+    {
+      "name": "Delete_IdentityLessPinnedTreeScale",
+      "status": "failed",
+      "reason": "A delete by name of a tree of a few thousand entries did not delete it; see trace."
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed"
+    }
+  ]
+}

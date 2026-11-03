@@ -1,0 +1,1 @@
+- Preserve the failed identity-less NAS delete scale run and its local controls with source-bound evidence.
