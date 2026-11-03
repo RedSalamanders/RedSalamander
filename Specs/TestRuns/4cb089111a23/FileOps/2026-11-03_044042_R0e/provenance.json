@@ -1,0 +1,1088 @@
+{
+  "scope": "15 independent focused processes, not Full",
+  "cohort": "32d8da-quiet2",
+  "machineHash": "4cb089111a23",
+  "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+  "wrapperSha256": "5d9fda5c96fa35098b1aaf8810de3c33a808b3c2c91fe052db6fcc9948bd5f3c",
+  "workerSha256": "0f77f53a4d0d6bb3252ed9e732964cb96558bfe6745603d6735b3cc49b532453",
+  "priorPreflightFailureManifestSha256": "d5383c1b5a7f423474b8b2de21be2126eff3ebd58caedb32d478d7ef8619f01c",
+  "sourceOutcomes": {
+    "main269": {
+      "sha256": "5f2d456d93afd1f2a5798f1d64a029752c46a8617952c4e20881f7667d17cb21",
+      "bytes": 10868,
+      "sourceName": "r0e-paired-32d8da-quiet2-main269-outcomes.json"
+    },
+    "pr200": {
+      "sha256": "8b0ebb7bc58b2f83036dcd25be88aa3d6f086642dc4b47f5e7fa5f949958bd1e",
+      "bytes": 10864,
+      "sourceName": "r0e-paired-32d8da-quiet2-pr200-outcomes.json"
+    },
+    "pr201": {
+      "sha256": "6730216a187b332db47f2c6dfc0311456d1f307a7ba71fb3ad39791daf81d842",
+      "bytes": 10848,
+      "sourceName": "r0e-paired-32d8da-quiet2-pr201-outcomes.json"
+    }
+  },
+  "selectedMetricsSha256": "0d94ede59d33deed0b0e9c2e3e09870c2cb9afc3b151f2e138f60f05d7378673",
+  "selectedMetricsBytes": 44719,
+  "selectedMetricsRows": 120,
+  "records": [
+    {
+      "side": "main269",
+      "sample": 1,
+      "runId": "20261103T044042Z-92680-91765e6c82b647399fe457a808519952",
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/main269-01.json",
+      "nativeResultSha256": "e4433f0275d5574eca5a36a6b0b2910ea53fe8973a23dea859923975ad6b1c0e",
+      "sourceMetricBytes": 2477204,
+      "sourceMetricRows": 6704,
+      "sourceMetricSha256": "a471e34cb61f4294b86618232710edb4aaf651247531c2adae4bb7601a2d3f58",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "bc2e50e51d7625a4869bf5b8bc42f65e1b5cc387ab5054e2aef406ce2c7c7564"
+        },
+        {
+          "line": 4627,
+          "sha256": "795cde5a3b2f1bf12dc1c47da4a7e2fb10c34d82ee5843e3e996137fa4b0b8d8"
+        },
+        {
+          "line": 4628,
+          "sha256": "6980ef51791f0569b9cbeea22ef1c67ff116cc49b5823e9af83b7f3edc865d3f"
+        },
+        {
+          "line": 4629,
+          "sha256": "8eb48a5b25ee68ce7f21610abe9c86485c83c8bdb761738aa3b91d607ffedad6"
+        },
+        {
+          "line": 4630,
+          "sha256": "a11f1ff83a650fd44ba7461dfe5af9dd56ae62e6520284e25dab80dc7cd3bc7b"
+        },
+        {
+          "line": 4631,
+          "sha256": "37a08de86a793faa372b51f19cd00220b8ac0128d403721ebdcf38edd136e264"
+        },
+        {
+          "line": 4632,
+          "sha256": "3442f367d24820492323b64a95ca86464beb0ddfc2836c39d7b68221b70f4220"
+        },
+        {
+          "line": 4633,
+          "sha256": "059abcd06537e236efeed589a914a7b991b2e451abe4dcff0524755ca1b3e81b"
+        }
+      ],
+      "runnerSummarySha256": "5471a11708715a7cfba23af9914b030ccb1f3bbb2bea893d52993d9e165cf8d5",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 782177,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1
+      }
+    },
+    {
+      "side": "main269",
+      "sample": 2,
+      "runId": "20261103T044149Z-55844-b99ccc8151b54361bad492bb63cc7fda",
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/main269-02.json",
+      "nativeResultSha256": "ac95fae151ec5e7b35659beea5db741637fafb6a6f2cf4a0bb806155d130711e",
+      "sourceMetricBytes": 2476743,
+      "sourceMetricRows": 6706,
+      "sourceMetricSha256": "c59cbd94efa051e3afb04e09798e95749f489d8b490c0ae19addb2526ffa5105",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "ba1e1245f48a03999d9a64d4e78f823728ee15453f1a9f2cbc68c70afb827525"
+        },
+        {
+          "line": 4627,
+          "sha256": "cd9cb150df8452bbdfd1219fa29fbf2b69e15aa4f69200a6068b6f74da6925b4"
+        },
+        {
+          "line": 4628,
+          "sha256": "cb105eaaabf36e4ab22e4e45aecf32376a9ca102fca55749ee1472cdd451de58"
+        },
+        {
+          "line": 4629,
+          "sha256": "f5a8a17a916f3e5576425a1459a55ee7bf8ac6b0618a63e5aba74e16227f118c"
+        },
+        {
+          "line": 4630,
+          "sha256": "193ef430c342d1b8240c9efbee1f7022ee971f100eed5518982c9a709271005f"
+        },
+        {
+          "line": 4631,
+          "sha256": "a45d9a327a6f2d6890a42076499d44c1b17ee93f532a16132a55b6ab6358a304"
+        },
+        {
+          "line": 4632,
+          "sha256": "1d4ac47210cd45ebbe4e8dbd55a280464a821f567f7c1fe9494a76e12bd6757b"
+        },
+        {
+          "line": 4633,
+          "sha256": "3a8e39a9398a216a4198f3656409eb147027592a3a111a6f8d26bea5c59226d4"
+        }
+      ],
+      "runnerSummarySha256": "ca408e3adea3d0664e71c9efee6f96771ed01d72139f3afb1b16aecd2413ec23",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 789471,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1
+      }
+    },
+    {
+      "side": "main269",
+      "sample": 3,
+      "runId": "20261103T044253Z-76540-53247ad63760469597f837b61af7ebf0",
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/main269-03.json",
+      "nativeResultSha256": "05a3872d053b38da60f01d7059ab8811e6433c3e150f77a6b43fa98eb9df9513",
+      "sourceMetricBytes": 2497310,
+      "sourceMetricRows": 6722,
+      "sourceMetricSha256": "fd79c5b62d39016146e7630904f4083e99321dd864415fb7bda364c3fe61b5cc",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "dda1b2ff35f23b393e051a45cb38c1c0dbd3a6d5287f07ebc1d65642000a771d"
+        },
+        {
+          "line": 4627,
+          "sha256": "33754f8299331a076a45977e50249e1c65b7d3f1fb33832b2b6728393356ec06"
+        },
+        {
+          "line": 4628,
+          "sha256": "a4019242c14dbb4ae7bcdda165860774bb20bedce33ca0878442dd2be9dd82e5"
+        },
+        {
+          "line": 4629,
+          "sha256": "4346eca6256c13b02412ba1bdcc8c3ad1205b0c1a931e6cdd8aa8c694142803c"
+        },
+        {
+          "line": 4630,
+          "sha256": "ea332f5348d004450e88f0f5b8c2cc3eb1745b7343a5d0ab90c06c240a4e02a5"
+        },
+        {
+          "line": 4631,
+          "sha256": "c93683cbc1ccf7eb52420d16ae6224f141c1206dc0ecc80ef025c2fe4d501ba1"
+        },
+        {
+          "line": 4632,
+          "sha256": "f0c8028e50ce6bf039f8860c7bae4a6da56d3f801b0561b1bf3c92e14a80cc36"
+        },
+        {
+          "line": 4633,
+          "sha256": "e64158b887e8d8d898da8b36abfddf3e0513299b33f7ca24ce326ffa4e325225"
+        }
+      ],
+      "runnerSummarySha256": "6c3d1b0da02fd6569b829a093daf753f7153503c4f1ad6860e8c80551af58849",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 784646,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1
+      }
+    },
+    {
+      "side": "main269",
+      "sample": 4,
+      "runId": "20261103T044358Z-47812-798fb5c76eca47f99ea21060659d9b90",
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/main269-04.json",
+      "nativeResultSha256": "15a1f59c734a6bea679f3340e60fb237bdd6d978ed54cad7ccf9a4756e1edf03",
+      "sourceMetricBytes": 2490781,
+      "sourceMetricRows": 6710,
+      "sourceMetricSha256": "8020b86a6e985ec3ece78c73d7b45d99eaffafd408084bdea1277c9ebff487d1",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "220f8a07250fd55eaae4bef5c4dd61b44af6fa560d8a2232a0dec9e9cfd104db"
+        },
+        {
+          "line": 4627,
+          "sha256": "fbecd5389a9ed864b1e4be596fe8124f9533ed509475d0bdef104f7de4e83e4c"
+        },
+        {
+          "line": 4628,
+          "sha256": "10f27aa31fa3f4627b524b8377a3e8f412c6486282ca339c12969aa84d11c244"
+        },
+        {
+          "line": 4629,
+          "sha256": "f754532f43810dd781d74eedd7c6e1b3005aae9b6ff6f6fa157e9893190ac794"
+        },
+        {
+          "line": 4630,
+          "sha256": "b45f87185fdd988656a72e4521bdc2f1d9c02c588e35525dbd388a1e1c8b9743"
+        },
+        {
+          "line": 4631,
+          "sha256": "ba3d794fdc1ecbea55bf0717748bbe6c01f533c778dceebe92418d6be34ca67f"
+        },
+        {
+          "line": 4632,
+          "sha256": "f2da771b5f998cc9114adab7db016579be8116122711502b519830e9c053ab67"
+        },
+        {
+          "line": 4633,
+          "sha256": "79ef92d49c0f77b7cbe6525dfdfa74c883d8ed2d66982777a3f059b6477249d0"
+        }
+      ],
+      "runnerSummarySha256": "f409ee23f37135f5e1eb6fbba435aa852f154c490ac529a2928fa3902fb0e040",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 817124,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1
+      }
+    },
+    {
+      "side": "main269",
+      "sample": 5,
+      "runId": "20261103T044504Z-63436-397ac490e7b440d590cec924833d4043",
+      "head": "269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1",
+      "receipt": "09e1e1c6003886d1aac84f1467018321a7a592839673ac95e358f923103b324d",
+      "snapshot": "d0ae2b608a58abe806af22d373839d3b10c59918a40394d16c78e03047dfe383",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/main269-05.json",
+      "nativeResultSha256": "7b9c2a00959884517d91f8bfd6eb21fc151b476984a81b706bc10315370f6572",
+      "sourceMetricBytes": 2485987,
+      "sourceMetricRows": 6712,
+      "sourceMetricSha256": "42ff12836182e8c801c218b0b966f39b19692ef43ec9235f9d6b7d51e1a28509",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "6c76b43f9e1ff25668eb69ce834d4bbe725db1be112a6f36bf0c1fa56367129e"
+        },
+        {
+          "line": 4627,
+          "sha256": "69b3b7551e2a92a406b102e8064dd08fda5fa06fa929dcfeff7f9736720bf44d"
+        },
+        {
+          "line": 4628,
+          "sha256": "cef9debcf38468f069f97ec64692be7d4911e9c61c5ba952d9188ba57dec7b5f"
+        },
+        {
+          "line": 4629,
+          "sha256": "606ac2cc36186e79214f3d0158796d45fe5d77500ce52ed5c493a0e1fea38c69"
+        },
+        {
+          "line": 4630,
+          "sha256": "763f32ef0ead65d769f428e2ddfb41f7ec2875b96933afb92dc8d67dcb1587b5"
+        },
+        {
+          "line": 4631,
+          "sha256": "aea0d01eb022bfa802b2afd2be0c683df288b5b0b807ba721958f8e95386c6ff"
+        },
+        {
+          "line": 4632,
+          "sha256": "5534c8af98eed9b419eaf36fde259ea52e0ab1190a714b20f7d9c5d1d45f4728"
+        },
+        {
+          "line": 4633,
+          "sha256": "ddf5978ba49ac61a5496def73cabfa1111b400dc04283c66b987a7ace90b60d3"
+        }
+      ],
+      "runnerSummarySha256": "5c7385faac0eedc18e17b87e8b45ccfeda74cd90bb76d0bf8217aedfe7d917eb",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 815215,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1
+      }
+    },
+    {
+      "side": "pr200",
+      "sample": 1,
+      "runId": "20261103T044623Z-110288-6034de3ce498434783a5928244b876c9",
+      "head": "32d20c9b10fea69a357978d982c2210a5026404d",
+      "receipt": "d82e2f683b880232ca0ecd2ea3e3ae0a9f30b90cbbd24c4d745b928e040f97a8",
+      "snapshot": "081f3e0c7350079954def57d515458ee0311d820b9537a5fb31e4bcdd6285430",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr200-01.json",
+      "nativeResultSha256": "eee84b5adf20c5ccc852af2af69966868c685a468a584073bbf316b980b72e5d",
+      "sourceMetricBytes": 2503418,
+      "sourceMetricRows": 6706,
+      "sourceMetricSha256": "5934b08cb29d8de00368d8b8fd6e197d77d3d1cccc38987e3436d68e49c4e415",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "c1c933364ce9ade1dfa0ce5417883ecadf475df171620893f82df27225aa78c1"
+        },
+        {
+          "line": 4627,
+          "sha256": "f117a96f88e7eecebc51c0afc5c59372a7af69279a374cac059515915d222fa4"
+        },
+        {
+          "line": 4628,
+          "sha256": "0910ac12512a36aac63e0a1df8b60b0b09a0e6f58a92e89c71d91a3f0292d0ef"
+        },
+        {
+          "line": 4629,
+          "sha256": "0c3cdbf9e0dccbd22e4234da1fb73bc91c4d5509c62b6e79f9ca0eca082d5f8b"
+        },
+        {
+          "line": 4630,
+          "sha256": "f39982a2494c5949646f830b315c33931089a6c2db34895f1838034568693837"
+        },
+        {
+          "line": 4631,
+          "sha256": "37f13f41158f04d2054ced7247725b0a941a63bf8033873d3008ea72e399681f"
+        },
+        {
+          "line": 4632,
+          "sha256": "d1b956ebcc896031da751104de399bde22028ccc914ca0685764d7554658482c"
+        },
+        {
+          "line": 4633,
+          "sha256": "f93cd1d2b0ba1f8ca3fa40887d68a72a7d53eedb1b1222144fab48fbb5f028d6"
+        }
+      ],
+      "runnerSummarySha256": "ded2fdd55722474ace7f787f674186018524201a03ccfb4db1dd973d94c54138",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 783171,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr200",
+      "sample": 2,
+      "runId": "20261103T044728Z-111704-da2e21a8fd5f46fb8f905b5cb1ce7c0b",
+      "head": "32d20c9b10fea69a357978d982c2210a5026404d",
+      "receipt": "d82e2f683b880232ca0ecd2ea3e3ae0a9f30b90cbbd24c4d745b928e040f97a8",
+      "snapshot": "081f3e0c7350079954def57d515458ee0311d820b9537a5fb31e4bcdd6285430",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr200-02.json",
+      "nativeResultSha256": "9fd0d034d57907fd5e0125b472c33fd1c920da4f7aef55b68dde9ab905ab9449",
+      "sourceMetricBytes": 2500222,
+      "sourceMetricRows": 6714,
+      "sourceMetricSha256": "ae1e8a0322b67e75051e221746a7e8494a301818474c72662d55753061b05a45",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "4806f3f44241f42cdca31aa02f1aa9dc291dd2afcb926053a6bb12c12e969d9c"
+        },
+        {
+          "line": 4627,
+          "sha256": "b9aefbb77555b2c49e154fa4aa0d93fc5c89fa513f2c7329bce979aa9e55cf96"
+        },
+        {
+          "line": 4628,
+          "sha256": "957b2b410cadb897427687c292c90d4e83e49c0da4273b46ac13a5aa92ccbc77"
+        },
+        {
+          "line": 4629,
+          "sha256": "cf35448c2945b80aa82e319aa8890c16ca96f3f58409bfafa1cae9f72a6312e3"
+        },
+        {
+          "line": 4630,
+          "sha256": "521b4d48d60c4d0004b28b4e37c209548bbc3679598bd22be30ff4161f4d4156"
+        },
+        {
+          "line": 4631,
+          "sha256": "3375a7402502528298a6f46879d2065167514792ffe0f68c323961975ea4145d"
+        },
+        {
+          "line": 4632,
+          "sha256": "56d5b0855eac7c0b2c266f2199b0d5c6631c344d530eb77a3e9e8dec7b320634"
+        },
+        {
+          "line": 4633,
+          "sha256": "99028d21bd124cdc08347659fc650b5690a6d6de139e3af1ca746fae1c0e703a"
+        }
+      ],
+      "runnerSummarySha256": "70ef66ea2318356bd28f9e1b86ed7063ec8361d4dfb0751b9e0509fc093fd52d",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 822324,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr200",
+      "sample": 3,
+      "runId": "20261103T044833Z-117008-99d36213bd9f4fe09e089938c4f19346",
+      "head": "32d20c9b10fea69a357978d982c2210a5026404d",
+      "receipt": "d82e2f683b880232ca0ecd2ea3e3ae0a9f30b90cbbd24c4d745b928e040f97a8",
+      "snapshot": "081f3e0c7350079954def57d515458ee0311d820b9537a5fb31e4bcdd6285430",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr200-03.json",
+      "nativeResultSha256": "8c3c5790170b06b053f3ec06d2e36c1fac60af5d6045865f76fe5b440e301bb1",
+      "sourceMetricBytes": 2501484,
+      "sourceMetricRows": 6716,
+      "sourceMetricSha256": "6035fca5f557ad0844f58d921a36099231d53212d102a4063e8849ea405c57f5",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "a25e633715d8d0ff2e7c664f49e35d8f9aa94da99f98aee4aa4570641f9a3a3c"
+        },
+        {
+          "line": 4627,
+          "sha256": "745135e5a5ec5a76fe00a43dba33b6cc8c064a2431192c3fdaacef517b9487e8"
+        },
+        {
+          "line": 4628,
+          "sha256": "b8ea735c71b75853d2aaf7549bdb7cb31d2032431216848323285fada57f64f6"
+        },
+        {
+          "line": 4629,
+          "sha256": "569d9098330ae68bdc04dc6a18c0411afcbc42bcc8fbfeecac7b9f58bd731af4"
+        },
+        {
+          "line": 4630,
+          "sha256": "e3a114dde610f040f779694e71a6b7cc798e87b6dc22eee0ac02215377bb23be"
+        },
+        {
+          "line": 4631,
+          "sha256": "cb04845e38854787e6520dadbd29929d39d8956fbfd0be612c72a3c2d053dedf"
+        },
+        {
+          "line": 4632,
+          "sha256": "b3d04767d6622aaa3d2c1985c901f681ce6930d8da4462800a169e4f347f8d9e"
+        },
+        {
+          "line": 4633,
+          "sha256": "e80a6108541b23cc49b918a5a0bd60450e601aa6f81149c4ed58d78acbedb114"
+        }
+      ],
+      "runnerSummarySha256": "f650d0eee9e66904acbf398d39fe9ea819dec1a3b686b3350b8889660f8e9696",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 800700,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr200",
+      "sample": 4,
+      "runId": "20261103T044938Z-80344-bd5d4426cbc84112bbd542d4ba76659f",
+      "head": "32d20c9b10fea69a357978d982c2210a5026404d",
+      "receipt": "d82e2f683b880232ca0ecd2ea3e3ae0a9f30b90cbbd24c4d745b928e040f97a8",
+      "snapshot": "081f3e0c7350079954def57d515458ee0311d820b9537a5fb31e4bcdd6285430",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr200-04.json",
+      "nativeResultSha256": "63d108f565b4c0f0d2383478ca2aebe98a9c580043a975814e79b3712037c363",
+      "sourceMetricBytes": 2511292,
+      "sourceMetricRows": 6724,
+      "sourceMetricSha256": "061dbe12f78136f0bcb3245cb4e6068823d1d0d764cd23806c9b72316ac01cb8",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "6cd398cb981d15c67abea08718a29d886655725a6bab476724101b9721da7a81"
+        },
+        {
+          "line": 4627,
+          "sha256": "354c42649547ebd79304c421fc8e39a6e2122c61c6c85c50324292a045af636c"
+        },
+        {
+          "line": 4628,
+          "sha256": "45e85b8d98e4f5647800d22d16578bf79d845bbfacb1233be33353120c10c792"
+        },
+        {
+          "line": 4629,
+          "sha256": "17ff1b4bff1d12a02d6619ca097efaa8793b2b6c36d03126485ebfc09a7dc50b"
+        },
+        {
+          "line": 4630,
+          "sha256": "edd71a0dfddb6fe3f90d7873fda76de5e5e080190700d78b998605569de57378"
+        },
+        {
+          "line": 4631,
+          "sha256": "be162016efa8e520f45ab0885914a0a0bfe1a79909ad0fcd8322e57bd30fef1f"
+        },
+        {
+          "line": 4632,
+          "sha256": "c314995637fdff1852de25b6cdeea30f78d0bbf61848280cbfcd43c7d3a87059"
+        },
+        {
+          "line": 4633,
+          "sha256": "caa212d1b46e1ce509e99c21e52f7aa5bd3283d5ef87fdb1d1bb46007cb7221f"
+        }
+      ],
+      "runnerSummarySha256": "dc3448e6636f8caaf9f0cd31781d9f292d0d13fbdd69a9f81b0e33ef9555dd20",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 792566,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr200",
+      "sample": 5,
+      "runId": "20261103T045043Z-107404-25206e92bef2470097decff56b2bd9cf",
+      "head": "32d20c9b10fea69a357978d982c2210a5026404d",
+      "receipt": "d82e2f683b880232ca0ecd2ea3e3ae0a9f30b90cbbd24c4d745b928e040f97a8",
+      "snapshot": "081f3e0c7350079954def57d515458ee0311d820b9537a5fb31e4bcdd6285430",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr200-05.json",
+      "nativeResultSha256": "21ed45ae792c34992fcb1935aa7c29e00516e71ef684e874a0d0656d343062ae",
+      "sourceMetricBytes": 2502090,
+      "sourceMetricRows": 6718,
+      "sourceMetricSha256": "c0b7129fc2661d6fd3698dc817b03bbfda6a586d7de4e571936803f9ce7fe42b",
+      "selectedMetricRows": [
+        {
+          "line": 4626,
+          "sha256": "ef8016407b4099b4a059e7e8ba35fb774860b31461ce9dcfbf4456716173efee"
+        },
+        {
+          "line": 4627,
+          "sha256": "d6cb3d423bea4ad1bec7f1c959aaca11667e2a1867e9ef9583dc56e9274f6205"
+        },
+        {
+          "line": 4628,
+          "sha256": "9509fca09536b60a2a953248469efad56654b878aa99bea2eb25d76bf0c57542"
+        },
+        {
+          "line": 4629,
+          "sha256": "faf75fa6602991c27fadbe1830c60bde6d86fa0382e61b68e20b8413b8b125cf"
+        },
+        {
+          "line": 4630,
+          "sha256": "cd992fae17565c1ac8e285f59812488bd18745f44ececdfae6c7741c904657f9"
+        },
+        {
+          "line": 4631,
+          "sha256": "4dabe94764366de3de273bc029d241ecab309aa6925f2cb8440b56d44cce11ce"
+        },
+        {
+          "line": 4632,
+          "sha256": "8fabfe467c8ec37aab0584317650f125422f2df2f69d90fbf3e4c3c7a21b11c5"
+        },
+        {
+          "line": 4633,
+          "sha256": "fb248468888442e1de46e0ccf390015f7158354218a47b028fc7315dfda32268"
+        }
+      ],
+      "runnerSummarySha256": "1edbff4f348da30c4747d2c0f9d3ea36613a64fe5c4e1ad904ce2aa749a211ea",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "RouteContainmentUs": 786683,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "AdmissionDecisionCount": 4096,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr201",
+      "sample": 1,
+      "runId": "20261103T045202Z-82568-a041a52c85904ece9610ab1981bfe346",
+      "head": "8dadef4f26f796378aea7040f53c14b095cff448",
+      "receipt": "13b12e7e8c33906b263923ea0354befbef819219df1014af693d9059cae3d883",
+      "snapshot": "d34d51b306afa0d20ed30855c54adf79421cc4f309221f23def53ac23ce995da",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr201-01.json",
+      "nativeResultSha256": "e6a72cd0b122df3d16e429ede0042df65eba303f673b06ef3d8fcfe20af251c4",
+      "sourceMetricBytes": 2477585,
+      "sourceMetricRows": 6709,
+      "sourceMetricSha256": "a1f327c6be1e5a132f2cce3c1aaebdf051cfd6635e75549c50ddd88aadbb074a",
+      "selectedMetricRows": [
+        {
+          "line": 4628,
+          "sha256": "559ee5fe86c2f2949e7db2f8e0deef626367d91b2a03257b3b5f303ec010f42e"
+        },
+        {
+          "line": 4629,
+          "sha256": "aff0a5624eee5fe475c09f10e46d4059ece79190895374d1b976e41e448e45fa"
+        },
+        {
+          "line": 4630,
+          "sha256": "45fdd0357f2a8f6d20d2e7f0b4a3b52039c2969c6be0fb1af964ec4be65424ff"
+        },
+        {
+          "line": 4631,
+          "sha256": "fb98c20efbbd8bbd9478ce513c46d581bb5fe5c2d7a9a08cf7279ce6ca2cc470"
+        },
+        {
+          "line": 4632,
+          "sha256": "97fb5ece7084c142d4369a8870011bcbc28e6d4f186b839f168e2c1ccdd05ff0"
+        },
+        {
+          "line": 4633,
+          "sha256": "3dbfec8a6ebfa60fc780bc25637eeb7a7192371a8667fbe6ce9d5c058ca224eb"
+        },
+        {
+          "line": 4634,
+          "sha256": "014a8843184c0645df4f90902b27522d58fab1573d80d680facd775649e4b07a"
+        },
+        {
+          "line": 4635,
+          "sha256": "62d088cc25f063971fc1d2dc7b9455cdd771b12069a69fee41294a0ccf84422e"
+        }
+      ],
+      "runnerSummarySha256": "f3dccaa1bb8f2a7e3ff5238c4370ce32f4f5dbbbc26e9f7b50fdcbd338e16607",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "RouteContainmentUs": 795964,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr201",
+      "sample": 2,
+      "runId": "20261103T045308Z-91300-80c7a9bbf8e04ff580ddf003dbf53aa0",
+      "head": "8dadef4f26f796378aea7040f53c14b095cff448",
+      "receipt": "13b12e7e8c33906b263923ea0354befbef819219df1014af693d9059cae3d883",
+      "snapshot": "d34d51b306afa0d20ed30855c54adf79421cc4f309221f23def53ac23ce995da",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr201-02.json",
+      "nativeResultSha256": "e66716ee2a19dd4ffac9900948d32af553a26b3b2ca066ea0e6ee51af460830a",
+      "sourceMetricBytes": 2464183,
+      "sourceMetricRows": 6691,
+      "sourceMetricSha256": "364e1c2dfc2b2301efda9f3d7d05961be086e13fb2a0a87e3611df3cfdbcc79e",
+      "selectedMetricRows": [
+        {
+          "line": 4628,
+          "sha256": "23712b4093d23e19f69673e90db57f90131e057031b814295a62166393d65dcb"
+        },
+        {
+          "line": 4629,
+          "sha256": "80664a9a4e6e7861ecadc1f20bc54571487f93976bf5c3e38630ed78d3e7e5bd"
+        },
+        {
+          "line": 4630,
+          "sha256": "7b9614fec9e797bb947059abaa17f44e9ad66f6303191a4eee9e30a51212adfa"
+        },
+        {
+          "line": 4631,
+          "sha256": "dfb17683a67297ebce4584838461723ffde162f76c716d018ff808579fbadeb0"
+        },
+        {
+          "line": 4632,
+          "sha256": "37d5377310c53f0662c36a0d5e68a77d2ba4deda3fbf5e231d71ab15a62bedc4"
+        },
+        {
+          "line": 4633,
+          "sha256": "d819ccf272b001b0024c7bd075557516e69faed7478c7673f8553d2e62cf4588"
+        },
+        {
+          "line": 4634,
+          "sha256": "1f5ec873dd8ef02b57837d05781fc8113242df14387ed7ade9b52e5ea5283372"
+        },
+        {
+          "line": 4635,
+          "sha256": "03a4d8c1e869727313f47d3dd3bee6b80837487b9a93d529b45064e63a82bc2f"
+        }
+      ],
+      "runnerSummarySha256": "546fe6e24033da01251ea3dc793bf8b4dd0d04745a2d335d2fc61b5e64f2faf5",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "RouteContainmentUs": 800662,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr201",
+      "sample": 3,
+      "runId": "20261103T045414Z-55436-88cac7aae2eb4ddd960800cb3a12dd7b",
+      "head": "8dadef4f26f796378aea7040f53c14b095cff448",
+      "receipt": "13b12e7e8c33906b263923ea0354befbef819219df1014af693d9059cae3d883",
+      "snapshot": "d34d51b306afa0d20ed30855c54adf79421cc4f309221f23def53ac23ce995da",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr201-03.json",
+      "nativeResultSha256": "8a13de75897136161b3dd3852d24a131aa9a29d23b0c73bb28e364563d24daf9",
+      "sourceMetricBytes": 2463996,
+      "sourceMetricRows": 6707,
+      "sourceMetricSha256": "032f4954cbeea663c8cc30a16d0cafc4e5a763fbade5e90ab78a9e57b6851bef",
+      "selectedMetricRows": [
+        {
+          "line": 4628,
+          "sha256": "c8c5aa29a075b2008407b496abb3f28919857b9d702b509cfe2c0fd5bae8c019"
+        },
+        {
+          "line": 4629,
+          "sha256": "b9c4618a68c1fd14000a5f55c9c129a435b757e34200339389b631feb594c038"
+        },
+        {
+          "line": 4630,
+          "sha256": "321d2148f2aee54eb62faae67f4bed1ac261602c44017f6d3b5f38c83fd326d0"
+        },
+        {
+          "line": 4631,
+          "sha256": "4f4ae33b03acf39b375572ab4b57116544b3b5d398f857ad0872ee62d611b46f"
+        },
+        {
+          "line": 4632,
+          "sha256": "1fe50fc24c7925babb8e29a006211318bddd4d7e693b2297ad7ffaaf50b68d13"
+        },
+        {
+          "line": 4633,
+          "sha256": "da3b5fa5d2d8c1aac40d65c0d8c5f9e2cd2b891eaeed4b33e7f51b36b2c650a4"
+        },
+        {
+          "line": 4634,
+          "sha256": "1fabd28bb820dac1db8cd998243f38a212c77ac6237940d73ba1a1d4364d3127"
+        },
+        {
+          "line": 4635,
+          "sha256": "d08a67bf95fa47a6962cc2daa1bf97aa08a7adfd45cccdb365a506c42f47e7b0"
+        }
+      ],
+      "runnerSummarySha256": "61c057e52202d20b2fc1134ce6250ef1c0cb86773085ff03dc044f0e229bd1c0",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "RouteContainmentUs": 799108,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr201",
+      "sample": 4,
+      "runId": "20261103T045521Z-54660-293465235f1c4bea98965e88bf38897e",
+      "head": "8dadef4f26f796378aea7040f53c14b095cff448",
+      "receipt": "13b12e7e8c33906b263923ea0354befbef819219df1014af693d9059cae3d883",
+      "snapshot": "d34d51b306afa0d20ed30855c54adf79421cc4f309221f23def53ac23ce995da",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr201-04.json",
+      "nativeResultSha256": "52a504c8c562b5f6e006608d7afc975bfafb7c134fb38969eeee75a245214865",
+      "sourceMetricBytes": 2469317,
+      "sourceMetricRows": 6706,
+      "sourceMetricSha256": "058017b216d5e5fb843ebcdd4be54e3654518ad586430981f7f8a7f50ca11919",
+      "selectedMetricRows": [
+        {
+          "line": 4628,
+          "sha256": "1f47ea5577170e647d263b779df51eb213ba2744b6b67673f59d0535dacce194"
+        },
+        {
+          "line": 4629,
+          "sha256": "206dfa4a10f280d79ce16a218f1d84298ae9d338e6b69c9acbb9b13839ac2d2e"
+        },
+        {
+          "line": 4630,
+          "sha256": "49cbc3e4e538957e184d44c394e82560ae13c39b7e4e3c49c7fd1e68dc2aa292"
+        },
+        {
+          "line": 4631,
+          "sha256": "db7eb8df230b4b5a11dca4c80eefd7232dae8a12478a0da3da2a7cf006c37f05"
+        },
+        {
+          "line": 4632,
+          "sha256": "81e605f67decd6266e1d101a1d90da9be2164603518ba7fbf051baf368006857"
+        },
+        {
+          "line": 4633,
+          "sha256": "7bbd52abfa1e0c62cf59b89277b1d66c47f793ed26e9d5acaaf8196724783548"
+        },
+        {
+          "line": 4634,
+          "sha256": "6b810828da893023955dcbf540c1e300c41700c6603bc4086be51e1cc138ea64"
+        },
+        {
+          "line": 4635,
+          "sha256": "184775530410d961aa0ff39bd15843504bddb09ae1e48d29cd5999c2c3c2bef9"
+        }
+      ],
+      "runnerSummarySha256": "6d686c4e981965f10309832aca44f297e48b0e6f27d4198d11ef80652c72c8c1",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "RouteContainmentUs": 796511,
+        "ProviderCallCount": 0
+      }
+    },
+    {
+      "side": "pr201",
+      "sample": 5,
+      "runId": "20261103T045627Z-86000-0874a9bd6ab94ecf852b1006b44b610f",
+      "head": "8dadef4f26f796378aea7040f53c14b095cff448",
+      "receipt": "13b12e7e8c33906b263923ea0354befbef819219df1014af693d9059cae3d883",
+      "snapshot": "d34d51b306afa0d20ed30855c54adf79421cc4f309221f23def53ac23ce995da",
+      "caseBodySha256": "ab2de533491c1816f373655e164c89a38ed38d3ec3d6de6b8f90502bbb3f9517",
+      "nativeResult": "native/pr201-05.json",
+      "nativeResultSha256": "46a505269e80f3846eb3194b79275182c47c8e119003e50ca343cf0b1a19071a",
+      "sourceMetricBytes": 2464764,
+      "sourceMetricRows": 6709,
+      "sourceMetricSha256": "2849ae9c38e78a5d2baef76f033a4876d85669ddc2e4003bb48d4a4948e2b2e9",
+      "selectedMetricRows": [
+        {
+          "line": 4628,
+          "sha256": "13134f8a9c12af52de518c782d1e797976a5e4c87a1422f172f7f1398059f569"
+        },
+        {
+          "line": 4629,
+          "sha256": "844a48443fd135a020b3750f1bd0b5381c74f8fae10c1e4e26b112fe6c7fd74a"
+        },
+        {
+          "line": 4630,
+          "sha256": "46a8e32366d308740cee4fd29be40422f282fefdaafdb9e94a36ed677cc4ef1b"
+        },
+        {
+          "line": 4631,
+          "sha256": "bfa4c0e0b66cd73eb0c307a234b7fb07b5c24e587afc18e57d10275b5815693b"
+        },
+        {
+          "line": 4632,
+          "sha256": "d3c626865d06a0edd971864dd6af91cce515f281578950d95b92823dbfdbb87a"
+        },
+        {
+          "line": 4633,
+          "sha256": "c9255dace42c054e48cd97651bfd4e4042e2c01dc11952a25a63df6a137e5c5a"
+        },
+        {
+          "line": 4634,
+          "sha256": "e5d04faed38207a566f285b4f45598f207c84ddaf3ce0ef3f5805a7ad244931a"
+        },
+        {
+          "line": 4635,
+          "sha256": "ad4985979f0c2ce461b872d0a6711c56a2164f48186f55c7eecd42f6bbdb5abc"
+        }
+      ],
+      "runnerSummarySha256": "f87682ed090503067d20d84715317a35d37195e6ca6ab8983d4a2274a40576eb",
+      "runnerExit": 2,
+      "quarantine": {
+        "is_valid": true,
+        "has_blocking_entries": false,
+        "active_count": 0,
+        "invalid_count": 0,
+        "active_entries": [],
+        "invalid_entries": [],
+        "errors": [],
+        "repair_attempt_count": 0,
+        "repair_reproduced_count": 0,
+        "repair_attempts": []
+      },
+      "metrics": {
+        "AdmissionDecisionCount": 4096,
+        "CapabilityParseCount": 4096,
+        "RejectedUncontainedCount": 1,
+        "RouteContainmentUs": 819371,
+        "ProviderCallCount": 0
+      }
+    }
+  ],
+  "timingContext": {
+    "quietWindowStartUtc": "2026-11-03T04:33:00Z",
+    "quietWindowEndUtc": "2026-11-03T05:00:00Z",
+    "quietWindowExtended": true,
+    "peerDeclaredPriorNativeDrainUtc": "2026-11-03T04:29:39Z",
+    "fullNativeReceiptAssessmentDrainObservedUtc": "2026-11-03T04:58:08Z",
+    "firstNativeRunIdTimestampUtc": "2026-11-03T04:40:42Z",
+    "basis": "Recorded host coordination and completed run identity; quiet interval is the negotiated host/no-heavy-work window."
+  },
+  "invocation": {
+    "entrypoint": "Tools/Run-AllTests.ps1",
+    "suite": "FileOps",
+    "caseFilter": "FileOps_ProviderCapabilityMatrix",
+    "validationMode": "Fresh",
+    "configuration": "Release",
+    "platform": "x64",
+    "buildNumber": 1,
+    "compilerDebugInformation": "Embedded",
+    "testsEnabled": true,
+    "skipBuild": true,
+    "processesPerSide": 5
+  }
+}

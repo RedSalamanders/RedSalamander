@@ -1,0 +1,25 @@
+{
+  "baseline": "main269",
+  "candidate": "pr201",
+  "baselineSamplesUs": [
+    782177,
+    784646,
+    789471,
+    815215,
+    817124
+  ],
+  "candidateSamplesUs": [
+    795964,
+    796511,
+    799108,
+    800662,
+    819371
+  ],
+  "baselineP95Us": 817124,
+  "candidateP95Us": 819371,
+  "thresholdUs": 1225686.0,
+  "passed": true,
+  "baselineOutcomeSha256": "5f2d456d93afd1f2a5798f1d64a029752c46a8617952c4e20881f7667d17cb21",
+  "candidateOutcomeSha256": "6730216a187b332db47f2c6dfc0311456d1f307a7ba71fb3ad39791daf81d842",
+  "scope": "R0e in-process capability/admission containment; not network or general throughput."
+}

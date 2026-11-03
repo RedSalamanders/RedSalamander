@@ -1,0 +1,1 @@
+- Archive the source-bound five-process R0e admission comparison for PR200 and PR201, retaining all native results, metric rows, unchanged thresholds, and the separate pre-native launcher failure provenance.
