@@ -1140,6 +1140,8 @@ Normative rules:
   is not the directory root. This is a lexical boundary, not a grant to open a path or
   an equivalence between distinct provider roots; UNC and slash-only provider semantics
   remain governed by their existing contracts.
+  Every separator in a recognized Win32 root prefix must be admitted by that identity;
+  an unaccepted slash remains component text.
 - The canonical composite child-name helper invokes `ValidateChildName`, `JoinPath`,
   and `GetChildNameCollisionKey` against one retained typed-route generation and
   copies every output before return. Provider Invalid preserves its exact failure;

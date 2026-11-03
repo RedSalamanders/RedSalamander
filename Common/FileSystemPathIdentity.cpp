@@ -481,7 +481,8 @@ namespace
     {
         return 3u;
     }
-    if (pathClass == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute && IsAcceptedSeparator(identity, path[6]))
+    if (pathClass == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute && IsAcceptedSeparator(identity, path[0]) &&
+        IsAcceptedSeparator(identity, path[1]) && IsAcceptedSeparator(identity, path[3]) && IsAcceptedSeparator(identity, path[6]))
     {
         return 7u;
     }
