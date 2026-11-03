@@ -1,5 +1,10 @@
 # SelfTest Specification
 
+The explicit hosted CommandsHandoff and FileOpsVolumes diagnostic scopes each select one fixed
+case and retain filtered NOT_EVALUATED repository coverage. The adapter verifies the selected
+case and every setup/cleanup result, quarantine state and source-bound build receipt before
+accepting filtered runner exit 2; these diagnostics never stand in for Full qualification.
+
 ## Hosted qualification prerequisites
 
 Shared-transfer admission controls preserve a nondefault process-wide limit across private
