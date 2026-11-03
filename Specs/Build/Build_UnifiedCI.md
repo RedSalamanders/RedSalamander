@@ -79,6 +79,8 @@ that all six native product pipelines passed.
 
 ## Project adapter
 
+The adapter resolves a relative `EngineRoot` from the current PowerShell filesystem location before importing the engine; non-filesystem providers are rejected. Absolute engine paths retain their existing meaning.
+
 The adapter uses RSBuildEnableTests=true for Release test builds and Suite CI through the hosted desktop wrapper. Production uses RSBuildEnableTests=false, -OfficialRelease and -ProductionOnly. The exact tested PluginContractTests.exe is downloaded as an immutable packaging input, checked against its regression digest and reused solely for portable smoke; it is not recompiled or shipped. Generated test scratch, logs and evidence stay in the governed marked RedSalamander.Perf sandbox. Downloaded frozen receipts and harness binaries are build inputs under .build/ci; native test generation does not write there. Production packaging retains the RuntimeDependencies.props and clean-extraction contracts. Full artifact-mutating qualification remains an explicit separate obligation.
 
 
