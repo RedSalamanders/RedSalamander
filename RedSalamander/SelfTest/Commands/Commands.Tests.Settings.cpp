@@ -9536,6 +9536,7 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
         };
         traceAttempt(L"direct", admission.directAttempt);
         traceAttempt(L"hotkey", admission.hotkeyAttempt);
+        traceAttempt(L"post-release", admission.postReleaseAttempt);
         state.Require(false,
                       std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}, "
                                   L"stage={}, error={}, heldKey={}, sent={}, requestAccepted={}, guardEvaluated={}, guardPassed={}, requestAttempted={}, "

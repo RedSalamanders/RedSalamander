@@ -11,6 +11,10 @@
         if (! state.Require(blocker.Start(), L"Could not install the no-activation negative control."))
             return false;
         state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true), L"Foreground admission must respect the no-activation guard.");
+        DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics blockedAdmission{};
+        state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, false, &blockedAdmission) &&
+                          ! blockedAdmission.postReleaseAttempt.observed && ! blockedAdmission.foregroundRequestAttempted,
+                      L"Ordinary admission must refuse before either foreground request under the no-activation guard.");
         state.Require(blocker.BlockedActivationCount() == 0u && blocker.BlockedFocusCount() == 0u,
                       L"No-activation admission must refuse before attempting a focus or activation change.");
     }
@@ -112,7 +116,8 @@
         witness.retired                   = false;
         witness.keyDownAtDispatch         = false;
         witness.altDownAtDispatch         = false;
-        const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
+        DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics admission{};
+        const bool activated      = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true, &admission);
         const bool retiredWitness = witness.retired && witness.window == nullptr && GetPropW(warningWindow, HotkeyDispatchWitness::StateProp()) == nullptr &&
                                     RedSalamander::Win32Callback::GetStoredWndProc(warningWindow, HotkeyDispatchWitness::OriginalProcProp()) == nullptr &&
                                     reinterpret_cast<WNDPROC>(GetWindowLongPtrW(warningWindow, GWLP_WNDPROC)) == warningProcedure;
@@ -127,6 +132,7 @@
                           retiredWitness));
         state.Require(witness.keyDownAtDispatch && witness.altDownAtDispatch,
                       L"Both registered chord keys must remain depressed until the foreground handoff completes.");
+        state.Require(! admission.postReleaseAttempt.observed, L"Strict hotkey admission must never use the post-release foreground request.");
         const auto released = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
             return (GetAsyncKeyState(VK_F24) & 0x8000) == 0 && (GetAsyncKeyState(VK_MENU) & 0x8000) == 0;
         }, {.timeout = std::chrono::milliseconds{500}, .operationName = L"owned foreground hotkey release"});
