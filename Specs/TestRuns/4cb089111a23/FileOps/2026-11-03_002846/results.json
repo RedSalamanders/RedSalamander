@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-11-03T00:28:46.434Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261103T002758Z-105172-3fd933d84e2248c5bf44006e245d2958\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 379985,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "A delete by name of a tree of a few thousand entries did not delete it; see trace.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1344,
+            "repeat_index": 1
+        },
+        {
+            "name": "Delete_IdentityLessPinnedTreeScale",
+            "status": "failed",
+            "duration_ms": 378610,
+            "repeat_index": 1,
+            "reason": "A delete by name of a tree of a few thousand entries did not delete it; see trace."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

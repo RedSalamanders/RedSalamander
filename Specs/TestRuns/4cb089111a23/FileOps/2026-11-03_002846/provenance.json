@@ -1,0 +1,32 @@
+{
+  "kind": "derived provenance",
+  "head": "333c1a90c68da966e41451f4204f536eef183d4b",
+  "receipt": "b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170",
+  "sourceSnapshot": "0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820",
+  "sourceRunId": "20261103T002758Z-105172-3fd933d84e2248c5bf44006e245d2958",
+  "originalFiles": [
+    {
+      "sha256": "CC1AA11129D0A578E1B6EE4DD79F1233ED150AB8D14E3061738815493EC3E985",
+      "relativePath": "fileops/results.json"
+    },
+    {
+      "sha256": "4E78FA76C11B042DB76F4C9ED36DAD4E6DDFE8D03013BA2A7781C4820E58C086",
+      "relativePath": "fileops/trace.txt"
+    },
+    {
+      "sha256": "27D37E8FB56CFDBAE2F12906DD19EFBA2414270A7350DB11AB5D539D675B85A7",
+      "relativePath": "results.json"
+    },
+    {
+      "sha256": "23B1065F5536650F407B1F890E92BC47F53ED2EFDAEC70389CB60AAA54572DFE",
+      "relativePath": "trace.txt"
+    },
+    {
+      "sha256": "2DB09BB78F3D7CCD18C9039AF617FB54EDFF7698370BB11C49286D2D796EF24F",
+      "relativePath": "perf/perf_metrics.jsonl"
+    }
+  ],
+  "tickBracketSha256": "47CE39EC6B0FF3C0608A9209636CFC8C2892823666F870B719DC7491B3709D5E",
+  "receiptCopySha256": "7D79C9C363FDBEC050C4EBC8E4D262E095B36E498BFEBFF1D04BFDF8444D638D",
+  "retention": "Full raw run and preservation packet remain external."
+}

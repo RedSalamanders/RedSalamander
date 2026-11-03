@@ -1,0 +1,35 @@
+{
+  "head": "1c31697a03962c81fda514f155fd39e446f880e2",
+  "runId": "20261103T002632Z-61612-321d52251bc14923a7d4cbfa5215c8c9",
+  "receiptId": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+  "sourceSnapshotId": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+  "case": "--s3-directory-transfer-selftests",
+  "processExit": 0,
+  "processElapsedMs": 1085,
+  "nativeCountsAvailable": true,
+  "nativePassed": 163,
+  "nativeFailed": 0,
+  "nativeHr": "00000000",
+  "nativeTimingAvailable": true,
+  "nativeTimingLine": "[INFO] S3 directory-transfer timing: destination baseline/candidate=223854/143660 us; publication baseline/candidate=55885/55670 us; source-revision baseline/candidate=118990/175152 us\r",
+  "metricFileAvailable": true,
+  "sourceClean": true,
+  "files": [
+    {
+      "name": "stdout.log",
+      "sha256": "2CBEC70366E2009663D6F9B69FBC939BEBD0196061E30076F3E95B6E7D608FD3",
+      "bytes": 842
+    },
+    {
+      "name": "stderr.log",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "name": "perf_metrics.jsonl",
+      "sha256": "7A0D9CC233410E7AD71582D606459622FCEFA9451CD7959D13159518B3F16171",
+      "bytes": 146790
+    }
+  ],
+  "coverage": "Focused native export, not Full qualification"
+}

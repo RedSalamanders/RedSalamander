@@ -1,0 +1,547 @@
+{
+  "schema": "redsalamander.perf-row-compaction.v1",
+  "input": {
+    "sha256": "2db09bb78f3d7ccd18c9039af617fb54edff7698370bb11c49286d2d796ef24f",
+    "rowCount": 48341,
+    "byteCount": 17066989,
+    "retention": "Full original retained externally in completed run and preservation packet."
+  },
+  "output": {
+    "sha256": "dc9dc3bef073fb2919a7e319748f22db8abbcb6deb5d3bbccf1ca8dae2c96f2e",
+    "rowCount": 66,
+    "file": "perf/perf_metrics.jsonl",
+    "byteCount": 24561,
+    "rowBytes": "Exact source bytes including line endings"
+  },
+  "selection": "Original 66 safe aggregate and scale rows in source order; inputLine is one-based and offsets are zero-based bytes.",
+  "rows": [
+    {
+      "inputLine": 653,
+      "inputByteOffset": 231352,
+      "byteLength": 355,
+      "outputByteOffset": 0,
+      "sha256": "748306d8521d67d0ecf44a13eca91c6aa0f2c73ba4bc79ba8c08d84681f8e617",
+      "metric": "FileOps.Local.ByNameWalk.Budget"
+    },
+    {
+      "inputLine": 654,
+      "inputByteOffset": 231707,
+      "byteLength": 358,
+      "outputByteOffset": 355,
+      "sha256": "34dd3e7bd993e2da73aea46e1a8f81c717a4cad7b6e8d79a477a3c2502b47bd2",
+      "metric": "FileOps.Local.ByNameWalk.PassParallel"
+    },
+    {
+      "inputLine": 655,
+      "inputByteOffset": 232065,
+      "byteLength": 362,
+      "outputByteOffset": 713,
+      "sha256": "0664838a3eac45b945fd5cb9e1ab48f2aa8cf06f711d431ee0c4da634ee72d8f",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineBudget"
+    },
+    {
+      "inputLine": 656,
+      "inputByteOffset": 232427,
+      "byteLength": 362,
+      "outputByteOffset": 1075,
+      "sha256": "7e4fa33444a37f897a814fa871af257d6331ef42331f3d5af0be9f8f17708507",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineSingle"
+    },
+    {
+      "inputLine": 657,
+      "inputByteOffset": 232789,
+      "byteLength": 362,
+      "outputByteOffset": 1437,
+      "sha256": "3b82736a4a33f1ff3438efb877156370162013afe234639b77e4dd4af69095a1",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineNested"
+    },
+    {
+      "inputLine": 658,
+      "inputByteOffset": 233151,
+      "byteLength": 365,
+      "outputByteOffset": 1799,
+      "sha256": "698c453d6252cc37b1261c9a5418cbc0471f4a05885362209764ce6751de9adf",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineNoWorkers"
+    },
+    {
+      "inputLine": 659,
+      "inputByteOffset": 233516,
+      "byteLength": 377,
+      "outputByteOffset": 2164,
+      "sha256": "58b274de16f2b67b87c80afae8eb52e2e1df6907b962ca4279468224d5337625",
+      "metric": "FileOps.Local.ByNameWalk.OpenUs"
+    },
+    {
+      "inputLine": 660,
+      "inputByteOffset": 233893,
+      "byteLength": 376,
+      "outputByteOffset": 2541,
+      "sha256": "6367232fafba311f81c52cd1ae89669bee0ddab8faf4e54b46324b34c8f67eed",
+      "metric": "FileOps.Local.ByNameWalk.FactsUs"
+    },
+    {
+      "inputLine": 661,
+      "inputByteOffset": 234269,
+      "byteLength": 382,
+      "outputByteOffset": 2917,
+      "sha256": "e97360d669718c58418a74ed7a9790756312c676e4e5599c65dc9c6cde3112c2",
+      "metric": "FileOps.Local.ByNameWalk.DispositionUs"
+    },
+    {
+      "inputLine": 662,
+      "inputByteOffset": 234651,
+      "byteLength": 381,
+      "outputByteOffset": 3299,
+      "sha256": "905d8dcfa908899b3a69dcce309c54de463b87957a39439f61c8ef8f9365d94d",
+      "metric": "FileOps.Local.ByNameWalk.DispositionExUs"
+    },
+    {
+      "inputLine": 663,
+      "inputByteOffset": 235032,
+      "byteLength": 388,
+      "outputByteOffset": 3680,
+      "sha256": "a274b4c4e71428d014258e3936690e13d284f33e592b1296aa6de3596d6345d2",
+      "metric": "FileOps.Local.ByNameWalk.DispositionLegacyUs"
+    },
+    {
+      "inputLine": 664,
+      "inputByteOffset": 235420,
+      "byteLength": 376,
+      "outputByteOffset": 4068,
+      "sha256": "087b96b5eef6eff662eb4127f31d6c6e843e54b4fc9578fa3972d0b94de6e774",
+      "metric": "FileOps.Local.ByNameWalk.CloseUs"
+    },
+    {
+      "inputLine": 665,
+      "inputByteOffset": 235796,
+      "byteLength": 367,
+      "outputByteOffset": 4444,
+      "sha256": "134e4eb924af928dbaf5e576fb368cf1afa6bca1c99c788280b03b1daea9d861",
+      "metric": "FileOps.Local.ByNameWalk.ReadonlyClearUs"
+    },
+    {
+      "inputLine": 666,
+      "inputByteOffset": 236163,
+      "byteLength": 370,
+      "outputByteOffset": 4811,
+      "sha256": "b79c191bb9947e4b1cf3e5c4ac40c4779147e68404dfff8583875e7e8ae0e5ba",
+      "metric": "FileOps.Local.ByNameWalk.ReadonlyRollbackUs"
+    },
+    {
+      "inputLine": 667,
+      "inputByteOffset": 236533,
+      "byteLength": 382,
+      "outputByteOffset": 5181,
+      "sha256": "6b3e0c78e8a742a19962c0353892134fe72bfde488c34b15867dc21d85772ba0",
+      "metric": "FileOps.Local.ByNameWalk.CompletionCallbackUs"
+    },
+    {
+      "inputLine": 668,
+      "inputByteOffset": 236915,
+      "byteLength": 355,
+      "outputByteOffset": 5563,
+      "sha256": "cd59ef1ce0a929a8d7697ef1c24f52c27677c74ffb88b659d6e6e535faaeb00c",
+      "metric": "FileOps.Local.ByNameWalk.ExSuccess"
+    },
+    {
+      "inputLine": 669,
+      "inputByteOffset": 237270,
+      "byteLength": 370,
+      "outputByteOffset": 5918,
+      "sha256": "bb19f69ff0914eae9b5d4ed0404b5eb0f147fd0f6635367bfe19ada88ecc5547",
+      "metric": "FileOps.Local.ByNameWalk.ExInvalidParameter"
+    },
+    {
+      "inputLine": 670,
+      "inputByteOffset": 237640,
+      "byteLength": 360,
+      "outputByteOffset": 6288,
+      "sha256": "8c2d71ae6777b09ddf90a10a8de80ea65ac779c52356d43d760e020c8cac29ca",
+      "metric": "FileOps.Local.ByNameWalk.ExNotSupported"
+    },
+    {
+      "inputLine": 671,
+      "inputByteOffset": 238000,
+      "byteLength": 360,
+      "outputByteOffset": 6648,
+      "sha256": "8bdb833deee1c40b3b7025dbc8ca5316f2479023211a09790cb07fd04483d61f",
+      "metric": "FileOps.Local.ByNameWalk.ExOtherFailure"
+    },
+    {
+      "inputLine": 672,
+      "inputByteOffset": 238360,
+      "byteLength": 365,
+      "outputByteOffset": 7008,
+      "sha256": "674a4051f87a1a421d0ab7d3e3bd903edc3d033f32c5fc7c2b142707812c4c86",
+      "metric": "FileOps.Local.ByNameWalk.LegacySuccess"
+    },
+    {
+      "inputLine": 673,
+      "inputByteOffset": 238725,
+      "byteLength": 359,
+      "outputByteOffset": 7373,
+      "sha256": "5e161119ea7188cab86158976320314755001960338412096b0f7a9969c27c03",
+      "metric": "FileOps.Local.ByNameWalk.LegacyFailure"
+    },
+    {
+      "inputLine": 835,
+      "inputByteOffset": 299841,
+      "byteLength": 366,
+      "outputByteOffset": 7732,
+      "sha256": "8793e693aa1af92970f309ba4a796616332788f7c9ade4257381d1d466825c85",
+      "metric": "FileOps.SelfTest.PinnedTreeScale"
+    },
+    {
+      "inputLine": 1339,
+      "inputByteOffset": 478015,
+      "byteLength": 356,
+      "outputByteOffset": 8098,
+      "sha256": "78f6a30c3303912f3ea968bffe80863e49cd719800ab2f0a405171000b86b0a0",
+      "metric": "FileOps.Local.ByNameWalk.Budget"
+    },
+    {
+      "inputLine": 1340,
+      "inputByteOffset": 478371,
+      "byteLength": 361,
+      "outputByteOffset": 8454,
+      "sha256": "0fe841178f51a94f6064ccc4d12d9d67c63647bc22ca29aba20db066065bb79f",
+      "metric": "FileOps.Local.ByNameWalk.PassParallel"
+    },
+    {
+      "inputLine": 1341,
+      "inputByteOffset": 478732,
+      "byteLength": 363,
+      "outputByteOffset": 8815,
+      "sha256": "048d389f61038d5f45168e77106033a1caa42515a198e02838ef57ba873cb320",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineBudget"
+    },
+    {
+      "inputLine": 1342,
+      "inputByteOffset": 479095,
+      "byteLength": 365,
+      "outputByteOffset": 9178,
+      "sha256": "bd81771120a291406be90c43e6e445f56edca8af19c90f0bd4711854ff0a1e7c",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineSingle"
+    },
+    {
+      "inputLine": 1343,
+      "inputByteOffset": 479460,
+      "byteLength": 363,
+      "outputByteOffset": 9543,
+      "sha256": "ec5c07cbb5958b9f770c1318e5636fa0a2a8c846ac65e9c75bc79bb821ba319c",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineNested"
+    },
+    {
+      "inputLine": 1344,
+      "inputByteOffset": 479823,
+      "byteLength": 366,
+      "outputByteOffset": 9906,
+      "sha256": "fcb17a95a345669bb76f49c029710f7dab10642591637927d116c02f6f6259de",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineNoWorkers"
+    },
+    {
+      "inputLine": 1345,
+      "inputByteOffset": 480189,
+      "byteLength": 378,
+      "outputByteOffset": 10272,
+      "sha256": "4122c71bbb5cd6b04561819336256b7f617892f310f65f8a3ce1113733774657",
+      "metric": "FileOps.Local.ByNameWalk.OpenUs"
+    },
+    {
+      "inputLine": 1346,
+      "inputByteOffset": 480567,
+      "byteLength": 376,
+      "outputByteOffset": 10650,
+      "sha256": "f44bde51d4abd14bfb3ef0346eba12a36212b22e2fa7698b7856d36c0b685388",
+      "metric": "FileOps.Local.ByNameWalk.FactsUs"
+    },
+    {
+      "inputLine": 1347,
+      "inputByteOffset": 480943,
+      "byteLength": 383,
+      "outputByteOffset": 11026,
+      "sha256": "0467fc434114cf6bdeb54de03550914c85976e9949b69c4c48a22143e0801c17",
+      "metric": "FileOps.Local.ByNameWalk.DispositionUs"
+    },
+    {
+      "inputLine": 1348,
+      "inputByteOffset": 481326,
+      "byteLength": 381,
+      "outputByteOffset": 11409,
+      "sha256": "fca1d5754a5d263308bbf6cf7667433ba2620e6bdd3d629a0ae099605461d8ec",
+      "metric": "FileOps.Local.ByNameWalk.DispositionExUs"
+    },
+    {
+      "inputLine": 1349,
+      "inputByteOffset": 481707,
+      "byteLength": 388,
+      "outputByteOffset": 11790,
+      "sha256": "953940f017941d56e5eaaa35fb2612cc256ccd28f5b818d71d3601d631aaf050",
+      "metric": "FileOps.Local.ByNameWalk.DispositionLegacyUs"
+    },
+    {
+      "inputLine": 1350,
+      "inputByteOffset": 482095,
+      "byteLength": 377,
+      "outputByteOffset": 12178,
+      "sha256": "1717793e09c60709116c87c61fbb028de202c49c7cf01ba7a0569b50d24c9fd1",
+      "metric": "FileOps.Local.ByNameWalk.CloseUs"
+    },
+    {
+      "inputLine": 1351,
+      "inputByteOffset": 482472,
+      "byteLength": 368,
+      "outputByteOffset": 12555,
+      "sha256": "5add9074b3dbfc5e3268a1d2666cefb93af9de9a0ab8ff83a4ca406b546fad21",
+      "metric": "FileOps.Local.ByNameWalk.ReadonlyClearUs"
+    },
+    {
+      "inputLine": 1352,
+      "inputByteOffset": 482840,
+      "byteLength": 371,
+      "outputByteOffset": 12923,
+      "sha256": "b54ceb937c032aa405113319774fcf61e2edf98721c1891f25828c06c1fd7c5a",
+      "metric": "FileOps.Local.ByNameWalk.ReadonlyRollbackUs"
+    },
+    {
+      "inputLine": 1353,
+      "inputByteOffset": 483211,
+      "byteLength": 382,
+      "outputByteOffset": 13294,
+      "sha256": "09b76d0b43d7ed94c0cf7f2b5e0024f8769765ae993130ac5125966cd45443c0",
+      "metric": "FileOps.Local.ByNameWalk.CompletionCallbackUs"
+    },
+    {
+      "inputLine": 1354,
+      "inputByteOffset": 483593,
+      "byteLength": 356,
+      "outputByteOffset": 13676,
+      "sha256": "507db321bc92d8f6bbc07e4014bf185d2ca4a25d1827dce36b1da88eab650129",
+      "metric": "FileOps.Local.ByNameWalk.ExSuccess"
+    },
+    {
+      "inputLine": 1355,
+      "inputByteOffset": 483949,
+      "byteLength": 371,
+      "outputByteOffset": 14032,
+      "sha256": "1f27eb926b1ef7c1af9d374132191054262112ab99b0f61c026a4d885d644bdf",
+      "metric": "FileOps.Local.ByNameWalk.ExInvalidParameter"
+    },
+    {
+      "inputLine": 1356,
+      "inputByteOffset": 484320,
+      "byteLength": 361,
+      "outputByteOffset": 14403,
+      "sha256": "772515fae3ceddda5a9c8fd613cfe442337e40c955eafe2029e2847af18c1fbe",
+      "metric": "FileOps.Local.ByNameWalk.ExNotSupported"
+    },
+    {
+      "inputLine": 1357,
+      "inputByteOffset": 484681,
+      "byteLength": 361,
+      "outputByteOffset": 14764,
+      "sha256": "b96bfc31de6362597fc8a328f324a265881f76f5e2e6a2474d5ca615b7dfbbb2",
+      "metric": "FileOps.Local.ByNameWalk.ExOtherFailure"
+    },
+    {
+      "inputLine": 1358,
+      "inputByteOffset": 485042,
+      "byteLength": 366,
+      "outputByteOffset": 15125,
+      "sha256": "1fca1a0e8fb501a417524405293d8b67e2233b82452057f01f15e2cc92e84bd9",
+      "metric": "FileOps.Local.ByNameWalk.LegacySuccess"
+    },
+    {
+      "inputLine": 1359,
+      "inputByteOffset": 485408,
+      "byteLength": 360,
+      "outputByteOffset": 15491,
+      "sha256": "f9f811f52397032c05c45acfaae7c42854536c7dcd9554982e341a362d789e96",
+      "metric": "FileOps.Local.ByNameWalk.LegacyFailure"
+    },
+    {
+      "inputLine": 1563,
+      "inputByteOffset": 563461,
+      "byteLength": 364,
+      "outputByteOffset": 15851,
+      "sha256": "6f23436fc44e69d4be61c4ffec4fe4b4f4af2eccc42990fb552fa45f0bf2f2ab",
+      "metric": "FileOps.SelfTest.PinnedTreeScale"
+    },
+    {
+      "inputLine": 47769,
+      "inputByteOffset": 16855113,
+      "byteLength": 375,
+      "outputByteOffset": 16215,
+      "sha256": "70bcd2077d546877710df8ada8ec55c29bbb07758cda42d41247d73424f7658e",
+      "metric": "FileOps.SelfTest.PinnedTreeScale"
+    },
+    {
+      "inputLine": 48018,
+      "inputByteOffset": 16942948,
+      "byteLength": 365,
+      "outputByteOffset": 16590,
+      "sha256": "16c33ebe229a620803724d3a7f6c72b578a54f17d0acf3976e3a18a45e11e566",
+      "metric": "FileOps.Local.ByNameWalk.Budget"
+    },
+    {
+      "inputLine": 48019,
+      "inputByteOffset": 16943313,
+      "byteLength": 368,
+      "outputByteOffset": 16955,
+      "sha256": "f10c6973f21bdfde4debccb40132fd4657cc4c12e8884920b8c042288e1e60ce",
+      "metric": "FileOps.Local.ByNameWalk.PassParallel"
+    },
+    {
+      "inputLine": 48020,
+      "inputByteOffset": 16943681,
+      "byteLength": 372,
+      "outputByteOffset": 17323,
+      "sha256": "3ff21c83498b65d8aadb746e3af4e4b8466b68876ed5089cba6bd778a8828c7c",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineBudget"
+    },
+    {
+      "inputLine": 48021,
+      "inputByteOffset": 16944053,
+      "byteLength": 372,
+      "outputByteOffset": 17695,
+      "sha256": "35da67b516c77fba5a078815e48a3cf083dfae20a0fa9f3f0dc9e6aff1fae68a",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineSingle"
+    },
+    {
+      "inputLine": 48022,
+      "inputByteOffset": 16944425,
+      "byteLength": 372,
+      "outputByteOffset": 18067,
+      "sha256": "6c3b75d228d56d4d6fb7119cb7476ac8e84fc483fee235ab025acacd0c9cddb6",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineNested"
+    },
+    {
+      "inputLine": 48023,
+      "inputByteOffset": 16944797,
+      "byteLength": 375,
+      "outputByteOffset": 18439,
+      "sha256": "7c77c3e518b3360fc4f433a041993aa793a617e1793f21f664476a117bbfa298",
+      "metric": "FileOps.Local.ByNameWalk.PassInlineNoWorkers"
+    },
+    {
+      "inputLine": 48024,
+      "inputByteOffset": 16945172,
+      "byteLength": 392,
+      "outputByteOffset": 18814,
+      "sha256": "26f96d8d66b88aca4196602d7610ead3ae8f73fac5cc204cb45e92fd30baa794",
+      "metric": "FileOps.Local.ByNameWalk.OpenUs"
+    },
+    {
+      "inputLine": 48025,
+      "inputByteOffset": 16945564,
+      "byteLength": 391,
+      "outputByteOffset": 19206,
+      "sha256": "a922550ffcbbe46bb669da8e601672ab22a2a51464afe083ead217c0b47a98f2",
+      "metric": "FileOps.Local.ByNameWalk.FactsUs"
+    },
+    {
+      "inputLine": 48026,
+      "inputByteOffset": 16945955,
+      "byteLength": 399,
+      "outputByteOffset": 19597,
+      "sha256": "ae371f1391e99909637f6d5faee00647718a600cebb42d27a1e9241e8f32696d",
+      "metric": "FileOps.Local.ByNameWalk.DispositionUs"
+    },
+    {
+      "inputLine": 48027,
+      "inputByteOffset": 16946354,
+      "byteLength": 389,
+      "outputByteOffset": 19996,
+      "sha256": "aee7ba6a54e395d6828c9b0353bcdf58f4ed5ee1f4ed7db1a35f3d7516385b59",
+      "metric": "FileOps.Local.ByNameWalk.DispositionExUs"
+    },
+    {
+      "inputLine": 48028,
+      "inputByteOffset": 16946743,
+      "byteLength": 405,
+      "outputByteOffset": 20385,
+      "sha256": "6efbdfb70af13322ed0aa98f64aa5b4dae6f2121d86568d56d5f781af3a99486",
+      "metric": "FileOps.Local.ByNameWalk.DispositionLegacyUs"
+    },
+    {
+      "inputLine": 48029,
+      "inputByteOffset": 16947148,
+      "byteLength": 393,
+      "outputByteOffset": 20790,
+      "sha256": "dfee18e4990d1c48e5b469a51b83c588014ac6d0089a392a21c9364ea9d0b57e",
+      "metric": "FileOps.Local.ByNameWalk.CloseUs"
+    },
+    {
+      "inputLine": 48030,
+      "inputByteOffset": 16947541,
+      "byteLength": 377,
+      "outputByteOffset": 21183,
+      "sha256": "a1e97f87179f910c69890a7f377d9b8bbccf3be214a9b1781fd1a16f5ccfb0aa",
+      "metric": "FileOps.Local.ByNameWalk.ReadonlyClearUs"
+    },
+    {
+      "inputLine": 48031,
+      "inputByteOffset": 16947918,
+      "byteLength": 380,
+      "outputByteOffset": 21560,
+      "sha256": "84b4eb9090cc7c2b473ee8fe5335de0062c9ea5249dac18ebe1e5c3d2b646f15",
+      "metric": "FileOps.Local.ByNameWalk.ReadonlyRollbackUs"
+    },
+    {
+      "inputLine": 48032,
+      "inputByteOffset": 16948298,
+      "byteLength": 392,
+      "outputByteOffset": 21940,
+      "sha256": "bb2bf78cdd00bc33542254c60f9806959ee8cbce0f2e2668af59e19634a8bae9",
+      "metric": "FileOps.Local.ByNameWalk.CompletionCallbackUs"
+    },
+    {
+      "inputLine": 48033,
+      "inputByteOffset": 16948690,
+      "byteLength": 365,
+      "outputByteOffset": 22332,
+      "sha256": "710c5b3876d9d20916e533a382b0c14da040aca4827c80c325d7984d604d606c",
+      "metric": "FileOps.Local.ByNameWalk.ExSuccess"
+    },
+    {
+      "inputLine": 48034,
+      "inputByteOffset": 16949055,
+      "byteLength": 380,
+      "outputByteOffset": 22697,
+      "sha256": "7cff9280049ac861c7363e43f34de0902d3d0f74cbd9c5662614d30ec23bf00f",
+      "metric": "FileOps.Local.ByNameWalk.ExInvalidParameter"
+    },
+    {
+      "inputLine": 48035,
+      "inputByteOffset": 16949435,
+      "byteLength": 370,
+      "outputByteOffset": 23077,
+      "sha256": "a9d8752668b0b72f494dad640845167897890afec42f18665a272cdde95306c1",
+      "metric": "FileOps.Local.ByNameWalk.ExNotSupported"
+    },
+    {
+      "inputLine": 48036,
+      "inputByteOffset": 16949805,
+      "byteLength": 370,
+      "outputByteOffset": 23447,
+      "sha256": "6f7feff4616e38a63e11fcad486514cd45f55623e244f8c66be2c6fd9a1f8eb9",
+      "metric": "FileOps.Local.ByNameWalk.ExOtherFailure"
+    },
+    {
+      "inputLine": 48037,
+      "inputByteOffset": 16950175,
+      "byteLength": 375,
+      "outputByteOffset": 23817,
+      "sha256": "b0ee5f528582d11f2ef2aa78e7542ca079f563af5ddb579c2fff2d92a62dab91",
+      "metric": "FileOps.Local.ByNameWalk.LegacySuccess"
+    },
+    {
+      "inputLine": 48038,
+      "inputByteOffset": 16950550,
+      "byteLength": 369,
+      "outputByteOffset": 24192,
+      "sha256": "223c38fba764d54dc1bc3d882dece0adf66385b162101e12fe378fdd48c9a8b6",
+      "metric": "FileOps.Local.ByNameWalk.LegacyFailure"
+    }
+  ]
+}

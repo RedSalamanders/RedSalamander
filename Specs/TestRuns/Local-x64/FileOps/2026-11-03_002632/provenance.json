@@ -1,0 +1,10 @@
+{
+  "sourceRunId": "20261103T002632Z-61612-321d52251bc14923a7d4cbfa5215c8c9",
+  "sourceHead": "1c31697a03962c81fda514f155fd39e446f880e2",
+  "receiptId": "40ec359afa086f9308e6b83e5455ca7dd96682b287a6f0eb299741ad2906753c",
+  "sourceSnapshotId": "3766773ab06b90c3885198e6c4675a0595e89f97503e178ad19c2c38e4434786",
+  "scope": "Focused native export, not Full qualification",
+  "originalMetricBytes": 146790,
+  "originalMetricRows": 329,
+  "originalMetricSha256": "7a0d9cc233410e7ad71582d606459622fcefa9451cd7959d13159518b3f16171"
+}

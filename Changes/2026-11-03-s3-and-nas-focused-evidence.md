@@ -1,0 +1,1 @@
+- Record the focused S3 directory-transfer pass and identity-less NAS Delete scale failure with source-bound evidence.

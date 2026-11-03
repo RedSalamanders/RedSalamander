@@ -1,0 +1,5 @@
+DERIVED SUMMARY; original trace remains external.
+Loopback: 2466 entries, card 53 ms, run 566 ms, completed S_OK, deleted.
+Chunks: 2466 entries, card 47 ms, run 681 ms, completed S_OK, deleted.
+NAS: 2466 entries, card 993 ms, completion unavailable at 60000 ms, scenario ERROR_TIMEOUT, not deleted.
+Child walk: 1340 successful legacy dispositions; cancellation drained.

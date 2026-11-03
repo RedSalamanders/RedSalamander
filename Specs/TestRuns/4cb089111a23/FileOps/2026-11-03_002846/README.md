@@ -1,0 +1,7 @@
+# Identity-less Delete NAS scale: failed focused run
+
+The x64 Release test-enabled focused run `20261103T002758Z-105172-3fd933d84e2248c5bf44006e245d2958` used PR 201 source `333c1a90c68da966e41451f4204f536eef183d4b`, full-solution receipt `b464eaf3f9f18465b022f62438410bfbce42e6c9c55672443f1b3af7e0a03170` and source snapshot `0ab7f7d4659e81c246a98cbaefc14e969f1d04dd2ac8f1fe1b7bf17dde05b820`. Native outcomes were 2 passed, 1 failed, 0 skipped. This is a failed focused run, not Full qualification.
+
+Both local controls deleted 2,466 entries in 566 ms and 681 ms. On the configured NAS, completion was unavailable at the unchanged 60-second deadline: 1,340 child legacy dispositions succeeded; the tree was not deleted. The scale metric was emitted at 00:34:12.140 UTC. An independent monotonic-clock anchor estimates the measured end at 00:34:12.121 UTC; both precede 00:35:08 UTC, and later cleanup is separate. The unavailable completion sentinel is not a successful result.
+
+The derived trace excludes environment-specific locations. `perf/perf_metrics.jsonl` contains exactly 66 safe original rows in original order; the manifest binds each original byte offset, line and digest to the full external 17,066,989-byte stream. Summed worker durations overlap and are not wall-clock savings. This diagnostic establishes neither a cause nor an A/B speedup, percentile, native ARM result or repository-wide pass.
