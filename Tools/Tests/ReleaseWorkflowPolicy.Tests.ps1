@@ -19,6 +19,32 @@ function New-RSReleasePolicyTestRoot {
             -Case "release-policy-$([Guid]::NewGuid().ToString('N'))")
 }
 
+Describe 'Project CI engine path resolution' {
+    It 'resolves relative engine paths from the PowerShell filesystem location and preserves absolute paths' {
+        $scratch = New-RSReleasePolicyTestRoot
+        $psLocation = Join-Path $scratch 'powershell'
+        $nativeLocation = Join-Path $scratch 'native'
+        foreach ($entry in @(@($psLocation, 'EXPECTED_ENGINE'), @($nativeLocation, 'WRONG_ENGINE'))) {
+            $moduleDir = Join-Path $entry[0] 'engine/Tools/Modules'
+            [void](New-Item -ItemType Directory -Path $moduleDir -Force)
+            [IO.File]::WriteAllText((Join-Path $moduleDir 'Ci.Policy.psm1'), "throw '$($entry[1])'", [Text.UTF8Encoding]::new($false))
+        }
+        $priorLocation = Get-Location
+        $priorNativeLocation = [Environment]::CurrentDirectory
+        try {
+            [Environment]::CurrentDirectory = $nativeLocation
+            Set-Location -LiteralPath $psLocation
+            $adapter = Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'
+            { & $adapter -Phase Static -EngineRoot './engine' -DevelopmentEngine } | Should Throw 'EXPECTED_ENGINE'
+            { & $adapter -Phase Static -EngineRoot (Join-Path $psLocation 'engine') -DevelopmentEngine } | Should Throw 'EXPECTED_ENGINE'
+            { & $adapter -Phase Static -EngineRoot 'Env:PATH' -DevelopmentEngine } | Should Throw 'EngineRoot requires the FileSystem provider'
+        } finally {
+            Set-Location -LiteralPath $priorLocation.Path
+            [Environment]::CurrentDirectory = $priorNativeLocation
+        }
+    }
+}
+
 function New-RSFakePeBytes {
     # Minimal PE32+ image: an export section naming $Export and a resource section that holds
     # the ENABLE_TESTS version marker when -TestSurfaceMarker is set.

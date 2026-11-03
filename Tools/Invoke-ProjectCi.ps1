@@ -9,7 +9,7 @@ and evidence use the governed sandbox. No product publication is performed here.
 .PARAMETER Phase
 Compiler-free PR checks, Release test build, regression execution, production ZIP, or explicit qualification.
 .PARAMETER EngineRoot
-Checkout of the exact shared engine commit in .ci/project.json.
+Checkout of the exact shared engine commit in .ci/project.json. Relative paths resolve from the current PowerShell filesystem location.
 .PARAMETER Platform
 Matching native x64 or ARM64 hosted runner.
 .PARAMETER Descriptor
@@ -45,7 +45,10 @@ if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes') -and $Phase -n
     throw 'Filtered diagnostic scopes are only valid for explicit Qualification.'
 }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$EngineRoot = [IO.Path]::GetFullPath($EngineRoot)
+$engineProvider = $null
+$engineDrive = $null
+$EngineRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($EngineRoot, [ref]$engineProvider, [ref]$engineDrive)
+if ($engineProvider.Name -cne 'FileSystem') { throw 'EngineRoot requires the FileSystem provider.' }
 Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Policy.psm1') -ErrorAction Stop
 Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Project.psm1') -ErrorAction Stop
 $context = New-CiProjectContext -Root $root -EngineRoot $EngineRoot -Phase $Phase -Platform $Platform -Descriptor $Descriptor -DevelopmentEngine:$DevelopmentEngine
