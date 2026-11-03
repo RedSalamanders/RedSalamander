@@ -9495,6 +9495,44 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
         const bool selfSessionKnown       = ProcessIdToSessionId(GetCurrentProcessId(), &selfSession) != FALSE;
         const bool foregroundSessionKnown = foregroundProcess != 0u && ProcessIdToSessionId(foregroundProcess, &foregroundSession) != FALSE;
         const DWORD foregroundThread      = GetWindowThreadProcessId(foregroundAfter, nullptr);
+        const auto traceAttempt           = [](std::wstring_view label, const DirectedSelfTestInputWarning::ForegroundAttemptEvidence& attempt) noexcept
+        {
+            Trace(std::format(L"Foreground {} attempt: observed={} blockerBeforeRequest={} requestAccepted={} before=0x{:X}/{} after=0x{:X}/{} "
+                              L"lastInputKnown={} lastInputTick={} requestTick={}.",
+                              label,
+                              attempt.observed,
+                              attempt.blockerActiveBeforeRequest,
+                              attempt.requestAccepted,
+                              reinterpret_cast<uintptr_t>(attempt.foregroundBefore),
+                              attempt.foregroundBeforePid,
+                              reinterpret_cast<uintptr_t>(attempt.foregroundAfter),
+                              attempt.foregroundAfterPid,
+                              attempt.lastInputKnown,
+                              attempt.lastInputTick,
+                              attempt.requestTick));
+            const auto traceThread = [&](std::wstring_view role, const DirectedSelfTestInputWarning::ForegroundThreadEvidence& evidence) noexcept
+            {
+                Trace(
+                    std::format(L"Foreground {} {} thread: threadId={} guiKnown={} guiError={} flags={} active=0x{:X} focus=0x{:X} menu=0x{:X} moveSize=0x{:X} "
+                                L"desktopKnown={} desktopError={}.",
+                                label,
+                                role,
+                                evidence.threadId,
+                                evidence.guiKnown,
+                                evidence.guiError,
+                                evidence.gui.flags,
+                                reinterpret_cast<uintptr_t>(evidence.gui.hwndActive),
+                                reinterpret_cast<uintptr_t>(evidence.gui.hwndFocus),
+                                reinterpret_cast<uintptr_t>(evidence.gui.hwndMenuOwner),
+                                reinterpret_cast<uintptr_t>(evidence.gui.hwndMoveSize),
+                                evidence.desktopKnown,
+                                evidence.desktopError));
+            };
+            traceThread(L"target", attempt.targetThread);
+            traceThread(L"foreground", attempt.foregroundThread);
+        };
+        traceAttempt(L"direct", admission.directAttempt);
+        traceAttempt(L"hotkey", admission.hotkeyAttempt);
         state.Require(false,
                       std::format(L"The notified foreground handoff failed before {}: foreground=0x{:X}, pid={}, target=0x{:X}, "
                                   L"stage={}, error={}, heldKey={}, sent={}, requestAccepted={}, guardEvaluated={}, guardPassed={}, requestAttempted={}, "
