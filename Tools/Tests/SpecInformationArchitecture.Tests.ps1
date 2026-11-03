@@ -713,6 +713,39 @@ $sample = ']('
         @($inventory.ProtectedDone.Unexpected).Count | Should Be 2
     }
 
+    It 'admits only the six retired advisor survey records and rejects siblings and companions' {
+        $root = New-RSSpecFixtureRepository
+        $paths = @(
+            'Specs/Plans/Done/AdvisorSurvey_Index_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_001-wip-lifecycle-and-status-truth_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_002-warpdrive-tailwind-executable-surface_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_003-closeout-gate-hygiene_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_004-refresh-stale-active-owners_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_005-decision-hold-scratch-routing_2026-08-25.md'
+        )
+        foreach ($path in $paths) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Retired advisor survey`nCurrent documentation work remains in I58.`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        foreach ($path in $paths) {
+            (@($inventory.ProtectedDone.AllowedAdditional) -contains $path) | Should Be $true
+        }
+        $unreviewed = @($paths | ForEach-Object { $_ -replace '2026-08-25', '2026-08-26' }) + @(
+            'Specs/Plans/Done/AdvisorSurvey_2026-08-25/unreviewed.md',
+            'Specs/Plans/Done/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md'
+        )
+        foreach ($path in $unreviewed) {
+            Set-RSFixtureFile -Root $root -RelativePath $path -Content "# Unreviewed survey companion`n"
+        }
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be $unreviewed.Count
+        foreach ($path in $unreviewed) {
+            (@($inventory.ProtectedDone.Unexpected) -contains $path) | Should Be $true
+        }
+    }
+
     It 'admits only the reviewed I55 implementation record while rejecting hosted-acceptance companions' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/CI_OrganizationStandardization_2026-10-29.md'

@@ -1240,7 +1240,14 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/FileOperations_LastNoteWrapping_2026-10-19.md',
             'Specs/Plans/Done/FileOperations_UIReviewFixes_2026-10-19.md',
             'Specs/Plans/Done/ScreenshotSyntheticData_2026-10-19.md',
-            'Specs/Plans/Done/StashReview_2026-10-19.md'
+            'Specs/Plans/Done/StashReview_2026-10-19.md',
+            # Exact retired August advisor survey; I58 retains current documentation work.
+            'Specs/Plans/Done/AdvisorSurvey_Index_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_001-wip-lifecycle-and-status-truth_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_002-warpdrive-tailwind-executable-surface_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_003-closeout-gate-hygiene_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_004-refresh-stale-active-owners_2026-08-25.md',
+            'Specs/Plans/Done/AdvisorSurvey_005-decision-hold-scratch-routing_2026-08-25.md'
         )
     )
 
