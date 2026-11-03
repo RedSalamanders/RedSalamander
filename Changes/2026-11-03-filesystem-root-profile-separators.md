@@ -1,0 +1,1 @@
+- Preserve provider separator rules when recognizing extended drive roots during parent traversal.

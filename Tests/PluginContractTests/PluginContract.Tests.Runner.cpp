@@ -2549,6 +2549,24 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
         Check(TryGetFileSystemParentPath(slashOnly, LR"(\\?\C:\child)", slashParent) == false,
               L"Slash-only identities do not interpret Win32 backslashes as separators",
               success);
+        FileSystemPathIdentity backslashOnly = local;
+        backslashOnly.acceptedSeparators     = L"\\";
+        constexpr std::array backslashCases{
+            ParentCase{LR"(\\?\C:\child)", LR"(\\?\C:\)"},
+            ParentCase{LR"(/\?\C:\child)", LR"(/\?\C:)"},
+            ParentCase{LR"(\/?\C:\child)", LR"(\/?\C:)"},
+            ParentCase{LR"(\\?/C:\child)", LR"(\\?/C:)"},
+            ParentCase{LR"(//?/C:\child)", LR"(//?/C:)"},
+            ParentCase{LR"(\\?\C:/child)", LR"(\\?)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/child)", LR"(\\?)"},
+        };
+        for (const auto& entry : backslashCases)
+        {
+            std::wstring parent;
+            Check(TryGetFileSystemParentPath(backslashOnly, entry.child, parent) && parent == entry.expected,
+                  std::format(L"Backslash-only parent respects namespace separators for {}", entry.child).c_str(),
+                  success);
+        }
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::None);
