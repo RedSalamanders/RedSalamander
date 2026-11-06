@@ -1774,14 +1774,16 @@
 // (folderview#2), the prompt's item kind breaks a same-name tie in the pane and through the host
 // request (folderview#4), and destroying the popup or answering the prompt ends a pending request
 // as Stale at once (x-lifetime#1).
-[[nodiscard]] bool RunFileOpsConflictInspectionSettlementChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunFileOpsConflictInspectionSettlementChecks(SelfTestState& state, std::wstring& failureReason) noexcept
 {
     using namespace std::chrono_literals;
-    using Status      = FileOperations::ConflictInspectionNavigationStatus;
-    using Result      = FileOperations::ConflictInspectionNavigationResult;
-    using Task        = FolderWindow::FileOperationState::Task;
-    const auto reject = [](std::wstring_view reason) noexcept
+    using Status = FileOperations::ConflictInspectionNavigationStatus;
+    using Result = FileOperations::ConflictInspectionNavigationResult;
+    using Task   = FolderWindow::FileOperationState::Task;
+    failureReason.clear();
+    const auto reject = [&](std::wstring_view reason) noexcept
     {
+        failureReason.assign(reason);
         AppendLog(std::format(L"FileOps conflict inspection: {}", reason));
         return false;
     };
@@ -1868,7 +1870,11 @@
         const auto focused = view->GetFocusedPath();
         return focused.has_value() && EqualsIgnoreCase(focused->wstring(), dest.wstring());
     };
-    const auto statusText = [&]() { return result ? std::to_wstring(static_cast<unsigned>(result->status)) : std::wstring(L"none"); };
+    const auto statusText = [&]()
+    {
+        return result ? std::format(L"{} (error=0x{:08X})", static_cast<unsigned>(result->status), static_cast<uint32_t>(result->error))
+                      : std::wstring(L"none");
+    };
     if (! settleAt(home))
         return reject(L"the left pane did not settle in the home folder");
 

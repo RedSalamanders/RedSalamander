@@ -1,11 +1,30 @@
 # Unified organization CI contract
 
-The manual native suite defaults to Full and may explicitly select CommandsHandoff or
-FileOpsVolumes, each mapped to one fixed diagnostic case. The adapter permits filtered runner
+The manual native suite defaults to Full and may explicitly select CommandsHandoff,
+FileOpsVolumes or ViewerSpaceCapture, each mapped to one fixed diagnostic case. The adapter permits filtered runner
 exit 2 only after validating the exact archived native cases, quarantine state, profile and
 source-bound full-solution receipt. It labels that result filtered and NOT_EVALUATED for
 repository coverage and creates no regression or production receipt. Other phases reject these
 scopes before mutation; the pinned native matrix, desktop lease and build contracts still apply.
+
+The separate manual `R0ePaired` scope is Release-only. It requires a nonzero full lowercase
+baseline commit SHA in `baseline_ref`, an available exact commit object, and a clean candidate
+whose HEAD equals the dispatch SHA and frozen descriptor. The candidate and an isolated,
+retained baseline worktree use full-solution test-enabled Embedded Release builds with the
+same positive frozen hosted build number and verified matching dependency/toolchain identity.
+Run five fresh canonical `FileOps_ProviderCapabilityMatrix` processes per side on the same
+native architecture and machine, at timeout scale 1 and repeat 1. Verify the reviewed source
+projections, raw archive closure, profile, quarantine, counts and timing gates before reduction.
+The owning [performance contract](../Testing/Testing_PerformanceValidation.md) retains the
+two-second ceiling and matched p95 bound.
+
+This paired study always leaves repository coverage NOT_EVALUATED and produces no regression
+or production receipt. A baseline may be described as timing-only RED solely when all other
+reviewed predicate clauses and complete raw evidence are verified. Its failed native result
+remains failed; paired-command exit 2 makes the hosted job fail after preserving evidence.
+Candidate failures, incomplete archives, other failed assertions or mismatched identities
+also fail the job. A successful diagnostic pair never substitutes for complete native
+qualification. Retain partial logs, run IDs and the owned baseline checkout on interruption.
 
 This specification owns the project's CI routing. The versioned implementation and policy tests live in
 [RedSalamanders/.github](https://github.com/RedSalamanders/.github). The exact reviewed full commit is recorded

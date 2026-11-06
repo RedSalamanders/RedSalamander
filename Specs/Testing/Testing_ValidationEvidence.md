@@ -336,6 +336,12 @@ exit 2 for filtered `NOT_EVALUATED` coverage); zero case counts never imply a pa
 The same scope rule applies when a focused legacy invocation produces only v1: a successful
 family or filtered run ends with exit 2. The absence of a v2 evidence record cannot widen coverage.
 
+The legacy runner summary can be written after completed-run relocation and therefore be absent
+from the pre-relocation archive intent inventory. Keep native results, traces and metrics bound
+to that closed inventory. Separately retain and hash the observed runner-summary bytes and check
+their run ID, executable, invocation times, profile, counts and outcome against the exact launch.
+Do not describe a post-archive summary as inventory-sealed or infer success from archive closure.
+
 Aggregate state labels are never sufficient evidence. One verified loader recomputes
 promotion, evidence, and terminal-result digests; requires digest/filename equality;
 checks origin/run, entry, invocation and coverage-plan identity, fingerprint, snapshots,

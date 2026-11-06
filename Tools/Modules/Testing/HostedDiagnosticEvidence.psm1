@@ -2,14 +2,33 @@ Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'ValidationEvidence.psm1') -Scope Local
 Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1') -Scope Local
 
+function Get-RSHostedPairedDispatch {
+    param([Parameter(Mandatory)][string]$EventName, [Parameter(Mandatory)][string]$EventJson,
+          [Parameter(Mandatory)][string]$CandidateHead)
+    if ($EventName -cne 'workflow_dispatch' -or $CandidateHead -cnotmatch '^[a-f0-9]{40}$' -or $CandidateHead -cmatch '^0+$') {
+        throw 'R0e paired validation requires a manual dispatch and a nonzero immutable candidate SHA.'
+    }
+    try { $event = $EventJson | ConvertFrom-Json -AsHashtable -ErrorAction Stop }
+    catch { throw 'R0e paired dispatch event is invalid JSON.' }
+    if ($event -isnot [System.Collections.IDictionary] -or -not $event.Contains('inputs') -or
+        $event.inputs -isnot [System.Collections.IDictionary] -or -not $event.inputs.Contains('scope') -or
+        -not $event.inputs.Contains('baseline_ref') -or -not $event.inputs.Contains('configuration') -or
+        $event.inputs.scope -cne 'R0ePaired' -or $event.inputs.configuration -cne 'Release' -or $event.inputs.baseline_ref -isnot [string] -or
+        $event.inputs.baseline_ref -cnotmatch '^[a-f0-9]{40}$' -or $event.inputs.baseline_ref -cmatch '^0+$') {
+        throw 'R0e paired dispatch requires its exact scope and a nonzero immutable baseline SHA.'
+    }
+    return @{ baseline=$event.inputs.baseline_ref; candidate=$CandidateHead }
+}
+
 # This adapter-only check deliberately accepts filtered runner exit 2, unlike the
 # general terminal reducer, but only after that reducer validates every native case.
 # It never converts the repository's NOT_EVALUATED coverage into a Full result.
 function Get-RSHostedDiagnosticSelection {
-    param([Parameter(Mandatory)][ValidateSet('CommandsHandoff','FileOpsVolumes')][string]$Scope)
+    param([Parameter(Mandatory)][ValidateSet('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture')][string]$Scope)
     switch ($Scope) {
         'CommandsHandoff' { return @{ suite='Commands'; case='cmd_pane_selection_select_next_keeps_navigation_shell_stable'; native='commands'; nativeSuite='Commands'; entry='selftest.commands' } }
         'FileOpsVolumes' { return @{ suite='FileOps'; case='R4A19_DiscoveryIndependentVolumes'; native='fileops'; nativeSuite='FileOperations'; entry='selftest.file-operations' } }
+        'ViewerSpaceCapture' { return @{ suite='Commands'; case='cmd_viewer_space_explorer_analyst_exact_nested_detail'; native='commands'; nativeSuite='Commands'; entry='selftest.commands' } }
     }
 }
 
@@ -22,7 +41,7 @@ function Get-RSHostedDiagnosticRunId {
 
 function Assert-RSHostedDiagnosticSelection {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Selection)
-    $known = @((Get-RSHostedDiagnosticSelection CommandsHandoff), (Get-RSHostedDiagnosticSelection FileOpsVolumes))
+    $known = @((Get-RSHostedDiagnosticSelection CommandsHandoff), (Get-RSHostedDiagnosticSelection FileOpsVolumes), (Get-RSHostedDiagnosticSelection ViewerSpaceCapture))
     $matches = @($known | Where-Object {
         $_.suite -ceq $Selection.suite -and $_.case -ceq $Selection.case -and $_.native -ceq $Selection.native -and
         $_.nativeSuite -ceq $Selection.nativeSuite -and $_.entry -ceq $Selection.entry
@@ -129,4 +148,4 @@ function Read-RSHostedDiagnosticEvidence {
         archiveIntentSha256=$complete.intent_sha256 }
 }
 
-Export-ModuleMember -Function Get-RSHostedDiagnosticSelection, Get-RSHostedDiagnosticRunId, Test-RSHostedDiagnosticOutcome, Read-RSHostedDiagnosticEvidence
+Export-ModuleMember -Function Get-RSHostedDiagnosticSelection, Get-RSHostedDiagnosticRunId, Test-RSHostedDiagnosticOutcome, Read-RSHostedDiagnosticEvidence, Get-RSHostedPairedDispatch

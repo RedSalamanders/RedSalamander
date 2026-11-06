@@ -15981,18 +15981,72 @@ struct FileOperationsPopupTestFixture final
         const bool providerFound   = FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId);
         const HRESULT fragmentHr   = providerFound && provider ? provider.query_to(fragment.put()) : E_NOINTERFACE;
         const HRESULT boundsHr     = SUCCEEDED(fragmentHr) && fragment ? fragment->get_BoundingRectangle(&bounds) : E_NOINTERFACE;
+        const bool ownsForeground  = GetForegroundWindow() == fixture.popup;
+        const bool ownsFocus       = GetFocus() == fixture.popup;
         const bool revealed =
             layoutAvailable && taskAvailable && currentTask.conflict.active && currentTask.conflict.generation == shortTask.conflict.generation &&
-            GetForegroundWindow() == fixture.popup && GetFocus() == fixture.popup && shortLayout.scrollPosition > beforeTab.scrollPosition &&
-            shortLayout.hostedFocusedAutomationId == expectedId && shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u &&
-            (shortLayout.hostedModifierState & MK_SHIFT) == 0u && providerFound && provider && SUCCEEDED(fragmentHr) && fragment && SUCCEEDED(boundsHr) &&
-            bounds.height > 0 && bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
+            ownsForeground && ownsFocus && shortLayout.scrollPosition > beforeTab.scrollPosition && shortLayout.hostedFocusedAutomationId == expectedId &&
+            shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u && (shortLayout.hostedModifierState & MK_SHIFT) == 0u && providerFound &&
+            provider && SUCCEEDED(fragmentHr) && fragment && SUCCEEDED(boundsHr) && bounds.height > 0 &&
+            bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
             bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
+        std::wstring failureDetail;
+        if (! revealed)
+        {
+            failureDetail = std::format(L"Conflict traversal geometry: dpi={} origin={},{} viewportClient={},{},{},{} viewportScreen={},{},{},{} "
+                                        L"uiaBounds={},{},{},{} beforeBoundsDip={},{},{},{} layout={} task={} active={} generationMatch={} "
+                                        L"foreground={} focus={} scrolled={} focusIdMatch={} tabIncrement={} shiftReleased={} provider={} "
+                                        L"fragment={} boundsResult={} positiveHeight={} topVisible={} bottomVisible={} "
+                                        L"scrollBefore={} scrollAfter={} modifiersBefore={} modifiersAfter={} tabsBefore={} tabsAfter={}",
+                                        popupDpi,
+                                        origin.x,
+                                        origin.y,
+                                        shortLayout.listViewportRect.left,
+                                        shortLayout.listViewportRect.top,
+                                        shortLayout.listViewportRect.right,
+                                        shortLayout.listViewportRect.bottom,
+                                        origin.x + shortLayout.listViewportRect.left,
+                                        origin.y + shortLayout.listViewportRect.top,
+                                        origin.x + shortLayout.listViewportRect.right,
+                                        origin.y + shortLayout.listViewportRect.bottom,
+                                        bounds.left,
+                                        bounds.top,
+                                        bounds.width,
+                                        bounds.height,
+                                        beforeBounds.left,
+                                        beforeBounds.top,
+                                        beforeBounds.right,
+                                        beforeBounds.bottom,
+                                        layoutAvailable,
+                                        taskAvailable,
+                                        currentTask.conflict.active,
+                                        currentTask.conflict.generation == shortTask.conflict.generation,
+                                        ownsForeground,
+                                        ownsFocus,
+                                        shortLayout.scrollPosition > beforeTab.scrollPosition,
+                                        shortLayout.hostedFocusedAutomationId == expectedId,
+                                        shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u,
+                                        (shortLayout.hostedModifierState & MK_SHIFT) == 0u,
+                                        providerFound && static_cast<bool>(provider),
+                                        SUCCEEDED(fragmentHr) && static_cast<bool>(fragment),
+                                        SUCCEEDED(boundsHr),
+                                        bounds.height > 0,
+                                        bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top,
+                                        bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <=
+                                            static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom,
+                                        beforeTab.scrollPosition,
+                                        shortLayout.scrollPosition,
+                                        routedModifiers.hostedModifierState,
+                                        shortLayout.hostedModifierState,
+                                        beforeTab.hostedNativeTabCount,
+                                        shortLayout.hostedNativeTabCount);
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, failureDetail);
+        }
         state.Require(revealed,
                       std::format(L"{} must reveal the published action above the footer: expected={} scroll={} focused={} boundsTop={} height={} "
                                   L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={} "
                                   L"modifiersBefore={} modifiersAfter={} nativeTabsBefore={} nativeTabsAfter={} providerFound={} "
-                                  L"fragmentHr=0x{:08X} boundsHr=0x{:08X}.",
+                                  L"fragmentHr=0x{:08X} boundsHr=0x{:08X}. {}",
                                   reverse ? L"Shift+Tab" : L"Tab",
                                   expectedId,
                                   shortLayout.scrollPosition,
@@ -16013,7 +16067,8 @@ struct FileOperationsPopupTestFixture final
                                   shortLayout.hostedNativeTabCount,
                                   providerFound,
                                   static_cast<unsigned long>(fragmentHr),
-                                  static_cast<unsigned long>(boundsHr)));
+                                  static_cast<unsigned long>(boundsHr),
+                                  failureDetail));
     };
     std::wstring previousId = actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(FileOperations::ConflictAction::Cancel));
     for (size_t remaining = primaryCount; remaining > 0u && state.failure.empty(); --remaining)
@@ -16178,7 +16233,23 @@ struct FileOperationsPopupTestFixture final
                     fixture.popup, PopupHitTest::Kind::TaskToggleCollapse, secondTask.taskId, 0u, IDS_FILEOPS_TOGGLE_TASK_DETAILS, provider) &&
                 provider;
             const HRESULT queryHr = resolved ? provider.query_to(fragment.put()) : E_NOINTERFACE;
+            UiaRect preFocusBounds{}, postFocusBounds{};
+            HRESULT preFocusBoundsHr = E_PENDING, postFocusBoundsHr = E_PENDING;
+            PopupLayoutDebugSnapshot preFocusLayout{}, postFocusLayout{};
+            bool preFocusLayoutRead = false, postFocusLayoutRead = false;
+            if (route == 3u && SUCCEEDED(queryHr) && fragment)
+            {
+                preFocusLayout.taskId = secondTask.taskId;
+                preFocusLayoutRead    = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, preFocusLayout);
+                preFocusBoundsHr      = fragment->get_BoundingRectangle(&preFocusBounds);
+            }
             const HRESULT focusHr = SUCCEEDED(queryHr) && fragment ? fragment->SetFocus() : E_NOINTERFACE;
+            if (route == 3u && SUCCEEDED(queryHr) && fragment)
+            {
+                postFocusLayout.taskId = secondTask.taskId;
+                postFocusLayoutRead    = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, postFocusLayout);
+                postFocusBoundsHr      = fragment->get_BoundingRectangle(&postFocusBounds);
+            }
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
                                        std::format(L"Pending disclosure preparation: route={} collapse={} visibleBeforeReveal={} snapshot={} scroll={} "
                                                    L"viewport=[{},{}] taskToggleVisible={} resolved={} queryHr=0x{:08X} focusHr=0x{:08X} id={}",
@@ -16242,9 +16313,72 @@ struct FileOperationsPopupTestFixture final
             {
                 UiaRect bounds{};
                 const HRESULT boundsHr = fragment->get_BoundingRectangle(&bounds);
+                std::wstring failureDetail;
+                if (FAILED(boundsHr) || bounds.width <= 0.0 || bounds.height <= 0.0)
+                {
+                    wil::com_ptr_nothrow<IRawElementProviderSimple> fresh;
+                    wil::com_ptr_nothrow<IRawElementProviderFragment> freshFragment;
+                    UiaRect freshBounds{};
+                    const bool freshFound       = FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, caption, fresh.put(), id) && fresh;
+                    const HRESULT freshQueryHr  = freshFound ? fresh.query_to(freshFragment.put()) : E_NOINTERFACE;
+                    const HRESULT freshBoundsHr = SUCCEEDED(freshQueryHr) && freshFragment ? freshFragment->get_BoundingRectangle(&freshBounds) : E_NOINTERFACE;
+                    POINT origin{};
+                    const bool originKnown = ClientToScreen(fixture.popup, &origin) != FALSE;
+                    failureDetail = std::format(L"Pending disclosure geometry: id={} dpi={} originKnown={} origin={},{} foreground={} nativeFocus={} "
+                                                L"preLayout={} preScroll={} preFocused={} preFocus={} preHr=0x{:08X} preBounds={},{},{},{} "
+                                                L"postLayout={} postScroll={} postFocused={} postFocus={} postHr=0x{:08X} postBounds={},{},{},{} "
+                                                L"redrawScroll={} redrawFocused={} redrawFocus={} viewportClient={},{},{},{} "
+                                                L"retainedHr=0x{:08X} retainedBounds={},{},{},{} freshFound={} freshQueryHr=0x{:08X} freshBoundsHr=0x{:08X} "
+                                                L"freshBounds={},{},{},{}",
+                                                id,
+                                                GetDpiForWindow(fixture.popup),
+                                                originKnown,
+                                                origin.x,
+                                                origin.y,
+                                                GetForegroundWindow() == fixture.popup,
+                                                GetFocus() == fixture.popup,
+                                                preFocusLayoutRead,
+                                                preFocusLayout.scrollPosition,
+                                                preFocusLayout.hostedFocusedAutomationId,
+                                                preFocusLayout.hostedFocusedHasFocus,
+                                                static_cast<unsigned long>(preFocusBoundsHr),
+                                                preFocusBounds.left,
+                                                preFocusBounds.top,
+                                                preFocusBounds.width,
+                                                preFocusBounds.height,
+                                                postFocusLayoutRead,
+                                                postFocusLayout.scrollPosition,
+                                                postFocusLayout.hostedFocusedAutomationId,
+                                                postFocusLayout.hostedFocusedHasFocus,
+                                                static_cast<unsigned long>(postFocusBoundsHr),
+                                                postFocusBounds.left,
+                                                postFocusBounds.top,
+                                                postFocusBounds.width,
+                                                postFocusBounds.height,
+                                                before.scrollPosition,
+                                                before.hostedFocusedAutomationId,
+                                                before.hostedFocusedHasFocus,
+                                                before.listViewportRect.left,
+                                                before.listViewportRect.top,
+                                                before.listViewportRect.right,
+                                                before.listViewportRect.bottom,
+                                                static_cast<unsigned long>(boundsHr),
+                                                bounds.left,
+                                                bounds.top,
+                                                bounds.width,
+                                                bounds.height,
+                                                freshFound,
+                                                static_cast<unsigned long>(freshQueryHr),
+                                                static_cast<unsigned long>(freshBoundsHr),
+                                                freshBounds.left,
+                                                freshBounds.top,
+                                                freshBounds.width,
+                                                freshBounds.height);
+                    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, failureDetail);
+                }
                 if (! state.Require(SUCCEEDED(boundsHr) && bounds.width > 0.0 && bounds.height > 0.0,
                                     std::format(L"The task disclosure must expose a measured pointer target: hr=0x{:08X} collapse={} "
-                                                L"bounds={},{},{},{} visible={} animating={} scroll={} viewport={},{},{},{}.",
+                                                L"bounds={},{},{},{} visible={} animating={} scroll={} viewport={},{},{},{}. {}",
                                                 static_cast<uint32_t>(boundsHr),
                                                 collapse,
                                                 bounds.left,
@@ -16257,7 +16391,8 @@ struct FileOperationsPopupTestFixture final
                                                 before.listViewportRect.left,
                                                 before.listViewportRect.top,
                                                 before.listViewportRect.right,
-                                                before.listViewportRect.bottom)))
+                                                before.listViewportRect.bottom,
+                                                failureDetail)))
                     return false;
                 POINT point{static_cast<LONG>(bounds.left + bounds.width * 0.5), static_cast<LONG>(bounds.top + bounds.height * 0.5)};
                 const HWND target = WindowFromPoint(point);

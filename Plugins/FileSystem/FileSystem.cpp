@@ -1015,6 +1015,7 @@ struct LocalVolumeRouteCache;
 struct StorageProbeDebugHooks
 {
     LocalVolumeRouteCache* routeCache                                                                                                          = nullptr;
+    uint64_t encodeCalls                                                                                                                       = 0u;
     void* context                                                                                                                              = nullptr;
     BOOL (*getVolumePathName)(void* context, const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept                    = nullptr;
     BOOL (*getVolumeNameForVolumeMountPoint)(void* context, const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept = nullptr;
@@ -1275,6 +1276,10 @@ struct LocalCapabilityRouteInfo final
 
 [[nodiscard]] std::string EncodeLocalRootId(std::wstring rootIdentity) noexcept
 {
+#ifdef _DEBUG
+    if (g_storageProbeDebugHooks != nullptr)
+        ++g_storageProbeDebugHooks->encodeCalls;
+#endif
     rootIdentity = OrdinalString::FoldCaseInvariant(rootIdentity);
     std::string encoded;
     if (! Common::Uri::TryPercentEncodeUtf8(rootIdentity, Common::Uri::SlashPolicy::Encode, encoded) || encoded.empty())
@@ -1353,7 +1358,6 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
         return route;
     }
 
-    route.rootId = EncodeLocalRootId(rootIdentity);
     {
         std::scoped_lock lock(routeCache.mutex);
         if (OrdinalString::EqualsNoCase(routeCache.volumeRoot, volumeRoot) && OrdinalString::EqualsNoCase(routeCache.volumeGuidDevicePath, rootIdentity) &&
@@ -1371,6 +1375,7 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
 #if defined(ENABLE_TESTS)
     CountAdmissionProbe(AdmissionProbeSlot::CacheMisses);
 #endif
+    route.rootId = EncodeLocalRootId(rootIdentity);
     std::scoped_lock lock(routeCache.mutex);
     routeCache.volumeRoot           = volumeRoot;
     routeCache.volumeGuidDevicePath = rootIdentity;
@@ -1602,6 +1607,7 @@ struct DebugMountedVolumeStorageProbeState
     DWORD lastVolumeNameBufferLength  = 0u;
     DWORD volumePathError             = ERROR_SUCCESS;
     DWORD volumeNameError             = ERROR_SUCCESS;
+    UINT driveType                    = DRIVE_FIXED;
     bool oneShortSuccess              = false;
 };
 
@@ -1699,9 +1705,10 @@ wil::unique_hfile DebugMountedVolumeOpenVolume(void* context, const wchar_t* vol
     return {};
 }
 
-UINT DebugRouteDriveType(void*, const wchar_t*) noexcept
+UINT DebugRouteDriveType(void* context, const wchar_t*) noexcept
 {
-    return DRIVE_FIXED;
+    const auto* state = static_cast<const DebugMountedVolumeStorageProbeState*>(context);
+    return state != nullptr ? state->driveType : DRIVE_UNKNOWN;
 }
 
 void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& failed) noexcept
@@ -1728,10 +1735,15 @@ void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& f
     LocalVolumeRouteCache testRouteCache;
     StorageProbeDebugScope scope(hooks, testRouteCache);
 
-    const std::wstring guidA = BuildOpenableVolumeGuidDevicePath(state.volumeName);
-    const std::string idA    = EncodeLocalRootId(guidA);
-    const auto routeA        = BuildLocalCapabilityRouteInfo(pathA.c_str());
-    DebugCheck(routeA.rootId == idA && ! routeA.remote, L"cold local route should use the lexical mount root's direct volume GUID", passed, failed);
+    const std::wstring guidA     = BuildOpenableVolumeGuidDevicePath(state.volumeName);
+    const std::string idA        = EncodeLocalRootId(guidA);
+    const uint64_t encodeBeforeA = hooks.encodeCalls;
+    const auto routeA            = BuildLocalCapabilityRouteInfo(pathA.c_str());
+    const uint64_t encodeAfterA  = hooks.encodeCalls;
+    DebugCheck(encodeAfterA - encodeBeforeA == 1u && routeA.rootId == idA && ! routeA.remote,
+               L"cold local route should use the lexical mount root's direct volume GUID",
+               passed,
+               failed);
 
     bool otherThreadIsolated = false;
     std::jthread otherProbe([&]() noexcept
@@ -1760,21 +1772,57 @@ void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& f
                passed,
                failed);
 
-    state.volumeRoot         = L"C:\\MountB\\";
-    state.volumeName         = L"\\\\?\\Volume{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}\\";
-    const std::wstring guidB = BuildOpenableVolumeGuidDevicePath(state.volumeName);
-    const auto routeB        = BuildLocalCapabilityRouteInfo(pathB.c_str());
-    DebugCheck(routeB.rootId == EncodeLocalRootId(guidB) && routeB.rootId != routeA.rootId && state.lastVolumePathInput == pathB &&
-                   state.lastVolumeNameInput == L"C:\\MountB\\",
+    state.volumeRoot             = L"C:\\MountB\\";
+    state.volumeName             = L"\\\\?\\Volume{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}\\";
+    const std::wstring guidB     = BuildOpenableVolumeGuidDevicePath(state.volumeName);
+    const uint64_t encodeBeforeB = hooks.encodeCalls;
+    const auto routeB            = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    const uint64_t encodeAfterB  = hooks.encodeCalls;
+    DebugCheck(encodeAfterB - encodeBeforeB == 1u && routeB.rootId == EncodeLocalRootId(guidB) && routeB.rootId != routeA.rootId &&
+                   state.lastVolumePathInput == pathB && state.lastVolumeNameInput == L"C:\\MountB\\",
                L"a path lexically inside MountB must not inherit a prior root reached by following its final link",
                passed,
                failed);
 
     const unsigned int pathCallsBeforeWarm = state.volumePathCalls;
     const unsigned int guidCallsBeforeWarm = state.volumeNameCalls;
+    const uint64_t encodeBeforeWarm        = hooks.encodeCalls;
     const auto routeBWarm                  = BuildLocalCapabilityRouteInfo(pathBWarm.c_str());
-    DebugCheck(routeBWarm.rootId == routeB.rootId && state.volumePathCalls == pathCallsBeforeWarm + 1u && state.volumeNameCalls == guidCallsBeforeWarm + 1u,
+    const uint64_t encodeAfterWarm         = hooks.encodeCalls;
+    DebugCheck(encodeAfterWarm == encodeBeforeWarm && routeBWarm.rootId == routeB.rootId && routeBWarm.remote == routeB.remote &&
+                   state.volumePathCalls == pathCallsBeforeWarm + 1u && state.volumeNameCalls == guidCallsBeforeWarm + 1u,
                L"a warm route hit must still resolve the requested lexical root and current direct GUID",
+               passed,
+               failed);
+    state.driveType                      = DRIVE_REMOTE;
+    const uint64_t encodeBeforeRemoteHit = hooks.encodeCalls;
+    const auto remoteHit                 = BuildLocalCapabilityRouteInfo(pathBWarm.c_str());
+    const uint64_t encodeAfterRemoteHit  = hooks.encodeCalls;
+    DebugCheck(encodeAfterRemoteHit == encodeBeforeRemoteHit && remoteHit.rootId == routeB.rootId && remoteHit.remote,
+               L"a warm matching GUID uses the freshly observed drive classification",
+               passed,
+               failed);
+    state.driveType = DRIVE_FIXED;
+    {
+        std::scoped_lock lock(testRouteCache.mutex);
+        testRouteCache.resolvedTick = GetTickCount64() - (kLocalVolumeRouteCacheTtlMs + 1u);
+    }
+    const uint64_t encodeBeforeExpiry = hooks.encodeCalls;
+    const auto expiredRoute           = BuildLocalCapabilityRouteInfo(pathBWarm.c_str());
+    const uint64_t encodeAfterExpiry  = hooks.encodeCalls;
+    DebugCheck(encodeAfterExpiry - encodeBeforeExpiry == 1u && expiredRoute.rootId == routeB.rootId && expiredRoute.remote == routeB.remote,
+               L"an expired route encodes the freshly resolved GUID once without changing its identity",
+               passed,
+               failed);
+
+    // The root is part of the cache key even if two mount roots resolve to the same GUID.
+    state.volumeRoot                             = L"C:\\MountB\\MountC\\";
+    const uint64_t encodeBeforeSameGuidOtherRoot = hooks.encodeCalls;
+    const auto sameGuidOtherRoot                 = BuildLocalCapabilityRouteInfo(pathC.c_str());
+    const uint64_t encodeAfterSameGuidOtherRoot  = hooks.encodeCalls;
+    DebugCheck(encodeAfterSameGuidOtherRoot - encodeBeforeSameGuidOtherRoot == 1u && sameGuidOtherRoot.rootId == routeB.rootId &&
+                   state.lastVolumePathInput == pathC && state.lastVolumeNameInput == state.volumeRoot,
+               L"a different lexical mount root with the same GUID must miss and encode its own observation",
                passed,
                failed);
 
@@ -1787,22 +1835,27 @@ void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& f
                passed,
                failed);
 
-    state.volumeRoot     = L"C:\\MountB\\";
-    state.volumeName     = L"\\\\?\\Volume{CCCCCCCC-DDDD-EEEE-FFFF-000000000000}\\";
-    const auto remounted = BuildLocalCapabilityRouteInfo(pathB.c_str());
-    DebugCheck(remounted.rootId == EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName)) && remounted.rootId != routeB.rootId,
+    state.volumeRoot                   = L"C:\\MountB\\";
+    state.volumeName                   = L"\\\\?\\Volume{CCCCCCCC-DDDD-EEEE-FFFF-000000000000}\\";
+    const uint64_t encodeBeforeRemount = hooks.encodeCalls;
+    const auto remounted               = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    const uint64_t encodeAfterRemount  = hooks.encodeCalls;
+    DebugCheck(encodeAfterRemount - encodeBeforeRemount == 1u && remounted.rootId == EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName)) &&
+                   remounted.rootId != routeB.rootId,
                L"the same lexical mount root must receive a new route identity after its direct GUID changes",
                passed,
                failed);
 
-    state.volumeNameError      = ERROR_NOT_SUPPORTED;
-    const auto unavailableGuid = BuildLocalCapabilityRouteInfo(pathB.c_str());
-    bool routeCacheInvalidated = false;
+    state.volumeNameError               = ERROR_NOT_SUPPORTED;
+    const uint64_t encodeBeforeFallback = hooks.encodeCalls;
+    const auto unavailableGuid          = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    const uint64_t encodeAfterFallback  = hooks.encodeCalls;
+    bool routeCacheInvalidated          = false;
     {
         std::scoped_lock lock(testRouteCache.mutex);
         routeCacheInvalidated = testRouteCache.volumeRoot.empty();
     }
-    DebugCheck(unavailableGuid.rootId == EncodeLocalRootId(state.volumeRoot) && routeCacheInvalidated,
+    DebugCheck(encodeAfterFallback - encodeBeforeFallback == 1u && unavailableGuid.rootId == EncodeLocalRootId(state.volumeRoot) && routeCacheInvalidated,
                L"an unavailable current GUID must use the lexical fallback and invalidate the old GUID snapshot",
                passed,
                failed);
@@ -1814,9 +1867,28 @@ void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& f
     state.volumePathError = ERROR_SUCCESS;
 
     const unsigned int volumePathCallsBeforeUnc = state.volumePathCalls;
+    const uint64_t encodeBeforeUnc              = hooks.encodeCalls;
     const auto unc                              = BuildLocalCapabilityRouteInfo(L"\\\\server\\share\\Folder\\file.bin");
-    DebugCheck(unc.remote && ! unc.rootId.empty() && state.volumePathCalls == volumePathCallsBeforeUnc,
+    const uint64_t encodeAfterUnc               = hooks.encodeCalls;
+    DebugCheck(encodeAfterUnc - encodeBeforeUnc == 1u && unc.remote && ! unc.rootId.empty() && state.volumePathCalls == volumePathCallsBeforeUnc,
                L"UNC classification must bypass local mount-root resolution",
+               passed,
+               failed);
+
+    // A malformed synthetic GUID exercises the same strict UTF-16 failure on cold and warm paths.
+    state.volumeRoot = L"C:\\MountB\\";
+    state.volumeName = L"\\\\?\\Volume{";
+    state.volumeName.push_back(static_cast<wchar_t>(0xD800u));
+    state.volumeName.append(L"}\\");
+    const std::string invalidExpected     = EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName));
+    const uint64_t encodeBeforeInvalid    = hooks.encodeCalls;
+    const auto invalidCold                = BuildLocalCapabilityRouteInfo(pathB.c_str());
+    const uint64_t encodeAfterInvalidCold = hooks.encodeCalls;
+    const auto invalidWarm                = BuildLocalCapabilityRouteInfo(pathBWarm.c_str());
+    const uint64_t encodeAfterInvalidWarm = hooks.encodeCalls;
+    DebugCheck(invalidExpected.empty() && invalidCold.rootId == invalidExpected && invalidWarm.rootId == invalidExpected &&
+                   encodeAfterInvalidCold - encodeBeforeInvalid == 1u && encodeAfterInvalidWarm == encodeAfterInvalidCold,
+               L"invalid UTF-16 keeps the same failed encoding on cold and matching warm routes",
                passed,
                failed);
 
