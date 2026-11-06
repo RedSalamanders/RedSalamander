@@ -2867,7 +2867,19 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 #endif
         if (! require(r0eCapabilityParseCount == kR0ePerfIterations && r0eAdmissionDecisionCount == kR0ePerfIterations && r0eRejectedUncontainedCount == 1u &&
                           providerOperationCallCount == 0u && r0eElapsedUs < kR0eSelfTestCeilingUs,
-                      L"R0e capability/admission containment must remain complete, provider-call-free, and within the build-specific ceiling."))
+                      std::format(L"R0e capability/admission containment must remain complete, provider-call-free, and within the build-specific ceiling "
+                                  L"(parses={}/{}, decisions={}, rejected={}, providerCalls={}, elapsed={} us, ceiling={} us, parseWork={} us, "
+                                  L"admissionWork={} us, rejectionChecks={} us).",
+                                  r0eCapabilityParseCount,
+                                  kR0ePerfIterations,
+                                  r0eAdmissionDecisionCount,
+                                  r0eRejectedUncontainedCount,
+                                  providerOperationCallCount,
+                                  r0eElapsedUs,
+                                  kR0eSelfTestCeilingUs,
+                                  std::chrono::duration_cast<std::chrono::microseconds>(r0eParseDuration).count(),
+                                  std::chrono::duration_cast<std::chrono::microseconds>(r0eAdmissionDuration).count(),
+                                  r0eRejectionChecksUs)))
         {
             return true;
         }

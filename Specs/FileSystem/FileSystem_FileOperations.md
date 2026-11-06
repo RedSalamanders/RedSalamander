@@ -2160,10 +2160,12 @@ provider's reason and a `preparation.destinationName` diagnostic before any inte
 execution keeps its own re-query against that admitted join.
 
 Inline Rename does not enter the source mutation phase until the worker is about to call
-`RenameIfUnchanged`. A pre-bind, provider-name refusal, live-output Skip, or other early failure is
-therefore reported as a typed `Failed`/`NotPublished`/`Retained` item; it must not become
-`Unknown` merely because no mutation receipt was produced. Batch Rename retains its task-wide
-mutation gate because its executor may touch multiple roots.
+`RenameIfUnchanged`. A provider-name refusal during Preparing reports typed
+`Failed`/`NotAttempted`/`Retained` with the provider's status, as for other pre-Ready failures.
+An executor pre-bind or other early failure reports `Failed`/`NotPublished`/`Retained`; an
+early Skip retains its own skipped result. None becomes `Unknown` merely because no mutation
+receipt was produced. Batch Rename retains its task-wide mutation gate because its executor may
+touch multiple roots.
 
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation
