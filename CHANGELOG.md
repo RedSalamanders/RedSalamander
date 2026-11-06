@@ -4,6 +4,45 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Consolidate the remaining advisor-survey documentation and routing work into one indexed WIP plan, preserve all six superseded survey files as retired Done records with source provenance, remove the old root queue, and update current references with exact archive-admission guards. Product implementation and qualification remain with their existing owners.
+  Validation preserved all six original body hashes and unchanged existing Done history; specification and tooling inventories passed. Focused checks recorded 148 passed, one pre-existing historical-review provenance failure and zero skips; the new archive-admission control passed. I58 records the failure and its bounded follow-up without claiming Full or product qualification.
+- Record a historical review of the WIP folder at `eb779e0bd836`. It checks plan accuracy against the tree, remaining source work, a recommended ship order, and folder-quality defects. The record authorizes no implementation and does not change the live index.
+  The review is `Specs/Reviews/WIP_FolderQuality_2026-11-01.md`, routed from `Specs/Reviews/README.md`.
+  Validation is a static citation pass of that commit. No native build or Full ran. `Tools/Test-Changelog.ps1` did not run in this environment because PowerShell 7 is absent.
+- Make the SearchService contention fixture acquire its owned pipe across listener
+  recreation within the existing deadline, retain operation timing assertions, and
+  add a deterministic bounded missing-listener control.
+- Preserve parallel search cancellation and callback failures when the last result
+  arrives after workers finish; cover that ordering with a deterministic fixture
+  gate and keep normal successful completion unchanged.
+- Update the I36/I50 review plans with passing noninteractive Release, portable ZIP and stock-checkout evidence; retain native ARM64, physical-device, foreground and environment-specific acceptance as pending while preparing the remediation for review.
+  Register the preserved stock-checkout recipe as an explicit consumer of the canonical validation-fingerprint module.
+  Preserve current-main CI/test contracts during integration and reuse the canonical SearchService fixture connector with real open-attempt observations.
+  Keep the incoming expanded I50 findings, including the separate Delete stream-context race, explicitly open instead of extending older validation claims to them.
+  Repair live references to the exact relocated evidence targets without modifying protected historical payloads.
+- Harden file operations and viewer lifetimes after revalidating the October merge reviews.
+  - Preserve exact Local publication/abort authority, long filenames, link targets and Hidden attributes;
+    use direct non-atomic MTP creation with truthful partial-publication and Move-source outcomes.
+  - Fix worker host-service dispatch, cancellation wakeups, directory-cache cancellation, interrupted-Move
+    notice ownership, conservative leftover cleanup and concurrent Preferences changes.
+  - Preserve Windows ordinal path identity for supplementary-character filenames in cached overlap
+    checks and required rename keys.
+  - Dispose ViewerSpace's private cache at Close, retain visible unreadable-subtree markers, and improve
+    viewer navigation, loading, localized counts, popup minimization, path-detail feedback and Issues export.
+  - Pin formatter behavior, exclude build/test sidecars from installers, preserve historical evidence while
+    shortening checkout paths, and strengthen scoped test verdicts and failure diagnostics.
+  - Check offline dependency constraints against immutable pinned registry data while preserving existing
+    managed checkouts and keeping live tool/bootstrap acceptance separate.
+- Remove MSI and MSIX packaging from the RedSalamander solution, build command,
+  release automation and active documentation. Keep portable ZIP and winget
+  delivery with receipt validation and clean-extraction smoke checks; reject
+  ProductionOnly plus ZIP because that build omits the matching smoke-test host.
+- Fix test-disabled leftover cleanup builds by guarding the test-only scan completion target with
+  `ENABLE_TESTS`. Native build and runtime validation remain pending user testing.
+- Preserve legacy interrupted-Move notices across the breadcrumb format upgrade, withholding them while another instance may still be their writer, and synchronize notice IDs with queue-key allocation.
+- Bind portable-package receipts to the final native binaries and their DxUi
+  provenance, reject mixed test-surface metadata, and refuse native output changes
+  during staging before receipt publication.
 - Use the owned warned Alt+F24 shortcut for native test foreground admission, preserve partial input/release cleanup and the 500 ms bound, and report the actual foreground-request result. Make the independent-volume control explicitly own and restore Parallel admission without relaxing overlap, byte or performance checks. Preserve the additional ARM64 failures and keep native qualification and Prepare acceptance open.
 - Align the short File Operations and decision-mirror keyboard regressions with the specified More-first, Cancel-last order and modeless close affordance, retaining visible focus, safe defaults, Escape and decision-ownership assertions. Reconcile the self-test guide with compiler-free PR checks and manual extended qualification. Record the owner's single obsolete-run cancellation and nine admission-only skips; public native qualification and artifact-only publication acceptance remain explicit in I56.
 - Archive standalone harness evidence before disposable-run cleanup, record the fresh native fixture rerun and merged RedSalamander repairs, and keep hosted Release/Prepare acceptance open until actual successful receipts exist.

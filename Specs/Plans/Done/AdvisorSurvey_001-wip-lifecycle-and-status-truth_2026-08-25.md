@@ -1,3 +1,24 @@
+# Retired advisor survey record
+
+> **NON-NORMATIVE RETIRED RECORD.** Archived on 2026-11-03 after reconciliation against current source.
+> No remaining executable work is owned by this file. Follow the single residual owner,
+> [I58: planning lifecycle and owner reconciliation](../WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
+> All executor instructions, TODO rows, dependencies and checkboxes in the original survey below are frozen history.
+> They do not authorize product changes, qualification runs, or access to the human-managed scratch note.
+
+## Archive provenance
+
+- **State:** RETIRED; superseded survey, not a claim that every surveyed product task is complete.
+- **Archived:** 2026-11-03
+- **Original path:** `advisor-plans/001-wip-lifecycle-and-status-truth.md`
+- **Source commit:** `269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1`
+- **Original Git blob:** `d69995b478c7302522f703c12eb4f8dfa2cbf1bc`
+- **Original file SHA-256:** `157db3b18456f5f38fe35b07ef428c09872dafc97952b7cd1609d495cd2bead5`
+- **Recovery:** `git show 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1:advisor-plans/001-wip-lifecycle-and-status-truth.md`
+
+## Frozen original survey
+
+<!-- original-advisor-survey:start -->
 # Plan 001: Stamp README lifecycle fields and honest status on every in-scope WIP file
 
 > **Executor instructions**: Follow this plan step by step. Run every

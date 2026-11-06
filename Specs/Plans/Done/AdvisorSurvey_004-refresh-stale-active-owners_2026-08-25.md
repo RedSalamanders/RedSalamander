@@ -1,3 +1,24 @@
+# Retired advisor survey record
+
+> **NON-NORMATIVE RETIRED RECORD.** Archived on 2026-11-03 after reconciliation against current source.
+> No remaining executable work is owned by this file. Follow the single residual owner,
+> [I58: planning lifecycle and owner reconciliation](../WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
+> All executor instructions, TODO rows, dependencies and checkboxes in the original survey below are frozen history.
+> They do not authorize product changes, qualification runs, or access to the human-managed scratch note.
+
+## Archive provenance
+
+- **State:** RETIRED; superseded survey, not a claim that every surveyed product task is complete.
+- **Archived:** 2026-11-03
+- **Original path:** `advisor-plans/004-refresh-stale-active-owners.md`
+- **Source commit:** `269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1`
+- **Original Git blob:** `91d3851b449238dc18b98e8ef86a0480183cc8f7`
+- **Original file SHA-256:** `4dc6ebd8a4cbce94bcf3b52bec2187f6a29df02a9921f5c24a8419718714a0f0`
+- **Recovery:** `git show 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1:advisor-plans/004-refresh-stale-active-owners.md`
+
+## Frozen original survey
+
+<!-- original-advisor-survey:start -->
 # Plan 004: Re-verify HRESULT, Win32, Google Drive, Astrolabe, Rosetta, FO stress, and CI format owners
 
 > **Executor instructions**: Follow this plan step by step. Run every
