@@ -1985,6 +1985,7 @@
         "Tools/Invoke-ProjectCi.ps1",
         "Tools/Invoke-R0ePairedValidation.ps1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
+        "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "prerequisites": [
