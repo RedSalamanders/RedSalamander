@@ -15312,7 +15312,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             bool contractsPassed = true;
             std::vector<std::wstring> failedContracts;
             size_t unexecutedContracts = 0u;
-            const auto check     = [&](std::wstring_view name, const auto& runCheck) noexcept
+            const auto check           = [&](std::wstring_view name, const auto& runCheck) noexcept
             {
                 if (state.retainTempRootOnFailure)
                 {
