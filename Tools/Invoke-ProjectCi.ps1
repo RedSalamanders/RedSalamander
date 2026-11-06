@@ -19,7 +19,7 @@ Immutable PR comparison base for changelog validation.
 .PARAMETER Configuration
 Debug, Release or ASan Debug for an explicit qualification only.
 .PARAMETER QualificationScope
-Normal regression, explicit Full qualification, or a fixed filtered diagnostic; never advances automatic Release state.
+Normal regression, explicit Full qualification, a fixed filtered diagnostic, or the manual R0e paired study; never advances automatic Release state.
 .PARAMETER DevelopmentEngine
 Allows a local engine under development for compiler-free checks only.
 .OUTPUTS
@@ -38,12 +38,13 @@ See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual a
 param([Parameter(Mandatory)][ValidateSet('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')][string]$Phase,
     [Parameter(Mandatory)][string]$EngineRoot, [ValidateSet('x64','ARM64')][string]$Platform = 'x64',
     [string]$Descriptor = '', [string]$Base = 'origin/main',
-    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','FileOpsVolumes')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
+    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes') -and $Phase -ne 'Qualification') {
+if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired') -and $Phase -ne 'Qualification') {
     throw 'Filtered diagnostic scopes are only valid for explicit Qualification.'
 }
+if ($QualificationScope -ceq 'R0ePaired' -and $Configuration -cne 'Release') { throw 'R0e paired validation requires Release.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $engineProvider = $null
 $engineDrive = $null
@@ -52,6 +53,21 @@ if ($engineProvider.Name -cne 'FileSystem') { throw 'EngineRoot requires the Fil
 Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Policy.psm1') -ErrorAction Stop
 Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Project.psm1') -ErrorAction Stop
 $context = New-CiProjectContext -Root $root -EngineRoot $EngineRoot -Phase $Phase -Platform $Platform -Descriptor $Descriptor -DevelopmentEngine:$DevelopmentEngine
+$pairedDispatch = $null
+if ($QualificationScope -ceq 'R0ePaired') {
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+    if ([string]::IsNullOrWhiteSpace($env:GITHUB_EVENT_PATH) -or -not (Test-Path -LiteralPath $env:GITHUB_EVENT_PATH -PathType Leaf)) {
+        throw 'R0e paired validation requires the manual dispatch event payload.'
+    }
+    $pairedDispatch = Get-RSHostedPairedDispatch -EventName $env:GITHUB_EVENT_NAME -EventJson ([IO.File]::ReadAllText($env:GITHUB_EVENT_PATH)) -CandidateHead $env:GITHUB_SHA
+    $candidateHead = (Invoke-CiGit $root @('rev-parse','HEAD')).stdout.Trim()
+    $candidateStatus = (Invoke-CiGit $root @('status','--porcelain')).stdout.Trim()
+    $baselineCommit = (Invoke-CiGit $root @('rev-parse','--verify',($pairedDispatch.baseline + '^{commit}'))).stdout.Trim()
+    if ($candidateHead -cne $pairedDispatch.candidate -or $context.batch.commit -cne $pairedDispatch.candidate -or $candidateStatus) {
+        throw 'R0e candidate checkout must be clean and match the frozen descriptor and dispatch SHA.'
+    }
+    if ($baselineCommit -cne $pairedDispatch.baseline) { throw 'R0e baseline must name the exact available commit object.' }
+}
 function Run([string]$Script, [string[]]$CommandArguments = @()) {
     Invoke-CiProjectScript -Context $context -Script $Script -Arguments $CommandArguments
 }
@@ -111,6 +127,7 @@ if ($Phase -eq 'Production') {
     return
 }
 $env:RSBuildEnableTests = 'true'
+if ($QualificationScope -ceq 'R0ePaired') { $env:RSBuildCompilerDebugInformation = 'Embedded' }
 if ($Phase -in @('ReleaseTestBuild','Qualification')) {
     Run 'build.ps1' ($profile + @('-BuildNumber',$number))
     Test-PinnedDxUiMatrix
@@ -129,7 +146,23 @@ if ($Configuration -eq 'ASan Debug') {
     }
 }
 Invoke-RSWithHostedTestDesktop -Action {
-    if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes')) {
+    if ($QualificationScope -ceq 'R0ePaired') {
+        [void][IO.Directory]::CreateDirectory($receiptDirectory)
+        $command = Assert-CiContainedPath $root (Join-Path $root 'Tools/Invoke-R0ePairedValidation.ps1')
+        $hostPath = (Get-Process -Id $PID).Path
+        $pairArgs = @('-NoProfile','-NonInteractive','-File',$command,'-BaselineHead',$pairedDispatch.baseline,
+            '-CandidateHead',$pairedDispatch.candidate,'-Platform',$Platform,'-BuildNumber',$number,
+            '-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-EngineRoot',$EngineRoot)
+        $process = Invoke-CiProcess -FilePath $hostPath -Arguments $pairArgs -WorkingDirectory $root -TimeoutSeconds 18000 -Stream -AllowFailure
+        [IO.File]::WriteAllText((Join-Path $receiptDirectory 'r0e-paired.stdout.log'), $process.stdout)
+        [IO.File]::WriteAllText((Join-Path $receiptDirectory 'r0e-paired.stderr.log'), $process.stderr)
+        if ($process.exitCode -eq 2) { throw 'R0e paired diagnostic retained a timing-only RED baseline; qualification remains NOT_EVALUATED.' }
+        if ($process.exitCode -ne 0) { throw "R0e paired diagnostic failed with exit $($process.exitCode); preserve its evidence." }
+        [void](Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21)
+        Write-Host 'R0e paired diagnostic completed; repository coverage remains NOT_EVALUATED.'
+        return
+    }
+    if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture')) {
         Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
         Import-Module (Join-Path $root 'Tools/Modules/Build/BuildEvidence.psm1')
         $selection = Get-RSHostedDiagnosticSelection -Scope $QualificationScope
@@ -185,7 +218,7 @@ Invoke-RSWithHostedTestDesktop -Action {
     $suite = if ($Phase -eq 'Qualification' -and $QualificationScope -eq 'Full') { 'Full' } else { 'CI' }
     Run 'Tools/Run-AllTests.ps1' ($profile + @('-Suite',$suite,'-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot'))
 }
-if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes')) { return }
+if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished; it does not authorize production or publication.'; return }
 $summaries = @(Get-ChildItem (Join-Path $env:REDSALAMANDER_TEST_ROOT 'evidence/completed-runs') -Recurse -Filter 'run-all-tests-results.json' -File | Where-Object LastWriteTimeUtc -ge $started)

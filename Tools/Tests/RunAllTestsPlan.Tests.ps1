@@ -1284,9 +1284,11 @@ Set-StrictMode -Version Latest
         $nightly | Should Match '(?m)^  workflow_dispatch:'
         $nightly | Should Not Match '(?m)^  schedule:'
         $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes\]'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired\]'
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
+        $nightly | Should Match '(?m)^      baseline_ref:\s*$'
+        $nightly | Should Match '(?m)^        required: false\s*$'
         $pin = [regex]::Escape($engineRef)
         $workflow | Should Not Match 'build-reusable\.yml|run_full_tests:|test_suite:'
         $native = Get-Content (Join-Path $repoRoot '.github/workflows/qualify.yml') -Raw
@@ -1296,6 +1298,9 @@ Set-StrictMode -Version Latest
         $adapter | Should Match "else \{ 'CI' \}"
         $adapter | Should Match "Run 'Tools/Run-AllTests.ps1'"
         $adapter | Should Match 'Invoke-CiAssertionProbe'
+        $adapter | Should Match 'Get-RSHostedPairedDispatch'
+        $adapter | Should Match 'Invoke-R0ePairedValidation\.ps1'
+        $adapter | Should Match 'timing-only RED baseline; qualification remains NOT_EVALUATED'
         foreach ($manual in @('nightly-ci.yml','nightly-flake.yml')) {
             $diagnostic = Get-Content (Join-Path $repoRoot ('.github/workflows/' + $manual)) -Raw
             $diagnostic | Should Match 'workflow_dispatch:'
@@ -2905,13 +2910,35 @@ Describe 'Hosted filtered diagnostic evidence' {
             @{name='Setup';status='passed'}, @{name=$selection.case;status='passed'}, @{name='Cleanup_RestorePluginConfig';status='passed'}) }
         $invoke = { Test-RSHostedDiagnosticOutcome -ExitCode 2 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $true -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end }
     }
-    It 'maps only the two reviewed exact diagnostic cases' {
+    It 'maps only the three reviewed exact diagnostic cases' {
         (Get-RSHostedDiagnosticSelection CommandsHandoff).case | Should Be 'cmd_pane_selection_select_next_keeps_navigation_shell_stable'
         $selection.case | Should Be 'R4A19_DiscoveryIndependentVolumes'
+        (Get-RSHostedDiagnosticSelection ViewerSpaceCapture).case | Should Be 'cmd_viewer_space_explorer_analyst_exact_nested_detail'
         { Get-RSHostedDiagnosticSelection -Scope Other } | Should Throw 'does not belong to the set'
+    }
+    It 'binds the paired scope to an immutable manual dispatch' {
+        $candidate = 'a' * 40; $baseline = 'b' * 40
+        $event = @{inputs=@{scope='R0ePaired'; configuration='Release'; baseline_ref=$baseline}} | ConvertTo-Json -Compress
+        $actual = Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $event -CandidateHead $candidate
+        $actual.baseline | Should Be $baseline
+        $actual.candidate | Should Be $candidate
+        { Get-RSHostedPairedDispatch -EventName push -EventJson $event -CandidateHead $candidate } | Should Throw 'manual dispatch'
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson '{invalid' -CandidateHead $candidate } | Should Throw 'invalid JSON'
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson '{}' -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='R0ePaired'; configuration='Release'; baseline_ref='main'}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='R0ePaired'; configuration='Release'; baseline_ref=('0' * 40)}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='CommandsHandoff'; configuration='Release'; baseline_ref=$baseline}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='R0ePaired'; configuration='Debug'; baseline_ref=$baseline}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $event -CandidateHead ('0' * 40) } | Should Throw 'candidate SHA'
     }
     It 'rejects diagnostic scope outside Qualification before loading an engine' {
         { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Static -EngineRoot 'missing-engine' -QualificationScope CommandsHandoff } | Should Throw 'only valid for explicit Qualification'
+        { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Static -EngineRoot 'missing-engine' -QualificationScope R0ePaired } | Should Throw 'only valid for explicit Qualification'
+        { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Qualification -EngineRoot 'missing-engine' -QualificationScope R0ePaired -Configuration Debug } | Should Throw 'requires Release'
     }
     It 'accepts one passing filtered case with clean companion results and quarantine' {
         (& $invoke) | Should Be $true
@@ -2921,6 +2948,14 @@ Describe 'Hosted filtered diagnostic evidence' {
         $summary.suite='Commands'; $summary.case_filter=$selection.case; $summary.passed=1; $summary.total=1
         $native=@{suite='Commands';passed=1;failed=0;skipped=0;cases=@(@{name=$selection.case;status='passed'})}
         (& $invoke) | Should Be $true
+    }
+    It 'accepts only the exact ViewerSpace Commands case for the capture scope' {
+        $selection=Get-RSHostedDiagnosticSelection ViewerSpaceCapture
+        $summary.suite='Commands'; $summary.case_filter=$selection.case; $summary.passed=1; $summary.total=1
+        $native=@{suite='Commands';passed=1;failed=0;skipped=0;cases=@(@{name=$selection.case;status='passed'})}
+        (& $invoke) | Should Be $true
+        $native.cases[0].name='cmd_pane_selection_select_next_keeps_navigation_shell_stable'
+        { & $invoke } | Should Throw 'exact selected native case'
     }
     It 'requires one safe runner-owned ID and rejects duplicate or traversal text' {
         (Get-RSHostedDiagnosticRunId -Output "  Run id:    $runId") | Should Be $runId

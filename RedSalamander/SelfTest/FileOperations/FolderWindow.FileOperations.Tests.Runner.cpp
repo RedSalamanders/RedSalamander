@@ -9652,13 +9652,21 @@ using TickResult = std::optional<bool>;
     return desktop.Finish() || reject(L"owned-window no-activation witness failed");
 }
 
-[[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state, std::wstring& failureReason) noexcept
 {
     using namespace std::chrono_literals;
     using namespace FileOperationsPopupInternal;
-    using State       = FolderWindow::FileOperationState;
-    const auto reject = [](std::wstring_view reason) noexcept
+    using State = FolderWindow::FileOperationState;
+    failureReason.clear();
+    const auto recordFailure = [&](std::wstring_view reason) noexcept
     {
+        if (! failureReason.empty())
+            failureReason.append(L"; ");
+        failureReason.append(reason);
+    };
+    const auto reject = [&](std::wstring_view reason) noexcept
+    {
+        recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
         return false;
     };
@@ -9669,6 +9677,7 @@ using TickResult = std::optional<bool>;
     const auto fail = [&](std::wstring_view reason) noexcept
     {
         ++failures;
+        recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
     auto* folder     = TryGetFolderWindow(state.mainWindow);
@@ -15311,6 +15320,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             bool contractsPassed = true;
             std::vector<std::wstring> failedContracts;
+            std::wstring conflictInspectionFailure;
             size_t unexecutedContracts = 0u;
             const auto check           = [&](std::wstring_view name, const auto& runCheck) noexcept
             {
@@ -15384,7 +15394,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                   [&] { return RunFileOpsPopupStatusAccessibilityChecks(state); });
             check(L"conflict inspection follows a refresh, ends Canceled on a user cancel, breaks a same-name tie by kind and ends Stale with its "
                   L"popup, prompt, cleared pane path or disconnect",
-                  [&] { return RunFileOpsConflictInspectionSettlementChecks(state); });
+                  [&] { return RunFileOpsConflictInspectionSettlementChecks(state, conflictInspectionFailure); });
             const FileOperations::QualifiedEndpoint dummyEndpoint{
                 .pluginId               = L"builtin/file-system-dummy",
                 .instanceId             = L"host/default",
@@ -15417,6 +15427,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                         failures.append(L"; ");
                     failures.append(name);
                 }
+                if (! conflictInspectionFailure.empty())
+                    failures.append(std::format(L" (conflict inspection: {})", conflictInspectionFailure));
                 Fail(std::format(L"File Operations safety contracts failed: {}. Failed witnesses={}, not executed after retained failure={}. "
                                  L"See individual witnesses in the trace.",
                                  failures,
@@ -15796,10 +15808,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             inProgress                 = true;
             const auto resetInProgress = wil::scope_exit([]() noexcept { inProgress = false; });
-            if (! RunFileOpsPopupIdleCadenceChecks(state))
+            std::wstring failureReason;
+            if (! RunFileOpsPopupIdleCadenceChecks(state, failureReason))
             {
-                Fail(L"A paused, queued or prompt-blocked task, open path detail or retained history kept the popup or owner timer doing per-tick work; see "
-                     L"trace.");
+                Fail(std::format(L"Popup idle cadence failed: {}. See individual witnesses in the trace.", failureReason));
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

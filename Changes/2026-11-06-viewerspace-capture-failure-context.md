@@ -1,0 +1,1 @@
+- Report ViewerSpace capture failures with the original pixel witnesses, child geometry, DPI, monitor bounds, and navigation host state to help diagnose hosted composition failures; validation remains pending.

@@ -1145,6 +1145,16 @@ The interleaved workload and total timer remain unchanged, including diagnostic 
 these phase metrics must never replace the total-time gate or be subtracted from it.
 Any before/after optimization comparison must retain this same instrumented fixture on both sides.
 
+The explicit hosted `R0ePaired` diagnostic uses
+[`Tools/Invoke-R0ePairedValidation.ps1`](../../Tools/Invoke-R0ePairedValidation.ps1)
+to retain both full-solution Embedded Release builds and five fresh canonical processes per
+side on one native machine. It verifies the exact reviewed case projections, unchanged scale-1
+workload, eight raw metrics, closed archives, source/receipt identities and clean quarantine.
+It does not widen a timing gate or qualify Full coverage. A baseline that fails only the
+two-second assertion remains a failed native result and makes the hosted diagnostic fail;
+the candidate measurements and comparison remain useful diagnostic evidence. Missing evidence,
+other failed assertions and candidate timing failures cannot be classified as timing-only RED.
+
 R0e-OR1 fixed-volume Local reader cancellation evidence uses the test-enabled Release Commands case
 `cmd_pane_fileops_local_blocked_reader_cancel_is_bounded`. One real Local `Win32FileReader` issues an
 overlapped one-byte read against a connected outbound byte pipe whose server produces no bytes. The

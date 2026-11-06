@@ -9,10 +9,14 @@ on:
         options: [Debug, Release, ASan Debug]
         default: Release
       scope:
-        description: Full qualification or one explicitly filtered diagnostic
+        description: Full qualification or an explicitly selected diagnostic
         type: choice
-        options: [Full, CommandsHandoff, FileOpsVolumes]
+        options: [Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired]
         default: Full
+      baseline_ref:
+        description: Full immutable baseline commit SHA, required only for R0ePaired
+        type: string
+        required: false
 permissions:
   contents: read
 concurrency:

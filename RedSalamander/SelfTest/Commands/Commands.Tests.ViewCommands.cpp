@@ -22105,20 +22105,124 @@ struct FolderViewDummyPluginHandles
         SendMessageW(probe.hwnd, WM_MOUSELEAVE, 0u, 0u);
         SendMessageW(snapshot.analysisHwnd, WM_MOUSELEAVE, 0u, 0u);
         UpdateWindow(probe.hwnd);
-        const HRESULT captured = RedSalamander::TestSupport::SaveWindowScreenshot(probe.hwnd, captures / (name + L".png"), probes);
-        state.Require(SUCCEEDED(captured),
-                      std::format(L"Owned-window capture {0} retains chrome, analysis, navigation and divider composition: 0x{1:08X}; "
-                                  L"backgroundPixels={2}, textPixels={3}, analysisPixels={4}, navigationPixels={5}, edgePixels=[{6},{7},{8},{9}].",
-                                  name,
-                                  static_cast<unsigned long>(captured),
-                                  probes[0].matchedPixels,
-                                  probes[1].matchedPixels,
-                                  probes[2].matchedPixels,
-                                  probes[3].matchedPixels,
-                                  probes[4].matchedPixels,
-                                  probes[5].matchedPixels,
-                                  probes[6].matchedPixels,
-                                  probes[7].matchedPixels));
+        const HRESULT captured    = RedSalamander::TestSupport::SaveWindowScreenshot(probe.hwnd, captures / (name + L".png"), probes);
+        const auto capturedProbes = probes; // Preserve the capture result before any diagnostic queries.
+        if (FAILED(captured))
+        {
+            RECT actualParentClient{}, actualParentWindow{}, actualNavigationClient{}, actualNavigationWindow{};
+            const bool parentClientOk     = GetClientRect(probe.hwnd, &actualParentClient) != FALSE;
+            const bool parentWindowOk     = GetWindowRect(probe.hwnd, &actualParentWindow) != FALSE;
+            const bool navigationClientOk = snapshot.navigationHwnd && GetClientRect(snapshot.navigationHwnd, &actualNavigationClient) != FALSE;
+            const bool navigationWindowOk = snapshot.navigationHwnd && GetWindowRect(snapshot.navigationHwnd, &actualNavigationWindow) != FALSE;
+            POINT navigationOrigin{actualNavigationClient.left, actualNavigationClient.top};
+            POINT navigationEnd{actualNavigationClient.right, actualNavigationClient.bottom};
+            const bool mappedOk = navigationClientOk && ClientToScreen(snapshot.navigationHwnd, &navigationOrigin) != FALSE &&
+                                  ClientToScreen(snapshot.navigationHwnd, &navigationEnd) != FALSE && ScreenToClient(probe.hwnd, &navigationOrigin) != FALSE &&
+                                  ScreenToClient(probe.hwnd, &navigationEnd) != FALSE;
+            MONITORINFO parentMonitor{.cbSize = sizeof(MONITORINFO)};
+            MONITORINFO navigationMonitor{.cbSize = sizeof(MONITORINFO)};
+            const bool parentMonitorOk = GetMonitorInfoW(MonitorFromWindow(probe.hwnd, MONITOR_DEFAULTTONEAREST), &parentMonitor) != FALSE;
+            const bool navigationMonitorOk =
+                snapshot.navigationHwnd && GetMonitorInfoW(MonitorFromWindow(snapshot.navigationHwnd, MONITOR_DEFAULTTONEAREST), &navigationMonitor) != FALSE;
+            std::wstring diagnostic =
+                std::format(L"Owned-window capture {0} retains chrome, analysis, navigation and divider composition: 0x{1:08X}; "
+                            L"backgroundPixels={2}, textPixels={3}, analysisPixels={4}, navigationPixels={5}, edgePixels=[{6},{7},{8},{9}].",
+                            name,
+                            static_cast<unsigned long>(captured),
+                            capturedProbes[0].matchedPixels,
+                            capturedProbes[1].matchedPixels,
+                            capturedProbes[2].matchedPixels,
+                            capturedProbes[3].matchedPixels,
+                            capturedProbes[4].matchedPixels,
+                            capturedProbes[5].matchedPixels,
+                            capturedProbes[6].matchedPixels,
+                            capturedProbes[7].matchedPixels);
+            diagnostic += std::format(L" DPI parent={0} navigation={1}; clientOk={2}/{3} parentClient=[{4},{5},{6},{7}] navigationClient=[{8},{9},{10},{11}] "
+                                      L"mappedOk={12} mappedNavigation=[{13},{14},{15},{16}] capturedNavigation=[{17},{18},{19},{20}].",
+                                      GetDpiForWindow(probe.hwnd),
+                                      snapshot.navigationHwnd ? GetDpiForWindow(snapshot.navigationHwnd) : 0u,
+                                      parentClientOk,
+                                      navigationClientOk,
+                                      actualParentClient.left,
+                                      actualParentClient.top,
+                                      actualParentClient.right,
+                                      actualParentClient.bottom,
+                                      actualNavigationClient.left,
+                                      actualNavigationClient.top,
+                                      actualNavigationClient.right,
+                                      actualNavigationClient.bottom,
+                                      mappedOk,
+                                      navigationOrigin.x,
+                                      navigationOrigin.y,
+                                      navigationEnd.x,
+                                      navigationEnd.y,
+                                      navigationClient.left,
+                                      navigationClient.top,
+                                      navigationClient.right,
+                                      navigationClient.bottom);
+            diagnostic += std::format(L" WindowOk={0}/{1} parent=[{2},{3},{4},{5}] navigation=[{6},{7},{8},{9}] monitorOk={10}/{11} "
+                                      L"parentMonitor=[{12},{13},{14},{15}] navigationMonitor=[{16},{17},{18},{19}].",
+                                      parentWindowOk,
+                                      navigationWindowOk,
+                                      actualParentWindow.left,
+                                      actualParentWindow.top,
+                                      actualParentWindow.right,
+                                      actualParentWindow.bottom,
+                                      actualNavigationWindow.left,
+                                      actualNavigationWindow.top,
+                                      actualNavigationWindow.right,
+                                      actualNavigationWindow.bottom,
+                                      parentMonitorOk,
+                                      navigationMonitorOk,
+                                      parentMonitor.rcMonitor.left,
+                                      parentMonitor.rcMonitor.top,
+                                      parentMonitor.rcMonitor.right,
+                                      parentMonitor.rcMonitor.bottom,
+                                      navigationMonitor.rcMonitor.left,
+                                      navigationMonitor.rcMonitor.top,
+                                      navigationMonitor.rcMonitor.right,
+                                      navigationMonitor.rcMonitor.bottom);
+            diagnostic +=
+                std::format(L" Navigation snapshot: available={0} window={1} visible={2} root={3} d2d={4} size={5}x{6} renders={7} "
+                            L"resizeFailures={8} presentFailures={9} flushFailures={10} mode={11} dark={12} contrast={13} bg=0x{14:08X} text=0x{15:08X} "
+                            L"viewNode={16} selected={17} layout={18} presented={19}.",
+                            navigationHost.diagnosticsAvailable,
+                            navigationHost.hasWindow,
+                            navigationHost.visible,
+                            navigationHost.hasRoot,
+                            navigationHost.hasD2DContext,
+                            navigationHost.clientWidthPx,
+                            navigationHost.clientHeightPx,
+                            navigationHost.renderCount,
+                            navigationHost.resizeFailureCount,
+                            navigationHost.presentFailureCount,
+                            navigationHost.prepareD2DFlushFailureCount,
+                            navigationHost.presentationMode,
+                            navigationHost.dark,
+                            navigationHost.highContrast,
+                            navigationHost.windowBackgroundArgb,
+                            navigationHost.textArgb,
+                            snapshot.viewNodeId,
+                            snapshot.selectedItemId,
+                            snapshot.layoutGeneration,
+                            snapshot.presentedLayoutGeneration);
+            for (size_t index = 0u; index < capturedProbes.size(); ++index)
+            {
+                const auto& witness = capturedProbes[index];
+                diagnostic += std::format(L" Probe{0} color=0x{1:08X} tolerance={2} required={3} matched={4} bounds=[{5},{6},{7},{8}].",
+                                          index,
+                                          static_cast<unsigned long>(witness.expectedColor),
+                                          static_cast<unsigned int>(witness.tolerance),
+                                          witness.minimumMatchingPixels,
+                                          witness.matchedPixels,
+                                          witness.clientBounds.left,
+                                          witness.clientBounds.top,
+                                          witness.clientBounds.right,
+                                          witness.clientBounds.bottom);
+            }
+            SelfTest::AppendSelfTestTrace(diagnostic);
+            state.Require(false, diagnostic);
+        }
         captureProvenance += std::format("{0}{{\"file\":\"{1}.png\",\"widthPx\":{2},\"heightPx\":{3},\"themeIndex\":{4},\"layoutGeneration\":{5},"
                                          "\"windowRectPx\":[{6},{7},{8},{9}],\"workAreaPx\":[{10},{11},{12},{13}],\"childEdgeProbes\":4,"
                                          "\"presentedLayoutGeneration\":{14},\"layoutDirty\":{15},\"mapWidthDip\":{16:.2f},\"mapHeightDip\":{17:.2f},"

@@ -1,9 +1,17 @@
 # Repository tooling
 
-The manual native suite defaults to Full. Its explicit CommandsHandoff and FileOpsVolumes
-choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
+The manual native suite defaults to Full. Its explicit CommandsHandoff, FileOpsVolumes and
+ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
+
+The explicit Release R0ePaired choice requires an immutable `baseline_ref` and runs
+`Invoke-R0ePairedValidation.ps1` on each matching native architecture. It retains an isolated
+baseline build and five fresh canonical processes per side with the same hosted build number,
+dependencies and profile. The two-second ceiling, exact workload/counts and matched p95
+bound remain enforced. Partial logs and failed native results remain available. A timing-only
+RED baseline ends with a failed diagnostic job and NOT_EVALUATED coverage; it never becomes
+a passing native, Full or release receipt. No diagnostic choice publishes production artifacts.
 
 The Full tooling deployment fixture bounds its contained targeted compiler operation to
 60 minutes; product performance budgets remain independent. See the
@@ -344,6 +352,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Get-VisibleTypographyAudit.ps1` | Public UI source audit | Finds visible typography paths outside the intended DirectWrite model. |
 | `Install-ClangFormat.ps1` | Public formatter acquisition | Checksum-pinned native formatter download/offline extraction, cache verification and failure-preserving publication. |
 | `Invoke-ProjectCi.ps1` | Public hosted CI adapter | Runs compiler-free PR checks or admitted native roles with pinned dependencies, governed test evidence and internal ZIPs. |
+| `Invoke-R0ePairedValidation.ps1` | Explicit hosted paired diagnostic | Retains an immutable baseline build and five fresh Release R0e processes per side with strict raw-evidence validation; never qualifies Full coverage. |
 | `Invoke-SanitizedMsbuild.ps1` | Public build diagnostic command | Runs contained MSBuild with normalized environment plus explicit profile/dependency coordination. |
 | `InvokeSolutionCloc.ps1` | Supported manual compatibility command | Preserves hand-run raw cloc arguments while forwarding solution discovery to `Measure-SourceLines.ps1 -Scope Solution`. |
 | `Manage-WindowsCredentials.ps1` | Public support command | Lists or, with confirmation, removes selected Windows credentials. |
@@ -410,6 +419,7 @@ and focused tests.
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
 | `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only supported display selection, work-area/session/foreground diagnostics, and restoration around native qualification. |
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
+| `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source, closed raw sample archives and fixed same-machine paired comparison. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
 | `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters, bounded Pester failure/skip case normalization, and result classification. |

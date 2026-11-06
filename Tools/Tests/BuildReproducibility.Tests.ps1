@@ -749,7 +749,7 @@ Describe 'Pinned build-tool and CI identity' {
         $adapter | Should Match 'Import-Module.*HostedTestDesktop'
         $nightly = Get-Content (Join-Path $repoRoot '.github/workflows/nightly-ci.yml') -Raw
         $nightly | Should Match 'workflow_dispatch:'
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes\]'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired\]'
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'
