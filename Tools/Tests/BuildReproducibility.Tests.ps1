@@ -749,11 +749,24 @@ Describe 'Pinned build-tool and CI identity' {
         $adapter | Should Match 'Import-Module.*HostedTestDesktop'
         $nightly = Get-Content (Join-Path $repoRoot '.github/workflows/nightly-ci.yml') -Raw
         $nightly | Should Match 'workflow_dispatch:'
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired\]'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'
         @((Get-Content (Join-Path $repoRoot 'Tests/test-scopes.json') -Raw|ConvertFrom-Json).prCoverage).Count | Should Be 0
+    }
+
+    It 'refuses desktop diagnostics outside hosted Qualification before engine or sandbox work' {
+        $adapterPath = Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'
+        $adapter = [IO.File]::ReadAllText($adapterPath)
+        $prior = [Environment]::GetEnvironmentVariable('GITHUB_ACTIONS', 'Process')
+        try {
+            $env:GITHUB_ACTIONS = 'false'
+            Assert-RSThrowsMatching -ScriptBlock { & $adapterPath -Phase Static -EngineRoot 'does-not-exist' -QualificationScope DesktopProbe } -Pattern 'only valid for explicit Qualification'
+            Assert-RSThrowsMatching -ScriptBlock { & $adapterPath -Phase Qualification -EngineRoot 'does-not-exist' -QualificationScope DesktopProbe } -Pattern 'restricted to GitHub Actions'
+        } finally { [Environment]::SetEnvironmentVariable('GITHUB_ACTIONS', $prior, 'Process') }
+        $adapter.IndexOf("if (`$QualificationScope -ceq 'DesktopProbe')") | Should BeLessThan $adapter.IndexOf('function Test-PinnedDxUiMatrix')
+        $adapter | Should Match "repository_verdict='NOT_EVALUATED'; desktop=\(Get-RSHostedDesktopDiagnostics\)"
     }
 
     It 'keeps manual ASan on both native architectures with seeded detector proof' {

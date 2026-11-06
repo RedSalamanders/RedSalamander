@@ -88,4 +88,27 @@ Describe 'Hosted desktop fixture lifecycle' {
         { Invoke-RSWithHostedTestDesktop { $global:rsHostedDesktopFixtureTest.ActionCalls++ } } | Should Throw 'seeded restoration failure'
         $global:rsHostedDesktopFixtureTest.ActionCalls | Should Be 1
     }
+    It 'reads desktop diagnostics without changing the display or invoking qualification' {
+        $desktop = [pscustomobject]@{ WindowStation='WinSta0'; WindowStationError=0; ThreadDesktop='Default'; ThreadDesktopError=0; InputDesktop=''; InputDesktopError=5; ForegroundDesktop=''; ForegroundDesktopError=5 }
+        $global:rsHostedDesktopFixtureTest.Small | Add-Member -NotePropertyName DesktopContext -NotePropertyValue $desktop
+        $result = Get-RSHostedDesktopDiagnostics
+        $result.DesktopContext.ThreadDesktop | Should Be 'Default'
+        $result.DesktopContext.InputDesktop | Should Be ''
+        $result.DesktopContext.InputDesktopError | Should Be 5
+        $result.DesktopContext.ForegroundDesktopError | Should Be 5
+        ($result.PSObject.Properties.Name -contains 'Mode') | Should Be $false
+        $global:rsHostedDesktopFixtureTest.ActionCalls | Should Be 0
+        Assert-MockCalled Get-RSHostedDesktopState -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly
+        Assert-MockCalled Get-RSHostedDisplayModes -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+        Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+    It 'refuses local diagnostics before reading the desktop' {
+        $env:GITHUB_ACTIONS = 'false'
+        $failure = $null
+        try { $null = Get-RSHostedDesktopDiagnostics } catch { $failure = $_.Exception.Message }
+        ($null -ne $failure) | Should Be $true
+        $failure | Should Match 'restricted to GitHub Actions'
+        Assert-MockCalled Get-RSHostedDesktopState -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+        Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
 }

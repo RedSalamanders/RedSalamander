@@ -20,7 +20,52 @@ namespace RedSalamander.Testing {
     }
     [StructLayout(LayoutKind.Sequential)]
     public struct Rectangle { public int Left, Top, Right, Bottom; }
+    public sealed class SafeDesktopHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid {
+        public SafeDesktopHandle() : base(true) {}
+        [DllImport("user32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
+        protected override bool ReleaseHandle() { return CloseDesktop(handle); }
+    }
+    public sealed class DesktopContext {
+        public string WindowStation = "";
+        public int WindowStationError;
+        public string ThreadDesktop = "";
+        public int ThreadDesktopError;
+        public string InputDesktop = "";
+        public int InputDesktopError;
+        public string ForegroundDesktop = "";
+        public int ForegroundDesktopError;
+    }
     public static class HostedDesktopNative {
+        [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetProcessWindowStation();
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint thread);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern SafeDesktopHandle OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint access);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetUserObjectInformationW(IntPtr handle, int index, StringBuilder text, uint bytes, out uint needed);
+        private static string ObjectName(IntPtr handle, out int error) {
+            error = 0;
+            if (handle == IntPtr.Zero) { error = Marshal.GetLastWin32Error(); return ""; }
+            var name = new StringBuilder(256);
+            uint needed;
+            if (!GetUserObjectInformationW(handle, 2, name, (uint)(name.Capacity * 2), out needed)) {
+                error = Marshal.GetLastWin32Error(); return "";
+            }
+            return name.ToString();
+        }
+        public static DesktopContext ReadDesktopContext(uint foregroundThread) {
+            var result = new DesktopContext();
+            result.WindowStation = ObjectName(GetProcessWindowStation(), out result.WindowStationError);
+            result.ThreadDesktop = ObjectName(GetThreadDesktop(GetCurrentThreadId()), out result.ThreadDesktopError);
+            // READOBJECTS only: neither desktop switching nor foreground permission is requested.
+            using (var input = OpenInputDesktop(0, false, 1)) {
+                if (input == null || input.IsInvalid) result.InputDesktopError = Marshal.GetLastWin32Error();
+                else result.InputDesktop = ObjectName(input.DangerousGetHandle(), out result.InputDesktopError);
+            }
+            if (foregroundThread != 0)
+                result.ForegroundDesktop = ObjectName(GetThreadDesktop(foregroundThread), out result.ForegroundDesktopError);
+            return result;
+        }
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool EnumDisplaySettingsW(string device, int index, ref DisplayMode mode);
@@ -52,7 +97,7 @@ function Get-RSHostedDesktopState {
     }
     $foreground = [RedSalamander.Testing.HostedDesktopNative]::GetForegroundWindow()
     $foregroundProcess = [uint32]0
-    $null = [RedSalamander.Testing.HostedDesktopNative]::GetWindowThreadProcessId($foreground, [ref]$foregroundProcess)
+    $foregroundThread = [RedSalamander.Testing.HostedDesktopNative]::GetWindowThreadProcessId($foreground, [ref]$foregroundProcess)
     $className = [Text.StringBuilder]::new(256)
     $null = [RedSalamander.Testing.HostedDesktopNative]::GetClassNameW($foreground, $className, $className.Capacity)
     $foregroundOwner = if ($foregroundProcess -eq 0) { $null } else { Get-Process -Id $foregroundProcess -ErrorAction SilentlyContinue }
@@ -67,10 +112,34 @@ function Get-RSHostedDesktopState {
         WorkWidth = $work.Right - $work.Left
         WorkHeight = $work.Bottom - $work.Top
         Session = [Diagnostics.Process]::GetCurrentProcess().SessionId
+        ForegroundThread = $foregroundThread
         ForegroundProcess = $foregroundProcess
         ForegroundName = $processName
         ForegroundClass = $className.ToString()
+        DesktopContext = [RedSalamander.Testing.HostedDesktopNative]::ReadDesktopContext($foregroundThread)
     }
+}
+
+function Get-RSHostedDesktopDiagnostics {
+    <#
+    .SYNOPSIS
+        Reads hosted desktop identities and individual access errors.
+    .DESCRIPTION
+        Refuses outside GitHub Actions. Reads the calling window station and desktop,
+        input desktop and foreground thread desktop, alongside display/session facts.
+        Unavailable names retain their Windows error; they do not establish a mismatch.
+        Does not send input, activate windows or change display/session settings.
+    .OUTPUTS
+        A diagnostic object, excluding the native display-mode restoration structure.
+    .NOTES
+        Read-only Windows GitHub Actions diagnostics; creates no qualification receipt.
+    .EXAMPLE
+        Get-RSHostedDesktopDiagnostics | ConvertTo-Json -Depth 5
+    #>
+    [CmdletBinding()]
+    param()
+    if ($env:GITHUB_ACTIONS -cne 'true') { throw 'Hosted desktop diagnostics are restricted to GitHub Actions.' }
+    Get-RSHostedDesktopState | Select-Object * -ExcludeProperty Mode
 }
 
 function Get-RSHostedDisplayModes {
@@ -152,4 +221,4 @@ function Invoke-RSWithHostedTestDesktop {
     }
 }
 
-Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop
+Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics

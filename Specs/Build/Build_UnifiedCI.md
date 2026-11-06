@@ -7,6 +7,14 @@ source-bound full-solution receipt. It labels that result filtered and NOT_EVALU
 repository coverage and creates no regression or production receipt. Other phases reject these
 scopes before mutation; the pinned native matrix, desktop lease and build contracts still apply.
 
+The manual `DesktopProbe` scope reads desktop and session facts on the same native hosted
+matrix before dependency installation or builds. It records calling window-station and
+thread-desktop names, input and foreground-desktop names, and individual Windows query
+errors in source-bound `desktop.json` evidence. An unavailable name is unknown, not proof
+of a separate desktop. This scope sends no input, activates no window and changes no
+display or session settings. It remains NOT_EVALUATED and creates no test, regression or
+production receipt. Other phases and local invocation reject it before engine/sandbox work.
+
 The separate manual `R0ePaired` scope is Release-only. It requires a nonzero full lowercase
 baseline commit SHA in `baseline_ref`, an available exact commit object, and a clean candidate
 whose HEAD equals the dispatch SHA and frozen descriptor. The candidate and an isolated,
