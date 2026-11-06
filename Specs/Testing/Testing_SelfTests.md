@@ -720,6 +720,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   querying diagnostic geometry. Record actual window/navigation DPI, monitor and client bounds,
   palette/render context and each probe's bounds, required count and matched count in the native
   failure reason. These observations do not change capture retries or pixel tolerances.
+  Keep visible fixture labels deterministic; a nonce used for isolation belongs outside the
+  scanned root whose leaf is displayed as breadcrumb text.
 - Aggregate File Operations safety and idle-cadence failures include their call-local failing
   witness reasons in native results as well as the trace. Precise diagnostics preserve the
   original assertions, deadlines, input sequence and restoration behavior.
