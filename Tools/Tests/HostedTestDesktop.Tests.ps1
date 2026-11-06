@@ -153,6 +153,29 @@ Describe 'Hosted owned desktop entry lifetime' {
         }
         Remove-Variable rsOwnedDesktopTest -Scope Global -ErrorAction SilentlyContinue
     }
+    It 'selects the owned fixture for this project hosted native entry without native calls' {
+        Get-RSHostedInputDesktopRequest | Should Be 'owned'
+        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+    }
+    It 'preserves the original fixture for both sources of a paired comparison' {
+        ($null -eq (Get-RSHostedInputDesktopRequest -PairedComparison)) | Should Be $true
+        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+    }
+    It 'does not select an owned desktop for local execution' {
+        $env:GITHUB_ACTIONS='false'
+        ($null -eq (Get-RSHostedInputDesktopRequest)) | Should Be $true
+        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+    }
+    It 'does not select an owned desktop for a self hosted runner' {
+        $env:RUNNER_ENVIRONMENT='self-hosted'
+        ($null -eq (Get-RSHostedInputDesktopRequest)) | Should Be $true
+        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+    }
+    It 'does not select an owned desktop for another repository' {
+        $env:GITHUB_REPOSITORY='fixture/other'
+        ($null -eq (Get-RSHostedInputDesktopRequest)) | Should Be $true
+        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+    }
     It 'restores after contained entry drain and preserves the action result' {
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { $global:rsOwnedDesktopTest.Events.Add('entry-drained'); 7 } }
         $r.Succeeded | Should Be $true

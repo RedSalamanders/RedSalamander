@@ -1,0 +1,1 @@
+- Use the verified owned input-desktop fixture for this project's hosted native interactive entries, retaining real keyboard/focus assertions, the existing warning, contained process drain and verified restoration. Local/self-hosted runs and matched historical comparisons keep their original desktop; inherited requests are cleared unless selected by the current role.

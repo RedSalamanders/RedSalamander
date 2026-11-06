@@ -31,7 +31,8 @@ Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for repository coverage.
 DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
-CommandsHandoff pilots an owned input desktop inside the existing interactive entry lease and restores it after child drain.
+Hosted interactive native entries use an owned input desktop inside the existing entry lease and restore it after child drain.
+Paired comparisons retain the original desktop for both sources.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
 ./Tools/Invoke-ProjectCi.ps1 -Phase Static -EngineRoot ../RedSalamanders.CI -Base origin/main -DevelopmentEngine
@@ -164,8 +165,9 @@ if ($Configuration -eq 'ASan Debug') {
 }
 $priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
 try {
-# Pilot: opt in only for the explicit handoff diagnostic until native proof is retained.
-if ($QualificationScope -ceq 'CommandsHandoff') { $env:REDSALAMANDER_HOSTED_TEST_DESKTOP = 'owned' }
+# Clear an inherited request unless the current hosted role selects this fixture.
+[Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',
+    (Get-RSHostedInputDesktopRequest -PairedComparison:($QualificationScope -ceq 'R0ePaired')), 'Process')
 Invoke-RSWithHostedTestDesktop -Action {
     if ($QualificationScope -ceq 'R0ePaired') {
         [void][IO.Directory]::CreateDirectory($receiptDirectory)

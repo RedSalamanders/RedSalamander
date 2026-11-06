@@ -2693,8 +2693,8 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and pilot a temporary owned input desktop for one leased interactive entry.",
-      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, or Invoke-RSWithHostedOwnedDesktop only within the canonical interactive entry lease. The owned desktop pilot is requested by explicit CommandsHandoff. Local invocation is refused.",
+      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and own a temporary input desktop for each leased hosted interactive entry.",
+      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest for pure fixture selection, and Invoke-RSWithHostedOwnedDesktop only within the canonical interactive entry lease. Project GitHub-hosted native entries request it; paired studies retain the original fixture on both sources. Local invocation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
         ".github/workflows/nightly-flake.yml",
@@ -2708,7 +2708,7 @@
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
         "Restores the original mode in finally; setup and restoration failures remain errors",
-        "The explicit handoff pilot creates and selects one owned input desktop inside the held entry lease, restores the original after contained child drain and closes its handles"
+        "Hosted interactive entries create and select one owned input desktop inside the held entry lease, restore the original after contained child drain and close its handles"
       ],
       "outputs": [
         "Qualification action output and display/work-area/session/foreground diagnostics",

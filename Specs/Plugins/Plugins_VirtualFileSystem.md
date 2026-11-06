@@ -1196,7 +1196,16 @@ value is admission qualification, not object mutation authority; exact source/de
 still comes from binding and boundary revalidation.
 
 Local resolves the requested path's lexical volume root and queries that exact
-mount root's current volume GUID on every route query. A short-lived route cache
+mount root's current volume GUID on every route query. Canonical existing ordinary
+drive paths may establish the root with fresh metadata-only handles: observe a direct
+physical DOS-device mapping, open its volume root, and open the relative path with
+`OBJ_DONT_REPARSE`. Both root and leaf must be non-reparse, the normalized DOS path
+must match exactly, and the opened root's volume GUID must match a fresh query of
+the current drive root. All handles close before returning. This path never follows
+a leaf or ancestor link and does not replace mutation authority. Noncanonical,
+missing, long, extended, remote, SUBST, unknown-mapping, unsupported or uncertain
+observations retain the existing Win32 resolver; fresh drive-type classification
+still applies on every query. A short-lived route cache
 may reuse the encoded root token only when both the lexical root and freshly
 observed GUID match its entry. It MUST NOT open the requested path to follow a
 final reparse point: route identity follows the same lexical mount-root semantics

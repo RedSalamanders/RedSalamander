@@ -227,6 +227,30 @@ function Get-RSHostedDisplayModes {
     throw 'Hosted display mode enumeration exceeded its safety bound.'
 }
 
+function Get-RSHostedInputDesktopRequest {
+    <#
+    .SYNOPSIS
+        Selects the owned input-desktop fixture for this project's hosted native entries.
+    .DESCRIPTION
+        Returns owned only on this project's GitHub-hosted runner. Paired comparisons
+        retain the original desktop so a historical baseline and current candidate use
+        the same fixture. This policy performs no native calls or environment mutation.
+    .PARAMETER PairedComparison
+        Preserves the original input desktop for both sides of a matched study.
+    .OUTPUTS
+        The string owned, or null to retain the original desktop.
+    .EXAMPLE
+        Get-RSHostedInputDesktopRequest -PairedComparison:$false
+    #>
+    [CmdletBinding()]
+    param([switch]$PairedComparison)
+    if ($PairedComparison -or $env:GITHUB_ACTIONS -cne 'true' -or
+        $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander') {
+        return $null
+    }
+    'owned'
+}
+
 function New-RSHostedOwnedDesktop {
     Initialize-RSHostedDesktopNative
     [RedSalamander.Testing.HostedDesktopNative]::EnterOwnedDesktop()
@@ -357,4 +381,4 @@ function Invoke-RSWithHostedTestDesktop {
     }
 }
 
-Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedOwnedDesktop
+Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedOwnedDesktop, Get-RSHostedInputDesktopRequest

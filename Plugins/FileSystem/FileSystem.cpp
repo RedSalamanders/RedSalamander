@@ -55,16 +55,35 @@ enum class AdmissionProbeSlot : size_t
     Count
 };
 constexpr size_t kAdmissionProbeSlots = static_cast<size_t>(AdmissionProbeSlot::Count);
+enum class LocalRootProbeSlot : size_t
+{
+    Schema,
+    OwnerTid,
+    LocalQueries,
+    UncQueries,
+    HandleAttempts,
+    HandleAccepted,
+    Fallbacks,
+    LegacyResolverCalls,
+    Count
+};
+constexpr size_t kLocalRootProbeSlots = static_cast<size_t>(LocalRootProbeSlot::Count);
 struct AdmissionProbe final
 {
     bool enabled = false;
     std::array<uint64_t, kAdmissionProbeSlots> values{};
+    std::array<uint64_t, kLocalRootProbeSlots> rootValues{};
 };
 thread_local AdmissionProbe g_admissionProbe;
 void CountAdmissionProbe(AdmissionProbeSlot slot, uint64_t value = 1u) noexcept
 {
     if (g_admissionProbe.enabled)
         g_admissionProbe.values[static_cast<size_t>(slot)] += value;
+}
+void CountLocalRootProbe(LocalRootProbeSlot slot) noexcept
+{
+    if (g_admissionProbe.enabled)
+        ++g_admissionProbe.rootValues[static_cast<size_t>(slot)];
 }
 #endif
 #if defined(ENABLE_TESTS)
@@ -1164,6 +1183,9 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     {
         return {};
     }
+#if defined(ENABLE_TESTS)
+    CountLocalRootProbe(LocalRootProbeSlot::LegacyResolverCalls);
+#endif
 
     std::wstring input(path);
     std::array<wchar_t, MAX_PATH> inlineRoot{};
@@ -1259,6 +1281,128 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     return BuildOpenableVolumeGuidDevicePath(std::wstring_view(volumeName.data(), static_cast<size_t>(terminator - volumeName.begin())));
 }
 
+// This is optimization eligibility, not operation-path validation. Every other
+// spelling retains the existing Win32 root resolver and its exact semantics.
+[[nodiscard]] bool CanProbeLocalRootWithoutReparse(std::wstring_view path) noexcept
+{
+    if (path.size() <= 3u || path.size() >= MAX_PATH || Common::Paths::ClassifyWindowsPath(path) != Common::Paths::WindowsPathClass::DriveAbsolute ||
+        path.find(L'/') != std::wstring_view::npos || path.back() == L'\\')
+        return false;
+    for (size_t start = 3u; start < path.size();)
+    {
+        const size_t separator            = path.find(L'\\', start);
+        const size_t end                  = separator == std::wstring_view::npos ? path.size() : separator;
+        const std::wstring_view component = path.substr(start, end - start);
+        const std::wstring_view stem      = component.substr(0u, component.find(L'.'));
+        if (! Common::Paths::IsSingleChildPathComponent(component) || component.back() == L'.' || component.back() == L' ' ||
+            (! stem.empty() && stem.back() == L' ') || component.find_first_of(L":*?\"<>|") != std::wstring_view::npos ||
+            FileSystemRouteCapabilitiesBase::IsReservedWindowsLeaf(component))
+            return false;
+        start = end + 1u;
+    }
+    return true;
+}
+
+// Metadata-only opens differ from exclusive stage creation: never create, write,
+// follow a reparse point or retain a handle across this one root observation.
+[[nodiscard]] wil::unique_handle OpenLocalRootProbeObject(std::wstring_view name, HANDLE root, bool directory) noexcept
+{
+    const auto ntCreateFile = GetNtCreateFile();
+    if (! ntCreateFile || name.empty() || name.size() > (std::numeric_limits<USHORT>::max)() / sizeof(wchar_t))
+        return {};
+    UNICODE_STRING text{};
+    text.Length        = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+    text.MaximumLength = text.Length;
+    // NtCreateFile reads the caller-owned name for this synchronous call.
+    text.Buffer = const_cast<wchar_t*>(name.data());
+    OBJECT_ATTRIBUTES attributes{};
+    constexpr ULONG dontReparse = 0x1000u; // Documented OBJECT_ATTRIBUTES::OBJ_DONT_REPARSE.
+    InitializeObjectAttributes(&attributes, &text, OBJ_CASE_INSENSITIVE | dontReparse, root, nullptr);
+    IO_STATUS_BLOCK io{};
+    wil::unique_handle handle;
+    const NTSTATUS status = ntCreateFile(handle.put(),
+                                         FILE_READ_ATTRIBUTES | SYNCHRONIZE | (directory ? FILE_TRAVERSE : 0u),
+                                         &attributes,
+                                         &io,
+                                         nullptr,
+                                         0u,
+                                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                         FILE_OPEN,
+                                         FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT | (directory ? FILE_DIRECTORY_FILE : 0u),
+                                         nullptr,
+                                         0u);
+    return status >= 0 ? std::move(handle) : wil::unique_handle{};
+}
+
+[[nodiscard]] bool TryResolveLocalRootWithoutReparse(std::wstring_view path, std::wstring& volumeRoot, std::wstring& volumeGuid) noexcept
+{
+#ifdef _DEBUG
+    // Synthetic storage observations must never perform real opens or borrow a
+    // physical identity. Their existing lexical/GUID fault controls remain intact.
+    if (g_storageProbeDebugHooks != nullptr)
+        return false;
+#endif
+    if (! CanProbeLocalRootWithoutReparse(path))
+        return false;
+    const std::array<wchar_t, 3u> drive{{path[0], L':', L'\0'}};
+    std::array<wchar_t, MAX_PATH> target{};
+    if (QueryDosDeviceForStorageProbe(drive.data(), target.data(), static_cast<DWORD>(target.size())) == 0u)
+        return false;
+    const auto terminator = std::ranges::find(target, L'\0');
+    const std::wstring_view device(target.data(), static_cast<size_t>(terminator - target.begin()));
+    constexpr std::wstring_view physicalPrefix = L"\\Device\\HarddiskVolume";
+    if (terminator == target.end() || ! device.starts_with(physicalPrefix) || device.size() == physicalPrefix.size() ||
+        ! std::ranges::all_of(device.substr(physicalPrefix.size()), [](wchar_t ch) noexcept { return ch >= L'0' && ch <= L'9'; }))
+        return false; // SUBST, mapped shares and unknown mappings keep the existing resolver.
+#if defined(ENABLE_TESTS)
+    CountLocalRootProbe(LocalRootProbeSlot::HandleAttempts);
+#endif
+    std::wstring nativeRoot(device);
+    nativeRoot.push_back(L'\\');
+    const auto root = OpenLocalRootProbeObject(nativeRoot, nullptr, true);
+    if (! root)
+        return false;
+    FILE_ATTRIBUTE_TAG_INFO rootInfo{};
+    if (! GetFileInformationByHandleEx(root.get(), FileAttributeTagInfo, &rootInfo, sizeof(rootInfo)) ||
+        (rootInfo.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY)
+        return false;
+    const auto item = OpenLocalRootProbeObject(path.substr(3u), root.get(), false);
+    if (! item)
+        return false;
+    FILE_ATTRIBUTE_TAG_INFO itemInfo{};
+    if (! GetFileInformationByHandleEx(item.get(), FileAttributeTagInfo, &itemInfo, sizeof(itemInfo)) ||
+        (itemInfo.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+        return false;
+    std::array<wchar_t, MAX_PATH> normalized{};
+    const DWORD normalizedLength =
+        GetFinalPathNameByHandleW(item.get(), normalized.data(), static_cast<DWORD>(normalized.size()), VOLUME_NAME_DOS | FILE_NAME_NORMALIZED);
+    constexpr std::wstring_view extendedPrefix = L"\\\\?\\";
+    if (normalizedLength == 0u || normalizedLength >= normalized.size())
+        return false;
+    const std::wstring_view normalizedPath(normalized.data(), normalizedLength);
+    if (! normalizedPath.starts_with(extendedPrefix) || normalizedPath.substr(extendedPrefix.size()) != path)
+        return false; // Preserve Win32 normalization, short-name and exact-name distinctions.
+    std::array<wchar_t, 50u> handleGuid{};
+    const DWORD guidLength =
+        GetFinalPathNameByHandleW(root.get(), handleGuid.data(), static_cast<DWORD>(handleGuid.size()), VOLUME_NAME_GUID | FILE_NAME_NORMALIZED);
+    if (guidLength == 0u || guidLength >= handleGuid.size())
+        return false;
+    std::wstring_view handleIdentity(handleGuid.data(), guidLength);
+    if (! handleIdentity.ends_with(L'\\'))
+        return false;
+    handleIdentity.remove_suffix(1u);
+    const std::wstring observedRoot(path.substr(0u, 3u));
+    std::wstring observedGuid = ResolveVolumeGuidDevicePath(observedRoot);
+    if (observedGuid.empty() || ! OrdinalString::EqualsNoCase(observedGuid, handleIdentity))
+        return false; // A concurrent drive-map change cannot reuse the opened volume's identity.
+    volumeRoot = observedRoot;
+    volumeGuid = std::move(observedGuid);
+#if defined(ENABLE_TESTS)
+    CountLocalRootProbe(LocalRootProbeSlot::HandleAccepted);
+#endif
+    return true;
+}
+
 struct LocalCapabilityRouteInfo final
 {
     std::string rootId;
@@ -1318,6 +1462,9 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
     LocalCapabilityRouteInfo route{};
     if (IsUncPath(path))
     {
+#if defined(ENABLE_TESTS)
+        CountLocalRootProbe(LocalRootProbeSlot::UncQueries);
+#endif
         route.remote                    = true;
         const std::wstring rootIdentity = ExtractDriveRoot(path);
         route.rootId                    = rootIdentity.empty() ? std::string("local-provider-root") : EncodeLocalRootId(rootIdentity);
@@ -1325,7 +1472,19 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
     }
 
     LocalVolumeRouteCache& routeCache = CurrentLocalVolumeRouteCache();
-    const std::wstring volumeRoot     = ResolveLocalVolumeRootPath(path);
+#if defined(ENABLE_TESTS)
+    CountLocalRootProbe(LocalRootProbeSlot::LocalQueries);
+#endif
+    std::wstring volumeRoot;
+    std::wstring rootIdentity;
+    const bool directRoot = TryResolveLocalRootWithoutReparse(path, volumeRoot, rootIdentity);
+    if (! directRoot)
+    {
+#if defined(ENABLE_TESTS)
+        CountLocalRootProbe(LocalRootProbeSlot::Fallbacks);
+#endif
+        volumeRoot = ResolveLocalVolumeRootPath(path);
+    }
     if (volumeRoot.empty())
     {
         // The provider-root query used by legacy capability inventory has no concrete volume.
@@ -1334,9 +1493,10 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
         return route;
     }
 
-    route.remote                    = GetDriveTypeForStorageProbe(volumeRoot.c_str()) == DRIVE_REMOTE;
-    const std::wstring rootIdentity = ResolveVolumeGuidDevicePath(volumeRoot);
-    const ULONGLONG nowTick         = GetTickCount64();
+    route.remote = GetDriveTypeForStorageProbe(volumeRoot.c_str()) == DRIVE_REMOTE;
+    if (! directRoot)
+        rootIdentity = ResolveVolumeGuidDevicePath(volumeRoot);
+    const ULONGLONG nowTick = GetTickCount64();
     if (rootIdentity.empty())
     {
         // Keep the lexical root fallback for this call, but do not let a prior
@@ -1704,6 +1864,40 @@ UINT DebugRouteDriveType(void* context, const wchar_t*) noexcept
 
 void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
+    for (const auto& [path, expected] : std::to_array<std::pair<std::wstring_view, bool>>({
+             {L"C:\\ordinary\\file.bin", true},
+             {L"c:\\ordinary\\file.bin", true},
+             {L"C:\\東京\\child-01.bin", true},
+             {L"C:\\ordinary\\file.bin.", false},
+             {L"C:\\ordinary\\file.bin ", false},
+             {L"C:\\ordinary\\.\\file.bin", false},
+             {L"C:\\ordinary\\..\\file.bin", false},
+             {L"C:\\ordinary\\\\file.bin", false},
+             {L"C:\\ordinary\\COM1.txt", false},
+             {L"C:\\ordinary\\COM1 .txt", false},
+             {L"C:\\ordinary\\COM\u00B9.txt", false},
+             {L"C:\\ordinary\\CONIN$", false},
+             {L"C:\\ordinary\\conin$", false},
+             {L"C:\\ordinary\\nul.txt", false},
+             {L"C:\\ordinary\\lpt1.txt", false},
+             {L"C:\\ordinary\\file.bin:stream", false},
+             {L"C:/ordinary/file.bin", false},
+             {L"\\\\?\\C:\\ordinary\\file.bin", false},
+             {L"\\\\server\\share\\file.bin", false},
+             {L"\\\\?\\Volume{12345678-1234-1234-1234-123456789abc}\\file.bin", false},
+             {L"C:relative", false},
+             {L"C:\\", false},
+             {L"C:\\ordinary\\", false},
+             {L"", false},
+             {L"relative", false},
+             {L"C:\\ordinary\\*.bin", false},
+         }))
+        DebugCheck(CanProbeLocalRootWithoutReparse(path) == expected,
+                   L"direct local root eligibility must preserve Win32 namespace and normalization semantics",
+                   passed,
+                   failed);
+    const std::wstring longProbePath = L"C:\\" + std::wstring(MAX_PATH, L'a');
+    DebugCheck(! CanProbeLocalRootWithoutReparse(longProbePath), L"long paths retain the existing bounded lexical resolver", passed, failed);
     DebugMountedVolumeStorageProbeState state;
     state.volumeRoot             = L"C:\\";
     const std::wstring pathA     = L"C:\\ordinary\\file.bin";
@@ -5704,8 +5898,18 @@ HRESULT FileSystemInternal::RestoreLocalDirectoryBasicInformation(const std::wst
 // Cache reset is caller-authorized only after the fixture establishes worker quiet.
 extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestAdmissionProbe(uint32_t action, uint32_t slotCount, uint64_t* slots) noexcept
 {
-    if (slotCount != kAdmissionProbeSlots || slots == nullptr || action > 4u)
+    if (slotCount != kAdmissionProbeSlots || slots == nullptr || action > 5u)
         return E_INVALIDARG;
+    if (action == 5u)
+    {
+        // Compatible side-band response: the original 19-slot count schema and
+        // actions are unchanged. Read the independent fresh-root proof after End.
+        if (g_admissionProbe.enabled)
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        std::fill_n(slots, kAdmissionProbeSlots, 0u);
+        std::copy(g_admissionProbe.rootValues.begin(), g_admissionProbe.rootValues.end(), slots);
+        return S_OK;
+    }
     if (action == 2u || action == 4u)
     {
         if (g_admissionProbe.enabled)
@@ -5730,10 +5934,13 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestAd
     {
         if (g_admissionProbe.enabled)
             return HRESULT_FROM_WIN32(ERROR_BUSY);
-        g_admissionProbe.values                                                    = {};
-        g_admissionProbe.values[static_cast<size_t>(AdmissionProbeSlot::Schema)]   = 1u;
-        g_admissionProbe.values[static_cast<size_t>(AdmissionProbeSlot::OwnerTid)] = GetCurrentThreadId();
-        g_admissionProbe.enabled                                                   = true;
+        g_admissionProbe.values                                                        = {};
+        g_admissionProbe.rootValues                                                    = {};
+        g_admissionProbe.values[static_cast<size_t>(AdmissionProbeSlot::Schema)]       = 1u;
+        g_admissionProbe.values[static_cast<size_t>(AdmissionProbeSlot::OwnerTid)]     = GetCurrentThreadId();
+        g_admissionProbe.rootValues[static_cast<size_t>(LocalRootProbeSlot::Schema)]   = 2u;
+        g_admissionProbe.rootValues[static_cast<size_t>(LocalRootProbeSlot::OwnerTid)] = GetCurrentThreadId();
+        g_admissionProbe.enabled                                                       = true;
     }
     else if (action == 1u)
     {
@@ -5744,6 +5951,19 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestAd
     else if (g_admissionProbe.enabled)
         return HRESULT_FROM_WIN32(ERROR_BUSY);
     std::copy(g_admissionProbe.values.begin(), g_admissionProbe.values.end(), slots);
+    return S_OK;
+}
+
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestDirectRootProbe(const wchar_t* path, BOOL* accepted) noexcept
+{
+    if (accepted == nullptr)
+        return E_POINTER;
+    *accepted = FALSE;
+    if (path == nullptr || path[0] == L'\0')
+        return E_INVALIDARG;
+    std::wstring root;
+    std::wstring guid;
+    *accepted = TryResolveLocalRootWithoutReparse(path, root, guid) ? TRUE : FALSE;
     return S_OK;
 }
 #endif

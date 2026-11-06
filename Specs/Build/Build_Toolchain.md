@@ -54,7 +54,7 @@ nonempty values. Parameter binding must preserve that distinction before convert
 non-null values to strings. None of these child overrides changes the caller's
 environment. Constructor tests and an actual contained child cover all three states.
 
-The hosted interactive-entry pilot may give `ContainedProcess` a synchronous, thread-bound
+The hosted interactive-entry fixture may give `ContainedProcess` a synchronous, thread-bound
 owned-desktop scope. It accepts only `WinSta0\RedSalamander.Test.<32 lowercase hexadecimal digits>`
 and sets `STARTUPINFO.lpDesktop` for contained children; it does not switch the input desktop.
 Scopes retire in reverse order on their creating thread, including failure paths. The canonical

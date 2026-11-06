@@ -1415,6 +1415,21 @@ baseline is 8,704 probes and 2,689 microseconds in
 Cartesian predicate as a fallback for conservative, legacy, or unkeyable scopes; an optimization may
 not convert incomplete identity into path authority.
 
+Local route-root validation retains the original 4,096-decision R0e workload and fixed
+Release ceiling. Existing 19-slot admission counters keep their original meaning:
+`RealVolumePathCalls` counts actual legacy API calls. Compatible action 5 reads the
+separate schema-2 root-proof counters after End; it does not change the original count
+schema or cache-control actions. F7 records schema, Local/UNC query counts and direct
+handle attempts/acceptances under `FileOps.LocalRootProbe.*` for every ingress, joined
+by the original sample tag and task ID. Verify that Local plus UNC equals route builds,
+accepted handles do not exceed attempts or Local queries, and Local queries equal
+accepted handles plus explicit fallbacks. Count legacy-resolver entries separately,
+including any storage probes, and require one or two actual legacy API calls per entry.
+Preserve independent native controls
+for ordinary files/directories, missing paths, leaf/ancestor junctions, noncanonical and
+extended spellings, rename and exact target inventory. API-only C# experiments are
+descriptive cost attribution, not native R0e or Full qualification.
+
 `FileOps.Interlock.PrepareLookupChecks` and `FileOps.Interlock.PrepareIndexStorage` additionally
 record temporary preparation-index behavior once per task. The first row's numeric values are
 scope and ancestor predicate evaluations; the second row's values are retained key capacity bytes

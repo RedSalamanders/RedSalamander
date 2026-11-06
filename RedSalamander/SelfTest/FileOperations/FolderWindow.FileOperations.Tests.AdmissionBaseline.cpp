@@ -206,6 +206,91 @@ struct Route final
            (EvaluateOwnedVirtualDiskMount(realVolume, primaryGuid.value(), mount, mount).starts_with(L"volume-not-file-backed-virtual-disk") ||
             expectRefusal(L"live-primary-volume", realVolume, primaryGuid.value(), mount, L"volume-reachable-outside-run-mount"));
 }
+[[nodiscard]] bool RunDirectRootProbeControls(SelfTestState& state, std::wstring& failure) noexcept
+{
+    failure.clear();
+    const auto reject = [&](std::wstring_view reason) noexcept
+    {
+        state.retainTempRootOnFailure = true;
+        failure.assign(reason);
+        AppendLog(std::format(L"Direct Local root proof: {}", reason));
+        return false;
+    };
+    const auto vtable = state.fsLocal ? reinterpret_cast<const void* const*>(state.fsLocal.get())[0] : nullptr;
+    auto module       = vtable ? AcquireModuleReferenceFromAddress(vtable) : wil::unique_hmodule{};
+    if (! module)
+        return reject(L"the actual Local module cannot be pinned");
+    using DirectProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
+#pragma warning(push)
+#pragma warning(disable : 4191) // POD-only ENABLE_TESTS export; the actual provider module remains pinned.
+    const auto directProbe = reinterpret_cast<DirectProbe>(GetProcAddress(module.get(), "RedSalamanderFileSystemTestDirectRootProbe"));
+#pragma warning(pop)
+    wil::com_ptr<IFileSystemIO> io;
+    if (! directProbe || ! state.fsLocal.try_query_to(io.put()))
+        return reject(L"the actual Local proof export or I/O interface is unavailable");
+    const auto fixture  = state.tempRoot / L"direct-root-proof";
+    const auto ordinary = fixture / L"ordinary";
+    const auto file     = ordinary / L"file.bin";
+    const auto junction = fixture / L"junction";
+    std::error_code error;
+    if (! RecreateEmptyDirectory(fixture) || ! std::filesystem::create_directory(ordinary, error) || ! WriteTestFile(file, 32u))
+        return reject(L"the owned fixture cannot be seeded");
+    std::vector<InventoryEntry> before;
+    if (! CaptureInventory({ordinary}, io, 4u, before) || ! TryCreateJunction(junction, ordinary))
+        return reject(L"the owned inventory or guarded junction cannot be created");
+    bool linkRetired  = false;
+    const auto unlink = wil::scope_exit([&]() noexcept
+    {
+        if (! linkRetired)
+            static_cast<void>(SelfTest::RemoveAll(junction));
+    });
+    const auto guid   = TryGetVolumeGuidPathForPath(ordinary);
+    if (! guid.has_value())
+        return reject(L"the independent Win32 volume identity is unavailable");
+    // A volume-GUID spelling retains the old resolver, so it independently checks
+    // the optimized ordinary path's typed identity through the real provider ABI.
+    const auto expected = FileSystemRouteContract::Query(state.fsLocal.get(), guid.value(), FILESYSTEM_COPY, kPluginIdLocal);
+    if (expected.state != FileSystemRouteContract::QueryState::Available)
+        return reject(L"the independent volume-GUID route is unavailable");
+    const auto check = [&](const std::filesystem::path& path, bool shouldUseDirect) noexcept
+    {
+        BOOL accepted             = FALSE;
+        const HRESULT probeStatus = directProbe(path.c_str(), &accepted);
+        const auto actual         = FileSystemRouteContract::Query(state.fsLocal.get(), path.native(), FILESYSTEM_COPY, kPluginIdLocal);
+        if (FAILED(probeStatus) || accepted != (shouldUseDirect ? TRUE : FALSE) || actual.state != FileSystemRouteContract::QueryState::Available ||
+            actual.snapshot.rootId != expected.snapshot.rootId || actual.snapshot.pathProfileId != expected.snapshot.pathProfileId)
+            return reject(std::format(L"path={} probe=0x{:08X} direct={} expectedDirect={} routeState={} rootMatches={} profileMatches={}",
+                                      path.native(),
+                                      static_cast<uint32_t>(probeStatus),
+                                      accepted,
+                                      shouldUseDirect,
+                                      static_cast<unsigned>(actual.state),
+                                      actual.snapshot.rootId == expected.snapshot.rootId,
+                                      actual.snapshot.pathProfileId == expected.snapshot.pathProfileId));
+        return true;
+    };
+    const auto extended         = Common::Paths::ToExtendedWin32Path(file.native());
+    std::wstring forwardSlashes = file.native();
+    std::ranges::replace(forwardSlashes, L'\\', L'/');
+    if (! check(ordinary, true) || ! check(file, true) || ! check(junction, false) || ! check(junction / L"file.bin", false) ||
+        ! check(ordinary / L"missing.bin", false) || ! check(ordinary / L"." / L"file.bin", false) || ! check(extended, false) ||
+        ! check(forwardSlashes, false))
+        return false;
+    const auto renamed = fixture / L"renamed";
+    std::filesystem::rename(ordinary, renamed, error);
+    if (error)
+        return reject(std::format(L"the owned ordinary-directory rename failed: {}", error.value()));
+    if (! check(file, false) || ! check(renamed / L"file.bin", true))
+        return false;
+    if (! SelfTest::RemoveAll(junction))
+        return reject(L"the exact owned junction could not be retired");
+    linkRetired = true;
+    std::vector<InventoryEntry> after;
+    if (! CaptureInventory({renamed}, io, 4u, after) || after != before)
+        return reject(L"the exact target inventory or bytes changed during proof/fallback/link cleanup");
+    Debug::Perf::EmitValue(L"FileOps.LocalRootProbe.NativeControls", 10u, S_OK);
+    return true;
+}
 } // namespace AdmissionBaselineSelfTest
 
 [[nodiscard]] bool RunFileOpsAdmissionBaseline(SelfTestState& state) noexcept
@@ -639,6 +724,27 @@ struct Route final
                                                       static_cast<unsigned long>(admissionHr),
                                                       static_cast<unsigned long>(snapshotHr),
                                                       taskId));
+                        std::array<uint64_t, kSlots> rootCounts{};
+                        if (FAILED(probe(5u, kSlots, rootCounts.data())) || rootCounts[0] != 2u || rootCounts[1] != GetCurrentThreadId() ||
+                            rootCounts[2] + rootCounts[3] != counts[8] || rootCounts[5] > rootCounts[4] || rootCounts[4] > rootCounts[2] ||
+                            rootCounts[2] != rootCounts[5] + rootCounts[6] || rootCounts[7] < rootCounts[6] || counts[9] < rootCounts[7] ||
+                            counts[9] > 2u * rootCounts[7])
+                            return reject(L"the independent fresh-root proof snapshot is invalid");
+                        constexpr std::array<std::wstring_view, 7u> rootNames{
+                            L"Schema", L"LocalQueries", L"UncQueries", L"HandleAttempts", L"HandleAccepted", L"Fallbacks", L"LegacyResolverCalls"};
+                        constexpr std::array<size_t, 7u> rootSlots{0u, 2u, 3u, 4u, 5u, 6u, 7u};
+                        for (size_t index = 0u; index < rootNames.size(); ++index)
+                            Debug::Perf::Emit(std::format(L"FileOps.LocalRootProbe.{}", rootNames[index]), tag, 0u, rootCounts[rootSlots[index]], taskId, S_OK);
+                        AppendLog(std::format(L"F7 ROOT PROBE {} task={} schema=2 localQueries={} uncQueries={} handleAttempts={} handleAccepted={} "
+                                              L"fallbacks={} legacyResolverCalls={}",
+                                              tag,
+                                              taskId,
+                                              rootCounts[2],
+                                              rootCounts[3],
+                                              rootCounts[4],
+                                              rootCounts[5],
+                                              rootCounts[6],
+                                              rootCounts[7]));
                         // An accepted ingress is not prepared-task or preservation proof.
                         // Retain the actual UI cost/counters even if worker preparation fails.
                         Debug::Perf::Emit(L"FileOps.AdmissionBaseline.IngressUiWallUs", tag, wallUs, selectedCount, taskId, admissionHr);

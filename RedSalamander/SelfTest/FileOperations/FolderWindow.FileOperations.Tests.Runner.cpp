@@ -15479,6 +15479,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
             AppendLog(L"Owned-volume operation-path controls passed without mounting a disk or taking focus.");
+            std::wstring directRootFailure;
+            if (! AdmissionBaselineSelfTest::RunDirectRootProbeControls(state, directRootFailure))
+            {
+                Fail(std::format(L"Direct Local root proof controls failed: {}", directRootFailure));
+                return true;
+            }
             if (! RunFileOpsInterruptedMoveWriterChecks(state))
             {
                 Fail(L"Interrupted Move writer, selection, notice ownership or history-retention contracts failed.");
