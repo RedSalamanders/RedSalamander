@@ -2594,5 +2594,13 @@ probe must never install a process-wide pointer to stack state or save/replace t
 route cache. The native Local route fixture also exercises a second thread with its own hooks
 and cache, and verifies that neither thread changes the other's synthetic identities.
 
+The direct-root metadata fixture grants a read-handle oplock only on its own acquired
+directory while denying read sharing. It calls the actual provider's directory-open
+helper on a joined worker and requires completion before releasing the holder, with
+no oplock-break signal and unchanged target inventory. The fixture completes its
+owned canceled overlapped request before releasing storage. `OplockAvailable=0`
+records unsupported availability; a positive native NTFS `OplockNoBreak=1` result is
+required to qualify this behavior.
+
 
 Selected-root non-name-surrogate directory-reparse controls may inject the observed reparse attribute of an owned ordinary directory, but must retain its real no-follow bound DIRECTORY authority. Require exactly one injected root observation and one selected-root bound-directory classification, then assert descendant file and directory conflict Skip outcomes, copied sibling bytes, unchanged source/blocker inventories, worker quiet and hook disarming. This seam does not create or validate an operating-system cloud reparse tag.

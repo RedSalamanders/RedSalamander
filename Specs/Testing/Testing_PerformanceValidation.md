@@ -1427,7 +1427,13 @@ accepted handles plus explicit fallbacks. Count legacy-resolver entries separate
 including any storage probes, and require one or two actual legacy API calls per entry.
 Preserve independent native controls
 for ordinary files/directories, missing paths, leaf/ancestor junctions, noncanonical and
-extended spellings, rename and exact target inventory. API-only C# experiments are
+extended spellings, rename and exact target inventory. An owned directory RH-oplock
+control must exercise the actual provider's metadata-open helper while a holder denies
+read sharing: the open must complete before releasing the holder and must not signal
+an oplock break. Cancel and complete the owned overlapped request, close the holder,
+and join its worker before releasing storage or the provider module. Unsupported
+filesystem availability is explicit and is not no-break qualification; retain a
+positive native NTFS execution. API-only C# experiments are
 descriptive cost attribution, not native R0e or Full qualification.
 
 `FileOps.Interlock.PrepareLookupChecks` and `FileOps.Interlock.PrepareIndexStorage` additionally

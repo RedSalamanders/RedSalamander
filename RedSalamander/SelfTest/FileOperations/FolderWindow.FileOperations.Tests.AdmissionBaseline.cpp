@@ -206,6 +206,128 @@ struct Route final
            (EvaluateOwnedVirtualDiskMount(realVolume, primaryGuid.value(), mount, mount).starts_with(L"volume-not-file-backed-virtual-disk") ||
             expectRefusal(L"live-primary-volume", realVolume, primaryGuid.value(), mount, L"volume-reachable-outside-run-mount"));
 }
+using MetadataProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
+
+[[nodiscard]] bool RunOwnedRootMetadataOplockControl(const std::filesystem::path& directory, MetadataProbe metadataProbe, std::wstring& failure) noexcept
+{
+    wil::unique_hfile owner(CreateFileW(directory.c_str(),
+                                        FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED | FILE_FLAG_OPEN_REPARSE_POINT,
+                                        nullptr));
+    if (! owner)
+    {
+        failure = L"the owned directory oplock handle could not open";
+        return false;
+    }
+    std::array<wchar_t, MAX_PATH> nativeName{};
+    const DWORD nativeLength =
+        GetFinalPathNameByHandleW(owner.get(), nativeName.data(), static_cast<DWORD>(nativeName.size()), VOLUME_NAME_NT | FILE_NAME_NORMALIZED);
+    if (nativeLength == 0u || nativeLength >= nativeName.size())
+    {
+        failure = L"the owned directory's handle-derived NT name is unavailable";
+        return false;
+    }
+    wil::unique_event_nothrow oplockEvent;
+    if (FAILED(oplockEvent.create(wil::EventOptions::ManualReset)))
+    {
+        failure = L"the owned oplock completion event could not be created";
+        return false;
+    }
+    OVERLAPPED overlapped{};
+    overlapped.hEvent = oplockEvent.get();
+    REQUEST_OPLOCK_INPUT_BUFFER input{};
+    input.StructureVersion     = REQUEST_OPLOCK_CURRENT_VERSION;
+    input.StructureLength      = static_cast<WORD>(sizeof(input));
+    input.RequestedOplockLevel = OPLOCK_LEVEL_CACHE_READ | OPLOCK_LEVEL_CACHE_HANDLE;
+    input.Flags                = REQUEST_OPLOCK_INPUT_FLAG_REQUEST;
+    REQUEST_OPLOCK_OUTPUT_BUFFER output{};
+    DWORD returned           = 0u;
+    const BOOL requested     = DeviceIoControl(owner.get(), FSCTL_REQUEST_OPLOCK, &input, sizeof(input), &output, sizeof(output), &returned, &overlapped);
+    const DWORD requestError = requested ? ERROR_SUCCESS : GetLastError();
+    if (requested || requestError != ERROR_IO_PENDING)
+    {
+        if (requestError == ERROR_NOT_SUPPORTED || requestError == ERROR_INVALID_FUNCTION || requestError == ERROR_INVALID_PARAMETER)
+        {
+            AppendLog(std::format(L"Local root metadata oplock control unavailable: error={}; no no-break qualification.", requestError));
+            Debug::Perf::EmitValue(L"FileOps.LocalRootProbe.OplockAvailable", 0u, S_FALSE);
+            return true;
+        }
+        failure = std::format(L"the owned directory RH oplock was not granted (error={})", requestError);
+        return false;
+    }
+    bool pending      = true;
+    const auto retire = [&]() noexcept
+    {
+        if (! pending)
+            return;
+        // Keep OVERLAPPED/output storage and its event alive until our canceled
+        // request completes, then close our holder to release a regressed opener.
+        static_cast<void>(CancelIoEx(owner.get(), &overlapped));
+        DWORD completedBytes = 0u;
+        static_cast<void>(GetOverlappedResult(owner.get(), &overlapped, &completedBytes, TRUE));
+        owner.reset();
+        pending = false;
+    };
+    const auto cancel = wil::scope_exit(retire);
+    struct Worker final
+    {
+        MetadataProbe probe = nullptr;
+        const wchar_t* name = nullptr;
+        wil::unique_event_nothrow finished;
+        std::atomic<HRESULT> status{E_PENDING};
+        std::atomic<BOOL> opened{FALSE};
+    } worker;
+    worker.probe = metadataProbe;
+    worker.name  = nativeName.data();
+    if (FAILED(worker.finished.create(wil::EventOptions::ManualReset)))
+    {
+        failure = L"the metadata worker completion event could not be created";
+        return false;
+    }
+    wil::unique_threadpool_work_nowait work(CreateThreadpoolWork(
+        [](PTP_CALLBACK_INSTANCE, void* context, PTP_WORK) noexcept
+    {
+        auto& current        = *static_cast<Worker*>(context);
+        BOOL opened          = FALSE;
+        const HRESULT status = current.probe(current.name, &opened);
+        current.opened.store(opened, std::memory_order_relaxed);
+        current.status.store(status, std::memory_order_release);
+        current.finished.SetEvent();
+    },
+        &worker,
+        nullptr));
+    if (! work)
+    {
+        failure = L"the owned metadata worker could not be created";
+        return false;
+    }
+    SubmitThreadpoolWork(work.get());
+    const bool completedBeforeRelease =
+        WaitForSingleObject(worker.finished.get(),
+                            static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(SelfTest::Scale(std::chrono::seconds(5))).count())) ==
+        WAIT_OBJECT_0;
+    const bool breakSignaled = WaitForSingleObject(oplockEvent.get(), 0u) != WAIT_TIMEOUT;
+    retire();
+    WaitForThreadpoolWorkCallbacks(work.get(), FALSE);
+    const HRESULT status = worker.status.load(std::memory_order_acquire);
+    if (! completedBeforeRelease || breakSignaled || status != S_OK || worker.opened.load(std::memory_order_relaxed) != TRUE)
+    {
+        failure = std::format(L"metadata directory open completedBeforeRelease={} breakSignaled={} status=0x{:08X} opened={}",
+                              completedBeforeRelease,
+                              breakSignaled,
+                              static_cast<uint32_t>(status),
+                              worker.opened.load(std::memory_order_relaxed));
+        return false;
+    }
+    Debug::Perf::EmitValue(L"FileOps.LocalRootProbe.OplockAvailable", 1u, S_OK);
+    Debug::Perf::EmitValue(L"FileOps.LocalRootProbe.OplockNoBreak", 1u, S_OK);
+    AppendLog(L"Local root metadata open completed under the owned directory RH oplock without breaking it; holder/worker/overlapped retired.");
+    return true;
+}
+
 [[nodiscard]] bool RunDirectRootProbeControls(SelfTestState& state, std::wstring& failure) noexcept
 {
     failure.clear();
@@ -220,13 +342,13 @@ struct Route final
     auto module       = vtable ? AcquireModuleReferenceFromAddress(vtable) : wil::unique_hmodule{};
     if (! module)
         return reject(L"the actual Local module cannot be pinned");
-    using DirectProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
 #pragma warning(push)
 #pragma warning(disable : 4191) // POD-only ENABLE_TESTS export; the actual provider module remains pinned.
-    const auto directProbe = reinterpret_cast<DirectProbe>(GetProcAddress(module.get(), "RedSalamanderFileSystemTestDirectRootProbe"));
+    const auto directProbe   = reinterpret_cast<MetadataProbe>(GetProcAddress(module.get(), "RedSalamanderFileSystemTestDirectRootProbe"));
+    const auto metadataProbe = reinterpret_cast<MetadataProbe>(GetProcAddress(module.get(), "RedSalamanderFileSystemTestDirectoryMetadataOpen"));
 #pragma warning(pop)
     wil::com_ptr<IFileSystemIO> io;
-    if (! directProbe || ! state.fsLocal.try_query_to(io.put()))
+    if (! directProbe || ! metadataProbe || ! state.fsLocal.try_query_to(io.put()))
         return reject(L"the actual Local proof export or I/O interface is unavailable");
     const auto fixture  = state.tempRoot / L"direct-root-proof";
     const auto ordinary = fixture / L"ordinary";
@@ -236,7 +358,12 @@ struct Route final
     if (! RecreateEmptyDirectory(fixture) || ! std::filesystem::create_directory(ordinary, error) || ! WriteTestFile(file, 32u))
         return reject(L"the owned fixture cannot be seeded");
     std::vector<InventoryEntry> before;
-    if (! CaptureInventory({ordinary}, io, 4u, before) || ! TryCreateJunction(junction, ordinary))
+    if (! CaptureInventory({ordinary}, io, 4u, before))
+        return reject(L"the owned pre-probe inventory cannot be observed");
+    std::wstring oplockFailure;
+    if (! RunOwnedRootMetadataOplockControl(ordinary, metadataProbe, oplockFailure))
+        return reject(oplockFailure);
+    if (! TryCreateJunction(junction, ordinary))
         return reject(L"the owned inventory or guarded junction cannot be created");
     bool linkRetired  = false;
     const auto unlink = wil::scope_exit([&]() noexcept

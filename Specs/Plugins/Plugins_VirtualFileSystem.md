@@ -1201,7 +1201,9 @@ drive paths may establish the root with fresh metadata-only handles: observe a d
 physical DOS-device mapping, open its volume root, and open the relative path with
 `OBJ_DONT_REPARSE`. Both root and leaf must be non-reparse, the normalized DOS path
 must match exactly, and the opened root's volume GUID must match a fresh query of
-the current drive root. All handles close before returning. This path never follows
+the current drive root. Both opens request only `FILE_READ_ATTRIBUTES | SYNCHRONIZE`;
+the directory open must not request `FILE_TRAVERSE` or cause an oplock-break
+acknowledgment wait. All handles close before returning. This path never follows
 a leaf or ancestor link and does not replace mutation authority. Noncanonical,
 missing, long, extended, remote, SUBST, unknown-mapping, unsupported or uncertain
 observations retain the existing Win32 resolver; fresh drive-type classification
