@@ -1,0 +1,2 @@
+- Resolve canonical existing Local paths with fresh, metadata-only no-reparse handles and a matching current volume-GUID observation. Links, missing/noncanonical paths, SUBST, remote or unknown mappings and any uncertain result retain the existing Win32 resolver. Preserve fresh route classification, cache identity/expiry and the original timing workload and deadline; record independent root-proof counters for validation.
+- Reuse one Windows device-name policy with ordinal case comparison, keeping reserved-name detection independent of the process C locale.

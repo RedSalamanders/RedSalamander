@@ -167,6 +167,7 @@
 
 .NOTES
     Prerequisites: PowerShell 7, the repository build toolchain unless -SkipBuild is used, and an interactive desktop for UI-driven suites. Side effects: acquires the selected platform/configuration artifact lock, holds the Windows-session mutex only around marked interactive entries, may build the solution, launches contained child test processes, and replaces runner-owned directories beneath the selected marked sandbox. Alternate-volume roots require an explicit switch. It does not terminate unrelated processes or block other profiles/worktrees. Primary consumers: local closeout, GitHub CI, and nightly test workflows.
+    The hosted handoff pilot can request an owned input desktop only during a marked entry's held interactive lease; it restores the original desktop after contained child drain. Noninteractive entries clear this internal request for descendant harnesses.
 
 .EXAMPLE
     .\Tools\Run-AllTests.ps1
@@ -482,6 +483,10 @@ namespace RedSalamander
             Write-Warning 'Unable to prevent system/display idle while the interactive test entry runs.'
         }
 
+        if ($env:REDSALAMANDER_HOSTED_TEST_DESKTOP -ceq 'owned') {
+            Import-Module (Join-Path $PSScriptRoot 'Modules/Testing/HostedTestDesktop.psm1')
+            return Invoke-RSWithHostedOwnedDesktop -Action $Operation
+        }
         return & $Operation
     }
     finally {
@@ -564,6 +569,13 @@ function Invoke-RSTestPlanEntry {
     if (-not [string]::IsNullOrWhiteSpace($ArtifactRoot) -and $Entry.Kind -in @('Executable', 'CppUnitTest')) {
         $safeName = ([string]$Entry.Name) -replace '[^A-Za-z0-9_.-]', '_'
         $outputLogPath = Join-Path $ArtifactRoot "$safeName.output.log"
+    }
+
+    $priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+    if (-not (Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry)) {
+        # Tooling and other noninteractive entries must not pass an interactive
+        # fixture request into their synthetic/negative child harness controls.
+        [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $null, 'Process')
     }
 
     try {
@@ -664,6 +676,8 @@ function Invoke-RSTestPlanEntry {
     } catch {
         $exitCode = 1
         $failureReason = $_.Exception.Message
+    } finally {
+        [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process')
     }
 
     $end = Get-Date
@@ -1609,7 +1623,7 @@ function New-RSRunnerEntryFingerprintRecord {
             switch ([string]$environmentInput) {
                 'env.profile' { $capabilityInputs[$environmentInput] = "$Platform|$Configuration" }
                 'env.windows-11' { $capabilityInputs[$environmentInput] = [Environment]::OSVersion.Version.ToString() }
-                'env.interactive-desktop' { $capabilityInputs[$environmentInput] = [Environment]::UserInteractive }
+                'env.interactive-desktop' { $capabilityInputs[$environmentInput] = [ordered]@{ user_interactive=[Environment]::UserInteractive; hosted_fixture=[string]$env:REDSALAMANDER_HOSTED_TEST_DESKTOP } }
                 'env.network' { $capabilityInputs[$environmentInput] = [Net.NetworkInformation.NetworkInterface]::GetIsNetworkAvailable() }
                 'env.test-resources' { $capabilityInputs[$environmentInput] = $testMachineResources.CapabilityDigest }
                 default { throw "Validation entry '$($executionEntry.Id)' declares an unknown environment input '$environmentInput'." }

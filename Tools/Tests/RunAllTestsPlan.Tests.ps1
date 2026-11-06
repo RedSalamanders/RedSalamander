@@ -1285,7 +1285,7 @@ Set-StrictMode -Version Latest
         $nightly | Should Match '(?m)^  workflow_dispatch:'
         $nightly | Should Not Match '(?m)^  schedule:'
         $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired\]'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Match '(?m)^      baseline_ref:\s*$'
@@ -1480,6 +1480,8 @@ Set-StrictMode -Version Latest
             -Message 'The session mutex must have one reviewed ownership site.'
         Assert-RSEqual -Actual ($desktopFunction.Extent.Text -match '\.WaitOne\(') -Expected $true -Message 'The entry boundary should acquire the mutex.'
         Assert-RSEqual -Actual ($desktopFunction.Extent.Text -match '\.ReleaseMutex\(\)') -Expected $true -Message 'The entry boundary should release the mutex in its finally block.'
+        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedOwnedDesktop') -gt $desktopFunction.Extent.Text.IndexOf('.WaitOne(')) -Expected $true -Message 'Owned hosted desktop entry must follow actual interactive lease acquisition.'
+        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedOwnedDesktop') -lt $desktopFunction.Extent.Text.IndexOf('.ReleaseMutex()')) -Expected $true -Message 'Owned desktop restoration must finish before the interactive lease is released.'
 
         foreach ($functionName in @('Invoke-RSSelfTestProcess', 'Invoke-RSTestPlanEntry')) {
             $entryFunction = $functions | Where-Object Name -eq $functionName | Select-Object -First 1
@@ -1494,6 +1496,43 @@ Set-StrictMode -Version Latest
             -Actual ($pesterCase -match "'Pester'[\s\S]*?Invoke-RSInteractiveDesktopOperation") `
             -Expected $false `
             -Message 'Pester execution must remain outside the interactive desktop boundary.'
+    }
+
+    It 'clears the hosted desktop request for noninteractive child harnesses and restores it on success and failure' {
+        Import-Module $helperModule -ErrorAction Stop
+        $tokens=$null; $errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$errors)
+        @($errors).Count | Should Be 0
+        & {
+            foreach($name in @('Test-RSTestEntryRequiresInteractiveDesktop','Invoke-RSTestPlanEntry')) {
+                $definition=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+                . ([scriptblock]::Create($definition.Extent.Text))
+            }
+            $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('desktop-request-'+[guid]::NewGuid().ToString('N'))
+            $probe=Join-Path $fixture 'probe.ps1'; $record=Join-Path $fixture 'observed.txt'
+            [IO.File]::WriteAllText($probe, @'
+param([string]$Record,[int]$Fail)
+[IO.File]::WriteAllText($Record,[string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP','Process'))
+if($Fail){throw 'seeded noninteractive child failure'}
+$global:LASTEXITCODE=0
+'@)
+            $prior=[Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP','Process')
+            $priorExit=Get-Variable LASTEXITCODE -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+            try {
+                $env:REDSALAMANDER_HOSTED_TEST_DESKTOP='owned'
+                foreach($failure in 0,1) {
+                    $entry=[pscustomobject]@{Name='desktop-request-control';Kind='PowerShellScript';Path=$probe;WorkingDirectory=$fixture;Arguments=@($record,$failure);RequiresInteractiveDesktop=$false}
+                    $result=Invoke-RSTestPlanEntry -Entry $entry -RepoRoot $repoRoot
+                    $result.ExitCode | Should Be $failure
+                    [IO.File]::ReadAllText($record) | Should Be ''
+                    $env:REDSALAMANDER_HOSTED_TEST_DESKTOP | Should Be 'owned'
+                    if($failure){$result.Failures[0].reason | Should Match 'seeded noninteractive child failure'}
+                }
+            } finally {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',$prior,'Process')
+                $global:LASTEXITCODE=$priorExit
+            }
+        }
     }
 
     It 'imports the contained-process API it calls directly' {

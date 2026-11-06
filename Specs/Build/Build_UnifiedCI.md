@@ -15,6 +15,16 @@ of a separate desktop. This scope sends no input, activates no window and change
 display or session settings. It remains NOT_EVALUATED and creates no test, regression or
 production receipt. Other phases and local invocation reject it before engine/sandbox work.
 
+Project GitHub-hosted native interactive entries use an owned input desktop under the
+runner's per-entry interactive lease. The original native hotkey case and verified desktop
+restoration passed on both native architectures before this fixture was enabled. Creation,
+native input assertions, contained child drain, restoration and handle retirement remain
+required; successful fixture setup alone does not qualify a suite. Requested fixture identity
+is bound to validation fingerprints. Local/self-hosted execution retains its current desktop.
+R0ePaired also retains the original desktop on both sources so historical and current
+implementations use the same fixture. The adapter clears unselected inherited requests and
+restores its caller's value afterward. See the self-test ownership contract.
+
 The separate manual `R0ePaired` scope is Release-only. It requires a nonzero full lowercase
 baseline commit SHA in `baseline_ref`, an available exact commit object, and a clean candidate
 whose HEAD equals the dispatch SHA and frozen descriptor. The candidate and an isolated,

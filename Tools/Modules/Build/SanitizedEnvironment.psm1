@@ -191,6 +191,35 @@ namespace RedSalamander.Tooling
 
     public sealed class ContainedProcess : IDisposable
     {
+        // A synchronous, runner-owned interactive entry may select its newly created
+        // desktop for contained children. The scope never switches desktops itself.
+        [ThreadStatic] private static DesktopProcessScope entryDesktopScope;
+        private sealed class DesktopProcessScope : IDisposable
+        {
+            private readonly int thread = Thread.CurrentThread.ManagedThreadId;
+            private readonly DesktopProcessScope previous;
+            public readonly string Desktop;
+            private bool disposed;
+            public DesktopProcessScope(string desktop)
+            {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(desktop ?? "", @"^WinSta0\\RedSalamander\.Test\.[0-9a-f]{32}$"))
+                    throw new ArgumentException("Only a named runner-owned test desktop may be selected.", "desktop");
+                previous = entryDesktopScope;
+                Desktop = desktop;
+                entryDesktopScope = this;
+            }
+            public void Dispose()
+            {
+                if (Thread.CurrentThread.ManagedThreadId != thread)
+                    throw new InvalidOperationException("The contained-process desktop scope must retire on its creating thread.");
+                if (disposed) return;
+                if (!Object.ReferenceEquals(entryDesktopScope, this))
+                    throw new InvalidOperationException("Contained-process desktop scopes must retire in reverse order.");
+                entryDesktopScope = previous;
+                disposed = true;
+            }
+        }
+        public static IDisposable UseOwnedDesktop(string desktop) { return new DesktopProcessScope(desktop); }
         private const uint CreateNoWindow = 0x08000000;
         private const uint CreateUnicodeEnvironment = 0x00000400;
         private const uint ExtendedStartupInfoPresent = 0x00080000;
@@ -524,6 +553,7 @@ namespace RedSalamander.Tooling
 
                 StartupInfoEx startupInfo = new StartupInfoEx();
                 startupInfo.StartupInfo.Size = Marshal.SizeOf(typeof(StartupInfoEx));
+                startupInfo.StartupInfo.Desktop = entryDesktopScope == null ? null : entryDesktopScope.Desktop;
                 startupInfo.AttributeList = attributeList;
                 if (useStandardHandles)
                 {

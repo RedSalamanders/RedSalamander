@@ -1,0 +1,1 @@
+- Pilot the existing native foreground hotkey check on a temporary desktop owned by the hosted test entry, preserving the warning, assertions, contained child drain and original desktop restoration. Bind the fixture to validation fingerprints; creation or restoration failures remain failures and the filtered pilot does not qualify Full coverage.

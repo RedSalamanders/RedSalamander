@@ -58,10 +58,18 @@ Describe 'Repository source scanner module' {
         $junction = if ($Link) { Join-Path $repository $Link } else { $repository }
         [void][IO.Directory]::CreateDirectory((Split-Path $junction))
         [void](New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $target)
-        $message = ''
-        try { [void](Get-RSRepositorySourceFiles -RepositoryRoot $repository -SourceRoots @($SourceRoot) -Extensions @('.cpp')) }
-        catch { $message = $_.Exception.Message }
-        $message | Should Match 'reparse point'
+        try {
+            $message = ''
+            try { [void](Get-RSRepositorySourceFiles -RepositoryRoot $repository -SourceRoots @($SourceRoot) -Extensions @('.cpp')) }
+            catch { $message = $_.Exception.Message }
+            $message | Should Match 'reparse point'
+        } finally {
+            # This fixture owns the exact link. Unlink it without traversing the target
+            # so the completed run remains relocatable under the archive contract.
+            [IO.Directory]::Delete($junction, $false)
+        }
+        (Test-Path -LiteralPath $junction) | Should Be $false
+        [IO.File]::ReadAllText((Join-Path $targetSource 'witness.cpp')) | Should Be 'TOKEN'
     }
 
     It 'does not enumerate a descendant junction' {
@@ -72,10 +80,15 @@ Describe 'Repository source scanner module' {
         [void][IO.Directory]::CreateDirectory($target)
         [IO.File]::WriteAllText((Join-Path $source 'owned.cpp'), 'owned')
         [IO.File]::WriteAllText((Join-Path $target 'must-not-read.cpp'), 'redirected')
-        [void](New-RSTestSandboxLink -ItemType Junction -Path (Join-Path $source 'redirected') -Target $target)
-        $files = @(Get-RSRepositorySourceFiles -RepositoryRoot (Join-Path $fixture 'repository') -SourceRoots @('Source') -Extensions @('.cpp'))
-        $files.Count | Should Be 1
-        $files[0].Name | Should Be 'owned.cpp'
+        $junction = Join-Path $source 'redirected'
+        [void](New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $target)
+        try {
+            $files = @(Get-RSRepositorySourceFiles -RepositoryRoot (Join-Path $fixture 'repository') -SourceRoots @('Source') -Extensions @('.cpp'))
+            $files.Count | Should Be 1
+            $files[0].Name | Should Be 'owned.cpp'
+        } finally { [IO.Directory]::Delete($junction, $false) }
+        (Test-Path -LiteralPath $junction) | Should Be $false
+        [IO.File]::ReadAllText((Join-Path $target 'must-not-read.cpp')) | Should Be 'redirected'
     }
 
     It 'rejects a source file symbolic link when the host permits its creation' {
@@ -91,10 +104,14 @@ Describe 'Repository source scanner module' {
             Write-Warning 'File symbolic link creation is unavailable on this host; the file-link rejection was not exercised.'
             return
         }
-        $message = ''
-        try { [void](Get-RSRepositorySourceFiles -RepositoryRoot (Join-Path $fixture 'repository') -SourceRoots @('Source') -Extensions @('.cpp')) }
-        catch { $message = $_.Exception.Message }
-        $message | Should Match 'Source file is a reparse point'
+        try {
+            $message = ''
+            try { [void](Get-RSRepositorySourceFiles -RepositoryRoot (Join-Path $fixture 'repository') -SourceRoots @('Source') -Extensions @('.cpp')) }
+            catch { $message = $_.Exception.Message }
+            $message | Should Match 'Source file is a reparse point'
+        } finally { [IO.File]::Delete((Join-Path $source 'redirected.cpp')) }
+        (Test-Path -LiteralPath (Join-Path $source 'redirected.cpp')) | Should Be $false
+        [IO.File]::ReadAllText($target) | Should Be 'redirected'
     }
 }
 

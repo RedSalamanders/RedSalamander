@@ -1916,9 +1916,26 @@
     if (! waitResult() || result->status != Status::Selected || ! focusedOnDest())
         return reject(std::format(L"a refresh before settlement ended the inspection with status {}, not by selecting the item", statusText()));
 
-    // folderview#4: a file and a folder listed under one name.
-    if (const std::wstring tieBreak = view->DebugValidateInspectionKindTieBreakForSelfTest(identity, dest.native()); ! tieBreak.empty())
-        return reject(tieBreak);
+    // folderview#4: a file and a folder listed under one name. A refresh can start
+    // after the preceding request selected the item. Displayed rows alone do not
+    // establish that the current generation has settled. Inject the twin and
+    // exercise all kind predicates synchronously in the actual settlement callback.
+    std::optional<std::wstring> tieBreak;
+    folder->SetPaneEnumerationSettledCallback(pane,
+                                              [&](const FolderView::InspectionVisit& visit, const std::filesystem::path& settledPath, HRESULT status)
+    {
+        if (tieBreak || ! EquivalentPath(identity, settledPath.native(), destDir.native()) || ! view->IsInspectionVisitCurrent(visit))
+            return;
+        tieBreak = FAILED(status) ? std::format(L"the tie-break enumeration failed with 0x{:08X}", static_cast<uint32_t>(status))
+                                  : view->DebugValidateInspectionKindTieBreakForSelfTest(identity, dest.native());
+    });
+    view->ForceRefresh();
+    const bool tieBreakSettled = wait([&] { return tieBreak.has_value(); }, L"inspection kind tie-break settlement");
+    folder->SetPaneEnumerationSettledCallback(pane, {});
+    if (! tieBreakSettled)
+        return reject(L"the kind tie-break did not reach a current enumeration settlement");
+    if (! tieBreak.value().empty())
+        return reject(tieBreak.value());
     if (! settleAt(home))
         return reject(L"the left pane did not return home after the tie-break check");
 

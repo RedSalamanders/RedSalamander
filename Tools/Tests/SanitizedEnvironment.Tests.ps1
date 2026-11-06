@@ -9,6 +9,25 @@ Describe 'SanitizedEnvironment helper' {
         Import-Module $helperModule -Force -ErrorAction Stop
     }
 
+    It 'limits an explicit child desktop scope to runner-owned names' {
+        $failure=$null
+        try { [RedSalamander.Tooling.ContainedProcess]::UseOwnedDesktop('WinSta0\Default') } catch { $failure=$_.Exception.Message }
+        ($null -ne $failure) | Should Be $true
+        $failure | Should Match 'Only a named runner-owned test desktop'
+    }
+
+    It 'requires reverse scope retirement and allows safe repeated disposal without launching a child' {
+        $name='WinSta0\RedSalamander.Test.' + ('a' * 32)
+        $outer=[RedSalamander.Tooling.ContainedProcess]::UseOwnedDesktop($name)
+        $inner=[RedSalamander.Tooling.ContainedProcess]::UseOwnedDesktop($name)
+        try {
+            $failure=$null
+            try { $outer.Dispose() } catch { $failure=$_.Exception.Message }
+            ($null -ne $failure) | Should Be $true
+            $failure | Should Match 'reverse order'
+        } finally { $inner.Dispose(); $outer.Dispose(); $outer.Dispose() }
+    }
+
     It 'creates a child ProcessStartInfo without mutating the caller Path' {
         $originalPath = [System.Environment]::GetEnvironmentVariable('Path', 'Process')
         try {

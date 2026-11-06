@@ -4,6 +4,7 @@ function Initialize-RSHostedDesktopNative {
     if ('RedSalamander.Testing.HostedDesktopNative' -as [type]) { return }
     Add-Type -TypeDefinition @'
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 namespace RedSalamander.Testing {
@@ -22,9 +23,42 @@ namespace RedSalamander.Testing {
     public struct Rectangle { public int Left, Top, Right, Bottom; }
     public sealed class SafeDesktopHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid {
         public SafeDesktopHandle() : base(true) {}
-        [DllImport("user32.dll", ExactSpelling = true)]
+        public int ReleaseError;
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
-        protected override bool ReleaseHandle() { return CloseDesktop(handle); }
+        protected override bool ReleaseHandle() {
+            bool closed = CloseDesktop(handle);
+            if (!closed) ReleaseError = Marshal.GetLastWin32Error();
+            return closed;
+        }
+    }
+    public sealed class HostedOwnedDesktopLease : IDisposable {
+        private readonly SafeDesktopHandle original;
+        private readonly SafeDesktopHandle owned;
+        private readonly string originalName;
+        private bool disposed;
+        public readonly string Name;
+        public bool Restored { get; private set; }
+        internal HostedOwnedDesktopLease(SafeDesktopHandle original, string originalName, SafeDesktopHandle owned, string name) {
+            this.original = original; this.originalName = originalName; this.owned = owned; Name = name;
+        }
+        public void Dispose() {
+            if (disposed) return;
+            disposed = true;
+            try {
+                string current = HostedDesktopNative.InputDesktopName();
+                if (current == Name) {
+                    if (!HostedDesktopNative.SwitchDesktop(original))
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot restore the original hosted input desktop.");
+                } else if (current != originalName) {
+                    throw new InvalidOperationException("Another input desktop became active; it must not be replaced by the test fixture.");
+                }
+                Restored = HostedDesktopNative.InputDesktopName() == originalName;
+                if (!Restored) throw new InvalidOperationException("Hosted input-desktop restoration did not match the original.");
+            } finally { owned.Dispose(); original.Dispose(); }
+            if (owned.ReleaseError != 0 || original.ReleaseError != 0)
+                throw new Win32Exception(owned.ReleaseError != 0 ? owned.ReleaseError : original.ReleaseError, "Cannot retire hosted desktop handles.");
+        }
     }
     public sealed class DesktopContext {
         public string WindowStation = "";
@@ -42,6 +76,10 @@ namespace RedSalamander.Testing {
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint thread);
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern SafeDesktopHandle OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint access);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern SafeDesktopHandle CreateDesktopW(string name, IntPtr device, IntPtr mode, uint flags, uint access, IntPtr security);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SwitchDesktop(SafeDesktopHandle desktop);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetUserObjectInformationW(IntPtr handle, int index, StringBuilder text, uint bytes, out uint needed);
         private static string ObjectName(IntPtr handle, out int error) {
             error = 0;
@@ -52,6 +90,42 @@ namespace RedSalamander.Testing {
                 error = Marshal.GetLastWin32Error(); return "";
             }
             return name.ToString();
+        }
+        public static string InputDesktopName() {
+            using (var desktop = OpenInputDesktop(0, false, 1)) {
+                if (desktop == null || desktop.IsInvalid)
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot identify the current input desktop.");
+                int error;
+                string name = ObjectName(desktop.DangerousGetHandle(), out error);
+                if (error != 0 || String.IsNullOrEmpty(name)) throw new Win32Exception(error, "Cannot read the current input desktop name.");
+                return name;
+            }
+        }
+        public static HostedOwnedDesktopLease EnterOwnedDesktop() {
+            int error;
+            string station = ObjectName(GetProcessWindowStation(), out error);
+            if (error != 0 || station != "WinSta0") throw new InvalidOperationException("Hosted test desktops require WinSta0.");
+            SafeDesktopHandle original = OpenInputDesktop(0, false, 0x101); // READOBJECTS | SWITCHDESKTOP
+            if (original == null || original.IsInvalid) {
+                int openError = Marshal.GetLastWin32Error();
+                if (original != null) original.Dispose();
+                throw new Win32Exception(openError, "Cannot retain the original hosted input desktop.");
+            }
+            SafeDesktopHandle owned = null;
+            bool transferred = false;
+            try {
+                string originalName = ObjectName(original.DangerousGetHandle(), out error);
+                if (error != 0 || originalName != "Default") throw new InvalidOperationException("The hosted input desktop must initially be Default.");
+                string name = "RedSalamander.Test." + Guid.NewGuid().ToString("N");
+                owned = CreateDesktopW(name, IntPtr.Zero, IntPtr.Zero, 0, 0x1ff, IntPtr.Zero);
+                if (owned == null || owned.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot create the owned hosted test desktop.");
+                var lease = new HostedOwnedDesktopLease(original, originalName, owned, name);
+                if (!SwitchDesktop(owned)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot activate the owned hosted test desktop.");
+                transferred = true;
+                return lease;
+            } finally {
+                if (!transferred) { if (owned != null) owned.Dispose(); original.Dispose(); }
+            }
         }
         public static DesktopContext ReadDesktopContext(uint foregroundThread) {
             var result = new DesktopContext();
@@ -153,6 +227,92 @@ function Get-RSHostedDisplayModes {
     throw 'Hosted display mode enumeration exceeded its safety bound.'
 }
 
+function Get-RSHostedInputDesktopRequest {
+    <#
+    .SYNOPSIS
+        Selects the owned input-desktop fixture for this project's hosted native entries.
+    .DESCRIPTION
+        Returns owned only on this project's GitHub-hosted runner. Paired comparisons
+        retain the original desktop so a historical baseline and current candidate use
+        the same fixture. This policy performs no native calls or environment mutation.
+    .PARAMETER PairedComparison
+        Preserves the original input desktop for both sides of a matched study.
+    .OUTPUTS
+        The string owned, or null to retain the original desktop.
+    .EXAMPLE
+        Get-RSHostedInputDesktopRequest -PairedComparison:$false
+    #>
+    [CmdletBinding()]
+    param([switch]$PairedComparison)
+    if ($PairedComparison -or $env:GITHUB_ACTIONS -cne 'true' -or
+        $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander') {
+        return $null
+    }
+    'owned'
+}
+
+function New-RSHostedOwnedDesktop {
+    Initialize-RSHostedDesktopNative
+    [RedSalamander.Testing.HostedDesktopNative]::EnterOwnedDesktop()
+}
+
+function New-RSHostedDesktopProcessScope {
+    param([Parameter(Mandatory)][string]$Name)
+    Import-Module (Join-Path $PSScriptRoot '../Build/SanitizedEnvironment.psm1')
+    [RedSalamander.Tooling.ContainedProcess]::UseOwnedDesktop(('WinSta0\' + $Name))
+}
+
+function Invoke-RSWithHostedOwnedDesktop {
+    <#
+    .SYNOPSIS
+        Runs one leased interactive entry on a temporary owned hosted input desktop.
+    .DESCRIPTION
+        Hosted-only and called inside the runner's interactive mutex. Creates one uniquely
+        named desktop, directs contained children there and uses the existing native input
+        warning. After the synchronous action drains its contained children, restores the
+        original input desktop and retires both handles. Refuses secure or unknown desktops.
+        Native focus/input assertions are unchanged. A foreign desktop switch is preserved
+        and reported as a fixture failure. Local use is refused before native calls.
+    .PARAMETER Action
+        Synchronous entry operation that closes its containment job before returning.
+    .OUTPUTS
+        Action output and desktop creation/restoration diagnostics.
+    .NOTES
+        Changes only the ephemeral hosted runner's input desktop during the leased entry.
+        No foreign windows, processes, hooks or foreground-lock settings are changed.
+    .EXAMPLE
+        Invoke-RSWithHostedOwnedDesktop -Action { Invoke-OwnedNativeTestEntry }
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][scriptblock]$Action)
+    if ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+        $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander') {
+        throw 'Owned input desktops are restricted to the project GitHub-hosted runner.'
+    }
+    $desktop = $null; $processScope = $null; $actionError = $null; $restoreError = $null
+    try {
+        $desktop = New-RSHostedOwnedDesktop
+        Write-Host ('Hosted owned input desktop entered: ' + $desktop.Name)
+        $processScope = New-RSHostedDesktopProcessScope -Name $desktop.Name
+        $result = & $Action
+    } catch { $actionError = $_ } finally {
+        try {
+            try { if ($null -ne $processScope) { $processScope.Dispose() } }
+            finally { if ($null -ne $desktop) { $desktop.Dispose() } }
+            if ($null -ne $desktop) {
+                Write-Host ('Hosted owned input desktop retired: ' + $desktop.Name + '; restored=' + $desktop.Restored)
+                if ($desktop.Restored -ne $true) { throw 'The hosted owned input desktop did not restore its original input desktop.' }
+            }
+        } catch { $restoreError = $_ }
+    }
+    if ($null -ne $actionError -and $null -ne $restoreError) {
+        throw [AggregateException]::new('Native entry and hosted desktop restoration both failed.', [Exception[]]@($actionError.Exception, $restoreError.Exception))
+    }
+    if ($null -ne $restoreError) { throw $restoreError }
+    if ($null -ne $actionError) { throw $actionError }
+    $result
+}
+
 function Set-RSHostedDisplayMode {
     param([Parameter(Mandatory)][object]$Mode)
     Initialize-RSHostedDesktopNative
@@ -221,4 +381,4 @@ function Invoke-RSWithHostedTestDesktop {
     }
 }
 
-Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics
+Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedOwnedDesktop, Get-RSHostedInputDesktopRequest

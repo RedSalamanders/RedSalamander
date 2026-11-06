@@ -5,6 +5,14 @@ ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapte
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
 
+Hosted native interactive entries use a temporary owned input desktop on this project's
+GitHub-hosted runner. Paired comparisons retain the original desktop on both sources.
+The canonical
+interactive entry holds its existing mutex, directs contained children to the new desktop,
+uses the existing native warning and assertions, then restores the original desktop after
+child drain. Creation/restoration errors remain failures. A filtered diagnostic remains
+NOT_EVALUATED; complete native qualification still requires its full selected plan.
+
 The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display
@@ -17,6 +25,10 @@ dependencies and profile. The two-second ceiling, exact workload/counts and matc
 bound remain enforced. Partial logs and failed native results remain available. A timing-only
 RED baseline ends with a failed diagnostic job and NOT_EVALUATED coverage; it never becomes
 a passing native, Full or release receipt. No diagnostic choice publishes production artifacts.
+
+Source-scanner reparse fixtures retire their exact owned links in finally blocks and
+verify target bytes before completed-run archival. The archive refuses retained absolute
+links; passing scanner assertions do not waive that final archive gate.
 
 The Full tooling deployment fixture bounds its contained targeted compiler operation to
 60 minutes; product performance budgets remain independent. See the
@@ -425,7 +437,7 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
-| `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only read-only desktop/access diagnostics, supported display selection and restoration around native qualification. |
+| `Modules/Testing/HostedTestDesktop.psm1` | Hosted desktop/access diagnostics, display restoration, pure input-fixture selection and a leased owned input desktop with verified restoration. |
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
 | `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source, closed raw sample archives and fixed same-machine paired comparison. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |

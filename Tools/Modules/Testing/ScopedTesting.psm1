@@ -148,7 +148,7 @@ function Get-ScopedEnvironmentIdentity {
     # No secrets are stored. Different machines, OS/PowerShell, graphics runtime or sanitizer options cannot reuse evidence.
     $values = @([Environment]::MachineName,[Runtime.InteropServices.RuntimeInformation]::OSDescription,
         [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(),$PSVersionTable.PSVersion.ToString(),
-        $env:ASAN_OPTIONS,$env:CI,$env:GITHUB_ACTIONS,$env:PROCESSOR_IDENTIFIER,$env:PATH,
+        $env:ASAN_OPTIONS,$env:CI,$env:GITHUB_ACTIONS,$env:REDSALAMANDER_HOSTED_TEST_DESKTOP,$env:PROCESSOR_IDENTIFIER,$env:PATH,
         $env:VCToolsVersion,$env:WindowsSDKVersion)
     foreach ($file in @('d3d10warp.dll','d3d11.dll','dwrite.dll')) {
         if (-not $env:SystemRoot) { continue }

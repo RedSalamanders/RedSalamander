@@ -1,0 +1,1 @@
+- Run the same-name file/folder inspection checks inside a current enumeration settlement. A displayed folder can retain its rows during a refresh; the test now waits for the correct generation before injecting its synthetic twin, preserving every ambiguity and selection assertion.
