@@ -620,6 +620,20 @@ Environment variables may select alternate test inputs such as profile names, bu
   display changes. Missing or access-denied names remain unknown. The same facts accompany
   the hosted display wrapper's diagnostics; neither their collection nor a successful probe
   establishes native interactive coverage or grants foreground permission.
+- The explicit hosted CommandsHandoff pilot requests an owned temporary input desktop through
+  `REDSALAMANDER_HOSTED_TEST_DESKTOP=owned`. Only an entry already holding the canonical
+  interactive mutex may enter this fixture; ordinary entries and local runs retain their
+  current desktop. The fixture requires this project's GitHub-hosted runner, `WinSta0` and
+  an initial `Default` input desktop. It creates one non-inheritable, uniquely named desktop
+  and explicitly directs contained children there through `STARTUPINFO.lpDesktop`. The child
+  uses the existing native warning and original focus/input assertions. Its containment job
+  must drain before the process-desktop scope retires, the original input desktop is restored,
+  both desktop handles close and the interactive mutex releases. A foreign desktop change is
+  preserved and fails the fixture; failed creation, restoration or handle retirement also
+  fails. Preserve both the native and restoration error when both occur. Never change foreign
+  windows/processes, foreground-lock policy or input queues. This is a hosted pilot, not yet
+  default Full qualification. Fingerprints bind the requested desktop fixture separately
+  from user-interactive capability; a successful filtered pilot remains NOT_EVALUATED.
 - Theme-cycle animation fixtures explicitly select the supported reduced-motion Off setting and
   restore the inherited UI settings; they must not depend on a hosted image's OS animation default.
   The dedicated reduced-motion case still selects On and checks its complete atomic presentation.

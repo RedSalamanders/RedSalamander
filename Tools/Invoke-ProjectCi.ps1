@@ -31,6 +31,7 @@ Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for repository coverage.
 DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
+CommandsHandoff pilots an owned input desktop inside the existing interactive entry lease and restores it after child drain.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
 ./Tools/Invoke-ProjectCi.ps1 -Phase Static -EngineRoot ../RedSalamanders.CI -Base origin/main -DevelopmentEngine
@@ -161,6 +162,10 @@ if ($Configuration -eq 'ASan Debug') {
         throw 'The seeded heap overflow was not rejected with an AddressSanitizer diagnostic.'
     }
 }
+$priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+try {
+# Pilot: opt in only for the explicit handoff diagnostic until native proof is retained.
+if ($QualificationScope -ceq 'CommandsHandoff') { $env:REDSALAMANDER_HOSTED_TEST_DESKTOP = 'owned' }
 Invoke-RSWithHostedTestDesktop -Action {
     if ($QualificationScope -ceq 'R0ePaired') {
         [void][IO.Directory]::CreateDirectory($receiptDirectory)
@@ -234,6 +239,7 @@ Invoke-RSWithHostedTestDesktop -Action {
     $suite = if ($Phase -eq 'Qualification' -and $QualificationScope -eq 'Full') { 'Full' } else { 'CI' }
     Run 'Tools/Run-AllTests.ps1' ($profile + @('-Suite',$suite,'-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot'))
 }
+} finally { [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process') }
 if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished; it does not authorize production or publication.'; return }

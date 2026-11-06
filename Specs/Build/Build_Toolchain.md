@@ -54,6 +54,13 @@ nonempty values. Parameter binding must preserve that distinction before convert
 non-null values to strings. None of these child overrides changes the caller's
 environment. Constructor tests and an actual contained child cover all three states.
 
+The hosted interactive-entry pilot may give `ContainedProcess` a synchronous, thread-bound
+owned-desktop scope. It accepts only `WinSta0\RedSalamander.Test.<32 lowercase hexadecimal digits>`
+and sets `STARTUPINFO.lpDesktop` for contained children; it does not switch the input desktop.
+Scopes retire in reverse order on their creating thread, including failure paths. The canonical
+entry lease and hosted desktop fixture own desktop creation, child-job drain and restoration;
+ordinary build, packaging and local launches retain their original desktop behavior.
+
 ## Pinned DxUi consumption
 
 `Dependencies/DxUi.lock.json` records the API revision the product has adopted (4) and selects the single `DxUi.lib`

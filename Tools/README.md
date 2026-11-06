@@ -5,6 +5,11 @@ ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapte
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
 
+CommandsHandoff pilots a temporary owned input desktop on the hosted runner. The canonical
+interactive entry holds its existing mutex, directs contained children to the new desktop,
+uses the existing native warning and assertions, then restores the original desktop after
+child drain. It fails on creation/restoration errors and remains a filtered diagnostic.
+
 The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display
@@ -422,7 +427,7 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
-| `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only read-only desktop/access diagnostics, supported display selection and restoration around native qualification. |
+| `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only desktop/access diagnostics, display restoration and a leased owned-input-desktop pilot for the exact handoff diagnostic. |
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
 | `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source, closed raw sample archives and fixed same-machine paired comparison. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |

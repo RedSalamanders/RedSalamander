@@ -2086,11 +2086,12 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Normalize duplicate process-environment keys, preserve distinct null-removal and present-empty child overrides, construct kill-on-close contained child-process environments whose job also ends a crash without a Windows Error Reporting dialog, and expose local current-parent identity for delegation checks.",
-      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread; historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
+      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread. The hosted interactive-entry fixture may scope contained children to its owned desktop; scope retirement is thread-bound and reverse-ordered. Historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
       "usedBy": [
         "build.ps1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
         "Tools/Modules/Build/ProcessStreaming.psm1",
+        "Tools/Modules/Testing/HostedTestDesktop.psm1",
         "Tools/Modules/Packaging/PortablePackageSmoke.psm1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
         "Tools/Run-AllTests.ps1",
@@ -2692,12 +2693,13 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, or establish and restore a sufficient driver-supported display fixture for hosted native UI qualification.",
-      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only hosted facts, or wrap synchronous CI/Full/shuffle validation in Invoke-RSWithHostedTestDesktop. Local invocation is refused.",
+      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and pilot a temporary owned input desktop for one leased interactive entry.",
+      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, or Invoke-RSWithHostedOwnedDesktop only within the canonical interactive entry lease. The owned desktop pilot is requested by explicit CommandsHandoff. Local invocation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
         ".github/workflows/nightly-flake.yml",
-        "Tools/Invoke-ProjectCi.ps1"
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Run-AllTests.ps1"
       ],
       "prerequisites": [
         "Windows GitHub Actions runner with an interactive display",
@@ -2705,11 +2707,13 @@
       ],
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
-        "Restores the original mode in finally; setup and restoration failures remain errors"
+        "Restores the original mode in finally; setup and restoration failures remain errors",
+        "The explicit handoff pilot creates and selects one owned input desktop inside the held entry lease, restores the original after contained child drain and closes its handles"
       ],
       "outputs": [
         "Qualification action output and display/work-area/session/foreground diagnostics",
-        "Read-only calling/input/foreground desktop names with individual Windows query errors"
+        "Read-only calling/input/foreground desktop names with individual Windows query errors",
+        "Owned input-desktop creation and verified restoration diagnostics"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
