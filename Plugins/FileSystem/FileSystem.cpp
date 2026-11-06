@@ -1314,6 +1314,8 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 
 // Metadata-only opens differ from exclusive stage creation: never create, write,
 // follow a reparse point or retain a handle across this one root observation.
+// Both directory and leaf request only attributes/synchronization: FILE_TRAVERSE
+// can break a directory RH oplock and wait indefinitely for its acknowledgment.
 [[nodiscard]] wil::unique_handle OpenLocalRootProbeObject(std::wstring_view name, HANDLE root, bool directory) noexcept
 {
     const auto ntCreateFile = GetNtCreateFile();
@@ -1330,7 +1332,7 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     IO_STATUS_BLOCK io{};
     wil::unique_handle handle;
     const NTSTATUS status = ntCreateFile(handle.put(),
-                                         FILE_READ_ATTRIBUTES | SYNCHRONIZE | (directory ? FILE_TRAVERSE : 0u),
+                                         FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                          &attributes,
                                          &io,
                                          nullptr,
@@ -6068,6 +6070,20 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestDi
     std::wstring root;
     std::wstring guid;
     *accepted = TryResolveLocalRootWithoutReparse(path, root, guid) ? TRUE : FALSE;
+    return S_OK;
+}
+
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestDirectoryMetadataOpen(const wchar_t* nativePath, BOOL* opened) noexcept
+{
+    if (opened == nullptr)
+        return E_POINTER;
+    *opened = FALSE;
+    if (nativePath == nullptr || nativePath[0] == L'\0')
+        return E_INVALIDARG;
+    // The caller supplies only its owned fixture's handle-derived NT name. Use
+    // the actual production directory-open helper, never a duplicated access mask.
+    const auto handle = OpenLocalRootProbeObject(nativePath, nullptr, true);
+    *opened           = handle ? TRUE : FALSE;
     return S_OK;
 }
 #endif
