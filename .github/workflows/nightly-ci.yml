@@ -11,7 +11,7 @@ on:
       scope:
         description: Full qualification or an explicitly selected diagnostic
         type: choice
-        options: [Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired]
+        options: [Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe]
         default: Full
       baseline_ref:
         description: Full immutable baseline commit SHA, required only for R0ePaired

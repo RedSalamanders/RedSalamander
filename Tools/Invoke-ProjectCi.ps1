@@ -19,7 +19,7 @@ Immutable PR comparison base for changelog validation.
 .PARAMETER Configuration
 Debug, Release or ASan Debug for an explicit qualification only.
 .PARAMETER QualificationScope
-Normal regression, explicit Full qualification, a fixed filtered diagnostic, or the manual R0e paired study; never advances automatic Release state.
+Normal regression, explicit Full qualification, a fixed filtered diagnostic, the manual R0e paired study, or read-only DesktopProbe; never advances automatic Release state.
 .PARAMETER DevelopmentEngine
 Allows a local engine under development for compiler-free checks only.
 .OUTPUTS
@@ -30,6 +30,7 @@ tool/baseline and install the selected platform dependencies before building.
 Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for repository coverage.
+DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
 ./Tools/Invoke-ProjectCi.ps1 -Phase Static -EngineRoot ../RedSalamanders.CI -Base origin/main -DevelopmentEngine
@@ -38,13 +39,14 @@ See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual a
 param([Parameter(Mandatory)][ValidateSet('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')][string]$Phase,
     [Parameter(Mandatory)][string]$EngineRoot, [ValidateSet('x64','ARM64')][string]$Platform = 'x64',
     [string]$Descriptor = '', [string]$Base = 'origin/main',
-    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
+    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired') -and $Phase -ne 'Qualification') {
+if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe') -and $Phase -ne 'Qualification') {
     throw 'Filtered diagnostic scopes are only valid for explicit Qualification.'
 }
 if ($QualificationScope -ceq 'R0ePaired' -and $Configuration -cne 'Release') { throw 'R0e paired validation requires Release.' }
+if ($QualificationScope -ceq 'DesktopProbe' -and $env:GITHUB_ACTIONS -cne 'true') { throw 'Hosted desktop diagnostics are restricted to GitHub Actions.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $engineProvider = $null
 $engineDrive = $null
@@ -55,7 +57,7 @@ Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Project.psm1') -ErrorActi
 $context = New-CiProjectContext -Root $root -EngineRoot $EngineRoot -Phase $Phase -Platform $Platform -Descriptor $Descriptor -DevelopmentEngine:$DevelopmentEngine
 $pairedDispatch = $null
 if ($QualificationScope -ceq 'R0ePaired') {
-    Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1')
     if ([string]::IsNullOrWhiteSpace($env:GITHUB_EVENT_PATH) -or -not (Test-Path -LiteralPath $env:GITHUB_EVENT_PATH -PathType Leaf)) {
         throw 'R0e paired validation requires the manual dispatch event payload.'
     }
@@ -70,6 +72,20 @@ if ($QualificationScope -ceq 'R0ePaired') {
 }
 function Run([string]$Script, [string[]]$CommandArguments = @()) {
     Invoke-CiProjectScript -Context $context -Script $Script -Arguments $CommandArguments
+}
+if ($QualificationScope -ceq 'DesktopProbe') {
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedTestDesktop.psm1')
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/TestSandbox.psm1')
+    $probeRoot = Join-Path ([IO.Path]::GetPathRoot($root)) 'RedSalamander.Perf'
+    $null = Initialize-RSTestSandboxRoot -TestRoot $probeRoot -RepoRoot $root -AllowExternalInitialization
+    $probeDirectory = Assert-RSTestSandboxContainedPath -TestRoot $probeRoot -Path (Join-Path $probeRoot "evidence/desktop-probe/$($env:GITHUB_RUN_ID)/$Platform") -RequireDescendant
+    [void][IO.Directory]::CreateDirectory($probeDirectory)
+    $probe = [ordered]@{ schema='red-salamander.hosted-desktop-probe.v1'; head=$context.batch.commit; platform=$Platform;
+        observed_utc=[DateTime]::UtcNow.ToString('o'); repository_verdict='NOT_EVALUATED'; desktop=(Get-RSHostedDesktopDiagnostics) }
+    $probe | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $probeDirectory 'desktop.json') -Encoding utf8
+    if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('evidence_directory=' + (Join-Path $probeRoot 'evidence')) }
+    Write-Host ('Read-only hosted desktop probe: ' + ($probe | ConvertTo-Json -Depth 8 -Compress))
+    return
 }
 function Test-PinnedDxUiMatrix {
     Import-Module (Join-Path $root 'Tools/Modules/Build/DxUiDependency.psm1')

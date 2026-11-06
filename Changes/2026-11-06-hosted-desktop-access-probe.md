@@ -1,0 +1,1 @@
+- Add an explicit read-only hosted desktop diagnostic to investigate foreground refusal on the existing native runners. Preserve individual access errors, source identity and pending interactive qualification without changing input, activation, display settings or test requirements.

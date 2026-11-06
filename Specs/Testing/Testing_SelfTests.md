@@ -648,6 +648,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   and restores a changed mode on success or failure. Unsupported setup or failed restoration
   fails qualification. Local invocation is refused; native assertions, warnings and desktop leases
   remain authoritative. The PR suite keeps its noninteractive scope.
+- The explicit hosted `DesktopProbe` diagnostic reads window-station, calling/input/foreground
+  desktop names and their individual access errors without building, input, activation or
+  display changes. Missing or access-denied names remain unknown. The same facts accompany
+  the hosted display wrapper's diagnostics; neither their collection nor a successful probe
+  establishes native interactive coverage or grants foreground permission.
 - Theme-cycle animation fixtures explicitly select the supported reduced-motion Off setting and
   restore the inherited UI settings; they must not depend on a hosted image's OS animation default.
   The dedicated reduced-motion case still selects On and checks its complete atomic presentation.

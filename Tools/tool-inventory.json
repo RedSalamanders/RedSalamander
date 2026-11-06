@@ -2692,11 +2692,12 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Establish a sufficient driver-supported display fixture for hosted native UI qualification and restore the original mode on success or failure.",
-      "usage": "Import in the reusable native CI/Full job and shuffle-repeat consumer, then wrap synchronous validation in Invoke-RSWithHostedTestDesktop. Local invocation is refused.",
+      "purpose": "Read hosted desktop identities and access errors, or establish and restore a sufficient driver-supported display fixture for hosted native UI qualification.",
+      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only hosted facts, or wrap synchronous CI/Full/shuffle validation in Invoke-RSWithHostedTestDesktop. Local invocation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
-        ".github/workflows/nightly-flake.yml"
+        ".github/workflows/nightly-flake.yml",
+        "Tools/Invoke-ProjectCi.ps1"
       ],
       "prerequisites": [
         "Windows GitHub Actions runner with an interactive display",
@@ -2707,7 +2708,8 @@
         "Restores the original mode in finally; setup and restoration failures remain errors"
       ],
       "outputs": [
-        "Qualification action output and display/work-area/session/foreground diagnostics"
+        "Qualification action output and display/work-area/session/foreground diagnostics",
+        "Read-only calling/input/foreground desktop names with individual Windows query errors"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
@@ -5105,7 +5107,7 @@
       "lifecycle": "active",
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
       "visibility": "public",
-      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification alone permits fixed CommandsHandoff, FileOpsVolumes and ViewerSpaceCapture filtered diagnostics and the manual Release R0ePaired study; none publishes regression receipts. Native local work uses canonical build/test entry points.",
+      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification alone permits fixed CommandsHandoff, FileOpsVolumes and ViewerSpaceCapture filtered diagnostics, the manual Release R0ePaired study and the read-only DesktopProbe; none publishes regression receipts. Native local work uses canonical build/test entry points.",
       "tests": [
         "Tools/Tests/ToolingGovernance.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
@@ -5121,6 +5123,7 @@
       "outputs": [
         "Governed RedSalamander.Perf evidence and regression receipt",
         "Filtered diagnostic coverage marker and runner output without a regression receipt",
+        "Source-bound read-only hosted desktop.json evidence for DesktopProbe, without build or test receipts",
         ".build production ZIP and source-bound receipt",
         "GitHub job output paths",
         "Pinned tool/registry and platform-private installed dependencies beneath .build"
