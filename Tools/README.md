@@ -14,6 +14,8 @@ The explicit DesktopProbe choice reads window-station, calling/input/foreground 
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display
 changes. Missing names remain unknown, and its result is NOT_EVALUATED for native coverage.
+The isolated route-API experiment also records read-only C# interop timings on an owned
+scratch path; it does not execute or qualify native R0e and is not a delivery change.
 
 The explicit Release R0ePaired choice requires an immutable `baseline_ref` and runs
 `Invoke-R0ePairedValidation.ps1` on each matching native architecture. It retains an isolated

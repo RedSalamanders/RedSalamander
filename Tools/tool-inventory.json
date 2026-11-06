@@ -5127,7 +5127,7 @@
       "outputs": [
         "Governed RedSalamander.Perf evidence and regression receipt",
         "Filtered diagnostic coverage marker and runner output without a regression receipt",
-        "Source-bound read-only hosted desktop.json evidence for DesktopProbe, without build or test receipts",
+        "Source-bound read-only hosted desktop.json evidence for DesktopProbe, including descriptive C# route-API timings on this private experiment branch, without build or test receipts",
         ".build production ZIP and source-bound receipt",
         "GitHub job output paths",
         "Pinned tool/registry and platform-private installed dependencies beneath .build"

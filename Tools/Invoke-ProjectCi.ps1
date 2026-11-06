@@ -31,6 +31,7 @@ Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for repository coverage.
 DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
+This private experiment also records separate read-only root/drive/GUID API timings; these are not native R0e qualification.
 CommandsHandoff pilots an owned input desktop inside the existing interactive entry lease and restores it after child drain.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
@@ -83,6 +84,69 @@ if ($QualificationScope -ceq 'DesktopProbe') {
     [void][IO.Directory]::CreateDirectory($probeDirectory)
     $probe = [ordered]@{ schema='red-salamander.hosted-desktop-probe.v1'; head=$context.batch.commit; platform=$Platform;
         observed_utc=[DateTime]::UtcNow.ToString('o'); repository_verdict='NOT_EVALUATED'; desktop=(Get-RSHostedDesktopDiagnostics) }
+    # Private experiment on this branch only: isolate the three fresh Win32 route
+    # observations. This is a read-only C# interop profile, not native R0e evidence.
+    $probeScratch = New-RSTestSandboxScratchDirectory -RepoRoot $root -Harness RouteApiProbe -Case FreshObservations
+    $env:TEMP=$probeScratch; $env:TMP=$probeScratch
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+namespace RedSalamander.RouteApiExperiment {
+    public sealed class Sample {
+        public string Phase;
+        public int Iterations;
+        public long ElapsedUs;
+        public int Failures;
+    }
+    public static class Probe {
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetVolumePathNameW(string path, StringBuilder root, uint count);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetVolumeNameForVolumeMountPointW(string root, StringBuilder name, uint count);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
+        private static extern uint GetDriveTypeW(string root);
+        public static List<Sample> Measure(string path) {
+            var root = new StringBuilder(260);
+            var guid = new StringBuilder(50);
+            if (!GetVolumePathNameW(path, root, 260))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot resolve the owned probe path.");
+            string knownRoot = root.ToString();
+            var samples = new List<Sample>();
+            foreach (string phase in new[] { "Root", "DriveType", "Guid", "Tuple" }) {
+                int failures = 0;
+                long started = Stopwatch.GetTimestamp();
+                for (int iteration = 0; iteration < 4096; ++iteration) {
+                    if (phase == "Root" || phase == "Tuple") {
+                        root.Clear();
+                        if (!GetVolumePathNameW(path, root, 260)) { ++failures; continue; }
+                    }
+                    string currentRoot = phase == "Tuple" ? root.ToString() : knownRoot;
+                    if ((phase == "DriveType" || phase == "Tuple") && GetDriveTypeW(currentRoot) <= 1)
+                        ++failures;
+                    if (phase == "Guid" || phase == "Tuple") {
+                        guid.Clear();
+                        if (!GetVolumeNameForVolumeMountPointW(currentRoot, guid, 50)) ++failures;
+                    }
+                }
+                samples.Add(new Sample { Phase=phase, Iterations=4096, Failures=failures,
+                    ElapsedUs=(long)((Stopwatch.GetTimestamp()-started)*1000000.0/Stopwatch.Frequency) });
+            }
+            return samples;
+        }
+    }
+}
+'@
+    $probe.route_api_experiment = [ordered]@{
+        implementation='CSharp-PInvoke'; process_architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();
+        path_characters=$probeScratch.Length; samples=@([RedSalamander.RouteApiExperiment.Probe]::Measure($probeScratch));
+        limitations='Interop overhead included; descriptive only; not the native R0e workload or qualification.'
+    }
     $probe | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $probeDirectory 'desktop.json') -Encoding utf8
     if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('evidence_directory=' + (Join-Path $probeRoot 'evidence')) }
     Write-Host ('Read-only hosted desktop probe: ' + ($probe | ConvertTo-Json -Depth 8 -Compress))

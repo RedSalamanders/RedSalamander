@@ -1,0 +1,1 @@
+- Retain a private, read-only hosted experiment that measures 4,096 fresh root, drive-type and volume-GUID observations separately and together. Its C# interop timings are descriptive, include interop overhead, and never qualify the native R0e workload. This experiment is isolated from the delivery branches.

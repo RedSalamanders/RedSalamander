@@ -15,6 +15,12 @@ of a separate desktop. This scope sends no input, activates no window and change
 display or session settings. It remains NOT_EVALUATED and creates no test, regression or
 production receipt. Other phases and local invocation reject it before engine/sandbox work.
 
+This isolated experiment additionally records four 4,096-iteration C# interop profiles:
+fresh root, drive type, volume GUID, and their complete tuple on an owned scratch path.
+These read-only measurements include interop overhead and describe OS observation cost;
+they are neither the native R0e workload nor qualification. The experiment is not part of
+the delivery branches and does not change any native workload or deadline.
+
 CommandsHandoff additionally pilots the owned hosted input desktop under the runner's
 per-entry interactive lease. It uses the same selected native hotkey case and evidence
 checks, preserves native assertions and returns to the original desktop after contained
