@@ -531,7 +531,9 @@ then applies the required compiler/SDK policy independently of the parent name.
 
 Tools/Install-ClangFormat.ps1 installs the Build/clang-format.json-pinned native formatter using PowerShell 7, without Python. It validates package and executable bytes, supports an offline -WheelPath and nonmutating -WhatIf, and preserves the existing executable on failure. The cache stays beneath .build/format.
 
-The repository-root `format-all.ps1` entrypoint formats tracked first-party `.cpp` and `.h` files with that same pinned formatter. It excludes `ThirdParty/`, `Specs/`, `advisor-plans/` and `.codex/`, and supports `-WhatIf` before acquiring the formatter or changing files. It does not rewrite archived evidence or untracked files.
+The repository-root `format-all.ps1` entrypoint formats tracked first-party `.cpp` and `.h` files with that same pinned formatter. It excludes `ThirdParty/`, `Specs/` and `.codex/`, and supports `-WhatIf` before acquiring the formatter or changing files. It does not rewrite archived evidence or untracked files.
+
+The six retired August advisor-survey records have individual exact Done-path admission with date-sibling and companion rejection. Their current documentation remainder is indexed as I58; archive admission does not close its remaining work or establish product qualification.
 
 Formatter output paths reuse the guarded path and atomic publication helpers in
 `Modules/Build/ArtifactOperationLock.psm1`. Existing reparse components are rejected through

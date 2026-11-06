@@ -15351,16 +15351,23 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! operations)
                 return false;
             bool contractsPassed = true;
+            std::vector<std::wstring> failedContracts;
+            size_t unexecutedContracts = 0u;
             const auto check     = [&](std::wstring_view name, const auto& runCheck) noexcept
             {
                 if (state.retainTempRootOnFailure)
                 {
                     AppendLog(std::format(L"Safety contract {}: NOT EXECUTED after retained failure", name));
                     contractsPassed = false;
+                    ++unexecutedContracts;
                     return;
                 }
                 const bool passed = runCheck();
                 AppendLog(std::format(L"Safety contract {}: {}", name, passed ? L"passed" : L"FAILED"));
+                if (! passed)
+                {
+                    failedContracts.emplace_back(name);
+                }
                 contractsPassed = contractsPassed && passed;
             };
             check(L"mutation interlock indexed lookup differential",
@@ -15444,7 +15451,18 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             check(L"retained popup idle telemetry measurement", [&] { return RecordFileOpsPopupIdleTelemetry(state); });
             if (! contractsPassed)
             {
-                Fail(L"File Operations safety contracts failed; see individual witnesses in the trace.");
+                std::wstring failures;
+                for (const std::wstring& name : failedContracts)
+                {
+                    if (! failures.empty())
+                        failures.append(L"; ");
+                    failures.append(name);
+                }
+                Fail(std::format(L"File Operations safety contracts failed: {}. Failed witnesses={}, not executed after retained failure={}. "
+                                 L"See individual witnesses in the trace.",
+                                 failures,
+                                 failedContracts.size(),
+                                 unexecutedContracts));
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

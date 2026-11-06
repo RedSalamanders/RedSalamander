@@ -50,7 +50,7 @@ $sourcePaths = @(
     $trackedPaths |
         Where-Object {
             $_ -and
-            $_ -notmatch '^(?i:ThirdParty|Specs|advisor-plans|\.codex)/'
+            $_ -notmatch '^(?i:ThirdParty|Specs|\.codex)/'
         } |
         Sort-Object -Unique |
         ForEach-Object {

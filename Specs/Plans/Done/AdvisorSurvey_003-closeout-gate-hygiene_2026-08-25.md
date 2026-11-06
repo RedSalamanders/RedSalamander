@@ -1,3 +1,24 @@
+# Retired advisor survey record
+
+> **NON-NORMATIVE RETIRED RECORD.** Archived on 2026-11-03 after reconciliation against current source.
+> No remaining executable work is owned by this file. Follow the single residual owner,
+> [I58: planning lifecycle and owner reconciliation](../WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md).
+> All executor instructions, TODO rows, dependencies and checkboxes in the original survey below are frozen history.
+> They do not authorize product changes, qualification runs, or access to the human-managed scratch note.
+
+## Archive provenance
+
+- **State:** RETIRED; superseded survey, not a claim that every surveyed product task is complete.
+- **Archived:** 2026-11-03
+- **Original path:** `advisor-plans/003-closeout-gate-hygiene.md`
+- **Source commit:** `269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1`
+- **Original Git blob:** `cb9087e0d406f4241ee7beaff05ca2ce60e2ceb0`
+- **Original file SHA-256:** `e39342791ae7f3b02f76c7df9f1eee85affe86cfd58a57c90f8bd4624d095724`
+- **Recovery:** `git show 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1:advisor-plans/003-closeout-gate-hygiene.md`
+
+## Frozen original survey
+
+<!-- original-advisor-survey:start -->
 # Plan 003: Separate implementation-complete plans from Fresh Full / perf-enforcement leftovers
 
 > **Executor instructions**: Follow this plan step by step. Run every

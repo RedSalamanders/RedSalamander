@@ -1,1 +1,0 @@
-- Preserve legacy interrupted-Move notices across the breadcrumb format upgrade, withholding them while another instance may still be their writer, and synchronize notice IDs with queue-key allocation.

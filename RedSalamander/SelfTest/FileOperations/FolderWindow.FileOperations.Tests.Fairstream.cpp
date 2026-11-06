@@ -9067,17 +9067,28 @@ case SelfTestState::Step::C1_InlineRenameNameRefusedOnCard:
     std::error_code ec;
     const bool hasTypedResult  = done->second.sourceItemResults.size() == 1u && done->second.sourceItemResults.front().has_value();
     const bool typedNoMutation = hasTypedResult && done->second.sourceItemResults.front()->status == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) &&
-                                 done->second.sourceItemResults.front()->publication == FileOperations::PublicationState::NotPublished &&
+                                 done->second.sourceItemResults.front()->publication == FileOperations::PublicationState::NotAttempted &&
                                  done->second.sourceItemResults.front()->sourceDisposition == FileOperations::SourceDisposition::Retained &&
                                  done->second.sourceItemResults.front()->completion == FileOperations::ItemCompletion::Failed;
-    if (done->second.hr != HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || ! typedNoMutation || ! std::filesystem::exists(source, ec) ||
+    wil::com_ptr<IFileSystemIO> localIo;
+    std::string sourceBytes;
+    const bool sourceIntact = paneFileSystem && paneFileSystem.try_query_to(localIo.put()) && ReadFileTextFsIo(localIo, source, sourceBytes) &&
+                              sourceBytes == std::string(1024u, '\x5A');
+    if (done->second.hr != HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || ! typedNoMutation || ! sourceIntact || ! std::filesystem::exists(source, ec) ||
         std::filesystem::exists(root / L"after.", ec) || std::filesystem::exists(root / L"after", ec))
     {
+        const auto* item = hasTypedResult ? std::addressof(done->second.sourceItemResults.front().value()) : nullptr;
         Fail(std::format(
-            L"C1 inline rename refused: Preparing must report typed Failed/NotPublished/Retained for ERROR_INVALID_NAME and leave the source untouched "
-            L"(hr=0x{:08X}, typed={}).",
+            L"C1 inline rename refused: Preparing must report typed Failed/NotAttempted/Retained for ERROR_INVALID_NAME and leave the source untouched "
+            L"(hr=0x{:08X}, typed={}, sourceIntact={}, itemCount={}, itemHr=0x{:08X}, publication={}, source={}, completion={}).",
             static_cast<unsigned long>(done->second.hr),
-            typedNoMutation ? 1 : 0));
+            typedNoMutation ? 1 : 0,
+            sourceIntact ? 1 : 0,
+            done->second.sourceItemResults.size(),
+            static_cast<unsigned long>(item ? item->status : E_PENDING),
+            item ? static_cast<int>(item->publication) : -1,
+            item ? static_cast<int>(item->sourceDisposition) : -1,
+            item ? static_cast<int>(item->completion) : -1));
         return true;
     }
     static_cast<void>(SelfTest::RemoveAll(root));
