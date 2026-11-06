@@ -21764,7 +21764,8 @@ struct FolderViewDummyPluginHandles
     {
         return false;
     }
-    const auto root = suiteRoot / L"work" / std::format(L"viewer_space_exact_detail_{0}", GetTickCount64());
+    // The unique parent isolates runs; the visible root breadcrumb must remain deterministic.
+    const auto root = suiteRoot / L"work" / std::format(L"viewer_space_exact_detail_{0}", GetTickCount64()) / L"Cedar Ridge Research Records Archive";
     state.Require(SelfTest::EnsureDirectory(root), L"Exact-detail root is created.");
     const std::string payload(1024u * 1024u, 'd');
     for (const wchar_t* group : {L"A", L"B"})
