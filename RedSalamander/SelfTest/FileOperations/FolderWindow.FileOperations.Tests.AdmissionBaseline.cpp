@@ -271,7 +271,7 @@ using MetadataProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
         owner.reset();
         pending = false;
     };
-    const auto cancel = wil::scope_exit(retire);
+    const auto cancel = wil::scope_exit([&]() noexcept { retire(); });
     struct Worker final
     {
         MetadataProbe probe = nullptr;
