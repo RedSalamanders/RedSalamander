@@ -41,6 +41,7 @@
 #include "PlugInterfaces/Viewer.h"
 #include "PluginConfiguration.h"
 #include "RegistryUtils.h"
+#include "StringConversion.h"
 #include "TerminalVtUpgrade.Tests.Contract.h"
 #include "TestSupport.Tests.Runner.h"
 #include "TestSupport/TestSupport.Tests.FailureReports.h"
@@ -1329,6 +1330,7 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         return;
     }
 
+    std::chrono::steady_clock::time_point unloadDeadline{};
     {
         wil::unique_hmodule module(LoadLibraryExW(fixtureModulePath.c_str(), nullptr, 0));
         Check(static_cast<bool>(module), L"Terminal.dll: isolated missing-runtime fixture loads", success);
@@ -1411,12 +1413,36 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
             terminal.reset();
         }
         parent.reset();
-        Check(WaitForPluginQuiet(canUnload), L"Terminal.dll: isolated diagnostic fixture reaches its unload quiet point", success);
+        // No metadata pointer is used after shutdown. Callback-return pins can still defer unmapping.
+        // Share the existing five-second unload budget with the subsequent physical-unmap witness.
+        unloadDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         shutdown();
+        const auto remaining = (std::max)(std::chrono::milliseconds::zero(),
+                                          std::chrono::duration_cast<std::chrono::milliseconds>(unloadDeadline - std::chrono::steady_clock::now()));
+        const auto quiet     = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept { return canUnload() == TRUE; }, {.timeout = remaining, .operationName = L"Terminal isolated diagnostic unload quiet point"});
+        Check(quiet.conditionMet, L"Terminal.dll: isolated diagnostic fixture reaches its unload quiet point", success);
+        if (! quiet.conditionMet)
+            std::wcerr << L"[ INFO     ] " << quiet.timeoutDiagnostic << L"\n";
     }
+
+    const auto remaining =
+        (std::max)(std::chrono::milliseconds::zero(), std::chrono::duration_cast<std::chrono::milliseconds>(unloadDeadline - std::chrono::steady_clock::now()));
+    const auto unmapped = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return GetModuleHandleW(fixtureModulePath.c_str()) == nullptr; },
+                                                                        {.timeout = remaining, .operationName = L"Terminal isolated diagnostic module unmap"});
+    Check(unmapped.conditionMet, L"Terminal.dll: isolated diagnostic fixture physically unmaps its copied module", success);
+    if (! unmapped.conditionMet)
+        std::wcerr << L"[ INFO     ] " << unmapped.timeoutDiagnostic << L"; module=" << fixtureModulePath.native() << L"\n";
 
     std::filesystem::remove_all(fixtureRoot, error);
     Check(! error, L"Terminal.dll: isolated localized diagnostic fixture cleans its scratch directory", success);
+    if (error)
+    {
+        const std::wstring message = error.category() == std::system_category() ? TryFormatSystemMessage(static_cast<DWORD>(error.value())) : std::wstring{};
+        std::wcerr << L"[ INFO     ] Terminal fixture cleanup path=" << fixtureRoot.native() << L" error=" << error.value() << L" category="
+                   << Common::Strings::Utf16FromUtf8ReplacingInvalid(error.category().name()) << L" message="
+                   << (message.empty() ? L"(Unicode system message unavailable)" : message) << L"\n";
+    }
 }
 
 // ---------------------------------------------------------------------------
