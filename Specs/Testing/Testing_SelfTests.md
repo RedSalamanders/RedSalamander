@@ -716,6 +716,17 @@ Environment variables may select alternate test inputs such as profile names, bu
   The adapter clears and restores its opt-in; local, x64, self-hosted, other-repository and
   R0ePaired roles never perform the stock-surface actions. Fingerprints include this opt-in.
   This preparation does not waive native foreground, input, capture or qualification assertions.
+  If direct foreground acquisition is refused, the same opted-in native ARM64 runner may
+  use one registered Alt+F24 handoff to its existing neutral window within 500 ms. This
+  earlier runner prelude is an explicit inline .NET fixture contract: it precedes the
+  child suite's warning and injects only the registered nontext chord. Product input
+  retains the canonical native warning and its lead time. The window's real hotkey
+  procedure rechecks Default input desktop, original HWND/process/thread/native focus
+  and owned target identity before activation. Held modifiers or F24 reject admission;
+  cleanup releases only acknowledged inserted keys in reverse order, retires registration
+  and subclass, and keeps the delegate alive through window-thread drain. Actual foreground
+  and focus must still be proved after key release; errors remain failures. Local, x64,
+  emulated, self-hosted, other-repository and paired roles never use this keyboard prelude.
   Their evidence uploads retain `artifacts/native-process-exits` from unarchived runs as well
   as completed evidence. Sealed historical Terminal evaluation/closeout lanes retain their
   reviewed historical desktop context and cannot qualify the current product.
@@ -799,6 +810,20 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Pane-filter prompt accessibility mismatch diagnostics retain the initial and post-read fixture
   snapshots, ValuePattern read HRESULT and element/foreground/focus witnesses. The existing
   equality assertion and wait budget remain unchanged; unexpected text is reported by length.
+  Initial and edited reads must succeed before their values can qualify the field; an empty
+  default value after a failed UIA read is not evidence of an empty editable field. Additional
+  diagnostic identity queries follow the original value capture.
+- Waiting Batch Rename test snapshots settle queued preview and target rebuilds, as well as
+  active collection/preview work, within the existing 30-second helper deadline when no
+  execution is active. Calls that exclude execution keep that behavior; explicit no-wait
+  snapshots retain pending-state coverage. Debounce coverage observes pending state before
+  pumping, then proves the waiting path publishes the latest preview and enables mode controls.
+- Commands dialog failure diagnostics retain original dispatch/snapshot and bounded-wait
+  results and label subsequent read-only probes. Editor marker diagnostics format the text
+  after the wait has populated it.
+- Popup failure-surface recovery uses the guarded, process-filtered desktop observer. Any
+  owned foreground transition or unavailable observation/event drain fails the case. Other
+  foreground activity remains diagnostic and never grants restoration or waives owned activation.
 - ViewerSpace capture failures retain the original capture HRESULT and all probe results before
   querying diagnostic geometry. Record actual window/navigation DPI, monitor and client bounds,
   palette/render context and each probe's bounds, required count and matched count in the native

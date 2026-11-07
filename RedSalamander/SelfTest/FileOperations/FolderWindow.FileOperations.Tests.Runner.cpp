@@ -11197,8 +11197,11 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"could not acquire the no-activation window guard");
-    const HWND foreground     = GetForegroundWindow();
-    const auto resetInjection = wil::scope_exit([]() noexcept
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+        return reject(std::format(L"process-scoped no-activation witness unavailable (failure={})", static_cast<unsigned int>(desktop.Failure())));
+    const auto foregroundBefore = desktop.LastObservation();
+    const auto resetInjection   = wil::scope_exit([]() noexcept
     {
         DebugFailNextFileOperationsD2DTargetAttempts(0u);
         DebugFailNextFileOperationsPopupLayoutMeasurements(0u);
@@ -11428,9 +11431,25 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
         return reject(L"the backoff timer did not re-attach the host from the failure surface");
     }
     static_cast<void>(describe(L"recovered"));
-    AppendLog(std::format(L"Popup failure-surface recovery: second surface selected after {} ms.", GetTickCount64() - failingSince));
-    if (GetForegroundWindow() != foreground)
-        return reject(L"recovery changed the foreground window");
+    AppendLog(std::format(L"Popup failure-surface recovery: elapsed from second persistent failure through recovery={} ms.", GetTickCount64() - failingSince));
+    const bool observed         = desktop.Finish();
+    const auto& foregroundAfter = desktop.LastObservation();
+    AppendLog(std::format(L"Popup recovery desktop observation: beforeHwnd=0x{:X} beforePid={} beforeTid={} afterHwnd=0x{:X} afterPid={} afterTid={} "
+                          L"afterAvailable={} ownedTransitions={} sampledForegroundChanges={} samples={} drainUs={} failure={}",
+                          reinterpret_cast<uintptr_t>(foregroundBefore.foregroundWindow),
+                          foregroundBefore.foregroundProcessId,
+                          foregroundBefore.foregroundThreadId,
+                          reinterpret_cast<uintptr_t>(foregroundAfter.foregroundWindow),
+                          foregroundAfter.foregroundProcessId,
+                          foregroundAfter.foregroundThreadId,
+                          desktop.LastObservationAvailable(),
+                          desktop.OwnedForegroundTransitions(),
+                          desktop.Stats().foregroundChanges,
+                          desktop.Stats().samples,
+                          desktop.Stats().barrierUs,
+                          static_cast<unsigned int>(desktop.Failure())));
+    if (! observed)
+        return reject(L"process-scoped no-activation observation or event drain failed");
     return true;
 }
 

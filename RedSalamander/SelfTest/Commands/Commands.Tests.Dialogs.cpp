@@ -4882,6 +4882,10 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
                                   reinterpret_cast<uintptr_t>(cycle.prompt)));
             }
             state.Require(! cycle.valueState->isReadOnly, std::format(L"Pane Filter prompt field should be editable during {}.", failureContext));
+            state.Require(SUCCEEDED(cycle.valueState->valueReadHr),
+                          std::format(L"Pane Filter initial UIA value read should succeed during {}; hr=0x{:08X}.",
+                                      failureContext,
+                                      static_cast<unsigned long>(cycle.valueState->valueReadHr)));
             state.Require(! cycle.valueState->name.empty(),
                           std::format(L"Pane Filter prompt editable DX field should expose a stable accessible name during {}.", failureContext));
             state.Require(cycle.valueState->value == cycle.snapshot.text,
@@ -4948,6 +4952,10 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
                       std::format(L"Pane Filter prompt should keep the editable field visible after editing during {}.", failureContext));
         if (cycle.editedValueState.has_value())
         {
+            state.Require(SUCCEEDED(cycle.editedValueState->valueReadHr),
+                          std::format(L"Pane Filter edited UIA value read should succeed during {}; hr=0x{:08X}.",
+                                      failureContext,
+                                      static_cast<unsigned long>(cycle.editedValueState->valueReadHr)));
             state.Require(cycle.editedValueState->value == cycle.editedSnapshot.text,
                           std::format(L"Pane Filter prompt field value should track the edited prompt text during {}.", failureContext));
         }
