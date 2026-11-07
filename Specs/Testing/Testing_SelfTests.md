@@ -657,6 +657,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   select the fixture, then restores the caller's value. Fingerprints bind the requested
   desktop fixture separately from user-interactive capability; a successful filtered
   diagnostic remains NOT_EVALUATED.
+  Active direct hosted callers, including native reusable builds, shuffle qualification and
+  current Ghostty product Commands, select the same fixture and restore the caller's request.
+  Their evidence uploads retain `artifacts/native-process-exits` from unarchived runs as well
+  as completed evidence. Sealed historical Terminal evaluation/closeout lanes retain their
+  reviewed historical desktop context and cannot qualify the current product.
 - Theme-cycle animation fixtures explicitly select the supported reduced-motion Off setting and
   restore the inherited UI settings; they must not depend on a hosted image's OS animation default.
   The dedicated reduced-motion case still selects On and checks its complete atomic presentation.

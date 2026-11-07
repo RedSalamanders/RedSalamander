@@ -511,7 +511,16 @@ jobs:
           }
           if ($env:RS_TEST_SUITE -in @('CI', 'Full')) {
             Import-Module ./Tools/Modules/Testing/HostedTestDesktop.psm1
-            Invoke-RSWithHostedTestDesktop -Action $runTests
+            Invoke-RSWithHostedTestDesktop -Action {
+              $priorDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+              try {
+                $desktopRequest = Get-RSHostedInputDesktopRequest
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $desktopRequest, 'Process')
+                & $runTests
+              } finally {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorDesktopRequest, 'Process')
+              }
+            }
           } else {
             & $runTests
           }
@@ -526,6 +535,7 @@ jobs:
           path: |
             ${{ steps.test_root.outputs.path }}/evidence/
             ${{ steps.test_root.outputs.path }}/runs/*/artifacts/selftest/
+            ${{ steps.test_root.outputs.path }}/runs/*/artifacts/native-process-exits/
             !${{ steps.test_root.outputs.path }}/runs/*/artifacts/selftest/**/work/**
             !${{ steps.test_root.outputs.path }}/evidence/completed-runs/*/scratch/**
             !${{ steps.test_root.outputs.path }}/evidence/completed-runs/*/artifacts/selftest/**/work/**
