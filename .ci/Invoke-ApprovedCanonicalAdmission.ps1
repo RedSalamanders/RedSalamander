@@ -1,7 +1,8 @@
 <# PRIVATE fixture admission diagnostic. This is not a product or native qualification. #>
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$CandidateRoot,[Parameter(Mandatory)][string]$BootstrapRoot,
-      [switch]$ApproveAccountClose,[switch]$ApproveSearchClose)
+      [switch]$ApproveAccountClose,[switch]$ApproveSearchClose,
+      [ValidateSet('Canonical','Explicit','Inherited')][string]$AttachmentVariant='Canonical')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop';$PSNativeCommandUseErrorActionPreference=$false
 $expected='3871a05da6109106d26b53ede1937e5ef29ec341'
@@ -28,7 +29,7 @@ Import-Module (Join-Path $CandidateRoot 'Tools/Modules/Testing/TestSandbox.psm1'
 [void](Initialize-RSTestSandboxRoot -TestRoot $testRoot -RepoRoot $CandidateRoot -AllowExternalInitialization)
 $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $CandidateRoot -Harness review-tools -Case approved-canonical-admission
 $env:TEMP=$scratch;$env:TMP=$scratch
-$e=Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path $testRoot "evidence/approved-canonical-admission/$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)") -RequireDescendant
+$e=Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path $testRoot "evidence/approved-canonical-admission/$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)-$AttachmentVariant") -RequireDescendant
 if(Test-Path -LiteralPath $e){throw 'Preserve prior admission evidence.'}
 [void][IO.Directory]::CreateDirectory($e)
 function Write-PrivateCreateOnlyJson([string]$Path,[object]$Value){
@@ -36,10 +37,18 @@ function Write-PrivateCreateOnlyJson([string]$Path,[object]$Value){
     $stream=[IO.File]::Open($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
     try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
 }
+$variant=$null
+if($AttachmentVariant -cne 'Canonical'){
+ . (Join-Path $BootstrapRoot '.ci/Prepare-PrivateDesktopVariant.ps1')
+ $variant=Get-PrivateBoundaryVariant -ModulePath $modulePath -Variant $AttachmentVariant
+}
 $intent=[ordered]@{schema='private.canonical-admission-intent.v1';candidate_head=$expected;candidate_module_sha256=$moduleHash;
     bootstrap_head=$env:GITHUB_SHA;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;job=$env:GITHUB_JOB;
     account_approved=[bool]$ApproveAccountClose;search_approved=[bool]$ApproveSearchClose;
     os_architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString();process_architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();
+    fixture_scope=if($variant){'PRIVATE_TRANSFORMED_FIXTURE'}else{'CANONICAL_FIXTURE'};attachment_variant=$AttachmentVariant;
+    original_csharp_sha256=if($variant){$variant.OriginalSha256}else{$null};compiled_csharp_sha256=if($variant){$variant.CompiledSha256}else{$null};
+    exact_replacements=if($variant){$variant.Replacements}else{@()};
     coverage='NOT_EVALUATED';created_utc=[DateTimeOffset]::UtcNow.ToString('o')}
 Write-PrivateCreateOnlyJson (Join-Path $e 'intent.json') $intent
 $record=[ordered]@{schema='private.canonical-admission-result.v1';intent_sha256=(Get-FileHash -LiteralPath (Join-Path $e 'intent.json')).Hash;
@@ -47,6 +56,7 @@ $record=[ordered]@{schema='private.canonical-admission-result.v1';intent_sha256=
 $failure=$null;$transcriptStarted=$false;$cleanupFailures=[Collections.Generic.List[Exception]]::new()
 try{
  Start-Transcript -LiteralPath (Join-Path $e 'fixture-transcript.txt') -NoClobber | Out-Null;$transcriptStarted=$true
+ if($variant){Add-Type -TypeDefinition $variant.Compiled}
  Import-Module $modulePath
  . (Join-Path $BootstrapRoot '.ci/Read-HostedInputCapability.ps1')
  try { $beforeCapability=Get-PrivateHostedInputCapability } catch { $beforeCapability=@{schema='private.hosted-input-capability.v1';error=$_.Exception.ToString()} }

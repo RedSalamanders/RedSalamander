@@ -1,0 +1,22 @@
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] private static extern IntPtr GetModuleHandleW(string name);
+        [DllImport("kernel32.dll", CharSet=CharSet.Ansi, ExactSpelling=true)] private static extern IntPtr GetProcAddress(IntPtr module, string name);
+        [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] private static extern IntPtr GetThreadDesktop(uint thread);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)] private delegate int NtQueryObjectDelegate(IntPtr handle,int kind,IntPtr buffer,uint length,out uint returned);
+        private sealed class PrivateQueryBuffer : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid {
+            internal PrivateQueryBuffer() : base(true) { SetHandle(Marshal.AllocHGlobal(56)); }
+            protected override bool ReleaseHandle() { Marshal.FreeHGlobal(handle); return true; }
+        }
+        private static void DiagnosticDesktopAccess(string stage, SafeDesktopHandle retained) {
+            IntPtr module=GetModuleHandleW("ntdll.dll"); IntPtr address=module==IntPtr.Zero?IntPtr.Zero:GetProcAddress(module,"NtQueryObject");
+            var query=address==IntPtr.Zero?null:Marshal.GetDelegateForFunctionPointer<NtQueryObjectDelegate>(address);
+            var context=HostedDesktopNative.ReadDesktopContext(0);
+            Console.Error.WriteLine("PrivateDesktopVariant stage="+stage+"; station="+context.WindowStation+"; thread="+context.ThreadDesktop+"; input="+context.InputDesktop+"; stationError="+context.WindowStationError+"; threadError="+context.ThreadDesktopError+"; inputError="+context.InputDesktopError);
+            foreach(var entry in new[]{new { Name="thread", Handle=GetThreadDesktop(GetCurrentThreadId()) },new { Name="retained", Handle=retained.DangerousGetHandle() }}) {
+                if(query==null || entry.Handle==IntPtr.Zero){Console.Error.WriteLine("PrivateDesktopVariant stage="+stage+"; handle="+entry.Name+"; queryAvailable=false");continue;}
+                using (var storage=new PrivateQueryBuffer()) {
+                    IntPtr buffer=storage.DangerousGetHandle();
+                    uint returned;int status=query(entry.Handle,0,buffer,56,out returned);uint granted=status>=0 && returned>=8?unchecked((uint)Marshal.ReadInt32(buffer,4)):0;
+                    Console.Error.WriteLine("PrivateDesktopVariant stage="+stage+"; handle="+entry.Name+"; status="+status+"; returned="+returned+"; grantedAvailable="+(status>=0 && returned>=8)+"; granted="+granted);
+                }
+            }
+        }

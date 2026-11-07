@@ -10,7 +10,7 @@ on:
         default: Release
       scope:
         type: choice
-        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity, ApprovedCurrentUi, ApprovedCanonicalAdmission]
+        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity, ApprovedCurrentUi, ApprovedCanonicalAdmission, ApprovedDesktopAttachmentPair]
         default: DesktopProbe
       dismiss_hosted_account_surface:
         description: Explicit owner-approved exception for the stock hosted ARM64 account window
@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   metadata:
-    if: inputs.scope != 'ApprovedCloseIdentity' && inputs.scope != 'ApprovedCurrentUi' && inputs.scope != 'ApprovedCanonicalAdmission'
+    if: inputs.scope != 'ApprovedCloseIdentity' && inputs.scope != 'ApprovedCurrentUi' && inputs.scope != 'ApprovedCanonicalAdmission' && inputs.scope != 'ApprovedDesktopAttachmentPair'
     name: Private desktop diagnostic (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -185,6 +185,60 @@ jobs:
         with:
           name: approved-canonical-admission-preflight-ARM64
           path: ${{ runner.temp }}/approved-canonical-admission-preflight.json
+          if-no-files-found: error
+  approved-desktop-attachment-pair:
+    if: inputs.scope == 'ApprovedDesktopAttachmentPair'
+    name: Private transformed fixture attachment pair
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 20
+    steps:
+      - name: Require both approved stock-surface exceptions
+        if: inputs.dismiss_hosted_account_surface != true || inputs.dismiss_hosted_search_surface != true
+        shell: pwsh
+        run: throw 'Both explicit authorizations are required.'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: bootstrap
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 3871a05da6109106d26b53ede1937e5ef29ec341
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Explicit attachment, one attempt
+        id: explicit
+        shell: pwsh
+        env:
+          APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
+          APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -AttachmentVariant Explicit
+      - name: Inherited desktop, one attempt
+        if: always() && steps.explicit.outcome != 'skipped'
+        shell: pwsh
+        env:
+          APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
+          APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -AttachmentVariant Inherited
+      - name: Retain bounded preflight status
+        if: always()
+        shell: pwsh
+        run: |
+          @{ scope='ApprovedDesktopAttachmentPair'; job_status='${{ job.status }}'; repository_coverage='NOT_EVALUATED' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'desktop-attachment-pair-preflight.json') -Encoding utf8
+      - name: Retain both fixture attempts and stock evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-attachment-pair-ARM64
+          path: C:/RedSalamander.Perf/evidence/
+          if-no-files-found: warn
+      - name: Retain preflight separately
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-attachment-pair-preflight-ARM64
+          path: ${{ runner.temp }}/desktop-attachment-pair-preflight.json
           if-no-files-found: error
   approved-current-ui:
     if: inputs.scope == 'ApprovedCurrentUi'
