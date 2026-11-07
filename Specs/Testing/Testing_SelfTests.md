@@ -758,6 +758,9 @@ Environment variables may select alternate test inputs such as profile names, bu
   its individual conditions, client viewport, client-to-screen origin, full UIA rectangle,
   actual DPI and focus/input state. Do not compare screen-space UIA bounds directly with a
   client-space viewport or treat a later diagnostic query as the original observation.
+- Pane-filter prompt accessibility mismatch diagnostics retain the initial and post-read fixture
+  snapshots, ValuePattern read HRESULT and element/foreground/focus witnesses. The existing
+  equality assertion and wait budget remain unchanged; unexpected text is reported by length.
 - ViewerSpace capture failures retain the original capture HRESULT and all probe results before
   querying diagnostic geometry. Record actual window/navigation DPI, monitor and client bounds,
   palette/render context and each probe's bounds, required count and matched count in the native
