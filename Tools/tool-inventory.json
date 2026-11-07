@@ -2693,7 +2693,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and own a temporary input desktop for each leased hosted interactive entry.",
+      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and own a temporary input desktop with a verified neutral foreground boundary for each leased hosted interactive entry.",
       "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest for pure fixture selection, and Invoke-RSWithHostedOwnedDesktop only within the canonical interactive entry lease. Project GitHub-hosted native entries request it; paired studies retain the original fixture on both sources. Local invocation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
@@ -2708,12 +2708,12 @@
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
         "Restores the original mode in finally; setup and restoration failures remain errors",
-        "Hosted interactive entries create and select one owned input desktop inside the held entry lease, restore the original after contained child drain and close its handles"
+        "Hosted interactive entries create and select one owned input desktop inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, restore the original after contained child drain, join the window thread and close desktop handles"
       ],
       "outputs": [
         "Qualification action output and display/work-area/session/foreground diagnostics",
         "Read-only calling/input/foreground desktop names with individual Windows query errors",
-        "Owned input-desktop creation and verified restoration diagnostics"
+        "Owned input-desktop creation, positive neutral foreground boundary and verified restoration diagnostics"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [

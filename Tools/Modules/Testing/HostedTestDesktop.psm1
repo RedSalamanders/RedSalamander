@@ -7,6 +7,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 namespace RedSalamander.Testing {
     // DEVMODEW is a fixed 220-byte public Win32 structure. Preserve the complete
     // enumerated mode, including fields the test fixture does not change.
@@ -32,15 +33,128 @@ namespace RedSalamander.Testing {
             return closed;
         }
     }
+    // Launcher-only foreground boundary: no application executable dependency and
+    // no input or window on the user's original desktop. The window and its queue
+    // belong to one dedicated thread for their entire lifetime.
+    internal sealed class OwnedDesktopAnchor : IDisposable {
+        private sealed class SafeWindowHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid {
+            public SafeWindowHandle() : base(true) {}
+            internal int ReleaseError { get; private set; }
+            [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+            [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DestroyWindow(IntPtr window);
+            protected override bool ReleaseHandle() {
+                bool destroyed = DestroyWindow(handle);
+                if (!destroyed) ReleaseError = Marshal.GetLastWin32Error();
+                return destroyed;
+            }
+        }
+        [StructLayout(LayoutKind.Sequential)] private struct Point { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] private struct Message {
+            public IntPtr Window; public uint Id; public UIntPtr WParam; public IntPtr LParam;
+            public uint Time; public Point Position; public uint Private;
+        }
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(SafeDesktopHandle desktop);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        private static extern SafeWindowHandle CreateWindowExW(uint extended, string className, string name, uint style,
+            int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr parameter);
+        [DllImport("user32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr SetFocus(IntPtr window);
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr GetFocus();
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern int GetSystemMetrics(int index);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        private static extern uint MsgWaitForMultipleObjectsEx(uint count, IntPtr[] handles, uint milliseconds, uint mask, uint flags);
+        [DllImport("user32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PeekMessageW(out Message message, IntPtr window, uint first, uint last, uint remove);
+        [DllImport("user32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool TranslateMessage(ref Message message);
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr DispatchMessageW(ref Message message);
+        private readonly SafeDesktopHandle desktop;
+        private readonly AutoResetEvent stop = new AutoResetEvent(false);
+        private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
+        private readonly Thread thread;
+        private volatile Exception failure;
+        private bool disposed;
+        private OwnedDesktopAnchor(SafeDesktopHandle desktop) {
+            this.desktop = desktop;
+            thread = new Thread(Run) { IsBackground = true, Name = "RedSalamander hosted foreground boundary" };
+        }
+        internal static OwnedDesktopAnchor Start(SafeDesktopHandle desktop) {
+            var anchor = new OwnedDesktopAnchor(desktop);
+            anchor.thread.Start();
+            if (!anchor.ready.Wait(TimeSpan.FromSeconds(10))) {
+                anchor.Dispose();
+                throw new TimeoutException("The owned hosted foreground boundary did not initialize.");
+            }
+            if (anchor.failure != null) {
+                Exception error = anchor.failure;
+                anchor.Dispose();
+                throw new InvalidOperationException("Cannot establish the owned hosted foreground boundary.", error);
+            }
+            return anchor;
+        }
+        private void Run() {
+            try {
+                if (!SetThreadDesktop(desktop))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot attach the owned foreground thread to its desktop.");
+                var window = CreateWindowExW(0x80, "STATIC", "RedSalamander hosted test boundary", 0x90000000,
+                    Math.Max(0, GetSystemMetrics(0) - 8), Math.Max(0, GetSystemMetrics(1) - 8), 8, 8,
+                    IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                using (window) {
+                    if (window == null || window.IsInvalid)
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot create the owned hosted foreground boundary.");
+                    IntPtr handle = window.DangerousGetHandle();
+                    if (!SetForegroundWindow(handle))
+                        throw new InvalidOperationException("The owned hosted boundary did not acquire real foreground ownership.");
+                    SetFocus(handle);
+                    if (GetForegroundWindow() != handle || GetFocus() != handle)
+                        throw new InvalidOperationException("The owned hosted boundary did not acquire real native focus.");
+                    ready.Set();
+                    var waits = new[] { stop.SafeWaitHandle.DangerousGetHandle() };
+                    for (;;) {
+                        uint result = MsgWaitForMultipleObjectsEx(1, waits, 0xffffffff, 0x04ff, 0x0004);
+                        if (result == 0) break;
+                        if (result != 1) throw new Win32Exception(Marshal.GetLastWin32Error(), "The owned foreground queue wait failed.");
+                        Message message;
+                        while (PeekMessageW(out message, IntPtr.Zero, 0, 0, 1)) {
+                            TranslateMessage(ref message);
+                            DispatchMessageW(ref message);
+                        }
+                    }
+                }
+                if (window.ReleaseError != 0)
+                    throw new Win32Exception(window.ReleaseError, "Cannot retire the owned hosted foreground window.");
+            } catch (Win32Exception error) { failure = error; }
+              catch (InvalidOperationException error) { failure = error; }
+            finally { ready.Set(); }
+        }
+        public void Dispose() {
+            if (disposed) return;
+            stop.Set();
+            if (!thread.Join(TimeSpan.FromSeconds(10)))
+                throw new TimeoutException("The owned hosted foreground thread did not retire.");
+            disposed = true;
+            ready.Dispose(); stop.Dispose();
+            if (failure != null) throw new InvalidOperationException("The owned hosted foreground boundary failed.", failure);
+        }
+    }
     public sealed class HostedOwnedDesktopLease : IDisposable {
         private readonly SafeDesktopHandle original;
         private readonly SafeDesktopHandle owned;
         private readonly string originalName;
+        private OwnedDesktopAnchor anchor;
         private bool disposed;
         public readonly string Name;
         public bool Restored { get; private set; }
+        public bool ForegroundBoundaryReady { get; private set; }
         internal HostedOwnedDesktopLease(SafeDesktopHandle original, string originalName, SafeDesktopHandle owned, string name) {
             this.original = original; this.originalName = originalName; this.owned = owned; Name = name;
+        }
+        internal void StartForegroundBoundary() {
+            anchor = OwnedDesktopAnchor.Start(owned);
+            ForegroundBoundaryReady = true;
         }
         public void Dispose() {
             if (disposed) return;
@@ -55,7 +169,10 @@ namespace RedSalamander.Testing {
                 }
                 Restored = HostedDesktopNative.InputDesktopName() == originalName;
                 if (!Restored) throw new InvalidOperationException("Hosted input-desktop restoration did not match the original.");
-            } finally { owned.Dispose(); original.Dispose(); }
+            } finally {
+                try { if (anchor != null) anchor.Dispose(); }
+                finally { owned.Dispose(); original.Dispose(); }
+            }
             if (owned.ReleaseError != 0 || original.ReleaseError != 0)
                 throw new Win32Exception(owned.ReleaseError != 0 ? owned.ReleaseError : original.ReleaseError, "Cannot retire hosted desktop handles.");
         }
@@ -112,6 +229,7 @@ namespace RedSalamander.Testing {
                 throw new Win32Exception(openError, "Cannot retain the original hosted input desktop.");
             }
             SafeDesktopHandle owned = null;
+            HostedOwnedDesktopLease lease = null;
             bool transferred = false;
             try {
                 string originalName = ObjectName(original.DangerousGetHandle(), out error);
@@ -119,12 +237,16 @@ namespace RedSalamander.Testing {
                 string name = "RedSalamander.Test." + Guid.NewGuid().ToString("N");
                 owned = CreateDesktopW(name, IntPtr.Zero, IntPtr.Zero, 0, 0x1ff, IntPtr.Zero);
                 if (owned == null || owned.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot create the owned hosted test desktop.");
-                var lease = new HostedOwnedDesktopLease(original, originalName, owned, name);
+                lease = new HostedOwnedDesktopLease(original, originalName, owned, name);
                 if (!SwitchDesktop(owned)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot activate the owned hosted test desktop.");
+                lease.StartForegroundBoundary();
                 transferred = true;
                 return lease;
             } finally {
-                if (!transferred) { if (owned != null) owned.Dispose(); original.Dispose(); }
+                if (!transferred) {
+                    if (lease != null) lease.Dispose();
+                    else { if (owned != null) owned.Dispose(); original.Dispose(); }
+                }
             }
         }
         public static DesktopContext ReadDesktopContext(uint foregroundThread) {
@@ -270,7 +392,10 @@ function Invoke-RSWithHostedOwnedDesktop {
         Hosted-only and called inside the runner's interactive mutex. Creates one uniquely
         named desktop, directs contained children there and uses the existing native input
         warning. After the synchronous action drains its contained children, restores the
-        original input desktop and retires both handles. Refuses secure or unknown desktops.
+        original input desktop and retires both handles. A thread-owned neutral window must
+        acquire real foreground and focus before the action starts; its message queue stays
+        live until restoration and is joined before its desktop handle closes.
+        Refuses secure or unknown desktops.
         Native focus/input assertions are unchanged. A foreign desktop switch is preserved
         and reported as a fixture failure. Local use is refused before native calls.
     .PARAMETER Action
@@ -292,7 +417,8 @@ function Invoke-RSWithHostedOwnedDesktop {
     $desktop = $null; $processScope = $null; $actionError = $null; $restoreError = $null
     try {
         $desktop = New-RSHostedOwnedDesktop
-        Write-Host ('Hosted owned input desktop entered: ' + $desktop.Name)
+        if ($desktop.ForegroundBoundaryReady -cne $true) { throw 'The hosted owned input desktop has no verified foreground boundary.' }
+        Write-Host ('Hosted owned input desktop entered: ' + $desktop.Name + '; foregroundBoundaryReady=' + $desktop.ForegroundBoundaryReady)
         $processScope = New-RSHostedDesktopProcessScope -Name $desktop.Name
         $result = & $Action
     } catch { $actionError = $_ } finally {

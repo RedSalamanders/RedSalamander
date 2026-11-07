@@ -659,7 +659,13 @@ Environment variables may select alternate test inputs such as profile names, bu
   current desktop. The fixture requires this project's GitHub-hosted runner, `WinSta0` and
   an initial `Default` input desktop. It creates one non-inheritable, uniquely named desktop
   and explicitly directs contained children there through `STARTUPINFO.lpDesktop`. The child
-  uses the existing native warning and original focus/input assertions. Its containment job
+  starts only after a dedicated thread on that desktop has created a neutral window and
+  verified real foreground and native focus ownership. This supplies a live restoration
+  boundary without using a foreign process or changing the original desktop's windows.
+  The neutral thread services its message queue throughout the entry, stops after original
+  input-desktop restoration and is joined before desktop handles close. Setup or retirement
+  failure fails qualification; a setup witness alone does not prove screenshot or input coverage.
+  The child uses the existing native warning and original focus/input assertions. Its containment job
   must drain before the process-desktop scope retires, the original input desktop is restored,
   both desktop handles close and the interactive mutex releases. A foreign desktop change is
   preserved and fails the fixture; failed creation, restoration or handle retirement also
