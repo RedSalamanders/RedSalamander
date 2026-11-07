@@ -1,0 +1,1 @@
+- Require successful Pane Filter accessibility value reads and retain diagnostic identity after capturing the original value.

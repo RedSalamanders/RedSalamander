@@ -7943,14 +7943,6 @@ template <typename Predicate>
 
         UiaValuePatternState state{};
         static_cast<void>(element->get_CurrentControlType(&state.controlType));
-        if (captureIdentity)
-        {
-            static_cast<void>(element->get_CurrentNativeWindowHandle(&state.nativeHwnd));
-            wil::unique_bstr automationId;
-            if (SUCCEEDED(element->get_CurrentAutomationId(&automationId)))
-                state.automationId.assign(automationId.get() ? automationId.get() : L"");
-        }
-
         wil::unique_bstr name;
         if (SUCCEEDED(element->get_CurrentName(&name)))
         {
@@ -7968,6 +7960,16 @@ template <typename Predicate>
         if (SUCCEEDED(valuePattern->get_CurrentIsReadOnly(&readOnly)))
         {
             state.isReadOnly = readOnly != FALSE;
+        }
+
+        // Capture diagnostic identity after the original value read, so these
+        // extra UIA calls cannot make an earlier read observe a later value.
+        if (captureIdentity)
+        {
+            static_cast<void>(element->get_CurrentNativeWindowHandle(&state.nativeHwnd));
+            wil::unique_bstr automationId;
+            if (SUCCEEDED(element->get_CurrentAutomationId(&automationId)))
+                state.automationId.assign(automationId.get() ? automationId.get() : L"");
         }
 
         return state;
@@ -13015,14 +13017,19 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const auto openListing = [&](FolderWindow::LeftoverCleanupDebugSnapshot& snapshot) noexcept
+    bool listingDispatch    = false;
+    ULONGLONG listingWaitMs = 0;
+    const auto openListing  = [&](FolderWindow::LeftoverCleanupDebugSnapshot& snapshot) noexcept
     {
-        if (! DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/cleanUpLeftovers"))
+        listingDispatch = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/cleanUpLeftovers");
+        if (! listingDispatch)
         {
             return false;
         }
+        const ULONGLONG waitStarted = GetTickCount64();
         const auto opened = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return g_folderWindow.DebugGetLeftoverCleanupSnapshot(snapshot); },
                                                                           {.timeout = SelfTest::Scale(5000ms), .operationName = L"leftover cleanup listing"});
+        listingWaitMs     = GetTickCount64() - waitStarted;
         return opened.conditionMet;
     };
     const auto listingClosed = [&](std::wstring_view what) noexcept
@@ -13051,7 +13058,25 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     // 1. Old stages start checked; a recent stage and possible original start unchecked. The ordinary
     //    file and subfolder's leftover are absent; Cancel deletes nothing.
     FolderWindow::LeftoverCleanupDebugSnapshot listing{};
-    state.Require(openListing(listing), L"cmd/pane/cleanUpLeftovers should open the leftover listing.");
+    const bool listingOpened = openListing(listing);
+    if (! listingOpened)
+    {
+        const HWND foreground = GetForegroundWindow();
+        DWORD foregroundPid   = 0;
+        static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundPid));
+        SelfTest::AppendSuiteTrace(
+            SelfTest::SelfTestSuite::Commands,
+            std::format(
+                L"Leftover listing failure: dispatch={} opened={} waitMs={} laterWindow=0x{:X} laterForeground=0x{:X} laterForegroundPid={} laterFocus=0x{:X}",
+                listingDispatch,
+                listingOpened,
+                listingWaitMs,
+                reinterpret_cast<uintptr_t>(g_folderWindow.DebugGetLeftoverCleanupWindowForSelfTest()),
+                reinterpret_cast<uintptr_t>(foreground),
+                foregroundPid,
+                reinterpret_cast<uintptr_t>(GetFocus())));
+    }
+    state.Require(listingOpened, L"cmd/pane/cleanUpLeftovers should open the leftover listing.");
     if (! state.failure.empty())
     {
         return false;
@@ -13253,11 +13278,26 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         PumpPendingMessages();
     }
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/listOpenedFiles"),
-                  L"cmd/pane/listOpenedFiles should dispatch through the shortcut path for the empty state.");
+    const bool openedFilesDispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/listOpenedFiles");
+    state.Require(openedFilesDispatched, L"cmd/pane/listOpenedFiles should dispatch through the shortcut path for the empty state.");
     PumpPendingMessages();
     FolderWindow::OpenedFilesDebugSnapshot emptySnapshot{};
-    state.Require(g_folderWindow.DebugGetOpenedFilesDialogSnapshot(emptySnapshot), L"List Opened Files dialog snapshot should be available.");
+    const bool openedFilesSnapshot = g_folderWindow.DebugGetOpenedFilesDialogSnapshot(emptySnapshot);
+    if (! openedFilesSnapshot)
+    {
+        const HWND foreground = GetForegroundWindow();
+        DWORD foregroundPid   = 0;
+        static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundPid));
+        SelfTest::AppendSuiteTrace(
+            SelfTest::SelfTestSuite::Commands,
+            std::format(L"Opened Files snapshot failure: dispatch={} snapshot={} laterForeground=0x{:X} laterForegroundPid={} laterFocus=0x{:X}",
+                        openedFilesDispatched,
+                        openedFilesSnapshot,
+                        reinterpret_cast<uintptr_t>(foreground),
+                        foregroundPid,
+                        reinterpret_cast<uintptr_t>(GetFocus())));
+    }
+    state.Require(openedFilesSnapshot, L"List Opened Files dialog snapshot should be available.");
     state.Require(emptySnapshot.visible, L"List Opened Files should show a dialog.");
     state.Require(emptySnapshot.usesDxUiHost, L"List Opened Files should use the themed DxUi host instead of the Win32 dialog-template surface.");
     state.Require(emptySnapshot.visibleNativeChildControlCount <= 1u,
@@ -17263,10 +17303,42 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         return false;
     }
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/edit"), L"cmd/pane/edit should dispatch through the shortcut path.");
+    const bool editDispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/edit");
+    state.Require(editDispatched, L"cmd/pane/edit should dispatch through the shortcut path.");
 
     std::string markerText;
-    state.Require(WaitForTextFileFirstLine(markerPath, "\"focused.editcmd\"", SelfTest::Scale(5000ms), markerText),
+    const ULONGLONG markerWaitStarted = GetTickCount64();
+    const bool markerMatched          = WaitForTextFileFirstLine(markerPath, "\"focused.editcmd\"", SelfTest::Scale(5000ms), markerText);
+    const ULONGLONG markerWaitMs      = GetTickCount64() - markerWaitStarted;
+    if (! markerMatched)
+    {
+        std::error_code statusError;
+        const auto status = std::filesystem::status(markerPath, statusError);
+        const bool exists = std::filesystem::exists(status);
+        std::error_code sizeError;
+        const uintmax_t size = exists ? std::filesystem::file_size(markerPath, sizeError) : 0u;
+        wil::unique_hfile markerRead{CreateFileW(
+            markerPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)};
+        const DWORD readOpenError = markerRead ? ERROR_SUCCESS : GetLastError();
+        const HWND foreground     = GetForegroundWindow();
+        DWORD foregroundPid       = 0;
+        static_cast<void>(GetWindowThreadProcessId(foreground, &foregroundPid));
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                   std::format(L"Primary Edit marker failure: dispatch={} matched={} waitMs={} laterExists={} laterStatusError={} laterSize={} "
+                                               L"laterSizeError={} laterReadOpenError={} laterForeground=0x{:X} laterForegroundPid={} laterFocus=0x{:X}",
+                                               editDispatched,
+                                               markerMatched,
+                                               markerWaitMs,
+                                               exists,
+                                               statusError.value(),
+                                               size,
+                                               sizeError.value(),
+                                               readOpenError,
+                                               reinterpret_cast<uintptr_t>(foreground),
+                                               foregroundPid,
+                                               reinterpret_cast<uintptr_t>(GetFocus())));
+    }
+    state.Require(markerMatched,
                   std::format(L"Primary Edit should expand {{Filename}} from the focused file while preserving argument quoting; actual marker='{}'.",
                               std::wstring(markerText.begin(), markerText.end())));
 

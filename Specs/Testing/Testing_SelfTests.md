@@ -772,6 +772,20 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Pane-filter prompt accessibility mismatch diagnostics retain the initial and post-read fixture
   snapshots, ValuePattern read HRESULT and element/foreground/focus witnesses. The existing
   equality assertion and wait budget remain unchanged; unexpected text is reported by length.
+  Initial and edited reads must succeed before their values can qualify the field; an empty
+  default value after a failed UIA read is not evidence of an empty editable field. Additional
+  diagnostic identity queries follow the original value capture.
+- Waiting Batch Rename test snapshots settle queued preview and target rebuilds, as well as
+  active collection/preview work, within the existing 30-second helper deadline when no
+  execution is active. Calls that exclude execution keep that behavior; explicit no-wait
+  snapshots retain pending-state coverage. Debounce coverage observes pending state before
+  pumping, then proves the waiting path publishes the latest preview and enables mode controls.
+- Commands dialog failure diagnostics retain original dispatch/snapshot and bounded-wait
+  results and label subsequent read-only probes. Editor marker diagnostics format the text
+  after the wait has populated it.
+- Popup failure-surface recovery uses the guarded, process-filtered desktop observer. Any
+  owned foreground transition or unavailable observation/event drain fails the case. Other
+  foreground activity remains diagnostic and never grants restoration or waives owned activation.
 - ViewerSpace capture failures retain the original capture HRESULT and all probe results before
   querying diagnostic geometry. Record actual window/navigation DPI, monitor and client bounds,
   palette/render context and each probe's bounds, required count and matched count in the native
