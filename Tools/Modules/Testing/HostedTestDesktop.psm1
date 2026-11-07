@@ -336,6 +336,10 @@ namespace RedSalamander.Testing {
             if (elapsed < 0) throw new ArgumentOutOfRangeException(nameof(elapsed));
             return elapsed >= 1500 ? 0u : (uint)Math.Min(10, 1500 - elapsed);
         }
+        internal static bool CanWaitForForegroundRestore(IntPtr current, IntPtr boundary, long elapsed) {
+            if (elapsed < 0) throw new ArgumentOutOfRangeException(nameof(elapsed));
+            return elapsed < 1500 && (current == IntPtr.Zero || current == boundary);
+        }
         private static void WaitOneRestoreMessage(System.Diagnostics.Stopwatch timer) {
             uint interval = RestoreWaitMilliseconds(timer.ElapsedMilliseconds);
             if (interval == 0) return;
@@ -367,8 +371,10 @@ namespace RedSalamander.Testing {
                 do {
                     current = GetForegroundWindow();
                     if (current == original) break;
-                    if (current != handle || timer.ElapsedMilliseconds >= 1500)
-                        throw new InvalidOperationException("The original hosted foreground window was not restored.");
+                    long elapsed = timer.ElapsedMilliseconds;
+                    if (!CanWaitForForegroundRestore(current, handle, elapsed))
+                        throw new InvalidOperationException("The original hosted foreground window was not restored. current=" + current.ToInt64() +
+                            "; original=" + original.ToInt64() + "; handle=" + handle.ToInt64() + "; elapsedMs=" + elapsed);
                     WaitOneRestoreMessage(timer);
                     uint checkedProcess;
                     if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
@@ -1103,6 +1109,8 @@ function Invoke-RSWithHostedDefaultDesktop {
         acquire real foreground and focus before the action starts. After contained child drain,
         restores the original foreground and native focus, joins the live window thread and
         closes its retained desktop handle. No input desktop is created or switched.
+         A transient null foreground is tolerated only after an accepted return request,
+         within the existing bounded wait; another window still fails restoration.
         After direct foreground refusal, the opted-in project-hosted native ARM64 role may
         use one guarded registered Alt+F24 handoff to the owned neutral window in 500 ms.
         This runner prelude precedes the child warning; product input retains the shared

@@ -483,6 +483,18 @@ Describe 'Hosted foreground chord role policy' {
 }
 
 Describe 'Hosted boundary return policy' {
+    It 'waits only for null or owned foreground before the existing deadline' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $wait = $boundary.GetMethod('CanWaitForForegroundRestore', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        foreach ($sample in @(@{current=0;elapsed=0;expected=$true}, @{current=0;elapsed=1499;expected=$true}, @{current=0;elapsed=1500;expected=$false}, @{current=42;elapsed=1499;expected=$true}, @{current=42;elapsed=1500;expected=$false}, @{current=43;elapsed=0;expected=$false}, @{current=43;elapsed=1499;expected=$false})) {
+            $wait.Invoke($null, [object[]]@([IntPtr]$sample.current, [IntPtr]42, [long]$sample.elapsed)) | Should Be $sample.expected
+        }
+        $caught = $null
+        try { [void]$wait.Invoke($null, [object[]]@([IntPtr]::Zero, [IntPtr]42, [long]-1)) }
+        catch [System.Management.Automation.MethodInvocationException] { $caught = $_.Exception.GetBaseException() }
+        ($caught -is [ArgumentOutOfRangeException]) | Should Be $true
+    }
     It 'clears only the no-activation extended style' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
         $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
