@@ -2700,6 +2700,7 @@
       "usedBy": [
         ".github/workflows/build-reusable.yml",
         ".github/workflows/nightly-flake.yml",
+        ".github/workflows/ghostty-runtime-product-qualification.yml",
         "Tools/Invoke-ProjectCi.ps1",
         "Tools/Run-AllTests.ps1"
       ],

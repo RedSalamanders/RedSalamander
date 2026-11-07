@@ -602,7 +602,8 @@ function Invoke-RSWithHostedTestDesktop {
         The action's output, with desktop diagnostics on the host stream.
     .NOTES
         Windows GitHub-hosted runner fixture only. No persistent display/registry changes.
-        Callers: build-reusable.yml and nightly-flake.yml. Contract: Testing_SelfTests.md.
+        Direct callers include build-reusable.yml, nightly-flake.yml and
+        ghostty-runtime-product-qualification.yml. Contract: Testing_SelfTests.md.
     .EXAMPLE
         Invoke-RSWithHostedTestDesktop -Action { ./Tools/Run-AllTests.ps1 -Suite CI -SkipBuild }
     #>

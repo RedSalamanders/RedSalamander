@@ -94,7 +94,7 @@ Describe 'Run-AllTests inventory desktop admission' {
                 . ([scriptblock]::Create($function.Extent.Text))
             }
             $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-inventory-' + [guid]::NewGuid().ToString('N'))
-            $testRunContext = @{ TestRoot = $env:REDSALAMANDER_TEST_ROOT; RunRoot = $fixtureRoot }
+            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
             $admissions = [Collections.Generic.List[bool]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
@@ -138,6 +138,20 @@ Describe 'Run-AllTests inventory desktop admission' {
             $admissions.Count | Should Be 2
             $admissions[0] | Should Be $true
             $admissions[1] | Should Be $false
+            # The selected marked root's drive supplies a real default without initializing another volume.
+            $oldRoot = [Environment]::GetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', 'Process')
+            $oldLegacy = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', 'Process')
+            $selectedRoot = $testRunContext.TestRoot
+            try {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', $null, 'Process')
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $null, 'Process')
+                $testRunContext.TestRoot = Get-RSTestSandboxRoot -RepoRoot $selectedRoot
+                $testRunContext.TestRoot | Should Be $selectedRoot
+                (Invoke-RSSelfTestProcess -Entry $entry -Arguments $entry.Arguments) | Should Be 0
+            } finally {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', $oldRoot, 'Process')
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $oldLegacy, 'Process')
+            }
         }
     }
 }
@@ -1327,7 +1341,7 @@ Set-StrictMode -Version Latest
         & {
             . ([scriptblock]::Create($function.Extent.Text))
             $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-exit-' + [guid]::NewGuid().ToString('N'))
-            $testRunContext = @{ TestRoot = $env:REDSALAMANDER_TEST_ROOT; RunRoot = $fixtureRoot }
+            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
             $profiles = [Collections.Generic.List[string]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
