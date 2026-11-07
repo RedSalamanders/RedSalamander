@@ -282,6 +282,9 @@ aggregate reserve no greater than 16 KiB. MTP fake-backend coverage includes
 publication, zero private payload buffering, at most 4 MiB for upload/relay, at most 8 MiB for
 verification, and one reusable reader request state of at most 8 MiB. A failed ordinary seek must
 not poison the reader; only a watchdog-abandoned device command may make it terminal.
+The fake MTP delayed-reader watchdog cases create their readers with the ordinary setup timeout,
+then verify and arm the 50 ms command timeout before the delayed read. Recovery uses the ordinary
+timeout while stale readers must still fail immediately; delayed-read and unload checks remain intact.
 Managed-cleanup cases also pause after destination publication and prove the retained Local binding
 blocks a pathname rename/replacement, inject one known Sharing Violation and require the central
 Retry action to reissue only conditional Delete, and inject an unknown mutation outcome that leaves
