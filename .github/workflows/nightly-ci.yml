@@ -93,4 +93,5 @@ jobs:
           path: |
             ${{ matrix.testRoot }}/runs/**/wgc-admission.json
             ${{ matrix.testRoot }}/runs/**/native-foreground.txt
+            ${{ matrix.testRoot }}/runs/**/account-dismissal-*.json
           if-no-files-found: error

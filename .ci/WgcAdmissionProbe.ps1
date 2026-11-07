@@ -60,7 +60,7 @@ public static class WgcDesktopAdmissionProbe {
     [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool PostMessageW(IntPtr window,uint message,UIntPtr wParam,IntPtr lParam);
     [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint access,bool inherit,uint process);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool QueryFullProcessImageNameW(Microsoft.Win32.SafeHandles.SafeProcessHandle process,uint flags,StringBuilder image,ref uint capacity);
-    [DllImport("kernel32.dll", ExactSpelling=true)] static extern int GetApplicationUserModelId(Microsoft.Win32.SafeHandles.SafeProcessHandle process,ref uint capacity,StringBuilder id);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetApplicationUserModelId(Microsoft.Win32.SafeHandles.SafeProcessHandle process,ref uint capacity,StringBuilder id);
     public static uint CurrentForegroundProcess() { uint process;GetWindowThreadProcessId(GetForegroundWindow(),out process);return process; }
     public static string CurrentForegroundTitle() {var title=new StringBuilder(1024);GetWindowTextW(GetForegroundWindow(),title,title.Capacity);return title.ToString();}
     public static string CurrentForegroundApplicationId() {
@@ -238,7 +238,23 @@ $initialForegroundTitle=[WgcDesktopAdmissionProbe]::CurrentForegroundTitle()
 $initialForegroundApplicationId=[WgcDesktopAdmissionProbe]::CurrentForegroundApplicationId()
 $initialForegroundIdentity=if($initialForegroundProcess){Get-CimInstance Win32_Process -Filter ('ProcessId='+$initialForegroundProcess)|Select-Object Name,ExecutablePath,CommandLine,SessionId}else{$null}
 $accountSurfaceDismissed=$false
-if($DismissHostedAccountSurface){$accountSurfaceDismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedAccountSurface($initialForegroundProcess)}
+if($DismissHostedAccountSurface){
+    Import-Module (Join-Path $repo 'Tools/Modules/Testing/HostedTestDesktop.psm1')
+    $context=(Get-RSHostedDesktopDiagnostics).DesktopContext
+    if($context.WindowStation -cne 'WinSta0' -or $context.InputDesktop -cne 'Default' -or $context.ThreadDesktop -cne 'Default'){
+        throw 'Refuse account-window intervention on an unknown or secure desktop.'
+    }
+    $intentPath=Join-Path $taskTemp 'account-dismissal-intent.json'
+    $resultPath=Join-Path $taskTemp 'account-dismissal-result.json'
+    if((Test-Path -LiteralPath $intentPath) -or (Test-Path -LiteralPath $resultPath)){throw 'Preserve account-window intervention evidence.'}
+    $intent=[ordered]@{Scope='Explicit manual hosted ARM64 account-window close only';RequestedUtc=[DateTime]::UtcNow.ToString('o');Head=(& git -C $repo rev-parse HEAD);Process=$initialForegroundProcess;Title=$initialForegroundTitle;ApplicationId=$initialForegroundApplicationId;Identity=$initialForegroundIdentity;DesktopContext=$context}
+    [IO.File]::WriteAllText($intentPath,($intent|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $closeError=$null
+    try{$accountSurfaceDismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedAccountSurface($initialForegroundProcess)}catch{$closeError=$_.Exception.Message;throw}finally{
+        $outcome=[ordered]@{CompletedUtc=[DateTime]::UtcNow.ToString('o');IntentSha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;Dismissed=$accountSurfaceDismissed;Error=$closeError}
+        [IO.File]::WriteAllText($resultPath,($outcome|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
+    }
+}
 $result=[WgcDesktopAdmissionProbe]::Run()
 $ownedResult=@()
 $foregroundBefore=$null;$foregroundAfter=$null;$grant=$null
