@@ -1,7 +1,7 @@
 <# PRIVATE fixture admission diagnostic. This is not a product or native qualification. #>
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$CandidateRoot,[Parameter(Mandatory)][string]$BootstrapRoot,
-      [switch]$ApproveAccountClose,[switch]$ApproveSearchClose,[switch]$ApproveWslStartupClose,
+      [switch]$ApproveAccountClose,[switch]$ApproveSearchClose,[switch]$ApproveWslStartupClose,[string]$BoundaryChildProbe,
       [ValidateSet('Canonical','Explicit','Inherited')][string]$AttachmentVariant='Canonical')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop';$PSNativeCommandUseErrorActionPreference=$false
@@ -14,6 +14,10 @@ if(-not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTION
     throw 'Both approvals and the exact manual project-hosted native ARM64 role are required.'
 }
 $CandidateRoot=[IO.Path]::GetFullPath($CandidateRoot);$BootstrapRoot=[IO.Path]::GetFullPath($BootstrapRoot)
+if($BoundaryChildProbe){
+ $expectedProbe=[IO.Path]::GetFullPath((Join-Path $BootstrapRoot '../.build/private-boundary-child/HostedForegroundProbe.exe'))
+ if(-not [string]::Equals([IO.Path]::GetFullPath($BoundaryChildProbe),$expectedProbe,[StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected boundary child executable path.'}
+}
 foreach($pair in @(@($CandidateRoot,$expected),@($BootstrapRoot,$env:GITHUB_SHA))){
     $head=(& git -C $pair[0] rev-parse HEAD | Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or $head -cne $pair[1]){throw 'Exact checkout identity is unavailable or mismatched.'}
@@ -49,15 +53,19 @@ $intent=[ordered]@{schema='private.canonical-admission-intent.v1';candidate_head
     fixture_scope=if($variant){'PRIVATE_TRANSFORMED_FIXTURE'}elseif($ApproveWslStartupClose){'CANONICAL_MODULE_WITH_APPROVED_PREPARATION'}else{'CANONICAL_FIXTURE'};attachment_variant=$AttachmentVariant;
     original_csharp_sha256=if($variant){$variant.OriginalSha256}else{$null};compiled_csharp_sha256=if($variant){$variant.CompiledSha256}else{$null};
     exact_replacements=if($variant){$variant.Replacements}else{@()};
+    boundary_child_probe=if($BoundaryChildProbe){[IO.Path]::GetFullPath($BoundaryChildProbe)}else{$null};
+    boundary_child_sha256=if($BoundaryChildProbe){(Get-FileHash -LiteralPath $BoundaryChildProbe -Algorithm SHA256).Hash}else{$null};
+    boundary_child_source_sha256=if($BoundaryChildProbe){(Get-FileHash -LiteralPath (Join-Path $BootstrapRoot '.ci/HostedForegroundProbe.cpp') -Algorithm SHA256).Hash}else{$null};
     coverage='NOT_EVALUATED';created_utc=[DateTimeOffset]::UtcNow.ToString('o')}
 Write-PrivateCreateOnlyJson (Join-Path $e 'intent.json') $intent
 $record=[ordered]@{schema='private.canonical-admission-result.v1';intent_sha256=(Get-FileHash -LiteralPath (Join-Path $e 'intent.json')).Hash;
-    entered=$false;completed=$false;desktop_request=$null;stock_request=$null;error=$null;source_after_verified=$false;cleanup_errors=@();coverage='NOT_EVALUATED'}
+    entered=$false;completed=$false;boundary_child_exit=$null;boundary_child_capture='not-started';desktop_request=$null;stock_request=$null;error=$null;source_after_verified=$false;cleanup_errors=@();coverage='NOT_EVALUATED'}
 $failure=$null;$transcriptStarted=$false;$cleanupFailures=[Collections.Generic.List[Exception]]::new()
 try{
  Start-Transcript -LiteralPath (Join-Path $e 'fixture-transcript.txt') -NoClobber | Out-Null;$transcriptStarted=$true
  if($variant){Add-Type -TypeDefinition $variant.Compiled}
  Import-Module $modulePath
+ if($BoundaryChildProbe){Import-Module (Join-Path $CandidateRoot 'Tools/Modules/Build/ProcessStreaming.psm1')}
  . (Join-Path $BootstrapRoot '.ci/Read-HostedInputCapability.ps1')
  try { $beforeCapability=Get-PrivateHostedInputCapability } catch { $beforeCapability=@{schema='private.hosted-input-capability.v1';error=$_.Exception.ToString()} }
  Write-PrivateCreateOnlyJson (Join-Path $e 'input-capability-before.json') $beforeCapability
@@ -89,7 +97,20 @@ try{
      Invoke-PrivateGuardedWslStartupClose -EvidenceDirectory $e -StockFailure $completion -Approved $true
     }
    }
-   Invoke-RSWithHostedDefaultDesktop { $record.entered=$true }
+   Invoke-RSWithHostedDefaultDesktop {
+    $record.entered=$true
+    if($BoundaryChildProbe){
+     if($AttachmentVariant -cne 'Canonical'){throw 'Round-trip requires the untransformed canonical fixture.'}
+     $stdoutPath=Join-Path $e 'boundary-child-stdout.txt';$stderrPath=Join-Path $e 'boundary-child-stderr.txt'
+     if((Test-Path -LiteralPath $stdoutPath) -or (Test-Path -LiteralPath $stderrPath)){throw 'Refusing to overwrite boundary child output.'}
+     $record.boundary_child_capture='in-progress; partial output may be truncated on timeout or capture failure'
+     $childExit=Invoke-RSStreamingProcess -FilePath ([IO.Path]::GetFullPath($BoundaryChildProbe)) `
+       -Arguments @('--boundary-child-roundtrip') -WorkingDirectory $BootstrapRoot -LogPath $stdoutPath -ErrorLogPath $stderrPath `
+       -AdditionalEnvironment @{RS_BOUNDARY_PARENT_PID=[string]$PID} -TimeoutMilliseconds 30000
+     $record.boundary_child_exit=$childExit;$record.boundary_child_capture='streaming completed'
+     if($childExit -ne 0){throw "Boundary child did not establish automatic return (exit $childExit; 10 not-returned, 11 inconclusive)."}
+    }
+   }
   }
   $record.completed=$true
  }finally{if($held){$mutex.ReleaseMutex()};$mutex.Dispose()}
@@ -106,6 +127,8 @@ finally{
   if($LASTEXITCODE -ne 0 -or $afterHead -cne $expected){throw 'Candidate head changed during admission.'}
   $afterDirty=@(& git -C $CandidateRoot status --porcelain)
   if($LASTEXITCODE -ne 0 -or $afterDirty.Count -or (Get-FileHash -LiteralPath $modulePath -Algorithm SHA256).Hash -cne $moduleHash){throw 'Candidate source or fixture module changed during admission.'}
+  if($BoundaryChildProbe -and ((Get-FileHash -LiteralPath $BoundaryChildProbe -Algorithm SHA256).Hash -cne $intent.boundary_child_sha256 -or
+    (Get-FileHash -LiteralPath (Join-Path $BootstrapRoot '.ci/HostedForegroundProbe.cpp') -Algorithm SHA256).Hash -cne $intent.boundary_child_source_sha256)){throw 'Boundary child source or executable changed during admission.'}
   $record.source_after_verified=$true
  }catch{$cleanupFailures.Add($_.Exception)}
  if($transcriptStarted){try{Stop-Transcript | Out-Null}catch{$cleanupFailures.Add($_.Exception)}}

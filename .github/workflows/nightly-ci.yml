@@ -10,7 +10,7 @@ on:
         default: Release
       scope:
         type: choice
-        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity, ApprovedCurrentUi, ApprovedCanonicalAdmission, ApprovedDesktopAttachmentPair]
+        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity, ApprovedCurrentUi, ApprovedCanonicalAdmission, ApprovedDesktopAttachmentPair, BoundaryChildRoundTrip]
         default: DesktopProbe
       dismiss_hosted_account_surface:
         description: Explicit owner-approved exception for the stock hosted ARM64 account window
@@ -31,7 +31,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   metadata:
-    if: inputs.scope != 'ApprovedCloseIdentity' && inputs.scope != 'ApprovedCurrentUi' && inputs.scope != 'ApprovedCanonicalAdmission' && inputs.scope != 'ApprovedDesktopAttachmentPair'
+    if: inputs.scope != 'ApprovedCloseIdentity' && inputs.scope != 'ApprovedCurrentUi' && inputs.scope != 'ApprovedCanonicalAdmission' && inputs.scope != 'ApprovedDesktopAttachmentPair' && inputs.scope != 'BoundaryChildRoundTrip'
     name: Private desktop diagnostic (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -188,6 +188,70 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: approved-canonical-admission-preflight-ARM64
+          path: ${{ runner.temp }}/approved-canonical-admission-preflight.json
+          if-no-files-found: error
+  boundary-child-roundtrip:
+    if: inputs.scope == 'BoundaryChildRoundTrip'
+    name: Private owned child boundary round trip
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 15
+    steps:
+      - name: Require both approved stock-surface exceptions
+        if: inputs.dismiss_hosted_account_surface != true || inputs.dismiss_hosted_search_surface != true
+        shell: pwsh
+        run: throw 'ApprovedCanonicalAdmission requires both explicit authorizations.'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: bootstrap
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 883ad92d9e5449f4e65d3792c2a278626df6d5fc
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: microsoft/wil
+          ref: cbf677fb0a942557d08fd129f4c106a76247b2ec
+          path: .build/probe-wil
+          persist-credentials: false
+      - name: Compile private boundary child
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $vswhere=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $installation=(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+          if (-not $installation) { throw 'VS installation unavailable' }
+          & (Join-Path $installation 'Common7/Tools/Launch-VsDevShell.ps1') -Arch ARM64 -HostArch arm64 -SkipAutomaticLocation
+          $output=Join-Path $env:GITHUB_WORKSPACE '.build/private-boundary-child'
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          & cl.exe /nologo /std:c++latest /EHsc /MD /O2 /Wall /WX- /external:W0 /external:anglebrackets /DENABLE_TESTS /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I candidate/Common /I candidate/Tests/TestSupport /external:I .build/probe-wil/include /Fo"$output/" /Fe"$output/HostedForegroundProbe.exe" bootstrap/.ci/HostedForegroundProbe.cpp /link user32.lib gdi32.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Private diagnostic build failed' }
+      - name: Run canonical fixture admission under interactive lease
+        shell: pwsh
+        env:
+          APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
+          APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -ApproveWslStartupClose:('${{ inputs.dismiss_hosted_wsl_startup }}' -ceq 'true') -BoundaryChildProbe "$env:GITHUB_WORKSPACE/.build/private-boundary-child/HostedForegroundProbe.exe"
+      - name: Retain bounded preflight status
+        if: always()
+        shell: pwsh
+        run: |
+          @{ scope='ApprovedCanonicalAdmission'; job_status='${{ job.status }}'; repository_coverage='NOT_EVALUATED' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'approved-canonical-admission-preflight.json') -Encoding utf8
+      - name: Retain admission and stock preparation evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: boundary-child-roundtrip-ARM64
+          path: C:/RedSalamander.Perf/evidence/
+          if-no-files-found: warn
+      - name: Retain preflight status separately
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: boundary-child-roundtrip-preflight-ARM64
           path: ${{ runner.temp }}/approved-canonical-admission-preflight.json
           if-no-files-found: error
   approved-desktop-attachment-pair:
