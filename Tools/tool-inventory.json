@@ -2713,7 +2713,7 @@
         "Restores the original mode in finally; setup and restoration failures remain errors",
         "Hosted interactive entries retain Default inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, restore the original foreground and native focus after contained child drain, join the window thread and close the retained desktop handle; they never create or switch input desktops",
         "A retirement threshold records failure but retains the interactive lease until the owned window thread exits; hosted supervision terminates a permanently stalled owner",
-        "With explicit project adapter opt-in on this repository's hosted native ARM64, may request one guarded WM_CLOSE each for the exact approved stock account and Search foreground surfaces while the interactive mutex is held; never closes other windows or kills processes",
+        "With explicit project adapter opt-in on this repository's hosted native ARM64, may request one guarded WM_CLOSE each for the exact approved stock account, Search and WSL update startup foreground surfaces while the interactive mutex is held; WSL requires exact parsed arguments and matching held-process/CIM creation identity; never closes other windows or kills processes",
         "After direct foreground refusal in that same native ARM64 role, may use one 500 ms registered Alt+F24 handoff to the existing owned neutral window; accounts for partial inserted key prefixes and releases, retains callback lifetime through owner-thread join, and preserves all native suite warnings and actual input/focus assertions"
       ],
       "outputs": [

@@ -581,7 +581,7 @@ using System.Text;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
 namespace RedSalamander.Testing {
-    // The only actionable surfaces are the two explicitly approved stock windows.
+    // Only the three explicitly approved hosted stock windows may be closed.
     // A retained process handle and a fresh HWND/thread/session check precede WM_CLOSE.
     public sealed class HostedStockSurface : IDisposable {
         private sealed class DesktopHandle : SafeHandleZeroOrMinusOneIsInvalid {
@@ -609,9 +609,22 @@ namespace RedSalamander.Testing {
         [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool QueryFullProcessImageNameW(SafeProcessHandle p,uint flags,StringBuilder s,ref uint n);
         [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetApplicationUserModelId(SafeProcessHandle p,ref uint n,StringBuilder s);
         [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmGetWindowAttribute(IntPtr h,uint attr,out uint value,uint size);
+        [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool GetProcessTimes(SafeProcessHandle p,out long created,out long exited,out long kernel,out long user);
+        private sealed class ArgumentHandle : SafeHandleZeroOrMinusOneIsInvalid {
+            public ArgumentHandle():base(true) {}
+            [DllImport("kernel32.dll", ExactSpelling=true)] static extern IntPtr LocalFree(IntPtr h);
+            protected override bool ReleaseHandle(){return LocalFree(handle)==IntPtr.Zero;}
+        }
+        [DllImport("shell32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern ArgumentHandle CommandLineToArgvW(string command,out int count);
         private readonly SafeProcessHandle process;
         private readonly IntPtr window;
-        private bool closed;
+        private bool closed, wslAuthorized;
+        private long wslCreationFileTime;
+        public bool CloseRequested { get { return closed; } }
+        public int WslArgumentCount { get; private set; }
+        public bool WslArgumentMatch { get; private set; }
+        public long WslCreationUtcTicks { get; private set; }
+        public bool WslCreationMatch { get; private set; }
         public string Kind { get; private set; }
         public long Window { get { return window.ToInt64(); } }
         public uint Thread { get; private set; }
@@ -621,6 +634,7 @@ namespace RedSalamander.Testing {
         public string Class { get; private set; }
         public string Image { get; private set; }
         public string ApplicationId { get; private set; }
+        public int ApplicationIdStatus { get; private set; }
         public string ForegroundDesktop { get; private set; }
         public int ForegroundDesktopError { get; private set; }
         private HostedStockSurface(IntPtr h,uint tid,uint pid,uint session,SafeProcessHandle p,string title,string cls,string image,string app,string kind) {
@@ -650,15 +664,47 @@ namespace RedSalamander.Testing {
         private static string ReadTitle(IntPtr h) {var s=new StringBuilder(1024);GetWindowTextW(h,s,s.Capacity);return s.ToString();}
         private static string ReadClass(IntPtr h) {var s=new StringBuilder(256);GetClassNameW(h,s,s.Capacity);return s.ToString();}
         private static string ReadImage(SafeProcessHandle p) {uint n=4096;var s=new StringBuilder((int)n);if(!QueryFullProcessImageNameW(p,0,s,ref n))throw new Win32Exception(Marshal.GetLastWin32Error(),"Cannot identify the hosted foreground image.");return s.ToString();}
-        private static string ReadApp(SafeProcessHandle p) {uint n=2048;var s=new StringBuilder((int)n);int hr=GetApplicationUserModelId(p,ref n,s);return hr==0?s.ToString():"";}
-        private static string Classify(IntPtr h,string title,string cls,string image,string app) {
+        private static string ReadApp(SafeProcessHandle p,out int status) {uint n=2048;var s=new StringBuilder((int)n);status=GetApplicationUserModelId(p,ref n,s);return status==0?s.ToString():"";}
+        private static string Classify(IntPtr h,string title,string cls,string image,string app,int appStatus) {
             string windows=Environment.GetFolderPath(Environment.SpecialFolder.Windows);
             if(h==GetShellWindow() && cls=="Progman" && String.Equals(image,System.IO.Path.Combine(windows,"explorer.exe"),StringComparison.OrdinalIgnoreCase))return "Shell";
             if(title=="Microsoft account" && cls=="Windows.UI.Core.CoreWindow" && app=="Microsoft.Windows.CloudExperienceHost_cw5n1h2txyewy!App" &&
                String.Equals(image,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WWAHost.exe"),StringComparison.OrdinalIgnoreCase))return "Account";
             if(title=="Search" && cls=="Windows.UI.Core.CoreWindow" && app=="MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI" &&
                String.Equals(image,System.IO.Path.Combine(windows,"SystemApps","MicrosoftWindows.Client.CBS_cw5n1h2txyewy","SearchHost.exe"),StringComparison.OrdinalIgnoreCase))return "Search";
+            if(WslIdentityMatches(title,cls,image,app,appStatus,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"wsl.exe")))return "WslStartup";
             return "Unknown";
+        }
+        internal static bool WslIdentityMatches(string title,string cls,string image,string app,int appStatus,string expected) {
+            return cls=="ConsoleWindowClass" && String.IsNullOrEmpty(app) && appStatus==15703 &&
+                String.Equals(title,expected,StringComparison.OrdinalIgnoreCase) && String.Equals(image,expected,StringComparison.OrdinalIgnoreCase);
+        }
+        internal static bool WslArgumentsMatch(string[] args,string image) {
+            return args!=null && args.Length==4 &&
+                (String.Equals(args[0],image,StringComparison.OrdinalIgnoreCase) || String.Equals(args[0],"wsl.exe",StringComparison.OrdinalIgnoreCase)) &&
+                args[1]=="--update" && args[2]=="--confirm" && args[3]=="--prompt-before-exit";
+        }
+        internal static bool WslCreationMatches(long capturedTicks,long queriedTicks) {
+            // CIM timestamps have microsecond precision; accept only its sub-microsecond rounding difference.
+            return capturedTicks>0 && queriedTicks>0 && Math.Abs(capturedTicks-queriedTicks)<10;
+        }
+        public void AuthorizeWsl(string command,long queriedCreationTicks) {
+            RequireHostedArm64(); RequireDefault(Thread);
+            if(Kind!="WslStartup" || closed || process==null || process.IsInvalid)throw new InvalidOperationException("WSL authorization requires the captured approved console.");
+            long created,exited,kernel,user;
+            if(!GetProcessTimes(process,out created,out exited,out kernel,out user))throw new Win32Exception(Marshal.GetLastWin32Error(),"Cannot bind WSL process creation.");
+            WslCreationUtcTicks=DateTime.FromFileTimeUtc(created).Ticks;
+            WslCreationMatch=WslCreationMatches(WslCreationUtcTicks,queriedCreationTicks);
+            if(!WslCreationMatch)throw new InvalidOperationException("WSL process creation identity does not match CIM.");
+            if(String.IsNullOrWhiteSpace(command))throw new InvalidOperationException("WSL startup argument sequence is unavailable or mismatched.");
+            int count=0; using(var argv=CommandLineToArgvW(command,out count)) {
+                WslArgumentCount=count;
+                if(argv==null || argv.IsInvalid || count!=4)throw new InvalidOperationException("WSL startup argument sequence is unavailable or mismatched.");
+                var values=new string[count];for(int i=0;i<count;i++)values[i]=Marshal.PtrToStringUni(Marshal.ReadIntPtr(argv.DangerousGetHandle(),i*IntPtr.Size));
+                WslArgumentMatch=WslArgumentsMatch(values,Image);
+                if(!WslArgumentMatch)throw new InvalidOperationException("WSL startup argument sequence is unavailable or mismatched.");
+            }
+            wslCreationFileTime=created;wslAuthorized=true;
         }
         public static HostedStockSurface Capture() {
             RequireHostedArm64();IntPtr h=GetForegroundWindow();uint pid;uint tid=GetWindowThreadProcessId(h,out pid);RequireDefault(tid);
@@ -669,11 +715,12 @@ namespace RedSalamander.Testing {
             var p=OpenProcess(0x1000,false,pid);if(p==null || p.IsInvalid){int error=Marshal.GetLastWin32Error();if(p!=null)p.Dispose();throw new Win32Exception(error,"Cannot retain the foreground process.");}
             bool transferred=false;
             try {
-                string title=ReadTitle(h),cls=ReadClass(h),image=ReadImage(p),app=ReadApp(p);
+                int appStatus;string title=ReadTitle(h),cls=ReadClass(h),image=ReadImage(p),app=ReadApp(p,out appStatus);
                 uint currentPid;uint currentTid=GetWindowThreadProcessId(h,out currentPid);
                 if(GetProcessId(p)!=pid || GetForegroundWindow()!=h || currentPid!=pid || currentTid!=tid)throw new InvalidOperationException("Foreground changed while captured.");
-                string kind=Classify(h,title,cls,image,app);
-                var result=new HostedStockSurface(h,tid,pid,session,p,title,cls,image,app,kind);
+                string kind=Classify(h,title,cls,image,app,appStatus);
+                if(kind=="WslStartup" && !IsWindowVisible(h))throw new InvalidOperationException("WSL startup console is not visible.");
+                var result=new HostedStockSurface(h,tid,pid,session,p,title,cls,image,app,kind);result.ApplicationIdStatus=appStatus;
                 // Foreign thread desktop access is often denied by hosted Windows. It is
                 // diagnostic only; WinSta0, caller/input Default and session are required.
                 IntPtr foregroundDesktop=GetThreadDesktop(tid);
@@ -694,13 +741,19 @@ namespace RedSalamander.Testing {
         }
         public void RequestClose() {
             RequireHostedArm64();RequireDefault(Thread);
-            if(closed || (Kind!="Account" && Kind!="Search") || process==null || process.IsInvalid)throw new InvalidOperationException("Only one close for a captured approved stock surface is allowed.");
-            uint pid;uint tid=GetWindowThreadProcessId(window,out pid);uint session, ownSession;
+            if(closed || (Kind!="Account" && Kind!="Search" && Kind!="WslStartup") || process==null || process.IsInvalid || (Kind=="WslStartup" && !wslAuthorized))throw new InvalidOperationException("Only one close for a captured approved stock surface is allowed.");
+            uint pid;uint tid=GetWindowThreadProcessId(window,out pid);uint session, ownSession;int appStatus;string app=ReadApp(process,out appStatus);
             if(GetForegroundWindow()!=window || pid!=Process || tid!=Thread || GetProcessId(process)!=Process ||
                !ProcessIdToSessionId(pid,out session) || !ProcessIdToSessionId(GetCurrentProcessId(),out ownSession) || session!=Session || session!=ownSession || ReadTitle(window)!=Title || ReadClass(window)!=Class ||
-               ReadApp(process)!=ApplicationId || !String.Equals(ReadImage(process),Image,StringComparison.OrdinalIgnoreCase) ||
-               Classify(window,Title,Class,Image,ApplicationId)!=Kind)
+               app!=ApplicationId || appStatus!=ApplicationIdStatus || !String.Equals(ReadImage(process),Image,StringComparison.OrdinalIgnoreCase) ||
+               Classify(window,Title,Class,Image,ApplicationId,appStatus)!=Kind)
                 throw new InvalidOperationException("Approved stock surface changed before close.");
+            if(Kind=="WslStartup") {
+                if(!IsWindowVisible(window))throw new InvalidOperationException("WSL startup console is no longer visible.");
+                long created,exited,kernel,user;
+                if(!GetProcessTimes(process,out created,out exited,out kernel,out user) || created!=wslCreationFileTime)
+                    throw new InvalidOperationException("WSL process creation identity changed before close.");
+            }
             closed=true;
             if(!PostMessageW(window,0x0010,UIntPtr.Zero,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error(),"Approved stock surface refused WM_CLOSE.");
             var timer=System.Diagnostics.Stopwatch.StartNew();
@@ -842,6 +895,13 @@ function Get-RSHostedStockPreparationRequest {
     '1'
 }
 
+# WSL alone needs query-only command-line and creation-time evidence; the held
+# native process handle validates that CIM refers to the same process instance.
+function Get-RSHostedWslProcess {
+    param([Parameter(Mandatory)][uint32]$ProcessId)
+    Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId = {0}" -f $ProcessId) -ErrorAction Stop
+}
+
 function Get-RSHostedStockSurface {
     Initialize-RSHostedStockSurfaceNative
     [RedSalamander.Testing.HostedStockSurface]::Capture()
@@ -853,8 +913,9 @@ function Invoke-RSHostedArm64StockPreparation {
         Prepare the hosted ARM64 Default desktop for an interactive native entry.
     .DESCRIPTION
         Under the runner's existing interactive mutex, inspects only the foreground and may
-        request one ordinary close each for the explicitly approved stock Microsoft account
-        and Search windows. Exact image, AUMID, class, title, session, desktop and captured
+        request one ordinary close each for the explicitly approved stock Microsoft account,
+        Search and exact WSL update startup windows. WSL additionally requires matching
+        held-process/CIM creation identity and the exact parsed update arguments. Exact image, AUMID, class, title, session, desktop and captured
         HWND/thread/process identity are checked with retained process handles. Unknown surfaces
         fail closed. A bounded five-second observation after account close catches the delayed
         Search transition; no input, process termination, generic window dismissal or policy
@@ -891,7 +952,7 @@ function Invoke-RSHostedArm64StockPreparation {
 # the guarded entry above always supplies the fixed five-second observation window.
 function Invoke-RSHostedStockPreparationCore {
     param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$SourceHead,[int]$ObservationMilliseconds=5000)
-    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$failure=$null
+    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$failure=$null;$wslCloseRequested=$false
     $start=[ordered]@{schema='red-salamander.hosted-stock-preparation.v1';source_head=$SourceHead;started_utc=[DateTimeOffset]::UtcNow.ToString('o')}
     $startBytes=[Text.UTF8Encoding]::new($false).GetBytes(($start|ConvertTo-Json));$startStream=[IO.File]::Open((Join-Path $directory 'start.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
     try{$startStream.Write($startBytes,0,$startBytes.Length);$startStream.Flush($true)}finally{$startStream.Dispose()}
@@ -899,8 +960,8 @@ function Invoke-RSHostedStockPreparationCore {
         $surface=Get-RSHostedStockSurface
         try {
             $lastObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;title=$surface.Title;class=$surface.Class;image=$surface.Image;application_id=$surface.ApplicationId;foreground_desktop=$surface.ForegroundDesktop;foreground_desktop_error=$surface.ForegroundDesktopError}
-            if($surface.Kind -cnotin @('Empty','Shell','Account','Search')){throw 'An unapproved foreground surface prevents hosted preparation.'}
-            if($surface.Kind -cin @('Account','Search')){
+            if($surface.Kind -cnotin @('Empty','Shell','Account','Search','WslStartup')){throw 'An unapproved foreground surface prevents hosted preparation.'}
+            if($surface.Kind -cin @('Account','Search','WslStartup')){
                 if($seen.ContainsKey($surface.Kind)){throw 'An approved stock surface reappeared after its one permitted close.'}
                 $seen[$surface.Kind]=$true
                 $intentPath=Join-Path $directory ($surface.Kind.ToLowerInvariant()+'-intent.json')
@@ -911,10 +972,23 @@ function Invoke-RSHostedStockPreparationCore {
                 $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($intent|ConvertTo-Json -Depth 4))
                 $stream=[IO.File]::Open($intentPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
                 try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
-                $errorText=$null;$success=$false;$closeFailure=$null;$resultFailure=$null
-                try{$surface.RequestClose();$success=$true}catch{$closeFailure=$_;$errorText=$_.Exception.Message}
+                $errorText=$null;$success=$false;$closeFailure=$null;$resultFailure=$null;$wslCimCreationTicks=$null
+                try{
+                    if($surface.Kind -ceq 'WslStartup'){
+                        $wsl=Get-RSHostedWslProcess -ProcessId $surface.Process
+                        if($null -eq $wsl -or [uint32]$wsl.ProcessId -ne $surface.Process -or $null -eq $wsl.CreationDate -or
+                           -not [string]::Equals([string]$wsl.ExecutablePath,$surface.Image,[StringComparison]::OrdinalIgnoreCase)){
+                            throw 'WSL CIM process identity is unavailable or mismatched.'
+                        }
+                        $wslCimCreationTicks=$wsl.CreationDate.ToUniversalTime().Ticks
+                        $surface.AuthorizeWsl([string]$wsl.CommandLine,$wslCimCreationTicks)
+                    }
+                    $surface.RequestClose();$success=$true
+                }catch{$closeFailure=$_;$errorText=$_.Exception.Message}
+                if($surface.Kind -ceq 'WslStartup'){$wslCloseRequested=$surface.CloseRequested}
                 try {
                     $result=[ordered]@{schema='red-salamander.hosted-stock-result.v1';intent_sha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;retired=$success;error=$errorText;observed_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+                    if($surface.Kind -ceq 'WslStartup'){$result['close_requested']=$wslCloseRequested;$result['creation_utc_ticks']=$surface.WslCreationUtcTicks;$result['cim_creation_utc_ticks']=$wslCimCreationTicks;$result['creation_match']=$surface.WslCreationMatch;$result['application_id_status']=$surface.ApplicationIdStatus;$result['argument_count']=$surface.WslArgumentCount;$result['arguments_match']=$surface.WslArgumentMatch}
                     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($result|ConvertTo-Json -Depth 4))
                     $stream=[IO.File]::Open($resultPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
                     try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
@@ -922,7 +996,7 @@ function Invoke-RSHostedStockPreparationCore {
                 if($closeFailure -and $resultFailure){throw [AggregateException]::new('Stock close and audit result both failed.', [Exception[]]@($closeFailure.Exception,$resultFailure.Exception))}
                 if($closeFailure){throw $closeFailure}
                 if($resultFailure){throw $resultFailure}
-                if($surface.Kind -ceq 'Account'){$timer.Restart()}
+                if($surface.Kind -cin @('Account','WslStartup')){$timer.Restart()}
                 continue
             }
         } finally {if($null -ne $surface){$surface.Dispose()}}
@@ -931,7 +1005,7 @@ function Invoke-RSHostedStockPreparationCore {
     };$completed=$true } catch {$failure=$_;$preparationError=$_.Exception.Message}
     try {
         $completion=[ordered]@{schema='red-salamander.hosted-stock-preparation-result.v1';completed=$completed;error=$preparationError;
-            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');last_observation=$lastObservation;finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');wsl_startup_close_requested=$wslCloseRequested;last_observation=$lastObservation;finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
         $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($completion|ConvertTo-Json -Depth 5));$stream=[IO.File]::Open((Join-Path $directory 'completion.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
         try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
     } catch {
@@ -979,7 +1053,7 @@ function Invoke-RSWithHostedDefaultDesktop {
         Action output and boundary/readiness/restoration diagnostics.
     .NOTES
         Owns only a neutral foreground window on the ephemeral hosted runner's Default desktop.
-        With the project adapter's approved ARM64 opt-in, prepares only the two identified
+        With the project adapter's approved ARM64 opt-in, prepares only the three identified
         stock foreground surfaces before creating the boundary. Other windows, processes,
         hooks and foreground-lock settings are unchanged.
     .EXAMPLE
