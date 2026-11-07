@@ -657,7 +657,7 @@ Environment variables may select alternate test inputs such as profile names, bu
   are restored, the desktop handle closes and the interactive mutex releases. A foreign desktop or
   foreground change is preserved and fails the fixture; failed setup, restoration or handle retirement also
   fails. Preserve both the native and restoration error when both occur. Never change foreign
-  windows/processes except the two explicitly approved hosted ARM64 stock-surface requests below,
+  windows/processes except the three explicitly approved hosted ARM64 stock-surface requests below,
   foreground-lock policy or input queues. A setup witness alone does not establish
   native handoff, screenshot or input coverage; those cases still require actual execution on
   each architecture. R0ePaired retains the original desktop for both historical and
@@ -670,10 +670,15 @@ Environment variables may select alternate test inputs such as profile names, bu
 - The project adapter may opt native ARM64 GitHub-hosted `ReleaseTest` and interactive
   `Qualification` entries into stock-surface preparation immediately before their Default
   boundary, while the same interactive mutex is held. The user's exception permits only one
-  ordinary `WM_CLOSE` each for the foreground stock `Microsoft account` WWAHost surface and
-  `Search` SearchHost surface, after exact path, title, class, AUMID, session, WinSta0 and
+  ordinary `WM_CLOSE` each for the foreground stock `Microsoft account` WWAHost surface,
+  `Search` SearchHost surface and exact WSL update startup console, after exact path, title, class, AUMID, session, WinSta0 and
   caller/input Default checks and captured HWND/thread/process revalidation with a held process
   handle. A denied foreign-thread desktop query is retained as diagnostic, never as positive proof.
+  The WSL console additionally requires the System32 `wsl.exe` image and console title/class,
+  empty AUMID, a held process creation time matched to query-only CIM, and exactly the parsed
+  arguments `--update --confirm --prompt-before-exit`. Missing or mismatched evidence refuses
+  the close; one request may retire only a destroyed or hidden non-foreground original HWND
+  within five seconds. No WSL command is executed and no process is terminated.
   Search retirement accepts a destroyed HWND, or the same non-foreground HWND when hidden or when
   DWM successfully reports exactly shell-cloaked mask 2; all other states fail within five seconds.
   The account-to-Search transition is observed for five seconds after account retirement. A

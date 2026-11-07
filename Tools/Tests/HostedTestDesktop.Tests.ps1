@@ -506,3 +506,92 @@ Describe 'Hosted boundary inherited desktop policy' {
         $method.Invoke($null, [object[]]@($null)) | Should Be $false
     }
 }
+
+Describe 'Hosted WSL startup guard managed contracts' {
+    It 'accepts only the approved console identity, arguments and matching creation instance' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedStockSurfaceNative }
+        $type=('RedSalamander.Testing.HostedStockSurface' -as [type])
+        $flags=[Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $identity=$type.GetMethod('WslIdentityMatches',$flags)
+        $arguments=$type.GetMethod('WslArgumentsMatch',$flags)
+        $creation=$type.GetMethod('WslCreationMatches',$flags)
+        $image='C:\Windows\System32\wsl.exe'
+        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'',[int]15703,$image)) | Should Be $true
+        $identity.Invoke($null,[object[]]@($image,'Other',$image,'',[int]15703,$image)) | Should Be $false
+        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass','C:\Other\wsl.exe','',[int]15703,$image)) | Should Be $false
+        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'unexpected.app',[int]0,$image)) | Should Be $false
+        $identity.Invoke($null,[object[]]@('other','ConsoleWindowClass',$image,'',[int]15703,$image)) | Should Be $false
+        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'',[int]5,$image)) | Should Be $false
+        $call=[object[]]::new(2);$call[1]=$image
+        $call[0]=[string[]]@($image,'--update','--confirm','--prompt-before-exit');$arguments.Invoke($null,$call) | Should Be $true
+        $call[0]=[string[]]@('wsl.exe','--update','--confirm','--prompt-before-exit');$arguments.Invoke($null,$call) | Should Be $true
+        $call[0]=[string[]]@($image,'--update','--confirm');$arguments.Invoke($null,$call) | Should Be $false
+        $call[0]=[string[]]@($image,'--update','--confirm','--prompt-before-exit','--extra');$arguments.Invoke($null,$call) | Should Be $false
+        $call[0]=[string[]]@($image,'--update','--prompt-before-exit','--confirm');$arguments.Invoke($null,$call) | Should Be $false
+        $call[0]=[string[]]@('C:\Other\wsl.exe','--update','--confirm','--prompt-before-exit');$arguments.Invoke($null,$call) | Should Be $false
+        $creation.Invoke($null,[object[]]@([long]1009,[long]1000)) | Should Be $true
+        $creation.Invoke($null,[object[]]@([long]1010,[long]1000)) | Should Be $false
+        $creation.Invoke($null,[object[]]@([long]999,[long]1000)) | Should Be $true
+        $creation.Invoke($null,[object[]]@([long]1000,[long]1010)) | Should Be $false
+        $creation.Invoke($null,[object[]]@([long]0,[long]0)) | Should Be $false
+    }
+}
+
+Describe 'Hosted WSL startup audit' {
+    BeforeEach {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $global:rsWslSurfaceQueue=[Collections.Generic.Queue[object]]::new()
+        $global:rsWslCloseCount=0
+        $global:rsWslQuery=[pscustomobject]@{ProcessId=42;CreationDate=[DateTime]::UtcNow;ExecutablePath='C:\Windows\System32\wsl.exe';CommandLine='fixture'}
+        Mock Get-RSHostedStockSurface { $global:rsWslSurfaceQueue.Dequeue() } -ModuleName HostedTestDesktop
+        Mock Get-RSHostedWslProcess { $global:rsWslQuery } -ModuleName HostedTestDesktop
+    }
+    AfterEach {Remove-Variable rsWslSurfaceQueue,rsWslCloseCount,rsWslQuery -Scope Global -ErrorAction SilentlyContinue}
+    It 'records authorization before the one approved close and then observes shell' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('wsl-audit-'+[guid]::NewGuid().ToString('N'))
+        foreach($kind in @('WslStartup','Shell')) {
+            $surface=[pscustomobject]@{Kind=$kind;Window=123;Thread=1;Process=42;Session=3;Title='fixture';Class='fixture';Image='C:\Windows\System32\wsl.exe';ApplicationId='';ApplicationIdStatus=15703;ForegroundDesktop='';ForegroundDesktopError=5;CloseRequested=$false;WslArgumentCount=0;WslArgumentMatch=$false;WslCreationUtcTicks=0;WslCreationMatch=$false}
+            $surface | Add-Member ScriptMethod AuthorizeWsl {param($command,$ticks) $this.WslArgumentCount=4;$this.WslArgumentMatch=$true;$this.WslCreationUtcTicks=$ticks;$this.WslCreationMatch=$true}
+            $surface | Add-Member ScriptMethod RequestClose {$this.CloseRequested=$true;$global:rsWslCloseCount++}
+            $surface | Add-Member ScriptMethod Dispose {}
+            $global:rsWslSurfaceQueue.Enqueue($surface)
+        }
+        & (Get-Module HostedTestDesktop) {param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0} $dir
+        $global:rsWslCloseCount | Should Be 1
+        $result=Get-Content (Join-Path $dir 'wslstartup-result.json') -Raw|ConvertFrom-Json
+        $result.retired | Should Be $true
+        $result.argument_count | Should Be 4
+        $result.arguments_match | Should Be $true
+        $result.creation_match | Should Be $true
+        $result.close_requested | Should Be $true
+        (Get-Content (Join-Path $dir 'completion.json') -Raw|ConvertFrom-Json).wsl_startup_close_requested | Should Be $true
+    }
+    It 'retains an argument refusal and never requests a close' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('wsl-args-refusal-'+[guid]::NewGuid().ToString('N'))
+        $surface=[pscustomobject]@{Kind='WslStartup';Window=123;Thread=1;Process=42;Session=3;Title='fixture';Class='fixture';Image='C:\Windows\System32\wsl.exe';ApplicationId='';ApplicationIdStatus=15703;ForegroundDesktop='';ForegroundDesktopError=5;CloseRequested=$false;WslArgumentCount=4;WslArgumentMatch=$false;WslCreationUtcTicks=0;WslCreationMatch=$false}
+        $surface | Add-Member ScriptMethod AuthorizeWsl {param($command,$ticks) throw 'WSL startup argument sequence is unavailable or mismatched.'}
+        $surface | Add-Member ScriptMethod RequestClose {$this.CloseRequested=$true;$global:rsWslCloseCount++}
+        $surface | Add-Member ScriptMethod Dispose {}
+        $global:rsWslSurfaceQueue.Enqueue($surface)
+        { & (Get-Module HostedTestDesktop) {param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0} $dir } | Should Throw 'WSL startup argument sequence is unavailable or mismatched.'
+        $global:rsWslCloseCount | Should Be 0
+        $result=Get-Content (Join-Path $dir 'wslstartup-result.json') -Raw|ConvertFrom-Json
+        $result.argument_count | Should Be 4
+        $result.arguments_match | Should Be $false
+        $result.close_requested | Should Be $false
+    }
+    It 'records a CIM identity refusal and does not request a close' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('wsl-refusal-'+[guid]::NewGuid().ToString('N'))
+        $surface=[pscustomobject]@{Kind='WslStartup';Window=123;Thread=1;Process=42;Session=3;Title='fixture';Class='fixture';Image='C:\Windows\System32\wsl.exe';ApplicationId='';ApplicationIdStatus=15703;ForegroundDesktop='';ForegroundDesktopError=5;CloseRequested=$false;WslArgumentCount=0;WslArgumentMatch=$false;WslCreationUtcTicks=0;WslCreationMatch=$false}
+        $surface | Add-Member ScriptMethod RequestClose {$this.CloseRequested=$true;$global:rsWslCloseCount++}
+        $surface | Add-Member ScriptMethod Dispose {}
+        $global:rsWslSurfaceQueue.Enqueue($surface);$global:rsWslQuery.ProcessId=43
+        { & (Get-Module HostedTestDesktop) {param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0} $dir } | Should Throw 'WSL CIM process identity is unavailable or mismatched.'
+        $global:rsWslCloseCount | Should Be 0
+        $result=Get-Content (Join-Path $dir 'wslstartup-result.json') -Raw|ConvertFrom-Json
+        $result.retired | Should Be $false
+        $result.arguments_match | Should Be $false
+        $result.close_requested | Should Be $false
+        (Get-Content (Join-Path $dir 'completion.json') -Raw|ConvertFrom-Json).wsl_startup_close_requested | Should Be $false
+    }
+}
