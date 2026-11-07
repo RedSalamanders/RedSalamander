@@ -91,6 +91,34 @@ public static class WgcDesktopAdmissionProbe {
         if(process==0 || !ProcessIdToSessionId(process,out session))throw new Win32Exception(Marshal.GetLastWin32Error(),"Foreground session unavailable.");
         return session;
     }
+    public sealed class SearchRetirementObservation {
+        public long ExpectedWindow; public uint ExpectedProcess,ExpectedThread;
+        public bool WindowExists,SameIdentity; public uint ObservedProcess,ObservedThread;
+        public bool? Visible,StyleVisible,Iconic; public uint? Style; public int? StyleReadError,CloakedHresult; public uint? CloakedMask; public string CloakedQueryError;
+        public long ForegroundWindow; public uint ForegroundProcess,ForegroundThread;
+    }
+    public static SearchRetirementObservation LastSearchRetirement;
+    static void ObserveSearchRetirement(IntPtr window,uint processId,uint threadId) {
+        var observed=new SearchRetirementObservation { ExpectedWindow=window.ToInt64(),ExpectedProcess=processId,ExpectedThread=threadId };
+        observed.WindowExists=IsWindow(window);
+        if(observed.WindowExists) {
+            uint process;uint thread=GetWindowThreadProcessId(window,out process);
+            observed.ObservedProcess=process;observed.ObservedThread=thread;
+            observed.SameIdentity=process==processId && thread==threadId;
+            if(observed.SameIdentity) {
+                observed.Visible=IsWindowVisible(window);observed.Iconic=IsIconic(window);
+                Marshal.SetLastPInvokeError(0);int style=GetWindowLongW(window,-16);int styleError=Marshal.GetLastWin32Error();
+                if(style!=0 || styleError==0){observed.Style=unchecked((uint)style);observed.StyleVisible=(observed.Style.Value & 0x10000000u)!=0;}
+                else observed.StyleReadError=styleError;
+                try { uint mask;int hr=DwmGetWindowAttribute(window,14,out mask,sizeof(uint));observed.CloakedHresult=hr;if(hr>=0)observed.CloakedMask=mask; }
+                catch(DllNotFoundException e) { observed.CloakedQueryError=e.Message; }
+                catch(EntryPointNotFoundException e) { observed.CloakedQueryError=e.Message; }
+            }
+        }
+        IntPtr foreground=GetForegroundWindow();uint foregroundProcess;uint foregroundThread=GetWindowThreadProcessId(foreground,out foregroundProcess);
+        observed.ForegroundWindow=foreground.ToInt64();observed.ForegroundProcess=foregroundProcess;observed.ForegroundThread=foregroundThread;
+        LastSearchRetirement=observed;
+    }
     public static bool CloseVerifiedHostedSearchSurface(long expectedWindow,uint expectedThread,uint expectedProcess,uint expectedSession) {
         if(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")!="true" ||
            Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT")!="github-hosted" ||
@@ -120,10 +148,12 @@ public static class WgcDesktopAdmissionProbe {
                !ProcessIdToSessionId(checkedProcess,out checkedSession) || checkedSession!=expectedSession)
                 throw new InvalidOperationException("The approved Search surface drifted before its close request.");
             if(!PostMessageW(window,0x0010,UIntPtr.Zero,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error(),"Search flyout refused its ordinary close request.");
-            var deadline=System.Diagnostics.Stopwatch.StartNew();
-            while(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window) && deadline.ElapsedMilliseconds<5000)Thread.Sleep(25);
-            if(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window))throw new InvalidOperationException("The stock Search flyout did not close; no process termination or input fallback is permitted.");
-            return true;
+            try {
+                var deadline=System.Diagnostics.Stopwatch.StartNew();
+                while(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window) && deadline.ElapsedMilliseconds<5000)Thread.Sleep(25);
+                if(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window))throw new InvalidOperationException("The stock Search flyout did not close; no process termination or input fallback is permitted.");
+                return true;
+            } finally { ObserveSearchRetirement(window,processId,threadId); }
         }
     }
     public static bool CloseVerifiedHostedAccountSurface(long expectedWindow,uint expectedThread,uint expectedProcess) {
@@ -162,7 +192,10 @@ public static class WgcDesktopAdmissionProbe {
         }
     }
     [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern int GetWindowLongW(IntPtr hwnd,int index);
     [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmFlush();
+    [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmGetWindowAttribute(IntPtr hwnd,uint attribute,out uint value,uint size);
     [DllImport("user32.dll", ExactSpelling=true,SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool AllowSetForegroundWindow(uint process);
     [DllImport("kernel32.dll", ExactSpelling=true)] static extern uint GetCurrentProcessId();
     [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool SetForegroundWindow(IntPtr window);
@@ -337,7 +370,7 @@ if($CloseSearchOnly){
         else{$dismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedSearchSurface($before.Window,$thread,$before.Process,$session)}
     }catch{$closeError=$_.Exception.Message;throw}finally{
         $postClose=$null;$snapshotError=$null;try{$postClose=Get-PrivateForegroundSnapshot}catch{$snapshotError=$_.Exception.Message}
-        $outcome=[ordered]@{CompletedUtc=[DateTime]::UtcNow.ToString('o');IntentSha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;Dismissed=$dismissed;NoTarget=$noTarget;NoTargetScope='No foreground window observed, not desktop-wide absence';Error=$closeError;PostCloseForeground=$postClose;SnapshotError=$snapshotError}
+        $outcome=[ordered]@{CompletedUtc=[DateTime]::UtcNow.ToString('o');IntentSha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;Dismissed=$dismissed;NoTarget=$noTarget;NoTargetScope='No foreground window observed, not desktop-wide absence';Error=$closeError;SearchRetirement=[WgcDesktopAdmissionProbe]::LastSearchRetirement;PostCloseForeground=$postClose;SnapshotError=$snapshotError}
         [IO.File]::WriteAllText($resultPath,($outcome|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
         Write-Host "Search intent: $intentPath";Write-Host "Search result: $resultPath"
     }
