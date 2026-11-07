@@ -678,6 +678,14 @@ void UnregisterPlaceholderSyncRoot(PlaceholderSyncRoot* root) noexcept
 
 using UniquePlaceholderSyncRoot = wil::unique_any<PlaceholderSyncRoot*, decltype(&UnregisterPlaceholderSyncRoot), UnregisterPlaceholderSyncRoot>;
 
+// The callback shares ownership independently of SelfTestState during failure and teardown.
+// Arrival witnesses the point after overlap advisory and before consumption.
+struct R4A02PreparationGate final
+{
+    std::atomic<bool> entered{false};
+    wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+};
+
 struct SelfTestState
 {
     // Explicitly delete copy/move operations (self-test state is not copyable/movable).
@@ -1045,6 +1053,7 @@ struct SelfTestState
     HWND mainWindow = nullptr;
 
     std::filesystem::path tempRoot;
+    std::shared_ptr<R4A02PreparationGate> r4a02PreparationGate;
     // Test-only storage proof failure preserves governed scratch after normal worker drain.
     bool retainTempRootOnFailure = false;
     std::filesystem::path fileOpsAlternateVolumeRoot;
@@ -3194,6 +3203,10 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_PATH", nullptr));
     static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_FIRED", nullptr));
 
+    if (state.r4a02PreparationGate && state.r4a02PreparationGate->release)
+    {
+        static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
+    }
     // The host timer guards against reentrant Tick calls while the shared message pump dispatches
     // completion notifications. All injected worker barriers above are released before cancellation.
     if (! CancelOutstandingSelfTestOperations(state.fileOps))
