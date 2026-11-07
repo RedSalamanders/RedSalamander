@@ -1373,6 +1373,13 @@ handle that performs the delete, and deletes only the entries of the pinned tree
 its own facts (a stop after a deletion reports the partial-tree receipt). The Local provider does this
 for identity-less locations (I35 R7.3, D-7.3).
 
+The configured NAS branch of the identity-less 2,466-entry scale selftest has one
+180-second total post-consent completion budget, multiplied once by the runner timeout
+scale. Repeated question and completion waits share its monotonic deadline. Local and
+chunked branches retain their existing waits; identity, cancellation, complete-deletion,
+worker-drain and configuration-restoration checks are unchanged. This correctness budget
+is not a throughput or performance-neutrality requirement.
+
 Optional `IFileSystemObjectBinding`
 (`d8ae290a-b84c-42ec-982c-7c01dedc7603`) and `IFileSystemBoundObject`
 (`5ed3921d-a486-42cc-a5c3-33d97f75c5b5`) implement:
