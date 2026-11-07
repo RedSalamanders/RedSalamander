@@ -88,16 +88,19 @@ public static class WgcDesktopAdmissionProbe {
             string expected=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WWAHost.exe");
             var title=new StringBuilder(1024);var cls=new StringBuilder(256);
             GetWindowTextW(window,title,title.Capacity);GetClassNameW(window,cls,cls.Capacity);
+            uint appCapacity=2048;var application=new StringBuilder((int)appCapacity);
+            int appStatus=GetApplicationUserModelId(process,ref appCapacity,application);
             if(!String.Equals(image.ToString(),expected,StringComparison.OrdinalIgnoreCase) ||
-               title.ToString()!="Microsoft account" || cls.ToString()!="Windows.UI.Core.CoreWindow")
+               title.ToString()!="Microsoft account" || cls.ToString()!="Windows.UI.Core.CoreWindow" ||
+               appStatus!=0 || application.ToString()!="Microsoft.Windows.CloudExperienceHost_cw5n1h2txyewy!App")
                 throw new InvalidOperationException("The foreground surface is not the verified stock account window.");
             uint checkedProcess;uint checkedThread=GetWindowThreadProcessId(window,out checkedProcess);
             if(GetForegroundWindow()!=window || checkedProcess!=processId || checkedThread!=threadId || CurrentForegroundTitle()!="Microsoft account")
                 throw new InvalidOperationException("The approved account surface drifted before its close request.");
             if(!PostMessageW(window,0x0010,UIntPtr.Zero,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error(),"Account window refused its ordinary close request");
             var deadline=System.Diagnostics.Stopwatch.StartNew();
-            while(IsWindow(window) && deadline.ElapsedMilliseconds<5000)Thread.Sleep(25);
-            if(IsWindow(window))throw new InvalidOperationException("The stock account window did not close; no process termination or input fallback is permitted.");
+            while(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window) && deadline.ElapsedMilliseconds<5000)Thread.Sleep(25);
+            if(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window))throw new InvalidOperationException("The stock account window did not close; no process termination or input fallback is permitted.");
             return true;
         }
     }
