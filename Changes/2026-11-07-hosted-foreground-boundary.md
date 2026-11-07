@@ -1,0 +1,1 @@
+- Require a real neutral foreground and focus window before hosted interactive tests start, keeping its message queue alive for restoration observers and joining its owning thread before desktop handles retire. Preserve setup failures, input and screenshot assertions, child containment and verified restoration.

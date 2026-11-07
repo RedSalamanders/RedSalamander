@@ -7,10 +7,13 @@ These choices leave repository coverage NOT_EVALUATED and publish no regression 
 
 Hosted native interactive entries use a temporary owned input desktop on this project's
 GitHub-hosted runner. Paired comparisons retain the original desktop on both sources.
+The owned desktop requires a neutral foreground/focus window with a live message queue
+before native execution, so restoration observers have a real boundary to preserve.
 The canonical
 interactive entry holds its existing mutex, directs contained children to the new desktop,
 uses the existing native warning and assertions, then restores the original desktop after
-child drain. Creation/restoration errors remain failures. A filtered diagnostic remains
+child drain, then joins the neutral window's owning thread before closing desktop handles.
+Creation, foreground setup and restoration errors remain failures. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 
 The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop

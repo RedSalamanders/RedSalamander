@@ -122,7 +122,7 @@ Describe 'Hosted owned desktop entry lifetime' {
         }
         $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
         $global:rsOwnedDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; ReportRestored=$true }
-        $lease = [pscustomobject]@{ Name=('RedSalamander.Test.' + ('a' * 32)); Restored=$false }
+        $lease = [pscustomobject]@{ Name=('RedSalamander.Test.' + ('a' * 32)); Restored=$false; ForegroundBoundaryReady=$true }
         $lease | Add-Member -MemberType ScriptMethod -Name Dispose -Value {
             $global:rsOwnedDesktopTest.Events.Add('restore')
             if ($global:rsOwnedDesktopTest.FailRestore) { throw 'seeded restore failure' }
@@ -202,6 +202,14 @@ Describe 'Hosted owned desktop entry lifetime' {
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded desktop creation failure'
         ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create'
+    }
+    It 'restores and refuses native execution without a positive foreground boundary witness' {
+        $global:rsOwnedDesktopTest.Lease.ForegroundBoundaryReady=$false
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'no verified foreground boundary'
+        ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create,restore'
+        Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
     It 'retains both native and restoration failures' {
         $global:rsOwnedDesktopTest.FailRestore=$true

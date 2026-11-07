@@ -18,7 +18,8 @@ production receipt. Other phases and local invocation reject it before engine/sa
 Project GitHub-hosted native interactive entries use an owned input desktop under the
 runner's per-entry interactive lease. The original native hotkey case and verified desktop
 restoration passed on both native architectures before this fixture was enabled. Creation,
-native input assertions, contained child drain, restoration and handle retirement remain
+verified neutral foreground/focus ownership, native input assertions, contained child drain,
+restoration, neutral-window thread retirement and handle retirement remain
 required; successful fixture setup alone does not qualify a suite. Requested fixture identity
 is bound to validation fingerprints. Local/self-hosted execution retains its current desktop.
 R0ePaired also retains the original desktop on both sources so historical and current
