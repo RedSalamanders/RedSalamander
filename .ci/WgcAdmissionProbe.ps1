@@ -151,7 +151,7 @@ if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hos
 }
 $path=Join-Path $taskTemp 'wgc-admission.json'
 if(Test-Path -LiteralPath $path){throw 'Preserve existing probe evidence'}
-$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image, input or desktop switch; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult}
+$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image or injected input; active owned desktop uses canonical hosted entry lease; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult}
 [IO.File]::WriteAllText($path,($report|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
 $report|ConvertTo-Json -Depth 6 -Compress
 Write-Host ('Probe evidence: '+$path)
