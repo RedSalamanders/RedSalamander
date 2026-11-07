@@ -1,31 +1,48 @@
+# PRIVATE, TEMPORARY API CONTROL. No application build, image capture or qualification receipt.
 name: Manual Native Suite
-run-name: "Manual native ${{ inputs.scope }} (${{ inputs.configuration }})"
+run-name: "DIAGNOSTIC ONLY WGC admission (${{ inputs.configuration }})"
 on:
   workflow_dispatch:
     inputs:
       configuration:
-        description: Explicit native qualification profile
         type: choice
-        options: [Debug, Release, ASan Debug]
+        options: [Release]
         default: Release
       scope:
-        description: Full qualification or an explicitly selected diagnostic
         type: choice
-        options: [Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe]
-        default: Full
-      baseline_ref:
-        description: Full immutable baseline commit SHA, required only for R0ePaired
-        type: string
-        required: false
+        options: [DesktopProbe]
+        default: DesktopProbe
 permissions:
   contents: read
 concurrency:
-  group: explicit-native-${{ github.run_id }}
+  group: wgc-admission-${{ github.run_id }}
   cancel-in-progress: false
 jobs:
-  qualification:
-    uses: RedSalamanders/.github/.github/workflows/qualification.yml@e32cf9f9b29f4e817decb09e1be44be7fc1a94de
-    with:
-      engine_ref: e32cf9f9b29f4e817decb09e1be44be7fc1a94de
-      configuration: ${{ inputs.configuration }}
-      scope: ${{ inputs.scope }}
+  metadata:
+    name: WGC metadata only (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025-vs2026
+            testRoot: 'D:\RedSalamander.Perf'
+          - arch: ARM64
+            runner: windows-11-vs2026-arm
+            testRoot: 'C:\RedSalamander.Perf'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Query owned-window admission without input, images or desktop switching
+        shell: pwsh
+        run: ./.ci/WgcAdmissionProbe.ps1 -TestRoot '${{ matrix.testRoot }}'
+      - name: Preserve metadata evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wgc-admission-${{ matrix.arch }}
+          path: ${{ matrix.testRoot }}/runs/**/wgc-admission.json
+          if-no-files-found: error
