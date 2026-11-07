@@ -3066,11 +3066,12 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
         return true;
     }
 
-    const std::filesystem::path reparseSrcRoot = state.tempRoot / L"copy-matrix-reparse-src";
-    const std::filesystem::path reparseDstRoot = state.tempRoot / L"copy-matrix-reparse-dst";
-    const std::filesystem::path reparsePayload = reparseSrcRoot / L"payload";
-    const std::filesystem::path reparseTarget  = state.tempRoot / L"copy-matrix-reparse-target";
-    const std::filesystem::path reparseLink    = reparsePayload / L"target-link";
+    const std::filesystem::path reparseSrcRoot    = state.tempRoot / L"copy-matrix-reparse-src";
+    const std::filesystem::path reparseDstRoot    = state.tempRoot / L"copy-matrix-reparse-dst";
+    const std::filesystem::path reparsePayload    = reparseSrcRoot / L"payload";
+    const std::filesystem::path reparseTarget     = state.tempRoot / L"copy-matrix-reparse-target";
+    const std::filesystem::path reparseLink       = reparsePayload / L"target-link";
+    const std::filesystem::path copiedReparseLink = reparseDstRoot / reparsePayload.filename() / reparseLink.filename();
     if (! RecreateEmptyDirectory(reparsePayload) || ! RecreateEmptyDirectory(reparseDstRoot) || ! RecreateEmptyDirectory(reparseTarget))
     {
         Fail(L"Copy recursive matrix failed to reset reparse directories.");
@@ -3081,6 +3082,28 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
         Fail(L"Copy recursive matrix failed to seed reparse files.");
         return true;
     }
+    // Case ownership admission is separate from RemoveAll's no-follow traversal;
+    // admit the guarded link leaf while refusing reparse points in its parents.
+    const auto retireLink = [](const std::filesystem::path& link) noexcept
+    {
+        std::error_code ec;
+        return Common::Testing::RequireSandboxedExposureTarget(link, ec) && SelfTest::RemoveAll(link);
+    };
+    bool linksRetired            = false;
+    const auto retireLinksOnExit = wil::scope_exit([&]() noexcept
+    {
+        if (! linksRetired)
+        {
+            const bool sourceRetired = retireLink(reparseLink);
+            const bool copyRetired   = retireLink(copiedReparseLink);
+            if (! sourceRetired || ! copyRetired)
+            {
+                AppendLog(L"Copy recursive matrix could not retire its owned reparse links without following them.");
+                if (! state.phaseFailed)
+                    Fail(L"Copy recursive matrix could not retire its owned reparse links without following them.");
+            }
+        }
+    });
     if (! TryCreateJunction(reparseLink, reparseTarget))
     {
         Fail(L"Copy recursive matrix failed to create a reparse work item.");
@@ -3096,11 +3119,19 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
         Fail(std::format(L"Copy recursive matrix reparse copy failed: 0x{:08X}.", static_cast<unsigned long>(hr)));
         return true;
     }
-    const std::filesystem::path copiedReparseLink = reparseDstRoot / reparsePayload.filename() / reparseLink.filename();
-    const std::optional<DWORD> copiedReparseTag   = TryGetReparseTag(copiedReparseLink);
+    const std::optional<DWORD> copiedReparseTag = TryGetReparseTag(copiedReparseLink);
     if (! copiedReparseTag.has_value() || (copiedReparseTag.value() != IO_REPARSE_TAG_MOUNT_POINT && copiedReparseTag.value() != IO_REPARSE_TAG_SYMLINK))
     {
         Fail(L"Copy recursive matrix did not preserve the child reparse point with Preserve policy.");
+        return true;
+    }
+    const bool sourceRetired = retireLink(reparseLink);
+    const bool copyRetired   = retireLink(copiedReparseLink);
+    linksRetired             = sourceRetired && copyRetired;
+    if (! linksRetired || ! FilesEqualBytes(reparsePayload / L"before-link.bin", reparseTarget / L"target.bin") ||
+        ! FilesEqualBytes(reparsePayload / L"before-link.bin", reparseDstRoot / reparsePayload.filename() / L"before-link.bin"))
+    {
+        Fail(L"Copy recursive matrix could not retire its owned links while preserving source, target, and copied canary bytes.");
         return true;
     }
 

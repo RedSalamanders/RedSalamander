@@ -1,0 +1,1 @@
+- Preserve each native self-test's original process exit before result normalization and archival, so missing results and archive failures retain the exit needed for diagnosis; retries receive separate records and failed writes stop validation.

@@ -191,8 +191,8 @@ namespace RedSalamander.Tooling
 
     public sealed class ContainedProcess : IDisposable
     {
-        // A synchronous, runner-owned interactive entry may select its newly created
-        // desktop for contained children. The scope never switches desktops itself.
+        // A synchronous hosted interactive entry explicitly selects the rendered
+        // Default desktop for contained children. The scope never switches desktops.
         [ThreadStatic] private static DesktopProcessScope entryDesktopScope;
         private sealed class DesktopProcessScope : IDisposable
         {
@@ -202,8 +202,11 @@ namespace RedSalamander.Tooling
             private bool disposed;
             public DesktopProcessScope(string desktop)
             {
-                if (!System.Text.RegularExpressions.Regex.IsMatch(desktop ?? "", @"^WinSta0\\RedSalamander\.Test\.[0-9a-f]{32}$"))
-                    throw new ArgumentException("Only a named runner-owned test desktop may be selected.", "desktop");
+                if (desktop != @"WinSta0\Default" ||
+                    Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
+                    Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT") != "github-hosted" ||
+                    Environment.GetEnvironmentVariable("GITHUB_REPOSITORY") != "RedSalamanders/RedSalamander")
+                    throw new ArgumentException("Only this project's hosted rendered Default desktop may be selected.", "desktop");
                 previous = entryDesktopScope;
                 Desktop = desktop;
                 entryDesktopScope = this;
@@ -219,7 +222,7 @@ namespace RedSalamander.Tooling
                 disposed = true;
             }
         }
-        public static IDisposable UseOwnedDesktop(string desktop) { return new DesktopProcessScope(desktop); }
+        public static IDisposable UseHostedDefaultDesktop() { return new DesktopProcessScope(@"WinSta0\Default"); }
         private const uint CreateNoWindow = 0x08000000;
         private const uint CreateUnicodeEnvironment = 0x00000400;
         private const uint ExtendedStartupInfoPresent = 0x00080000;
