@@ -58,6 +58,32 @@ namespace RedSalamander.Testing {
             public IntPtr Active, Focus, Capture, MenuOwner, MoveSize, Caret;
             public Rectangle CaretBounds;
         }
+        [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput {
+            public ushort VirtualKey, ScanCode;
+            public uint Flags, Time;
+            public UIntPtr ExtraInfo;
+        }
+        [StructLayout(LayoutKind.Explicit, Size = 40)] private struct NativeInput {
+            [FieldOffset(0)] public uint Type;
+            [FieldOffset(8)] public KeyboardInput Keyboard;
+        }
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate IntPtr BoundarySubclassProcedure(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr subclass, UIntPtr data);
+        [DllImport("comctl32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowSubclass(IntPtr window, BoundarySubclassProcedure procedure, UIntPtr subclass, UIntPtr data);
+        [DllImport("comctl32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool RemoveWindowSubclass(IntPtr window, BoundarySubclassProcedure procedure, UIntPtr subclass);
+        [DllImport("comctl32.dll", ExactSpelling = true)] private static extern IntPtr DefSubclassProc(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool RegisterHotKey(IntPtr window, int id, uint modifiers, uint key);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool UnregisterHotKey(IntPtr window, int id);
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern short GetAsyncKeyState(int key);
+        [DllImport("user32.dll", ExactSpelling = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr window);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] input, int size);
+        [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentProcessId();
+        [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentThreadId();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(SafeDesktopHandle desktop);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
@@ -90,9 +116,17 @@ namespace RedSalamander.Testing {
         private volatile Exception failure;
         private bool threadStarted;
         private bool disposed;
+        private readonly BoundarySubclassProcedure subclassProcedure;
+        private static readonly UIntPtr BoundarySubclassId = new UIntPtr(0x52534244u);
+        private const int BoundaryHotkeyId = 0x5253;
+        private IntPtr activationWindow, activationOriginal, activationOriginalFocus;
+        private uint activationOriginalThread, activationOriginalProcess;
+        private bool hotkeyArmed, hotkeyHandled, hotkeyAcquired;
+        private Exception hotkeyCallbackFailure;
         internal bool Restored { get; private set; }
         internal HostedForegroundBoundary(SafeDesktopHandle desktop) {
             this.desktop = desktop;
+            subclassProcedure = BoundarySubclassCallback;
             joinThreshold = TimeSpan.FromSeconds(10);
             thread = new Thread(Run) { IsBackground = true, Name = "RedSalamander hosted foreground boundary" };
         }
@@ -102,6 +136,7 @@ namespace RedSalamander.Testing {
             if (managedWorker == null || !managedWorker.IsAlive || managedThreshold <= TimeSpan.Zero)
                 throw new ArgumentException("The managed drain control requires a live worker and positive threshold.");
             thread = managedWorker;
+            subclassProcedure = BoundarySubclassCallback;
             threadStarted = true;
             joinThreshold = managedThreshold;
         }
@@ -139,6 +174,127 @@ namespace RedSalamander.Testing {
             if (!GetGUIThreadInfo(thread, ref info))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot verify the original hosted foreground focus.");
             return info;
+        }
+        internal static ushort[] RemainingOwnedChordKeyUps(uint downs, uint ups) {
+            if (downs > 2) throw new ArgumentOutOfRangeException("downs");
+            if (ups > downs) throw new ArgumentOutOfRangeException("ups");
+            if (downs == ups) return Array.Empty<ushort>();
+            if (downs == 1 || ups == 1) return new ushort[] { 0x12 };
+            return new ushort[] { 0x87, 0x12 };
+        }
+        internal static bool AllowsOwnedBoundaryChord(string request, string actions, string runner, string repository, Architecture os, Architecture process) {
+            return request == "1" && actions == "true" && runner == "github-hosted" && repository == "RedSalamanders/RedSalamander" &&
+                os == Architecture.Arm64 && process == Architecture.Arm64;
+        }
+        private IntPtr BoundarySubclassCallback(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr subclass, UIntPtr data) {
+            if (message == 0x0312 && subclass == BoundarySubclassId && wParam.ToUInt64() == BoundaryHotkeyId && hotkeyArmed) {
+                hotkeyHandled = true;
+                // Capture named failures for the worker; never throw across WndProc.
+                try {
+                    uint process;
+                    if (!canceled && window == activationWindow && IsWindow(window) && IsWindowVisible(window) &&
+                        GetWindowThreadProcessId(window, out process) == GetCurrentThreadId() && process == GetCurrentProcessId()) {
+                        if (GetForegroundWindow() == window && GetFocus() == window) {
+                            if (HostedDesktopNative.InputDesktopName() != "Default")
+                                throw new InvalidOperationException("Input desktop changed during owned hotkey admission.");
+                            hotkeyAcquired = true;
+                        } else {
+                            VerifyOriginalForeground(activationOriginal, activationOriginalThread, activationOriginalProcess, activationOriginalFocus);
+                            if (!canceled) {
+                                bool accepted = SetForegroundWindow(window);
+                                if (!canceled) {
+                                    SetFocus(window);
+                                    hotkeyAcquired = accepted && GetForegroundWindow() == window && GetFocus() == window;
+                                }
+                            }
+                        }
+                    }
+                } catch (Win32Exception error) { hotkeyCallbackFailure = error; }
+                  catch (InvalidOperationException error) { hotkeyCallbackFailure = error; }
+                return IntPtr.Zero;
+            }
+            return DefSubclassProc(window, message, wParam, lParam);
+        }
+        private void AcquireWithOwnedHotkey(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+            if (!AllowsOwnedBoundaryChord(Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION"),
+                Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT"),
+                Environment.GetEnvironmentVariable("GITHUB_REPOSITORY"), RuntimeInformation.OSArchitecture, RuntimeInformation.ProcessArchitecture))
+                throw new InvalidOperationException("The hosted boundary did not acquire real foreground ownership; keyboard admission is limited to the selected native ARM64 role.");
+            // ABI/layer exception: the compiler-free inline .NET host cannot include
+            // TestSupport.Tests.DirectedSelfTestInputWarning.h. Mirror its owned
+            // ALT+F24 acknowledgement/release protocol for this existing neutral
+            // boundary only. Product suites keep their canonical native warning.
+            VerifyOriginalForeground(original, originalThread, originalProcess, originalFocus);
+            if (Marshal.SizeOf<NativeInput>() != 40 || Marshal.SizeOf<KeyboardInput>() != 24)
+                throw new InvalidOperationException("Unexpected native keyboard input ABI.");
+            activationWindow = handle; activationOriginal = original;
+            activationOriginalThread = originalThread; activationOriginalProcess = originalProcess;
+            activationOriginalFocus = originalFocus;
+            hotkeyHandled = false; hotkeyAcquired = false; hotkeyCallbackFailure = null;
+            bool subclassed = false, registered = false;
+            uint downs = 0, ups = 0;
+            Exception operationFailure = null;
+            var cleanupFailures = new System.Collections.Generic.List<Exception>();
+            try {
+                if (canceled) throw new InvalidOperationException("Hosted keyboard admission was canceled before registration.");
+                if (!SetWindowSubclass(handle, subclassProcedure, BoundarySubclassId, UIntPtr.Zero))
+                    throw new InvalidOperationException("Cannot install the owned hosted hotkey callback.");
+                subclassed = true;
+                if (!RegisterHotKey(handle, BoundaryHotkeyId, 0x4001, 0x87))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot register the owned hosted hotkey.");
+                registered = true;
+                VerifyOriginalForeground(original, originalThread, originalProcess, originalFocus);
+                foreach (int key in new[] { 0x87, 0x10, 0x11, 0x12, 0x5b, 0x5c })
+                    if ((GetAsyncKeyState(key) & 0x8000) != 0)
+                        throw new InvalidOperationException("Held input prevents the owned hosted hotkey.");
+                if (canceled) throw new InvalidOperationException("Hosted keyboard admission was canceled before input.");
+                hotkeyArmed = true;
+                var input = new[] {
+                    new NativeInput { Type = 1, Keyboard = new KeyboardInput { VirtualKey = 0x12 } },
+                    new NativeInput { Type = 1, Keyboard = new KeyboardInput { VirtualKey = 0x87 } }
+                };
+                downs = SendInput(2, input, Marshal.SizeOf<NativeInput>());
+                if (downs != 2) throw new Win32Exception(Marshal.GetLastWin32Error(), "The owned hosted chord was only partially inserted.");
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                while (!canceled && !hotkeyHandled && timer.ElapsedMilliseconds < 500) {
+                    Message message;
+                    while (PeekMessageW(out message, handle, 0x0312, 0x0312, 1))
+                        DispatchMessageW(ref message);
+                    if (!hotkeyHandled && !canceled) {
+                        uint wait = MsgWaitForMultipleObjectsEx(0, null, 10, 0x0080, 0x0004);
+                        if (wait == 0xffffffff) throw new Win32Exception(Marshal.GetLastWin32Error(), "The owned hosted hotkey wait failed.");
+                    }
+                }
+                if (hotkeyCallbackFailure != null)
+                    throw new InvalidOperationException("The owned hosted hotkey callback refused activation.", hotkeyCallbackFailure);
+                if (canceled || !hotkeyHandled || !hotkeyAcquired)
+                    throw new InvalidOperationException("The real owned hosted hotkey did not acquire foreground and focus.");
+            } catch (Win32Exception error) { operationFailure = error; }
+              catch (InvalidOperationException error) { operationFailure = error; }
+            finally {
+                hotkeyArmed = false;
+                // SendInput acknowledges an inserted prefix. Release only our own
+                // inserted keys, in reverse order, including partial key-up insertion.
+                for (int attempt = 0; attempt != 2 && ups < downs; ++attempt) {
+                    ushort[] keys = RemainingOwnedChordKeyUps(downs, ups);
+                    var release = new NativeInput[keys.Length];
+                    for (int i = 0; i < keys.Length; ++i)
+                        release[i] = new NativeInput { Type = 1, Keyboard = new KeyboardInput { VirtualKey = keys[i], Flags = 2 } };
+                    ups += SendInput((uint)release.Length, release, Marshal.SizeOf<NativeInput>());
+                }
+                if (ups != downs) cleanupFailures.Add(new InvalidOperationException("The owned hosted chord did not acknowledge every key release."));
+                if (registered && !UnregisterHotKey(handle, BoundaryHotkeyId))
+                    cleanupFailures.Add(new Win32Exception(Marshal.GetLastWin32Error(), "Cannot unregister the owned hosted hotkey."));
+                if (subclassed && !RemoveWindowSubclass(handle, subclassProcedure, BoundarySubclassId))
+                    cleanupFailures.Add(new InvalidOperationException("Cannot retire the owned hosted hotkey callback."));
+                try { Console.Error.WriteLine("HostedDefaultDesktop.BoundaryHotkey handled=" + hotkeyHandled + "; acquired=" + hotkeyAcquired + "; downs=" + downs + "; ups=" + ups + "; foreground=" + GetForegroundWindow().ToInt64() + "; focus=" + GetFocus().ToInt64()); }
+                catch (System.IO.IOException) { /* Preserve input/drain results if the diagnostic stream is closed. */ }
+                catch (ObjectDisposedException) { /* Preserve input/drain results if diagnostics were disposed. */ }
+            }
+            if (operationFailure != null) cleanupFailures.Insert(0, operationFailure);
+            if (cleanupFailures.Count != 0) throw new AggregateException("Owned hosted keyboard admission failed.", cleanupFailures);
+            if (HostedDesktopNative.InputDesktopName() != "Default" || GetForegroundWindow() != handle || GetFocus() != handle)
+                throw new InvalidOperationException("The owned hosted hotkey foreground or focus was lost after release.");
         }
         private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
             if (HostedDesktopNative.InputDesktopName() != "Default")
@@ -198,7 +354,7 @@ namespace RedSalamander.Testing {
                         VerifyOriginalForeground(original, originalThread, originalProcess, originalFocus);
                         if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before foreground acquisition.");
                         if (!SetForegroundWindow(handle))
-                            throw new InvalidOperationException("The hosted boundary did not acquire real foreground ownership.");
+                            AcquireWithOwnedHotkey(handle, original, originalThread, originalProcess, originalFocus);
                         if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled during foreground acquisition.");
                         SetFocus(handle);
                         if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled during focus acquisition.");
@@ -250,6 +406,9 @@ namespace RedSalamander.Testing {
                 catch (ObjectDisposedException) { /* Preserve the timeout and continue safe drain if diagnostics are closed. */ }
                 thread.Join();
             }
+            // A failed subclass retirement may leave the callback installed until
+            // the owner window/thread dies. Keep the delegate rooted through join.
+            GC.KeepAlive(subclassProcedure);
             disposed = true;
             ready.Dispose(); stop.Dispose();
             if (timeout) throw new TimeoutException("The hosted foreground thread exceeded its retirement threshold and later drained.", failure);
@@ -799,6 +958,10 @@ function Invoke-RSWithHostedDefaultDesktop {
         acquire real foreground and focus before the action starts. After contained child drain,
         restores the original foreground and native focus, joins the live window thread and
         closes its retained desktop handle. No input desktop is created or switched.
+        After direct foreground refusal, the opted-in project-hosted native ARM64 role may
+        use one guarded registered Alt+F24 handoff to the owned neutral window in 500 ms.
+        This runner prelude precedes the child warning; product input retains the shared
+        native warning. Held input, partial-release, focus and retirement failures reject it.
         A ten-second retirement threshold records a failure; the caller retains its interactive
         lease until the worker exits. Hosted workflow supervision handles a worker that never drains.
         Refuses secure or unknown desktops.
