@@ -119,7 +119,8 @@ jobs:
         shell: pwsh
         env:
           APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
-        run: ./bootstrap/.ci/Invoke-ApprovedCloseIdentity.ps1 -RepoRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true')
+          APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCloseIdentity.ps1 -RepoRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true')
       - name: Retain bounded job status even if preflight fails
         if: always()
         shell: pwsh
