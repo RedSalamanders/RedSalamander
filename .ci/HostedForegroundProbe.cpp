@@ -10,11 +10,11 @@ int main()
     if (! std::getenv("GITHUB_ACTIONS") || ! std::getenv("RUNNER_ENVIRONMENT"))
         return 2;
     const HWND original = GetForegroundWindow();
-    wil::unique_hwnd target(CreateWindowExW(WS_EX_APPWINDOW,
+    wil::unique_hwnd target(CreateWindowExW(WS_EX_APPWINDOW | WS_EX_TOPMOST,
                                            L"STATIC",
                                            L"RedSalamander private foreground diagnostic",
                                            WS_POPUP | WS_VISIBLE,
-                                           32, 32, 256, 80,
+                                           32, 32, 320, 360,
                                            nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
     if (! target)
         return 3;
@@ -40,6 +40,66 @@ int main()
         printAttempt("direct", diagnostics.directAttempt);
         printAttempt("hotkey", diagnostics.hotkeyAttempt);
         printAttempt("post-release", diagnostics.postReleaseAttempt);
+        std::printf("PRIVATE_NATIVE_FOREIGN_GUI flags=%lu menuOwner=%p capture=%p active=%p focus=%p\n",
+                    diagnostics.directAttempt.foregroundThread.gui.flags,
+                    static_cast<void*>(diagnostics.directAttempt.foregroundThread.gui.hwndMenuOwner),
+                    static_cast<void*>(diagnostics.directAttempt.foregroundThread.gui.hwndCapture),
+                    static_cast<void*>(diagnostics.directAttempt.foregroundThread.gui.hwndActive),
+                    static_cast<void*>(diagnostics.directAttempt.foregroundThread.gui.hwndFocus));
+        if (! activated && GetForegroundWindow() == original)
+        {
+            // Private bootstrap control differs from the strict hotkey assertion:
+            // a real click is allowed only on this inert, process-owned button.
+            // It reuses the canonical warning and never clicks an application control.
+            wil::unique_hwnd button(CreateWindowExW(0, L"BUTTON", L"Owned focus diagnostic", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                                   8, 8, 304, 56, target.get(), nullptr, GetModuleHandleW(nullptr), nullptr));
+            POINT point{160, 36};
+            POINT cursor{};
+            bool idle = true;
+            for (const int key : {VK_LBUTTON, VK_RBUTTON, VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2, VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN, VK_F24})
+                idle = idle && (GetAsyncKeyState(key) & 0x8000) == 0;
+            LASTINPUTINFO before{.cbSize = sizeof(LASTINPUTINFO)};
+            const bool ownedHit = button && ClientToScreen(target.get(), &point) && WindowFromPoint(point) == button.get();
+            const bool admitted = ownedHit && idle && warning.IsVisible() && GetCursorPos(&cursor) && GetLastInputInfo(&before) &&
+                                  GetForegroundWindow() == original && ! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread();
+            UINT sent = 0u;
+            bool cursorRestored = false;
+            if (admitted && SetCursorPos(point.x, point.y))
+            {
+                LASTINPUTINFO checked{.cbSize = sizeof(LASTINPUTINFO)};
+                if (WindowFromPoint(point) == button.get() && GetForegroundWindow() == original && GetLastInputInfo(&checked) && checked.dwTime == before.dwTime)
+                {
+                    std::array<INPUT, 2u> mouse{};
+                    mouse[0].type = INPUT_MOUSE;
+                    mouse[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+                    mouse[1].type = INPUT_MOUSE;
+                    mouse[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+                    sent = SendInput(static_cast<UINT>(mouse.size()), mouse.data(), sizeof(INPUT));
+                    if (sent == 1u)
+                        static_cast<void>(SendInput(1u, mouse.data() + 1u, sizeof(INPUT)));
+                    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+                    while (std::chrono::steady_clock::now() < deadline && GetForegroundWindow() != target.get())
+                    {
+                        MSG message{};
+                        while (PeekMessageW(&message, nullptr, 0u, 0u, PM_REMOVE))
+                        {
+                            TranslateMessage(&message);
+                            DispatchMessageW(&message);
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+                    }
+                }
+                POINT current{};
+                if (GetCursorPos(&current) && current.x == point.x && current.y == point.y &&
+                    (GetForegroundWindow() == target.get() || GetForegroundWindow() == original))
+                    cursorRestored = SetCursorPos(cursor.x, cursor.y) != FALSE;
+            }
+            RedSalamander::TestSupport::DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics afterClick;
+            const bool after = GetForegroundWindow() == target.get() &&
+                               RedSalamander::TestSupport::DirectedSelfTestInputWarning::TryActivateOwnedWindow(target.get(), false, &afterClick);
+            std::printf("PRIVATE_NATIVE_OWNED_CLICK ownedHit=%d idle=%d admitted=%d sent=%u activated=%d actualForeground=%d actualFocus=%d cursorRestored=%d stage=%ls\n",
+                        ownedHit, idle, admitted, sent, after, GetForegroundWindow() == target.get(), GetFocus() == target.get(), cursorRestored, afterClick.stage);
+        }
         // Restore only while this diagnostic still owns foreground. Never replace
         // newer activity or manipulate the other process's queue/window settings.
         if (GetForegroundWindow() == target.get() && original && IsWindow(original))

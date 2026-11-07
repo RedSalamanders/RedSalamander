@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   metadata:
-    name: WGC metadata only (${{ matrix.arch }})
+    name: Private desktop diagnostic (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
