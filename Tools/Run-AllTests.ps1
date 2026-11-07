@@ -574,10 +574,12 @@ function Invoke-RSTestPlanEntry {
     }
 
     $priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+    $priorStockPreparationRequest = [Environment]::GetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', 'Process')
     if (-not (Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry)) {
         # Tooling and other noninteractive entries must not pass an interactive
         # fixture request into their synthetic/negative child harness controls.
         [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $null, 'Process')
+        [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $null, 'Process')
     }
 
     try {
@@ -680,6 +682,7 @@ function Invoke-RSTestPlanEntry {
         $failureReason = $_.Exception.Message
     } finally {
         [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process')
+        [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $priorStockPreparationRequest, 'Process')
     }
 
     $end = Get-Date
@@ -1639,7 +1642,7 @@ function New-RSRunnerEntryFingerprintRecord {
             switch ([string]$environmentInput) {
                 'env.profile' { $capabilityInputs[$environmentInput] = "$Platform|$Configuration" }
                 'env.windows-11' { $capabilityInputs[$environmentInput] = [Environment]::OSVersion.Version.ToString() }
-                'env.interactive-desktop' { $capabilityInputs[$environmentInput] = [ordered]@{ user_interactive=[Environment]::UserInteractive; hosted_fixture=[string]$env:REDSALAMANDER_HOSTED_TEST_DESKTOP } }
+                'env.interactive-desktop' { $capabilityInputs[$environmentInput] = [ordered]@{ user_interactive=[Environment]::UserInteractive; hosted_fixture=[string]$env:REDSALAMANDER_HOSTED_TEST_DESKTOP; hosted_stock_preparation=[string]$env:RS_HOSTED_ARM64_STOCK_PREPARATION } }
                 'env.network' { $capabilityInputs[$environmentInput] = [Net.NetworkInformation.NetworkInterface]::GetIsNetworkAvailable() }
                 'env.test-resources' { $capabilityInputs[$environmentInput] = $testMachineResources.CapabilityDigest }
                 default { throw "Validation entry '$($executionEntry.Id)' declares an unknown environment input '$environmentInput'." }

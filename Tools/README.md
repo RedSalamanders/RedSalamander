@@ -15,6 +15,14 @@ and uses the existing native warning and assertions. No input desktop is created
 Boundary setup and restoration errors remain failures. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 
+The project adapter selects approved stock-surface preparation only for its hosted native ARM64
+ReleaseTest and interactive Qualification entries. Inside the existing interactive mutex, it may
+request one ordinary close each for the exact stock Microsoft account and Search foreground
+surfaces after identity and session revalidation, and retains create-only audit records beneath
+the marked test root. It observes the delayed Search transition for five seconds after account
+retirement. Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
+studies do not perform these actions. Native focus, input and capture assertions are unchanged.
+
 The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display

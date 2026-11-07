@@ -312,3 +312,104 @@ namespace RedSalamander.Testing {
         [RedSalamander.Testing.ManagedBoundaryDrainControl]::Run($type) | Should Be $true
     }
 }
+
+Describe 'Approved hosted ARM64 stock preparation' {
+    BeforeEach {
+        $script:savedActions=$env:GITHUB_ACTIONS; $script:savedRunner=$env:RUNNER_ENVIRONMENT; $script:savedRepo=$env:GITHUB_REPOSITORY
+        $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
+        $global:stockObservations=[Collections.Generic.Queue[object]]::new()
+        $global:stockCloses=[Collections.Generic.List[string]]::new()
+        Mock Get-RSHostedStockSurface { $global:stockObservations.Dequeue() } -ModuleName HostedTestDesktop
+    }
+    AfterEach {
+        $env:GITHUB_ACTIONS=$script:savedActions; $env:RUNNER_ENVIRONMENT=$script:savedRunner; $env:GITHUB_REPOSITORY=$script:savedRepo
+        Remove-Variable stockObservations,stockCloses -Scope Global -ErrorAction SilentlyContinue
+    }
+    It 'limits opt-in to native ARM64 hosted project roles' {
+        $p=@{Phase='ReleaseTest';Platform='ARM64';QualificationScope='Normal';OsArchitecture='Arm64';ProcessArchitecture='Arm64'}
+        Get-RSHostedStockPreparationRequest @p | Should Be '1'
+        $p.Phase='Qualification'; $p.QualificationScope='CommandsHandoff'; Get-RSHostedStockPreparationRequest @p | Should Be '1'
+        $p.QualificationScope='R0ePaired'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.QualificationScope='DesktopProbe'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.QualificationScope='Normal'; $p.Platform='x64'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.Platform='ARM64'; $p.ProcessArchitecture='X64'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.ProcessArchitecture='Arm64'; $env:RUNNER_ENVIRONMENT='self-hosted'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_ACTIONS='false'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $env:GITHUB_ACTIONS='true'; $env:GITHUB_REPOSITORY='other/repository'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+    }
+    It 'completes only after the approved account and search retire and shell is observed' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-stock-success-'+[guid]::NewGuid().ToString('N'))
+        foreach($kind in @('Account','Search','Shell')) {
+            $surface=[pscustomobject]@{Kind=$kind;Window=123;Thread=1;Process=2;Session=3;Title=$kind;Class='fixture';Image='fixture';ApplicationId='fixture';ForegroundDesktop='';ForegroundDesktopError=5}
+            $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind) }
+            $surface | Add-Member ScriptMethod Dispose { }
+            $global:stockObservations.Enqueue($surface)
+        }
+        & (Get-Module HostedTestDesktop) { param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0 } $dir
+        ($global:stockCloses -join ',') | Should Be 'Account,Search'
+        $completion=Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json
+        $completion.completed | Should Be $true
+        $completion.last_observation.kind | Should Be 'Shell'
+    }
+    It 'retains a failing close and never requests a second close' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-stock-failure-'+[guid]::NewGuid().ToString('N'))
+        $surface=[pscustomobject]@{Kind='Search';Window=123;Thread=1;Process=2;Session=3;Title='Search';Class='fixture';Image='fixture';ApplicationId='fixture';ForegroundDesktop='';ForegroundDesktopError=5}
+        $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind); throw 'seeded close failure' }
+        $surface | Add-Member ScriptMethod Dispose { }
+        $global:stockObservations.Enqueue($surface)
+        { & (Get-Module HostedTestDesktop) { param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0 } $dir } | Should Throw 'seeded close failure'
+        ($global:stockCloses -join ',') | Should Be 'Search'
+        $result=Get-Content (Join-Path $dir 'search-result.json') -Raw | ConvertFrom-Json
+        $result.retired | Should Be $false
+        $result.error | Should Match 'seeded close failure'
+        (Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json).completed | Should Be $false
+    }
+    It 'refuses a second appearance without sending another close' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-stock-repeat-'+[guid]::NewGuid().ToString('N'))
+        foreach($kind in @('Search','Search')) {
+            $surface=[pscustomobject]@{Kind=$kind;Window=123;Thread=1;Process=2;Session=3;Title=$kind;Class='fixture';Image='fixture';ApplicationId='fixture';ForegroundDesktop='';ForegroundDesktopError=5}
+            $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind) }
+            $surface | Add-Member ScriptMethod Dispose { }
+            $global:stockObservations.Enqueue($surface)
+        }
+        { & (Get-Module HostedTestDesktop) { param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0 } $dir } | Should Throw 'reappeared'
+        ($global:stockCloses -join ',') | Should Be 'Search'
+        (Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json).completed | Should Be $false
+    }
+    It 'refuses to close when its create-only intent already exists' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-stock-audit-'+[guid]::NewGuid().ToString('N'))
+        [IO.File]::WriteAllText((Join-Path $dir 'search-intent.json'),'seeded previous intent')
+        $surface=[pscustomobject]@{Kind='Search';Window=123;Thread=1;Process=2;Session=3;Title='Search';Class='fixture';Image='fixture';ApplicationId='fixture';ForegroundDesktop='';ForegroundDesktopError=5}
+        $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind) }
+        $surface | Add-Member ScriptMethod Dispose { }
+        $global:stockObservations.Enqueue($surface)
+        $attempt=Invoke-RSTestBlock { & (Get-Module HostedTestDesktop) { param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0 } $dir }
+        $attempt.Succeeded | Should Be $false
+        $attempt.Error.Exception.Message | Should Match 'already exists'
+        $global:stockCloses.Count | Should Be 0
+        [IO.File]::ReadAllText((Join-Path $dir 'search-intent.json')) | Should Be 'seeded previous intent'
+        (Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json).completed | Should Be $false
+    }
+    It 'retains approved one-close intents and refuses an unknown foreground' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-stock-'+[guid]::NewGuid().ToString('N'))
+        foreach($kind in @('Account','Search','Unknown')) {
+            $surface=[pscustomobject]@{Kind=$kind;Window=123;Thread=1;Process=2;Session=3;Title=$kind;Class='fixture';Image='fixture';ApplicationId='fixture';ForegroundDesktop='';ForegroundDesktopError=5}
+            $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind) }
+            $surface | Add-Member ScriptMethod Dispose { }
+            $global:stockObservations.Enqueue($surface)
+        }
+        { & (Get-Module HostedTestDesktop) { param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0 } $dir } | Should Throw 'unapproved foreground surface'
+        ($global:stockCloses -join ',') | Should Be 'Account,Search'
+        (Get-Content (Join-Path $dir 'account-result.json') -Raw | ConvertFrom-Json).retired | Should Be $true
+        (Get-Content (Join-Path $dir 'search-result.json') -Raw | ConvertFrom-Json).retired | Should Be $true
+        $completion=Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json
+        $completion.completed | Should Be $false
+        $completion.last_observation.kind | Should Be 'Unknown'
+        $completion.last_observation.foreground_desktop_error | Should Be 5
+    }
+}

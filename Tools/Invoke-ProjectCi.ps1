@@ -31,7 +31,8 @@ Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
 Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for repository coverage.
 DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
-Hosted interactive native entries use an owned input desktop inside the existing entry lease and restore it after child drain.
+Hosted interactive native entries use a verified boundary on Default inside the existing entry lease and restore it after child drain.
+Eligible hosted native ARM64 entries may first request the two approved stock-window closes, retaining create-only marked-root evidence.
 Paired comparisons retain the original desktop for both sources.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
@@ -164,10 +165,13 @@ if ($Configuration -eq 'ASan Debug') {
     }
 }
 $priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+$priorStockPreparationRequest = [Environment]::GetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', 'Process')
 try {
 # Clear an inherited request unless the current hosted role selects this fixture.
 [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',
     (Get-RSHostedInputDesktopRequest -PairedComparison:($QualificationScope -ceq 'R0ePaired')), 'Process')
+[Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION',
+    (Get-RSHostedStockPreparationRequest -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope), 'Process')
 Invoke-RSWithHostedTestDesktop -Action {
     if ($QualificationScope -ceq 'R0ePaired') {
         [void][IO.Directory]::CreateDirectory($receiptDirectory)
@@ -241,7 +245,10 @@ Invoke-RSWithHostedTestDesktop -Action {
     $suite = if ($Phase -eq 'Qualification' -and $QualificationScope -eq 'Full') { 'Full' } else { 'CI' }
     Run 'Tools/Run-AllTests.ps1' ($profile + @('-Suite',$suite,'-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot'))
 }
-} finally { [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process') }
+} finally {
+    [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $priorStockPreparationRequest, 'Process')
+    [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process')
+}
 if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished; it does not authorize production or publication.'; return }
