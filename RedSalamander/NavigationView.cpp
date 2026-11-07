@@ -1640,6 +1640,8 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
         out.editSuggestPopupVisible    = true;
         out.editSuggestItemCount       = _editSuggestItems.size();
         out.editSuggestSelectedIndex   = _editSuggestSelectedIndex;
+        out.editSuggestHoveredIndex    = _editSuggestHoveredIndex;
+        out.editSuggestPopupHwnd       = _editSuggestPopup.get();
         out.editSuggestPopupClientSize = _editSuggestPopupClientSize;
     }
     if (_editValidationPopup && IsWindowVisible(_editValidationPopup.get()) != FALSE)
