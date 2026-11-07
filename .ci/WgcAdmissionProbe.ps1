@@ -49,6 +49,7 @@ public static class WgcDesktopAdmissionProbe {
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int CreateForWindow(IntPtr self,IntPtr hwnd,ref Guid iid,out ComOwner result);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern Desktop CreateDesktopW(string name,IntPtr device,IntPtr mode,uint flags,uint access,IntPtr attributes);
     [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool SetThreadDesktop(Desktop desktop);
+    [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] static extern Desktop OpenInputDesktop(uint flags,bool inherit,uint access);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern Window CreateWindowExW(uint ex,string cls,string title,uint style,int x,int y,int w,int h,IntPtr parent,IntPtr menu,IntPtr module,IntPtr param);
     [DllImport("user32.dll", ExactSpelling=true)] static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetForegroundWindow();
@@ -90,13 +91,14 @@ public static class WgcDesktopAdmissionProbe {
         IntPtr foreground=GetForegroundWindow();
         OriginalForegroundBefore=foreground.ToInt64();
         string name="RedSalamander.Probe."+Guid.NewGuid().ToString("N");
-        using(var desktop=CreateDesktopW(name,IntPtr.Zero,IntPtr.Zero,0,0x1ff,IntPtr.Zero)) {
+        using(var desktop=CreateDesktopW(name,IntPtr.Zero,IntPtr.Zero,0,0x1ff,IntPtr.Zero)) using(var input=OpenInputDesktop(0,false,0x1ff)) {
+            if(input==null || input.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(),"Retain input desktop for owned API control");
             if(desktop==null || desktop.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(),"Create inactive probe desktop");
             foreach(bool alternate in new[]{false,true}) foreach(uint apartment in new uint[]{0,1}) {
                 Exception error=null;
                 var thread=new Thread(()=>{
                     try {
-                        if(alternate && !SetThreadDesktop(desktop)) throw new Win32Exception(Marshal.GetLastWin32Error(),"Attach inactive probe desktop");
+                        if(!SetThreadDesktop(alternate?desktop:input)) throw new Win32Exception(Marshal.GetLastWin32Error(),"Attach explicit probe desktop");
                         int initialized=RoInitialize(apartment);
                         if(initialized<0) Marshal.ThrowExceptionForHR(initialized);
                         try {
@@ -107,7 +109,7 @@ public static class WgcDesktopAdmissionProbe {
                                     int factoryHr;
                                     int flush=DwmFlush();
                                     int itemHr=Admit(window.DangerousGetHandle(),out factoryHr);
-                                    results.Add(new Result{Desktop=alternate?"inactive-owned":"original",ExtendedStyle=style,FactoryHr=factoryHr,ItemHr=itemHr,FlushHr=flush,Visible=IsWindowVisible(window.DangerousGetHandle()),SameDesktopForegroundUnchanged=alternate?(bool?)null:GetForegroundWindow()==foreground,Apartment=apartment==0?"STA":"MTA",ItemWidth=lastWidth,ItemHeight=lastHeight,ItemSizeHr=lastSizeHr});
+                                    results.Add(new Result{Desktop=alternate?"inactive-owned":"active-input",ExtendedStyle=style,FactoryHr=factoryHr,ItemHr=itemHr,FlushHr=flush,Visible=IsWindowVisible(window.DangerousGetHandle()),SameDesktopForegroundUnchanged=alternate?(bool?)null:GetForegroundWindow()==foreground,Apartment=apartment==0?"STA":"MTA",ItemWidth=lastWidth,ItemHeight=lastHeight,ItemSizeHr=lastSizeHr});
                                 }
                             }
                             if(!alternate) {
@@ -130,9 +132,26 @@ public static class WgcDesktopAdmissionProbe {
 }
 '@
 $result=[WgcDesktopAdmissionProbe]::Run()
+$ownedResult=@()
+if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hosted'){
+    # Reuse the canonical entry lease definition, changing only its script-relative
+    # module locator because this diagnostic has no native application/build role.
+    $parseErrors=$null;$tokens=$null
+    $runnerAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$parseErrors)
+    if($parseErrors.Count){throw 'Canonical runner parse failed'}
+    $definition=@($runnerAst.FindAll({param($node)$node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSInteractiveDesktopOperation'},$false))
+    if($definition.Count -ne 1){throw 'Expected one canonical interactive lease'}
+    $definitionText=$definition[0].Extent.Text.Replace("(Join-Path `$PSScriptRoot 'Modules/Testing/HostedTestDesktop.psm1')","(Join-Path `$repo 'Tools/Modules/Testing/HostedTestDesktop.psm1')")
+    . ([scriptblock]::Create($definitionText))
+    $priorDesktopRequest=$env:REDSALAMANDER_HOSTED_TEST_DESKTOP
+    try{
+        $env:REDSALAMANDER_HOSTED_TEST_DESKTOP='owned'
+        $ownedResult=@(Invoke-RSInteractiveDesktopOperation -RequiresInteractiveDesktop $true -Operation {[WgcDesktopAdmissionProbe]::Run()})
+    }finally{[Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',$priorDesktopRequest,'Process')}
+}
 $path=Join-Path $taskTemp 'wgc-admission.json'
 if(Test-Path -LiteralPath $path){throw 'Preserve existing probe evidence'}
-$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image, input or desktop switch; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result}
+$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image, input or desktop switch; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult}
 [IO.File]::WriteAllText($path,($report|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
 $report|ConvertTo-Json -Depth 6 -Compress
 Write-Host ('Probe evidence: '+$path)
