@@ -636,7 +636,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   `Default` for both the calling thread and input desktop. It retains one non-inheritable desktop
   handle and explicitly directs contained children there through `STARTUPINFO.lpDesktop`. Alternate
   Win32 desktops do not provide valid WGC capture items on the selected hosted images. The child
-  starts only after a dedicated thread on Default has created a neutral window and
+  starts only after a dedicated worker has verified its inherited WinSta0/Default thread desktop and
+  the Default input desktop without replacing its inherited desktop handle, then created a neutral window and
   verified real foreground and native focus ownership. This supplies a live restoration
   boundary without using a foreign process. No input desktop is created or switched.
   The neutral thread services its message queue throughout the entry, restores the original
