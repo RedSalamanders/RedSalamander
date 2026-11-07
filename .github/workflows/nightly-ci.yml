@@ -21,7 +21,7 @@ on:
         type: boolean
         default: false
       dismiss_hosted_wsl_startup:
-        description: Separate approval for the exact hosted WSL update startup console in attachment-pair diagnostics only
+        description: Separate approval for the exact hosted WSL update startup console in private admission diagnostics
         type: boolean
         default: false
 permissions:
@@ -161,7 +161,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 3871a05da6109106d26b53ede1937e5ef29ec341
+          ref: 942fc8e088c6d1796d5b89fb02d20c024a1ec92d
           path: candidate
           persist-credentials: false
           fetch-depth: 0
@@ -170,7 +170,7 @@ jobs:
         env:
           APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
           APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
-        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true')
+        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -ApproveWslStartupClose:('${{ inputs.dismiss_hosted_wsl_startup }}' -ceq 'true')
       - name: Retain bounded preflight status
         if: always()
         shell: pwsh

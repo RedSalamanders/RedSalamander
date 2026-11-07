@@ -5,8 +5,8 @@ param([Parameter(Mandatory)][string]$CandidateRoot,[Parameter(Mandatory)][string
       [ValidateSet('Canonical','Explicit','Inherited')][string]$AttachmentVariant='Canonical')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop';$PSNativeCommandUseErrorActionPreference=$false
-$expected='3871a05da6109106d26b53ede1937e5ef29ec341'
-if(($ApproveWslStartupClose -and $AttachmentVariant -ceq 'Canonical') -or -not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTIONS -cne 'true' -or
+$expected=if($AttachmentVariant -ceq 'Canonical'){'942fc8e088c6d1796d5b89fb02d20c024a1ec92d'}else{'3871a05da6109106d26b53ede1937e5ef29ec341'}
+if(-not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTIONS -cne 'true' -or
    $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
    $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
    [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -cne 'Arm64' -or
@@ -46,7 +46,7 @@ $intent=[ordered]@{schema='private.canonical-admission-intent.v1';candidate_head
     bootstrap_head=$env:GITHUB_SHA;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;job=$env:GITHUB_JOB;
     account_approved=[bool]$ApproveAccountClose;search_approved=[bool]$ApproveSearchClose;wsl_startup_approved=[bool]$ApproveWslStartupClose;
     os_architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString();process_architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();
-    fixture_scope=if($variant){'PRIVATE_TRANSFORMED_FIXTURE'}else{'CANONICAL_FIXTURE'};attachment_variant=$AttachmentVariant;
+    fixture_scope=if($variant){'PRIVATE_TRANSFORMED_FIXTURE'}elseif($ApproveWslStartupClose){'CANONICAL_MODULE_WITH_APPROVED_PREPARATION'}else{'CANONICAL_FIXTURE'};attachment_variant=$AttachmentVariant;
     original_csharp_sha256=if($variant){$variant.OriginalSha256}else{$null};compiled_csharp_sha256=if($variant){$variant.CompiledSha256}else{$null};
     exact_replacements=if($variant){$variant.Replacements}else{@()};
     coverage='NOT_EVALUATED';created_utc=[DateTimeOffset]::UtcNow.ToString('o')}
