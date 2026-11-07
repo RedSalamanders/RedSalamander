@@ -10,6 +10,8 @@ GitHub-hosted runner. Paired comparisons retain the original fixture on both sou
 A thread-owned neutral window must prove real foreground and focus before child launch,
 keep its queue live, and restore the original foreground and native focus after contained
 child drain. Its thread joins before the retained desktop handle closes. The canonical
+boundary clears its no-activation style only after verified acquisition, preserving all
+other style bits; restoration services at most one queued message per bounded wait.
 interactive entry holds its existing mutex, explicitly directs contained children to Default,
 and uses the existing native warning and assertions. No input desktop is created or switched.
 Boundary setup and restoration errors remain failures. A filtered diagnostic remains

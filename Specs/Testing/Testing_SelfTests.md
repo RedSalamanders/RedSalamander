@@ -673,6 +673,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   the Default input desktop without replacing its inherited desktop handle, then created a neutral window and
   verified real foreground and native focus ownership. This supplies a live restoration
   boundary without using a foreign process. No input desktop is created or switched.
+  The neutral window is created without activation; only after verifying its own foreground,
+  focus, desktop and thread/process identity may its owning thread clear the no-activation
+  extended style, preserving all other style bits and verifying the result without a new
+  activation request. Restoration uses bounded message-aware waits that continue to check
+  the original window identity and input desktop, preserving the existing deadlines.
   The neutral thread services its message queue throughout the entry, restores the original
   foreground window and native focus only while the fixture owns foreground (or verifies an
   already restored original), and is joined before the retained desktop handle closes. Setup or retirement
