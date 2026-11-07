@@ -527,6 +527,12 @@ Environment variables may select alternate test inputs such as profile names, bu
   and the Pester entry failure reason retains up to four named case details. Large
   assertion payloads are truncated with an explicit marker.
 - `Tools/Run-AllTests.ps1` must tolerate both direct suite JSON (`commands_results.json`, `compare_results.json`, `fileops_results.json`) and aggregated run JSON (`selftest_run_results.json`) when summarizing archived results.
+- Immediately after each contained native self-test exits, the runner writes a unique create-only
+  `artifacts/native-process-exits/<guid>.json` with its PID, executable path, UTC observation and signed
+  process exit code. Keep it outside the rotating `selftest/last_run` tree and separate from the
+  normalized suite verdict: missing or stale case results can fail coverage even after a zero native
+  exit. Classification retries create independent records. A write failure fails the runner;
+  archive refusal retains the original record with the failed run.
 - `Tools/Run-AllTests.ps1` must also write a runner-owned `run-all-tests-results.json` artifact for every invocation. Multi-suite runs must preserve each suite's status counts, case names, failure reasons, skipped reasons, wrapper exit code, canonical `test_root`, and per-run `run_id` in that aggregate file so later suites cannot overwrite earlier evidence. The aggregate must also preserve a non-blocking `test_sandbox_audit` object that records the selected root, allowed run ids, unexpected sibling run directories, and unexpected direct children. Normal execution audits only the selected root and must not enumerate or mutate legacy locations outside it.
 - `Tools/Run-AllTests.ps1` must also derive `run-all-tests-case-history.jsonl` and `run-all-tests-dashboard.md` from the aggregate summary. History rows must include `harness`, `case`, `duration_ms`, `status`, `reason`, `classification`, `seed`, `attempt`, and whether the row came from native case output or retry/shuffle evidence.
 - Runner aggregate summaries must preserve blocking classification metadata: per-suite `classification`, `classification_reason`, `retry_attempts`, and top-level `classifications` counts for `flaky`, `regression`, `isolation_suspect`, and `unclassified_failure`.
@@ -620,26 +626,33 @@ Environment variables may select alternate test inputs such as profile names, bu
   display changes. Missing or access-denied names remain unknown. The same facts accompany
   the hosted display wrapper's diagnostics; neither their collection nor a successful probe
   establishes native interactive coverage or grants foreground permission.
-- Project GitHub-hosted native interactive entries request an owned temporary input desktop through
-  `REDSALAMANDER_HOSTED_TEST_DESKTOP=owned`. Only an entry already holding the canonical
+- Project GitHub-hosted native interactive entries request a foreground boundary on the rendered
+  `Default` desktop through `REDSALAMANDER_HOSTED_TEST_DESKTOP=default`. Only an entry holding the canonical
   interactive mutex may enter this fixture; noninteractive entries and local/self-hosted runs retain their
   current desktop. The fixture requires this project's GitHub-hosted runner, `WinSta0` and
-  an initial `Default` input desktop. It creates one non-inheritable, uniquely named desktop
-  and explicitly directs contained children there through `STARTUPINFO.lpDesktop`. The child
-  starts only after a dedicated thread on that desktop has created a neutral window and
+  `Default` for both the calling thread and input desktop. It retains one non-inheritable desktop
+  handle and explicitly directs contained children there through `STARTUPINFO.lpDesktop`. Alternate
+  Win32 desktops do not provide valid WGC capture items on the selected hosted images. The child
+  starts only after a dedicated thread on Default has created a neutral window and
   verified real foreground and native focus ownership. This supplies a live restoration
-  boundary without using a foreign process or changing the original desktop's windows.
-  The neutral thread services its message queue throughout the entry, stops after original
-  input-desktop restoration and is joined before desktop handles close. Setup or retirement
+  boundary without using a foreign process. No input desktop is created or switched.
+  The neutral thread services its message queue throughout the entry, restores the original
+  foreground window and native focus only while the fixture owns foreground (or verifies an
+  already restored original), and is joined before the retained desktop handle closes. Setup or retirement
   failure fails qualification; a setup witness alone does not prove screenshot or input coverage.
+  Startup cancellation never waits on an in-flight window API: the worker checks it before each
+  subsequent activation step and readiness, while the original API may still complete. If the bounded worker join
+  expires, deferred cleanup retains its desktop handle and synchronization objects until the
+  worker actually exits. Retirement preserves simultaneous action, restoration, join and
+  handle-release errors; a timeout is never reported as successful restoration.
   The child uses the existing native warning and original focus/input assertions. Its containment job
-  must drain before the process-desktop scope retires, the original input desktop is restored,
-  both desktop handles close and the interactive mutex releases. A foreign desktop change is
-  preserved and fails the fixture; failed creation, restoration or handle retirement also
+  must drain before the process-desktop scope retires, the original foreground and native focus
+  are restored, the desktop handle closes and the interactive mutex releases. A foreign desktop or
+  foreground change is preserved and fails the fixture; failed setup, restoration or handle retirement also
   fails. Preserve both the native and restoration error when both occur. Never change foreign
-  windows/processes, foreground-lock policy or input queues. The original native handoff
-  case and restoration passed on both architectures before enabling the fixture for hosted
-  native qualification. R0ePaired retains the original desktop for both historical and
+  windows/processes, foreground-lock policy or input queues. A setup witness alone does not establish
+  native handoff, screenshot or input coverage; those cases still require actual execution on
+  each architecture. R0ePaired retains the original desktop for both historical and
   current sources. Adapter selection clears an inherited request when this role does not
   select the fixture, then restores the caller's value. Fingerprints bind the requested
   desktop fixture separately from user-interactive capability; a successful filtered
@@ -1294,6 +1307,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   until post-order restoration. Commands
   source contracts reject any return of the host whole-tree traversal stack or the Local
   `createdDirectories` metadata list.
+- `Phase7_CopyRecursiveParallelismMatrix` retires its owned source and copied junctions immediately
+  after verifying the copied reparse tag, before subsequent matrix fixtures run. Each removal requires
+  fresh sandbox ownership admission and the canonical no-follow cleaner; a scope guard retries
+  retirement on early case exits. Source, copied-file and link-target canary bytes must remain intact.
+  Archive refusal for retained absolute links stays a failure and never triggers cleanup of failed runs.
 - `Phase7_CopyItemsSaturatedPoolProducersHelp` starts three concurrent Local bulk `CopyItems` calls of
   eight folders each (copy/move concurrency 16, just-in-time discovery), more root walks than the shared
   scheduler has workers. Every call must return `S_OK` with each root completed once and fully copied,

@@ -27,6 +27,15 @@ policy, so receipts produced before the change cannot authorize exact reuse afte
 The process owns that directory for its complete lifetime; caller environment and
 journal files are not modified.
 
+Every contained native self-test launch retains its raw signed process exit separately from
+the normalized suite outcome in a create-only `artifacts/native-process-exits/<guid>.json`.
+Its PID, executable path and UTC observation identify the launched process without copying
+its command line or environment. This record is written after the process wait and before
+case parsing, coverage checks or archival, including classification retries. A missing or
+stale case artifact may fail the normalized verdict independently of the native exit code.
+Writing the record must succeed; archive refusal retains it in the original run. The raw
+exit is diagnostic evidence and never overrides failed coverage or establishes a pass.
+
 `Get-RSWorkspaceSnapshot` is the canonical local source identity. It resolves only
 local Git objects, uses the merge base of an explicit impact base without fetching,
 and records separate committed-base, index, and worktree byte identities for changed,

@@ -114,146 +114,146 @@ Describe 'Hosted desktop fixture lifecycle' {
     }
 }
 
-Describe 'Hosted owned desktop entry lifetime' {
+Describe 'Hosted Default desktop entry lifetime' {
     BeforeEach {
-        $script:priorOwnedDesktopEnvironment = @{}
+        $script:priorDefaultDesktopEnvironment = @{}
         foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY')) {
-            $script:priorOwnedDesktopEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+            $script:priorDefaultDesktopEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
-        $global:rsOwnedDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; ReportRestored=$true }
-        $lease = [pscustomobject]@{ Name=('RedSalamander.Test.' + ('a' * 32)); Restored=$false; ForegroundBoundaryReady=$true }
+        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; ReportRestored=$true }
+        $lease = [pscustomobject]@{ Name='Default'; Restored=$false; ForegroundBoundaryReady=$true }
         $lease | Add-Member -MemberType ScriptMethod -Name Dispose -Value {
-            $global:rsOwnedDesktopTest.Events.Add('restore')
-            if ($global:rsOwnedDesktopTest.FailRestore) { throw 'seeded restore failure' }
-            $this.Restored=$global:rsOwnedDesktopTest.ReportRestored
+            $global:rsDefaultDesktopTest.Events.Add('restore')
+            if ($global:rsDefaultDesktopTest.FailRestore) { throw 'seeded restore failure' }
+            $this.Restored=$global:rsDefaultDesktopTest.ReportRestored
         }
         $scope = [pscustomobject]@{}
         $scope | Add-Member -MemberType ScriptMethod -Name Dispose -Value {
-            $global:rsOwnedDesktopTest.Events.Add('retire-process-scope')
-            if ($global:rsOwnedDesktopTest.FailScopeRetire) { throw 'seeded process scope retirement failure' }
+            $global:rsDefaultDesktopTest.Events.Add('retire-process-scope')
+            if ($global:rsDefaultDesktopTest.FailScopeRetire) { throw 'seeded process scope retirement failure' }
         }
-        $global:rsOwnedDesktopTest | Add-Member -NotePropertyName Lease -NotePropertyValue $lease
-        $global:rsOwnedDesktopTest | Add-Member -NotePropertyName Scope -NotePropertyValue $scope
-        Mock New-RSHostedOwnedDesktop {
-            $global:rsOwnedDesktopTest.Events.Add('create')
-            if ($global:rsOwnedDesktopTest.FailCreate) { throw 'seeded desktop creation failure' }
-            $global:rsOwnedDesktopTest.Lease
+        $global:rsDefaultDesktopTest | Add-Member -NotePropertyName Lease -NotePropertyValue $lease
+        $global:rsDefaultDesktopTest | Add-Member -NotePropertyName Scope -NotePropertyValue $scope
+        Mock New-RSHostedDefaultDesktop {
+            $global:rsDefaultDesktopTest.Events.Add('create')
+            if ($global:rsDefaultDesktopTest.FailCreate) { throw 'seeded desktop creation failure' }
+            $global:rsDefaultDesktopTest.Lease
         } -ModuleName HostedTestDesktop
         Mock New-RSHostedDesktopProcessScope {
-            $global:rsOwnedDesktopTest.Events.Add('process-scope')
-            if ($global:rsOwnedDesktopTest.FailScope) { throw 'seeded process scope creation failure' }
-            $global:rsOwnedDesktopTest.Scope
+            $global:rsDefaultDesktopTest.Events.Add('process-scope')
+            if ($global:rsDefaultDesktopTest.FailScope) { throw 'seeded process scope creation failure' }
+            $global:rsDefaultDesktopTest.Scope
         } -ModuleName HostedTestDesktop
         Mock Set-RSHostedDisplayMode {} -ModuleName HostedTestDesktop
     }
     AfterEach {
-        foreach ($name in $script:priorOwnedDesktopEnvironment.Keys) {
-            [Environment]::SetEnvironmentVariable($name, $script:priorOwnedDesktopEnvironment[$name], 'Process')
+        foreach ($name in $script:priorDefaultDesktopEnvironment.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $script:priorDefaultDesktopEnvironment[$name], 'Process')
         }
-        Remove-Variable rsOwnedDesktopTest -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable rsDefaultDesktopTest -Scope Global -ErrorAction SilentlyContinue
     }
-    It 'selects the owned fixture for this project hosted native entry without native calls' {
-        Get-RSHostedInputDesktopRequest | Should Be 'owned'
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+    It 'selects the rendered Default fixture for this project hosted native entry without native calls' {
+        Get-RSHostedInputDesktopRequest | Should Be 'default'
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
     It 'preserves the original fixture for both sources of a paired comparison' {
         ($null -eq (Get-RSHostedInputDesktopRequest -PairedComparison)) | Should Be $true
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
-    It 'does not select an owned desktop for local execution' {
+    It 'does not select a hosted boundary for local execution' {
         $env:GITHUB_ACTIONS='false'
         ($null -eq (Get-RSHostedInputDesktopRequest)) | Should Be $true
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
-    It 'does not select an owned desktop for a self hosted runner' {
+    It 'does not select a hosted boundary for a self hosted runner' {
         $env:RUNNER_ENVIRONMENT='self-hosted'
         ($null -eq (Get-RSHostedInputDesktopRequest)) | Should Be $true
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
-    It 'does not select an owned desktop for another repository' {
+    It 'does not select a hosted boundary for another repository' {
         $env:GITHUB_REPOSITORY='fixture/other'
         ($null -eq (Get-RSHostedInputDesktopRequest)) | Should Be $true
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
     It 'restores after contained entry drain and preserves the action result' {
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { $global:rsOwnedDesktopTest.Events.Add('entry-drained'); 7 } }
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { $global:rsDefaultDesktopTest.Events.Add('entry-drained'); 7 } }
         $r.Succeeded | Should Be $true
         $r.Output[0] | Should Be 7
-        ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create,process-scope,entry-drained,retire-process-scope,restore'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,entry-drained,retire-process-scope,restore'
         Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
     It 'preserves a failing native entry after restoring the original desktop' {
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'seeded native entry failure' } }
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded native entry failure' } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded native entry failure'
-        ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
     }
     It 'restores when process scope construction fails' {
-        $global:rsOwnedDesktopTest.FailScope=$true
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $global:rsDefaultDesktopTest.FailScope=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded process scope creation failure'
-        ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create,process-scope,restore'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,restore'
     }
     It 'does not execute the action after desktop creation fails' {
-        $global:rsOwnedDesktopTest.FailCreate=$true
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $global:rsDefaultDesktopTest.FailCreate=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded desktop creation failure'
-        ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
     }
     It 'restores and refuses native execution without a positive foreground boundary witness' {
-        $global:rsOwnedDesktopTest.Lease.ForegroundBoundaryReady=$false
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $global:rsDefaultDesktopTest.Lease.ForegroundBoundaryReady=$false
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'no verified foreground boundary'
-        ($global:rsOwnedDesktopTest.Events -join ',') | Should Be 'create,restore'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,restore'
         Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
     It 'retains both native and restoration failures' {
-        $global:rsOwnedDesktopTest.FailRestore=$true
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'seeded native entry failure' } }
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded native entry failure' } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded native entry failure'
         $r.Error.Exception.Message | Should Match 'seeded restore failure'
     }
     It 'fails an otherwise successful action when restoration fails' {
-        $global:rsOwnedDesktopTest.FailRestore=$true
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { 0 } }
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 0 } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded restore failure'
     }
     It 'still restores the input desktop if process scope retirement fails' {
-        $global:rsOwnedDesktopTest.FailScopeRetire=$true
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { 0 } }
+        $global:rsDefaultDesktopTest.FailScopeRetire=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 0 } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'seeded process scope retirement failure'
-        $global:rsOwnedDesktopTest.Events[$global:rsOwnedDesktopTest.Events.Count-1] | Should Be 'restore'
+        $global:rsDefaultDesktopTest.Events[$global:rsDefaultDesktopTest.Events.Count-1] | Should Be 'restore'
     }
     It 'rejects a missing positive restoration witness' {
-        $global:rsOwnedDesktopTest.ReportRestored=$false
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { 0 } }
+        $global:rsDefaultDesktopTest.ReportRestored=$false
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 0 } }
         $r.Succeeded | Should Be $false
-        $r.Error.Exception.Message | Should Match 'did not restore its original input desktop'
+        $r.Error.Exception.Message | Should Match 'did not restore its original foreground and focus'
     }
     It 'refuses local invocation before any desktop or native action' {
         $env:GITHUB_ACTIONS='false'
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'restricted to the project GitHub-hosted runner'
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
     It 'refuses another repository before any desktop or native action' {
         $env:GITHUB_REPOSITORY='fixture/other'
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
     It 'refuses a self-hosted runner before any desktop or native action' {
         $env:RUNNER_ENVIRONMENT='self-hosted'
-        $r=Invoke-RSTestBlock { Invoke-RSWithHostedOwnedDesktop { throw 'must not execute' } }
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
-        $global:rsOwnedDesktopTest.Events.Count | Should Be 0
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
 }

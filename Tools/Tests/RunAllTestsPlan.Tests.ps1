@@ -93,6 +93,8 @@ Describe 'Run-AllTests inventory desktop admission' {
                 if (-not $function) { throw "Missing actual runner function: $name" }
                 . ([scriptblock]::Create($function.Extent.Text))
             }
+            $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-inventory-' + [guid]::NewGuid().ToString('N'))
+            $testRunContext = @{ TestRoot = $env:REDSALAMANDER_TEST_ROOT; RunRoot = $fixtureRoot }
             $admissions = [Collections.Generic.List[bool]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
@@ -106,6 +108,7 @@ Describe 'Run-AllTests inventory desktop admission' {
                 param($ProcessStartInfo)
                 $children.Add($ProcessStartInfo)
                 $process = [pscustomobject]@{
+                    Id = 12345
                     ExitCode = 0
                     StandardOutput = [IO.StringReader]::new('{"suites":[{"suite":"Commands","cases":["cmd_inventory_fixture"]}]}')
                     StandardError = [IO.StringReader]::new('')
@@ -1322,6 +1325,8 @@ Set-StrictMode -Version Latest
 
         & {
             . ([scriptblock]::Create($function.Extent.Text))
+            $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-exit-' + [guid]::NewGuid().ToString('N'))
+            $testRunContext = @{ TestRoot = $env:REDSALAMANDER_TEST_ROOT; RunRoot = $fixtureRoot }
             $profiles = [Collections.Generic.List[string]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
@@ -1341,7 +1346,7 @@ Set-StrictMode -Version Latest
             function Start-RSContainedProcess {
                 param($ProcessStartInfo)
                 $children.Add($ProcessStartInfo)
-                $process = [pscustomobject]@{ ExitCode = 17 }
+                $process = [pscustomobject]@{ Id = 12345; ExitCode = 17 }
                 $process | Add-Member ScriptMethod WaitForExit { }
                 return $process
             }
@@ -1386,6 +1391,73 @@ Set-StrictMode -Version Latest
             $children[3].EnvironmentVariables[$vhdxNames[0]] | Should Be 'C:\owned\mount'
             $children[3].EnvironmentVariables[$vhdxNames[1]] | Should Be '\\?\Volume{00000000-5a4d-4e2b-9c11-7e57c1ea0f00}\'
             $children[3].EnvironmentVariables.ContainsKey($vhdxNames[2]) | Should Be $false
+
+            $records = @(Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'artifacts/native-process-exits') -Filter '*.json')
+            $records.Count | Should Be 4
+            @($records.Name | Sort-Object -Unique).Count | Should Be 4
+            foreach ($record in $records) {
+                $json = Get-Content -LiteralPath $record.FullName -Raw
+                $parsed = $json | ConvertFrom-Json
+                $parsed.schema | Should Be 'red-salamander.native-process-exit.v1'
+                $parsed.process_id | Should Be 12345
+                $parsed.exit_code | Should Be 17
+                $parsed.executable | Should Be ([IO.Path]::GetFullPath('fixture.exe', $TestDrive))
+                $json | Should Match '"observed_utc":"\d{4}-\d\d-\d\dT[^" ]+Z"'
+            }
+            # A later normalized suite failure leaves the original native exit record intact.
+            $normalized = @{ ExitCode = 1 }
+            $normalized.ExitCode | Should Be 1
+            ((Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json).exit_code) | Should Be 17
+
+            function Out-File { throw 'injected exit record write failure' }
+            $failedWrite = Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $failedWrite.Succeeded | Should Be $false
+            $failedWrite.Error.Exception.Message | Should Match 'injected exit record write failure'
+            $closed.Count | Should Be 5
+        }
+    }
+
+    It 'retains the raw native exit record when the real run archive refuses an owned link' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$errors)
+        @($errors).Count | Should Be 0
+        $definition = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSSelfTestProcess'
+        }, $true)
+        & {
+            . ([scriptblock]::Create($definition.Extent.Text))
+            $testRunContext = New-RSTestRunContext -RepoRoot $repoRoot -TestRootOverride $env:REDSALAMANDER_TEST_ROOT
+            [void](New-Item -ItemType Directory -Path $testRunContext.RunRoot -ErrorAction Stop)
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) return $false }
+            function Invoke-RSInteractiveDesktopOperation { param($RequiresInteractiveDesktop, $Operation) & $Operation }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $process = [pscustomobject]@{ Id = 12345; ExitCode = -1073741819 }
+                $process | Add-Member ScriptMethod WaitForExit { }
+                return $process
+            }
+            function Close-RSContainedProcess { param($Process) }
+            try {
+                $entry = [pscustomobject]@{ Path = 'fixture.exe'; WorkingDirectory = $TestDrive }
+                (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest')) | Should Be -1073741819
+                $record = @(Get-ChildItem -LiteralPath (Join-Path $testRunContext.RunRoot 'artifacts/native-process-exits') -Filter '*.json')
+                $record.Count | Should Be 1
+                $before = [IO.File]::ReadAllText($record[0].FullName)
+                $target = Join-Path $testRunContext.RunRoot 'owned-target'
+                [void](New-Item -ItemType Directory -Path $target -ErrorAction Stop)
+                [IO.File]::WriteAllText((Join-Path $target 'canary.txt'), 'retained target')
+                $link = Join-Path $testRunContext.RunRoot 'owned-link'
+                [void](New-RSTestSandboxLink -Path $link -Target $target -ItemType Junction)
+                $archive = Invoke-RSTestBlock { Save-RSTestSandboxRunEvidence -TestRoot $testRunContext.TestRoot -RunId $testRunContext.RunId }
+                $archive.Succeeded | Should Be $false
+                $archive.Error.Exception.Message | Should Match 'unsafe or mount-like reparse point'
+                [IO.File]::ReadAllText($record[0].FullName) | Should Be $before
+                ($before | ConvertFrom-Json).exit_code | Should Be -1073741819
+                [IO.File]::ReadAllText((Join-Path $target 'canary.txt')) | Should Be 'retained target'
+            } finally {
+                Remove-RSTestSandboxExactRunDirectory -TestRoot $testRunContext.TestRoot -RunId $testRunContext.RunId
+            }
         }
     }
 
@@ -1479,8 +1551,8 @@ Set-StrictMode -Version Latest
             -Message 'The session mutex must have one reviewed ownership site.'
         Assert-RSEqual -Actual ($desktopFunction.Extent.Text -match '\.WaitOne\(') -Expected $true -Message 'The entry boundary should acquire the mutex.'
         Assert-RSEqual -Actual ($desktopFunction.Extent.Text -match '\.ReleaseMutex\(\)') -Expected $true -Message 'The entry boundary should release the mutex in its finally block.'
-        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedOwnedDesktop') -gt $desktopFunction.Extent.Text.IndexOf('.WaitOne(')) -Expected $true -Message 'Owned hosted desktop entry must follow actual interactive lease acquisition.'
-        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedOwnedDesktop') -lt $desktopFunction.Extent.Text.IndexOf('.ReleaseMutex()')) -Expected $true -Message 'Owned desktop restoration must finish before the interactive lease is released.'
+        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedDefaultDesktop') -gt $desktopFunction.Extent.Text.IndexOf('.WaitOne(')) -Expected $true -Message 'Hosted Default entry must follow actual interactive lease acquisition.'
+        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedDefaultDesktop') -lt $desktopFunction.Extent.Text.IndexOf('.ReleaseMutex()')) -Expected $true -Message 'Hosted foreground restoration must finish before the interactive lease is released.'
 
         foreach ($functionName in @('Invoke-RSSelfTestProcess', 'Invoke-RSTestPlanEntry')) {
             $entryFunction = $functions | Where-Object Name -eq $functionName | Select-Object -First 1

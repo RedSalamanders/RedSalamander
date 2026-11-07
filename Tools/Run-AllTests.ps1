@@ -30,6 +30,8 @@
     MTP recovery journals cannot reuse or change the caller's profile state.
     Case inventory uses the early-exit, nonactivating --selftest-list-cases path
     without a desktop lease. Actual native execution retains its entry's desktop admission.
+    Every native self-test launch records its actual process exit separately under the run's
+    artifacts/native-process-exits directory, before coverage and archive processing.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -483,9 +485,9 @@ namespace RedSalamander
             Write-Warning 'Unable to prevent system/display idle while the interactive test entry runs.'
         }
 
-        if ($env:REDSALAMANDER_HOSTED_TEST_DESKTOP -ceq 'owned') {
+        if ($env:REDSALAMANDER_HOSTED_TEST_DESKTOP -ceq 'default') {
             Import-Module (Join-Path $PSScriptRoot 'Modules/Testing/HostedTestDesktop.psm1')
-            return Invoke-RSWithHostedOwnedDesktop -Action $Operation
+            return Invoke-RSWithHostedDefaultDesktop -Action $Operation
         }
         return & $Operation
     }
@@ -1105,7 +1107,21 @@ function Invoke-RSSelfTestProcess {
             try {
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
                 $process.WaitForExit()
-                return $process.ExitCode
+                $nativeExitCode = $process.ExitCode
+                $exitDirectory = Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot `
+                    -Path (Join-Path $testRunContext.RunRoot 'artifacts/native-process-exits') -RequireDescendant
+                [void](New-Item -ItemType Directory -Path $exitDirectory -Force -ErrorAction Stop)
+                $exitPath = Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot `
+                    -Path (Join-Path $exitDirectory (([guid]::NewGuid().ToString('N')) + '.json')) -RequireDescendant
+                $exitRecord = [ordered]@{
+                    schema = 'red-salamander.native-process-exit.v1'
+                    process_id = $process.Id
+                    executable = [IO.Path]::GetFullPath($startInfo.FileName, $startInfo.WorkingDirectory)
+                    observed_utc = [DateTime]::UtcNow.ToString('o')
+                    exit_code = $nativeExitCode
+                }
+                $exitRecord | ConvertTo-Json -Compress | Out-File -LiteralPath $exitPath -Encoding utf8NoBOM -NoClobber -ErrorAction Stop
+                return $nativeExitCode
             }
             finally {
                 Close-RSContainedProcess -Process $process

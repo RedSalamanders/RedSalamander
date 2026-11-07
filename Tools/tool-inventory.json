@@ -1556,6 +1556,7 @@
         "Can build the selected platform/configuration",
         "Suspends and re-attests only the selected profile around a declared artifact writer",
         "Runs contained test executables and Pester",
+        "Writes a unique create-only raw native self-test exit record before result parsing; a write failure fails execution",
         "Holds the Windows-session mutex only around plan entries marked RequiresInteractiveDesktop",
         "Creates run, temp, archive, and evidence state only beneath exact X:/RedSalamander.Perf",
         "Projects explicitly configured non-secret Connection Manager profile names, SMB roots, MTP selectors, and one exact alternate local test root into the runner process and restores the caller environment",
@@ -1564,6 +1565,7 @@
       ],
       "outputs": [
         "Aggregate-v2 run summary with v1 sidecar",
+        "Per-launch artifacts/native-process-exits/<guid>.json with raw signed process exit, PID, executable and UTC observation",
         "Normalized terminal results and verified promotions",
         "Validation plan, content-addressed decisions, fingerprints, and checkpoints",
         "Typed PASSED/FAILED/NOT_EVALUATED/invalid/blocked/corrupt process exit",
@@ -2086,7 +2088,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Normalize duplicate process-environment keys, preserve distinct null-removal and present-empty child overrides, construct kill-on-close contained child-process environments whose job also ends a crash without a Windows Error Reporting dialog, and expose local current-parent identity for delegation checks.",
-      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread. The hosted interactive-entry fixture may scope contained children to its owned desktop; scope retirement is thread-bound and reverse-ordered. Historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
+      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread. The project GitHub-hosted interactive-entry fixture scopes contained children explicitly to the rendered Default desktop; scope retirement is thread-bound and reverse-ordered. Historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
       "usedBy": [
         "build.ps1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
@@ -2693,8 +2695,8 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and own a temporary input desktop with a verified neutral foreground boundary for each leased hosted interactive entry.",
-      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest for pure fixture selection, and Invoke-RSWithHostedOwnedDesktop only within the canonical interactive entry lease. Project GitHub-hosted native entries request it; paired studies retain the original fixture on both sources. Local invocation is refused.",
+      "purpose": "Read hosted desktop identities and access errors, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry.",
+      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest for pure fixture selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. Project GitHub-hosted native entries request it; paired studies retain the original fixture on both sources. Local invocation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
         ".github/workflows/nightly-flake.yml",
@@ -2708,12 +2710,12 @@
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
         "Restores the original mode in finally; setup and restoration failures remain errors",
-        "Hosted interactive entries create and select one owned input desktop inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, restore the original after contained child drain, join the window thread and close desktop handles"
+        "Hosted interactive entries retain Default inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, restore the original foreground and native focus after contained child drain, join the window thread and close the retained desktop handle; they never create or switch input desktops"
       ],
       "outputs": [
         "Qualification action output and display/work-area/session/foreground diagnostics",
         "Read-only calling/input/foreground desktop names with individual Windows query errors",
-        "Owned input-desktop creation, positive neutral foreground boundary and verified restoration diagnostics"
+        "Rendered Default-desktop identity, positive neutral foreground boundary and verified restoration diagnostics"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [

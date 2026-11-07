@@ -1,0 +1,1 @@
+- Run hosted interactive UI checks on the rendered Default desktop, with an owned foreground window and verified restoration of the original foreground and native focus. Alternate-desktop capture failures are retained; platform capture and input qualification remain required.

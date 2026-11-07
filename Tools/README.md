@@ -5,15 +5,14 @@ ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapte
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
 
-Hosted native interactive entries use a temporary owned input desktop on this project's
-GitHub-hosted runner. Paired comparisons retain the original desktop on both sources.
-The owned desktop requires a neutral foreground/focus window with a live message queue
-before native execution, so restoration observers have a real boundary to preserve.
-The canonical
-interactive entry holds its existing mutex, directs contained children to the new desktop,
-uses the existing native warning and assertions, then restores the original desktop after
-child drain, then joins the neutral window's owning thread before closing desktop handles.
-Creation, foreground setup and restoration errors remain failures. A filtered diagnostic remains
+Hosted native interactive entries use the rendered `WinSta0\Default` desktop on this project's
+GitHub-hosted runner. Paired comparisons retain the original fixture on both sources.
+A thread-owned neutral window must prove real foreground and focus before child launch,
+keep its queue live, and restore the original foreground and native focus after contained
+child drain. Its thread joins before the retained desktop handle closes. The canonical
+interactive entry holds its existing mutex, explicitly directs contained children to Default,
+and uses the existing native warning and assertions. No input desktop is created or switched.
+Boundary setup and restoration errors remain failures. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 
 The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop
@@ -319,6 +318,10 @@ firewall rules, accesses a device, or rewrites checked-in assets, read its
 ## Common entry points
 
 `Run-AllTests.ps1` keeps active execution beneath the marked `runs/<runId>` tree.
+Each contained native self-test also leaves a unique `artifacts/native-process-exits/<guid>.json`
+with its original signed process exit, PID, executable and UTC observation before result
+normalization. Missing/stale results can fail coverage independently of that exit. Retry
+records are separate, write failures stop execution, and archive refusal preserves the records.
 After children and owned-disk teardown finish, it verifies and renames the complete
 tree into `evidence/completed-runs/<runId>` on the same volume. Summary/dashboard
 links use that final location. Failed, skipped and interrupted witnesses are retained;
