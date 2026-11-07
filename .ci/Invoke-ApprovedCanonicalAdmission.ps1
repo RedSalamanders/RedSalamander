@@ -4,7 +4,7 @@ param([Parameter(Mandatory)][string]$CandidateRoot,[Parameter(Mandatory)][string
       [switch]$ApproveAccountClose,[switch]$ApproveSearchClose)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop';$PSNativeCommandUseErrorActionPreference=$false
-$expected='6a3e947e77cba5353a6e9f06918522c4490b1207'
+$expected='3871a05da6109106d26b53ede1937e5ef29ec341'
 if(-not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTIONS -cne 'true' -or
    $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
    $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
