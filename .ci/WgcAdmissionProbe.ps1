@@ -55,6 +55,60 @@ public static class WgcDesktopAdmissionProbe {
     [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmFlush();
+    [DllImport("user32.dll", ExactSpelling=true,SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool AllowSetForegroundWindow(uint process);
+    [DllImport("kernel32.dll", ExactSpelling=true)] static extern uint GetCurrentProcessId();
+    [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr SetFocus(IntPtr window);
+    [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetFocus();
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,ExactSpelling=true,SetLastError=true)] static extern Desktop OpenDesktopW(string name,uint flags,bool inherit,uint access);
+    [StructLayout(LayoutKind.Sequential)] struct Point { public int X,Y; }
+    [StructLayout(LayoutKind.Sequential)] struct Message { public IntPtr Window;public uint Id;public UIntPtr WParam;public IntPtr LParam;public uint Time;public Point Position;public uint Private; }
+    [DllImport("user32.dll",ExactSpelling=true,SetLastError=true)] static extern uint MsgWaitForMultipleObjectsEx(uint count,IntPtr[] handles,uint milliseconds,uint mask,uint flags);
+    [DllImport("user32.dll",ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool PeekMessageW(out Message message,IntPtr window,uint first,uint last,uint flags);
+    [DllImport("user32.dll",ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool TranslateMessage(ref Message message);
+    [DllImport("user32.dll",ExactSpelling=true)] static extern IntPtr DispatchMessageW(ref Message message);
+    public sealed class ForegroundResult {
+        public string Stage;public bool SetForegroundReturned,ActualForeground,ActualFocus;public int CaptureHr,Width,Height;
+    }
+    static DefaultAnchor anchor;
+    public static bool GrantSelfOnActiveInputDesktop() {
+        bool granted=false;Exception failure=null;
+        var t=new Thread(()=>{try { using(var d=OpenInputDesktop(0,false,0x1ff)) {
+            if(d==null || d.IsInvalid || !SetThreadDesktop(d)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            granted=AllowSetForegroundWindow(GetCurrentProcessId());
+        }}catch(Win32Exception e){failure=e;}});
+        t.Start();if(!t.Join(TimeSpan.FromSeconds(10)))throw new TimeoutException("Owned grant worker timeout");
+        if(failure!=null)throw new InvalidOperationException("Owned grant failed",failure);
+        return granted;
+    }
+    public static void StartDefaultAnchor() { anchor=new DefaultAnchor(); }
+    public static ForegroundResult ActivateDefaultAnchor(string stage) { return anchor.Activate(stage); }
+    public static void StopDefaultAnchor() { if(anchor!=null){anchor.Dispose();anchor=null;} }
+    sealed class DefaultAnchor : IDisposable {
+        readonly AutoResetEvent request=new AutoResetEvent(false),stop=new AutoResetEvent(false);
+        readonly ManualResetEventSlim ready=new ManualResetEventSlim(false),finished=new ManualResetEventSlim(false);
+        readonly Thread thread;Exception failure;ForegroundResult result;string stage;
+        public DefaultAnchor() { thread=new Thread(Run){IsBackground=true};thread.Start();if(!ready.Wait(TimeSpan.FromSeconds(10)))throw new TimeoutException("Default owned window startup timeout");if(failure!=null)throw new InvalidOperationException("Default window startup failed",failure); }
+        void Run() {
+            try { using(var desktop=OpenDesktopW("Default",0,false,0x1ff)) {
+                if(desktop==null || desktop.IsInvalid || !SetThreadDesktop(desktop)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                int initialized=RoInitialize(1);if(initialized<0)Marshal.ThrowExceptionForHR(initialized);
+                try { using(var window=CreateWindowExW(0x08040000,"STATIC","Owned default foreground control",0x90000000,Math.Max(0,GetSystemMetrics(0)-12),Math.Max(0,GetSystemMetrics(1)-12),12,12,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero)) {
+                    if(window==null || window.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error());
+                    ready.Set();var waits=new[]{request.SafeWaitHandle.DangerousGetHandle(),stop.SafeWaitHandle.DangerousGetHandle()};
+                    for(;;){uint wait=MsgWaitForMultipleObjectsEx(2,waits,0xffffffff,0x04ff,4);
+                        if(wait==1)break;
+                        if(wait==0){IntPtr h=window.DangerousGetHandle();bool set=SetForegroundWindow(h);SetFocus(h);int factory;int captured=Admit(h,out factory);
+                            result=new ForegroundResult{Stage=stage,SetForegroundReturned=set,ActualForeground=GetForegroundWindow()==h,ActualFocus=GetFocus()==h,CaptureHr=captured,Width=lastWidth,Height=lastHeight};finished.Set();}
+                        else if(wait==2){Message m;while(PeekMessageW(out m,IntPtr.Zero,0,0,1)){TranslateMessage(ref m);DispatchMessageW(ref m);}}
+                        else throw new Win32Exception(Marshal.GetLastWin32Error());
+                    }
+                }}finally{RoUninitialize();}
+            }}catch(Win32Exception e){failure=e;}catch(COMException e){failure=e;}finally{ready.Set();finished.Set();}
+        }
+        public ForegroundResult Activate(string value){stage=value;finished.Reset();request.Set();if(!finished.Wait(TimeSpan.FromSeconds(10)))throw new TimeoutException("Default activation timeout");if(failure!=null)throw new InvalidOperationException("Default owned activation failed",failure);return result;}
+        public void Dispose(){stop.Set();if(!thread.Join(TimeSpan.FromSeconds(10)))throw new TimeoutException("Default control retirement timeout");ready.Dispose();finished.Dispose();request.Dispose();stop.Dispose();if(failure!=null)throw new InvalidOperationException("Default control failed",failure);}
+    }
     public sealed class Result {
         public string Desktop; public uint ExtendedStyle; public int FactoryHr; public int ItemHr;
         public int FlushHr; public bool Visible; public bool? SameDesktopForegroundUnchanged;
@@ -133,6 +187,7 @@ public static class WgcDesktopAdmissionProbe {
 '@
 $result=[WgcDesktopAdmissionProbe]::Run()
 $ownedResult=@()
+$foregroundBefore=$null;$foregroundAfter=$null;$grant=$null
 if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hosted'){
     # Reuse the canonical entry lease definition, changing only its script-relative
     # module locator because this diagnostic has no native application/build role.
@@ -145,13 +200,17 @@ if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hos
     . ([scriptblock]::Create($definitionText))
     $priorDesktopRequest=$env:REDSALAMANDER_HOSTED_TEST_DESKTOP
     try{
+        [WgcDesktopAdmissionProbe]::StartDefaultAnchor()
+        $foregroundBefore=[WgcDesktopAdmissionProbe]::ActivateDefaultAnchor('before-bootstrap')
         $env:REDSALAMANDER_HOSTED_TEST_DESKTOP='owned'
-        $ownedResult=@(Invoke-RSInteractiveDesktopOperation -RequiresInteractiveDesktop $true -Operation {[WgcDesktopAdmissionProbe]::Run()})
-    }finally{[Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',$priorDesktopRequest,'Process')}
+        $ownedResult=@(Invoke-RSInteractiveDesktopOperation -RequiresInteractiveDesktop $true -Operation {[WgcDesktopAdmissionProbe]::Run();$script:wgcSelfGrant=[WgcDesktopAdmissionProbe]::GrantSelfOnActiveInputDesktop()})
+        $grant=$script:wgcSelfGrant
+        $foregroundAfter=[WgcDesktopAdmissionProbe]::ActivateDefaultAnchor('after-bootstrap-specific-self-grant')
+    }finally{[WgcDesktopAdmissionProbe]::StopDefaultAnchor();[Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',$priorDesktopRequest,'Process')}
 }
 $path=Join-Path $taskTemp 'wgc-admission.json'
 if(Test-Path -LiteralPath $path){throw 'Preserve existing probe evidence'}
-$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image or injected input; active owned desktop uses canonical hosted entry lease; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult}
+$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image or injected input; active owned desktop uses canonical hosted entry lease; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter}
 [IO.File]::WriteAllText($path,($report|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
 $report|ConvertTo-Json -Depth 6 -Compress
 Write-Host ('Probe evidence: '+$path)
