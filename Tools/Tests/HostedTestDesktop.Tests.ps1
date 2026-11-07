@@ -257,3 +257,58 @@ Describe 'Hosted Default desktop entry lifetime' {
         $global:rsDefaultDesktopTest.Events.Count | Should Be 0
     }
 }
+
+Describe 'Hosted boundary managed drain' {
+    It 'keeps disposal pending after its threshold until a stalled managed worker exits' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        if (-not ('RedSalamander.Testing.ManagedBoundaryDrainControl' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.Reflection;
+using System.Threading;
+namespace RedSalamander.Testing {
+    public static class ManagedBoundaryDrainControl {
+        public static bool Run(Type boundaryType) {
+            using (var started = new ManualResetEventSlim(false))
+            using (var release = new ManualResetEventSlim(false))
+            using (var disposeStarted = new ManualResetEventSlim(false))
+            using (var finished = new ManualResetEventSlim(false)) {
+                Exception failure = null;
+                var worker = new Thread(() => { started.Set(); release.Wait(); }) { IsBackground = true };
+                worker.Start();
+                Thread disposer = null;
+                bool disposerStarted = false;
+                try {
+                    if (!started.Wait(TimeSpan.FromSeconds(2))) throw new InvalidOperationException("Managed worker did not start.");
+                    var ctor = boundaryType.GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null,
+                        new[] { typeof(Thread), typeof(TimeSpan) }, null);
+                    if (ctor == null) throw new InvalidOperationException("Managed boundary constructor missing.");
+                    var boundary = (IDisposable)ctor.Invoke(new object[] { worker, TimeSpan.FromMilliseconds(50) });
+                    disposer = new Thread(() => {
+                        disposeStarted.Set();
+                        try { boundary.Dispose(); }
+                        catch (TimeoutException error) { failure = error; }
+                        catch (ObjectDisposedException error) { failure = error; }
+                        catch (InvalidOperationException error) { failure = error; }
+                        finally { finished.Set(); }
+                    }) { IsBackground = true };
+                    disposer.Start();
+                    disposerStarted = true;
+                    if (!disposeStarted.Wait(TimeSpan.FromSeconds(2))) throw new InvalidOperationException("Managed disposer did not start.");
+                    bool returnedWhileWorkerLive = finished.Wait(TimeSpan.FromMilliseconds(250));
+                    bool workerStillLive = worker.IsAlive;
+                    release.Set();
+                    if (!finished.Wait(TimeSpan.FromSeconds(2)) || !disposer.Join(TimeSpan.FromSeconds(2)))
+                        throw new InvalidOperationException("Managed disposal did not finish after worker release.");
+                    return !returnedWhileWorkerLive && workerStillLive && !worker.IsAlive && failure is TimeoutException;
+                } finally { release.Set(); worker.Join(); if (disposerStarted) disposer.Join(); }
+            }
+        }
+    }
+}
+'@
+        }
+        $type=[RedSalamander.Testing.HostedDesktopNative].Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        [RedSalamander.Testing.ManagedBoundaryDrainControl]::Run($type) | Should Be $true
+    }
+}

@@ -2711,7 +2711,8 @@
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
         "Restores the original mode in finally; setup and restoration failures remain errors",
-        "Hosted interactive entries retain Default inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, restore the original foreground and native focus after contained child drain, join the window thread and close the retained desktop handle; they never create or switch input desktops"
+        "Hosted interactive entries retain Default inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, restore the original foreground and native focus after contained child drain, join the window thread and close the retained desktop handle; they never create or switch input desktops",
+        "A retirement threshold records failure but retains the interactive lease until the owned window thread exits; hosted supervision terminates a permanently stalled owner"
       ],
       "outputs": [
         "Qualification action output and display/work-area/session/foreground diagnostics",
