@@ -33,6 +33,7 @@ Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for 
 DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
 Hosted interactive native entries use a verified boundary on Default inside the existing entry lease and restore it after child drain.
 Eligible hosted native ARM64 entries may first request the two approved stock-window closes, retaining create-only marked-root evidence.
+Their neutral fixture may use one bounded registered nontext-key handoff after direct foreground refusal; native suite warnings and input assertions remain required.
 Paired comparisons retain the original desktop for both sources.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE

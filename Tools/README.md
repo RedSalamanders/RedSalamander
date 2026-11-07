@@ -23,6 +23,13 @@ the marked test root. It observes the delayed Search transition for five seconds
 retirement. Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
 studies do not perform these actions. Native focus, input and capture assertions are unchanged.
 
+When direct foreground acquisition is refused, that same native ARM64 role may use one
+registered Alt+F24 handoff to the owned neutral fixture window within 500 ms. The inline
+.NET host checks held input and current desktop/foreground/focus, accounts for partial
+key insertion and release, and retires its callback before owner-thread drain. This runner
+prelude precedes the child warning; product keyboard input keeps the canonical native
+warning and lead time. Actual foreground, native focus and restoration remain required.
+
 The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display

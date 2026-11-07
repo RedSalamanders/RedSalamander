@@ -413,3 +413,71 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $completion.last_observation.foreground_desktop_error | Should Be 5
     }
 }
+
+Describe 'Hosted foreground chord managed contracts' {
+    It 'releases only inserted key downs that have not already been released' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $assembly = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly
+        $boundary = $assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $flags = [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $remaining = $boundary.GetMethod('RemainingOwnedChordKeyUps', $flags)
+        $remaining | Should Not BeNullOrEmpty
+        foreach ($sample in @(
+            @{ downs=0; ups=0; expected='' },
+            @{ downs=1; ups=0; expected='18' },
+            @{ downs=1; ups=1; expected='' },
+            @{ downs=2; ups=0; expected='135,18' },
+            @{ downs=2; ups=1; expected='18' },
+            @{ downs=2; ups=2; expected='' }
+        )) {
+            $result = $remaining.Invoke($null, [object[]]@([uint32]$sample.downs, [uint32]$sample.ups))
+            (@($result) -join ',') | Should Be $sample.expected
+        }
+        foreach ($sample in @(@{ downs=3; ups=0 }, @{ downs=1; ups=2 }, @{ downs=0; ups=1 })) {
+            $reflectionError = $null
+            try { [void]$remaining.Invoke($null, [object[]]@([uint32]$sample.downs, [uint32]$sample.ups)) }
+            catch [System.Management.Automation.MethodInvocationException] { $reflectionError = $_.Exception.GetBaseException() }
+            ($reflectionError -is [ArgumentOutOfRangeException]) | Should Be $true
+        }
+    }
+    It 'uses the Windows 64-bit INPUT and keyboard layout' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $assembly = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly
+        $boundary = $assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $keyboard = $boundary.GetNestedType('KeyboardInput', [Reflection.BindingFlags]::NonPublic)
+        $input = $boundary.GetNestedType('NativeInput', [Reflection.BindingFlags]::NonPublic)
+        $keyboard | Should Not BeNullOrEmpty
+        $input | Should Not BeNullOrEmpty
+        $sizeOf = [Runtime.InteropServices.Marshal].GetMethod('SizeOf', [type[]]@([type]))
+        $sizeOf.Invoke($null, [object[]]@($keyboard)) | Should Be 24
+        $sizeOf.Invoke($null, [object[]]@($input)) | Should Be 40
+        [Runtime.InteropServices.Marshal]::OffsetOf($keyboard, 'ExtraInfo').ToInt32() | Should Be 16
+        [Runtime.InteropServices.Marshal]::OffsetOf($input, 'Type').ToInt32() | Should Be 0
+        [Runtime.InteropServices.Marshal]::OffsetOf($input, 'Keyboard').ToInt32() | Should Be 8
+    }
+}
+
+Describe 'Hosted foreground chord role policy' {
+    It 'permits only the opted-in project hosted native ARM64 role' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $assembly = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly
+        $boundary = $assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $flags = [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $policy = $boundary.GetMethod('AllowsOwnedBoundaryChord', $flags)
+        $policy | Should Not BeNullOrEmpty
+        $arm = [Runtime.InteropServices.Architecture]::Arm64
+        $x64 = [Runtime.InteropServices.Architecture]::X64
+        foreach ($sample in @(
+            @{request='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$true},
+            @{request=''; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
+            @{request='1'; actions='false'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
+            @{request='1'; actions='true'; runner='self-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
+            @{request='1'; actions='true'; runner='github-hosted'; repository='other/repo'; os=$arm; process=$arm; expected=$false},
+            @{request='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$arm; expected=$false},
+            @{request='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$x64; expected=$false}
+        )) {
+            $actual = $policy.Invoke($null, [object[]]@($sample.request, $sample.actions, $sample.runner, $sample.repository, $sample.os, $sample.process))
+            $actual | Should Be $sample.expected
+        }
+    }
+}

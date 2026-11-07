@@ -1,0 +1,1 @@
+- Admit the hosted ARM64 test fixture through a bounded owned hotkey handoff when Windows refuses direct foreground activation, preserving key-release, focus, restoration and native suite checks.
