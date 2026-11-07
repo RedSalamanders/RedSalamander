@@ -126,7 +126,12 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: approved-close-identity-ARM64
-          path: |
-            C:/RedSalamander.Perf/evidence/approved-close-identity/**
-            ${{ runner.temp }}/approved-close-identity-preflight.json
+          path: C:/RedSalamander.Perf/evidence/approved-close-identity/
+          if-no-files-found: warn
+      - name: Retain close diagnostic preflight status separately
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approved-close-identity-preflight-ARM64
+          path: ${{ runner.temp }}/approved-close-identity-preflight.json
           if-no-files-found: error
