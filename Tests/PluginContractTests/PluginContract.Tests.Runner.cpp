@@ -1438,10 +1438,14 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
     Check(! error, L"Terminal.dll: isolated localized diagnostic fixture cleans its scratch directory", success);
     if (error)
     {
-        const std::wstring message = error.category() == std::system_category() ? TryFormatSystemMessage(static_cast<DWORD>(error.value())) : std::wstring{};
-        std::wcerr << L"[ INFO     ] Terminal fixture cleanup path=" << fixtureRoot.native() << L" error=" << error.value() << L" category="
-                   << Common::Strings::Utf16FromUtf8ReplacingInvalid(error.category().name()) << L" message="
-                   << (message.empty() ? L"(Unicode system message unavailable)" : message) << L"\n";
+        const std::wstring message    = error.category() == std::system_category() ? TryFormatSystemMessage(static_cast<DWORD>(error.value())) : std::wstring{};
+        const std::wstring category   = Common::Strings::Utf16FromUtf8ReplacingInvalid(error.category().name());
+        const std::wstring diagnostic = std::format(L"[ INFO     ] Terminal fixture cleanup path={0} error={1} category={2} message={3}\n",
+                                                    fixtureRoot.native(),
+                                                    error.value(),
+                                                    category,
+                                                    message.empty() ? std::wstring_view(L"(Unicode system message unavailable)") : std::wstring_view(message));
+        std::wcerr << diagnostic;
     }
 }
 
