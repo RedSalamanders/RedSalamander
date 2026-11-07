@@ -39,10 +39,51 @@ jobs:
       - name: Query owned-window admission and active desktop through the canonical lease
         shell: pwsh
         run: ./.ci/WgcAdmissionProbe.ps1 -TestRoot '${{ matrix.testRoot }}'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: microsoft/wil
+          ref: cbf677fb0a942557d08fd129f4c106a76247b2ec
+          path: .build/probe-wil
+          persist-credentials: false
+      - name: Build private canonical foreground diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $vswhere=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $installation=(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+          if (-not $installation) { throw 'VS installation unavailable' }
+          $hostArch=if ($env:PROCESSOR_ARCHITECTURE -ceq 'ARM64') { 'arm64' } else { 'amd64' }
+          & (Join-Path $installation 'Common7/Tools/Launch-VsDevShell.ps1') -Arch '${{ matrix.arch }}' -HostArch $hostArch -SkipAutomaticLocation
+          $output=Join-Path $env:GITHUB_WORKSPACE '.build/private-foreground-probe/${{ matrix.arch }}'
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          & cl.exe /nologo /std:c++latest /EHsc /MD /O2 /Wall /WX- /external:W0 /external:anglebrackets /DENABLE_TESTS /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I Common /I Tests/TestSupport /external:I .build/probe-wil/include /Fo"$output/" /Fe"$output/HostedForegroundProbe.exe" .ci/HostedForegroundProbe.cpp /link user32.lib gdi32.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Private diagnostic build failed' }
+      - name: Run private canonical foreground diagnostic under the existing desktop lease
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo=$env:GITHUB_WORKSPACE
+          $env:REDSALAMANDER_TEST_ROOT='${{ matrix.testRoot }}'
+          Import-Module ./Tools/Modules/Testing/TestSandbox.psm1
+          $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $repo -Harness review-tools -Case private-native-foreground
+          $env:TEMP=$scratch; $env:TMP=$scratch
+          $tokens=$null; $parseErrors=$null
+          $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$parseErrors)
+          if ($parseErrors.Count) { throw 'Canonical runner parse failed' }
+          $definition=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSInteractiveDesktopOperation'},$false))
+          if ($definition.Count -ne 1) { throw 'Expected exact canonical desktop lease' }
+          . ([scriptblock]::Create($definition[0].Extent.Text))
+          [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',$null,'Process')
+          Invoke-RSInteractiveDesktopOperation -RequiresInteractiveDesktop $true -Operation {
+            & (Join-Path $repo '.build/private-foreground-probe/${{ matrix.arch }}/HostedForegroundProbe.exe') | Tee-Object -FilePath (Join-Path $scratch 'native-foreground.txt')
+            if ($LASTEXITCODE -ne 0) { throw 'Private diagnostic execution failed' }
+          }
       - name: Preserve metadata evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wgc-admission-${{ matrix.arch }}
-          path: ${{ matrix.testRoot }}/runs/**/wgc-admission.json
+          path: |
+            ${{ matrix.testRoot }}/runs/**/wgc-admission.json
+            ${{ matrix.testRoot }}/runs/**/native-foreground.txt
           if-no-files-found: error
