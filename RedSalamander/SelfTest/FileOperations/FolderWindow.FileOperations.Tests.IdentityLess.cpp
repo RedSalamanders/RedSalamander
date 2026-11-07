@@ -311,8 +311,24 @@ public:
 
     // The task's actionable question, or nothing once it ended or the wait ran out. A question this scope
     // already answered stays published until the worker takes the answer; it is never returned again.
-    [[nodiscard]] std::optional<IdentityLessPrompt> WaitForQuestion(uint64_t taskId, std::wstring_view what)
+    using CompletionDeadline = std::optional<std::chrono::steady_clock::time_point>;
+
+    // A supplied absolute deadline is shared by every post-consent wait. Other cases retain their original scaled wait.
+    [[nodiscard]] static std::optional<std::chrono::milliseconds> WaitBudget(CompletionDeadline deadline) noexcept
     {
+        if (! deadline.has_value())
+            return SelfTest::Scale(kIdentityLessWait);
+        const auto remaining = deadline.value() - std::chrono::steady_clock::now();
+        if (remaining <= std::chrono::steady_clock::duration::zero())
+            return std::nullopt;
+        return std::chrono::ceil<std::chrono::milliseconds>(remaining);
+    }
+
+    [[nodiscard]] std::optional<IdentityLessPrompt> WaitForQuestion(uint64_t taskId, std::wstring_view what, CompletionDeadline deadline = std::nullopt)
+    {
+        const auto budget = WaitBudget(deadline);
+        if (! budget.has_value())
+            return std::nullopt;
         std::optional<IdentityLessPrompt> prompt;
         static_cast<void>(RedSalamander::TestSupport::PumpMessagesUntil(
             [&]() noexcept
@@ -323,8 +339,8 @@ public:
                 prompt.reset();
             return prompt.has_value() || _state.completedTasks.contains(taskId);
         },
-            {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = what}));
-        return prompt;
+            {.timeout = budget.value(), .operationName = what}));
+        return deadline.has_value() && std::chrono::steady_clock::now() >= deadline.value() ? std::nullopt : prompt;
     }
 
     // Answers as the card does: an action under More (Delete all remaining by name) is submitted with
@@ -346,13 +362,18 @@ public:
     }
 
     // The task's end, or nothing when it did not end in time.
-    [[nodiscard]] const CompletedTaskInfo* WaitForEnd(uint64_t taskId, std::wstring_view what)
+    [[nodiscard]] const CompletedTaskInfo* WaitForEnd(uint64_t taskId, std::wstring_view what, CompletionDeadline deadline = std::nullopt)
     {
+        const auto budget = WaitBudget(deadline);
+        if (! budget.has_value())
+            return nullptr;
         const auto ended = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
             return _state.completedTasks.contains(taskId) && _operations->FindTask(taskId) == nullptr;
-        }, {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = what});
+        }, {.timeout = budget.value(), .operationName = what});
         const auto found = _state.completedTasks.find(taskId);
-        return ended.conditionMet && found != _state.completedTasks.end() ? &found->second : nullptr;
+        return ended.conditionMet && (! deadline.has_value() || std::chrono::steady_clock::now() < deadline.value()) && found != _state.completedTasks.end()
+                   ? &found->second
+                   : nullptr;
     }
 
     // Whether the task is waiting to enter its operation (its queue place, an overlap edge or the interlock).
@@ -371,26 +392,32 @@ public:
 
     // Ends a task that may still ask questions (a refused item asks what to do next): each one is
     // answered Cancel and recorded in `asked`.
-    [[nodiscard]] const CompletedTaskInfo* CancelQuestionsUntilEnd(uint64_t taskId, std::wstring_view what, std::vector<IdentityLessPrompt>* asked = nullptr)
+    [[nodiscard]] const CompletedTaskInfo* CancelQuestionsUntilEnd(uint64_t taskId,
+                                                                   std::wstring_view what,
+                                                                   std::vector<IdentityLessPrompt>* asked = nullptr,
+                                                                   CompletionDeadline deadline            = std::nullopt)
     {
         for (size_t round = 0u; round < 4u; ++round)
         {
-            const auto question = WaitForQuestion(taskId, what);
+            const auto question = WaitForQuestion(taskId, what, deadline);
             if (! question.has_value())
                 break;
             if (asked != nullptr)
                 asked->push_back(question.value());
             if (! Answer(taskId, question.value(), IdentityLessAction::Cancel))
                 break;
+            const auto budget = WaitBudget(deadline);
+            if (! budget.has_value())
+                return nullptr;
             static_cast<void>(RedSalamander::TestSupport::PumpMessagesUntil(
                 [&]() noexcept
             {
                 const auto next = TryGetConflictPromptCopy(_operations->FindTask(taskId));
                 return ! next.has_value() || next->generation != question->generation || _state.completedTasks.contains(taskId);
             },
-                {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = what}));
+                {.timeout = budget.value(), .operationName = what}));
         }
-        return WaitForEnd(taskId, what);
+        return WaitForEnd(taskId, what, deadline);
     }
 
 private:
@@ -2921,9 +2948,37 @@ struct QueuedByNameDelete final
         }
         return true;
     };
-    const auto measure = [&](std::wstring_view where, const std::filesystem::path& tree, const std::filesystem::path& providerTree) noexcept -> bool
+    bool deadlineWitnessesChecked = false;
+    const auto measure            = [&](std::wstring_view where, const std::filesystem::path& tree, const std::filesystem::path& providerTree) noexcept -> bool
     {
         IdentityLessCaseScope scope(state, operations);
+        if (! deadlineWitnessesChecked)
+        {
+            // Zero is not an allocated task. Exercise exhaustion without starting or mutating a real operation.
+            constexpr uint64_t absentTask = 0u;
+            if (operations->FindTask(absentTask) != nullptr || state.completedTasks.contains(absentTask))
+                return reject(L"deadline witness task is not absent");
+            const auto defaultBudget = IdentityLessCaseScope::WaitBudget(std::nullopt);
+            if (! defaultBudget.has_value() || defaultBudget.value() != SelfTest::Scale(kIdentityLessWait))
+                return reject(L"default completion wait changed");
+            const IdentityLessCaseScope::CompletionDeadline expired = std::chrono::steady_clock::now() - std::chrono::milliseconds{1};
+            const auto expiredStarted                               = std::chrono::steady_clock::now();
+            if (scope.WaitForQuestion(absentTask, L"expired scale question", expired).has_value() ||
+                scope.WaitForEnd(absentTask, L"expired scale completion", expired) != nullptr ||
+                scope.CancelQuestionsUntilEnd(absentTask, L"expired scale questions", nullptr, expired) != nullptr ||
+                std::chrono::steady_clock::now() - expiredStarted >= SelfTest::Scale(std::chrono::seconds{1}))
+                return reject(L"an exhausted completion deadline started another wait");
+            const auto sharedStarted                               = std::chrono::steady_clock::now();
+            const IdentityLessCaseScope::CompletionDeadline shared = sharedStarted + SelfTest::Scale(std::chrono::milliseconds{15});
+            if (scope.WaitForQuestion(absentTask, L"shared scale question", shared).has_value() ||
+                scope.WaitForEnd(absentTask, L"shared scale completion", shared) != nullptr ||
+                scope.CancelQuestionsUntilEnd(absentTask, L"shared scale questions", nullptr, shared) != nullptr ||
+                IdentityLessCaseScope::WaitBudget(shared).has_value() ||
+                std::chrono::steady_clock::now() - sharedStarted >= SelfTest::Scale(std::chrono::seconds{1}))
+                return reject(L"successive completion waits renewed their shared deadline");
+            AppendLog(L"Pinned tree, scale: default wait, immediate expiry and shared deadline witnesses passed.");
+            deadlineWitnessesChecked = true;
+        }
         const auto started  = std::chrono::steady_clock::now();
         const auto deletion = scope.StartDelete({providerTree}, false);
         if (! deletion.has_value())
@@ -2932,7 +2987,11 @@ struct QueuedByNameDelete final
         const auto answered = std::chrono::steady_clock::now();
         if (! card.has_value() || ! IsByNameCard(card.value()) || ! scope.Answer(deletion.value(), card.value(), IdentityLessAction::PermanentDelete))
             return reject(std::format(L"{}: the delete by name did not ask its card: {}", where, DescribeIdentityLessPrompt(card)));
-        const CompletedTaskInfo* end = scope.CancelQuestionsUntilEnd(deletion.value(), L"scale delete");
+        // Only the configured NAS scale scenario gets one scaled post-consent budget.
+        const IdentityLessCaseScope::CompletionDeadline deadline =
+            where == L"nas" ? IdentityLessCaseScope::CompletionDeadline{std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{180})}
+                            : std::nullopt;
+        const CompletedTaskInfo* end = scope.CancelQuestionsUntilEnd(deletion.value(), L"scale delete", nullptr, deadline);
         const auto ended             = std::chrono::steady_clock::now();
         const auto cardMs            = std::chrono::duration_cast<std::chrono::milliseconds>(answered - started).count();
         const auto runMs             = std::chrono::duration_cast<std::chrono::milliseconds>(ended - answered).count();

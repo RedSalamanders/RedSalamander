@@ -1380,8 +1380,15 @@ the mutation. Restoration compares the provider's normalized configuration and o
 then restores the exact prior host-map entry or absence and dirty flag. An unavailable canonical baseline
 permits only a best-effort recovery attempt, never a verified restoration. Local witnesses cover normalized
 defaults, nondefault settings and early-exit restoration. Its 2,466-entry whole, chunked and configured NAS
-scenarios retain their existing identity checks and deadline. A failed worker drain or configuration
+scenarios retain their existing identity checks. A failed worker drain or configuration
 restoration fails the case.
+
+The configured NAS branch of the identity-less 2,466-entry scale selftest has one
+180-second total post-consent completion budget, multiplied once by the runner timeout
+scale. Repeated question and completion waits share its monotonic deadline. Local and
+chunked branches retain their existing waits; identity, cancellation, complete-deletion,
+worker-drain and configuration-restoration checks are unchanged. This correctness budget
+is not a throughput or performance-neutrality requirement.
 
 Optional `IFileSystemObjectBinding`
 (`d8ae290a-b84c-42ec-982c-7c01dedc7603`) and `IFileSystemBoundObject`
