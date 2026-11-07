@@ -2341,7 +2341,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
             // Creating even message-only windows can enqueue DWM notifications.
             // Service only this private thread's setup traffic before injecting
             // the witnesses; nothing is pumped during the ordering assertions.
-            static_cast<void>(TestSupport::PumpPendingMessages());
+            static_cast<void>(RedSalamander::TestSupport::PumpPendingMessages());
             MSG setupMessage{};
             if (PeekMessageW(&setupMessage, nullptr, 0, 0, PM_NOREMOVE) != FALSE)
             {
