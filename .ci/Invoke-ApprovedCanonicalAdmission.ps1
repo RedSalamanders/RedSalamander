@@ -1,12 +1,12 @@
 <# PRIVATE fixture admission diagnostic. This is not a product or native qualification. #>
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$CandidateRoot,[Parameter(Mandatory)][string]$BootstrapRoot,
-      [switch]$ApproveAccountClose,[switch]$ApproveSearchClose,
+      [switch]$ApproveAccountClose,[switch]$ApproveSearchClose,[switch]$ApproveWslStartupClose,
       [ValidateSet('Canonical','Explicit','Inherited')][string]$AttachmentVariant='Canonical')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop';$PSNativeCommandUseErrorActionPreference=$false
 $expected='3871a05da6109106d26b53ede1937e5ef29ec341'
-if(-not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTIONS -cne 'true' -or
+if(($ApproveWslStartupClose -and $AttachmentVariant -ceq 'Canonical') -or -not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTIONS -cne 'true' -or
    $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
    $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
    [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -cne 'Arm64' -or
@@ -44,7 +44,7 @@ if($AttachmentVariant -cne 'Canonical'){
 }
 $intent=[ordered]@{schema='private.canonical-admission-intent.v1';candidate_head=$expected;candidate_module_sha256=$moduleHash;
     bootstrap_head=$env:GITHUB_SHA;run_id=$env:GITHUB_RUN_ID;run_attempt=$env:GITHUB_RUN_ATTEMPT;job=$env:GITHUB_JOB;
-    account_approved=[bool]$ApproveAccountClose;search_approved=[bool]$ApproveSearchClose;
+    account_approved=[bool]$ApproveAccountClose;search_approved=[bool]$ApproveSearchClose;wsl_startup_approved=[bool]$ApproveWslStartupClose;
     os_architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString();process_architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();
     fixture_scope=if($variant){'PRIVATE_TRANSFORMED_FIXTURE'}else{'CANONICAL_FIXTURE'};attachment_variant=$AttachmentVariant;
     original_csharp_sha256=if($variant){$variant.OriginalSha256}else{$null};compiled_csharp_sha256=if($variant){$variant.CompiledSha256}else{$null};
@@ -73,6 +73,22 @@ try{
   try{$held=$mutex.WaitOne([TimeSpan]::FromMinutes(2))}catch [Threading.AbandonedMutexException]{$held=$true;Write-Warning 'Acquired abandoned interactive mutex.'}
   if(-not $held){throw 'Timed out waiting for the canonical interactive mutex.'}
   Invoke-RSWithHostedTestDesktop {
+   if($ApproveWslStartupClose){
+    $stockRoot=Join-Path $testRoot 'evidence/hosted-stock-preparation'
+    $beforeStock=if(Test-Path -LiteralPath $stockRoot){@(Get-ChildItem -LiteralPath $stockRoot -Directory | ForEach-Object {$_.FullName})}else{@()}
+    try { & (Get-Module HostedTestDesktop) {param($root) Invoke-RSHostedArm64StockPreparation -RepoRoot $root} $CandidateRoot | Out-Null }
+    catch {
+     $original=$_
+     if($original.Exception.Message -cne 'An unapproved foreground surface prevents hosted preparation.'){throw}
+     $added=@(Get-ChildItem -LiteralPath $stockRoot -Directory | Where-Object {$_.FullName -cnotin $beforeStock})
+     if($added.Count -ne 1){throw 'Cannot uniquely bind the saved stock-preparation refusal.'}
+     $completionPath=Join-Path $added[0].FullName 'completion.json'
+     $completion=Get-Content -LiteralPath $completionPath -Raw | ConvertFrom-Json
+     if($completion.completed -isnot [bool] -or $completion.completed -or $completion.error -cne 'An unapproved foreground surface prevents hosted preparation.' -or $completion.last_observation.kind -cne 'Unknown') {throw 'Saved stock-preparation refusal does not match the expected guard.'}
+     . (Join-Path $BootstrapRoot '.ci/Invoke-GuardedWslStartup.ps1')
+     Invoke-PrivateGuardedWslStartupClose -EvidenceDirectory $e -StockFailure $completion -Approved $true
+    }
+   }
    Invoke-RSWithHostedDefaultDesktop { $record.entered=$true }
   }
   $record.completed=$true

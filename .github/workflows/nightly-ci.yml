@@ -20,6 +20,10 @@ on:
         description: Separate explicit owner approval for the exact stock hosted ARM64 Search flyout
         type: boolean
         default: false
+      dismiss_hosted_wsl_startup:
+        description: Separate approval for the exact hosted WSL update startup console in attachment-pair diagnostics only
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -213,14 +217,16 @@ jobs:
         env:
           APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
           APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
-        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -AttachmentVariant Explicit
+          APPROVED_WSL_STARTUP_CLOSE: ${{ inputs.dismiss_hosted_wsl_startup }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -ApproveWslStartupClose:($env:APPROVED_WSL_STARTUP_CLOSE -ceq 'true') -AttachmentVariant Explicit
       - name: Inherited desktop, one attempt
         if: always() && steps.explicit.outcome != 'skipped'
         shell: pwsh
         env:
           APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
           APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
-        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -AttachmentVariant Inherited
+          APPROVED_WSL_STARTUP_CLOSE: ${{ inputs.dismiss_hosted_wsl_startup }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCanonicalAdmission.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true') -ApproveWslStartupClose:($env:APPROVED_WSL_STARTUP_CLOSE -ceq 'true') -AttachmentVariant Inherited
       - name: Retain bounded preflight status
         if: always()
         shell: pwsh
