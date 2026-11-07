@@ -10,6 +10,7 @@ Import-Module $testRunPlanModule -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force -ErrorAction Stop
 Import-Module $policyModule -Force -ErrorAction Stop
 Import-Module $buildEvidenceModule -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function New-RSReleasePolicyTestRoot {
@@ -17,6 +18,32 @@ function New-RSReleasePolicyTestRoot {
             -RepoRoot $repoRoot `
             -Harness 'tools-pester' `
             -Case "release-policy-$([Guid]::NewGuid().ToString('N'))")
+}
+
+Describe 'Project CI engine path resolution' {
+    It 'resolves relative engine paths from the PowerShell filesystem location and preserves absolute paths' {
+        $scratch = New-RSReleasePolicyTestRoot
+        $psLocation = Join-Path $scratch 'powershell'
+        $nativeLocation = Join-Path $scratch 'native'
+        foreach ($entry in @(@($psLocation, 'EXPECTED_ENGINE'), @($nativeLocation, 'WRONG_ENGINE'))) {
+            $moduleDir = Join-Path $entry[0] 'engine/Tools/Modules'
+            [void](New-Item -ItemType Directory -Path $moduleDir -Force)
+            [IO.File]::WriteAllText((Join-Path $moduleDir 'Ci.Policy.psm1'), "throw '$($entry[1])'", [Text.UTF8Encoding]::new($false))
+        }
+        $priorLocation = Get-Location
+        $priorNativeLocation = [Environment]::CurrentDirectory
+        try {
+            [Environment]::CurrentDirectory = $nativeLocation
+            Set-Location -LiteralPath $psLocation
+            $adapter = Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'
+            { & $adapter -Phase Static -EngineRoot './engine' -DevelopmentEngine } | Should Throw 'EXPECTED_ENGINE'
+            { & $adapter -Phase Static -EngineRoot (Join-Path $psLocation 'engine') -DevelopmentEngine } | Should Throw 'EXPECTED_ENGINE'
+            { & $adapter -Phase Static -EngineRoot 'Env:PATH' -DevelopmentEngine } | Should Throw 'EngineRoot requires the FileSystem provider'
+        } finally {
+            Set-Location -LiteralPath $priorLocation.Path
+            [Environment]::CurrentDirectory = $priorNativeLocation
+        }
+    }
 }
 
 function New-RSFakePeBytes {
@@ -455,10 +482,10 @@ Describe 'Release workflow source contracts' {
         $upload = $flake.Substring($uploadStart)
         $upload | Should Match 'include-hidden-files:\s*true'
         $upload | Should Match '(?m)^\s+path:\s*\|\s*$'
-        foreach ($suffix in @('/evidence/', '/runs/*/artifacts/selftest/', '/runs/*/artifacts/selftest/**/work/**',
+        foreach ($suffix in @('/evidence/', '/runs/*/artifacts/selftest/', '/runs/*/artifacts/native-process-exits/', '/runs/*/artifacts/selftest/**/work/**',
                 '/evidence/completed-runs/*/scratch/**', '/evidence/completed-runs/*/artifacts/selftest/**/work/**',
                 '/**/*.vhd', '/**/*.vhdx', '/**/*.avhdx')) {
-            $prefix = if ($suffix -in @('/evidence/', '/runs/*/artifacts/selftest/')) { '' } else { '!' }
+            $prefix = if ($suffix -in @('/evidence/', '/runs/*/artifacts/selftest/', '/runs/*/artifacts/native-process-exits/')) { '' } else { '!' }
             $upload | Should Match ([regex]::Escape($prefix + '${{ steps.test-root.outputs.path }}' + $suffix))
         }
         $upload | Should Not Match '(?m)^\s+path:\s*\$\{\{ steps\.test-root\.outputs\.path \}\}[\\/]?\s*$'
@@ -467,14 +494,75 @@ Describe 'Release workflow source contracts' {
         $flake | Should Match '-SelfTestRepeat 5 -SelfTestShuffleSeed \$seed -ClassifyFailures'
         $flake | Should Match '-AllowExternalTestRoot -AllowAlternateVolumeTestRoot'
         $flake | Should Match 'Invoke-RSWithHostedTestDesktop -Action'
-          $flake | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \{\s*\.\\Tools\\Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Nightly shuffle suite failed'
+          $flake | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \{.*?\.\\Tools\\Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Nightly shuffle suite failed'
     }
 
       It 'checks native exit status inside the protected action before reporting success' {
           $build = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
           $build | Should Match '(?s)\$runTests = \{\s*\./Tools/Run-AllTests\.ps1[^\r\n]*\r?\n\s*if \(\$LASTEXITCODE -ne 0\) \{ throw "Native'
-          $build | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \$runTests.*?exit 0'
+          $build | Should Match '(?s)Invoke-RSWithHostedTestDesktop -Action \{.*?& \$runTests.*?exit 0'
+          $uploadStart = $build.IndexOf('name: Upload native qualification evidence', [StringComparison]::Ordinal)
+          $uploadEnd = $build.IndexOf('name: Upload native build diagnostics', $uploadStart, [StringComparison]::Ordinal)
+          ($uploadStart -ge 0 -and $uploadEnd -gt $uploadStart) | Should Be $true
+          $build.Substring($uploadStart, $uploadEnd - $uploadStart) | Should Match ([regex]::Escape('${{ steps.test_root.outputs.path }}/runs/*/artifacts/native-process-exits/'))
       }
+
+    It 'selects and restores the hosted request inside all three actual direct workflow actions' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
+        $saved = @{}
+        foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY','REDSALAMANDER_HOSTED_TEST_DESKTOP')) {
+            $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+        }
+        $priorExit = Get-Variable LASTEXITCODE -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+        function Invoke-RSWithHostedTestDesktop { param([scriptblock]$Action) & $Action }
+        try {
+            foreach ($relative in @('.github/workflows/nightly-flake.yml', '.github/workflows/build-reusable.yml', '.github/workflows/ghostty-runtime-product-qualification.yml')) {
+                $text = Get-Content -LiteralPath (Join-Path $repoRoot $relative) -Raw
+                $start = $text.IndexOf('Invoke-RSWithHostedTestDesktop -Action {', [StringComparison]::Ordinal)
+                $endMarker = if ($relative -like '*nightly*') { '          exit 0' } elseif ($relative -like '*ghostty*') { '      - name: Build production Release ARM64 product' } else { '          } else {' }
+                $end = $text.IndexOf($endMarker, $start, [StringComparison]::Ordinal)
+                ($start -ge 0 -and $end -gt $start) | Should Be $true
+                $actionText = $text.Substring($start, $end - $start)
+                if ($relative -like '*nightly*') {
+                    $nativeLine = '(?m)^\s*\.\\Tools\\Run-AllTests\.ps1[^\r\n]*'
+                    ([regex]::Matches($actionText, $nativeLine).Count) | Should Be 1
+                    $actionText = [regex]::Replace($actionText, $nativeLine, '              & $fakeNative')
+                } elseif ($relative -like '*ghostty*') {
+                    $nativeLine = '(?ms)^\s*\.\\Tools\\Run-AllTests\.ps1\s*`\s*\r?\n.*?^\s*-BuildNumber \(\[int\]\$env:RS_BUILD_NUMBER\)'
+                    ([regex]::Matches($actionText, $nativeLine).Count) | Should Be 1
+                    $actionText = [regex]::Replace($actionText, $nativeLine, '                & $fakeNative')
+                }
+                $action = [scriptblock]::Create($actionText)
+                foreach ($hosted in @($true, $false)) {
+                    foreach ($fail in @($false, $true)) {
+                      foreach ($prior in @('default', 'prior-value', '')) {
+                        $env:GITHUB_ACTIONS = 'true'
+                        $env:RUNNER_ENVIRONMENT = if ($hosted) { 'github-hosted' } else { 'self-hosted' }
+                        $env:GITHUB_REPOSITORY = 'RedSalamanders/RedSalamander'
+                        [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $(if ($prior) { $prior } else { $null }), 'Process')
+                        $observed = [Collections.Generic.List[string]]::new()
+                        $fakeNative = {
+                            $observed.Add([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process'))
+                            if ($fail) { $global:LASTEXITCODE = 9; throw 'seeded native failure' }
+                            $global:LASTEXITCODE = 0
+                        }
+                        $runTests = $fakeNative
+                        $result = Invoke-RSTestBlock { & $action }
+                        $result.Succeeded | Should Be (-not $fail)
+                        if ($fail) { $result.Error.Exception.Message | Should Match 'seeded native failure' }
+                        $expectedCount = if ($relative -like '*ghostty*' -and -not $fail) { 3 } else { 1 }
+                        $observed.Count | Should Be $expectedCount
+                        foreach ($actual in $observed) { $actual | Should Be $(if ($hosted) { 'default' } else { '' }) }
+                        ([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')) | Should Be $prior
+                      }
+                    }
+                }
+            }
+        } finally {
+            foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
+            $global:LASTEXITCODE = $priorExit
+        }
+    }
 
     It 'keeps current artifact downloaders pinned and the exact sealed Gate0 workflow intact' {
         $downloaders = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github/workflows') -Filter '*.yml' |

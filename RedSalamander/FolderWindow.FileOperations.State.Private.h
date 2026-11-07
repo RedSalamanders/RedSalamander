@@ -2,9 +2,87 @@
 
 #include "FolderWindow.FileOperationsInternal.h"
 
+#include <utility>
+
 namespace FolderWindowFileOperationsStateInternal
 {
 #ifdef ENABLE_TESTS
+// Test-only checkpoint after a positive bridge write. The default requires a
+// partial identity-owned stage; the popup fixture may opt into any positive
+// write. Task IDs name current waiters, not earlier arrivals.
+struct SelfTestProgressIoGate final
+{
+    SelfTestProgressIoGate() noexcept                                = default;
+    SelfTestProgressIoGate(const SelfTestProgressIoGate&)            = delete;
+    SelfTestProgressIoGate(SelfTestProgressIoGate&&)                 = delete;
+    SelfTestProgressIoGate& operator=(const SelfTestProgressIoGate&) = delete;
+    SelfTestProgressIoGate& operator=(SelfTestProgressIoGate&&)      = delete;
+
+    bool Arm(bool anyPositiveBridgeWrite = false) noexcept
+    {
+        std::scoped_lock lock(mutex);
+        if (! waiters.empty())
+            return false;
+        timedOut = false;
+        allowAnyPositiveWrite.store(anyPositiveBridgeWrite, std::memory_order_release);
+        armed.store(true, std::memory_order_release);
+        return true;
+    }
+    void Release() noexcept
+    {
+        {
+            std::scoped_lock lock(mutex);
+            armed.store(false, std::memory_order_release);
+        }
+        cv.notify_all();
+    }
+    [[nodiscard]] bool HasEntered(uint64_t taskId) noexcept
+    {
+        std::scoped_lock lock(mutex);
+        return std::ranges::find(waiters, taskId) != waiters.end();
+    }
+    [[nodiscard]] bool TimedOut() noexcept
+    {
+        std::scoped_lock lock(mutex);
+        return timedOut;
+    }
+    [[nodiscard]] bool AllowsAnyPositiveWrite() const noexcept
+    {
+        return armed.load(std::memory_order_acquire) && allowAnyPositiveWrite.load(std::memory_order_acquire);
+    }
+    template <typename CancelPredicate> void Pause(uint64_t taskId, CancelPredicate&& cancelled) noexcept
+    {
+        if (! armed.load(std::memory_order_acquire))
+            return;
+        std::unique_lock lock(mutex);
+        if (! armed.load(std::memory_order_relaxed) || cancelled())
+            return;
+        waiters.push_back(taskId);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (armed.load(std::memory_order_relaxed) && ! cancelled())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+            {
+                timedOut = true;
+                break;
+            }
+            cv.wait_for(lock, std::chrono::milliseconds(100));
+        }
+        const auto found = std::ranges::find(waiters, taskId);
+        if (found != waiters.end())
+            waiters.erase(found);
+    }
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::vector<uint64_t> waiters;
+    std::atomic<bool> armed{false};
+    std::atomic<bool> allowAnyPositiveWrite{false};
+    bool timedOut = false;
+};
+
+extern SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
+
 struct SelfTestPausePoint final
 {
     SelfTestPausePoint()                                     = default;
@@ -17,6 +95,11 @@ struct SelfTestPausePoint final
     std::atomic<bool> entered{false};
     std::atomic<bool> releaseRequested{false};
     std::atomic<unsigned int> activeWaiters{0u};
+    std::atomic<bool> timedOut{false};
+    std::mutex targetMutex;
+    std::wstring targetSource;
+    std::atomic<uint64_t> targetTask{0u};
+    bool targetClaimed = false;
 
     void Set(bool isEnabled) noexcept
     {
@@ -24,6 +107,7 @@ struct SelfTestPausePoint final
         {
             entered.store(false, std::memory_order_release);
             releaseRequested.store(false, std::memory_order_release);
+            timedOut.store(false, std::memory_order_release);
             enabled.store(true, std::memory_order_release);
             return;
         }
@@ -37,15 +121,38 @@ struct SelfTestPausePoint final
         return entered.load(std::memory_order_acquire);
     }
 
+    [[nodiscard]] bool HasTimedOut() const noexcept
+    {
+        return timedOut.load(std::memory_order_acquire);
+    }
+
+    // A synthetic source path claims exactly one task before it starts running;
+    // callers must release and drain the previous waiter before arming again.
+    [[nodiscard]] bool ArmForSource(std::wstring_view source) noexcept
+    {
+        std::scoped_lock lock(targetMutex);
+        if (source.empty() || targetClaimed || activeWaiters.load(std::memory_order_acquire) != 0u || enabled.load(std::memory_order_acquire))
+            return false;
+        targetSource.assign(source);
+        targetTask.store(0u, std::memory_order_release);
+        Set(true);
+        return true;
+    }
+
+    [[nodiscard]] bool HasEnteredForTask(uint64_t taskId) const noexcept
+    {
+        return taskId != 0u && targetTask.load(std::memory_order_acquire) == taskId && HasEntered();
+    }
+
     void Release() noexcept
     {
         enabled.store(false, std::memory_order_release);
         releaseRequested.store(true, std::memory_order_release);
     }
 
-    void Pause(ULONGLONG bailoutMs) noexcept
+    template <typename CancelPredicate> void PauseUntil(ULONGLONG bailoutMs, CancelPredicate&& cancelled) noexcept
     {
-        if (! enabled.load(std::memory_order_acquire))
+        if (! enabled.load(std::memory_order_acquire) || cancelled())
         {
             return;
         }
@@ -55,14 +162,38 @@ struct SelfTestPausePoint final
         entered.store(true, std::memory_order_release);
         const auto clearEntered   = wil::scope_exit([&]() noexcept { entered.store(false, std::memory_order_release); });
         const ULONGLONG startTick = GetTickCount64();
-        while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire))
+        while (! releaseRequested.load(std::memory_order_acquire) && enabled.load(std::memory_order_acquire) && ! cancelled())
         {
             const ULONGLONG nowTick = GetTickCount64();
             if (nowTick >= startTick && (nowTick - startTick) > bailoutMs)
             {
+                timedOut.store(true, std::memory_order_release);
                 break;
             }
             Sleep(1);
+        }
+    }
+
+    void Pause(ULONGLONG bailoutMs) noexcept
+    {
+        PauseUntil(bailoutMs, []() noexcept { return false; });
+    }
+
+    template <typename CancelPredicate>
+    void PauseForSource(std::wstring_view source, uint64_t taskId, ULONGLONG bailoutMs, CancelPredicate&& cancelled) noexcept
+    {
+        {
+            std::scoped_lock lock(targetMutex);
+            if (! enabled.load(std::memory_order_acquire) || targetClaimed || targetSource != source || taskId == 0u ||
+                (targetTask.load(std::memory_order_acquire) != 0u && targetTask.load(std::memory_order_relaxed) != taskId))
+                return;
+            targetClaimed = true;
+            targetTask.store(taskId, std::memory_order_release);
+        }
+        PauseUntil(bailoutMs, std::forward<CancelPredicate>(cancelled));
+        {
+            std::scoped_lock lock(targetMutex);
+            targetClaimed = false;
         }
     }
 };
@@ -100,6 +231,9 @@ extern std::atomic<bool> g_fileOpsBridgeInjectHostileChildNames;
 extern std::atomic<unsigned long> g_fileOpsBridgeInjectHostileChildNameAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeInjectRootDirectoryReparseCount;
+extern std::atomic<unsigned long> g_fileOpsBridgeInjectRootDirectoryReparseAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeInjectedRootBoundDirectoryCount;
 extern std::atomic<int> g_fileOpsBridgeReparsePolicyOverride;
 extern std::atomic<unsigned long> g_fileOpsBridgeReplacePublishedDestinationAttempts;
 extern std::atomic<unsigned long> g_fileOpsManagedCleanupKnownNonCommitCount;
@@ -156,6 +290,7 @@ extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoin
 extern SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 extern SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
+extern SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts;
 extern std::atomic<DWORD> g_fileOpsInlineRenameAdmissionThreadId;

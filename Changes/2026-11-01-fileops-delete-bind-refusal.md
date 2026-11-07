@@ -1,0 +1,1 @@
+- Keep denied Delete opens out of the by-name fallback even when an earlier metadata probe cannot report an object identity.

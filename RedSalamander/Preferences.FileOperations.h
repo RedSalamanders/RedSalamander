@@ -45,9 +45,10 @@ private:
     DxUi::WindowHost* _pageHostDx = nullptr;
     DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
-    PreferencesDialogState* _state      = nullptr;
-    bool _syncingDxBandwidthPresetCombo = false;
-    bool _syncingDxCustomBandwidthEdit  = false;
-    bool _syncingDxBridgeBufferEdit     = false;
-    bool _showCustomBandwidth           = false;
+    PreferencesDialogState* _state        = nullptr;
+    bool _syncingDxBandwidthPresetCombo   = false;
+    bool _syncingDxCustomBandwidthEdit    = false;
+    bool _syncingDxBridgeBufferEdit       = false;
+    bool _syncingDxParallelTransfersCombo = false;
+    bool _showCustomBandwidth             = false;
 };

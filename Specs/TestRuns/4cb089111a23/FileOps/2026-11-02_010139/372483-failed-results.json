@@ -1,0 +1,52 @@
+{
+  "schema": "red-salamander.curated-case-results.v1",
+  "source_head": "372483a010e1cce2e3aca56c362297134f49bbea",
+  "build_source_snapshot": "4f656ab8a7b3417469ffb7a7081da4805da598ebe22b7025c9741c18e065f4d5",
+  "build_receipt_id": "8eafa9a8cfa3aa46d615372c26d410e2787fed429fa0fa919a53cab683a0e58f",
+  "runs": [
+    {
+      "label": "372483-unknown-direct-commit-failed",
+      "run_id": "20261102T110512Z-10016-ef28f91ff16749429d7201aed68fbd6b",
+      "case_filter": "FileOps_CrossProviderMtpNewFile",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "failure_message": "A new file copied to an MTP device did not publish through the device writer, or left a temporary object; see trace.",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1672,
+          "repeat_index": 1
+        },
+        {
+          "name": "FileOps_CrossProviderMtpNewFile",
+          "status": "failed",
+          "duration_ms": 782,
+          "repeat_index": 1,
+          "reason": "A new file copied to an MTP device did not publish through the device writer, or left a temporary object; see trace."
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 31,
+          "repeat_index": 1
+        }
+      ],
+      "raw_results_sha256": "a33760df7389b2a6d079b194877828d647702077551252efaea769ebb753b09e",
+      "raw_trace_sha256": "a6b7734b949dbe7923400115114d5133c49c99e99bd902c2987fa147fd757676",
+      "raw_wrapper_sha256": "0e1765b6cf2d23e7963fc7dbe0696c8391438ac5611f5731eee4efb6adf50eac",
+      "preserved_manifest_sha256": "1d8f66a525cf2ccc0c5509b6e31c8bbe8f9d565874e4cbf5250f7718727b3036",
+      "trace_observation": {
+        "bucket": 23,
+        "status": "0x80004005",
+        "source_leaf": "partial-move-source.bin",
+        "message": "Cross-provider transfer asked an unexpected question",
+        "retry_selected_observed": false
+      }
+    }
+  ]
+}

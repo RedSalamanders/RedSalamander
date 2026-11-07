@@ -1499,7 +1499,8 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
         return false;
     }
     const auto phase = static_cast<FileOperations::TaskLifecyclePhase>(task.lifecyclePhase);
-    return phase == FileOperations::TaskLifecyclePhase::Preparing || phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance;
+    return phase == FileOperations::TaskLifecyclePhase::Preparing || phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance ||
+           phase == FileOperations::TaskLifecyclePhase::PreparingExecution;
 }
 
 [[nodiscard]] bool TaskHasSkippedOutcome(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
@@ -1755,7 +1756,12 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
     }
     switch (status)
     {
-        case TaskStatusKind::Waiting: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING);
+        case TaskStatusKind::Waiting:
+            if (task.waitingForExclusiveTransfer)
+                return LoadStringResource(nullptr, IDS_FILEOPS_WAITING_EXCLUSIVE_TRANSFER);
+            if (task.waitingForParallelTransferSlot)
+                return FormatStringResource(nullptr, IDS_FILEOPS_WAITING_PARALLEL_LIMIT_FMT, task.sharedParallelTransferLimit);
+            return LoadStringResource(nullptr, task.waitingForIdentityInterlock ? IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK : IDS_FILEOPS_GRAPH_WAITING);
         case TaskStatusKind::Paused: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
         case TaskStatusKind::Conflict:
             return LoadStringResource(nullptr, task.conflict.metadataLoading ? IDS_FILEOPS_CONFLICT_READING_DETAILS : IDS_FILEOPS_STATUS_WAITING_FOR_DECISION);
@@ -5716,13 +5722,17 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             snap.conflict.overlapTaskId      = task->_conflictArbiter.prompt.overlapTaskId;
         }
 
-        snap.started          = task->HasStarted();
-        snap.paused           = task->IsPaused();
-        snap.waitingForOthers = task->IsWaitingForOthers();
-        snap.waitingInQueue   = task->IsWaitingInQueue();
-        snap.overlapQueued    = task->IsOverlapQueued();
-        snap.queuePaused      = task->IsQueuePaused();
-        snap.queueOrderKey    = task->GetQueueOrderKey();
+        snap.started                        = task->HasStarted();
+        snap.paused                         = task->IsPaused();
+        snap.waitingForOthers               = task->IsWaitingForOthers();
+        snap.waitingInQueue                 = task->IsWaitingInQueue();
+        snap.waitingForIdentityInterlock    = snap.waitingInQueue && task->_waitingForIdentityInterlock.load(std::memory_order_acquire);
+        snap.waitingForParallelTransferSlot = snap.waitingInQueue && task->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
+        snap.waitingForExclusiveTransfer    = snap.waitingInQueue && task->_waitingForExclusiveTransfer.load(std::memory_order_acquire);
+        snap.sharedParallelTransferLimit    = FileOperations::GetSharedParallelTransferLimit();
+        snap.overlapQueued                  = task->IsOverlapQueued();
+        snap.queuePaused                    = task->IsQueuePaused();
+        snap.queueOrderKey                  = task->GetQueueOrderKey();
         if (const auto waitingIt = waitingTaskIndex.find(snap.taskId); waitingIt != waitingTaskIndex.end())
         {
             snap.canMoveQueueUp   = waitingIt->second > 0u;
@@ -7330,6 +7340,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
             IsTaskCollapsedForDisplay(task.taskId, fileOps && fileOps->GetPopupCompactDensity()))
             continue;
         const auto presentation = ResolveWholeTaskProgressPresentation(task);
+        PrepareFactPair(information.waitingReason,
+                        ! task.finished && task.waitingInQueue &&
+                                (task.waitingForIdentityInterlock || task.waitingForParallelTransferSlot || task.waitingForExclusiveTransfer)
+                            ? StatusTextForTask(task, TaskStatusKind::Waiting, GetTickCount64())
+                            : std::wstring{},
+                        {},
+                        _smallFormat.get(),
+                        width);
         std::wstring progress;
         std::wstring percent;
         if (presentation.showWorkFacts && ! TaskUsesSkippedCountingWorkSummary(task))
@@ -9578,6 +9596,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 }
                 if (information.concurrency.rate)
                     h += FactPairHeight(information.concurrency) + DipsToPixels(6.0f, _dpi);
+                if (information.waitingReason.rate)
+                    h += FactPairHeight(information.waitingReason) + DipsToPixels(4.0f, _dpi);
             }
             // Decision content changes immediately (metadata/inspection outcomes).
             // Snap its measured height too; interpolating a shorter previous card
@@ -11440,6 +11460,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     primaryProgressTop = textY + DipsToPixels(6.0f, _dpi);
                     textY += compactProgressPresentation.showTransferProgress ? DipsToPixels(26.0f, _dpi) : DipsToPixels(8.0f, _dpi);
                 }
+                if (! task.conflict.active && information.waitingReason.rate)
+                {
+                    const auto bounds = D2D1::RectF(textX, textY, contentRight, textY + FactPairHeight(information.waitingReason));
+                    DrawFactPair(information.waitingReason, bounds, task.taskId, L"WaitingReason", {});
+                    textY = bounds.bottom + DipsToPixels(4.0f, _dpi);
+                }
                 // A decision replaces ordinary transfer details. Keeping both here
                 // exposes stale paths and a moving mini-progress above the conflict.
                 if (! task.conflict.active)
@@ -12144,9 +12170,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             // transfer controls and no action whose required facts are incomplete.
                         }
                         // During copy/move discovery-ahead, keep the transfer controls available before bytes start moving.
-                        else if (task.discoveryAheadActive)
+                        else if (task.discoveryAheadActive && progressPresentation.showWorkFacts)
                         {
-                            const bool showStartNow     = ! task.started && ! task.overlapQueued && (task.waitingForOthers || task.waitingInQueue);
+                            const bool showStartNow     = ! task.started && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
+                                                          ! task.waitingForParallelTransferSlot && ! task.waitingForExclusiveTransfer &&
+                                                          (task.waitingForOthers || task.waitingInQueue);
                             const std::wstring skipText = LoadStringResource(nullptr, IDS_FILEOPS_BTN_SKIP);
                             if (showStartNow && showCopyMoveControls && ! speedLimitText.empty())
                             {
@@ -12330,7 +12358,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             // (which applies once it starts) are the only meaningful controls,
                             // plus Start now when the task is explicitly waiting behind others.
                             const bool showPause    = task.started;
-                            const bool showStartNow = ! task.started && ! task.overlapQueued && (task.waitingForOthers || task.waitingInQueue);
+                            const bool showStartNow = ! task.started && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
+                                                      ! task.waitingForParallelTransferSlot && ! task.waitingForExclusiveTransfer &&
+                                                      (task.waitingForOthers || task.waitingInQueue);
                             const float actionCount = (showPause ? 1.0f : 0.0f) + (showStartNow ? 1.0f : 0.0f) + 2.0f;
                             const float available   = std::max(0.0f, rowW - btnGapX * std::max(0.0f, actionCount - 1.0f));
                             const float minEach     = DipsToPixels(68.0f, _dpi);
@@ -12410,7 +12440,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         else
                         {
                             const bool showPause    = task.started;
-                            const bool showStartNow = ! task.started && ! task.overlapQueued && (task.waitingForOthers || task.waitingInQueue);
+                            const bool showStartNow = ! task.started && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
+                                                      ! task.waitingForParallelTransferSlot && ! task.waitingForExclusiveTransfer &&
+                                                      (task.waitingForOthers || task.waitingInQueue);
                             if (showPause)
                             {
                                 const float pauseW  = std::max(0.0f, (rowW - btnGapX) * 0.5f);
@@ -15281,6 +15313,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     }
     result.hostedAccessibilityNotificationCount = _hostedAccessibilityNotificationCount;
     result.hostedNativeTabCount                 = _debugNativeTabCount;
+    result.hostedModifierState                  = _controlsHost.DebugGetModifierState();
     result.failureSurfaceTabCount               = _debugFailureSurfaceTabCount;
     result.failureSurfaceReentrantEntryCount    = _debugFailureSurfaceReentrantEntryCount;
     result.hostedFocusChangeCount               = _debugFocusChangeCount;
@@ -17215,6 +17248,14 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
     using FileOperationsPopupInternal::RateHistory;
     using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
     using Status   = Snapshot::StatusKind;
+    Snapshot reserved{};
+    reserved.operation      = FILESYSTEM_DELETE;
+    reserved.lifecyclePhase = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::PreparingExecution);
+    if (! TaskShowsPreparingStatus(reserved) || ResolveTaskStatusKind(reserved) != Status::Preparing)
+        return false;
+    reserved.conflict.active = true;
+    if (! TaskShowsPreparingStatus(reserved) || ResolveTaskStatusKind(reserved) != Status::Conflict)
+        return false;
     Snapshot task{};
     task.started            = true;
     task.operationStartTick = 1u;

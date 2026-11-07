@@ -978,6 +978,30 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept = 0;
 };
 
+// Optional task-owned transfer budget. The returned COM object owns one permit;
+// releasing it ends the reservation. The operation control and cookie are
+// borrowed only for the synchronous acquisition call.
+interface __declspec(uuid("46c979d7-fd7f-4ad9-9d08-4c5949e9e3be")) __declspec(novtable) IFileSystemTaskTransferBudget : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE CreateParticipant(uint32_t maxConcurrentFiles, IFileSystemTaskTransferBudget** participant) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE NarrowParticipantLimit(uint32_t maxConcurrentFiles) noexcept                                         = 0;
+    virtual HRESULT STDMETHODCALLTYPE AcquireFile(IFileSystemOperationControl * control, void* cookie, IUnknown** permit) noexcept         = 0;
+    virtual HRESULT STDMETHODCALLTYPE AcquireOpaque(IFileSystemOperationControl * control, void* cookie, IUnknown** permit) noexcept       = 0;
+};
+
+// A provider implements this only when all file work from the call is covered
+// by the supplied task budget and all workers have joined before returning.
+interface __declspec(uuid("b75aa65c-ef8e-49fd-85ba-676053b418cc")) __declspec(novtable) IFileSystemCooperativeCopy : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE CopyItemWithTaskBudget(const wchar_t* sourcePath,
+                                                             const wchar_t* destinationPath,
+                                                             FileSystemFlags flags,
+                                                             const FileSystemOptions* options,
+                                                             IFileSystemCallback* callback,
+                                                             void* cookie,
+                                                             IFileSystemTaskTransferBudget* budget) noexcept = 0;
+};
+
 // Optional cancellation/progress contract for potentially expensive directory enumeration.
 // The callback is per-call and synchronous: implementations MUST NOT retain it or invoke it
 // after ReadDirectoryInfoCancellable returns. A failed progress callback or TRUE cancellation
@@ -1349,6 +1373,15 @@ interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(
         FileSystemFlags flags, const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept                         = 0;
     virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept = 0;
+};
+
+// Optional bounded transfer of a directory metadata witness to an already-held
+// strict delete authority. Success retires the witness's kernel pin while its
+// immutable identity snapshot remains readable; active metadata readers return
+// ERROR_BUSY and no handoff takes place. This never grants mutation authority.
+interface __declspec(uuid("81cd70fe-c664-430e-8b87-dde9a2cb26b5")) __declspec(novtable) IFileSystemBoundObjectPinHandoff : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE TakeDirectoryReadPinFrom(IFileSystemBoundObject * witness) noexcept = 0;
 };
 
 // Optional exact-object content proof. The provider must read the already-bound object/revision;

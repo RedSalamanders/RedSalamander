@@ -1,0 +1,397 @@
+{
+  "schema": "red-salamander.curated-case-results.v1",
+  "runs": [
+    {
+      "label": "identity",
+      "run_id": "20261102T005558Z-101068-9ff7441195a942a8802b9cbaf1ed1a5d",
+      "case_filter": "FileOps_IdentityInterlockWaiting",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 2219,
+          "reason": ""
+        },
+        {
+          "name": "FileOps_IdentityInterlockWaiting",
+          "status": "passed",
+          "duration_ms": 18875,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 94,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "a85f4e0a28de19e79c05afa59417c8fc95002d2cd4f73b27f7a52f832bb1a5f0",
+      "raw_wrapper_sha256": "0cac0e158de7138453dc754c9e2459945629ccea2803a73aff70932c18f56968",
+      "raw_trace_sha256": "6dc3bd88ad6ff972495b5ff746e77c3a1c193bbd9ca4e1d3632f1da05eeea6c5"
+    },
+    {
+      "label": "consent-failed",
+      "run_id": "20261102T005748Z-2136-bb21a18fa56d4f99bfbfa6c0748e266a",
+      "case_filter": "Phase10_DeferredConsentAndRecycleEscalation",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1219,
+          "reason": ""
+        },
+        {
+          "name": "Phase10_DeferredConsentAndRecycleEscalation",
+          "status": "failed",
+          "duration_ms": 4203,
+          "reason": "Deferred-consent risk matrix did not publish its prompt: risk=0."
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 31,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "c63f202da9a3246a1fab9e8ee41e945ab983c00ca26ff34c899c7a886d41eee3",
+      "raw_wrapper_sha256": "3075e8defef094748f49f621d154d822d358404d6d5d6d1760b3b5d606c0325b",
+      "raw_trace_sha256": "18723b8c173a20f005b3e5e8c35a1b7a41999ee58a4b319158d3658dccf9c40c"
+    },
+    {
+      "label": "mtp-failed",
+      "run_id": "20261102T005955Z-81244-36b0cfa1653a48ff8bd89dc45b0cc642",
+      "case_filter": "FileOps_CrossProviderMtpNewFile",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1234,
+          "reason": ""
+        },
+        {
+          "name": "FileOps_CrossProviderMtpNewFile",
+          "status": "failed",
+          "duration_ms": 203,
+          "reason": "A new file copied to an MTP device did not publish through the device writer, or left a temporary object; see trace."
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 32,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "092d2b9aa03e784900f2df330f889d97c63500dc9fa06b20b79a3fde7c77e076",
+      "raw_wrapper_sha256": "c99b8b716184a9739977d42d87269fb615d8156207fecdb40b38c13ea030099e",
+      "raw_trace_sha256": "1fcfc14df23eef7ddca347bf2c72b173f061b2945d1d04fc3f3ddf7754852911"
+    },
+    {
+      "label": "saturation",
+      "run_id": "20261102T010139Z-102132-500d5657b70846299da9f3c46ae3962a",
+      "case_filter": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1703,
+          "reason": ""
+        },
+        {
+          "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+          "status": "passed",
+          "duration_ms": 12328,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 125,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "cdcdd41faa1dfa2a8dd682ef709204a6f219d1af06f479d82e10139fd8dba022",
+      "raw_wrapper_sha256": "bfbf835c1bd72e9d22760d5316ac9c799d11dba5651357d7bf50c6b21cad427d",
+      "raw_trace_sha256": "67244449e9f0f0a527a8957fb627b656c0612d0cc10690ca24a0f3808e5482e1"
+    },
+    {
+      "label": "folders",
+      "run_id": "20261102T010313Z-99440-87e117f8945e462b8b56397b8cf6f395",
+      "case_filter": "DiscoveryScope_MultipleFoldersLiveProgress",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1281,
+          "reason": ""
+        },
+        {
+          "name": "DiscoveryScope_MultipleFoldersLiveProgress",
+          "status": "passed",
+          "duration_ms": 9937,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 47,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "f0bc65ab3e7c4e8624040f4493b50db04c0ea84507e505e3f485d938ffe7fd8a",
+      "raw_wrapper_sha256": "f5cac93bc4a74fda4fed7399d990e3ab5d96a6a9cfc0626d7ea8a149ba26a51c",
+      "raw_trace_sha256": "87284f31ef1aa9394090c43315e22fcde579c9574e7ef605043a9f27c241e67d"
+    },
+    {
+      "label": "skip",
+      "run_id": "20261102T010447Z-42880-92a8989e59cf43dbb07d961850902844",
+      "case_filter": "Phase5_DiscoverySkipContinues",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1625,
+          "reason": ""
+        },
+        {
+          "name": "Phase5_DiscoverySkipContinues",
+          "status": "passed",
+          "duration_ms": 750,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 422,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "6d4a2765a9ad7b8a6240a0b411631e287d57e6be7a0ef583d68de9a3b74fa0d4",
+      "raw_wrapper_sha256": "755bb1c5b80b3bac75a3d30f71d3a98b633054d1898bc01f8c91c36b3adedece",
+      "raw_trace_sha256": "db0da8c1a5d495054de0f1ac6b93fdb3c7bdfe59a86ccdd7ff3d316716dbd796"
+    },
+    {
+      "label": "queue-failed",
+      "run_id": "20261102T010646Z-62452-e5f0af13f5884391b765208bafb2462a",
+      "case_filter": "Phase5_SwitchWaitToParallelResume",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 1,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1781,
+          "reason": ""
+        },
+        {
+          "name": "Phase5_SwitchParallelToWaitDuringDiscovery",
+          "status": "failed",
+          "duration_ms": 60062,
+          "reason": "Parallel-to-Queue transfer witness timed out at step 1 (gate timed out=false)."
+        },
+        {
+          "name": "Phase5_SwitchWaitToParallelResume",
+          "status": "skipped",
+          "duration_ms": 0,
+          "reason": "not reached (aborted due to failure)"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 469,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "6ce01a87d5c76b6b45bd8f8a2e82b0fce898bae3832ae20940d9788f9dcc778b",
+      "raw_wrapper_sha256": "1afe3358e337faf8f2e75c68bcd3db31ff929445102bc9c169ee81676f5f532b",
+      "raw_trace_sha256": "17e6f0c790ace07435425ea8dd662d2cf15190252419a3ae0a86b695b1028eab"
+    },
+    {
+      "label": "phase7-perf",
+      "run_id": "20261102T062511Z-81992-2a431cf1df644cb6bbe3f4050dc0062e",
+      "case_filter": "Phase7_CopyMoveConcurrency16Perf",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1265,
+          "reason": ""
+        },
+        {
+          "name": "Phase7_CopyMoveConcurrency16Perf",
+          "status": "passed",
+          "duration_ms": 438,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 187,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "61f677e025f1299a1c429d40882dfe62035a1244e0ac1e39a8c1dae99cdfb897",
+      "raw_wrapper_sha256": "1bb23eaa3e1dc7eb15a698bc452e4c8c0ab380ffada1836678fa1e613c3382bb",
+      "raw_trace_sha256": "7c1bb37791e24e9611870be1031f5a2eb2287fd579b729c94cc01395762364e9"
+    },
+    {
+      "label": "phase7-auto",
+      "run_id": "20261102T062612Z-75560-c98e6d6e0563402a889169682437b4ff",
+      "case_filter": "Phase7_AutoConcurrencyHints",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1234,
+          "reason": ""
+        },
+        {
+          "name": "Phase7_AutoConcurrencyHints",
+          "status": "passed",
+          "duration_ms": 891,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 141,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "15b8e415ca1e460b50be4431f75b90177009d35fbe2e42aecf0805dd4f5bfbc3",
+      "raw_wrapper_sha256": "10dafed2967f8926748370c54938bb1490e9d86671a45529dcd04e21c94e837d",
+      "raw_trace_sha256": "51bb9a61aa6a8fd6b70cf0af160b779848f0718500066f1309d4f311bc9fe72e"
+    },
+    {
+      "label": "phase9",
+      "run_id": "20261102T062714Z-97472-20eab76819e649cfa0b9f3e991f1896f",
+      "case_filter": "Phase9_ConflictPrompt_ApplyToAllUiCache",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1281,
+          "reason": ""
+        },
+        {
+          "name": "Phase9_ConflictPrompt_ApplyToAllUiCache",
+          "status": "passed",
+          "duration_ms": 453,
+          "reason": ""
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 94,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "3f9d1eba50eee8a5d3daec0009d653fa82dc3a97d79a17f8229a27fbe2555d6b",
+      "raw_wrapper_sha256": "fc31e5d485ae88461b8230cb9aa08f6e2cfda5460bf0674e91ceb2382085a072",
+      "raw_trace_sha256": "7dff98a05e594d62681cf83840c74a4d916d93fbca5f8d7b0a8b12719ef3c4ba"
+    },
+    {
+      "label": "phase11-failed",
+      "run_id": "20261102T062831Z-35380-c87a48cce66b4f1ab5646595a8e60545",
+      "case_filter": "Phase11_ConnectionOverride",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 2,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1344,
+          "reason": ""
+        },
+        {
+          "name": "Phase11_ConnectionOverridePrecedence",
+          "status": "failed",
+          "duration_ms": 765,
+          "reason": "@conn precedence candidate completed before popup diagnostics could be observed."
+        },
+        {
+          "name": "Phase11_ConnectionOverrideGlobalGate",
+          "status": "skipped",
+          "duration_ms": 0,
+          "reason": "not reached (aborted due to failure)"
+        },
+        {
+          "name": "Phase11_ConnectionOverrideClamp",
+          "status": "skipped",
+          "duration_ms": 0,
+          "reason": "not reached (aborted due to failure)"
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 63,
+          "reason": ""
+        }
+      ],
+      "raw_results_sha256": "ebab733db98d25d0b9d6c52868add517f0a337c10e9c689e8c52c90482e60f70",
+      "raw_wrapper_sha256": "4c62ed1f3e5066e6fc269713cfd5c212f3cd2905e3445b1731bd33b3c33312b5",
+      "raw_trace_sha256": "0a7c57c4b5a69f792a7fedff9988e753eb9460cb666c0ac4eb22b35e46c5abe5"
+    }
+  ]
+}

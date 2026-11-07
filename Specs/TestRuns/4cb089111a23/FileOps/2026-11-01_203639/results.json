@@ -1,0 +1,80 @@
+{
+  "schema": "red-salamander.curated-fileops-result.v1",
+  "sourceRunId": "20261101T203639Z-23512-d2a5d72faf0949a6a2d3a194de4330b0",
+  "run_started_utc": "2026-11-01T20:37:11.276Z",
+  "suite": "FileOperations",
+  "duration_ms": 31750,
+  "passed": 11,
+  "failed": 0,
+  "skipped": 0,
+  "failureMessage": null,
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1203,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+      "status": "passed",
+      "duration_ms": 1109,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_DontStartCancelsBeforeMutation",
+      "status": "passed",
+      "duration_ms": 1079,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_ReadReadDoesNotWarn",
+      "status": "passed",
+      "duration_ms": 171,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_SameDestinationWarns",
+      "status": "passed",
+      "duration_ms": 250,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_RunConcurrentSameDestinationStaysSafe",
+      "status": "passed",
+      "duration_ms": 25344,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_LiveOutputGuardChoices",
+      "status": "passed",
+      "duration_ms": 1500,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_DisjointWritesDoNotWarn",
+      "status": "passed",
+      "duration_ms": 125,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_RenamePublishKeepsIndexPrecise",
+      "status": "passed",
+      "duration_ms": 188,
+      "repeat_index": 1
+    },
+    {
+      "name": "R4A02_LatePublisherStillWarns",
+      "status": "passed",
+      "duration_ms": 453,
+      "repeat_index": 1
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 328,
+      "repeat_index": 1
+    }
+  ],
+  "timeout_scale": 1.0
+}

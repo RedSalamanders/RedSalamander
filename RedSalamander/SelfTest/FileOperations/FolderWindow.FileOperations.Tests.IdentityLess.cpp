@@ -2093,15 +2093,24 @@ struct QueuedByNameDelete final
     const std::filesystem::path root = state.tempRoot / L"identity-less-changed-entry";
     if (! RecreateEmptyDirectory(root))
         return reject(L"case root unavailable");
-    const auto removeRoot                = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    bool keepAclEvidence                 = false;
+    const auto removeRoot                = wil::scope_exit([&]() noexcept
+    {
+        if (keepAclEvidence)
+            state.retainTempRootOnFailure = true;
+        else
+            static_cast<void>(SelfTest::RemoveAll(root));
+    });
     const std::filesystem::path location = uncStatus == LoopbackShareStatus::Reachable ? LoopbackShareAlias(root) : root;
     IdentityLessCaseScope scope(state, operations);
     if (! IdentityLessCaseScope::MakeIdentityLess(location))
         return reject(L"the identity-less injection could not be configured");
 
-    for (const bool missing : {false, true})
+    for (const unsigned int variantIndex : {0u, 1u, 2u})
     {
-        const std::wstring_view variant  = missing ? L"missing" : L"changed";
+        const bool missing               = variantIndex == 1u;
+        const bool readonlyChange        = variantIndex == 2u;
+        const std::wstring_view variant  = missing ? L"missing" : readonlyChange ? L"readonly-changed" : L"changed";
         const std::filesystem::path tree = root / variant;
         const std::filesystem::path file = tree / L"Sub" / L"b.bin";
         if (! RecreateEmptyDirectory(tree / L"Sub") || ! WriteFilledTestFile(file, 2048u, 0xA1u) || ! ArmIdentityLessByNamePause(location / variant))
@@ -2116,7 +2125,14 @@ struct QueuedByNameDelete final
         bool changed      = false;
         std::error_code ec;
         if (paused)
-            changed = missing ? std::filesystem::remove(file, ec) : WriteFilledTestFile(file, 999u, 0xA2u);
+            changed = missing          ? std::filesystem::remove(file, ec)
+                      : readonlyChange ? SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_READONLY) != FALSE
+                                       : WriteFilledTestFile(file, 999u, 0xA2u);
+        const auto restoreReadonly = wil::scope_exit([&]() noexcept
+        {
+            if (readonlyChange && std::filesystem::exists(file, ec))
+                static_cast<void>(SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_NORMAL));
+        });
         static_cast<void>(SetEnvironmentVariableW(kIdentityLessByNamePauseReleaseEnv.data(), L"1"));
         if (! paused || ! changed)
             return reject(std::format(L"{}: the delete never paused before its deletions, or the entry could not be changed (paused={})", variant, paused));
@@ -2124,7 +2140,8 @@ struct QueuedByNameDelete final
         const auto receipt                 = TakeFileOpsItemReceiptForSelfTest(deletion.value(), 0u);
         const size_t refusals              = CountLiveIdentityLessDiagnostics(
             operations, deletion.value(), L"delete.permanent.byName", HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), L"nothing was deleted");
-        const bool kept             = std::filesystem::is_directory(tree / L"Sub") && (missing ? ! std::filesystem::exists(file) : FileSizeEquals(file, 999u));
+        const bool kept =
+            std::filesystem::is_directory(tree / L"Sub") && (missing ? ! std::filesystem::exists(file) : FileSizeEquals(file, readonlyChange ? 2048u : 999u));
         const std::wstring observed = std::format(L"{}: deleteHr=0x{:08X} refusals={} kept={} receipt=[{}]",
                                                   variant,
                                                   deleteEnd != nullptr ? static_cast<unsigned long>(deleteEnd->hr) : 0ul,
@@ -2135,7 +2152,323 @@ struct QueuedByNameDelete final
         if (deleteEnd == nullptr || SUCCEEDED(deleteEnd->hr) || refusals == 0u || ! kept || ! IsKeptReceipt(receipt))
             return reject(std::format(L"a listed entry that changed after the listing did not stop the delete with nothing deleted: {}", observed));
     }
-    Debug::Perf::Emit(L"FileOps.SelfTest.PinnedTreeChangedEntry", L"changed;missing", 0u, 2u, 0u, S_OK);
+
+    // The listed child's exact DELETE handle needs WRITE_ATTRIBUTES only for a
+    // readonly clear/rollback. Restore the original DACL on any surviving object
+    // after the worker is quiet, verifying the same file identity first.
+    for (const bool readonly : {false, true})
+    {
+        const std::filesystem::path tree = root / (readonly ? L"acl-readonly" : L"acl-plain");
+        const std::filesystem::path file = tree / L"child.bin";
+        if (! RecreateEmptyDirectory(tree) || ! WriteFilledTestFile(file, 512u, 0xB1u) ||
+            (readonly && ! SetFileAttributesW(file.c_str(), FILE_ATTRIBUTE_READONLY)))
+            return reject(L"ACL fixture could not be seeded");
+
+        wil::unique_handle authority(CreateFileW(file.c_str(),
+                                                 READ_CONTROL | WRITE_DAC | FILE_READ_ATTRIBUTES,
+                                                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                 nullptr,
+                                                 OPEN_EXISTING,
+                                                 FILE_FLAG_OPEN_REPARSE_POINT,
+                                                 nullptr));
+        BY_HANDLE_FILE_INFORMATION originalFacts{};
+        PSECURITY_DESCRIPTOR rawDescriptor       = nullptr;
+        PACL originalDacl                        = nullptr;
+        constexpr SECURITY_INFORMATION readParts = OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+        if (! authority || ! GetFileInformationByHandle(authority.get(), &originalFacts) ||
+            (originalFacts.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u ||
+            (originalFacts.nFileIndexHigh == 0u && originalFacts.nFileIndexLow == 0u) ||
+            GetSecurityInfo(authority.get(), SE_FILE_OBJECT, readParts, nullptr, nullptr, &originalDacl, nullptr, &rawDescriptor) != ERROR_SUCCESS)
+            return reject(L"ACL fixture identity or original DACL unavailable");
+        wil::unique_hlocal_ptr<void> originalSecurity(rawDescriptor);
+        SECURITY_DESCRIPTOR_CONTROL originalControl{};
+        DWORD revision = 0u;
+        if (! originalSecurity || ! originalDacl || ! IsValidAcl(originalDacl) || ! IsValidSecurityDescriptor(originalSecurity.get()) ||
+            ! GetSecurityDescriptorControl(originalSecurity.get(), &originalControl, &revision))
+            return reject(L"ACL fixture original DACL is invalid");
+        // Private recovery evidence is beside, never inside, the selected
+        // tree; each snapshot is exclusive, flushed and verified before mutation.
+        // HandleIo supplies the shared byte transfer; this local fixture owns
+        // exclusive creation, durable flush and exact private-evidence readback.
+        const auto backupRecord = [&](const std::filesystem::path& path, const void* bytes, size_t length) noexcept -> bool
+        {
+            wil::unique_hfile output(
+                CreateFileW(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, nullptr));
+            if (! output || FAILED(Common::HandleIo::WriteAll(output.get(), bytes, length)) || FlushFileBuffers(output.get()) == FALSE)
+                return false;
+            output.reset();
+            wil::unique_hfile input(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            LARGE_INTEGER actualSize{};
+            std::vector<std::byte> readback(length);
+            return input && GetFileSizeEx(input.get(), &actualSize) != FALSE && actualSize.QuadPart >= 0 &&
+                   static_cast<uint64_t>(actualSize.QuadPart) == length && SUCCEEDED(Common::HandleIo::ReadExact(input.get(), readback)) &&
+                   (length == 0u || std::memcmp(readback.data(), bytes, length) == 0);
+        };
+        bool aclVariantSucceeded         = false;
+        const auto retainBackupOnFailure = wil::scope_exit([&]() noexcept
+        {
+            if (! aclVariantSucceeded)
+            {
+                keepAclEvidence               = true;
+                state.retainTempRootOnFailure = true;
+            }
+        });
+        const auto backupSnapshot        = [&](std::wstring_view stage) noexcept -> bool
+        {
+            const DWORD descriptorSize = GetSecurityDescriptorLength(originalSecurity.get());
+            if ((originalControl & SE_SELF_RELATIVE) == 0u || descriptorSize == 0u)
+                return false;
+            std::vector<std::byte> descriptorDigest;
+            std::vector<std::byte> daclDigest;
+            const auto descriptorBytes = std::span<const std::byte>(static_cast<const std::byte*>(originalSecurity.get()), descriptorSize);
+            const auto daclBytes       = std::span<const std::byte>(reinterpret_cast<const std::byte*>(originalDacl), originalDacl->AclSize);
+            if (! Common::Crypto::ComputeContentDigest(Common::Crypto::ContentDigestAlgorithm::Sha256, descriptorBytes, descriptorDigest) ||
+                ! Common::Crypto::ComputeContentDigest(Common::Crypto::ContentDigestAlgorithm::Sha256, daclBytes, daclDigest))
+                return false;
+            const std::string manifest = std::format("schema=1\ncontrol={}\nrevision={}\ndescriptor_bytes={}\ndacl_bytes={}\n"
+                                                     "descriptor_sha256={}\ndacl_sha256={}\n",
+                                                     originalControl,
+                                                     revision,
+                                                     descriptorSize,
+                                                     originalDacl->AclSize,
+                                                     Common::Crypto::EncodeHexDigest(descriptorDigest),
+                                                     Common::Crypto::EncodeHexDigest(daclDigest));
+            const std::wstring prefix  = std::format(L"acl-{}-{}", readonly ? L"readonly" : L"plain", stage);
+            return backupRecord(root / (prefix + L".sd"), descriptorBytes.data(), descriptorBytes.size()) &&
+                   backupRecord(root / (prefix + L".txt"), manifest.data(), manifest.size());
+        };
+        if (! backupSnapshot(L"raw-creation"))
+            return reject(L"ACL fixture could not durably save its raw creation descriptor");
+        const auto* rawDaclStart = reinterpret_cast<const std::byte*>(originalDacl);
+        const std::vector<std::byte> rawDaclBytes(rawDaclStart, rawDaclStart + originalDacl->AclSize);
+        AppendLog(std::format(L"Pinned tree ACL raw-creation saved: control={} daclBytes={} readonly={}.", originalControl, rawDaclBytes.size(), readonly));
+
+        // This is initialization of a newly created test object, not restoration
+        // of a caller's ACL: retain its ACEs and protection, then snapshot the
+        // filesystem's resulting inheritance model as the fault-cycle baseline.
+        const SECURITY_INFORMATION initializeParts =
+            DACL_SECURITY_INFORMATION |
+            ((originalControl & SE_DACL_PROTECTED) != 0u ? PROTECTED_DACL_SECURITY_INFORMATION : UNPROTECTED_DACL_SECURITY_INFORMATION);
+        const DWORD initializeError = SetSecurityInfo(authority.get(), SE_FILE_OBJECT, initializeParts, nullptr, nullptr, originalDacl, nullptr);
+        if (initializeError != ERROR_SUCCESS)
+        {
+            AppendLog(std::format(L"Pinned tree ACL seed initialization failed (error={}).", initializeError));
+            return reject(L"ACL fixture seed initialization failed");
+        }
+        originalSecurity.reset();
+        rawDescriptor         = nullptr;
+        originalDacl          = nullptr;
+        const DWORD seedQuery = GetSecurityInfo(authority.get(), SE_FILE_OBJECT, readParts, nullptr, nullptr, &originalDacl, nullptr, &rawDescriptor);
+        originalSecurity.reset(rawDescriptor);
+        if (seedQuery != ERROR_SUCCESS || ! originalSecurity || ! originalDacl || ! IsValidAcl(originalDacl) ||
+            ! IsValidSecurityDescriptor(originalSecurity.get()) || ! GetSecurityDescriptorControl(originalSecurity.get(), &originalControl, &revision) ||
+            ! backupSnapshot(L"seeded-baseline"))
+            return reject(L"ACL fixture seeded baseline unavailable or not durably saved");
+        if (originalDacl->AclSize != rawDaclBytes.size() || std::memcmp(originalDacl, rawDaclBytes.data(), rawDaclBytes.size()) != 0)
+            return reject(L"ACL fixture seed changed the raw creation DACL bytes");
+        AppendLog(std::format(L"Pinned tree ACL seeded-baseline saved: control={} daclBytes={} rawDaclMatches=true readonly={}.",
+                              originalControl,
+                              originalDacl->AclSize,
+                              readonly));
+        {
+            wil::unique_handle deleteRead(CreateFileW(file.c_str(),
+                                                      DELETE | FILE_READ_ATTRIBUTES,
+                                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                      nullptr,
+                                                      OPEN_EXISTING,
+                                                      FILE_FLAG_OPEN_REPARSE_POINT,
+                                                      nullptr));
+            wil::unique_handle attributeWrite(CreateFileW(file.c_str(),
+                                                          FILE_WRITE_ATTRIBUTES,
+                                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                          nullptr,
+                                                          OPEN_EXISTING,
+                                                          FILE_FLAG_OPEN_REPARSE_POINT,
+                                                          nullptr));
+            if (! deleteRead || ! attributeWrite)
+                return reject(L"ACL fixture seeded baseline did not grant the intended delete/read and attribute-write access");
+        }
+        AppendLog(std::format(L"Pinned tree ACL pre-denial snapshot: descriptorBytes={} daclBytes={} readonly={}.",
+                              GetSecurityDescriptorLength(originalSecurity.get()),
+                              originalDacl->AclSize,
+                              readonly));
+        const SECURITY_INFORMATION restoreParts =
+            DACL_SECURITY_INFORMATION |
+            ((originalControl & SE_DACL_PROTECTED) != 0u ? PROTECTED_DACL_SECURITY_INFORMATION : UNPROTECTED_DACL_SECURITY_INFORMATION);
+        std::array<std::byte, SECURITY_MAX_SID_SIZE> sidBuffer{};
+        DWORD sidBytes = static_cast<DWORD>(sidBuffer.size());
+        if (! CreateWellKnownSid(WinWorldSid, nullptr, sidBuffer.data(), &sidBytes))
+            return reject(L"ACL fixture SID unavailable");
+        EXPLICIT_ACCESSW denial{};
+        denial.grfAccessPermissions = FILE_WRITE_ATTRIBUTES;
+        denial.grfAccessMode        = DENY_ACCESS;
+        denial.grfInheritance       = NO_INHERITANCE;
+        denial.Trustee.TrusteeForm  = TRUSTEE_IS_SID;
+        denial.Trustee.TrusteeType  = TRUSTEE_IS_WELL_KNOWN_GROUP;
+        denial.Trustee.ptstrName    = reinterpret_cast<wchar_t*>(sidBuffer.data());
+        PACL deniedRaw              = nullptr;
+        const DWORD mergeError      = SetEntriesInAclW(1u, &denial, originalDacl, &deniedRaw);
+        wil::unique_hlocal_ptr<ACL> deniedDacl(deniedRaw);
+        if (mergeError != ERROR_SUCCESS || ! deniedDacl)
+            return reject(L"ACL fixture could not deny attribute writes");
+        const DWORD denyError = SetSecurityInfo(authority.get(), SE_FILE_OBJECT, restoreParts, nullptr, nullptr, deniedDacl.get(), nullptr);
+        if (denyError != ERROR_SUCCESS)
+        {
+            AppendLog(std::format(L"Pinned tree ACL denial failed; original backup retained (error={}).", denyError));
+            return reject(L"ACL fixture could not deny attribute writes");
+        }
+        authority.reset(); // Do not keep a delete-pending child alive during the walk.
+
+        bool securityChanged  = true;
+        const auto restoreAcl = [&]() noexcept -> bool
+        {
+            if (! securityChanged)
+                return true;
+            std::error_code existenceError;
+            const bool exists = std::filesystem::exists(file, existenceError);
+            if (existenceError)
+            {
+                AppendLog(std::format(L"Pinned tree ACL restore: existence query failed (error={}).", existenceError.value()));
+                return false;
+            }
+            if (! exists)
+            {
+                securityChanged = false; // The selected object was deleted, not replaced.
+                return true;
+            }
+            wil::unique_handle current(CreateFileW(file.c_str(),
+                                                   READ_CONTROL | WRITE_DAC | FILE_READ_ATTRIBUTES,
+                                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                   nullptr,
+                                                   OPEN_EXISTING,
+                                                   FILE_FLAG_OPEN_REPARSE_POINT,
+                                                   nullptr));
+            if (! current)
+            {
+                const DWORD error = GetLastError();
+                AppendLog(std::format(L"Pinned tree ACL restore: open failed (error={}).", error));
+                return false;
+            }
+            BY_HANDLE_FILE_INFORMATION facts{};
+            if (! GetFileInformationByHandle(current.get(), &facts))
+            {
+                const DWORD error = GetLastError();
+                AppendLog(std::format(L"Pinned tree ACL restore: identity query failed (error={}).", error));
+                return false;
+            }
+            const bool reparse      = (facts.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u;
+            const bool sameIdentity = facts.dwVolumeSerialNumber == originalFacts.dwVolumeSerialNumber &&
+                                      facts.nFileIndexHigh == originalFacts.nFileIndexHigh && facts.nFileIndexLow == originalFacts.nFileIndexLow;
+            if (reparse || ! sameIdentity)
+            {
+                AppendLog(std::format(L"Pinned tree ACL restore: identity refused (reparse={} sameIdentity={}).", reparse, sameIdentity));
+                return false;
+            }
+            const DWORD setError = SetSecurityInfo(current.get(), SE_FILE_OBJECT, restoreParts, nullptr, nullptr, originalDacl, nullptr);
+            if (setError != ERROR_SUCCESS)
+            {
+                AppendLog(std::format(L"Pinned tree ACL restore: SetSecurityInfo failed (error={}).", setError));
+                return false;
+            }
+            PSECURITY_DESCRIPTOR restoredRaw = nullptr;
+            PACL restoredDacl                = nullptr;
+            const DWORD query = GetSecurityInfo(current.get(), SE_FILE_OBJECT, readParts, nullptr, nullptr, &restoredDacl, nullptr, &restoredRaw);
+            wil::unique_hlocal_ptr<void> restored(restoredRaw);
+            SECURITY_DESCRIPTOR_CONTROL restoredControl{};
+            DWORD restoredRevision             = 0u;
+            const bool controlRead             = query == ERROR_SUCCESS && restored && restoredDacl &&
+                                                 GetSecurityDescriptorControl(restored.get(), &restoredControl, &restoredRevision) != FALSE;
+            const bool controlMatches          = controlRead && restoredControl == originalControl;
+            const bool revisionMatches         = controlRead && restoredRevision == revision;
+            const bool sizeMatches             = controlRead && restoredDacl->AclSize == originalDacl->AclSize;
+            const bool bytesMatch              = sizeMatches && std::memcmp(restoredDacl, originalDacl, originalDacl->AclSize) == 0;
+            const DWORD originalDescriptorSize = GetSecurityDescriptorLength(originalSecurity.get());
+            const DWORD restoredDescriptorSize = controlRead && IsValidSecurityDescriptor(restored.get()) ? GetSecurityDescriptorLength(restored.get()) : 0u;
+            const bool descriptorSizeMatches   = restoredDescriptorSize == originalDescriptorSize && restoredDescriptorSize != 0u;
+            const bool descriptorBytesMatch    = descriptorSizeMatches && std::memcmp(restored.get(), originalSecurity.get(), originalDescriptorSize) == 0;
+            if (! controlRead || ! controlMatches || ! revisionMatches || ! sizeMatches || ! bytesMatch || ! descriptorSizeMatches || ! descriptorBytesMatch)
+            {
+                AppendLog(std::format(L"Pinned tree ACL restore: readback mismatch (query={} controlRead={} control={} revision={} size={} bytes={} "
+                                      L"descriptorSize={} descriptorBytes={} originalControl={} restoredControl={} originalSize={} restoredSize={}).",
+                                      query,
+                                      controlRead,
+                                      controlMatches,
+                                      revisionMatches,
+                                      sizeMatches,
+                                      bytesMatch,
+                                      descriptorSizeMatches,
+                                      descriptorBytesMatch,
+                                      originalControl,
+                                      restoredControl,
+                                      originalDacl->AclSize,
+                                      controlRead ? restoredDacl->AclSize : 0u));
+                return false;
+            }
+            securityChanged = false;
+            return true;
+        };
+        const auto restoreGuard = wil::scope_exit([&]() noexcept
+        {
+            if (! CancelOutstandingSelfTestOperations(operations))
+            {
+                keepAclEvidence               = true;
+                state.retainTempRootOnFailure = true;
+                AppendLog(L"Pinned tree ACL cleanup could not reach the worker quiet point; case retained.");
+                return;
+            }
+            if (! restoreAcl())
+            {
+                keepAclEvidence               = true;
+                state.retainTempRootOnFailure = true;
+                AppendLog(L"Pinned tree ACL cleanup failed to restore the original same-object DACL.");
+            }
+        });
+        {
+            wil::unique_handle deniedProbe(CreateFileW(file.c_str(),
+                                                       FILE_WRITE_ATTRIBUTES,
+                                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                       nullptr,
+                                                       OPEN_EXISTING,
+                                                       FILE_FLAG_OPEN_REPARSE_POINT,
+                                                       nullptr));
+            const DWORD deniedError = deniedProbe ? ERROR_SUCCESS : GetLastError();
+            if (deniedProbe || deniedError != ERROR_ACCESS_DENIED)
+            {
+                AppendLog(std::format(L"Pinned tree ACL denial probe unexpected (open={} error={}).", static_cast<bool>(deniedProbe), deniedError));
+                return reject(L"ACL fixture did not deny attribute-write access");
+            }
+        }
+        const auto deletion = scope.StartDelete({location / tree.filename()}, false);
+        if (! deletion.has_value())
+            return reject(L"ACL Delete was not admitted");
+        const auto card = scope.WaitForQuestion(deletion.value(), L"ACL Delete card");
+        if (! card.has_value() || ! IsByNameCard(card.value()) || ! scope.Answer(deletion.value(), card.value(), IdentityLessAction::PermanentDelete))
+            return reject(L"ACL Delete did not reach its by-name consent");
+        const CompletedTaskInfo* end = scope.CancelQuestionsUntilEnd(deletion.value(), L"ACL Delete completion");
+        if (end == nullptr)
+        {
+            keepAclEvidence = true;
+            return reject(L"ACL Delete did not reach its worker quiet point");
+        }
+        std::error_code existenceError;
+        const bool exists  = std::filesystem::exists(file, existenceError);
+        const auto receipt = TakeFileOpsItemReceiptForSelfTest(deletion.value(), 0u);
+        const size_t accessDenials =
+            readonly ? CountLiveIdentityLessDiagnostics(operations, deletion.value(), L"delete.permanent.byName", HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)) : 0u;
+        const bool expected = ! existenceError && end != nullptr &&
+                              (readonly ? FAILED(end->hr) && exists && IsKeptReceipt(receipt) && accessDenials != 0u : SUCCEEDED(end->hr) && ! exists);
+        if (! restoreAcl())
+            return reject(L"ACL fixture could not restore and verify its original same-object DACL");
+        if (! expected)
+            return reject(std::format(L"ACL Delete unexpected result: readonly={} completed={} hr=0x{:08X} exists={} accessDenials={}",
+                                      readonly,
+                                      end != nullptr,
+                                      end ? static_cast<unsigned long>(end->hr) : 0ul,
+                                      exists,
+                                      accessDenials));
+        aclVariantSucceeded = true;
+    }
+    Debug::Perf::Emit(L"FileOps.SelfTest.PinnedTreeChangedEntry", L"changed;missing;readonly-changed", 0u, 3u, 0u, S_OK);
     return true;
 }
 
@@ -2549,7 +2882,7 @@ struct QueuedByNameDelete final
 // and, where path.smb.primary is configured, on a per-run child of the registered share. The log and the perf record keep
 // the time from the start to the card (the pin listing) and from the answer to the end (the re-check listing,
 // the execution listing and the deletions); the case asserts only that the whole tree is deleted.
-[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecksImpl(SelfTestState& state) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
     {
@@ -2604,22 +2937,54 @@ struct QueuedByNameDelete final
         const auto cardMs            = std::chrono::duration_cast<std::chrono::milliseconds>(answered - started).count();
         const auto runMs             = std::chrono::duration_cast<std::chrono::milliseconds>(ended - answered).count();
         const bool deleted           = ! std::filesystem::exists(tree);
-        AppendLog(std::format(L"Pinned tree, scale ({}): entries={} card={} ms run={} ms hr=0x{:08X} deleted={}",
+        const HRESULT completionHr   = end != nullptr ? end->hr : E_PENDING;
+        const HRESULT scenarioHr =
+            end == nullptr ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : (end->hr == S_OK && deleted ? S_OK : (FAILED(end->hr) ? end->hr : E_FAIL));
+        AppendLog(std::format(L"Pinned tree, scale ({}): entries={} card={} ms run={} ms completionAvailable={} completionHr=0x{:08X} "
+                              L"scenarioHr=0x{:08X} deleted={}",
                               where,
                               kEntries,
                               cardMs,
                               runMs,
-                              end != nullptr ? static_cast<unsigned long>(end->hr) : 0ul,
+                              end != nullptr,
+                              static_cast<unsigned long>(completionHr),
+                              static_cast<unsigned long>(scenarioHr),
                               deleted));
-        Debug::Perf::Emit(L"FileOps.SelfTest.PinnedTreeScale",
-                          where,
-                          static_cast<uint64_t>(runMs) * 1000u,
-                          kEntries,
-                          static_cast<uint64_t>(cardMs),
-                          end != nullptr ? end->hr : E_FAIL);
+        if (end == nullptr)
+        {
+            // Owner-thread delivery and atomic task observations are independent witnesses,
+            // not a coherent snapshot. Never read the worker result before its release flag.
+            const auto* current = operations->FindTask(deletion.value());
+            const bool finished = current && current->_taskFinished.load(std::memory_order_acquire);
+            const bool active   = operations->DebugAreBothAdmissionsActiveForSelfTest(deletion.value(), deletion.value());
+            AppendLog(std::format(L"Pinned tree, scale WAIT FAILURE {} task={} taskPresent={} finished={} workerHr=0x{:08X} "
+                                  L"lifecycle={} started={} reserved={} entered={} waiting={} waitingOthers={} "
+                                  L"readinessComplete={} readinessHr=0x{:08X} activeAdmission={}",
+                                  where,
+                                  deletion.value(),
+                                  current != nullptr,
+                                  finished,
+                                  static_cast<unsigned long>(finished ? current->GetResult() : E_PENDING),
+                                  current ? static_cast<unsigned int>(current->GetLifecyclePhase()) : 0u,
+                                  current && current->HasStarted(),
+                                  current && current->HasReservedOperation(),
+                                  current && current->HasEnteredOperation(),
+                                  current && current->IsWaitingInQueue(),
+                                  current && current->IsWaitingForOthers(),
+                                  current && current->_selectedRootReadinessComplete.load(std::memory_order_acquire),
+                                  static_cast<unsigned long>(current ? current->_selectedRootReadinessStatus.load(std::memory_order_acquire) : E_PENDING),
+                                  active));
+        }
+        Debug::Perf::EmitDurationUs(
+            L"FileOps.SelfTest.PinnedTreeScale", where, static_cast<uint64_t>(runMs) * 1000u, kEntries, static_cast<uint64_t>(cardMs), scenarioHr);
         if (end == nullptr || end->hr != S_OK || ! deleted)
-            return reject(std::format(
-                L"{}: the tree was not deleted by name (hr=0x{:08X} deleted={})", where, end != nullptr ? static_cast<unsigned long>(end->hr) : 0ul, deleted));
+            return reject(std::format(L"{}: the tree was not deleted by name (completionAvailable={} completionHr=0x{:08X} "
+                                      L"scenarioHr=0x{:08X} deleted={})",
+                                      where,
+                                      end != nullptr,
+                                      static_cast<unsigned long>(completionHr),
+                                      static_cast<unsigned long>(scenarioHr),
+                                      deleted));
         return true;
     };
 
@@ -2656,6 +3021,132 @@ struct QueuedByNameDelete final
     if (! buildTree(child / L"tree"))
         return reject(std::format(L"NAS tree under '{}' unavailable", child.native()));
     return measure(L"nas", child / L"tree", child / L"tree");
+}
+
+// Own the live Local instance's temporary setting through the final worker quiet point, without
+// changing the user's persisted plugin configuration. Success includes a verified restoration.
+[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecks(SelfTestState& state) noexcept
+{
+    auto* operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    if (! operations || ! state.fsLocal || ! state.infoLocal || ! CancelOutstandingSelfTestOperations(operations))
+        return false;
+    // This local transaction is specific to the live selftest provider and its
+    // host settings mirror. The common setter owns mutation and dirty tracking.
+    std::function<bool(const std::function<bool()>&)> withTemporaryBudget;
+    withTemporaryBudget = [&](const std::function<bool()>& body) noexcept -> bool
+    {
+        std::string original;
+        if (! BackupPluginConfiguration(state.infoLocal.get(), original))
+            return false;
+        const auto originalRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (originalRoute.state != FileSystemRouteContract::QueryState::Available)
+            return false;
+        const uint32_t originalBudget = originalRoute.snapshot.deleteMaxConcurrency;
+        const bool originalDirty      = state.localConfigDirty;
+        const std::wstring pluginId(kPluginIdLocal);
+        const auto entry = g_settings.plugins.configurationByPluginId.find(pluginId);
+        std::optional<Common::Settings::JsonValue> originalHost;
+        if (entry != g_settings.plugins.configurationByPluginId.end())
+            originalHost = entry->second;
+        bool restored       = false;
+        bool canonicalReady = false;
+        std::string canonical;
+        const auto restore = [&]() noexcept
+        {
+            if (restored)
+                return true;
+            state.localConfigDirty = true;
+            if (! CancelOutstandingSelfTestOperations(operations))
+            {
+                AppendLog(L"Pinned tree, scale: Local configuration restoration failed to reach worker quiet.");
+                return false;
+            }
+            const bool set = SetPluginConfiguration(state.infoLocal.get(), canonicalReady ? canonical : original);
+            if (! set)
+            {
+                AppendLog(std::format(L"Pinned tree, scale: Local configuration restoration setter failed: canonicalReady={}.", canonicalReady));
+                return false;
+            }
+            std::string actual;
+            const auto route  = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+            const bool read   = BackupPluginConfiguration(state.infoLocal.get(), actual);
+            const bool same   = canonicalReady && read && actual == canonical;
+            const bool budget = route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.deleteMaxConcurrency == originalBudget;
+            if (! canonicalReady || ! same || ! budget)
+            {
+                AppendLog(std::format(L"Pinned tree, scale: Local restore verification failed: canonicalReady={} read={} same={} actualLength={} "
+                                      L"expectedLength={} budget={}",
+                                      canonicalReady,
+                                      read,
+                                      same,
+                                      actual.size(),
+                                      canonical.size(),
+                                      budget));
+                return false;
+            }
+            if (originalHost.has_value())
+                g_settings.plugins.configurationByPluginId[pluginId] = originalHost.value();
+            else
+                g_settings.plugins.configurationByPluginId.erase(pluginId);
+            state.localConfigDirty = originalDirty;
+            restored               = true;
+            return true;
+        };
+        const auto restoreOnExit = wil::scope_exit([&]() noexcept { static_cast<void>(restore()); });
+        // A fresh getter may return {}, whereas the setter adds canonical policy.
+        // Keep the guard active across this first mutation as well.
+        if (! SetPluginConfiguration(state.infoLocal.get(), original) || ! BackupPluginConfiguration(state.infoLocal.get(), canonical))
+            return false;
+        canonicalReady             = true;
+        const auto normalizedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (normalizedRoute.state != FileSystemRouteContract::QueryState::Available || normalizedRoute.snapshot.deleteMaxConcurrency != originalBudget)
+            return false;
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"))
+            return false;
+        const auto requestedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        AppendLog(std::format(L"Pinned tree, scale: Local Delete budget original={} requested=8 effective={}",
+                              originalBudget,
+                              requestedRoute.state == FileSystemRouteContract::QueryState::Available ? requestedRoute.snapshot.deleteMaxConcurrency : 0u));
+        if (requestedRoute.state != FileSystemRouteContract::QueryState::Available || requestedRoute.snapshot.deleteMaxConcurrency != 8u)
+            return false;
+        if (! body())
+            return false;
+        return restore();
+    };
+    // The outer transaction protects the caller while the inner transactions
+    // exercise both map lineages without requiring the optional NAS fixture.
+    return withTemporaryBudget([&]() noexcept
+    {
+        const std::wstring pluginId(kPluginIdLocal);
+        // The setter canonicalizes {}; this checks its normalized default semantics.
+        if (! SetPluginConfiguration(state.infoLocal.get(), "{}"))
+            return false;
+        g_settings.plugins.configurationByPluginId.erase(pluginId);
+        state.localConfigDirty     = false;
+        const bool defaultRestored = withTemporaryBudget([]() noexcept { return true; });
+        if (! defaultRestored || state.localConfigDirty || g_settings.plugins.configurationByPluginId.contains(pluginId))
+            return false;
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":2})json"))
+            return false;
+        state.localConfigDirty = true;
+        const auto savedHost   = g_settings.plugins.configurationByPluginId.at(pluginId);
+        std::string savedProvider;
+        if (! BackupPluginConfiguration(state.infoLocal.get(), savedProvider))
+            return false;
+        // A failed body takes the same scope-guard path as an early fixture exit.
+        if (withTemporaryBudget([]() noexcept { return false; }) || ! state.localConfigDirty ||
+            ! g_settings.plugins.configurationByPluginId.contains(pluginId) || g_settings.plugins.configurationByPluginId.at(pluginId).value != savedHost.value)
+            return false;
+        std::string afterProvider;
+        const auto afterRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (! BackupPluginConfiguration(state.infoLocal.get(), afterProvider) || afterProvider != savedProvider ||
+            afterRoute.state != FileSystemRouteContract::QueryState::Available || afterRoute.snapshot.deleteMaxConcurrency != 2u)
+            return false;
+        AppendLog(L"Pinned tree, scale: normalized default, nondefault and early-exit configuration restoration witnesses passed.");
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"))
+            return false;
+        return RunDeleteIdentityLessPinnedTreeScaleChecksImpl(state);
+    });
 }
 
 // I35 S4 (red-team HIGH c and b, round 2): a folder deleted by name carries its last-write time in its

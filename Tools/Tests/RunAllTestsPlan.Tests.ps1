@@ -93,6 +93,8 @@ Describe 'Run-AllTests inventory desktop admission' {
                 if (-not $function) { throw "Missing actual runner function: $name" }
                 . ([scriptblock]::Create($function.Extent.Text))
             }
+            $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-inventory-' + [guid]::NewGuid().ToString('N'))
+            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
             $admissions = [Collections.Generic.List[bool]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
@@ -106,6 +108,7 @@ Describe 'Run-AllTests inventory desktop admission' {
                 param($ProcessStartInfo)
                 $children.Add($ProcessStartInfo)
                 $process = [pscustomobject]@{
+                    Id = 12345
                     ExitCode = 0
                     StandardOutput = [IO.StringReader]::new('{"suites":[{"suite":"Commands","cases":["cmd_inventory_fixture"]}]}')
                     StandardError = [IO.StringReader]::new('')
@@ -135,6 +138,20 @@ Describe 'Run-AllTests inventory desktop admission' {
             $admissions.Count | Should Be 2
             $admissions[0] | Should Be $true
             $admissions[1] | Should Be $false
+            # The selected marked root's drive supplies a real default without initializing another volume.
+            $oldRoot = [Environment]::GetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', 'Process')
+            $oldLegacy = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', 'Process')
+            $selectedRoot = $testRunContext.TestRoot
+            try {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', $null, 'Process')
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $null, 'Process')
+                $testRunContext.TestRoot = Get-RSTestSandboxRoot -RepoRoot $selectedRoot
+                $testRunContext.TestRoot | Should Be $selectedRoot
+                (Invoke-RSSelfTestProcess -Entry $entry -Arguments $entry.Arguments) | Should Be 0
+            } finally {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', $oldRoot, 'Process')
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $oldLegacy, 'Process')
+            }
         }
     }
 }
@@ -159,7 +176,9 @@ $ApplyLegacySandboxCleanup = $false
             $deployment.Substring($start, $end - $start).Replace('$script:selected', '$local:selected'))
         $previousPlatform = $env:RS_VALIDATION_PLATFORM
         $previousConfiguration = $env:RS_VALIDATION_CONFIGURATION
+        $previousBuildNumber = $env:RS_VALIDATION_BUILD_NUMBER
         try {
+            $env:RS_VALIDATION_BUILD_NUMBER = '533'
             foreach ($Platform in @('x64', 'ARM64')) {
                 foreach ($Configuration in @('Debug', 'Release', 'ASan Debug')) {
                     $env:RS_VALIDATION_PLATFORM = $Platform
@@ -179,9 +198,60 @@ $ApplyLegacySandboxCleanup = $false
             $rejected = $false
             try { & $deploymentPreflight } catch { $rejected = $true }
             $rejected | Should Be $true
+            $env:RS_VALIDATION_PLATFORM = 'x64'
+            $env:RS_VALIDATION_CONFIGURATION = 'Release'
+            foreach ($invalidNumber in @('', '0', '65536', 'not-a-number')) {
+                $env:RS_VALIDATION_BUILD_NUMBER = $invalidNumber
+                $rejected = $false
+                try { & $deploymentPreflight } catch { $rejected = $true }
+                $rejected | Should Be $true
+            }
+            $env:RS_VALIDATION_BUILD_NUMBER = '533'
+            & $deploymentPreflight
+            $deploymentTokens = $null; $deploymentErrors = $null
+            $deploymentAst = [Management.Automation.Language.Parser]::ParseFile(
+                (Join-Path $repoRoot 'Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1'),
+                [ref]$deploymentTokens, [ref]$deploymentErrors)
+            @($deploymentErrors).Count | Should Be 0
+            $afterAll = $deploymentAst.Find({ param($node)
+                $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'AfterAll'
+            }, $true)
+            $null -eq $afterAll | Should Be $false
+            $afterAllBody = $afterAll.CommandElements[1].ScriptBlock.Extent.Text
+            $afterAllBody = $afterAllBody.Substring(1, $afterAllBody.Length - 2).Replace(
+                '$script:deploymentArtifactOperation', '$local:deploymentArtifactOperation')
+            $cleanup = [scriptblock]::Create($afterAllBody)
+            & {
+                Set-StrictMode -Version Latest
+                $local:deploymentArtifactOperationLock = $null
+                $local:deploymentArtifactOperationScope = $null
+                $env:RS_VALIDATION_BUILD_NUMBER = '0'
+                $primaryMessage = ''
+                try { & $deploymentPreflight } catch { $primaryMessage = $_.Exception.Message }
+                finally { . $cleanup }
+                $primaryMessage | Should Be 'RS_VALIDATION_BUILD_NUMBER must be the validated pre-mutation receipt build number.'
+                $null -eq $local:deploymentArtifactOperationLock | Should Be $true
+                $null -eq $local:deploymentArtifactOperationScope | Should Be $true
+
+                $expectedLock = [pscustomobject]@{ id = 'fixture-lock' }
+                $observation = [pscustomobject]@{ Calls = 0; Lock = $null }
+                function Exit-RSArtifactOperationLock {
+                    param($Lock)
+                    $observation.Calls++
+                    $observation.Lock = $Lock
+                }
+                $local:deploymentArtifactOperationLock = $expectedLock
+                $local:deploymentArtifactOperationScope = [pscustomobject]@{ id = 'fixture-scope' }
+                . $cleanup
+                $observation.Calls | Should Be 1
+                [object]::ReferenceEquals($observation.Lock, $expectedLock) | Should Be $true
+                $null -eq $local:deploymentArtifactOperationLock | Should Be $true
+                $null -eq $local:deploymentArtifactOperationScope | Should Be $true
+            }
         } finally {
             $env:RS_VALIDATION_PLATFORM = $previousPlatform
             $env:RS_VALIDATION_CONFIGURATION = $previousConfiguration
+            $env:RS_VALIDATION_BUILD_NUMBER = $previousBuildNumber
         }
     }
 
@@ -210,6 +280,86 @@ $ApplyLegacySandboxCleanup = $false
             $scheduled = & $scheduler $scenario.Entries @{}
             ($scheduled.Early -join ',') | Should Be ($scenario.Early -join ',')
             ($scheduled.Late -join ',') | Should Be ($scenario.Late -join ',')
+        }
+    }
+
+    It 'passes the frozen build number only during an artifact writer and restores it on failure' {
+        $tokens = $null; $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $runnerFunction = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Invoke-RSRunnerStandaloneValidationEntry'
+        }, $true)
+        $null -eq $runnerFunction | Should Be $false
+        $runnerText = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'))
+        $numberStart = $runnerText.IndexOf('$buildNumberArgument = @($preMutationReceipt.build_arguments', [StringComparison]::Ordinal)
+        $numberEnd = $runnerText.IndexOf('# Fail closed before the writer', $numberStart, [StringComparison]::Ordinal)
+        if ($numberStart -lt 0 -or $numberEnd -le $numberStart) { throw 'Missing actual receipt build-number validation.' }
+        $numberValidation = $runnerText.Substring($numberStart, $numberEnd - $numberStart).Replace(
+            'exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)', "throw 'blocked receipt'")
+        $parseReceiptNumber = [scriptblock]::Create('param($preMutationReceipt)' + [Environment]::NewLine + $numberValidation + [Environment]::NewLine + '$reattestBuildNumber')
+        (& $parseReceiptNumber ([pscustomobject]@{ build_arguments = @('build-number=533') })) | Should Be 533
+        foreach ($badReceipt in @(
+                [pscustomobject]@{ build_arguments = @('build-number=533', 'build-number=bad') },
+                [pscustomobject]@{ build_arguments = @('build-number=0') },
+                [pscustomobject]@{ build_arguments = @('build-number=65536') },
+                [pscustomobject]@{ build_arguments = @('build-number=bad') })) {
+            $caughtMessage = ''
+            try { & $parseReceiptNumber $badReceipt } catch { $caughtMessage = $_.Exception.Message }
+            $caughtMessage | Should Be 'blocked receipt'
+        }
+        & {
+            . ([scriptblock]::Create($runnerFunction.Extent.Text))
+            $validationEvidenceRun = $null
+            $Platform = 'x64'; $Configuration = 'Release'
+            $failureClassificationEnabled = $false
+            $artifactRoot = ''; $initialWorkspaceSnapshot = [pscustomobject]@{ snapshot_id = 'same' }
+            $observation = [pscustomobject]@{ Calls = 0; BuildNumber = ''; CiNumber = ''; Throw = $false }
+            function Write-Header { param($Message) }
+            function Assert-RSRunnerArtifactReadBarrier { param($Entry) }
+            function Invoke-RSTestPlanEntry {
+                param($Entry, $RepoRoot, $ArtifactRoot)
+                $observation.Calls++
+                $observation.BuildNumber = [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process')
+                $observation.CiNumber = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
+                if ($observation.Throw) { throw 'fixture writer failure' }
+                return [pscustomobject]@{ ExitCode = 0 }
+            }
+            function Add-RSTestResultClassification { param($Result) return $Result }
+            function Import-RSRunnerValidationModules {}
+            function Publish-RSRunnerWorkspaceSnapshot { param($Label) return [pscustomobject]@{ snapshot_id = 'same' } }
+            function Get-RSObjectValue { param($Object, $Names, $DefaultValue) return $DefaultValue }
+            $entry = [pscustomobject]@{ Id = 'fixture.writer'; Name = 'fixture'; Kind = 'Pester'; Path = ''; Arguments = @(); ArtifactWriteIds = @('profile') }
+            $previousNumber = [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process')
+            $previousCi = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
+            try {
+                [Environment]::SetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'prior', 'Process')
+                [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', '64', 'Process')
+                [void](Invoke-RSRunnerStandaloneValidationEntry -Entry $entry -DeferEvidence -ArtifactBuildNumber 533)
+                $observation.Calls | Should Be 1
+                $observation.BuildNumber | Should Be '533'
+                $observation.CiNumber | Should Be '64'
+                [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process') | Should Be 'prior'
+                $observation.Throw = $true
+                $caughtMessage = ''
+                try { Invoke-RSRunnerStandaloneValidationEntry -Entry $entry -DeferEvidence -ArtifactBuildNumber 533 } catch { $caughtMessage = $_.Exception.Message }
+                $caughtMessage | Should Be 'fixture writer failure'
+                $observation.Calls | Should Be 2
+                $observation.BuildNumber | Should Be '533'
+                [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process') | Should Be 'prior'
+                foreach ($invalid in @(0, 65536)) {
+                    $caughtMessage = ''
+                    try { Invoke-RSRunnerStandaloneValidationEntry -Entry $entry -DeferEvidence -ArtifactBuildNumber $invalid } catch { $caughtMessage = $_.Exception.Message }
+                    $caughtMessage | Should Be 'An artifact writer requires the validated pre-mutation build number.'
+                    $observation.Calls | Should Be 2
+                    [Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process') | Should Be 'prior'
+                }
+            } finally {
+                [Environment]::SetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', $previousNumber, 'Process')
+                [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', $previousCi, 'Process')
+            }
         }
     }
 
@@ -279,7 +429,7 @@ $ApplyLegacySandboxCleanup = $false
         $deployment | Should Match '''\.build\\\{0\}\\\{1\}'' -f \$selectedPlatform, \$selectedConfiguration'
         $deployment | Should Not Match '\.build\\x64\\Debug'
         $deployment | Should Match '''-Configuration'', \$Configuration, ''-Platform'', \$Platform'
-        $deployment | Should Match 'Invoke-RSTargetedBuildForDeploymentTest -Platform \$selectedPlatform -Configuration \$selectedConfiguration'
+        $deployment | Should Match 'Invoke-RSTargetedBuildForDeploymentTest -Platform \$selectedPlatform -Configuration \$selectedConfiguration -BuildNumber \$selectedBuildNumber'
     }
 
 It 'binds post-writer fingerprints to the restored receipt and matches seeded Resume construction' {
@@ -457,14 +607,17 @@ Describe 'Run-AllTests plan helper' {
     It 'serializes FileOps foreground and UIA checks while activation stays exact opt-in' {
         foreach ($case in @('', 'FileOps_VisualGallery', 'FileOps_AdmissionBaseline', 'FileOpsFamily_SafetyRemediationContracts',
                 'Phase6_', 'FileOps_VisualGalleryInteraction', 'fileops_visualgalleryinteraction', 'FileOps_VisualGalleryInteraction*',
-                'FileOpsFamily_DiscoveryScope', 'DiscoveryScope_', 'DiscoveryScope_FolderLiveProgress*',
+                'FileOpsFamily_DiscoveryScope', 'DiscoveryScope_', 'DiscoveryScope_LocalDirectApi*', 'discoveryscope_localdirectapi',
+                'DiscoveryScope_LocalDirectApi ', 'DiscoveryScope_LocalDirectApi,DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_FolderLiveProgress*',
                 'DiscoveryScope_MultipleFoldersLiveProgress*', 'discoveryscope_folderliveprogress',
                 'discoveryscope_multiplefoldersliveprogress', 'DiscoveryScope_FolderLiveProgress ',
                 ' DiscoveryScope_MultipleFoldersLiveProgress', 'DiscoveryScope_FolderLiveProgressUnknown',
                 'DiscoveryScope_FolderLiveProgress,DiscoveryScope_MultipleFoldersLiveProgress',
                 'fileops_repeatdecisioncontracts', 'FileOps_RepeatDecisionContracts*', 'FileOps_RepeatDecisionContracts ',
                 'FileOps_RepeatDecisionContracts,DiscoveryScope_FolderLiveProgress',
-                'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb')) {
+                'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'fileops_identityinterlockwaiting', 'FileOps_IdentityInterlockWaiting*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb',
+                'delete_identitylesspinnedtreechangedentry', 'Delete_IdentityLessPinnedTreeChangedEntry*', 'Delete_IdentityLessPinnedTreeChangedEntry ',
+                'Delete_IdentityLessPinnedTreeChangedEntry,DiscoveryScope_LocalDirectApi')) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                 -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
             $interactive = $case -eq 'FileOps_VisualGalleryInteraction'
@@ -477,7 +630,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
-        foreach ($case in @('DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                 -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
             $plan.Count | Should Be 1
@@ -490,7 +643,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'retains the FileOps desktop lease for broad suites and proof injections using an exact owned-witness name' {
-        foreach ($case in @('DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('All', 'CI', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -513,7 +666,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'preserves exact owned-witness activation and desktop markers in quarantine repair' {
-        foreach ($case in @('DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('FileOps', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -608,6 +761,8 @@ Describe 'Run-AllTests plan helper' {
         $runnerSource | Should Match 'Complete-RSValidationArtifactMutation'
         $runnerSource | Should Match 'New-RSRunnerEntryFingerprintRecord -ExecutionEntries \$testPlan'
         $runnerSource | Should Match 're-attested profile failed byte-for-byte receipt verification'
+        $runnerSource | Should Match '(?s)preMutationReceipt\.build_arguments.+valid build number.+Suspend-RSBuildReceipt.+ArtifactBuildNumber \$reattestBuildNumber'
+        $runnerSource | Should Match "(?s)RS_VALIDATION_BUILD_NUMBER.+Invoke-RSTestPlanEntry.+finally.+previousProfileEnvironment"
         $runnerSource | Should Match '(?s)Re-attesting profile after:.+Get-RSBuildEnvironmentOverrides -Suite \$Suite.+SetEnvironmentVariable\(\$key, \[string\]\$reattestEnvironmentOverrides\[\$key\], ''Process''\).+build\.ps1.+finally.+SetEnvironmentVariable\(\$key, \$previousReattestEnvironment\[\$key\], ''Process''\)'
         $runnerSource | Should Match '(?s)Re-attesting profile after:.+build\.ps1''\) -Configuration \$Configuration -Platform \$Platform.+-MaxCpuCount 4'
     }
@@ -1147,7 +1302,11 @@ Set-StrictMode -Version Latest
         $nightly | Should Match '(?m)^  workflow_dispatch:'
         $nightly | Should Not Match '(?m)^  schedule:'
         $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
-        $nightly | Should Match '(?m)^      scope: Full\s*$'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $nightly | Should Match '(?m)^        default: Full\s*$'
+        $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
+        $nightly | Should Match '(?m)^      baseline_ref:\s*$'
+        $nightly | Should Match '(?m)^        required: false\s*$'
         $pin = [regex]::Escape($engineRef)
         $workflow | Should Not Match 'build-reusable\.yml|run_full_tests:|test_suite:'
         $native = Get-Content (Join-Path $repoRoot '.github/workflows/qualify.yml') -Raw
@@ -1157,6 +1316,9 @@ Set-StrictMode -Version Latest
         $adapter | Should Match "else \{ 'CI' \}"
         $adapter | Should Match "Run 'Tools/Run-AllTests.ps1'"
         $adapter | Should Match 'Invoke-CiAssertionProbe'
+        $adapter | Should Match 'Get-RSHostedPairedDispatch'
+        $adapter | Should Match 'Invoke-R0ePairedValidation\.ps1'
+        $adapter | Should Match 'timing-only RED baseline; qualification remains NOT_EVALUATED'
         foreach ($manual in @('nightly-ci.yml','nightly-flake.yml')) {
             $diagnostic = Get-Content (Join-Path $repoRoot ('.github/workflows/' + $manual)) -Raw
             $diagnostic | Should Match 'workflow_dispatch:'
@@ -1178,6 +1340,8 @@ Set-StrictMode -Version Latest
 
         & {
             . ([scriptblock]::Create($function.Extent.Text))
+            $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('native-exit-' + [guid]::NewGuid().ToString('N'))
+            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
             $profiles = [Collections.Generic.List[string]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
@@ -1197,7 +1361,7 @@ Set-StrictMode -Version Latest
             function Start-RSContainedProcess {
                 param($ProcessStartInfo)
                 $children.Add($ProcessStartInfo)
-                $process = [pscustomobject]@{ ExitCode = 17 }
+                $process = [pscustomobject]@{ Id = 12345; ExitCode = 17 }
                 $process | Add-Member ScriptMethod WaitForExit { }
                 return $process
             }
@@ -1242,6 +1406,73 @@ Set-StrictMode -Version Latest
             $children[3].EnvironmentVariables[$vhdxNames[0]] | Should Be 'C:\owned\mount'
             $children[3].EnvironmentVariables[$vhdxNames[1]] | Should Be '\\?\Volume{00000000-5a4d-4e2b-9c11-7e57c1ea0f00}\'
             $children[3].EnvironmentVariables.ContainsKey($vhdxNames[2]) | Should Be $false
+
+            $records = @(Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'artifacts/native-process-exits') -Filter '*.json')
+            $records.Count | Should Be 4
+            @($records.Name | Sort-Object -Unique).Count | Should Be 4
+            foreach ($record in $records) {
+                $json = Get-Content -LiteralPath $record.FullName -Raw
+                $parsed = $json | ConvertFrom-Json
+                $parsed.schema | Should Be 'red-salamander.native-process-exit.v1'
+                $parsed.process_id | Should Be 12345
+                $parsed.exit_code | Should Be 17
+                $parsed.executable | Should Be ([IO.Path]::GetFullPath('fixture.exe', $TestDrive))
+                $json | Should Match '"observed_utc":"\d{4}-\d\d-\d\dT[^" ]+Z"'
+            }
+            # A later normalized suite failure leaves the original native exit record intact.
+            $normalized = @{ ExitCode = 1 }
+            $normalized.ExitCode | Should Be 1
+            ((Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json).exit_code) | Should Be 17
+
+            function Out-File { throw 'injected exit record write failure' }
+            $failedWrite = Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $failedWrite.Succeeded | Should Be $false
+            $failedWrite.Error.Exception.Message | Should Match 'injected exit record write failure'
+            $closed.Count | Should Be 5
+        }
+    }
+
+    It 'retains the raw native exit record when the real run archive refuses an owned link' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$tokens, [ref]$errors)
+        @($errors).Count | Should Be 0
+        $definition = $ast.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSSelfTestProcess'
+        }, $true)
+        & {
+            . ([scriptblock]::Create($definition.Extent.Text))
+            $testRunContext = New-RSTestRunContext -RepoRoot $repoRoot -TestRootOverride $env:REDSALAMANDER_TEST_ROOT
+            [void](New-Item -ItemType Directory -Path $testRunContext.RunRoot -ErrorAction Stop)
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) return $false }
+            function Invoke-RSInteractiveDesktopOperation { param($RequiresInteractiveDesktop, $Operation) & $Operation }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $process = [pscustomobject]@{ Id = 12345; ExitCode = -1073741819 }
+                $process | Add-Member ScriptMethod WaitForExit { }
+                return $process
+            }
+            function Close-RSContainedProcess { param($Process) }
+            try {
+                $entry = [pscustomobject]@{ Path = 'fixture.exe'; WorkingDirectory = $TestDrive }
+                (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest')) | Should Be -1073741819
+                $record = @(Get-ChildItem -LiteralPath (Join-Path $testRunContext.RunRoot 'artifacts/native-process-exits') -Filter '*.json')
+                $record.Count | Should Be 1
+                $before = [IO.File]::ReadAllText($record[0].FullName)
+                $target = Join-Path $testRunContext.RunRoot 'owned-target'
+                [void](New-Item -ItemType Directory -Path $target -ErrorAction Stop)
+                [IO.File]::WriteAllText((Join-Path $target 'canary.txt'), 'retained target')
+                $link = Join-Path $testRunContext.RunRoot 'owned-link'
+                [void](New-RSTestSandboxLink -Path $link -Target $target -ItemType Junction)
+                $archive = Invoke-RSTestBlock { Save-RSTestSandboxRunEvidence -TestRoot $testRunContext.TestRoot -RunId $testRunContext.RunId }
+                $archive.Succeeded | Should Be $false
+                $archive.Error.Exception.Message | Should Match 'unsafe or mount-like reparse point'
+                [IO.File]::ReadAllText($record[0].FullName) | Should Be $before
+                ($before | ConvertFrom-Json).exit_code | Should Be -1073741819
+                [IO.File]::ReadAllText((Join-Path $target 'canary.txt')) | Should Be 'retained target'
+            } finally {
+                Remove-RSTestSandboxExactRunDirectory -TestRoot $testRunContext.TestRoot -RunId $testRunContext.RunId
+            }
         }
     }
 
@@ -1335,6 +1566,8 @@ Set-StrictMode -Version Latest
             -Message 'The session mutex must have one reviewed ownership site.'
         Assert-RSEqual -Actual ($desktopFunction.Extent.Text -match '\.WaitOne\(') -Expected $true -Message 'The entry boundary should acquire the mutex.'
         Assert-RSEqual -Actual ($desktopFunction.Extent.Text -match '\.ReleaseMutex\(\)') -Expected $true -Message 'The entry boundary should release the mutex in its finally block.'
+        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedDefaultDesktop') -gt $desktopFunction.Extent.Text.IndexOf('.WaitOne(')) -Expected $true -Message 'Hosted Default entry must follow actual interactive lease acquisition.'
+        Assert-RSEqual -Actual ($desktopFunction.Extent.Text.IndexOf('Invoke-RSWithHostedDefaultDesktop') -lt $desktopFunction.Extent.Text.IndexOf('.ReleaseMutex()')) -Expected $true -Message 'Hosted foreground restoration must finish before the interactive lease is released.'
 
         foreach ($functionName in @('Invoke-RSSelfTestProcess', 'Invoke-RSTestPlanEntry')) {
             $entryFunction = $functions | Where-Object Name -eq $functionName | Select-Object -First 1
@@ -1349,6 +1582,43 @@ Set-StrictMode -Version Latest
             -Actual ($pesterCase -match "'Pester'[\s\S]*?Invoke-RSInteractiveDesktopOperation") `
             -Expected $false `
             -Message 'Pester execution must remain outside the interactive desktop boundary.'
+    }
+
+    It 'clears the hosted desktop request for noninteractive child harnesses and restores it on success and failure' {
+        Import-Module $helperModule -ErrorAction Stop
+        $tokens=$null; $errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$errors)
+        @($errors).Count | Should Be 0
+        & {
+            foreach($name in @('Test-RSTestEntryRequiresInteractiveDesktop','Invoke-RSTestPlanEntry')) {
+                $definition=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+                . ([scriptblock]::Create($definition.Extent.Text))
+            }
+            $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('desktop-request-'+[guid]::NewGuid().ToString('N'))
+            $probe=Join-Path $fixture 'probe.ps1'; $record=Join-Path $fixture 'observed.txt'
+            [IO.File]::WriteAllText($probe, @'
+param([string]$Record,[int]$Fail)
+[IO.File]::WriteAllText($Record,[string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP','Process'))
+if($Fail){throw 'seeded noninteractive child failure'}
+$global:LASTEXITCODE=0
+'@)
+            $prior=[Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP','Process')
+            $priorExit=Get-Variable LASTEXITCODE -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+            try {
+                $env:REDSALAMANDER_HOSTED_TEST_DESKTOP='owned'
+                foreach($failure in 0,1) {
+                    $entry=[pscustomobject]@{Name='desktop-request-control';Kind='PowerShellScript';Path=$probe;WorkingDirectory=$fixture;Arguments=@($record,$failure);RequiresInteractiveDesktop=$false}
+                    $result=Invoke-RSTestPlanEntry -Entry $entry -RepoRoot $repoRoot
+                    $result.ExitCode | Should Be $failure
+                    [IO.File]::ReadAllText($record) | Should Be ''
+                    $env:REDSALAMANDER_HOSTED_TEST_DESKTOP | Should Be 'owned'
+                    if($failure){$result.Failures[0].reason | Should Match 'seeded noninteractive child failure'}
+                }
+            } finally {
+                [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',$prior,'Process')
+                $global:LASTEXITCODE=$priorExit
+            }
+        }
     }
 
     It 'imports the contained-process API it calls directly' {
@@ -2748,5 +3018,115 @@ Describe 'Administrative sandbox cleanup live-owner protection' {
         } finally {
             Remove-RSTestSandboxExactRunDirectory -TestRoot $testRoot -RunId $runId
         }
+    }
+}
+
+Describe 'Hosted filtered diagnostic evidence' {
+    BeforeAll {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+    }
+    BeforeEach {
+        $selection = Get-RSHostedDiagnosticSelection -Scope FileOpsVolumes
+        $runId = '20261103T000000Z-1234-0123456789abcdef0123456789abcdef'
+        $start = [DateTimeOffset]'2026-11-03T00:00:00Z'; $end = $start.AddMinutes(1)
+        $expectedExe = 'Z:\synthetic\RedSalamander.exe'
+        $summary = @{ executable=$expectedExe; run_started_utc='2026-11-03T00:00:01Z'; run_ended_utc='2026-11-03T00:00:02Z'; schema='red-salamander.run-all-tests.v1'; run_id=$runId; suite='FileOps'; case_filter=$selection.case; platform='ARM64'; configuration='Release'; exit_code=2; passed=3; failed=0; skipped=0; total=3;
+            quarantine=@{ is_valid=$true; has_blocking_entries=$false; active_count=0; active_entries=@(); invalid_count=0; invalid_entries=@(); errors=@() } }
+        $native = @{ suite='FileOperations'; passed=3; failed=0; skipped=0; cases=@(
+            @{name='Setup';status='passed'}, @{name=$selection.case;status='passed'}, @{name='Cleanup_RestorePluginConfig';status='passed'}) }
+        $invoke = { Test-RSHostedDiagnosticOutcome -ExitCode 2 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $true -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end }
+    }
+    It 'maps only the three reviewed exact diagnostic cases' {
+        (Get-RSHostedDiagnosticSelection CommandsHandoff).case | Should Be 'cmd_pane_selection_select_next_keeps_navigation_shell_stable'
+        $selection.case | Should Be 'R4A19_DiscoveryIndependentVolumes'
+        (Get-RSHostedDiagnosticSelection ViewerSpaceCapture).case | Should Be 'cmd_viewer_space_explorer_analyst_exact_nested_detail'
+        { Get-RSHostedDiagnosticSelection -Scope Other } | Should Throw 'does not belong to the set'
+    }
+    It 'binds the paired scope to an immutable manual dispatch' {
+        $candidate = 'a' * 40; $baseline = 'b' * 40
+        $event = @{inputs=@{scope='R0ePaired'; configuration='Release'; baseline_ref=$baseline}} | ConvertTo-Json -Compress
+        $actual = Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $event -CandidateHead $candidate
+        $actual.baseline | Should Be $baseline
+        $actual.candidate | Should Be $candidate
+        { Get-RSHostedPairedDispatch -EventName push -EventJson $event -CandidateHead $candidate } | Should Throw 'manual dispatch'
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson '{invalid' -CandidateHead $candidate } | Should Throw 'invalid JSON'
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson '{}' -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='R0ePaired'; configuration='Release'; baseline_ref='main'}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='R0ePaired'; configuration='Release'; baseline_ref=('0' * 40)}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='CommandsHandoff'; configuration='Release'; baseline_ref=$baseline}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        $eventBad = @{inputs=@{scope='R0ePaired'; configuration='Debug'; baseline_ref=$baseline}} | ConvertTo-Json -Compress
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $eventBad -CandidateHead $candidate } | Should Throw 'exact scope'
+        { Get-RSHostedPairedDispatch -EventName workflow_dispatch -EventJson $event -CandidateHead ('0' * 40) } | Should Throw 'candidate SHA'
+    }
+    It 'rejects diagnostic scope outside Qualification before loading an engine' {
+        { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Static -EngineRoot 'missing-engine' -QualificationScope CommandsHandoff } | Should Throw 'only valid for explicit Qualification'
+        { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Static -EngineRoot 'missing-engine' -QualificationScope R0ePaired } | Should Throw 'only valid for explicit Qualification'
+        { & (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1') -Phase Qualification -EngineRoot 'missing-engine' -QualificationScope R0ePaired -Configuration Debug } | Should Throw 'requires Release'
+    }
+    It 'accepts one passing filtered case with clean companion results and quarantine' {
+        (& $invoke) | Should Be $true
+    }
+    It 'accepts the exact Commands case without inventing FileOps setup phases' {
+        $selection=Get-RSHostedDiagnosticSelection CommandsHandoff
+        $summary.suite='Commands'; $summary.case_filter=$selection.case; $summary.passed=1; $summary.total=1
+        $native=@{suite='Commands';passed=1;failed=0;skipped=0;cases=@(@{name=$selection.case;status='passed'})}
+        (& $invoke) | Should Be $true
+    }
+    It 'accepts only the exact ViewerSpace Commands case for the capture scope' {
+        $selection=Get-RSHostedDiagnosticSelection ViewerSpaceCapture
+        $summary.suite='Commands'; $summary.case_filter=$selection.case; $summary.passed=1; $summary.total=1
+        $native=@{suite='Commands';passed=1;failed=0;skipped=0;cases=@(@{name=$selection.case;status='passed'})}
+        (& $invoke) | Should Be $true
+        $native.cases[0].name='cmd_pane_selection_select_next_keeps_navigation_shell_stable'
+        { & $invoke } | Should Throw 'exact selected native case'
+    }
+    It 'requires one safe runner-owned ID and rejects duplicate or traversal text' {
+        (Get-RSHostedDiagnosticRunId -Output "  Run id:    $runId") | Should Be $runId
+        { Get-RSHostedDiagnosticRunId -Output "Run id: ../bad" } | Should Throw 'Expected one exact runner-owned diagnostic run ID'
+        { Get-RSHostedDiagnosticRunId -Output "Run id: $runId`nRun id: $runId" } | Should Throw 'Expected one exact runner-owned diagnostic run ID'
+        { Read-RSHostedDiagnosticEvidence -TestRoot 'Z:\RedSalamander.Perf' -RunId '../bad' -Selection $selection } | Should Throw 'Invalid diagnostic run ID'
+    }
+    It 'rejects a modified selection before resolving any evidence path' {
+        $selection.native='../bad'
+        { Read-RSHostedDiagnosticEvidence -TestRoot 'Z:\RedSalamander.Perf' -RunId $runId -Selection $selection } | Should Throw 'Unknown hosted diagnostic selection'
+    }
+    It 'rejects an exit other than filtered 2 and untrusted receipt' {
+        { Test-RSHostedDiagnosticOutcome -ExitCode 0 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $true -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end } | Should Throw 'Filtered runner, profile, or source receipt'
+        { Test-RSHostedDiagnosticOutcome -ExitCode 2 -RunId $runId -Selection $selection -Summary $summary -Native $native -Platform ARM64 -Configuration Release -ReceiptVerified $false -ExpectedExePath $expectedExe -InvocationStartedUtc $start -InvocationEndedUtc $end } | Should Throw 'Filtered runner, profile, or source receipt'
+    }
+    It 'rejects wrong profile, run ID or case' {
+        $summary.platform='x64'; { & $invoke } | Should Throw 'Filtered runner, profile, or source receipt'
+        $summary.platform='ARM64'; $summary.run_id='other'; { & $invoke } | Should Throw 'Filtered runner, profile, or source receipt'
+        $summary.run_id=$runId; $summary.case_filter='other'; { & $invoke } | Should Throw 'Filtered runner, profile, or source receipt'
+    }
+    It 'rejects a foreign executable and stale, malformed, or unordered invocation times' {
+        $summary.executable='Z:\other\RedSalamander.exe'; { & $invoke } | Should Throw 'Diagnostic executable or invocation window'
+        $summary.executable=$expectedExe; $summary.run_started_utc='2026-11-02T23:59:59Z'; { & $invoke } | Should Throw 'outside the invocation window'
+        $summary.run_started_utc='not-a-time'; { & $invoke } | Should Throw 'summary time is invalid'
+        $summary.run_started_utc='2026-11-03T00:00:03Z'; { & $invoke } | Should Throw 'outside the invocation window'
+        $summary.run_started_utc='2026-11-03T00:00:01Z'; $summary.run_ended_utc='2026-11-03T00:01:01Z'; { & $invoke } | Should Throw 'outside the invocation window'
+    }
+    It 'rejects wrong native suite, missing cleanup and inconsistent counts' {
+        $native.suite='Commands'; { & $invoke } | Should Throw 'Native diagnostic result is incomplete'
+        $native.suite='FileOperations'; $native.cases=@(@{name='Setup';status='passed'},@{name=$selection.case;status='passed'}); $native.passed=2
+        { & $invoke } | Should Throw 'Required FileOps setup or cleanup'
+        $native.cases=@(@{name='Setup';status='passed'},@{name=$selection.case;status='passed'},@{name='Cleanup_RestorePluginConfig';status='passed'})
+        { & $invoke } | Should Throw 'Native diagnostic cases'
+    }
+    It 'rejects an unrelated native case in the filtered selection' {
+        $native.cases += @{name='unexpected';status='passed'}; $native.passed=4; $summary.passed=4; $summary.total=4
+        { & $invoke } | Should Throw 'Unexpected native cases'
+    }
+    It 'rejects exit 2 with no cases, failed cases, or skipped cleanup' {
+        $native.cases=@(); $native.passed=0; { & $invoke } | Should Throw 'exact selected native case'
+        $native.cases=@(@{name=$selection.case;status='failed'}); $native.passed=0; $native.failed=1; { & $invoke } | Should Throw 'exact selected native case'
+        $native.cases=@(@{name='Setup';status='passed'},@{name=$selection.case;status='passed'},@{name='Cleanup_RestorePluginConfig';status='skipped'}); $native.passed=2; $native.failed=0; $native.skipped=1; { & $invoke } | Should Throw 'Required FileOps setup or cleanup'
+    }
+    It 'rejects missing or blocking quarantine evidence' {
+        $summary.quarantine=@{}; { & $invoke } | Should Throw 'quarantine state'
+        $summary.quarantine=@{is_valid=$true;has_blocking_entries=$true;invalid_count=0;errors=@()}; { & $invoke } | Should Throw 'quarantine state'
     }
 }

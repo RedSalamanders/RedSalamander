@@ -938,17 +938,22 @@
     const auto applyCulture    = [](std::wstring_view culture) noexcept
     { return SUCCEEDED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, std::wstring(culture)})); };
 
-    constexpr uint64_t taskId          = 0xF26A202610100002ull;
-    constexpr uint64_t summaryTaskId   = 0xF26A202610100003ull;
-    constexpr uint64_t aggregateTaskId = 0xF26A202610100004ull;
-    const auto removeFixture           = wil::scope_exit([&]() noexcept
+    constexpr uint64_t taskId                       = 0xF26A202610100002ull;
+    constexpr uint64_t summaryTaskId                = 0xF26A202610100003ull;
+    constexpr uint64_t aggregateTaskId              = 0xF26A202610100004ull;
+    constexpr uint64_t localizedResultSummaryTaskId = 0xF26A202610100005ull;
+    constexpr uint64_t interruptedNoticeTaskId      = 0xF26A202610100006ull;
+    constexpr std::array fixtureIds{taskId, summaryTaskId, aggregateTaskId, localizedResultSummaryTaskId, interruptedNoticeTaskId};
+    std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> existing;
+    operations->CollectCompletedTasks(existing);
+    if (std::ranges::any_of(existing, [&](const auto& summary) noexcept { return std::ranges::find(fixtureIds, summary.taskId) != fixtureIds.end(); }))
+        return reject(L"a fixture task ID already belongs to a retained completion");
+    const auto cleanupFixture = [&]() noexcept
     {
-        operations->DebugRemoveDiagnosticsForTask(taskId);
-        operations->DebugRemoveDiagnosticsForTask(summaryTaskId);
-        operations->DebugRemoveDiagnosticsForTask(aggregateTaskId);
-        operations->DismissCompletedTask(taskId);
-        operations->DismissCompletedTask(summaryTaskId);
-    });
+        for (const uint64_t id : fixtureIds)
+            operations->DebugRemoveDiagnosticsForTask(id);
+    };
+    auto removeFixture = wil::scope_exit([&]() noexcept { cleanupFixture(); });
 
     // Every producer that records an IDS_* message, with the typed text it passes (State.cpp,
     // State.Runtime.cpp). clipboard.move.consumeFailed runs through its real producer below.
@@ -1183,7 +1188,6 @@
         return reject(L"the French completed note or synthetic summary lost its known missing-file explanation");
     operations->DebugAppendCompletedTaskForSelfTest(failedSummary);
 
-    constexpr uint64_t localizedResultSummaryTaskId = 0xF26A202610100005ull;
     FolderWindow::FileOperationState::CompletedTaskSummary localizedResultSummary{};
     localizedResultSummary.taskId                        = localizedResultSummaryTaskId;
     localizedResultSummary.resultSummaryResourceId       = IDS_FMT_FILEOPS_RESULT_STOPPED_COPIED;
@@ -1195,7 +1199,6 @@
     const std::wstring frenchResultSummary               = localizedResultSummary.resultSummary;
     operations->DebugAppendCompletedTaskForSelfTest(std::move(localizedResultSummary));
 
-    constexpr uint64_t interruptedNoticeTaskId = 0xF26A202610100006ull;
     FolderWindow::FileOperationState::CompletedTaskSummary interruptedNotice{};
     interruptedNotice.taskId                           = interruptedNoticeTaskId;
     interruptedNotice.interruptedOperationId           = 0xA102u;
@@ -1300,6 +1303,12 @@
     if (accessDenied.empty() || lastNote != accessDenied)
         return reject(std::format(L"a task.result Error over an item Warning left the Last note '{}', expected '{}'", lastNote, accessDenied));
 
+    cleanupFixture();
+    existing.clear();
+    operations->CollectCompletedTasks(existing);
+    if (std::ranges::any_of(existing, [&](const auto& summary) noexcept { return std::ranges::find(fixtureIds, summary.taskId) != fixtureIds.end(); }))
+        return reject(L"fixture-owned completions remained after cleanup");
+    removeFixture.release();
     AppendLog(L"FileOps Issues producer resource text: every IDS_* producer keeps its own sentence as Problem and Last note in fr-FR and "
               L"en-US; (a)-(d), no HRESULT literal, task-level Last-note precedence, and live-language Last notes and summary rows verified.");
     return true;

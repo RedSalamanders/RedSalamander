@@ -1,0 +1,1 @@
+- Restore eligible queue-order controls on tasks waiting for transfer capacity or identity while keeping unsafe Start now actions unavailable.

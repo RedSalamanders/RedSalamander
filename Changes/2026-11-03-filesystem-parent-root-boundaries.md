@@ -1,0 +1,1 @@
+- Preserve filesystem root separators and stop parent traversal at absolute drive and volume-GUID roots without treating volume devices as directories.

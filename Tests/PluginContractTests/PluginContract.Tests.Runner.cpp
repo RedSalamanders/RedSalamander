@@ -31,6 +31,7 @@
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
 #include "PackedFileInfoBuffer.h"
+#include "PathUtils.h"
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/FactoryImpl.h"
 #include "PlugInterfaces/FileSystem.h"
@@ -40,6 +41,7 @@
 #include "PlugInterfaces/Viewer.h"
 #include "PluginConfiguration.h"
 #include "RegistryUtils.h"
+#include "StringConversion.h"
 #include "TerminalVtUpgrade.Tests.Contract.h"
 #include "TestSupport.Tests.Runner.h"
 #include "TestSupport/TestSupport.Tests.FailureReports.h"
@@ -1328,6 +1330,7 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         return;
     }
 
+    std::chrono::steady_clock::time_point unloadDeadline{};
     {
         wil::unique_hmodule module(LoadLibraryExW(fixtureModulePath.c_str(), nullptr, 0));
         Check(static_cast<bool>(module), L"Terminal.dll: isolated missing-runtime fixture loads", success);
@@ -1410,12 +1413,40 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
             terminal.reset();
         }
         parent.reset();
-        Check(WaitForPluginQuiet(canUnload), L"Terminal.dll: isolated diagnostic fixture reaches its unload quiet point", success);
+        // No metadata pointer is used after shutdown. Callback-return pins can still defer unmapping.
+        // Share the existing five-second unload budget with the subsequent physical-unmap witness.
+        unloadDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         shutdown();
+        const auto remaining = (std::max)(std::chrono::milliseconds::zero(),
+                                          std::chrono::duration_cast<std::chrono::milliseconds>(unloadDeadline - std::chrono::steady_clock::now()));
+        const auto quiet     = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept { return canUnload() == TRUE; }, {.timeout = remaining, .operationName = L"Terminal isolated diagnostic unload quiet point"});
+        Check(quiet.conditionMet, L"Terminal.dll: isolated diagnostic fixture reaches its unload quiet point", success);
+        if (! quiet.conditionMet)
+            std::wcerr << L"[ INFO     ] " << quiet.timeoutDiagnostic << L"\n";
     }
+
+    const auto remaining =
+        (std::max)(std::chrono::milliseconds::zero(), std::chrono::duration_cast<std::chrono::milliseconds>(unloadDeadline - std::chrono::steady_clock::now()));
+    const auto unmapped = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept { return GetModuleHandleW(fixtureModulePath.c_str()) == nullptr; },
+                                                                        {.timeout = remaining, .operationName = L"Terminal isolated diagnostic module unmap"});
+    Check(unmapped.conditionMet, L"Terminal.dll: isolated diagnostic fixture physically unmaps its copied module", success);
+    if (! unmapped.conditionMet)
+        std::wcerr << L"[ INFO     ] " << unmapped.timeoutDiagnostic << L"; module=" << fixtureModulePath.native() << L"\n";
 
     std::filesystem::remove_all(fixtureRoot, error);
     Check(! error, L"Terminal.dll: isolated localized diagnostic fixture cleans its scratch directory", success);
+    if (error)
+    {
+        const std::wstring message    = error.category() == std::system_category() ? TryFormatSystemMessage(static_cast<DWORD>(error.value())) : std::wstring{};
+        const std::wstring category   = Common::Strings::Utf16FromUtf8ReplacingInvalid(error.category().name());
+        const std::wstring diagnostic = std::format(L"[ INFO     ] Terminal fixture cleanup path={0} error={1} category={2} message={3}\n",
+                                                    fixtureRoot.native(),
+                                                    error.value(),
+                                                    category,
+                                                    message.empty() ? std::wstring_view(L"(Unicode system message unavailable)") : std::wstring_view(message));
+        std::wcerr << diagnostic;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2488,6 +2519,85 @@ void CheckOrdinalComponentKeyUnitParity(const FileSystemPathIdentity& identity, 
 
 void TestTypedRouteValidatorContracts(bool& success) noexcept
 {
+    {
+        const FileSystemPathIdentity local = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+        struct ParentCase final
+        {
+            std::wstring_view child;
+            std::wstring_view expected;
+        };
+        constexpr std::array cases{
+            ParentCase{LR"(C:\child)", LR"(C:\)"},
+            ParentCase{LR"(C:/child)", LR"(C:/)"},
+            ParentCase{LR"(\\?\C:\child)", LR"(\\?\C:\)"},
+            ParentCase{LR"(\\?\C:/child)", LR"(\\?\C:/)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent\child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent/child)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\parent)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\child\\)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)"},
+            ParentCase{LR"(\\?\Volume{not-a-guid}\child)", LR"(\\?\Volume{not-a-guid}\)"},
+            ParentCase{LR"(\\server\share\child)", LR"(\\server\share)"},
+            ParentCase{LR"(\\?\UNC\server\share\child)", LR"(\\?\UNC\server\share)"},
+        };
+        for (const auto& entry : cases)
+        {
+            std::wstring parent;
+            Check(TryGetFileSystemParentPath(local, entry.child, parent) && parent == entry.expected,
+                  std::format(L"Canonical parent preserves the root boundary for {}", entry.child).c_str(),
+                  success);
+        }
+        for (const std::wstring_view root :
+             {LR"(C:\)", LR"(\\?\C:\)", LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)", LR"(\\server\share)", LR"(\\?\UNC\server\share)"})
+        {
+            std::wstring parent;
+            Check(! TryGetFileSystemParentPath(local, root, parent) && parent.empty(), L"A supported Windows filesystem root has no parent", success);
+        }
+        std::wstring repeatedRootParent;
+        Check(! TryGetFileSystemParentPath(local, LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\\)", repeatedRootParent) && repeatedRootParent.empty(),
+              L"Repeated root separators cannot traverse above the filesystem root",
+              success);
+        constexpr auto volumeRoot   = LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}\)";
+        constexpr auto volumeDevice = LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef})";
+        Check(Common::Paths::IsSupportedLocalFileOperationPath(volumeRoot) && ! Common::Paths::IsSupportedLocalFileOperationPath(volumeDevice) &&
+                  ! EquivalentPath(local, volumeRoot, volumeDevice) && ! Common::Paths::IsSupportedLocalFileOperationPath(LR"(\\.\C:\child)") &&
+                  ! Common::Paths::IsSupportedLocalFileOperationPath(LR"(\\?\GLOBALROOT\Device\HarddiskVolume1\child)"),
+              L"Filesystem roots remain distinct from bare volumes and rejected device namespaces",
+              success);
+        std::wstring malformedParent;
+        Check(! Common::Paths::IsSupportedLocalFileOperationPath(LR"(\\?\Volume{unclosed\child)") &&
+                  TryGetFileSystemParentPath(local, LR"(\\?\Volume{unclosed\child)", malformedParent) && malformedParent == LR"(\\?\Volume{unclosed)",
+              L"An incomplete volume token retains generic parent semantics and is outside Local's operation envelope",
+              success);
+        FileSystemPathIdentity slashOnly = local;
+        slashOnly.preferredSeparator     = L'/';
+        slashOnly.acceptedSeparators     = L"/";
+        std::wstring slashParent;
+        Check(TryGetFileSystemParentPath(slashOnly, L"/bucket/folder/item", slashParent) && slashParent == L"/bucket/folder",
+              L"Slash-only provider parent semantics remain unchanged",
+              success);
+        Check(TryGetFileSystemParentPath(slashOnly, LR"(\\?\C:\child)", slashParent) == false,
+              L"Slash-only identities do not interpret Win32 backslashes as separators",
+              success);
+        FileSystemPathIdentity backslashOnly = local;
+        backslashOnly.acceptedSeparators     = L"\\";
+        constexpr std::array backslashCases{
+            ParentCase{LR"(\\?\C:\child)", LR"(\\?\C:\)"},
+            ParentCase{LR"(/\?\C:\child)", LR"(/\?\C:)"},
+            ParentCase{LR"(\/?\C:\child)", LR"(\/?\C:)"},
+            ParentCase{LR"(\\?/C:\child)", LR"(\\?/C:)"},
+            ParentCase{LR"(//?/C:\child)", LR"(//?/C:)"},
+            ParentCase{LR"(\\?\C:/child)", LR"(\\?)"},
+            ParentCase{LR"(\\?\Volume{01234567-89aB-CdEf-0123-456789abcdef}/child)", LR"(\\?)"},
+        };
+        for (const auto& entry : backslashCases)
+        {
+            std::wstring parent;
+            Check(TryGetFileSystemParentPath(backslashOnly, entry.child, parent) && parent == entry.expected,
+                  std::format(L"Backslash-only parent respects namespace separators for {}", entry.child).c_str(),
+                  success);
+        }
+    }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::None);
         const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");

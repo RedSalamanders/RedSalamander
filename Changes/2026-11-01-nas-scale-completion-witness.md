@@ -1,0 +1,1 @@
+- Distinguish an unavailable NAS scale-test completion from a successful provider result and record synchronized task/admission state at the existing wait deadline before cancellation.

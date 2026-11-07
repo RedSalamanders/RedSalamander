@@ -485,6 +485,11 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK "Čaká sa na dokončenie konfliktných operácií. Identifikátory súborov nie sú pre túto operáciu dostupné, preto sa musí vykonať samostatne."
+    IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE "&Paralelné prenosy"
+    IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC "Zdieľaný limit pre operácie so súbormi (1–16; predvolené 4). Rôzne súbory s novými cieľovými názvami možno prenášať súčasne. Prepísania a konfliktné operácie zostávajú postupné."
+    IDS_FILEOPS_WAITING_PARALLEL_LIMIT_FMT "Čaká sa na voľné miesto pre prenos. Zdieľaný limit je {0}."
+    IDS_FILEOPS_WAITING_EXCLUSIVE_TRANSFER "Čaká sa na operáciu, ktorá sa musí vykonať samostatne."
     IDS_FMT_FILEOPS_TRANSFER_AMOUNT "{0} z {1}"
     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} súborov, {1:L} priečinkov"

@@ -1,0 +1,34 @@
+{
+  "kind": "auxiliary-source-only-pester-recheck",
+  "run_id": "20261101T011952Z-75968-cda13a7d25ef47388996eaf787b99af9",
+  "repo_root": "Z:\\src\\RedSalamander-worktrees\\fileops-waiting-state-20261031",
+  "engine_commit": "c3c778cabd81dbf85b95f1dc4cec64b3b0eac12c",
+  "pester_version": "3.4.0",
+  "excludes": [
+    "RequiresBuildToolchain"
+  ],
+  "results": [
+    {
+      "Script": "WingetValidation.Tests.ps1",
+      "Total": 21,
+      "Passed": 19,
+      "Failed": 2,
+      "Skipped": 0,
+      "Failures": [
+        {
+          "Name": "requires explicit main publication and both native install receipts before submission",
+          "Describe": "Winget shared publication route",
+          "StackTrace": "at line: 146 in Z:\\src\\RedSalamander-worktrees\\fileops-waiting-state-20261031\\Tools\\Tests\\WingetValidation.Tests.ps1\n146:         $submit | Should Match 'manifestDigest -cne \\$identity.PublicationId'\r",
+          "MessageExcerpt": "Expected: {<#\n.SYNOPSIS\nSubmits an exact-version winget PR after both native install gates pass.\n.PARAMETER Root\nTrusted current main checkout.\n.PARAMETER Directory\nImmutable prepared publication artifact directory.\n.PARAMETER InstallEvidence\nDirectory holding both native winget install receipts.\n.OUTPUTS\nExisting exact publication or automation-owned upstream PR URL.\n.NOTES\nExplicit main dispatch only; requires WINGET_TOKEN. Refuses stale evidence, conflicting PRs and modified manifests.\n.EXAMPLE\n./Tools/Submit-Winget.ps1 -Root . -Directory prepared -InstallEvidence install-evidence\n#>\n[CmdletBinding()]\nparam([string]$Root='.',[Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$InstallEvidence)\nSet-StrictMode -Version Latest\n$ErrorActionPreference='Stop'\nImport-Module "
+        },
+        {
+          "Name": "enables local manifests, validates before install and cleans only an owned absent identity",
+          "Describe": "Winget shared publication route",
+          "StackTrace": "at line: 153 in Z:\\src\\RedSalamander-worktrees\\fileops-waiting-state-20261031\\Tools\\Tests\\WingetValidation.Tests.ps1\n153:         ($enable -ge 0 -and $validate -gt $enable -and $start -gt $validate) | Should Be $true\r",
+          "MessageExcerpt": "Expected: {True}\nBut was:  {False}"
+        }
+      ]
+    }
+  ],
+  "qualification": "Source-only recheck; does not replace or promote the original PR suite result."
+}

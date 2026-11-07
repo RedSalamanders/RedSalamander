@@ -1,0 +1,38 @@
+[
+  {
+    "source": "resource-localization.xml",
+    "raw_sha256": "ce3c5ef7c7280ab06c5188812151a24dcf8d49386f7a5affab91e79d5a005978",
+    "total": 10,
+    "failed": 0,
+    "skipped": 0,
+    "failures": []
+  },
+  {
+    "source": "tooling-governance.xml",
+    "raw_sha256": "6349e78843d683f0a10078c4ae7310101b1b6290c59908379ceea1eeb1fa9b73",
+    "total": 12,
+    "failed": 0,
+    "skipped": 0,
+    "failures": []
+  },
+  {
+    "source": "runner-plan-profile.xml",
+    "raw_sha256": "bb54be68f625f11bffd6027d9be030236edeed1a77aa582b130e08eb16cd2658",
+    "total": 77,
+    "failed": 1,
+    "skipped": 0,
+    "failures": [
+      "Run-AllTests plan helper.defines Suite CI as the GitHub Actions gate through the unified runner"
+    ]
+  },
+  {
+    "source": "source-contracts-final.xml",
+    "raw_sha256": "aec0f5aec220c542ed23bd131fdce6542c76bf04e8f3c3f5ce2abdc0932aab20",
+    "total": 212,
+    "failed": 1,
+    "skipped": 0,
+    "failures": [
+      "Test harness source contracts.keeps the nightly shuffle repeat lane separate from the PR gate"
+    ]
+  }
+]

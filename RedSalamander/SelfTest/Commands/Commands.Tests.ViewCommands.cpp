@@ -6722,6 +6722,65 @@ private:
         return false;
     }
 
+    // This keyboard fixture parks on its owned edit host so delivered pointer hover cannot select a row.
+    // Checks sample cursor position; they cannot exclude movement between samples or the final restore check.
+    POINT originalCursor{};
+    POINT parkedCursor{};
+    bool cursorParked          = false;
+    bool cursorInterference    = false;
+    const auto ownedForeground = [&]() noexcept
+    {
+        const HWND root = GetAncestor(mainWindow, GA_ROOT);
+        DWORD processId = 0;
+        return root && GetForegroundWindow() == root && GetWindowThreadProcessId(root, &processId) == GetCurrentThreadId() &&
+               processId == GetCurrentProcessId();
+    };
+    const auto stillParkedAndOwned = [&]() noexcept
+    {
+        POINT current{};
+        if (cursorInterference || ! ownedForeground() || GetCursorPos(&current) == FALSE || current.x != parkedCursor.x || current.y != parkedCursor.y)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        return true;
+    };
+    state.Require(GetCursorPos(&originalCursor) != FALSE, L"Could not capture the cursor before edit-suggest keyboard isolation.");
+    if (! state.failure.empty())
+        return false;
+    const auto restoreIsolatedCursor = wil::scope_exit([&]() noexcept
+    {
+        if (! cursorParked)
+            return;
+        NavigationViewDebugSnapshot snapshot{};
+        bool retired = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot);
+        for (unsigned int attempt = 0; retired && snapshot.editMode && attempt < 2u; ++attempt)
+        {
+            const HWND input     = snapshot.currentEditInputHwnd;
+            DWORD processId      = 0;
+            const DWORD threadId = input ? GetWindowThreadProcessId(input, &processId) : 0;
+            if (! stillParkedAndOwned() || ! input || IsWindow(input) == FALSE || processId != GetCurrentProcessId() || threadId != GetCurrentThreadId())
+            {
+                retired = false;
+                break;
+            }
+            SendMessageW(input, WM_KEYDOWN, VK_ESCAPE, 0);
+            SendMessageW(input, WM_KEYUP, VK_ESCAPE, 0);
+            PumpPendingMessages();
+            retired = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot);
+        }
+        retired = retired && ! snapshot.editMode && ! snapshot.editSuggestPopupVisible;
+        if (! retired || ! stillParkedAndOwned())
+        {
+            SelfTest::AppendSuiteTrace(
+                SelfTest::SelfTestSuite::Commands,
+                L"Edit-suggest cursor isolation cleanup could not verify retired edit/popup and unchanged parked cursor; cursor preserved.");
+            state.Require(false, L"Edit-suggest cursor isolation cleanup could not verify retired edit/popup and unchanged parked cursor; cursor preserved.");
+            return;
+        }
+        state.Require(SetCursorPos(originalCursor.x, originalCursor.y) != FALSE, L"Edit-suggest cursor isolation could not restore the original cursor.");
+    });
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for navigation-view edit-suggest test.");
     if (suiteRoot.empty())
@@ -6893,6 +6952,83 @@ private:
         return false;
     }
 
+    const auto parkOwnedCursor = [&]() noexcept
+    {
+        NavigationViewDebugSnapshot fresh{};
+        POINT current{};
+        const POINT expected = cursorParked ? parkedCursor : originalCursor;
+        if (cursorInterference || ! ownedForeground() || GetCursorPos(&current) == FALSE || current.x != expected.x || current.y != expected.y ||
+            ! g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, fresh))
+        {
+            cursorInterference = true;
+            return false;
+        }
+        const HWND host = fresh.currentEditHostHwnd;
+        RECT rect{};
+        DWORD processId = 0;
+        if (! host || IsWindow(host) == FALSE || GetWindowThreadProcessId(host, &processId) != GetCurrentThreadId() || processId != GetCurrentProcessId() ||
+            GetWindowRect(host, &rect) == FALSE || rect.right <= rect.left || rect.bottom <= rect.top)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        const POINT next{rect.left + (rect.right - rect.left) / 2, rect.top + (rect.bottom - rect.top) / 2};
+        const HWND hit = WindowFromPoint(next);
+        RECT popup{};
+        if (! hit || (hit != host && IsChild(host, hit) == FALSE) ||
+            (fresh.editSuggestPopupVisible && (! fresh.editSuggestPopupHwnd || IsWindow(fresh.editSuggestPopupHwnd) == FALSE ||
+                                               GetWindowRect(fresh.editSuggestPopupHwnd, &popup) == FALSE || PtInRect(&popup, next) != FALSE)) ||
+            ! ownedForeground() || GetCursorPos(&current) == FALSE || current.x != expected.x || current.y != expected.y)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        if (SetCursorPos(next.x, next.y) == FALSE)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        parkedCursor = next;
+        cursorParked = true;
+        PumpPendingMessages();
+        return stillParkedAndOwned();
+    };
+    state.Require(parkOwnedCursor(), L"Could not safely park the cursor on the owned edit host.");
+    if (! state.failure.empty())
+        return false;
+    const auto verifyCursorIsolation = [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        POINT current{};
+        if (! stillParkedAndOwned() || GetCursorPos(&current) == FALSE || current.x != parkedCursor.x || current.y != parkedCursor.y)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        DWORD processId = 0;
+        const HWND host = value.currentEditHostHwnd;
+        const HWND hit  = WindowFromPoint(current);
+        if (! host || IsWindow(host) == FALSE || GetWindowThreadProcessId(host, &processId) != GetCurrentThreadId() || processId != GetCurrentProcessId() ||
+            ! hit || (hit != host && IsChild(host, hit) == FALSE))
+        {
+            cursorInterference = true;
+            return false;
+        }
+        if (value.editSuggestPopupVisible)
+        {
+            RECT popup{};
+            if (! value.editSuggestPopupHwnd || IsWindow(value.editSuggestPopupHwnd) == FALSE || GetWindowRect(value.editSuggestPopupHwnd, &popup) == FALSE ||
+                PtInRect(&popup, current) != FALSE)
+            {
+                cursorInterference = true;
+                return false;
+            }
+        }
+        return true;
+    };
+    state.Require(verifyCursorIsolation(editSnapshot), L"Edit-suggest cursor isolation failed immediately after parking.");
+    if (! state.failure.empty())
+        return false;
+
     const auto pathEditAcceptsDirectedInput = [](const NavigationViewDebugSnapshot& value) noexcept
     {
         if (value.focusTarget == NavigationViewDebugFocusTarget::PathEdit)
@@ -7021,6 +7157,11 @@ private:
 
     const auto setEditTextAndMoveCaret = [&](std::wstring_view text, std::wstring_view context) noexcept
     {
+        NavigationViewDebugSnapshot cursorSnapshot{};
+        state.Require(g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, cursorSnapshot) && verifyCursorIsolation(cursorSnapshot),
+                      std::format(L"Edit-suggest cursor isolation failed before {}.", context));
+        if (! state.failure.empty())
+            return false;
         const std::wstring queryText(text);
         state.Require(queryText.starts_with(rootText),
                       std::format(L"Navigation-view edit-suggest query did not share the expected root prefix during {}.", context));
@@ -7084,9 +7225,9 @@ private:
         const bool reached = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
                                                            [&](const NavigationViewDebugSnapshot& value) noexcept
         {
-            return pathEditAcceptsDirectedInput(value) && value.editMode && value.editSuggestPopupVisible && value.editSuggestItemCount >= 1u &&
-                   value.editSuggestSelectedIndex == expectedSelectedIndex && ! value.historyDropdownVisible && ! value.fullPathPopupVisible &&
-                   ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 1u && value.currentPathText == rootText &&
+            return verifyCursorIsolation(value) && pathEditAcceptsDirectedInput(value) && value.editMode && value.editSuggestPopupVisible &&
+                   value.editSuggestItemCount >= 1u && value.editSuggestSelectedIndex == expectedSelectedIndex && ! value.historyDropdownVisible &&
+                   ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 1u && value.currentPathText == rootText &&
                    value.currentEditText == expectedText && g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
                    g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
@@ -7102,16 +7243,44 @@ private:
                 snapshot = currentSnapshot;
             }
 
+            POINT cursor{};
+            const bool cursorKnown = GetCursorPos(&cursor) != FALSE;
+            RECT popupRect{};
+            const bool popupRectKnown = snapshot.editSuggestPopupHwnd && GetWindowRect(snapshot.editSuggestPopupHwnd, &popupRect) != FALSE;
             state.Require(false,
                           std::format(L"Navigation view did not expose the edit-suggest popup during {}. focusTarget={} editMode={} popupVisible={} "
-                                      L"popupItems={} selectedIndex={} visibleChildren={} currentEdit='{}' currentPath='{}'",
+                                      L"popupItems={} selectedIndex={} expectedIndex={} hoveredIndex={} visibleChildren={} history={} fullPath={} "
+                                      L"fullPathEdit={} refresh={}/{} items={}/{} selected={}/{} cursorKnown={} cursor=({}, {}) parked=({}, {}) "
+                                      L"cursorInterference={} popupRectKnown={} popupRect=({}, {}, {}, {}) currentEdit='{}' currentPath='{}'",
                                       context,
                                       static_cast<int>(snapshot.focusTarget),
                                       snapshot.editMode,
                                       snapshot.editSuggestPopupVisible,
                                       snapshot.editSuggestItemCount,
                                       snapshot.editSuggestSelectedIndex,
+                                      expectedSelectedIndex,
+                                      snapshot.editSuggestHoveredIndex,
                                       snapshot.visibleChildWindowCount,
+                                      snapshot.historyDropdownVisible,
+                                      snapshot.fullPathPopupVisible,
+                                      snapshot.fullPathPopupEditMode,
+                                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                                      baselineRefreshCount,
+                                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                                      baselineItemCount,
+                                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                                      baselineSelectedCount,
+                                      cursorKnown,
+                                      cursor.x,
+                                      cursor.y,
+                                      parkedCursor.x,
+                                      parkedCursor.y,
+                                      cursorInterference,
+                                      popupRectKnown,
+                                      popupRect.left,
+                                      popupRect.top,
+                                      popupRect.right,
+                                      popupRect.bottom,
                                       snapshot.currentEditText,
                                       snapshot.currentPathText));
         }
@@ -7224,7 +7393,9 @@ private:
                  WM_DPICHANGED,
                  static_cast<WPARAM>(static_cast<DWORD>(MAKELONG(static_cast<WORD>(suggestTestDpi), static_cast<WORD>(suggestTestDpi)))),
                  reinterpret_cast<LPARAM>(&suggestScaledRect));
-    PumpPendingMessages();
+    state.Require(parkOwnedCursor(), L"Could not safely repark the cursor after the DPI transition.");
+    if (! state.failure.empty())
+        return false;
 
     NavigationViewDebugSnapshot dpiSuggestSnapshot{};
     state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
@@ -7259,6 +7430,7 @@ private:
 
     state.Require(hasPathEditFocus(dpiSuggestSnapshot),
                   L"Path edit should retain Win32 focus while the live edit-suggest popup reflows across the synthetic DPI transition.");
+    state.Require(verifyCursorIsolation(dpiSuggestSnapshot), L"Edit-suggest cursor isolation failed after the DPI transition.");
     if (! state.failure.empty())
     {
         return false;
@@ -15494,6 +15666,9 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
         HWND timerWindow = nullptr;
         bool armed       = false;
         bool queued      = false;
+        DWORD timerError = ERROR_SUCCESS;
+        DWORD waitError  = ERROR_SUCCESS;
+        std::chrono::steady_clock::time_point deadline{};
 
         static void Queue(void* context) noexcept
         {
@@ -15502,10 +15677,30 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
                 return;
             control.armed = true;
             if (SetTimer(control.timerWindow, 1u, 1u, PaintProbe::OnTimer) == 0u)
+            {
+                control.timerError = GetLastError();
                 return;
-            std::this_thread::sleep_for(20ms);
-            MSG pending{};
-            control.queued = PeekMessageW(&pending, control.timerWindow, WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE;
+            }
+            // Observe the real timer's readiness without dispatching it. A
+            // fixed sleep cannot promise readiness under timer coalescing.
+            // This control shares (and never extends) the original deadline;
+            // only the helper under test may drain the queued paint.
+            while (std::chrono::steady_clock::now() < control.deadline)
+            {
+                MSG pending{};
+                if (PeekMessageW(&pending, control.timerWindow, WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE)
+                {
+                    control.queued = true;
+                    return;
+                }
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(control.deadline - std::chrono::steady_clock::now());
+                const DWORD waitMs   = static_cast<DWORD>((std::max)(1ms, (std::min)(20ms, remaining)).count());
+                if (MsgWaitForMultipleObjectsEx(0u, nullptr, waitMs, QS_TIMER, MWMO_INPUTAVAILABLE) == WAIT_FAILED)
+                {
+                    control.waitError = GetLastError();
+                    return;
+                }
+            }
         }
     };
     std::atomic<uint32_t> latePaints{0u};
@@ -15521,22 +15716,32 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
     state.Require(attached != 0 || GetLastError() == ERROR_SUCCESS, L"Could not attach the late queued-paint probe.");
     if (! state.failure.empty())
         return false;
-    QuietCommitPaint lateControl{.timerWindow = lateTimerWindow.get()};
+    const auto lateTimeout = SelfTest::Scale(5000ms);
+    QuietCommitPaint lateControl{.timerWindow = lateTimerWindow.get(), .deadline = std::chrono::steady_clock::now() + lateTimeout};
     const auto beforeLate             = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
-    const bool lateQuiet              = WaitForFolderViewWarmPerfQuiescence(pane, 100ms, SelfTest::Scale(5000ms), QuietCommitPaint::Queue, &lateControl);
+    const bool lateQuiet              = WaitForFolderViewWarmPerfQuiescence(pane, 100ms, lateTimeout, QuietCommitPaint::Queue, &lateControl);
     const auto atLateReturn           = g_folderWindow.DebugGetWarmPanePerfSnapshot(pane);
     const uint32_t latePaintsAtReturn = latePaints.load(std::memory_order_acquire);
     MSG pendingLate{};
     const bool latePendingAtReturn = lateTimerWindow && PeekMessageW(&pendingLate, lateTimerWindow.get(), WM_TIMER, WM_TIMER, PM_NOREMOVE) != FALSE;
-    SelfTest::AppendSelfTestTrace(std::format(L"Warm quiescence late probe: quiet={} armed={} queued={} pending={} paintsAtReturn={} renderDelta={}.",
+    SelfTest::AppendSelfTestTrace(std::format(L"Warm quiescence late probe: quiet={} armed={} queued={} pending={} paintsAtReturn={} renderDelta={} "
+                                              L"timerError={} waitError={}.",
                                               lateQuiet,
                                               lateControl.armed,
                                               lateControl.queued,
                                               latePendingAtReturn,
                                               latePaintsAtReturn,
-                                              atLateReturn.renderCalls - beforeLate.renderCalls));
+                                              atLateReturn.renderCalls - beforeLate.renderCalls,
+                                              lateControl.timerError,
+                                              lateControl.waitError));
     state.Require(lateQuiet && lateControl.armed && lateControl.queued,
-                  L"The independent late-paint control must actually queue work inside the original quiet deadline.");
+                  std::format(L"The independent late-paint control must actually queue work inside the original quiet deadline: quiet={} armed={} "
+                              L"queued={} timerError={} waitError={}.",
+                              lateQuiet,
+                              lateControl.armed,
+                              lateControl.queued,
+                              lateControl.timerError,
+                              lateControl.waitError));
     state.Require(! latePendingAtReturn && latePaintsAtReturn == 1u && atLateReturn.renderCalls > beforeLate.renderCalls,
                   L"Warm quiescence must drain and observe the real paint queued after its first empty-queue observation.");
     // Drain any failed negative control while its borrowed probe is still alive.
@@ -19096,6 +19301,15 @@ struct FolderViewPerfBudgetFile
     const auto maximum = (std::numeric_limits<uint64_t>::max)();
     Debug::Perf::Emit(L"perf.jsonl.contract", controls, maximum, maximum, maximum - 1u, E_ACCESSDENIED);
     Debug::Perf::Emit(L"perf.jsonl.counter", L"", 0u, maximum, 1u, S_OK);
+    Debug::Perf::EmitDurationUs(L"perf.jsonl.duration_zero", L"shared", 0u, 7u, 16u, E_ACCESSDENIED);
+    Debug::Perf::EmitDurationUs(L"perf.jsonl.duration_nonzero", L"exclusive", 42u, 3u, 4u, S_OK);
+    Debug::Perf::EmitDurationUs(L"perf.jsonl.duration_default_detail", 0u, 2u, 3u);
+    Debug::Perf::EmitCounter(L"perf.jsonl.counter_zero", 0u);
+    {
+        Debug::Perf::Scope scope(L"perf.jsonl.scope");
+        scope.SetValue0(9u);
+        scope.SetValue1(11u);
+    }
     const std::wstring large(100000u, L'x');
     Debug::Perf::Emit(L"perf.jsonl.large", large, 1u);
     const auto afterLarge = Debug::Perf::GetJsonlDebugSnapshotForSelfTest();
@@ -19128,7 +19342,8 @@ struct FolderViewPerfBudgetFile
     const auto after = Debug::Perf::GetJsonlDebugSnapshotForSelfTest();
     state.Require(after.metadataPreparations == before.metadataPreparations && after.retainedLineCapacity <= 64u * 1024u,
                   L"JSONL emission rebuilt constant metadata or retained oversized scratch.");
-    state.Require(after.threadWriteCalls - before.threadWriteCalls == 8u, L"JSONL observation must count this thread's writes without counting other threads.");
+    state.Require(after.threadWriteCalls - before.threadWriteCalls == 13u,
+                  L"JSONL observation must count this thread's writes without counting other threads.");
     std::array<bool, kThreadCount * kRowsPerThread> seen{};
     size_t ownRows = 0u;
     std::ifstream file(path, std::ios::binary);
@@ -19228,6 +19443,36 @@ struct FolderViewPerfBudgetFile
                               yyjson_get_uint(yyjson_obj_get(object, "value")) == maximum,
                           L"Zero-duration JSONL counter semantics changed.");
         }
+        else if (name == "perf.jsonl.duration_zero" || name == "perf.jsonl.duration_nonzero")
+        {
+            const bool zero = name == "perf.jsonl.duration_zero";
+            state.Require(JsonStringEquals(object, "unit", "us") && JsonStringEquals(object, "detail", zero ? "shared" : "exclusive") &&
+                              yyjson_get_uint(yyjson_obj_get(object, "durationUs")) == (zero ? 0u : 42u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value")) == (zero ? 0u : 42u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value0")) == (zero ? 7u : 3u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value1")) == (zero ? 16u : 4u) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "hr")) == static_cast<uint32_t>(zero ? E_ACCESSDENIED : S_OK),
+                          L"Typed durations must preserve exact elapsed values, units, detail, auxiliary facts and status.");
+        }
+        else if (name == "perf.jsonl.duration_default_detail")
+        {
+            state.Require(JsonStringEquals(object, "unit", "us") && JsonStringEquals(object, "detail", "duration") &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value")) == 0u && yyjson_get_uint(yyjson_obj_get(object, "value0")) == 2u &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value1")) == 3u,
+                          L"The existing duration helper must retain its detail and serialize a zero duration as microseconds.");
+        }
+        else if (name == "perf.jsonl.counter_zero")
+        {
+            state.Require(JsonStringEquals(object, "unit", "count") && yyjson_get_uint(yyjson_obj_get(object, "value")) == 0u,
+                          L"A genuine zero counter must remain a count.");
+        }
+        else if (name == "perf.jsonl.scope")
+        {
+            state.Require(JsonStringEquals(object, "unit", "us") &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value")) == yyjson_get_uint(yyjson_obj_get(object, "durationUs")) &&
+                              yyjson_get_uint(yyjson_obj_get(object, "value0")) == 9u && yyjson_get_uint(yyjson_obj_get(object, "value1")) == 11u,
+                          L"Scope output must be a duration with unchanged auxiliary facts, even when the clock rounds to zero.");
+        }
         else if (name == "perf.jsonl.large")
         {
             state.Require(JsonStringEquals(object, "detail", std::string(large.size(), 'x')), L"An oversized JSONL record was truncated.");
@@ -19247,7 +19492,7 @@ struct FolderViewPerfBudgetFile
         }
     }
     file.close();
-    state.Require(ownRows == seen.size() + 8u && std::all_of(seen.begin(), seen.end(), [](bool value) { return value; }),
+    state.Require(ownRows == seen.size() + 13u && std::all_of(seen.begin(), seen.end(), [](bool value) { return value; }),
                   L"JSONL records were not immediately readable and complete before clearing capture.");
     Debug::Perf::ClearJsonlOutput();
     std::error_code ec;
@@ -21731,7 +21976,9 @@ struct FolderViewDummyPluginHandles
     {
         return false;
     }
-    const auto root = suiteRoot / L"work" / std::format(L"viewer_space_exact_detail_{0}", GetTickCount64());
+    // The unique parent isolates runs. Fixed capitals provide a reproducible text-population
+    // witness at 96 DPI, where thin mixed-case ClearType glyphs can miss the existing pixel floor.
+    const auto root = suiteRoot / L"work" / std::format(L"viewer_space_exact_detail_{0}", GetTickCount64()) / L"CEDAR RIDGE RESEARCH RECORDS ARCHIVE";
     state.Require(SelfTest::EnsureDirectory(root), L"Exact-detail root is created.");
     const std::string payload(1024u * 1024u, 'd');
     for (const wchar_t* group : {L"A", L"B"})
@@ -22072,20 +22319,124 @@ struct FolderViewDummyPluginHandles
         SendMessageW(probe.hwnd, WM_MOUSELEAVE, 0u, 0u);
         SendMessageW(snapshot.analysisHwnd, WM_MOUSELEAVE, 0u, 0u);
         UpdateWindow(probe.hwnd);
-        const HRESULT captured = RedSalamander::TestSupport::SaveWindowScreenshot(probe.hwnd, captures / (name + L".png"), probes);
-        state.Require(SUCCEEDED(captured),
-                      std::format(L"Owned-window capture {0} retains chrome, analysis, navigation and divider composition: 0x{1:08X}; "
-                                  L"backgroundPixels={2}, textPixels={3}, analysisPixels={4}, navigationPixels={5}, edgePixels=[{6},{7},{8},{9}].",
-                                  name,
-                                  static_cast<unsigned long>(captured),
-                                  probes[0].matchedPixels,
-                                  probes[1].matchedPixels,
-                                  probes[2].matchedPixels,
-                                  probes[3].matchedPixels,
-                                  probes[4].matchedPixels,
-                                  probes[5].matchedPixels,
-                                  probes[6].matchedPixels,
-                                  probes[7].matchedPixels));
+        const HRESULT captured    = RedSalamander::TestSupport::SaveWindowScreenshot(probe.hwnd, captures / (name + L".png"), probes);
+        const auto capturedProbes = probes; // Preserve the capture result before any diagnostic queries.
+        if (FAILED(captured))
+        {
+            RECT actualParentClient{}, actualParentWindow{}, actualNavigationClient{}, actualNavigationWindow{};
+            const bool parentClientOk     = GetClientRect(probe.hwnd, &actualParentClient) != FALSE;
+            const bool parentWindowOk     = GetWindowRect(probe.hwnd, &actualParentWindow) != FALSE;
+            const bool navigationClientOk = snapshot.navigationHwnd && GetClientRect(snapshot.navigationHwnd, &actualNavigationClient) != FALSE;
+            const bool navigationWindowOk = snapshot.navigationHwnd && GetWindowRect(snapshot.navigationHwnd, &actualNavigationWindow) != FALSE;
+            POINT navigationOrigin{actualNavigationClient.left, actualNavigationClient.top};
+            POINT navigationEnd{actualNavigationClient.right, actualNavigationClient.bottom};
+            const bool mappedOk = navigationClientOk && ClientToScreen(snapshot.navigationHwnd, &navigationOrigin) != FALSE &&
+                                  ClientToScreen(snapshot.navigationHwnd, &navigationEnd) != FALSE && ScreenToClient(probe.hwnd, &navigationOrigin) != FALSE &&
+                                  ScreenToClient(probe.hwnd, &navigationEnd) != FALSE;
+            MONITORINFO parentMonitor{.cbSize = sizeof(MONITORINFO)};
+            MONITORINFO navigationMonitor{.cbSize = sizeof(MONITORINFO)};
+            const bool parentMonitorOk = GetMonitorInfoW(MonitorFromWindow(probe.hwnd, MONITOR_DEFAULTTONEAREST), &parentMonitor) != FALSE;
+            const bool navigationMonitorOk =
+                snapshot.navigationHwnd && GetMonitorInfoW(MonitorFromWindow(snapshot.navigationHwnd, MONITOR_DEFAULTTONEAREST), &navigationMonitor) != FALSE;
+            std::wstring diagnostic =
+                std::format(L"Owned-window capture {0} retains chrome, analysis, navigation and divider composition: 0x{1:08X}; "
+                            L"backgroundPixels={2}, textPixels={3}, analysisPixels={4}, navigationPixels={5}, edgePixels=[{6},{7},{8},{9}].",
+                            name,
+                            static_cast<unsigned long>(captured),
+                            capturedProbes[0].matchedPixels,
+                            capturedProbes[1].matchedPixels,
+                            capturedProbes[2].matchedPixels,
+                            capturedProbes[3].matchedPixels,
+                            capturedProbes[4].matchedPixels,
+                            capturedProbes[5].matchedPixels,
+                            capturedProbes[6].matchedPixels,
+                            capturedProbes[7].matchedPixels);
+            diagnostic += std::format(L" DPI parent={0} navigation={1}; clientOk={2}/{3} parentClient=[{4},{5},{6},{7}] navigationClient=[{8},{9},{10},{11}] "
+                                      L"mappedOk={12} mappedNavigation=[{13},{14},{15},{16}] capturedNavigation=[{17},{18},{19},{20}].",
+                                      GetDpiForWindow(probe.hwnd),
+                                      snapshot.navigationHwnd ? GetDpiForWindow(snapshot.navigationHwnd) : 0u,
+                                      parentClientOk,
+                                      navigationClientOk,
+                                      actualParentClient.left,
+                                      actualParentClient.top,
+                                      actualParentClient.right,
+                                      actualParentClient.bottom,
+                                      actualNavigationClient.left,
+                                      actualNavigationClient.top,
+                                      actualNavigationClient.right,
+                                      actualNavigationClient.bottom,
+                                      mappedOk,
+                                      navigationOrigin.x,
+                                      navigationOrigin.y,
+                                      navigationEnd.x,
+                                      navigationEnd.y,
+                                      navigationClient.left,
+                                      navigationClient.top,
+                                      navigationClient.right,
+                                      navigationClient.bottom);
+            diagnostic += std::format(L" WindowOk={0}/{1} parent=[{2},{3},{4},{5}] navigation=[{6},{7},{8},{9}] monitorOk={10}/{11} "
+                                      L"parentMonitor=[{12},{13},{14},{15}] navigationMonitor=[{16},{17},{18},{19}].",
+                                      parentWindowOk,
+                                      navigationWindowOk,
+                                      actualParentWindow.left,
+                                      actualParentWindow.top,
+                                      actualParentWindow.right,
+                                      actualParentWindow.bottom,
+                                      actualNavigationWindow.left,
+                                      actualNavigationWindow.top,
+                                      actualNavigationWindow.right,
+                                      actualNavigationWindow.bottom,
+                                      parentMonitorOk,
+                                      navigationMonitorOk,
+                                      parentMonitor.rcMonitor.left,
+                                      parentMonitor.rcMonitor.top,
+                                      parentMonitor.rcMonitor.right,
+                                      parentMonitor.rcMonitor.bottom,
+                                      navigationMonitor.rcMonitor.left,
+                                      navigationMonitor.rcMonitor.top,
+                                      navigationMonitor.rcMonitor.right,
+                                      navigationMonitor.rcMonitor.bottom);
+            diagnostic +=
+                std::format(L" Navigation snapshot: available={0} window={1} visible={2} root={3} d2d={4} size={5}x{6} renders={7} "
+                            L"resizeFailures={8} presentFailures={9} flushFailures={10} mode={11} dark={12} contrast={13} bg=0x{14:08X} text=0x{15:08X} "
+                            L"viewNode={16} selected={17} layout={18} presented={19}.",
+                            navigationHost.diagnosticsAvailable,
+                            navigationHost.hasWindow,
+                            navigationHost.visible,
+                            navigationHost.hasRoot,
+                            navigationHost.hasD2DContext,
+                            navigationHost.clientWidthPx,
+                            navigationHost.clientHeightPx,
+                            navigationHost.renderCount,
+                            navigationHost.resizeFailureCount,
+                            navigationHost.presentFailureCount,
+                            navigationHost.prepareD2DFlushFailureCount,
+                            navigationHost.presentationMode,
+                            navigationHost.dark,
+                            navigationHost.highContrast,
+                            navigationHost.windowBackgroundArgb,
+                            navigationHost.textArgb,
+                            snapshot.viewNodeId,
+                            snapshot.selectedItemId,
+                            snapshot.layoutGeneration,
+                            snapshot.presentedLayoutGeneration);
+            for (size_t index = 0u; index < capturedProbes.size(); ++index)
+            {
+                const auto& witness = capturedProbes[index];
+                diagnostic += std::format(L" Probe{0} color=0x{1:08X} tolerance={2} required={3} matched={4} bounds=[{5},{6},{7},{8}].",
+                                          index,
+                                          static_cast<unsigned long>(witness.expectedColor),
+                                          static_cast<unsigned int>(witness.tolerance),
+                                          witness.minimumMatchingPixels,
+                                          witness.matchedPixels,
+                                          witness.clientBounds.left,
+                                          witness.clientBounds.top,
+                                          witness.clientBounds.right,
+                                          witness.clientBounds.bottom);
+            }
+            SelfTest::AppendSelfTestTrace(diagnostic);
+            state.Require(false, diagnostic);
+        }
         captureProvenance += std::format("{0}{{\"file\":\"{1}.png\",\"widthPx\":{2},\"heightPx\":{3},\"themeIndex\":{4},\"layoutGeneration\":{5},"
                                          "\"windowRectPx\":[{6},{7},{8},{9}],\"workAreaPx\":[{10},{11},{12},{13}],\"childEdgeProbes\":4,"
                                          "\"presentedLayoutGeneration\":{14},\"layoutDirty\":{15},\"mapWidthDip\":{16:.2f},\"mapHeightDip\":{17:.2f},"
@@ -23581,8 +23932,8 @@ struct FolderViewDummyPluginHandles
     },
                                                  SelfTest::Scale(10000ms)),
                   L"Fresh post-Close ViewerSpace scan failed to settle exact provider totals after stale-token delivery.");
-    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", closeReuseMetricOffset) == 1u,
-                  L"Same-window restore before Close did not use exactly one cache hit.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", closeReuseMetricOffset) == 0u,
+                  L"The interrupted same-window restore must not report a completed cache hit.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", postCloseMetricOffset) == 0u,
                   L"Fresh post-Close window recorded a ViewerSpace cache hit.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_restore_turn_us", closeReuseMetricOffset) == 1u,
@@ -25833,7 +26184,8 @@ struct FolderViewDummyPluginHandles
     uint64_t bookkeepingHigh = 0u;
     struct Cycle final
     {
-        uint64_t openUs = 0u, firstMeaningfulPaintUs = 0u, retainedUs = 0u, adoptionUs = 0u, closeUs = 0u, closeWorkingSet = 0u, closePrivate = 0u;
+        uint64_t openUs = 0u, warmOpenUs = 0u, firstMeaningfulPaintUs = 0u, retainedUs = 0u, adoptionUs = 0u, closeUs = 0u, closeWorkingSet = 0u,
+                 closePrivate = 0u;
         uint64_t ownedBytes = 0u, cacheBytes = 0u, restoreBytes = 0u, generation = 0u;
         size_t directories = 0u, files = 0u;
     };
@@ -25893,25 +26245,27 @@ struct FolderViewDummyPluginHandles
         for (size_t i = 0u; i < cycles.size(); ++i)
         {
             const Cycle& c = cycles[i];
-            cycleJson.append(std::format(
-                L"    {{\"cycle\":{},\"openSettleUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},\"adoptionSettleUs\":{},\"closeUs\":{},"
-                L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
-                L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
-                i + 1u,
-                c.openUs,
-                c.firstMeaningfulPaintUs,
-                c.retainedUs,
-                c.adoptionUs,
-                c.closeUs,
-                c.closeWorkingSet,
-                c.closePrivate,
-                c.ownedBytes,
-                c.cacheBytes,
-                c.restoreBytes,
-                c.generation,
-                c.directories,
-                c.files,
-                i + 1u < cycles.size() ? L",\n" : L"\n"));
+            cycleJson.append(std::format(L"    "
+                                         L"{{\"cycle\":{},\"openSettleUs\":{},\"warmOpenUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
+                                         L"\"adoptionSettleUs\":{},\"closeUs\":{},"
+                                         L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
+                                         L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
+                                         i + 1u,
+                                         c.openUs,
+                                         c.warmOpenUs,
+                                         c.firstMeaningfulPaintUs,
+                                         c.retainedUs,
+                                         c.adoptionUs,
+                                         c.closeUs,
+                                         c.closeWorkingSet,
+                                         c.closePrivate,
+                                         c.ownedBytes,
+                                         c.cacheBytes,
+                                         c.restoreBytes,
+                                         c.generation,
+                                         c.directories,
+                                         c.files,
+                                         i + 1u < cycles.size() ? L",\n" : L"\n"));
         }
 
         std::wstring artifact;
@@ -25970,15 +26324,17 @@ struct FolderViewDummyPluginHandles
                             lastObserved.drawItemCount,
                             lastObserved.analysisRowCount));
         }
-        artifact.append(std::format(
-            L"  \"pendingCycle\":{{\"openSettleUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},\"adoptionSettleUs\":{},\"closeUs\":{}}},\n"
-            L"  \"cycles\":[\n{}  ]\n}}\n",
-            activeCycle.openUs,
-            activeCycle.firstMeaningfulPaintUs,
-            activeCycle.retainedUs,
-            activeCycle.adoptionUs,
-            activeCycle.closeUs,
-            cycleJson));
+        artifact.append(std::format(L"  "
+                                    L"\"pendingCycle\":{{\"openSettleUs\":{},\"warmOpenUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
+                                    L"\"adoptionSettleUs\":{},\"closeUs\":{}}},\n"
+                                    L"  \"cycles\":[\n{}  ]\n}}\n",
+                                    activeCycle.openUs,
+                                    activeCycle.warmOpenUs,
+                                    activeCycle.firstMeaningfulPaintUs,
+                                    activeCycle.retainedUs,
+                                    activeCycle.adoptionUs,
+                                    activeCycle.closeUs,
+                                    cycleJson));
         const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"viewer_space_memory_20_cycle_metrics.json");
         const bool artifactWritten               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifact);
         SelfTest::AppendSuiteTrace(
@@ -26024,7 +26380,7 @@ struct FolderViewDummyPluginHandles
                                                                             [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
         {
             observe(s);
-            const bool cacheReady = index == 0u ? s.scanCacheSnapshotBytes > 0u : s.scanCacheRestoreBytes > 0u;
+            const bool cacheReady = s.scanCacheSnapshotBytes > 0u && s.scanCacheRestoreBytes == 0u;
             return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.cacheRestorePhase == 0u && ! s.layoutBuildActive &&
                    ! s.layoutDirty && ! s.analysisBuildActive && ! s.layoutAnimationActive && s.drawItemCount > 0u && s.analysisRowCount > 0u &&
                    s.firstMeaningfulPaintUs > 0u && s.presentedLayoutGeneration == s.layoutGeneration && cacheReady;
@@ -26054,10 +26410,39 @@ struct FolderViewDummyPluginHandles
             writePartialArtifact(L"open-settle");
             return false;
         }
-        if (index > 0u)
+        state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", cycleMetricScanOffset) == hitsBefore,
+                      std::format(L"ViewerSpace cycle {} fresh window unexpectedly used the scan cache.", index + 1u));
+        if (! state.failure.empty())
         {
-            state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", cycleMetricScanOffset) > hitsBefore,
-                          std::format(L"ViewerSpace cycle {} did not reopen from the scan cache.", index + 1u));
+            writePartialArtifact(L"cold-open-cache");
+            return false;
+        }
+
+        // The cache belongs to the live window: exercise a warm restore before F5 and Close.
+        const std::uintmax_t warmMetricOffset = FolderViewPerfMetricScanOffset();
+        const uint64_t warmHitsBefore         = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", warmMetricOffset);
+        failurePhase                          = L"warm-open-settle";
+        failurePhaseStartedAt                 = std::chrono::steady_clock::now();
+        const auto warmStartedAt              = std::chrono::steady_clock::now();
+        const bool reopened                   = ReopenStandaloneViewerForPointerProbe(state, L"ViewerSpace memory cycle warm reopen", root, probe);
+        const bool warmSettled                = reopened && WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                                                           opened,
+                                                                                           [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
+        {
+            observe(s);
+            return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.cacheRestorePhase == 0u && ! s.layoutBuildActive &&
+                   ! s.layoutDirty && ! s.analysisBuildActive && ! s.layoutAnimationActive && s.drawItemCount > 0u && s.analysisRowCount > 0u &&
+                   s.firstMeaningfulPaintUs > 0u && s.presentedLayoutGeneration == s.layoutGeneration && s.scanCacheRestoreBytes > 0u;
+        },
+                                                                            remaining(deadline));
+        activeCycle.warmOpenUs                = Debug::Perf::ElapsedUs(warmStartedAt);
+        Debug::Perf::Emit(L"viewer.space.memory.cycle_warm_open_us", L"20-cycle", activeCycle.warmOpenUs, index + 1u, warmSettled ? 1u : 0u);
+        state.Require(warmSettled && FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", warmMetricOffset) == warmHitsBefore + 1u,
+                      std::format(L"ViewerSpace cycle {} did not complete exactly one same-window cache restore.", index + 1u));
+        if (! warmSettled || ! state.failure.empty())
+        {
+            writePartialArtifact(L"warm-open-settle");
+            return false;
         }
 
         const WndMsg::ViewerSpacePerfDebugSnapshot displayed = opened;
@@ -26178,7 +26563,8 @@ struct FolderViewDummyPluginHandles
         closeWorkingSet.push_back(afterClose.workingSetBytes);
         closePrivate.push_back(afterClose.privateBytes);
         cycles.push_back(Cycle{.openUs                 = openUs,
-                               .firstMeaningfulPaintUs = opened.firstMeaningfulPaintUs,
+                               .warmOpenUs             = activeCycle.warmOpenUs,
+                               .firstMeaningfulPaintUs = activeCycle.firstMeaningfulPaintUs,
                                .retainedUs             = retainedUs,
                                .adoptionUs             = adoptionUs,
                                .closeUs                = closeUs,
@@ -26235,27 +26621,29 @@ struct FolderViewDummyPluginHandles
     for (size_t i = 0u; i < cycles.size(); ++i)
     {
         const Cycle& c = cycles[i];
-        cycleJson.append(std::format(L"    "
-                                     L"{{\"cycle\":{},\"openPhase\":\"{}\",\"openSettleUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
-                                     L"\"adoptionSettleUs\":{},\"closeUs\":{},"
-                                     L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
-                                     L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
-                                     i + 1u,
-                                     i == 0u ? L"initial-full-scan-cache-seed" : L"cached-reopen",
-                                     c.openUs,
-                                     c.firstMeaningfulPaintUs,
-                                     c.retainedUs,
-                                     c.adoptionUs,
-                                     c.closeUs,
-                                     c.closeWorkingSet,
-                                     c.closePrivate,
-                                     c.ownedBytes,
-                                     c.cacheBytes,
-                                     c.restoreBytes,
-                                     c.generation,
-                                     c.directories,
-                                     c.files,
-                                     i + 1u < cycles.size() ? L",\n" : L"\n"));
+        cycleJson.append(
+            std::format(L"    "
+                        L"{{\"cycle\":{},\"openPhase\":\"{}\",\"openSettleUs\":{},\"warmOpenUs\":{},\"firstMeaningfulPaintUs\":{},\"retainedWaitUs\":{},"
+                        L"\"adoptionSettleUs\":{},\"closeUs\":{},"
+                        L"\"workingSetAfterCloseBytes\":{},\"privateAfterCloseBytes\":{},\"viewerOwnedBytes\":{},"
+                        L"\"cacheResidentBytes\":{},\"cacheRestoreBytes\":{},\"displayGeneration\":{},\"directories\":{},\"files\":{}}}{}",
+                        i + 1u,
+                        L"cold-open",
+                        c.openUs,
+                        c.warmOpenUs,
+                        c.firstMeaningfulPaintUs,
+                        c.retainedUs,
+                        c.adoptionUs,
+                        c.closeUs,
+                        c.closeWorkingSet,
+                        c.closePrivate,
+                        c.ownedBytes,
+                        c.cacheBytes,
+                        c.restoreBytes,
+                        c.generation,
+                        c.directories,
+                        c.files,
+                        i + 1u < cycles.size() ? L",\n" : L"\n"));
     }
     std::wstring artifact;
     artifact.append(L"{\n  \"scenario\":\"viewer_space_memory_20_cycle_convergence\",\n");
@@ -32291,9 +32679,32 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         const uint32_t before = enumCount.load(std::memory_order_acquire);
         FocusFolderViewPane(FolderWindow::Pane::Left);
+        const bool focusLeftBefore = g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left;
+        const bool hiddenBefore    = g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left);
+        const auto selectedBefore  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+        const auto refreshBefore   = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES, 0), 0);
-        state.Require(WaitForAtomicAtLeast(enumCount, before + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                      L"Enumeration did not refresh after showing hidden names while pane filter is active.");
+        const bool refreshed = WaitForAtomicAtLeast(enumCount, before + 1u, SelfTest::Scale(std::chrono::milliseconds{3000}));
+        if (! refreshed)
+        {
+            Trace(std::format(L"Show hidden under filter: focusLeftBefore={} focusLeftAfter={} hiddenBefore={} hiddenAfter={} selectedBefore={} "
+                              L"selectedAfter={} enumBefore={} enumAfter={} forceRefreshBefore={} forceRefreshAfter={} a={} b={} c={} filterActive={}.",
+                              focusLeftBefore,
+                              g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left,
+                              hiddenBefore,
+                              g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left),
+                              selectedBefore,
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                              before,
+                              enumCount.load(std::memory_order_acquire),
+                              refreshBefore,
+                              g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"b.log"),
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"c.txt"),
+                              g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left)));
+        }
+        state.Require(refreshed, L"Enumeration did not refresh after showing hidden names while pane filter is active.");
     }
 
     const FolderView::NameFilterState filterState = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);

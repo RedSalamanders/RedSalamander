@@ -293,6 +293,16 @@ must reveal each preceding primary action and then More; forward Tab from More m
 primary action. Each step first restores the top scroll position and verifies the previous focus
 identity, then requires positive native scrolling and visible UIA bounds, including focus chrome,
 above the footer. Traversal never submits an action or changes foreground ownership.
+Owned informational cards force the real conflict below the short viewport. Before each
+Tab, inspect the exact retained decision button's unclipped bounds and prove it starts below
+the viewport; a fixed window height alone does not establish overflow. Remove only those
+fixture-owned informational IDs on success or early failure. Collect the post-Tab UIA bounds
+independently of the scroll assertion so failure diagnostics show the actual provider result.
+Routed modifier tests deliver owned Shift key messages to the retained host as well as setting
+the thread keyboard table used by native shortcut checks. The host caches modifiers from its
+message stream; changing the table alone does not establish reverse traversal. The debug layout
+snapshot exposes that modifier mask. Each step verifies the mask before Tab, one native Tab
+delivery, and cleared routed Shift afterward, including scoped cleanup on failure.
 First-frame collapse tests MUST inspect the actual raw provider tree, including offscreen children,
 after witnessing each case-owned task before collapse. Missing roots, traversal failures and logical
 visibility flags alone cannot establish that providers retired.
@@ -453,7 +463,8 @@ the operation/status fallback. The exact accessible status remains available ind
 
 The card consumes the engine-owned `TaskLifecyclePhase`; it MUST NOT infer Preparing from missing
 progress, zero totals, or a worker that has not emitted a transfer callback. `Preparing` and
-`AwaitingAcceptance` render as Preparing. `Ready` is a transition boundary before Waiting/Running;
+`AwaitingAcceptance` and `PreparingExecution` render as Preparing. `Ready` is a transition boundary before Waiting/Running;
+after queue reservation, `PreparingExecution` covers strict directory acquisition and consent without regressing the engine lifecycle.
 `Terminal` remains an engine fact. The normal finalizer also enters lifecycle `Stopping`, so
 that phase alone MUST NOT imply cancellation. The popup snapshots `Task::CancelRequestedDurable`
 as cancellation authority, published before `RequestCancel` exposes the lifecycle phase. An
@@ -622,7 +633,11 @@ example "This task may remove items that task #3 is still reading." Its actions 
 these tasks** (the default and Enter action), **Run at the same time**, and **Don't start** (Escape).
 Run is present only when every disclosed relation fits the fixed bound and applies only to the named
 concurrently-live task IDs; another undisclosed overlap still asks independently. When an overlapping
-task may delete an item by name (I35 R7.3: a delete by name, or a Recycle whose escalation could), Run
+relation contains a Local plain-directory Permanent Delete, Run is absent in both directions, even
+for an overlapping read: its strict confirmation and mutation lease requires serialized host
+admission for that scope. Stale concurrent consent cannot bypass this rule, while disjoint scopes
+remain eligible. When an overlapping task may delete an item by name (I35 R7.3: a delete by name,
+or a Recycle whose escalation could), Run
 is never offered and that task is named first: "Task #3 may delete by name an item that this task writes
 or changes, or a folder that holds it. The two cannot run at the same time: queued, this task starts once
 task #3 has ended, and what it writes to may be gone by then." (or "reads"). Queue keeps the task
@@ -641,8 +656,12 @@ waits and the interlock wait itself remain silent. Read/read overlaps and clearl
 neither does the conservative wait of a provider without bound objects (its interlock cannot prove
 which objects two paths name, so it serializes without naming a problem).
 
-A Permanent Delete asks its confirmation on the card, not in a modal at ingress: once Preparing has
-pinned every selected root the card shows "Permanent delete" with the question the modal used
+A Permanent Delete asks its confirmation on the card, not in a modal at ingress. A Local
+plain-directory task first queues with a nonblocking metadata identity witness, then reserves
+overlapping admission and acquires checked strict Delete handles after its predecessors finish.
+It shows Preparing (`PreparingExecution`) around the reserved consent, with Waiting for decision while the question is active; execution has not
+entered, and queue-reorder and Start now actions cannot change the reservation. With every selected
+root strictly pinned, the card shows "Permanent delete" with the question the modal used
 ("Permanently delete {what} from {where}. This cannot be undone."), and its actions are **Cancel**
 (first, the default and Escape action) and **Permanently delete**. Cancel ends the task as canceled
 before any mutation and leaves no completed-history success entry; Permanently delete lets the task
@@ -1200,6 +1219,16 @@ Keyboard behavior is:
   the global Options control is used only when that task is gone.
   Outside a bound decision, `Escape` hides the popup. Window Close always hides without resolving a
   decision.
+  Positive two-task UIA binding tests establish each task's visible decision row before its
+  asserted transaction, then focus global Options and require no implicit decision target.
+  Acquire a fresh exact inspection provider from that settled tree. Its focus, default and
+  cancel identities must update synchronously with no render between the focus call and
+  observation. Setup may paint between task legs; a pending scroll alone does not make an
+  offscreen action a valid Escape target.
+  Separately switch directly from A to B and back to A without a render. Require exact task
+  focus and Enter authority throughout, with Escape matching actual primary-decision visibility
+  observed through UIA bounds. The independent visible-row checks retain positive Cancel coverage
+  for both tasks.
 - Window Close is the caption Close of the global File Operations popup, not a task action. It MUST
   remain hide-only and MUST NOT cancel the focused task or all tasks. The hidden surface remains
   reachable through **View > File Operations**, `cmd/app/showFileOperations`, and the default
@@ -1301,12 +1330,23 @@ indeterminate while any included total is open, even when other active tasks hav
 
 Waiting Copy/Move cards show their operation/selection, the static Waiting chip, source and fixed
 destination paths, and applicable Start now / queue order / limit / cancel actions. While queued,
-waiting on another operation or queue-paused, they expose no Counting text, Written: 0 B,
+waiting on another operation or queue-paused, they expose no Skip counting action, Counting text, Written: 0 B,
 transfer amounts, percentages, ETA, concurrency, discovery indicator, source-row mini-bar,
 whole-task progress bar/marquee or throughput graph, in either pixels or hosted accessibility.
 Retained scan/stream facts do not override this state. Layout reserves only rows actually painted,
 with the ordinary content/action gap. Running/discovery and manual-pause presentation resumes
 normally when eligible. No waiting animation or repeated unchanged live announcement is allowed.
+
+When an identity-unavailable conflict blocks admission, a measured, wrapped sentence explains
+that file IDs are unavailable for this operation and it must run separately. Capacity waits say
+`Waiting for a transfer slot. The shared limit is {0}.` using the live configured target. Exclusive
+admission waits say `Waiting for an operation that must run separately.` Their complete localized
+text is exposed through the task-owned `WaitingReason` accessibility region. These cards omit
+Start now and Skip counting: releasing a user queue preference cannot bypass capacity or a safety
+interlock. A direct Start now request preserves the actual wait until admission or cancellation;
+it never exposes Running, Counting or zero-byte progress while the worker still waits.
+Overlap questions for two Copy/Move jobs offer Queue and Don't start; they withhold Run at the
+same time. Other operation-family consent rules continue to use their existing safety policy.
 
 The no-activation `FileOps_ReviewRemediationContracts` fixture exercises these waiting surfaces
 through the production painter and hosted accessibility regions, including running-to-waiting

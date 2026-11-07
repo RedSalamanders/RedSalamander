@@ -1,0 +1,38 @@
+{
+    "run_started_utc": "2026-11-01T00:52:14.101Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261101T005129Z-81876-e0409ed066624c92ad555c2738b66c6f\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 3474,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "settings_file_operations_roundtrip",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_file_operations_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1130,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_file_operations_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 691,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_file_operations_roundtrip_restores_dxui_surface",
+            "status": "passed",
+            "duration_ms": 167,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

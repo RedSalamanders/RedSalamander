@@ -7,6 +7,95 @@
 #include <limits>
 #include <thread>
 
+[[nodiscard]] bool RunFileOperationSharedTransferSelfTests(SelfTestState& state, std::wstring& failure) noexcept
+{
+    using State = FolderWindow::FileOperationState;
+    if (! LoadPlugins(state) || ! state.fsLocal)
+        return false;
+    wil::com_ptr<IFileSystemIO> io;
+    if (FAILED(state.fsLocal->QueryInterface(IID_PPV_ARGS(io.addressof()))) || ! io)
+        return false;
+    const auto root = state.tempRoot / L"shared-parallel-transfers";
+    if (! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    struct Scenario final
+    {
+        uint32_t limit;
+        size_t jobs;
+        size_t filesPerJob;
+        FileSystemOperation operation;
+        bool cancelLast;
+        bool directoryIdsOnly = false;
+    };
+    size_t ordinal = 0u;
+    for (const Scenario scenario : {Scenario{1u, 4u, 1u, FILESYSTEM_COPY, false},
+                                    Scenario{4u, 4u, 1u, FILESYSTEM_COPY, false},
+                                    Scenario{4u, 5u, 1u, FILESYSTEM_COPY, true},
+                                    Scenario{4u, 2u, 4u, FILESYSTEM_COPY, false},
+                                    Scenario{4u, 4u, 1u, FILESYSTEM_MOVE, false, true},
+                                    Scenario{4u, 4u, 1u, FILESYSTEM_MOVE, false, false}})
+    {
+        const auto caseRoot    = root / std::format(L"case-{}", ++ordinal);
+        const auto destination = caseRoot / L"studio-nas-movies";
+        if (! RecreateEmptyDirectory(destination))
+            return false;
+        std::vector<std::filesystem::path> sources;
+        std::vector<std::string> expected;
+        for (size_t index = 0u; index < scenario.jobs * scenario.filesPerJob; ++index)
+        {
+            sources.push_back(caseRoot / L"exports" / std::format(L"Moonrise-{}.bin", index));
+            expected.emplace_back();
+            if (! WriteTestFile(sources.back(), 4u * 1024u * 1024u + index) || ! ReadFileTextFsIo(io, sources.back(), expected.back()))
+                return false;
+        }
+        RedSalamander::TestSupport::ScopedEnvironmentVariable unsupportedIds(
+            kSelfTestEnvBindIdentityUnsupportedPath, scenario.directoryIdsOnly ? std::nullopt : std::optional<std::wstring_view>(destination.native()));
+        RedSalamander::TestSupport::ScopedEnvironmentVariable unsupportedDirectoryIds(
+            L"REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH",
+            scenario.directoryIdsOnly ? std::optional<std::wstring_view>(destination.native()) : std::nullopt);
+        if (! State::DebugRunSharedTransfersForSelfTest(
+                state.fsLocal.get(), sources, destination, scenario.operation, scenario.limit, scenario.filesPerJob, scenario.cancelLast, failure))
+            return false;
+        size_t published = 0u;
+        for (size_t index = 0u; index < sources.size(); ++index)
+        {
+            const auto target = destination / sources[index].filename();
+            if (GetFileAttributesW(target.c_str()) == INVALID_FILE_ATTRIBUTES)
+            {
+                if (! scenario.cancelLast)
+                {
+                    failure = L"Every successful shared transfer must publish its distinct new destination.";
+                    return false;
+                }
+                continue;
+            }
+            ++published;
+            std::string actual;
+            const bool sourcePresent = GetFileAttributesW(sources[index].c_str()) != INVALID_FILE_ATTRIBUTES;
+            if (! ReadFileTextFsIo(io, target, actual) || actual != expected[index] || sourcePresent != (scenario.operation == FILESYSTEM_COPY))
+            {
+                failure = L"Shared transfers must preserve exact file content, keep Copy sources, and remove only successfully published Move sources.";
+                return false;
+            }
+        }
+        if (published != sources.size() - (scenario.cancelLast ? scenario.filesPerJob : 0u))
+        {
+            failure = L"Canceling a queued transfer must omit exactly its unpublished files.";
+            return false;
+        }
+        AppendLog(std::format(L"SharedTransfers: limit={} jobs={} filesPerJob={} operation={} cancelQueued={} directoryIdsOnly={} published={} passed=true",
+                              scenario.limit,
+                              scenario.jobs,
+                              scenario.filesPerJob,
+                              static_cast<unsigned int>(scenario.operation),
+                              scenario.cancelLast,
+                              scenario.directoryIdsOnly,
+                              published));
+    }
+    return true;
+}
+
 namespace FileOperationItemResultReducerSelfTestInternal
 {
 [[nodiscard]] bool EnsureFolder(IFileSystem* fileSystem, const std::wstring_view path) noexcept

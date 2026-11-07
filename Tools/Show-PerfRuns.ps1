@@ -45,6 +45,9 @@
 .PARAMETER FailOnQuality
     Produces a nonzero exit when selected records fail sample-quality or budget checks.
 
+    A metric with mixed units, including a unit change across compared or trended runs,
+    always fails without producing a mixed-unit statistical summary.
+
 .PARAMETER ShowBuildFlavor
     Includes build configuration/flavor metadata in run output.
 
@@ -58,7 +61,7 @@
     Human-readable host output only. The command does not mutate or return archived run objects.
 
 .NOTES
-    Prerequisites: archived PerfJsonl metrics with the schema described in Specs/Testing/Testing_PerformanceValidation.md. Side effects: none; reads evidence and optional budgets only. Exit is nonzero for malformed evidence and, with -FailOnQuality, for blocking quality findings. Primary use is performance review and before/after closeout.
+    Prerequisites: archived PerfJsonl metrics with the schema described in Specs/Testing/Testing_PerformanceValidation.md. Side effects: none; reads evidence and optional budgets only. Exit is nonzero for malformed evidence or mixed units and, with -FailOnQuality, for blocking quality findings. Primary use is performance review and before/after closeout.
 
 .EXAMPLE
     .\Tools\Show-PerfRuns.ps1 -Area FolderView -Trend
@@ -376,6 +379,7 @@ function Show-Usage() {
     Write-Host '  -Area       Restrict discovery to one area, for example Commands, CompareDirectories, or FileOps.'
     Write-Host '  -Scenario   Filter metrics by scenario field from the JSONL records.'
     Write-Host '  -Metric     Filter to a single metric name.'
+    Write-Host '  Mixed units within one metric or across its compared/trended runs fail without a summary.'
     Write-Host '  -FolderViewPreset Filter to the core FolderView frame, scale/cold/slow, scroll, icon, thumbnail, and refresh metrics.'
     Write-Host '  -BudgetPath Override the FolderView performance-budget file used for sample minimums.'
     Write-Host '  -MinimumSamplesForP95 Minimum count for p95 quality. Explicit values override budget minimums. Default: 200.'
@@ -645,6 +649,10 @@ function Measure-Metric([object[]]$Records, [string]$MetricFilter, [string]$Scen
 
     $groups = $filtered | Group-Object -Property metric
     $summary = foreach ($group in $groups) {
+        $units = @($group.Group | ForEach-Object { [string]$_.unit } | Sort-Object -CaseSensitive -Unique)
+        if ($units.Count -ne 1) {
+            throw "Metric '$($group.Name)' contains mixed units; no statistical summary is valid."
+        }
         $values = @($group.Group | ForEach-Object { [double]$_.value } | Sort-Object)
         $count = $values.Count
         if ($count -eq 0) {
@@ -749,6 +757,12 @@ function Compare-PerfRuns([object]$OldRun, [object]$NewRun, [string]$MetricFilte
     $newMap = @{}
     foreach ($entry in $newSummary) { $newMap[$entry.Metric] = $entry }
 
+    foreach ($name in $oldMap.Keys) {
+        if ($newMap.ContainsKey($name) -and $oldMap[$name].Unit -cne $newMap[$name].Unit) {
+            throw "Metric '$name' has different units across compared runs; no comparison is valid."
+        }
+    }
+
     $allMetrics = @($oldMap.Keys + $newMap.Keys) | Sort-Object -Unique
     $rows = foreach ($name in $allMetrics) {
         $old = $oldMap[$name]
@@ -845,6 +859,13 @@ function Show-PerfTrend([object[]]$Runs, [string]$MetricFilter, [string]$Scenari
     if (-not $ordered) {
         Write-StyledLine 'No trend data found.' 'Noise'
         return
+    }
+
+    foreach ($group in ($ordered | Group-Object Metric)) {
+        $units = @($group.Group | ForEach-Object { [string]$_.Unit } | Sort-Object -CaseSensitive -Unique)
+        if ($units.Count -ne 1) {
+            throw "Metric '$($group.Name)' has different units across trend runs; no trend is valid."
+        }
     }
 
     if ($MetricFilter) {

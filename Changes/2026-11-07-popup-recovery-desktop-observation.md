@@ -1,0 +1,1 @@
+- Track process-owned foreground activation during popup recovery while preserving unrelated desktop activity.

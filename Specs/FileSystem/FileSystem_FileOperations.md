@@ -220,7 +220,9 @@ attributes, creation time, listed index) until its own deletion through that ver
 program can rename it, turn it into a link or replace it meanwhile, and no path below a held folder can
 be redirected; folders are held top-down, a level at a time. Each file and link is opened no-follow
 through its held folders, sharing only reads, and deleted through that handle once its facts equal the
-listed ones. Files and links go first (a chunk's folders taken in turn, so entries deleted at the same
+listed ones. That handle requests attribute-write access only when the listed entry is readonly and
+may require the separately consented readonly clear and rollback; the readonly bit is among the facts
+checked on the same handle, so a changed bit refuses deletion. Files and links go first (a chunk's folders taken in turn, so entries deleted at the same
 time rarely share a folder), then folders deepest level first, each pass on the shared File Operations
 scheduler with the provider's delete concurrency; at most 1,024 folders are held at once
 (plus the chain above them): a larger tree goes in chunks of sibling subtrees that fit, a subtree that
@@ -595,6 +597,28 @@ path mutation occurred; these remain ordinary conflicts for the user to resolve.
 `Commit()` may have left partial destination content and is reported as publication Unknown, with no
 automatic retry or path-based cleanup. A managed Move without exact publication proof keeps its
 source even when the destination reports successful Commit; it is a copied result with source retained.
+The bridge's own publication and stage facts also guard the outer item executor: a failed attempt
+with Unknown or Published final publication, or a Retained, Unknown or RetainedIncomplete owned stage,
+must not enter a generic conflict decision or replay the primary operation. Preserve each independent
+publication, source and stage fact and the original failure phase and status. Continue-on-error may
+advance to a different item without replaying this one; an explicit descendant Skip and cancellation
+retain their existing terminal handling. A failed, known NotPublished attempt with no retained or
+uncertain stage remains eligible for the ordinary conflict policy.
+Bridge Skip-only partial outcomes use an attempt-local terminal witness produced after the selected
+root's traversal completes without an independent failure; a previously observed Skip alone never
+turns a later traversal failure into a Skip. Unknown publication and retained or uncertain stage debt
+take precedence over that witness. Root and descendant Skips retain their distinct result semantics;
+`S_FALSE` alone is not a Skip, including when publication succeeded but verification was unavailable.
+An explicit directory-shell conflict Skip participates in that witness, with a selected-root Skip
+distinguished from a skipped descendant; a failed sibling walk still takes precedence.
+A selected reparse-tagged root that binds no-follow as a directory uses the same completed-directory
+Skip classification as an ordinary directory root. A skipped descendant is not a skipped root, and a
+failed walk or independent unknown publication or stage debt never becomes Skip-only partial work.
+Copy-only Move never performs source deletion, so its source remains Retained on a failed bridge
+attempt or uncertain stage cleanup even when destination publication is unknown or already occurred.
+A skip-only partial result with known publication and no stage debt retains its explicit Skip;
+independent unknown publication or stage debt takes precedence. An Unavailable verification result
+from a sibling cannot turn a failed or indeterminate directory result into a completed publication.
 
 For ordinary built-in Local Copy of a regular file to an absent destination name, the provider uses
 the visible direct-final publication shape: it creates the final leaf exclusively, retains the exact
@@ -1539,23 +1563,62 @@ callback, that status carries no exact destination authority. The host may still
 Both, Skip, Skip All, or Cancel when otherwise valid, but MUST withhold Overwrite, Replace read-only,
 and Replace link. A destructive button is never offered merely because an HRESULT resembles Exists.
 
+A no-overwrite atomic-final or direct-final writer may report an appeared occupant as a known
+non-commit. The bridge may re-admit that item through its bounded collision loop after releasing
+the attempt's permits and writer. Re-admission reads the current occupant and applies the ordinary
+destructive-action authority policy before offering Overwrite; an identity-less conditional replacement
+still requires the observed occupant expectation and a writer that accepts it. Exhaustion or cancellation
+retains the existing failure or cancellation path; no generic provider-returned collision gains authority.
+
+For a file retried within that bridge call, logical transfer progress adds only newly observed written
+bytes above that file's highest previous attempt, including partial failed attempts. This high-water is
+a written-byte observation, not a publication or source-stability receipt: source mutation between
+attempts can change the bytes or size. The separate physical byte count includes every retransmitted
+write for bandwidth pacing; verification remains separately counted under the same bandwidth budget.
+
 ## Delete and Recycle
 
 Recycle and Permanent are distinct `DeletePlan` modes. Permanent Delete requires fresh explicit
 consent and confirmation-to-mutation identity continuity. Admission makes no provider call for it:
 it decides native authority from the provider's binding interface alone and gathers the
-confirmation's words from the pane listing. When exact host binding exists, Preparing pins each
-selected root no-follow on the task thread (the retained delete authority), then asks the
-confirmation on the task card in the words the modal used (Cancel rightmost and default, Permanently
-delete); after the answer it binds each confirmed pathname again and requires the object/revision
-identity to match the pinned root before recording the consent receipt, and execution calls
-`DeleteIfUnchanged` on the retained authority. It never confirms one object and later deletes a
-pathname replacement: the object the user confirms is the pinned one, and a pathname that no longer
-names it refuses with `ERROR_REVISION_MISMATCH` before any mutation. The pinned roots stay pinned
-(no-follow, write and delete sharing denied) while the card waits for the answer, so on Local a
-pathname swap in that window is itself refused with a sharing violation and the re-check guards
-only a provider whose pin is weaker; a cancelled confirmation ends the task as canceled with nothing
-mutated and releases them. A provider
+confirmation's words from the pane listing. When exact host binding exists, the task retains each
+selected root no-follow. Local plain directories initially retain a metadata identity witness,
+without a strict Delete handle: a queued Delete must not prevent its predecessor from publishing a
+staged child. Overlap advice and queueing therefore precede the directory confirmation. Once all
+predecessors have ended, active admission reserves every conflicting scope pair, including reads,
+and the task acquires strict Delete handles. Each new handle must agree with its still-retained
+witness through `CrossCheckBoundObjectIdentity`, kind and non-reparse checks before any contents walk.
+A changed, missing or unopenable root refuses before confirmation or mutation; metadata authority
+never receives `DeleteIfUnchanged`. Files, links, native-authority and corroborated-by-name routes
+retain their existing binding rules. Mixed selections retain the ordinary strict file/link pins
+while queued.
+
+An Unsupported metadata probe never enables the by-name route by itself. The original strict
+Delete bind must also report Unsupported; a denied or failed strict open stays a preparation
+failure. If the strict probe unexpectedly supplies exact identity after metadata could not, the
+task refuses with `ERROR_RETRY` rather than weakening identity or retaining a strict queue-time pin.
+
+After every strict directory grant has been checked, `IFileSystemBoundObjectPinHandoff` retires this
+task's old metadata kernel pins before confirmation. Existing immutable snapshots keep identity
+facts, not a second open directory handle. Local counted metadata reads make handoff fail with
+`ERROR_BUSY` before mutation; no handle is retired while a read or its temporary reopened handles
+remain active. A missing handoff interface fails safely and never enables a by-name fallback.
+The retired witness still supports `GetSnapshot` and `IsSameObject`; handle-based metadata reads fail
+with `ERROR_INVALID_HANDLE`. This prevents the task's own stale snapshots from delaying legacy
+directory disposition. Independent peer or external handles retain ordinary Windows delete-pending
+semantics and can delay name reuse; handoff does not revoke another operation's authority.
+
+With the strict roots held, the task asks confirmation on its card in the words the modal used
+(Cancel rightmost and default, Permanently delete); after the answer it binds each confirmed pathname
+again and requires the object/revision identity to match before recording the consent receipt.
+For a reserved directory task, only this validated task-scoped receipt may be added to its frozen
+plans; the destination, active interlock and all other accepted intent remain immutable. The
+pre-consumption gate runs after that receipt is published, and execution calls `DeleteIfUnchanged`
+on the strict authority. It never confirms one object and later deletes a pathname replacement.
+The strict Local roots deny write and delete sharing throughout confirmation and mutation, so a
+pathname swap during the question or re-check is refused. Cancellation or failure releases the strict
+bindings before active admission is withdrawn or successors are notified. `FileOps.Delete.DirectoryLeaseUs`
+records the checked acquisition cost. A provider
 without host binding supports Permanent Delete through its contract-tested native mutation (plan
 `nativeAuthority`): admission finds no bound object (`Unsupported`), records no ingress snapshot and
 no exact-delete interlock authority (the interlock's confirmation-to-mutation continuity check applies
@@ -1993,7 +2056,10 @@ what task N publishes; this task may replace what task N reads; task N deletes t
 this task writes or reads there, named first, I35 R7.3). **Queue after these tasks** (the
 default) keeps the admission wait below as the transient edge, released without a second warning once
 the named tasks terminate; **Run at the same time** admits the task concurrently only when the full
-disclosed relation set fits the fixed 64-task bound and no overlapping pair involves a delete by name; **Don't start** (Escape) ends the task as a
+disclosed relation set fits the fixed 64-task bound, no overlapping pair involves a delete by name,
+and the pair is not two transfers. Overlapping Copy/Move jobs always serialize; their warning
+withholds Run, and even a stale caller-supplied concurrent relation cannot bypass admission.
+**Don't start** (Escape) ends the task as a
 Preparing cancel with no mutation, clipboard consumption, or breadcrumb. The question's decision stays
 unrecorded; the metric `FileOps.Overlap.DontStart` counts only the user's own **Don't start** answer,
 and `FileOps.Overlap.CanceledWhilePending` counts a Cancel all or close that ended the task while the
@@ -2005,6 +2071,10 @@ F2 (`RenamePlan(InlineRename)`) keeps honoring the interlock without a prompt, a
 exception states. The warning names only overlaps the paths prove: a scope in a conservative
 identity domain (a provider without bound objects, where the interlock treats every
 conflicting-access pair as overlapping) keeps the silent wait it always had and raises none. The
+popup identifies this admission wait as Waiting and explains the identity limitation. The state
+remains waiting after Start now releases only the user's queue preference; only actual admission
+or cancellation clears it. The wait reason is derived from the conflicting scope pair already
+checked for admission, without another provider call or path-based weakening of the interlock. The
 non-Run admission wait itself is unchanged: a destructive or publishing task does not
 rename, remove, replace, or publish through a
 tree while another task is reading it. Endpoint/path-profile containment and retained no-follow
@@ -2041,8 +2111,61 @@ relative suffix from that anchor. Equal or ancestor/descendant suffixes under th
 overlap; distinct sibling suffixes do not. This comparison is alias-safe across alternate path
 spellings because the anchor, not the pathname spelling, supplies authority. Binding
 Indeterminate or provider-contract violation rejects the task before mutation. Unsupported identity
-uses a conservative provider/profile identity-domain scope and serializes potentially aliased
-writers rather than becoming a path-only scope.
+uses a conservative provider/profile identity-domain scope. It serializes potentially aliased
+writers except for the narrowly qualified new-file admission below; it never becomes object authority.
+
+Parallel regular-file transfers share one process-wide file budget, default four, controlled by
+`fileOperations.maxParallelTransfers` (`1..16`). It applies across jobs and their per-item workers,
+not four independently for every job. A fifth eligible one-file job waits before execution, with
+its capacity reason, until another job leaves. A live increase wakes waiters; a decrease lets
+existing transactions finish and admits no new holder above the new target. Queue mode still
+honors its existing serial job order.
+
+Automatic independent admission requires built-in local-filesystem endpoints, a non-Native
+transfer strategy, positively bound regular source files, and destination leaves that were
+positively Missing during canonical preparation. If destination-parent IDs are Unsupported,
+distinct new sibling names under the same qualified root, path contract and normalized parent
+may run concurrently. Equal/case-equivalent names, ancestor/descendant paths, differently spelled
+roots or parents, conflicting bound source aliases, existing names, folders and unqualified providers do not
+receive that exception. Indeterminate bindings still reject preparation. All scopes in the job
+must qualify. These cached namespace keys guide scheduling only; publication remains atomic
+no-replace, replacement still needs its existing consent/authority, and Move removes only its
+unchanged bound source after successful publication/proof.
+
+For these qualified new regular-file Managed Moves, unsupported destination-parent IDs may use
+a bounded negative attribute walk that rejects links, non-directories and failed reads. The source
+and its parent must remain bound, the destination must still be positively Missing, and the local
+route must advertise publication/readback proof. The bridge still binds the source and must prove
+the published file before `DeleteIfUnchanged`; parent attributes grant no destructive authority.
+If published-file identity/proof is also unavailable, the operation retains its source and reports
+the incomplete outcome. Existing names, directory sources and known ancestry-link failures retain
+their original guard. `FileOps.NewFileParentCheckUs` records this execution-time check and parent count;
+it adds no provider I/O to preparation or the queue predicate.
+
+Jobs that transfer data but do not qualify reserve exclusive transfer admission until completion. This retains
+serialization for overwrites, directory work and opaque provider calls and avoids holding file
+capacity while waiting on another transfer job's conflict decision. Once an eligible older exclusive
+admission waits for active transfers to drain, later transfers cannot refill the admission set ahead
+of it. Reservation follows queue order and admission identity, and excludes canceled, stopped,
+paused, explicitly queued, stale or predecessor/identity-blocked waiters. Cancellation or completion
+releases the reservation; identity dependencies remain ahead of capacity. Known path/object interlocks
+remain in force for every operation family. Eligible host transfers resolve destination conflicts
+and bind the source before acquiring a shared file permit; a raced existing target requires an
+exclusive permit. Shared permits precede connection permits and span staging, bytes, publication,
+verification and source/stage cleanup. RAII returns capacity on failure and cancellation. Opaque
+provider Copy calls without cooperative support reserve the task budget opaquely and receive the
+current cap in their options. A nonqualified data-transfer job owns one outer exclusive reservation,
+not one reservation per selected root. Cooperative Local Copy calls receive per-call participants:
+their actual file and literal-link operations acquire task-owned tokens sharing the live process
+limit, while each participant also respects its resolved provider concurrency cap. This allows
+multiple roots of the same task to make progress without multiplying their combined file budget.
+The host's managed bridge uses that same group for its file permits. An opaque participant waits for
+all group files to drain and blocks later file permits until it returns; cancellation wakes or bounds
+waiting acquisitions, and RAII retains the group and outer reservation until all tokens are released.
+Live decreases admit no new file above the current limit while existing tokens drain; increases wake
+waiters. The optional COM interface and borrowed lifetimes are specified in `Plugins_PluginAPI.md`.
+Native-only rename moves use their existing path/object interlocks without claiming data capacity;
+an unrelated rename remains admissible while all data slots are occupied.
 
 Admission precomputes normalized suffix keys outside the queue lock and indexes exact retained-anchor
 identity domains during the overlap check. Within one exact anchor group, suffixes are ordered by
@@ -2123,10 +2246,12 @@ provider's reason and a `preparation.destinationName` diagnostic before any inte
 execution keeps its own re-query against that admitted join.
 
 Inline Rename does not enter the source mutation phase until the worker is about to call
-`RenameIfUnchanged`. A pre-bind, provider-name refusal, live-output Skip, or other early failure is
-therefore reported as a typed `Failed`/`NotPublished`/`Retained` item; it must not become
-`Unknown` merely because no mutation receipt was produced. Batch Rename retains its task-wide
-mutation gate because its executor may touch multiple roots.
+`RenameIfUnchanged`. A provider-name refusal during Preparing reports typed
+`Failed`/`NotAttempted`/`Retained` with the provider's status, as for other pre-Ready failures.
+An executor pre-bind or other early failure reports `Failed`/`NotPublished`/`Retained`; an
+early Skip retains its own skipped result. None becomes `Unknown` merely because no mutation
+receipt was produced. Batch Rename retains its task-wide mutation gate because its executor may
+touch multiple roots.
 
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation
@@ -3033,6 +3158,7 @@ Host settings:
 - `fileOperations.mode`: Queue or Parallel;
 - concurrency and bandwidth controls already exposed;
 - `fileOperations.verifyAfterCopy`: Boolean, default false;
+- `fileOperations.maxParallelTransfers`: integer, default four, range one through sixteen;
 - `fileOperations.mirrorDecisionsInPane`: Boolean, default true; presentation only (the decision
   mirror over the pane, see "Conflict model"); it never changes what is asked, the action policy or the
   answer.
@@ -3102,6 +3228,17 @@ same-machine Release trigger and accepted indexed baseline are archived under
 `Specs/TestRuns/4cb089111a23/FileOps/2026-08-29_022850/` (65,536 comparisons,
 2,600,470 microseconds) and `Specs/TestRuns/4cb089111a23/FileOps/2026-08-29_024402/`
 (8,704 indexed probes, 2,689 microseconds), respectively.
+
+New-file namespace keys are prepared outside the queue lock with no additional provider calls.
+They retain at most 32,768 selected files and 16 MiB of string capacity (including terminators)
+per preparation; inability to prepare a complete set retains exclusive admission. The overlap
+index combines canonical retained-object comparisons with sorted missing-name keys; it must
+match the pairwise policy without a Cartesian scan of large eligible selections.
+`FileOps.Interlock.NewFileKeyBytes` records reserved key bytes and eligible selected-file count.
+`FileOps.SharedTransfers.AcquireUs` records shared/exclusive wait duration, occupied/reserved
+slots and current target. Neither metric contains paths. Deterministic budget, admission, actual
+local I/O with simulated unsupported NAS IDs, cancellation and teardown witnesses live in
+`FileOps_IdentityInterlockWaiting`; they do not establish physical NAS throughput.
 
 The deterministic large-selection retention scenario emits
 `FileOps.SelfTest.InterlockLargeSelectionRetainedAuthorityNodes` and
@@ -3205,8 +3342,10 @@ below); a self-test may override both:
   copy when the source has none of the backup-stream features (the inspection passes still run, and
   the Overwrite route's metadata transfer is otherwise unchanged);
 - `DESTINATION_CONCURRENCY` (c, host only): the provider's own Copy/Move route budgets
-  `min(source, destination)` concurrency, as the bridge always does, and records the destination
+  `min(source, destination)` storage concurrency, as the bridge always does, and records the destination
   storage kind in `autoConcurrencyDestinationStorageKind`;
+  Copy/managed-Move data concurrency is also bounded by `fileOperations.maxParallelTransfers`,
+  while Delete and metadata-only native renames retain their own budgets;
 - `WRITE_THROUGH_REMOTE` (w): on a remote destination the stage or direct-final handle is created
   with `FILE_FLAG_WRITE_THROUGH` and without `FILE_ATTRIBUTE_TEMPORARY`, so each write returns once
   the server holds it, and the Local pumps write 8 MiB per call there instead of 1 MiB (the
@@ -3306,7 +3445,11 @@ The File Operations selftest and provider-contract matrix cover:
   receipt; `Delete_IdentityLessPinnedTreeConcurrentWriter`); a folder over a test-only entry bound is
   refused at Preparing with its plain reason and no card (`Delete_IdentityLessPinnedTreeBudget`); a
   listed file changed or removed at that pause stops the delete with nothing deleted and a known
-  non-commit receipt (`Delete_IdentityLessPinnedTreeChangedEntry`); a refused Recycle escalated by name
+  non-commit receipt (`Delete_IdentityLessPinnedTreeChangedEntry`). Its private ACL variants durably
+  save the OS-creation descriptor before reapplying the new fixture's existing DACL/protection as a
+  seed, then save a separate seeded baseline before fault injection. Surviving objects are restored
+  and checked against that exact seeded baseline after worker quiet; failures retain the sandbox and
+  available private backups. This is fixture initialization, not restoration of a user's ACL; a refused Recycle escalated by name
   stops on a file written at that pause and reports the same partial delete
   (`Delete_IdentityLessPinnedTreeEscalationPartial`); a listed folder swapped for a junction at that
   pause, with a listing that reports no file index and a decoy forged with the listed file's facts, never
@@ -3318,6 +3461,11 @@ The File Operations selftest and provider-contract matrix cover:
   (`Delete_IdentityLessPinnedTreeHolders`); and a tree of 2,466 entries is deleted by name on the loopback
   alias, whole and again with a test-only budget of four held folders (so it goes in chunks), and, where
   `path.smb.primary` is configured, on the share, its timings logged (`Delete_IdentityLessPinnedTreeScale`);
+  the case temporarily sets the actual Local provider to manual Delete concurrency 8, verifies the effective
+  budget, and restores and verifies the original configuration after workers are quiet;
+  an expired scale-case wait reports missing completion as `E_PENDING` separately from the scenario's
+  `ERROR_TIMEOUT`, with synchronized task/admission witnesses before case-induced cancellation. A missing
+  completion must never be logged as a successful provider result; the existing waits and deletion assertions remain unchanged;
   a child added while the card waits or between the answer and the delete refuses with
   `ERROR_REVISION_MISMATCH`, and a task admitted after the answer, before the re-check or while the
   delete is about to run, is asked about the delete (no Run at the same time) and its pending question
@@ -3410,7 +3558,10 @@ coherently. Verification weighting and selected-root result reduction remain unc
 `DiscoveryScope_FolderLiveProgress` copies real nested files through serial, overwrite, parallel,
 bridge and Verify routes and checks exact counts/bytes, independent destination content, actual
 advancing meter pixels, delayed finalization and known-size Publishing. Separate controls cover
-open traversal, empty roots and publication followed by committed-error/proof failure.
+open traversal, empty roots and publication followed by committed-error/proof failure. The open
+traversal capture holds its selected sequential producer after a positive open listing report and
+requires the same task checkpoint throughout capture; it releases the bounded, cancellation-aware
+test hold before draining the operation.
 `DiscoveryScope_MultipleFoldersLiveProgress` covers real concurrent selected roots and zero-payload
 file links. Its Native `CopyItems` API control uses the production reducer on a non-admitted task;
 it does not bypass the product's Bulk Copy admission policy or claim a product Bulk popup route.

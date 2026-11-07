@@ -1,5 +1,50 @@
 # Unified organization CI contract
 
+The manual native suite defaults to Full and may explicitly select CommandsHandoff,
+FileOpsVolumes or ViewerSpaceCapture, each mapped to one fixed diagnostic case. The adapter permits filtered runner
+exit 2 only after validating the exact archived native cases, quarantine state, profile and
+source-bound full-solution receipt. It labels that result filtered and NOT_EVALUATED for
+repository coverage and creates no regression or production receipt. Other phases reject these
+scopes before mutation; the pinned native matrix, desktop lease and build contracts still apply.
+
+The manual `DesktopProbe` scope reads desktop and session facts on the same native hosted
+matrix before dependency installation or builds. It records calling window-station and
+thread-desktop names, input and foreground-desktop names, and individual Windows query
+errors in source-bound `desktop.json` evidence. An unavailable name is unknown, not proof
+of a separate desktop. This scope sends no input, activates no window and changes no
+display or session settings. It remains NOT_EVALUATED and creates no test, regression or
+production receipt. Other phases and local invocation reject it before engine/sandbox work.
+
+Project GitHub-hosted native interactive entries use an owned input desktop under the
+runner's per-entry interactive lease. The original native hotkey case and verified desktop
+restoration passed on both native architectures before this fixture was enabled. Creation,
+verified neutral foreground/focus ownership, native input assertions, contained child drain,
+restoration, neutral-window thread retirement and handle retirement remain
+required; successful fixture setup alone does not qualify a suite. Requested fixture identity
+is bound to validation fingerprints. Local/self-hosted execution retains its current desktop.
+R0ePaired also retains the original desktop on both sources so historical and current
+implementations use the same fixture. The adapter clears unselected inherited requests and
+restores its caller's value afterward. See the self-test ownership contract.
+
+The separate manual `R0ePaired` scope is Release-only. It requires a nonzero full lowercase
+baseline commit SHA in `baseline_ref`, an available exact commit object, and a clean candidate
+whose HEAD equals the dispatch SHA and frozen descriptor. The candidate and an isolated,
+retained baseline worktree use full-solution test-enabled Embedded Release builds with the
+same positive frozen hosted build number and verified matching dependency/toolchain identity.
+Run five fresh canonical `FileOps_ProviderCapabilityMatrix` processes per side on the same
+native architecture and machine, at timeout scale 1 and repeat 1. Verify the reviewed source
+projections, raw archive closure, profile, quarantine, counts and timing gates before reduction.
+The owning [performance contract](../Testing/Testing_PerformanceValidation.md) retains the
+two-second ceiling and matched p95 bound.
+
+This paired study always leaves repository coverage NOT_EVALUATED and produces no regression
+or production receipt. A baseline may be described as timing-only RED solely when all other
+reviewed predicate clauses and complete raw evidence are verified. Its failed native result
+remains failed; paired-command exit 2 makes the hosted job fail after preserving evidence.
+Candidate failures, incomplete archives, other failed assertions or mismatched identities
+also fail the job. A successful diagnostic pair never substitutes for complete native
+qualification. Retain partial logs, run IDs and the owned baseline checkout on interruption.
+
 This specification owns the project's CI routing. The versioned implementation and policy tests live in
 [RedSalamanders/.github](https://github.com/RedSalamanders/.github). The exact reviewed full commit is recorded
 in .ci/project.json and every reusable workflow caller. Update those pins together through a reviewed PR.
@@ -71,6 +116,8 @@ Source changes, tests written, static checks, and the shared engine's own behavi
 that all six native product pipelines passed.
 
 ## Project adapter
+
+The adapter resolves a relative `EngineRoot` from the current PowerShell filesystem location before importing the engine; non-filesystem providers are rejected. Absolute engine paths retain their existing meaning.
 
 The adapter uses RSBuildEnableTests=true for Release test builds and Suite CI through the hosted desktop wrapper. Production uses RSBuildEnableTests=false, -OfficialRelease and -ProductionOnly. The exact tested PluginContractTests.exe is downloaded as an immutable packaging input, checked against its regression digest and reused solely for portable smoke; it is not recompiled or shipped. Generated test scratch, logs and evidence stay in the governed marked RedSalamander.Perf sandbox. Downloaded frozen receipts and harness binaries are build inputs under .build/ci; native test generation does not write there. Production packaging retains the RuntimeDependencies.props and clean-extraction contracts. Full artifact-mutating qualification remains an explicit separate obligation.
 

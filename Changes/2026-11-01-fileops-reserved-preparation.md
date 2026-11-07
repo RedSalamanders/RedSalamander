@@ -1,0 +1,1 @@
+- Keep directory Delete cards in Preparing while acquiring their checked authority and finishing consent, with Waiting for decision taking precedence while the question is open.

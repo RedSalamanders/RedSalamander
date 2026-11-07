@@ -1,0 +1,40 @@
+{
+  "schema": "red-salamander.curated-provenance.v1",
+  "runId": "20261101T210749Z-30956-df01357452034ed687006662c3e662d8",
+  "sourceHead": "0750451541e6ca23b9e0e8511613f97a8273039b",
+  "receiptId": "cceb33263bea64a4863e5cb4fab3635a495453d1e98a3e65dd2dedf0494f127c",
+  "buildInputSnapshot": "46545d6f5d85d067a138c56a399a75de4d9fa58bd91cb00c800c65c5adf09b93",
+  "rawArtifactHashes": {
+    "aggregateResults": {
+      "bytes": 6874,
+      "sha256": "d9816015fa78ccc6b89a500c6cf1a06c9e0944fa5b8fa91ee01002ae364646c3"
+    },
+    "runnerResults": {
+      "bytes": 17186,
+      "sha256": "b8bbabdd2182cca1e38d87436781a895081a9bb13939d7c15c857795c7612159"
+    },
+    "commandsResults": {
+      "bytes": 4148,
+      "sha256": "4d83737f49e8e67a49ba98bac65295c2fbff7600ca26ee5bb87971734169962e"
+    },
+    "rawTrace": {
+      "bytes": 290034,
+      "sha256": "59aaa1c28264f18657b1070adee0955b945caaaccef49aa394bd390b14e852ba"
+    },
+    "rawMetrics": {
+      "bytes": 31211756,
+      "sha256": "bbbde227cb2857d0bc12027b38bfa00338b0a23b1a92389a2d865842dedaff81"
+    },
+    "receipt": {
+      "bytes": 89878,
+      "sha256": "e4b5f3afa0ec35f8431d6c15051d79c1b8b2810790ef8955eaaf0d567a8c2db7"
+    }
+  },
+  "traceLineReferences": [
+    928,
+    929,
+    930,
+    936
+  ],
+  "note": "Full original artifacts remain in the external archived run; derived files omit environment paths."
+}

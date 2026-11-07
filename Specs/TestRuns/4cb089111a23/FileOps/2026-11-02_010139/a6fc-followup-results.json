@@ -1,0 +1,151 @@
+{
+  "schema": "red-salamander.curated-case-results.v1",
+  "source_head": "a6fc67111b318486b9b5516df561fee56a985b68",
+  "build_source_snapshot": "0bcc7add31f2545ae7b62174076c59f00dea056533409bbc013c7e62ba8b4a23",
+  "build_receipt_id": "bedb7b6e94e018e0dc66793d25eb39255d8c5e04445cf121ba4ea019c4bea0a6",
+  "build_receipt_file_sha256": "49bdb3b934b670f24357a2d1f1267a466d044771ac37922c6806756a5f4bbe45",
+  "runs": [
+    {
+      "run_id": "20261102T122850Z-107704-72716b5127184cbc95c9f1416363588d",
+      "case_filter": "FileOps_CrossProviderMtpNewFile",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "failure_message": null,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1203,
+          "repeat_index": 1
+        },
+        {
+          "name": "FileOps_CrossProviderMtpNewFile",
+          "status": "passed",
+          "duration_ms": 578,
+          "repeat_index": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 47,
+          "repeat_index": 1
+        }
+      ],
+      "raw_results_sha256": "1117a40f009476a39481cc653860bac4eefa5855f2382d90c61161b471ca0ed6",
+      "raw_trace_sha256": "ca9fa4eb780d7fc049eda82986e773fc6294fcbe6c90f5019612b5b6cbd2f374",
+      "raw_metrics_sha256": "3d78666fdf6826c2d50cd65caebd8119c21eba7b21d18356dae12a152db73cff",
+      "raw_wrapper_sha256": "109b18ccf799d529ae8dc1f9ee2c0d6e54c691e5937da3959401de90ae9e6969"
+    },
+    {
+      "run_id": "20261102T123059Z-91508-ddf6fbde0a5f4913a87290ddf7ba34e7",
+      "case_filter": "Fairstream_BridgePerFileConflictSkips",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "failure_message": null,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1266,
+          "repeat_index": 1
+        },
+        {
+          "name": "Fairstream_BridgePerFileConflictSkips",
+          "status": "passed",
+          "duration_ms": 187,
+          "repeat_index": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 94,
+          "repeat_index": 1
+        }
+      ],
+      "raw_results_sha256": "f877c162bda22a2f622fe8ed0656ec3a681dd9f1030fbb22670b39c9a5fcd9e2",
+      "raw_trace_sha256": "d261bf55d0b3d71663d31c7d5b1ce58a998effa2509df2328e7a677c0e03bb8c",
+      "raw_metrics_sha256": "7ebeea309f298ac1baecabe425a74a5c50045b4521813ec62b44500a0a7f6b3e",
+      "raw_wrapper_sha256": "348758e4fbde2819aa85f3ac4523836508e2ffdb9fa58561919f314767ff8b08"
+    },
+    {
+      "run_id": "20261102T123237Z-98940-9e972c8277564ca68a15d0889af84440",
+      "case_filter": "Cinderstar_BridgeMovePerFileConflictSkipsParallel",
+      "wrapper_exit_code": 2,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "failure_message": null,
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1250,
+          "repeat_index": 1
+        },
+        {
+          "name": "Cinderstar_BridgeMovePerFileConflictSkipsParallel",
+          "status": "passed",
+          "duration_ms": 203,
+          "repeat_index": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 125,
+          "repeat_index": 1
+        }
+      ],
+      "raw_results_sha256": "2d8b3ffb204b09e900b37363b6162a1ee90b47249222c0f09bf5b005ba791cfa",
+      "raw_trace_sha256": "4b67ac4108569712a14e22bf6bfcfffb051b402919836fe3e0afa80a7a490f46",
+      "raw_metrics_sha256": "358620db1b6f6f195a0900ffb474bd3ad12de7e271f44eb19d5769252faa4460",
+      "raw_wrapper_sha256": "095ed6aec073aba449f9727daeb13c33e0f6e81cdb8de89cec600dad1ff5c9a5"
+    },
+    {
+      "run_id": "20261102T123346Z-63092-77dbea9746de4205a099d0cdf78f5c66",
+      "case_filter": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "failure_message": "Riptide bridge dir-vs-file test expected S_FALSE after Skip, got 0x00000000.",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1234,
+          "repeat_index": 1
+        },
+        {
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+          "status": "failed",
+          "duration_ms": 172,
+          "repeat_index": 1,
+          "reason": "Riptide bridge dir-vs-file test expected S_FALSE after Skip, got 0x00000000."
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 47,
+          "repeat_index": 1
+        }
+      ],
+      "raw_results_sha256": "9f5fd8529194931f5fa34738bda67a5fed246c0ef17f7240bf20f062d5fede5d",
+      "raw_trace_sha256": "8f821b987e9be47f463a9cd73091637c84f43fa85bbef855e35636a4be47245b",
+      "raw_metrics_sha256": "b98ed991afeb77290f7d142ec43bf43f7ccd7c0d685264dd704b7cc7102c922b",
+      "raw_wrapper_sha256": "e5e2501154caad57436c405e06ab6b54e91b30bc36bebb4aac7355b7e9d3d2ad"
+    }
+  ],
+  "failed_run_preserved_manifest_sha256": "67161d4c15d8b2b2a7addd8fa1bfb64912bd8b37c3a5ead51a0fe3c27a862776"
+}

@@ -2310,55 +2310,144 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
 [[nodiscard]] bool TestFindDialogResultDrainsRespectQueuedChildInput(CaseState& state) noexcept
 {
-    PumpPendingMessages();
-
-    wil::unique_hwnd parentWindow{CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 16, 16, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr)};
-    state.Require(parentWindow.get() != nullptr, L"Failed to create parent probe window for Find drain queue-order test.");
-    if (! state.failure.empty())
+    // A private window thread is necessary here: this probe asserts the whole
+    // queue head, while the Commands UI thread also receives unrelated work.
+    // Its owned message-only windows never activate or inject desktop input.
+    struct ProbeResult final
     {
-        return false;
-    }
-
-    wil::unique_hwnd childWindow{CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 0, 0, 8, 8, parentWindow.get(), nullptr, GetModuleHandleW(nullptr), nullptr)};
-    state.Require(childWindow.get() != nullptr, L"Failed to create child probe window for Find drain queue-order test.");
-    if (! state.failure.empty())
+        const wchar_t* failure       = nullptr;
+        DWORD error                  = ERROR_SUCCESS;
+        UINT observedMessage         = 0u;
+        const wchar_t* observedOwner = L"none";
+    } result;
+    try
     {
-        return false;
-    }
-
-    const auto cleanup = wil::scope_exit([&]() noexcept
-    {
-        MSG message{};
-        while (PeekMessageW(&message, childWindow.get(), 0, 0, PM_REMOVE) != 0)
+        std::jthread worker([&result]() noexcept
         {
-        }
-        while (PeekMessageW(&message, parentWindow.get(), 0, 0, PM_REMOVE) != 0)
-        {
-        }
-        childWindow.reset();
-        parentWindow.reset();
-    });
+            wil::unique_hwnd parent{CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr)};
+            if (! parent)
+            {
+                result.failure = L"Create message-only parent";
+                result.error   = GetLastError();
+                return;
+            }
+            wil::unique_hwnd child{CreateWindowExW(0, L"STATIC", L"", WS_CHILD, 0, 0, 0, 0, parent.get(), nullptr, GetModuleHandleW(nullptr), nullptr)};
+            if (! child)
+            {
+                result.failure = L"Create owned child";
+                result.error   = GetLastError();
+                return;
+            }
+            // Creating even message-only windows can enqueue DWM notifications.
+            // Service only this private thread's setup traffic before injecting
+            // the witnesses; nothing is pumped during the ordering assertions.
+            static_cast<void>(RedSalamander::TestSupport::PumpPendingMessages());
+            MSG setupMessage{};
+            if (PeekMessageW(&setupMessage, nullptr, 0, 0, PM_NOREMOVE) != FALSE)
+            {
+                result.failure         = L"Owned queue setup did not settle before posting witnesses";
+                result.observedMessage = setupMessage.message;
+                return;
+            }
+            if (! PostMessageW(child.get(), WM_MOUSEMOVE, 0, MAKELPARAM(1, 1)) || ! PostMessageW(parent.get(), WndMsg::kFindSearchResults, 0, 0))
+            {
+                result.failure = L"Post owned queue witnesses";
+                result.error   = GetLastError();
+                return;
+            }
+            MSG message{};
+            const auto requireHead = [&](HWND hwnd, UINT expected, const wchar_t* failure) noexcept
+            {
+                const bool found = PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE) != FALSE;
+                if (! found || message.hwnd != hwnd || message.message != expected)
+                {
+                    result.failure         = failure;
+                    result.observedMessage = found ? message.message : 0u;
+                    result.observedOwner   = ! found                        ? L"none"
+                                             : message.hwnd == parent.get() ? L"parent"
+                                             : message.hwnd == child.get()  ? L"child"
+                                             : message.hwnd == nullptr      ? L"thread"
+                                                                            : L"other";
+                    return false;
+                }
+                return true;
+            };
+            const auto removeExpected = [&](HWND hwnd, UINT expected, const wchar_t* failure) noexcept
+            {
+                if (PeekMessageW(&message, hwnd, expected, expected, PM_REMOVE) == FALSE || message.hwnd != hwnd || message.message != expected)
+                {
+                    result.failure = failure;
+                    return false;
+                }
+                return true;
+            };
+            if (! requireHead(child.get(), WM_MOUSEMOVE, L"Child input must be the exact first queue item"))
+                return;
+            if (DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
+            {
+                result.failure = L"Result must not bypass child input";
+                return;
+            }
+            if (! removeExpected(child.get(), WM_MOUSEMOVE, L"Remove the expected child input") ||
+                ! requireHead(parent.get(), WndMsg::kFindSearchResults, L"Result must be the exact next queue item"))
+                return;
+            if (! DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
+            {
+                result.failure = L"Result must become eligible after child input is removed";
+                return;
+            }
+            if (! removeExpected(parent.get(), WndMsg::kFindSearchResults, L"Remove the expected result"))
+                return;
 
-    state.Require(PostMessageW(childWindow.get(), WM_MOUSEMOVE, 0, MAKELPARAM(1, 1)) != FALSE,
-                  L"Failed to queue child mouse input before Find result message.");
-    state.Require(PostMessageW(parentWindow.get(), WndMsg::kFindSearchResults, 0, 0) != FALSE,
-                  L"Failed to queue parent Find result message after child input.");
-    if (! state.failure.empty())
+            // Independent counterfactuals: application work and the actual DWM
+            // setup notification must each stop the same unfiltered guard.
+            for (const UINT interveningMessage : {WM_APP + 0x3A0u, static_cast<UINT>(WM_DWMNCRENDERINGCHANGED)})
+            {
+                if (! PostMessageW(parent.get(), interveningMessage, 0, 0) || ! PostMessageW(parent.get(), WndMsg::kFindSearchResults, 0, 0))
+                {
+                    result.failure = L"Post intervening queue witnesses";
+                    result.error   = GetLastError();
+                    return;
+                }
+                if (! requireHead(parent.get(), interveningMessage, L"Intervening message must be the exact next queue item"))
+                    return;
+                if (DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
+                {
+                    result.failure = L"Result must not bypass intervening work";
+                    return;
+                }
+                if (! removeExpected(parent.get(), interveningMessage, L"Remove the expected intervening message") ||
+                    ! requireHead(parent.get(), WndMsg::kFindSearchResults, L"Result must follow the intervening message"))
+                    return;
+                if (! DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
+                {
+                    result.failure = L"Result must become eligible after intervening work is removed";
+                    return;
+                }
+                if (! removeExpected(parent.get(), WndMsg::kFindSearchResults, L"Remove the expected result after intervening work"))
+                    return;
+            }
+        });
+        worker.join();
+    }
+    catch (const std::bad_alloc&)
     {
+        // This noexcept test boundary treats allocation failure as fatal.
+        std::terminate();
+    }
+    catch (const std::system_error& error)
+    {
+        // Thread creation/join failure is a fixture failure; no desktop input was sent.
+        Debug::Error(L"Find queue probe thread failed: {}.", error.code().value());
+        state.Require(false, std::format(L"Find queue probe thread failed: {}.", error.code().value()));
         return false;
     }
-
-    state.Require(! DebugFindFilesIsNextQueuedMessage(parentWindow.get(), WndMsg::kFindSearchResults),
-                  L"Find result drains must not skip queued child-window input that is ahead of a result message.");
-
-    MSG message{};
-    state.Require(PeekMessageW(&message, childWindow.get(), WM_MOUSEMOVE, WM_MOUSEMOVE, PM_REMOVE) != 0,
-                  L"Expected child mouse input to remain at the queue head for the drain-order probe.");
-    state.Require(DebugFindFilesIsNextQueuedMessage(parentWindow.get(), WndMsg::kFindSearchResults),
-                  L"Find result drain should become eligible once the older child input has been removed.");
-    state.Require(PeekMessageW(&message, parentWindow.get(), WndMsg::kFindSearchResults, WndMsg::kFindSearchResults, PM_REMOVE) != 0,
-                  L"Expected queued parent Find result message to remain after the child input.");
-
+    state.Require(result.failure == nullptr,
+                  std::format(L"Find queue-order probe failed: {} (error={}, observedOwner={}, observedMessage=0x{:X}).",
+                              result.failure ? result.failure : L"none",
+                              result.error,
+                              result.observedOwner,
+                              result.observedMessage));
     return state.failure.empty();
 }
 

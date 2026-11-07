@@ -1474,6 +1474,7 @@ void MergePreferencesOwnedFileOperationsSettings(Common::Settings::Settings& lat
     applyChangedField(merged.mirrorDecisionsInPane, baseline.mirrorDecisionsInPane, working.mirrorDecisionsInPane);
     applyChangedField(merged.verifyAfterCopy, baseline.verifyAfterCopy, working.verifyAfterCopy);
     applyChangedField(merged.defaultBandwidthLimitBytesPerSecond, baseline.defaultBandwidthLimitBytesPerSecond, working.defaultBandwidthLimitBytesPerSecond);
+    applyChangedField(merged.maxParallelTransfers, baseline.maxParallelTransfers, working.maxParallelTransfers);
     applyChangedField(merged.crossFsBridgeBufferSizeKB, baseline.crossFsBridgeBufferSizeKB, working.crossFsBridgeBufferSizeKB);
     applyChangedField(merged.maxDiagnosticsLogFiles, baseline.maxDiagnosticsLogFiles, working.maxDiagnosticsLogFiles);
     applyChangedField(merged.diagnosticsInfoEnabled, baseline.diagnosticsInfoEnabled, working.diagnosticsInfoEnabled);

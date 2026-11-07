@@ -2867,7 +2867,19 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 #endif
         if (! require(r0eCapabilityParseCount == kR0ePerfIterations && r0eAdmissionDecisionCount == kR0ePerfIterations && r0eRejectedUncontainedCount == 1u &&
                           providerOperationCallCount == 0u && r0eElapsedUs < kR0eSelfTestCeilingUs,
-                      L"R0e capability/admission containment must remain complete, provider-call-free, and within the build-specific ceiling."))
+                      std::format(L"R0e capability/admission containment must remain complete, provider-call-free, and within the build-specific ceiling "
+                                  L"(parses={}/{}, decisions={}, rejected={}, providerCalls={}, elapsed={} us, ceiling={} us, parseWork={} us, "
+                                  L"admissionWork={} us, rejectionChecks={} us).",
+                                  r0eCapabilityParseCount,
+                                  kR0ePerfIterations,
+                                  r0eAdmissionDecisionCount,
+                                  r0eRejectedUncontainedCount,
+                                  providerOperationCallCount,
+                                  r0eElapsedUs,
+                                  kR0eSelfTestCeilingUs,
+                                  std::chrono::duration_cast<std::chrono::microseconds>(r0eParseDuration).count(),
+                                  std::chrono::duration_cast<std::chrono::microseconds>(r0eAdmissionDuration).count(),
+                                  r0eRejectionChecksUs)))
         {
             return true;
         }
@@ -5310,9 +5322,83 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
 
 case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 {
+    struct R4A19ScopeCounts final
+    {
+        size_t read = 0u, write = 0u, publish = 0u;
+        size_t conservative = 0u, anchored = 0u, independent = 0u;
+    };
+    struct R4A19AdmissionDiagnostic final
+    {
+        bool captured = false, waitA = false, waitB = false, activeA = false, activeB = false;
+        bool identityWaitA = false, identityWaitB = false, slotWaitA = false, slotWaitB = false, exclusiveWaitA = false, exclusiveWaitB = false;
+        bool parallelA = false, parallelB = false, overlap = false, byNameDelete = false;
+        bool pairFound = false, pairDomain = false, pairContract = false, pairSameRoot = false, pairSameParent = false;
+        bool leftConservative = false, rightConservative = false, leftAnchored = false, rightAnchored = false;
+        bool leftIndependent = false, rightIndependent = false;
+        unsigned int leftRole = 0u, rightRole = 0u, advisory = 0u;
+        uint64_t comparisons = 0u, advisoryComparisons = 0u, captureUs = 0u;
+        R4A19ScopeCounts a, b;
+    };
+    // Only scalar facts persist between UI ticks; no bound-object authority or path is retained.
+    static R4A19AdmissionDiagnostic diagnostic;
+    const auto logDiagnostic = [&]() noexcept
+    {
+        AppendLog(std::format(L"R4-A19 admission diagnostic: captured={} waitA={} waitB={} activeA={} activeB={} parallelA={} parallelB={} "
+                              L"A(read/write/publish={}/{}/{} conservative={} anchored={} independent={}) "
+                              L"B(read/write/publish={}/{}/{} conservative={} anchored={} independent={}) "
+                              L"overlap={} comparisons={} advisory={} advisoryComparisons={} byNameDelete={} captureUs={}",
+                              diagnostic.captured,
+                              diagnostic.waitA,
+                              diagnostic.waitB,
+                              diagnostic.activeA,
+                              diagnostic.activeB,
+                              diagnostic.parallelA,
+                              diagnostic.parallelB,
+                              diagnostic.a.read,
+                              diagnostic.a.write,
+                              diagnostic.a.publish,
+                              diagnostic.a.conservative,
+                              diagnostic.a.anchored,
+                              diagnostic.a.independent,
+                              diagnostic.b.read,
+                              diagnostic.b.write,
+                              diagnostic.b.publish,
+                              diagnostic.b.conservative,
+                              diagnostic.b.anchored,
+                              diagnostic.b.independent,
+                              diagnostic.overlap,
+                              diagnostic.comparisons,
+                              diagnostic.advisory,
+                              diagnostic.advisoryComparisons,
+                              diagnostic.byNameDelete,
+                              diagnostic.captureUs));
+        AppendLog(std::format(L"R4-A19 overlapping pair: found={} roles={}/{} conservative={}/{} anchored={}/{} independent={}/{} "
+                              L"sameDomain={} samePathContract={} sameRoot={} sameParent={}",
+                              diagnostic.pairFound,
+                              diagnostic.leftRole,
+                              diagnostic.rightRole,
+                              diagnostic.leftConservative,
+                              diagnostic.rightConservative,
+                              diagnostic.leftAnchored,
+                              diagnostic.rightAnchored,
+                              diagnostic.leftIndependent,
+                              diagnostic.rightIndependent,
+                              diagnostic.pairDomain,
+                              diagnostic.pairContract,
+                              diagnostic.pairSameRoot,
+                              diagnostic.pairSameParent));
+        AppendLog(std::format(L"R4-A19 wait reasons: identity={}/{} sharedSlot={}/{} exclusive={}/{}",
+                              diagnostic.identityWaitA,
+                              diagnostic.identityWaitB,
+                              diagnostic.slotWaitA,
+                              diagnostic.slotWaitB,
+                              diagnostic.exclusiveWaitA,
+                              diagnostic.exclusiveWaitB));
+    };
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
+        logDiagnostic();
         Fail(L"R4A19_DiscoveryIndependentVolumes timed out.");
         return true;
     }
@@ -5324,14 +5410,24 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     const std::filesystem::path cBase            = state.tempRoot / L"r4-a19-independent-c";
     const std::filesystem::path cSource          = cBase / L"source-c";
     const std::filesystem::path cDestination     = cBase / L"destination-c";
+    const auto selectedFiles                     = [&](const std::filesystem::path& source)
+    {
+        std::vector<std::filesystem::path> files;
+        files.reserve(kFileCount);
+        for (unsigned int index = 0u; index < kFileCount; ++index)
+            files.push_back(source / std::format(L"payload-{:02}.bin", index));
+        return files;
+    };
 
     if (state.stepState == 0u)
     {
+        diagnostic = {};
         // Queue is the product default. This control measures independent
         // operations, so it must establish Parallel admission explicitly rather
         // than inheriting a previous case's mode or racing the first worker.
         state.r4A19IndependentQueueModeOriginal = state.fileOps->GetQueueNewTasks();
         state.fileOps->SetQueueNewTasks(false);
+        BeginSelfTestSharedTransferLimit(state, (std::max)(2u * kFileCount, FileOperations::GetSharedParallelTransferLimit()));
         AppendLog(std::format(L"R4-A19 independent-volume admission: originalQueue={} fixtureQueue={}",
                               state.r4A19IndependentQueueModeOriginal.value(),
                               state.fileOps->GetQueueNewTasks()));
@@ -5372,9 +5468,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {cSource},
+                                                                  selectedFiles(cSource),
                                                                   cDestination,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value())
@@ -5414,19 +5510,45 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             AppendLog(std::format(L"Independent-volume destination operation path refused: {}", refusal));
             return std::nullopt;
         }
+
+        // The probe may bind only the freshly verified, test-owned filesystem root.
+        // Stop before binding if lexical parent traversal does not reach that exact spelling.
+        const FileSystemPathIdentity identity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+        std::wstring ancestor                 = source.value().native();
+        while (ancestor != volume)
+        {
+            std::wstring parent;
+            if (! TryGetFileSystemParentPath(identity, ancestor, parent) || parent.size() >= ancestor.size())
+            {
+                AppendLog(L"R4-A19 owned-volume root probe: parent walk did not reach the verified root.");
+                return std::nullopt;
+            }
+            ancestor = std::move(parent);
+        }
+        {
+            constexpr FileSystemBindFlags flags               = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+            const FileOperations::ObjectBindingResult binding = FileOperations::BindObjectAuthority(state.fsLocal.get(), ancestor, L"local-win32", flags);
+            const bool boundDirectory = binding.state == FileOperations::ObjectBindingState::Bound && binding.status == S_OK && binding.authority.boundObject &&
+                                        binding.authority.kind == FILESYSTEM_BOUND_DIRECTORY;
+            AppendLog(std::format(L"R4-A19 owned-volume root probe: state={} hr=0x{:08X} boundDirectory={}.",
+                                  static_cast<unsigned int>(binding.state),
+                                  static_cast<unsigned long>(binding.status),
+                                  boundDirectory));
+            if (! boundDirectory)
+                return std::nullopt;
+        }
         return std::pair{source.value(), destination.value()};
     };
-    const auto verifyTree = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
+    const auto verifyFiles = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
     {
-        const std::filesystem::path copied = destinationRoot / source.filename();
-        if (CountFilesRecursive(copied) != kFileCount)
+        if (CountFilesRecursive(destinationRoot) != kFileCount)
         {
             return false;
         }
         for (unsigned int index = 0u; index < kFileCount; ++index)
         {
             const std::filesystem::path leaf = std::format(L"payload-{:02}.bin", index);
-            if (! FilesEqualBytes(source / leaf, copied / leaf))
+            if (! FilesEqualBytes(source / leaf, destinationRoot / leaf))
             {
                 return false;
             }
@@ -5444,7 +5566,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         state.r4A19VolumeCIsolatedUs = completed->second.completionTick >= state.r4A19ScenarioStartTick
                                            ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
                                            : 0u;
-        if (FAILED(completed->second.hr) || ! verifyTree(cSource, cDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
+        if (FAILED(completed->second.hr) || ! verifyFiles(cSource, cDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeCIsolatedUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 primary isolated control failed: hr=0x{:08X} "
@@ -5471,9 +5593,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {operationPaths.value().first},
+                                                                  selectedFiles(operationPaths.value().first),
                                                                   operationPaths.value().second,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value())
@@ -5495,7 +5617,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         state.r4A19VolumeDIsolatedUs = completed->second.completionTick >= state.r4A19ScenarioStartTick
                                            ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
                                            : 0u;
-        if (FAILED(completed->second.hr) || ! verifyTree(dSource, dDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
+        if (FAILED(completed->second.hr) || ! verifyFiles(dSource, dDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeDIsolatedUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 alternate isolated control failed: hr=0x{:08X} "
@@ -5528,9 +5650,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {cSource},
+                                                                  selectedFiles(cSource),
                                                                   cDestination,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         state.taskB                  = StartFileOperationAndGetId(state.fileOps,
@@ -5538,9 +5660,9 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
                                                                   state.fsLocal,
-                                                                  {operationPaths.value().first},
+                                                                  selectedFiles(operationPaths.value().first),
                                                                   operationPaths.value().second,
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                                  FILESYSTEM_FLAG_NONE,
                                                                   false,
                                                                   kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
@@ -5568,8 +5690,77 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             std::scoped_lock lock(taskB->_progressMutex);
             completedB = taskB->_progressCompletedBytes;
         }
+        const auto admissionA = taskA->LoadMutationInterlockAdmission();
+        const auto admissionB = taskB->LoadMutationInterlockAdmission();
+        if (! diagnostic.captured && admissionA && admissionB && admissionA->scopes && admissionB->scopes &&
+            (taskA->IsWaitingInQueue() || taskB->IsWaitingInQueue() || (taskA->HasEnteredOperation() && taskB->HasEnteredOperation())))
+        {
+            const auto captureStarted = std::chrono::steady_clock::now();
+            using Access              = FileOperations::MutationInterlockAccess;
+            const auto count          = [](const auto& scopes) noexcept
+            {
+                R4A19ScopeCounts result;
+                for (const auto& scope : scopes)
+                {
+                    result.read += scope.access == Access::ReadSource;
+                    result.write += scope.access == Access::WriteSource;
+                    result.publish += scope.access == Access::PublishDestination;
+                    result.conservative += scope.conservativeIdentityDomain;
+                    result.anchored += ! scope.anchors.empty();
+                    result.independent += scope.independentNewFileTransfer;
+                }
+                return result;
+            };
+            diagnostic.waitA          = taskA->IsWaitingInQueue();
+            diagnostic.waitB          = taskB->IsWaitingInQueue();
+            diagnostic.activeA        = taskA->HasEnteredOperation();
+            diagnostic.activeB        = taskB->HasEnteredOperation();
+            diagnostic.identityWaitA  = taskA->_waitingForIdentityInterlock.load(std::memory_order_acquire);
+            diagnostic.identityWaitB  = taskB->_waitingForIdentityInterlock.load(std::memory_order_acquire);
+            diagnostic.slotWaitA      = taskA->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
+            diagnostic.slotWaitB      = taskB->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
+            diagnostic.exclusiveWaitA = taskA->_waitingForExclusiveTransfer.load(std::memory_order_acquire);
+            diagnostic.exclusiveWaitB = taskB->_waitingForExclusiveTransfer.load(std::memory_order_acquire);
+            diagnostic.parallelA      = admissionA->parallelNewFiles;
+            diagnostic.parallelB      = admissionB->parallelNewFiles;
+            diagnostic.a              = count(*admissionA->scopes);
+            diagnostic.b              = count(*admissionB->scopes);
+            diagnostic.overlap  = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(*admissionA->scopes, *admissionB->scopes, diagnostic.comparisons);
+            diagnostic.advisory = static_cast<unsigned int>(FileOperations::DebugClassifySameHostOverlapForSelfTest(
+                *admissionA->scopes, *admissionB->scopes, diagnostic.byNameDelete, diagnostic.advisoryComparisons));
+            for (const auto& left : *admissionA->scopes)
+            {
+                for (const auto& right : *admissionB->scopes)
+                {
+                    if (! FileOperations::DebugMutationScopesOverlapForSelfTest(left, right))
+                        continue;
+                    diagnostic.pairFound         = true;
+                    diagnostic.leftRole          = static_cast<unsigned int>(left.access);
+                    diagnostic.rightRole         = static_cast<unsigned int>(right.access);
+                    diagnostic.leftConservative  = left.conservativeIdentityDomain;
+                    diagnostic.rightConservative = right.conservativeIdentityDomain;
+                    diagnostic.leftAnchored      = ! left.anchors.empty();
+                    diagnostic.rightAnchored     = ! right.anchors.empty();
+                    diagnostic.leftIndependent   = left.independentNewFileTransfer;
+                    diagnostic.rightIndependent  = right.independentNewFileTransfer;
+                    diagnostic.pairDomain        = FileOperations::QualifiedEndpointsShareObjectIdentityDomain(left.endpoint, right.endpoint);
+                    diagnostic.pairContract      = FileOperations::QualifiedEndpointsHaveSamePathContract(left.endpoint, right.endpoint);
+                    diagnostic.pairSameRoot      = FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint);
+                    diagnostic.pairSameParent    = left.independentParentKey.has_value() && right.independentParentKey.has_value() &&
+                                                   left.independentParentKey.value() == right.independentParentKey.value();
+                    break;
+                }
+                if (diagnostic.pairFound)
+                    break;
+            }
+            diagnostic.captureUs = Debug::Perf::ElapsedUs(captureStarted);
+            diagnostic.captured  = true;
+        }
+        const bool qualifiedAndActive = admissionA && admissionB && admissionA->parallelNewFiles && admissionB->parallelNewFiles &&
+                                        admissionA->hasDataTransfers && admissionB->hasDataTransfers &&
+                                        state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value());
         state.r4A19IndependentProgressOverlap =
-            state.r4A19IndependentProgressOverlap || (taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
+            state.r4A19IndependentProgressOverlap || (qualifiedAndActive && taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
     }
 
     const auto completedA = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
@@ -5585,9 +5776,11 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             : 0u;
     const uint64_t slowerIsolatedUs = (std::max)(state.r4A19VolumeCIsolatedUs, state.r4A19VolumeDIsolatedUs);
     const uint64_t concurrentGateUs = (slowerIsolatedUs * 135u + 99u) / 100u;
-    if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyTree(cSource, cDestination) ||
-        ! verifyTree(dSource, dDestination) || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
+    if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyFiles(cSource, cDestination) ||
+        ! verifyFiles(dSource, dDestination) || completedA->second.discoveredTotalBytes != kTaskBytes ||
+        completedB->second.discoveredTotalBytes != kTaskBytes || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
     {
+        logDiagnostic();
         Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} "
                          L"hrB=0x{:08X} overlap={} "
                          L"bytesA={}/{} bytesB={}/{} isolatedC={} isolatedD={} "
@@ -5619,6 +5812,15 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
     const std::filesystem::path alternateRoot = std::move(state.fileOpsAlternateVolumeRoot);
     static_cast<void>(SelfTest::RemoveAll(alternateRoot));
     PruneEmptyAlternateVolumeSandboxParents(alternateRoot);
+    const auto sandboxBase = Common::Testing::GetDedicatedExternalTestSandboxBase(alternateRoot, Common::Testing::kTestSandboxDirectoryName);
+    std::error_code sandboxEc;
+    if (! sandboxBase.has_value() || ! Common::Testing::HasValidTestSandboxMarker(sandboxBase.value()) ||
+        ! Common::Testing::IsExistingTestSandboxPathReparseFree(sandboxBase.value(), sandboxEc) || sandboxEc)
+    {
+        Fail(L"R4-A19 alternate-volume sandbox root or ownership marker was not preserved after cleanup.");
+        return true;
+    }
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::DiscoveryScope_LeafCopy);
     return false;
 }
@@ -6575,6 +6777,509 @@ case SelfTestState::Step::DiscoveryScope_LocalDirectApi:
         options.operationControlCookie = nullptr;
         return options;
     };
+
+    // A valid call that cannot inspect its source still owns one closed scope.
+    // Exercise the public legacy adapters separately; neither operation may create a destination.
+    {
+        const std::wstring missing     = (sourceRoot / L"missing.bin").wstring();
+        const std::wstring destination = (base / L"missing-destination.bin").wstring();
+        DirectApiDiscoveryRecorder copyRecorder{};
+        FileSystemOptions copyOptions = makeOptions(copyRecorder);
+        const HRESULT copyHr          = state.fsLocal->CopyItem(missing.c_str(), destination.c_str(), flags, &copyOptions, nullptr, nullptr);
+        DirectApiDiscoveryRecorder moveRecorder{};
+        FileSystemOptions moveOptions = makeOptions(moveRecorder);
+        const HRESULT moveHr          = state.fsLocal->MoveItem(missing.c_str(), destination.c_str(), flags, &moveOptions, nullptr, nullptr);
+        if (SUCCEEDED(copyHr) || SUCCEEDED(moveHr))
+        {
+            Fail(std::format(L"{}: missing-source singular Copy or Move unexpectedly succeeded.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem missing source", copyRecorder, {0u, 0u, 0u}));
+        appendDefect(DescribeDiscoveryScopeDefect(L"MoveItem missing source", moveRecorder, {0u, 0u, 0u}));
+
+        DirectApiDiscoveryRecorder invalidRecorder{};
+        FileSystemOptions invalidOptions = makeOptions(invalidRecorder);
+        const HRESULT nullSourceHr       = state.fsLocal->CopyItem(nullptr, destination.c_str(), flags, &invalidOptions, nullptr, nullptr);
+        invalidOptions.sizeBytes         = 0u;
+        const HRESULT invalidOptionsHr   = state.fsLocal->CopyItem(missing.c_str(), destination.c_str(), flags, &invalidOptions, nullptr, nullptr);
+        if (nullSourceHr != E_POINTER || SUCCEEDED(invalidOptionsHr) || ! invalidRecorder.events.empty())
+        {
+            Fail(std::format(L"{}: rejected ABI arguments unexpectedly entered a discovery scope.", label));
+            return true;
+        }
+    }
+
+    // The budget adapter must close the same scope when its participant refuses
+    // admission before any source mutation. This synchronous fake owns no permits.
+    {
+        struct RefusingBudget final : IFileSystemTaskTransferBudget
+        {
+            HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void** result) noexcept override
+            {
+                if (result)
+                    *result = nullptr;
+                return E_NOINTERFACE;
+            }
+            ULONG STDMETHODCALLTYPE AddRef() noexcept override
+            {
+                return 1u;
+            }
+            ULONG STDMETHODCALLTYPE Release() noexcept override
+            {
+                return 1u;
+            }
+            HRESULT STDMETHODCALLTYPE CreateParticipant(uint32_t, IFileSystemTaskTransferBudget**) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE NarrowParticipantLimit(uint32_t) noexcept override
+            {
+                return E_ACCESSDENIED;
+            }
+            HRESULT STDMETHODCALLTYPE AcquireFile(IFileSystemOperationControl*, void*, IUnknown**) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE AcquireOpaque(IFileSystemOperationControl*, void*, IUnknown**) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+        } budget;
+        wil::com_ptr<IFileSystemCooperativeCopy> cooperative;
+        if (! state.fsLocal.try_query_to(cooperative.put()) || ! cooperative)
+        {
+            Fail(std::format(L"{}: Local cooperative Copy is unavailable.", label));
+            return true;
+        }
+        DirectApiDiscoveryRecorder recorder{};
+        FileSystemOptions options      = makeOptions(recorder);
+        const std::wstring destination = (base / L"budget-destination.bin").wstring();
+        const HRESULT hr               = cooperative->CopyItemWithTaskBudget(leafA.c_str(), destination.c_str(), flags, &options, nullptr, nullptr, &budget);
+        if (hr != E_ACCESSDENIED)
+        {
+            Fail(std::format(L"{}: budget refusal was not preserved (hr=0x{:08X}).", label, static_cast<unsigned long>(hr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem budget refusal", recorder, {0u, 0u, 0u}));
+    }
+
+    // Regular-file discovery must close before publication. A rejected closure
+    // callback is still one attempted closure and must stop the mutation.
+    {
+        if (! seedSelection())
+        {
+            Fail(std::format(L"{}: could not seed singular Copy fixture.", label));
+            return true;
+        }
+        const std::filesystem::path destination = base / L"singular-copy.bin";
+        DirectApiDiscoveryRecorder recorder{};
+        recorder.destinationExpectedAbsentAtClose = destination;
+        FileSystemOptions options                 = makeOptions(recorder);
+        const HRESULT hr                          = state.fsLocal->CopyItem(leafA.c_str(), destination.c_str(), flags, &options, nullptr, nullptr);
+        if (FAILED(hr) || ! recorder.closedBeforeDestination || ! FileSizeEquals(destination, kLeafBytesA))
+        {
+            Fail(std::format(L"{}: singular Copy did not close discovery before publication.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem file", recorder, {kLeafBytesA, 1u, 0u}));
+
+        const std::filesystem::path refused = base / L"refused-copy.bin";
+        DirectApiDiscoveryRecorder failingRecorder{};
+        failingRecorder.reportResult     = E_ACCESSDENIED;
+        FileSystemOptions failingOptions = makeOptions(failingRecorder);
+        const HRESULT failure            = state.fsLocal->CopyItem(leafA.c_str(), refused.c_str(), flags, &failingOptions, nullptr, nullptr);
+        std::error_code existsError;
+        if (failure != E_ACCESSDENIED || std::filesystem::exists(refused, existsError) || existsError)
+        {
+            Fail(std::format(L"{}: rejected discovery callback did not stop singular Copy.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem rejected discovery", failingRecorder, {kLeafBytesA, 1u, 0u}));
+
+        const std::filesystem::path nullOptionsDestination = base / L"null-options-copy.bin";
+        const HRESULT nullOptionsHr = state.fsLocal->CopyItem(leafB.c_str(), nullOptionsDestination.c_str(), flags, nullptr, nullptr, nullptr);
+        if (FAILED(nullOptionsHr) || ! FileSizeEquals(nullOptionsDestination, kLeafBytesB))
+        {
+            Fail(std::format(L"{}: Copy with null options failed (hr=0x{:08X}).", label, static_cast<unsigned long>(nullOptionsHr)));
+            return true;
+        }
+
+        // Replace the file synchronously when its final record is delivered: the
+        // next root probe must not turn a closed file scope into a tree walk.
+        struct ShapeChangeRecorder final : DirectApiDiscoveryRecorder
+        {
+            std::filesystem::path source;
+            std::filesystem::path junctionTarget;
+            bool changed = false;
+            HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* cookie) noexcept override
+            {
+                const HRESULT hr = DirectApiDiscoveryRecorder::FileSystemReportDiscoveryProgress(progress, cookie);
+                if (SUCCEEDED(hr) && progress != nullptr && progress->traversalClosed != FALSE)
+                    changed = DeleteFileW(source.c_str()) != FALSE &&
+                              (junctionTarget.empty() ? CreateDirectoryW(source.c_str(), nullptr) != FALSE : TryCreateJunction(source, junctionTarget));
+                return hr;
+            }
+        } shapeRecorder;
+        const std::filesystem::path shapeSource      = base / L"shape-change.bin";
+        const std::filesystem::path shapeDestination = base / L"shape-destination.bin";
+        if (! WriteTestFile(shapeSource, 97u))
+        {
+            Fail(std::format(L"{}: could not seed source shape change.", label));
+            return true;
+        }
+        shapeRecorder.source           = shapeSource;
+        FileSystemOptions shapeOptions = makeOptions(shapeRecorder);
+        const HRESULT shapeHr          = state.fsLocal->CopyItem(shapeSource.c_str(), shapeDestination.c_str(), flags, &shapeOptions, nullptr, nullptr);
+        existsError.clear();
+        if (! shapeRecorder.changed || shapeHr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) || std::filesystem::exists(shapeDestination, existsError) ||
+            existsError)
+        {
+            Fail(std::format(L"{}: a file changed to a directory after closure was not refused (hr=0x{:08X}).", label, static_cast<unsigned long>(shapeHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem file-to-directory", shapeRecorder, {97u, 1u, 0u}));
+
+        const std::filesystem::path linkSource      = base / L"shape-link-source.bin";
+        const std::filesystem::path linkTarget      = base / L"shape-link-target";
+        const std::filesystem::path linkDestination = base / L"shape-link-destination";
+        if (! RecreateEmptyDirectory(linkTarget) || ! WriteTestFile(linkSource, 97u))
+        {
+            Fail(std::format(L"{}: could not seed source link change.", label));
+            return true;
+        }
+        ShapeChangeRecorder linkRecorder{};
+        linkRecorder.source           = linkSource;
+        linkRecorder.junctionTarget   = linkTarget;
+        FileSystemOptions linkOptions = makeOptions(linkRecorder);
+        const HRESULT linkHr          = state.fsLocal->CopyItem(linkSource.c_str(), linkDestination.c_str(), flags, &linkOptions, nullptr, nullptr);
+        existsError.clear();
+        if (! linkRecorder.changed || linkHr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) || std::filesystem::exists(linkDestination, existsError) || existsError)
+        {
+            Fail(std::format(
+                L"{}: a file changed to a sandbox junction after closure was not refused (hr=0x{:08X}).", label, static_cast<unsigned long>(linkHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem file-to-junction", linkRecorder, {97u, 1u, 0u}));
+
+        struct DirectoryChangeRecorder final : DirectApiDiscoveryRecorder
+        {
+            std::filesystem::path source;
+            bool changed = false;
+            HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+            {
+                if (! abort)
+                    return E_POINTER;
+                *abort = FALSE;
+                if (! changed)
+                    changed = RemoveDirectoryW(source.c_str()) != FALSE && WriteTestFile(source, 97u);
+                return S_OK;
+            }
+        } directoryRecorder;
+        const std::filesystem::path directorySource      = base / L"shape-directory";
+        const std::filesystem::path directoryDestination = base / L"shape-directory-destination";
+        if (! RecreateEmptyDirectory(directorySource))
+        {
+            Fail(std::format(L"{}: could not seed directory shape change.", label));
+            return true;
+        }
+        directoryRecorder.source           = directorySource;
+        FileSystemOptions directoryOptions = makeOptions(directoryRecorder);
+        const HRESULT directoryHr = state.fsLocal->CopyItem(directorySource.c_str(), directoryDestination.c_str(), flags, &directoryOptions, nullptr, nullptr);
+        existsError.clear();
+        if (! directoryRecorder.changed || directoryHr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) ||
+            std::filesystem::exists(directoryDestination, existsError) || existsError)
+        {
+            Fail(std::format(
+                L"{}: a directory changed to a file before traversal was not refused (hr=0x{:08X}).", label, static_cast<unsigned long>(directoryHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem directory-to-file", directoryRecorder, {0u, 0u, 0u}));
+
+        struct CancelRecorder final : DirectApiDiscoveryRecorder
+        {
+            HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+            {
+                if (! abort)
+                    return E_POINTER;
+                *abort = TRUE;
+                return S_OK;
+            }
+        } cancelRecorder;
+        const std::filesystem::path cancelSource      = base / L"cancel-source";
+        const std::filesystem::path cancelDestination = base / L"cancel-destination";
+        if (! RecreateEmptyDirectory(cancelSource))
+        {
+            Fail(std::format(L"{}: could not seed prewalk cancellation.", label));
+            return true;
+        }
+        FileSystemOptions cancelOptions = makeOptions(cancelRecorder);
+        const HRESULT cancelHr          = state.fsLocal->CopyItem(cancelSource.c_str(), cancelDestination.c_str(), flags, &cancelOptions, nullptr, nullptr);
+        existsError.clear();
+        if (cancelHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || std::filesystem::exists(cancelDestination, existsError) || existsError)
+        {
+            Fail(std::format(L"{}: prewalk cancellation was not preserved (hr=0x{:08X}).", label, static_cast<unsigned long>(cancelHr)));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem prewalk cancellation", cancelRecorder, {0u, 0u, 0u}));
+
+        // Only the initial observed attribute is injected. The provider consumes
+        // the exact path only after its real no-follow binding says DIRECTORY;
+        // this is not a claim about an actual cloud or reparse-backed device.
+        constexpr std::wstring_view kObservedReparse    = L"REDSALAMANDER_FILEOPS_TEST_DISCOVERY_REPARSE_SOURCE";
+        const std::filesystem::path observedRoot        = base / L"observed-reparse";
+        const std::filesystem::path observedSource      = observedRoot / L"source";
+        const std::filesystem::path observedDestination = observedRoot / L"destination";
+        if (! RecreateEmptyDirectory(observedSource) || ! WriteTestFile(observedSource / L"a.bin", 97u) || ! WriteTestFile(observedSource / L"b.bin", 103u))
+        {
+            Fail(std::format(L"{}: could not seed observed-reparse control.", label));
+            return true;
+        }
+        const std::wstring observedExtended = MakeExtendedPathForSelfTest(observedSource);
+        RedSalamander::TestSupport::ScopedEnvironmentVariable observedAttribute(kObservedReparse, observedExtended);
+        DirectApiDiscoveryRecorder observedRecorder{};
+        FileSystemOptions observedOptions = makeOptions(observedRecorder);
+        const HRESULT observedHr      = state.fsLocal->CopyItem(observedSource.c_str(), observedDestination.c_str(), flags, &observedOptions, nullptr, nullptr);
+        const auto remainingAttribute = RedSalamander::TestSupport::ReadEnvironmentValue(kObservedReparse);
+        if (FAILED(observedHr) || remainingAttribute.error != ERROR_SUCCESS || remainingAttribute.value.has_value() ||
+            ! FileSizeEquals(observedDestination / L"a.bin", 97u) || ! FileSizeEquals(observedDestination / L"b.bin", 103u))
+        {
+            Fail(std::format(L"{}: observed-reparse DIRECTORY control failed (hr=0x{:08X}, consumed={}).",
+                             label,
+                             static_cast<unsigned long>(observedHr),
+                             ! remainingAttribute.value.has_value()));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"CopyItem observed-reparse directory", observedRecorder, {200u, 2u, 1u}));
+    }
+
+    // The serial fallback must leave a failed root setup open while the outer
+    // conflict decision chooses Keep Both, Retry, Skip or Cancel.
+    {
+        struct SerialConflictCallback : IFileSystemCallback
+        {
+            virtual ~SerialConflictCallback() = default;
+
+            FileSystemIssueAction decision = FileSystemIssueAction::Cancel;
+            std::wstring blocker;
+            unsigned int issues = 0u;
+            bool removed        = false;
+            HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation,
+                                                         unsigned long,
+                                                         unsigned long,
+                                                         uint64_t,
+                                                         uint64_t,
+                                                         const wchar_t*,
+                                                         const wchar_t*,
+                                                         uint64_t,
+                                                         uint64_t,
+                                                         FileSystemOptions*,
+                                                         uint64_t,
+                                                         void*) noexcept override
+            {
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemItemCompleted(FileSystemOperation,
+                                                              unsigned long,
+                                                              const wchar_t*,
+                                                              const wchar_t*,
+                                                              HRESULT,
+                                                              const FileSystemItemMutationResult*,
+                                                              FileSystemOptions*,
+                                                              void*) noexcept override
+            {
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemShouldCancel(BOOL* cancel, void*) noexcept override
+            {
+                if (! cancel)
+                    return E_POINTER;
+                *cancel = FALSE;
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE FileSystemIssue(FileSystemOperation,
+                                                      const wchar_t*,
+                                                      const wchar_t*,
+                                                      HRESULT,
+                                                      FileSystemIssueAction* action,
+                                                      IFileSystemBoundObject** expected,
+                                                      FileSystemOptions*,
+                                                      void*) noexcept override
+            {
+                if (! action || ! expected)
+                    return E_POINTER;
+                ++issues;
+                *expected = nullptr;
+                if (decision == FileSystemIssueAction::Retry)
+                    removed = DeleteFileW(blocker.c_str()) != FALSE;
+                *action = decision;
+                return S_OK;
+            }
+        };
+        constexpr std::wstring_view kSerialSource = L"REDSALAMANDER_FILEOPS_TEST_SERIAL_COPY_SOURCE";
+        constexpr std::array decisions{
+            FileSystemIssueAction::KeepBoth, FileSystemIssueAction::Retry, FileSystemIssueAction::Skip, FileSystemIssueAction::Cancel};
+        for (size_t index = 0; index < decisions.size(); ++index)
+        {
+            const std::filesystem::path root        = base / std::format(L"serial-conflict-{}", index);
+            const std::filesystem::path source      = root / L"source";
+            const std::filesystem::path destination = root / L"destination";
+            if (! RecreateEmptyDirectory(source) || ! WriteTestFile(source / L"child.bin", 97u) || ! WriteTestFile(destination, 31u))
+            {
+                Fail(std::format(L"{}: could not seed serial conflict fixture.", label));
+                return true;
+            }
+            const std::wstring sourceText      = source.wstring();
+            const std::wstring destinationText = destination.wstring();
+            const std::wstring selected        = MakeExtendedPathForSelfTest(sourceText);
+            RedSalamander::TestSupport::ScopedEnvironmentVariable serial(kSerialSource, selected);
+            SerialConflictCallback callback{};
+            callback.decision = decisions[index];
+            callback.blocker  = destinationText;
+            DirectApiDiscoveryRecorder recorder{};
+            FileSystemOptions options          = makeOptions(recorder);
+            const HRESULT hr                   = state.fsLocal->CopyItem(sourceText.c_str(), destinationText.c_str(), flags, &options, &callback, nullptr);
+            const auto remaining               = RedSalamander::TestSupport::ReadEnvironmentValue(kSerialSource);
+            const bool successful              = decisions[index] == FileSystemIssueAction::KeepBoth || decisions[index] == FileSystemIssueAction::Retry;
+            const std::filesystem::path copied = decisions[index] == FileSystemIssueAction::KeepBoth ? root / L"destination (2)" : destination;
+            if (remaining.error != ERROR_SUCCESS || remaining.value.has_value() || callback.issues != 1u || (successful != SUCCEEDED(hr)) ||
+                (decisions[index] == FileSystemIssueAction::Retry && ! callback.removed) || (successful && ! FileSizeEquals(copied / L"child.bin", 97u)) ||
+                (decisions[index] != FileSystemIssueAction::Retry && ! FileSizeEquals(destination, 31u)))
+            {
+                Fail(std::format(L"{}: serial root-conflict case {} failed (hr=0x{:08X}, issues={}, seamConsumed={}).",
+                                 label,
+                                 index,
+                                 static_cast<unsigned long>(hr),
+                                 callback.issues,
+                                 ! remaining.value.has_value()));
+                return true;
+            }
+            appendDefect(DescribeDiscoveryScopeDefect(
+                L"serial root conflict", recorder, successful ? ExpectedDiscoveryTotals{97u, 1u, 1u} : ExpectedDiscoveryTotals{0u, 0u, 1u}));
+        }
+
+        // A rejected final record is still final; do not replay the tree under
+        // its already closed cookie or replace the callback's failure.
+        const std::filesystem::path closedRoot        = base / L"recursive-closure-refusal";
+        const std::filesystem::path closedSource      = closedRoot / L"source";
+        const std::filesystem::path closedDestination = closedRoot / L"destination";
+        if (! RecreateEmptyDirectory(closedSource) || ! WriteTestFile(closedSource / L"child.bin", 97u))
+        {
+            Fail(std::format(L"{}: could not seed recursive closure refusal.", label));
+            return true;
+        }
+        DirectApiDiscoveryRecorder recorder{};
+        recorder.reportResult     = E_ACCESSDENIED;
+        recorder.failOnlyAtClose  = true;
+        FileSystemOptions options = makeOptions(recorder);
+        SerialConflictCallback callback{};
+        callback.decision = FileSystemIssueAction::Retry;
+        const HRESULT hr  = state.fsLocal->CopyItem(closedSource.c_str(), closedDestination.c_str(), flags, &options, &callback, nullptr);
+        if (hr != E_ACCESSDENIED || callback.issues != 0u)
+        {
+            Fail(std::format(L"{}: rejected final discovery was replayed or changed HRESULT (hr=0x{:08X}, issues={}).",
+                             label,
+                             static_cast<unsigned long>(hr),
+                             callback.issues));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"recursive rejected closure", recorder, {97u, 1u, 1u}));
+
+        // Hold the real Local file at its zero-byte opening callback while the
+        // producer lists its only directory. Closure must arrive while held.
+        struct HeldFileCallback final : SerialConflictCallback
+        {
+            wil::unique_handle entered{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            std::atomic<bool> waiting{false};
+            HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation,
+                                                         unsigned long,
+                                                         unsigned long,
+                                                         uint64_t,
+                                                         uint64_t,
+                                                         const wchar_t*,
+                                                         const wchar_t*,
+                                                         uint64_t itemTotal,
+                                                         uint64_t itemDone,
+                                                         FileSystemOptions*,
+                                                         uint64_t,
+                                                         void*) noexcept override
+            {
+                if (itemTotal > 0u && itemDone == 0u)
+                {
+                    waiting.store(true, std::memory_order_release);
+                    SetEvent(entered.get());
+                    const DWORD wait = WaitForSingleObject(release.get(), 10'000u);
+                    waiting.store(false, std::memory_order_release);
+                    if (wait != WAIT_OBJECT_0)
+                        return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+                }
+                return S_OK;
+            }
+        } held;
+        struct CloseEventRecorder final : DirectApiDiscoveryRecorder
+        {
+            wil::unique_handle closed{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            HANDLE entered = nullptr; // borrowed from the held callback until worker join
+            HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* cookie) noexcept override
+            {
+                if (progress != nullptr && progress->traversalClosed != FALSE && WaitForSingleObject(entered, 10'000u) != WAIT_OBJECT_0)
+                    return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+                const HRESULT hr = DirectApiDiscoveryRecorder::FileSystemReportDiscoveryProgress(progress, cookie);
+                if (progress != nullptr && progress->traversalClosed != FALSE)
+                    SetEvent(closed.get());
+                return hr;
+            }
+        } liveRecorder;
+        const std::filesystem::path liveRoot        = base / L"recursive-held";
+        const std::filesystem::path liveSource      = liveRoot / L"source";
+        const std::filesystem::path liveDestination = liveRoot / L"destination";
+        if (! held.entered || ! held.release || ! liveRecorder.closed || ! RecreateEmptyDirectory(liveSource) ||
+            ! WriteTestFile(liveSource / L"child.bin", 64u * 1024u))
+        {
+            Fail(std::format(L"{}: could not seed held recursive Copy.", label));
+            return true;
+        }
+        liveRecorder.entered          = held.entered.get();
+        FileSystemOptions liveOptions = makeOptions(liveRecorder);
+        std::atomic<HRESULT> liveResult{E_PENDING};
+        std::jthread worker;
+        try
+        {
+            worker = std::jthread([&]() noexcept {
+                liveResult.store(state.fsLocal->CopyItem(liveSource.c_str(), liveDestination.c_str(), flags, &liveOptions, &held, nullptr),
+                                 std::memory_order_release);
+            });
+        }
+        // Thread construction can throw at this noexcept self-test boundary;
+        // allocation failure remains fatal and other start failures fail the case.
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::system_error& error)
+        {
+            Debug::Error(L"Could not start held discovery Copy worker: {}", error.code().value());
+            Fail(std::format(L"{}: could not start held recursive Copy.", label));
+            return true;
+        }
+        const auto releaseWorker   = wil::scope_exit([&]() noexcept
+        {
+            SetEvent(held.release.get());
+            if (worker.joinable())
+                worker.join();
+        });
+        const bool entered         = WaitForSingleObject(held.entered.get(), 10'000u) == WAIT_OBJECT_0;
+        const bool closedWhileHeld = entered && WaitForSingleObject(liveRecorder.closed.get(), 10'000u) == WAIT_OBJECT_0 &&
+                                     held.waiting.load(std::memory_order_acquire) && liveResult.load(std::memory_order_acquire) == E_PENDING;
+        SetEvent(held.release.get());
+        worker.join();
+        if (! closedWhileHeld || FAILED(liveResult.load(std::memory_order_acquire)) || ! FileSizeEquals(liveDestination / L"child.bin", 64u * 1024u))
+        {
+            Fail(std::format(L"{}: recursive discovery did not close while the file opening was held.", label));
+            return true;
+        }
+        appendDefect(DescribeDiscoveryScopeDefect(L"recursive held opening", liveRecorder, {64u * 1024u, 1u, 1u}));
+    }
 
     // Bulk Copy: four selected roots, three of them plain files and one a recursive directory.
     if (! seedSelection() || ! RecreateEmptyDirectory(copyDest))
@@ -11787,11 +12492,11 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
             return false;
         }
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) ||
+            PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) ||
             prompt->defaultAction != Task::ConflictAction::Proceed || prompt->escapeAction != Task::ConflictAction::Cancel ||
             prompt->overlapTaskId != state.taskA.value())
         {
-            fail(std::format(L"{}: the warning must name the overlapping Copy (task {}) with Queue (default), Run, and Don't start "
+            fail(std::format(L"{}: the directory Delete warning must name the overlapping Copy (task {}) with Queue (default) and Don't start "
                              L"(bucket={}, named task={}).",
                              label,
                              state.taskA.value(),
@@ -11989,22 +12694,43 @@ case SelfTestState::Step::R4A02_ReadReadDoesNotWarn:
 case SelfTestState::Step::R4A02_SameDestinationWarns:
 {
     using Task = FolderWindow::FileOperationState::Task;
-    // Two tasks are injected back-to-back with the same publish leaf. Their immutable scope vectors
-    // are published before either advisory scan, so at least the later scan must name the other task
-    // even when both workers finish Preparing before either enters operation.
+    // Hold A after it publishes its scopes and completes its advisory, but before mutation.
+    // B must then compare its prepared scopes with A's still-registered prepared scopes.
     const std::filesystem::path rootA       = state.tempRoot / L"r4a02-same-destination-a";
     const std::filesystem::path rootB       = state.tempRoot / L"r4a02-same-destination-b";
     const std::filesystem::path sourceA     = rootA / L"shared";
     const std::filesystem::path sourceB     = rootB / L"shared";
     const std::filesystem::path destination = state.tempRoot / L"r4a02-same-destination-out";
     const ULONGLONG nowTick                 = GetTickCount64();
+    const auto fail                         = [&](std::wstring message) noexcept
+    {
+        if (state.r4a02PreparationGate && state.r4a02PreparationGate->release)
+            static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
+        AppendLog(std::format(L"R4A02 same destination: A={} B={} gate={} step={}",
+                              state.taskA.value_or(0u),
+                              state.taskB.value_or(0u),
+                              state.r4a02PreparationGate && state.r4a02PreparationGate->entered.load(std::memory_order_acquire),
+                              state.stepState));
+        for (const auto id : {state.taskA, state.taskB})
+        {
+            if (id.has_value())
+            {
+                const auto done = state.completedTasks.find(id.value());
+                if (done != state.completedTasks.end())
+                    AppendLog(std::format(L"R4A02 same destination: task {} terminal hr=0x{:08X}.", id.value(), static_cast<unsigned long>(done->second.hr)));
+            }
+        }
+        Fail(std::move(message));
+    };
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
-        Fail(std::format(L"R4A02 same destination timed out at step {}.", state.stepState));
+        fail(std::format(L"R4A02 same destination timed out at step {}.", state.stepState));
         return true;
     }
     if (state.stepState == 0u)
     {
+        state.taskA.reset();
+        state.taskB.reset();
         std::error_code ec;
         for (const auto& path : {rootA, rootB, destination})
         {
@@ -12018,19 +12744,59 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
             if (! WriteTestFile(sourceA / std::format(L"a{:03}.bin", index), 64u * 1024u) ||
                 ! WriteTestFile(sourceB / std::format(L"b{:03}.bin", index), 64u * 1024u))
             {
-                Fail(std::format(L"R4A02 same destination could not stage source file {}.", index));
+                fail(std::format(L"R4A02 same destination could not stage source file {}.", index));
                 return true;
             }
         }
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {sourceA},
-                                                 destination,
-                                                 FILESYSTEM_FLAG_RECURSIVE,
-                                                 false);
+        state.r4a02PreparationGate = std::make_shared<R4A02PreparationGate>();
+        if (! state.r4a02PreparationGate->release)
+        {
+            fail(L"R4A02 same destination could not create the preparation gate.");
+            return true;
+        }
+        const auto gate = state.r4a02PreparationGate;
+        state.taskA     = StartFileOperationAndGetId(state.fileOps,
+                                                     FILESYSTEM_COPY,
+                                                     FolderWindow::Pane::Left,
+                                                     FolderWindow::Pane::Right,
+                                                     state.fsLocal,
+                                                     {sourceA},
+                                                     destination,
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     false,
+                                                     0u,
+                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                     false,
+                                                     nullptr,
+                                                     {},
+                                                     std::nullopt,
+                                                     {},
+                                                     [gate]() noexcept -> HRESULT
+        {
+            gate->entered.store(true, std::memory_order_release);
+            const DWORD wait = WaitForSingleObject(gate->release.get(), 180'000u);
+            return wait == WAIT_OBJECT_0 ? S_OK : wait == WAIT_TIMEOUT ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : HRESULT_FROM_WIN32(GetLastError());
+        });
+        if (! state.taskA.has_value())
+        {
+            fail(L"R4A02 same destination could not start Copy A.");
+            return true;
+        }
+        state.stepState = 1u;
+        return false;
+    }
+    if (state.stepState == 1u)
+    {
+        if (! state.r4a02PreparationGate->entered.load(std::memory_order_acquire))
+        {
+            if (state.completedTasks.contains(state.taskA.value()))
+            {
+                fail(L"R4A02 Copy A completed before reaching its preparation gate.");
+                return true;
+            }
+            return false;
+        }
+        AppendLog(std::format(L"R4A02 same destination: A={} reached prepared gate; admitting B.", state.taskA.value()));
         state.taskB = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -12040,15 +12806,15 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
                                                  destination,
                                                  FILESYSTEM_FLAG_RECURSIVE,
                                                  false);
-        if (! state.taskA.has_value() || ! state.taskB.has_value())
+        if (! state.taskB.has_value())
         {
-            Fail(L"R4A02 same destination could not start both Copies.");
+            fail(L"R4A02 same destination could not start Copy B.");
             return true;
         }
-        state.stepState = 1u;
+        state.stepState = 2u;
         return false;
     }
-    if (state.stepState == 1u)
+    if (state.stepState == 2u)
     {
         Task* const taskA  = state.fileOps->FindTask(state.taskA.value());
         Task* const taskB  = state.fileOps->FindTask(state.taskB.value());
@@ -12058,7 +12824,7 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
         {
             if (state.completedTasks.contains(state.taskA.value()) || state.completedTasks.contains(state.taskB.value()))
             {
-                Fail(L"R4A02 same destination completed without an overlap warning.");
+                fail(L"R4A02 same destination completed without an overlap warning.");
                 return true;
             }
             return false;
@@ -12066,33 +12832,26 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
         const auto validPrompt = [&](const Task::ConflictPromptState& prompt, uint64_t otherTaskId) noexcept
         {
             return prompt.bucket == Task::ConflictBucket::SameHostOverlap && PromptHasAction(prompt, Task::ConflictAction::Proceed) &&
-                   PromptHasAction(prompt, Task::ConflictAction::RunConcurrently) && PromptHasAction(prompt, Task::ConflictAction::Cancel) &&
+                   ! PromptHasAction(prompt, Task::ConflictAction::RunConcurrently) && PromptHasAction(prompt, Task::ConflictAction::Cancel) &&
                    prompt.defaultAction == Task::ConflictAction::Proceed && prompt.escapeAction == Task::ConflictAction::Cancel &&
                    prompt.overlapTaskId == otherTaskId;
         };
-        if ((promptA.has_value() && ! validPrompt(promptA.value(), state.taskB.value())) ||
-            (promptB.has_value() && ! validPrompt(promptB.value(), state.taskA.value())))
+        if (promptA.has_value() || ! promptB.has_value() || ! validPrompt(promptB.value(), state.taskA.value()))
         {
-            Fail(L"R4A02 same destination warning did not name the concurrently prepared Copy and both scheduling actions.");
+            if (promptB.has_value())
+                AppendLog(std::format(L"R4A02 same destination: B prompt bucket={} named task={}.",
+                                      static_cast<unsigned int>(promptB.value().bucket),
+                                      promptB.value().overlapTaskId));
+            fail(L"R4A02 same destination warning must name the held prepared Copy and offer Queue and Don't start without Run concurrently.");
             return true;
         }
-        if (promptA.has_value())
-        {
-            taskA->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
-            if (promptB.has_value())
-            {
-                taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Proceed, false);
-            }
-            state.stepState = 2u; // A canceled, B completes.
-        }
-        else
-        {
-            taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
-            state.stepState = 3u; // B canceled, A completes.
-        }
+        AppendLog(std::format(L"R4A02 same destination: B={} warning names A={}; canceling B and releasing A.", state.taskB.value(), state.taskA.value()));
+        taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
+        static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
+        state.stepState = 3u;
         return false;
     }
-    if (state.stepState == 2u || state.stepState == 3u)
+    if (state.stepState == 3u)
     {
         const auto completedA = state.completedTasks.find(state.taskA.value());
         const auto completedB = state.completedTasks.find(state.taskB.value());
@@ -12100,15 +12859,30 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
         {
             return false;
         }
-        const HRESULT canceledHr = state.stepState == 2u ? completedA->second.hr : completedB->second.hr;
-        const HRESULT successHr  = state.stepState == 2u ? completedB->second.hr : completedA->second.hr;
+        const HRESULT canceledHr = completedB->second.hr;
+        const HRESULT successHr  = completedA->second.hr;
+        AppendLog(std::format(L"R4A02 same destination: A={} hr=0x{:08X}, B={} hr=0x{:08X}.",
+                              state.taskA.value(),
+                              static_cast<unsigned long>(successHr),
+                              state.taskB.value(),
+                              static_cast<unsigned long>(canceledHr)));
         if (canceledHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || FAILED(successHr))
         {
-            Fail(std::format(L"R4A02 same destination expected one pre-mutation cancel and one success (cancel=0x{:08X}, success=0x{:08X}).",
+            fail(std::format(L"R4A02 same destination expected one pre-mutation cancel and one success (cancel=0x{:08X}, success=0x{:08X}).",
                              static_cast<unsigned long>(canceledHr),
                              static_cast<unsigned long>(successHr)));
             return true;
         }
+        for (uint32_t index = 0u; index < 96u; ++index)
+        {
+            std::error_code ec;
+            if (std::filesystem::exists(destination / L"shared" / std::format(L"b{:03}.bin", index), ec) || ec)
+            {
+                fail(std::format(L"R4A02 canceled Copy B published a destination member or could not be checked (index {}).", index));
+                return true;
+            }
+        }
+        state.r4a02PreparationGate.reset();
         NextStep(state, SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe);
         return false;
     }
@@ -12118,10 +12892,9 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
 case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
 {
     using Task = FolderWindow::FileOperationState::Task;
-    // R4-A02-2: start one throttled Local Copy, then explicitly Run a second Copy whose publish
-    // scope is the same destination subtree. The second task bypasses only the disclosed active
-    // relation, both tasks are admitted at once, and disjoint members from both immutable result
-    // sets reach the destination without disabling ordinary per-item policy.
+    // Keep the historical case ID for exact-filter callers. Transfer conflicts now offer
+    // Queue and Cancel; the former Run choice must not bypass serialization. Both complete
+    // result sets must survive, and an independent third job still receives its own question.
     const std::filesystem::path rootA                             = state.tempRoot / L"r4a02-run-a";
     const std::filesystem::path rootB                             = state.tempRoot / L"r4a02-run-b";
     const std::filesystem::path rootC                             = state.tempRoot / L"r4a02-run-c";
@@ -12166,7 +12939,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
             Fail(L"R4A02 Run concurrent could not stage the undisclosed third task.");
             return true;
         }
-        state.r4a02ConcurrentAdmissionObserved = false;
+        state.r4a02SerializedAdmissionObserved = false;
         state.taskC.reset();
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
@@ -12234,39 +13007,40 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
             return false;
         }
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || prompt->overlapTaskId != state.taskA.value() ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
             ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) || prompt->defaultAction != Task::ConflictAction::Proceed ||
             prompt->escapeAction != Task::ConflictAction::Cancel)
         {
-            Fail(L"R4A02 Run concurrent warning must offer Queue (default), Run, and Don't start for the named active task.");
+            Fail(L"Conflicting transfer admission must offer Queue (default) and Don't start, with no Run bypass.");
             return true;
         }
-        second->DebugSubmitCurrentConflictDecision(Task::ConflictAction::RunConcurrently, false);
+        second->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Proceed, false);
         state.stepState = 3u;
         return false;
     }
 
     Task* const first  = state.fileOps->FindTask(state.taskA.value());
     Task* const second = state.fileOps->FindTask(state.taskB.value());
-    if (first != nullptr && second != nullptr && first->HasEnteredOperation() && second->HasEnteredOperation() &&
-        ! state.completedTasks.contains(state.taskA.value()) && ! state.completedTasks.contains(state.taskB.value()))
+    if (state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value()))
     {
-        state.r4a02ConcurrentAdmissionObserved = true;
+        Fail(L"Conflicting transfer jobs must never enter execution simultaneously.");
+        return true;
     }
-    if (state.stepState == 3u && state.r4a02ConcurrentAdmissionObserved)
+    if (state.stepState == 3u && first != nullptr && first->HasEnteredOperation() && second != nullptr && second->IsWaitingInQueue())
     {
-        state.taskC = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {sourceC},
-                                                 destination,
-                                                 FILESYSTEM_FLAG_RECURSIVE,
-                                                 false,
-                                                 0u,
-                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                 false);
+        state.r4a02SerializedAdmissionObserved = true;
+        state.taskC                            = StartFileOperationAndGetId(state.fileOps,
+                                                                            FILESYSTEM_COPY,
+                                                                            FolderWindow::Pane::Left,
+                                                                            FolderWindow::Pane::Right,
+                                                                            state.fsLocal,
+                                                                            {sourceC},
+                                                                            destination,
+                                                                            FILESYSTEM_FLAG_RECURSIVE,
+                                                                            false,
+                                                                            0u,
+                                                                            FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                            false);
         if (! state.taskC.has_value())
         {
             Fail(L"R4A02 Run concurrent could not start the undisclosed third task.");
@@ -12290,7 +13064,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
         }
         const bool namesDisclosedTask = prompt->overlapTaskId == state.taskA.value() || prompt->overlapTaskId == state.taskB.value();
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! namesDisclosedTask ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently))
+            PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently))
         {
             Fail(L"R4A02 Run concurrent third task did not receive an independent warning naming an active task.");
             return true;
@@ -12310,12 +13084,12 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     const bool outputsPresent =
         std::filesystem::exists(destination / L"shared" / L"a000.bin", outputEc) && std::filesystem::exists(destination / L"shared" / L"a399.bin", outputEc) &&
         std::filesystem::exists(destination / L"shared" / L"b000.bin", outputEc) && std::filesystem::exists(destination / L"shared" / L"b399.bin", outputEc);
-    if (! state.r4a02ConcurrentAdmissionObserved || FAILED(completedA->second.hr) || FAILED(completedB->second.hr) ||
-        completedC->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || completedB->second.interlockWaitCount != 0u || ! outputsPresent)
+    if (! state.r4a02SerializedAdmissionObserved || FAILED(completedA->second.hr) || FAILED(completedB->second.hr) ||
+        completedC->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! outputsPresent)
     {
-        Fail(std::format(L"R4A02 Run concurrent must admit both disclosed tasks and retain both result sets "
+        Fail(std::format(L"Conflicting transfers must run in order and retain both result sets "
                          L"(observed={}, A=0x{:08X}, B=0x{:08X}, C=0x{:08X}, B waits={}, outputs={}).",
-                         state.r4a02ConcurrentAdmissionObserved,
+                         state.r4a02SerializedAdmissionObserved,
                          static_cast<unsigned long>(completedA->second.hr),
                          static_cast<unsigned long>(completedB->second.hr),
                          static_cast<unsigned long>(completedC->second.hr),
@@ -12330,19 +13104,23 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
 case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
 {
     using Task = FolderWindow::FileOperationState::Task;
-    // R4-A02-2: pause a Local Copy immediately after it publishes one exact destination item, then
-    // start a permanent Delete of that item. The Delete chooses Run at admission and the test drops
+    // R4-A02-2: copy a directory through the Local provider and pause its top-level completion
+    // callback after the child has been published and its file handles closed. A selected regular
+    // file takes the bridge route, whose retained publication authority correctly prevents the
+    // Delete bind before this advisory can be exercised. Start a permanent Delete of the child.
+    // The Delete chooses Run at admission and the test drops
     // only that relation at the pre-mutation pause, modelling a newly uncovered destructive
     // consequence without relying on transfer timing. The item gate must protect the live publisher
     // for Skip, Queue, and explicit destructive consent. The Queue row forces the fixed publication
     // index into overflow and proves the conservative active-scope fallback.
-    const uint32_t scenario                   = state.r4a02LiveOutputScenario;
-    const wchar_t* const scenarioName         = scenario == 0u ? L"Skip" : scenario == 1u ? L"Queue" : L"Delete anyway";
-    const std::filesystem::path sourceParent  = state.tempRoot / std::format(L"r4a02-live-source-{}", scenario);
-    const std::filesystem::path sourceItem    = sourceParent / L"a-published.bin";
-    const std::filesystem::path destination   = state.tempRoot / std::format(L"r4a02-live-output-{}", scenario);
-    const std::filesystem::path publishedItem = destination / L"a-published.bin";
-    const auto releasePauses                  = []() noexcept
+    const uint32_t scenario                  = state.r4a02LiveOutputScenario;
+    const wchar_t* const scenarioName        = scenario == 0u ? L"Skip" : scenario == 1u ? L"Queue" : scenario == 2u ? L"Delete anyway" : L"Bridge sharing";
+    const std::filesystem::path sourceParent = state.tempRoot / std::format(L"r4a02-live-source-{}", scenario);
+    const std::filesystem::path sourceItem   = sourceParent / L"a-published.bin";
+    const std::filesystem::path destination  = state.tempRoot / std::format(L"r4a02-live-output-{}", scenario);
+    const std::filesystem::path publishedItem =
+        scenario == 3u ? destination / sourceItem.filename() : destination / sourceParent.filename() / sourceItem.filename();
+    const auto releasePauses = []() noexcept
     {
         ReleaseFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest();
         SetFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest(false);
@@ -12359,10 +13137,10 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
 
     if (state.stepState == 0u)
     {
-        if (scenario >= 3u || ! state.fsLocal || ! state.fileOps)
+        if (scenario >= 4u || ! state.fsLocal || ! state.fileOps)
         {
             releasePauses();
-            Fail(L"R4A02 live-output guard requires three scenarios and the Local file system.");
+            Fail(L"R4A02 live-output guard requires four scenarios and the Local file system.");
             return true;
         }
         std::error_code ec;
@@ -12383,9 +13161,9 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
                                                  FolderWindow::Pane::Left,
                                                  FolderWindow::Pane::Right,
                                                  state.fsLocal,
-                                                 {sourceItem},
+                                                 {scenario == 3u ? sourceItem : sourceParent},
                                                  destination,
-                                                 FILESYSTEM_FLAG_NONE,
+                                                 scenario == 3u ? FILESYSTEM_FLAG_NONE : FILESYSTEM_FLAG_RECURSIVE,
                                                  false,
                                                  0u,
                                                  FolderWindow::FileOperationState::ExecutionMode::PerItem,
@@ -12403,6 +13181,14 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     if (state.stepState == 1u)
     {
         Task* const publisher = state.fileOps->FindTask(state.taskA.value());
+        if (const auto prompt = TryGetConflictPromptCopy(publisher); prompt.has_value())
+        {
+            releasePauses();
+            Fail(std::format(L"R4A02 live-output {} publisher opened an unexpected pre-publication prompt (bucket={}).",
+                             scenarioName,
+                             static_cast<unsigned int>(prompt.value().bucket)));
+            return true;
+        }
         std::error_code ec;
         if (! HasFileOpsLiveOutputPublishedPauseEnteredForSelfTest() || ! std::filesystem::exists(publishedItem, ec))
         {
@@ -12449,12 +13235,43 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     {
         Task* const invalidator = state.fileOps->FindTask(state.taskB.value());
         const auto prompt       = TryGetConflictPromptCopy(invalidator);
-        if (! prompt.has_value())
+        if (scenario == 3u)
         {
-            if (state.completedTasks.contains(state.taskB.value()))
+            if (prompt.has_value() || HasFileOpsPermanentDeleteBeforeLiveOutputGuardPauseEnteredForSelfTest())
             {
                 releasePauses();
-                Fail(std::format(L"R4A02 live-output {} Delete completed without its admission warning.", scenarioName));
+                Fail(L"R4A02 bridge sharing control reached an admission warning before the Delete binding failed.");
+                return true;
+            }
+            const auto completed = state.completedTasks.find(state.taskB.value());
+            if (completed == state.completedTasks.end())
+                return false;
+            const HRESULT deleteHr   = completed->second.hr;
+            const bool publisherLive = HasFileOpsLiveOutputPublishedPauseEnteredForSelfTest() && state.fileOps->FindTask(state.taskA.value()) != nullptr &&
+                                       ! state.completedTasks.contains(state.taskA.value());
+            const bool intact        = FileSizeEquals(sourceItem, 4u * 1024u) && FilesEqualBytes(sourceItem, publishedItem);
+            if (deleteHr != HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || ! publisherLive || ! intact ||
+                HasFileOpsPermanentDeleteBeforeLiveOutputGuardPauseEnteredForSelfTest())
+            {
+                releasePauses();
+                Fail(std::format(L"R4A02 bridge sharing control failed (Delete hr=0x{:08X}, publisher live={}, files intact={}).",
+                                 static_cast<unsigned long>(deleteHr),
+                                 publisherLive,
+                                 intact));
+                return true;
+            }
+            releasePauses();
+            state.stepState = 6u;
+            return false;
+        }
+        if (! prompt.has_value())
+        {
+            if (const auto completed = state.completedTasks.find(state.taskB.value()); completed != state.completedTasks.end())
+            {
+                releasePauses();
+                Fail(std::format(L"R4A02 live-output {} Delete completed without its admission warning (hr=0x{:08X}).",
+                                 scenarioName,
+                                 static_cast<unsigned long>(completed->second.hr)));
                 return true;
             }
             return false;
@@ -12547,6 +13364,23 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
         return false;
     }
 
+    if (state.stepState == 6u)
+    {
+        const auto publisherDone = state.completedTasks.find(state.taskA.value());
+        if (publisherDone == state.completedTasks.end())
+            return false;
+        if (FAILED(publisherDone->second.hr) || ! FileSizeEquals(sourceItem, 4u * 1024u) || ! FilesEqualBytes(sourceItem, publishedItem))
+        {
+            Fail(std::format(L"R4A02 bridge sharing publisher did not finish cleanly with both files intact (hr=0x{:08X}).",
+                             static_cast<unsigned long>(publisherDone->second.hr)));
+            return true;
+        }
+        state.taskA.reset();
+        state.taskB.reset();
+        NextStep(state, SelfTestState::Step::R4A02_DisjointWritesDoNotWarn);
+        return false;
+    }
+
     const auto publisherDone   = state.completedTasks.find(state.taskA.value());
     const auto invalidatorDone = state.completedTasks.find(state.taskB.value());
     std::error_code existsEc;
@@ -12589,7 +13423,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     ++state.r4a02LiveOutputScenario;
     state.taskA.reset();
     state.taskB.reset();
-    if (state.r4a02LiveOutputScenario < 3u)
+    if (state.r4a02LiveOutputScenario < 4u)
     {
         state.stepState = 0u;
         return false;
@@ -13016,6 +13850,14 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
                 slow->RequestCancel();
             }
             slowCanceled = true;
+        }
+        if (const auto prompt = TryGetConflictPromptCopy(state.fileOps->FindTask(state.taskB.value())); prompt.has_value())
+        {
+            releaseAll();
+            Fail(std::format(L"R4A02 late publisher: the predecessor Copy must publish without a conflict (bucket={}, hr=0x{:08X}).",
+                             static_cast<unsigned int>(prompt.value().bucket),
+                             static_cast<unsigned long>(prompt.value().status)));
+            return true;
         }
         const auto copyDone   = state.completedTasks.find(state.taskB.value());
         const auto removeDone = state.completedTasks.find(state.taskA.value());
@@ -14238,9 +15080,16 @@ case SelfTestState::Step::Phase5_DiscoverySkipContinues:
         }
         {
             std::scoped_lock lock(taskA->_progressMutex);
+            state.pauseResumeBaselineItems = taskA->_progressCompletedItems;
             state.pauseResumeBaselineBytes = taskA->_progressCompletedBytes;
         }
         taskA->SetDesiredSpeedLimit(4096u);
+        Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.DiscoverySkipRelease",
+                                    L"",
+                                    (released - requested) * 1000ull,
+                                    state.pauseResumeBaselineItems,
+                                    state.pauseResumeBaselineBytes,
+                                    S_OK);
         state.stepState = 4;
         return false;
     }
@@ -14791,71 +15640,40 @@ case SelfTestState::Step::BR3_CancelQueuePausedTransfer:
 }
 case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
 {
+    using Task              = FolderWindow::FileOperationState::Task;
+    auto& ioGate            = FolderWindowFileOperationsStateInternal::g_fileOpsProgressIoGateForSelfTest;
     const ULONGLONG nowTick = GetTickCount64();
-    if (HasTimedOut(state, nowTick))
+    if (HasTimedOut(state, nowTick) || ioGate.TimedOut())
     {
-        const auto summarizeTask = [&](std::optional<std::uint64_t> idOpt) -> std::wstring
-        {
-            if (! idOpt.has_value() || ! state.fileOps)
-            {
-                return L"(missing)";
-            }
-
-            const std::uint64_t id                       = idOpt.value();
-            FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(id);
-            if (! task)
-            {
-                return std::format(L"id={} (missing)", id);
-            }
-
-            unsigned long totalItems     = 0;
-            unsigned long completedItems = 0;
-            {
-                std::scoped_lock lock(task->_progressMutex);
-                totalItems     = task->_progressTotalItems;
-                completedItems = task->_progressCompletedItems;
-            }
-
-            return std::format(L"id={} entered={} started={} qpause={} discoveryAhead={} discoveryClosed={} discoverySkipped={} items={}/{}",
-                               id,
-                               task->HasEnteredOperation(),
-                               task->HasStarted(),
-                               task->IsQueuePaused(),
-                               task->_discoveryAheadActive.load(std::memory_order_acquire),
-                               task->_discoveryClosed.load(std::memory_order_acquire),
-                               task->_discoverySkipped.load(std::memory_order_acquire),
-                               completedItems,
-                               totalItems);
-        };
-
-        Fail(std::format(L"Phase5_SwitchParallelToWaitDuringDiscovery timed out. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
+        Fail(std::format(L"Parallel-to-Queue transfer witness timed out at step {} (gate timed out={}).", state.stepState, ioGate.TimedOut()));
         return true;
     }
 
-    const FileSystemFlags flags                  = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    const std::filesystem::path sourceA          = state.tempRoot / L"discovery-a";
-    const std::filesystem::path sourceB          = state.tempRoot / L"discovery-b";
-    const std::filesystem::path destinationA     = state.tempRoot / L"discovery-switch-dst-a";
-    const std::filesystem::path destinationB     = state.tempRoot / L"discovery-switch-dst-b";
-    constexpr uint64_t kSpeedLimitBytesPerSecond = 64u;
+    const std::filesystem::path sourceA      = state.tempRoot / L"queue-switch-file-a.bin";
+    const std::filesystem::path sourceB      = state.tempRoot / L"queue-switch-file-b.bin";
+    const std::filesystem::path destinationA = state.tempRoot / L"discovery-switch-dst-a";
+    const std::filesystem::path destinationB = state.tempRoot / L"discovery-switch-dst-b";
+    // Exceed the largest permitted bridge buffer so each transfer must perform
+    // a positive partial stage write before it can complete.
+    constexpr uint64_t kFixtureBytes             = 20ull * 1024ull * 1024ull;
+    constexpr uint64_t kSpeedLimitBytesPerSecond = 4ull * 1024ull * 1024ull;
 
     if (state.stepState == 0)
     {
         state.queuePausedTask.reset();
+        BeginSelfTestSharedTransferLimit(state, (std::max)(2u, FileOperations::GetSharedParallelTransferLimit()));
         state.fileOps->ApplyQueueMode(false);
-
-        // Bounded producer queues plus a low transfer rate keep both single-pass traversals open
-        // long enough to exercise the Parallel -> Queue transition deterministically.
-        const std::string config =
-            R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1,"deleteMaxConcurrency":1,"deleteRecycleBinMaxConcurrency":1,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048})json";
-        static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), config));
-
-        if (! RecreateEmptyDirectory(destinationA) || ! RecreateEmptyDirectory(destinationB))
+        if (! RecreateEmptyDirectory(destinationA) || ! RecreateEmptyDirectory(destinationB) || ! WriteTestFile(sourceA, kFixtureBytes) ||
+            ! WriteTestFile(sourceB, kFixtureBytes))
         {
-            Fail(L"Failed to reset destinations for the Parallel-to-Queue discovery test.");
+            Fail(L"Failed to stage independent regular-file transfers for the queue-mode test.");
             return true;
         }
-
+        if (! ioGate.Arm())
+        {
+            Fail(L"A previous transfer checkpoint is still active.");
+            return true;
+        }
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -14863,7 +15681,7 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
                                                  state.fsLocal,
                                                  {sourceA},
                                                  destinationA,
-                                                 flags,
+                                                 FILESYSTEM_FLAG_NONE,
                                                  false,
                                                  kSpeedLimitBytesPerSecond);
         state.taskB = StartFileOperationAndGetId(state.fileOps,
@@ -14873,54 +15691,56 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
                                                  state.fsLocal,
                                                  {sourceB},
                                                  destinationB,
-                                                 flags,
+                                                 FILESYSTEM_FLAG_NONE,
                                                  false,
                                                  kSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
-            Fail(L"Failed to start local copy tasks for the Parallel-to-Queue discovery test.");
+            Fail(L"Failed to start independent regular-file transfers for the queue-mode test.");
             return true;
         }
-
         state.stepState = 1;
         return false;
     }
 
-    FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
-    FolderWindow::FileOperationState::Task* taskB = state.fileOps->FindTask(state.taskB.value());
+    Task* const taskA = state.fileOps->FindTask(state.taskA.value());
+    Task* const taskB = state.fileOps->FindTask(state.taskB.value());
     if (! taskA || ! taskB)
     {
-        return false;
+        Fail(L"A queue-mode transfer disappeared before the held I/O witness completed.");
+        return true;
     }
-
     if (state.stepState == 1)
     {
-        if (taskA->HasEnteredOperation() && taskB->HasEnteredOperation())
+        if (! ioGate.HasEntered(state.taskA.value()) || ! ioGate.HasEntered(state.taskB.value()))
+            return false;
+        const auto admissionA = taskA->LoadMutationInterlockAdmission();
+        const auto admissionB = taskB->LoadMutationInterlockAdmission();
+        if (! admissionA || ! admissionB || ! admissionA->parallelNewFiles || ! admissionB->parallelNewFiles || ! admissionA->hasDataTransfers ||
+            ! admissionB->hasDataTransfers || ! state.fileOps->DebugAreBothAdmissionsActiveForSelfTest(state.taskA.value(), state.taskB.value()))
         {
-            state.fileOps->ApplyQueueMode(true);
-            state.stepState = 2;
+            Fail(L"The held Copy tasks must have simultaneous qualified new-file data admissions.");
+            return true;
         }
+        // Retain both real transfers while switching mode. The manual pause on the eventual
+        // queue predecessor stays until the resume phase, so it cannot complete and unqueue its peer.
+        taskA->SetPaused(true);
+        taskB->SetPaused(true);
+        state.fileOps->ApplyQueueMode(true);
+        ioGate.Release();
+        state.stepState = 2;
         return false;
     }
-
     if (state.stepState == 2)
     {
         const bool aPaused = taskA->IsQueuePaused();
         const bool bPaused = taskB->IsQueuePaused();
-        if (aPaused == bPaused)
-        {
+        if (aPaused == bPaused || taskA->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u ||
+            taskB->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u)
             return false;
-        }
-
-        state.queuePausedTask                              = aPaused ? state.taskA : state.taskB;
-        FolderWindow::FileOperationState::Task* pausedTask = aPaused ? taskA : taskB;
-
-        if (! pausedTask->_discoveryAheadActive.load(std::memory_order_acquire))
-        {
-            return false;
-        }
-
-        pausedTask->SkipDiscovery();
+        state.queuePausedTask  = aPaused ? state.taskA : state.taskB;
+        Task* const pausedTask = aPaused ? taskA : taskB;
+        pausedTask->SetPaused(false); // Only Queue mode now holds this task.
         {
             std::scoped_lock lock(pausedTask->_progressMutex);
             state.pauseResumeBaselineItems = pausedTask->_progressCompletedItems;
@@ -14931,59 +15751,25 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
         return false;
     }
 
-    if (! state.queuePausedTask.has_value())
+    Task* const pausedTask = state.fileOps->FindTask(state.queuePausedTask.value());
+    if (! pausedTask || ! pausedTask->IsQueuePaused() || pausedTask->IsPaused())
     {
-        return false;
+        Fail(L"The selected transfer must remain paused solely by Queue mode.");
+        return true;
     }
-
-    FolderWindow::FileOperationState::Task* pausedTask = state.fileOps->FindTask(state.queuePausedTask.value());
-    if (! pausedTask)
-    {
+    if (nowTick >= state.markerTick && nowTick - state.markerTick < 500ull)
         return false;
-    }
-
-    const bool discoveryStill = pausedTask->_discoveryAheadActive.load(std::memory_order_acquire);
-    if (discoveryStill)
-    {
-        return false;
-    }
-
-    if (state.markerTick != 0 && nowTick >= state.markerTick && (nowTick - state.markerTick) < 500ull)
-    {
-        return false;
-    }
-
     {
         std::scoped_lock lock(pausedTask->_progressMutex);
         if (pausedTask->_progressCompletedItems != state.pauseResumeBaselineItems || pausedTask->_progressCompletedBytes != state.pauseResumeBaselineBytes)
         {
-            // Queue mode is observed at bounded provider progress checkpoints. A callback already
-            // in flight when the mode changes may publish its final chunk before blocking. Move the
-            // baseline forward and require a complete quiet window; continuous mutation will still
-            // hit the enclosing test deadline instead of being mistaken for an immediate pause.
+            // A progress callback already in flight can finish once; require a full quiet window.
             state.pauseResumeBaselineItems = pausedTask->_progressCompletedItems;
             state.pauseResumeBaselineBytes = pausedTask->_progressCompletedBytes;
             state.markerTick               = nowTick;
             return false;
         }
     }
-
-    const ULONGLONG skipRequestedTick       = pausedTask->_discoverySkipRequestedTick.load(std::memory_order_acquire);
-    const ULONGLONG reservationReleasedTick = pausedTask->_discoveryReservationReleasedTick.load(std::memory_order_acquire);
-    if (skipRequestedTick == 0u || reservationReleasedTick < skipRequestedTick)
-    {
-        Fail(L"Skip discovery did not atomically release the host discovery-ahead reservation.");
-        return true;
-    }
-    const ULONGLONG releaseLatencyMs = reservationReleasedTick - skipRequestedTick;
-    if (releaseLatencyMs > 50ull)
-    {
-        Fail(std::format(L"Skip discovery release latency was {}ms (limit 50ms).", releaseLatencyMs));
-        return true;
-    }
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.DiscoverySkipRelease", L"", releaseLatencyMs * 1000ull, state.pauseResumeBaselineItems, state.pauseResumeBaselineBytes, S_OK);
-
     NextStep(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
     return false;
 }
@@ -15030,6 +15816,10 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
     if (state.stepState == 0)
     {
         state.fileOps->ApplyQueueMode(false);
+        if (auto* task = state.fileOps->FindTask(state.taskA.value()))
+            task->SetPaused(false);
+        if (auto* task = state.fileOps->FindTask(state.taskB.value()))
+            task->SetPaused(false);
         state.stepState = 1;
         return false;
     }
@@ -15145,6 +15935,7 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
         return false;
     }
 
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::Phase6_PopupRateSmoothing);
     return false;
 }

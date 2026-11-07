@@ -1781,8 +1781,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     FileOperationMoveBreadcrumb::SetRootForSelfTest(breadcrumbs);
     const auto restoreBreadcrumbs = wil::scope_exit([] { FileOperationMoveBreadcrumb::ClearRootForSelfTest(); });
     Common::Settings::Settings settings{};
-    settings.fileOperations.emplace();
-    auto owner = std::make_unique<FolderWindow>();
+    settings.fileOperations.emplace().maxParallelTransfers = FileOperations::GetSharedParallelTransferLimit();
+    auto owner                                             = std::make_unique<FolderWindow>();
     owner->SetSettings(&settings);
     FolderWindow::FileOperationState operations(*owner);
     auto lifetime = std::make_shared<int>(0);
@@ -2079,17 +2079,23 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
 
 // Exercise the production painter and hosted accessibility regions: a correct aggregate
 // snapshot alone cannot detect stray counting text or the source-row mini marquee.
-[[nodiscard]] bool CaptureFileOpsWaitingCards(SelfTestState& state)
+[[nodiscard]] bool CaptureFileOpsWaitingCards(SelfTestState& state, const bool identityOnly = false)
 {
     using namespace FileOperationsPopupInternal;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
         return false;
-    auto* folder        = TryGetFolderWindow(state.mainWindow);
-    const auto output   = SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::FileOperations, L"waiting-cards");
+    auto* folder = TryGetFolderWindow(state.mainWindow);
+    const auto output =
+        SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::FileOperations, identityOnly ? L"identity-interlock-waiting" : L"waiting-cards");
     const auto monitors = GetFileOpsGalleryMonitors();
     if (! folder || monitors.empty() || output.empty() || ! SelfTest::EnsureDirectory(output))
         return false;
-    const HWND foreground    = GetForegroundWindow();
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+    {
+        AppendLog(std::format(L"WaitingCard: no-activation observation could not start (failure={})", static_cast<unsigned int>(desktop.Failure())));
+        return false;
+    }
     const auto previousTheme = folder->GetTheme();
     Localization::LanguagePreference previousLanguage{};
     if (g_settings.ui.has_value() && ! g_settings.ui.value().language.empty() && g_settings.ui.value().language != L"system")
@@ -2118,23 +2124,27 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
             theme.reducedMotionOverride = true;
             folder->ApplyTheme(theme);
             for (const auto operation : {FILESYSTEM_COPY, FILESYSTEM_MOVE})
-                for (unsigned wait = 0u; wait < 3u; ++wait)
+                for (unsigned wait = identityOnly ? 3u : 0u; wait < (identityOnly ? 6u : 3u); ++wait)
                 {
                     TaskSnapshot task{};
-                    task.taskId               = 0xCA4Eu;
-                    task.operation            = operation;
-                    task.lifecyclePhase       = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Ready);
-                    task.selection            = {L"Moonrise.2026.2160p.mkv", 1u, 1u, 0u, true};
-                    task.currentSourcePath    = L"C:\\Studio\\Exports\\Moonrise.2026.2160p.mkv";
-                    task.destinationFolder    = L"\\\\studio-nas\\Media\\Movies";
-                    task.destinationPane      = FolderWindow::Pane::Right;
-                    task.waitingInQueue       = wait == 0u;
-                    task.waitingForOthers     = wait == 1u;
-                    task.queuePaused          = wait == 2u;
-                    task.started              = wait == 2u;
-                    task.discoveryClosed      = wait == 1u;
-                    task.discoveredBytesKnown = task.discoveryClosed;
-                    task.totalBytes           = task.discoveryClosed ? 8ull << 30 : 0u;
+                    task.taskId                         = 0xCA4Eu;
+                    task.operation                      = operation;
+                    task.lifecyclePhase                 = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Ready);
+                    task.selection                      = {L"Moonrise.2026.2160p.mkv", 1u, 1u, 0u, true};
+                    task.currentSourcePath              = L"C:\\Studio\\Exports\\Moonrise.2026.2160p.mkv";
+                    task.destinationFolder              = L"\\\\studio-nas\\Media\\Movies";
+                    task.destinationPane                = FolderWindow::Pane::Right;
+                    task.waitingInQueue                 = wait == 0u || wait >= 3u;
+                    task.waitingForIdentityInterlock    = wait == 3u;
+                    task.waitingForParallelTransferSlot = wait == 4u;
+                    task.waitingForExclusiveTransfer    = wait == 5u;
+                    task.sharedParallelTransferLimit    = 4u;
+                    task.waitingForOthers               = wait == 1u;
+                    task.queuePaused                    = wait == 2u;
+                    task.started                        = wait == 2u;
+                    task.discoveryClosed                = wait == 1u;
+                    task.discoveredBytesKnown           = task.discoveryClosed;
+                    task.totalBytes                     = task.discoveryClosed ? 8ull << 30 : 0u;
                     // Stale stream/scan facts must never paint activity while the task waits.
                     task.discoveryAheadActive       = true;
                     task.operationStartTick         = task.started ? GetTickCount64() : 0u;
@@ -2149,12 +2159,26 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                         return false;
                     auto running           = task;
                     running.started        = true;
-                    running.waitingInQueue = running.waitingForOthers = running.queuePaused = false;
-                    running.operationStartTick                                              = GetTickCount64();
+                    running.waitingInQueue = running.waitingForOthers = running.queuePaused = running.waitingForIdentityInterlock = false;
+                    running.waitingForParallelTransferSlot = running.waitingForExclusiveTransfer = false;
+                    running.operationStartTick                                                   = GetTickCount64();
                     renderer->DebugSetVisualScenario({running}, false, true);
                     PlaceFileOpsGalleryWindow(popup.get(), monitors.front(), width, 400);
                     renderer->DebugUpdateLiveVisualScenario({task});
                     PlaceFileOpsGalleryWindow(popup.get(), monitors.front(), width, 400);
+                    // Text glyph preparation is asynchronous; use the gallery's shared
+                    // message pump settlement before measuring or publishing captures.
+                    const auto ready   = std::chrono::steady_clock::now() + std::chrono::milliseconds{350};
+                    const auto settled = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                        return std::chrono::steady_clock::now() >= ready;
+                    }, {.timeout = SelfTest::Scale(std::chrono::milliseconds{2000}), .operationName = L"settle waiting-card text"});
+                    if (! settled.conditionMet)
+                        return false;
+                    if (! desktop.Sample())
+                    {
+                        AppendLog(std::format(L"WaitingCard: no-activation observation failed (failure={})", static_cast<unsigned int>(desktop.Failure())));
+                        return false;
+                    }
                     for (unsigned frame = 0u; frame < 12u; ++frame)
                     {
                         Debug::Perf::Scope repaint(L"FileOps.Popup.WaitingCard.FrameUs");
@@ -2162,21 +2186,27 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                     }
                     PopupLayoutDebugSnapshot layout{};
                     layout.taskId = task.taskId;
-                    bool correct = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), layout) && layout.found && layout.taskPaintedTransferText.empty() &&
-                                   layout.taskPaintedDiscoveryText.empty() && layout.taskPaintedFileProgressCount == 0u &&
-                                   ! layout.taskTransferProgressVisible && ! layout.taskDiscoveryIndicatorVisible &&
-                                   ! layout.taskTransferProgressMarqueeVisible && ! layout.taskThroughputSummaryVisible && layout.taskConcurrencyText.empty() &&
-                                   layout.taskPaintedPathCount == 2u && layout.taskCancelVisible && layout.taskSpeedLimitVisible &&
-                                   (wait == 2u || layout.taskStartNowVisible) && ! layout.taskHasVisibleButtonOverlap &&
-                                   layout.taskStatusChipPaintedText == LoadStringResource(nullptr, IDS_FILEOPS_STATUS_WAITING);
+                    bool correct =
+                        DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), layout) && layout.found && layout.taskPaintedTransferText.empty() &&
+                        layout.taskPaintedDiscoveryText.empty() && layout.taskPaintedFileProgressCount == 0u && ! layout.taskTransferProgressVisible &&
+                        ! layout.taskDiscoveryIndicatorVisible && ! layout.taskTransferProgressMarqueeVisible && ! layout.taskThroughputSummaryVisible &&
+                        layout.taskConcurrencyText.empty() && layout.taskPaintedPathCount == 2u && layout.taskCancelVisible && layout.taskSpeedLimitVisible &&
+                        ! layout.taskSkipVisible && (wait == 2u || (wait >= 3u ? ! layout.taskStartNowVisible : layout.taskStartNowVisible)) &&
+                        ! layout.taskHasVisibleButtonOverlap && layout.taskStatusChipPaintedText == LoadStringResource(nullptr, IDS_FILEOPS_STATUS_WAITING);
                     std::wstring text;
                     std::wstring help;
                     for (const auto suffix : {L"Progress.Amount", L"Progress.Percent", L"Progress.Counts", L"Throughput.Eta", L"Concurrency"})
                         correct = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(
                                       std::format(L"FileOperations.Task.{}.{}", task.taskId, suffix), text, help) &&
                                   correct;
-                    const auto file = std::format(L"waiting-{}-{}-{}-{}.png", language, width, static_cast<unsigned>(operation), wait);
-                    if (wait == 0u)
+                    const auto waitingReasonId  = std::format(L"FileOperations.Task.{}.WaitingReason", task.taskId);
+                    const bool hasWaitingReason = renderer->DebugHostedRegionAccessibleTextForSelfTest(waitingReasonId, text, help);
+                    const auto expectedReason   = wait == 3u   ? LoadStringResource(nullptr, IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK)
+                                                  : wait == 4u ? FormatStringResource(nullptr, IDS_FILEOPS_WAITING_PARALLEL_LIMIT_FMT, 4u)
+                                                               : LoadStringResource(nullptr, IDS_FILEOPS_WAITING_EXCLUSIVE_TRANSFER);
+                    correct                     = (wait >= 3u ? hasWaitingReason && text == expectedReason : ! hasWaitingReason) && correct;
+                    const auto file             = std::format(L"waiting-{}-{}-{}-{}.png", language, width, static_cast<unsigned>(operation), wait);
+                    if (wait == 0u || wait >= 3u)
                     {
                         const HRESULT captured        = RedSalamander::TestSupport::SaveWindowScreenshot(popup.get(), output / file);
                         correct                       = SUCCEEDED(captured) && correct;
@@ -2198,10 +2228,45 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                           layout.taskPaintedPathCount,
                                           layout.taskConcurrencyText));
                     passed = correct && passed;
+                    if (wait >= 3u)
+                    {
+                        // The engine supplies edge eligibility independently of the reason for
+                        // waiting. Exercise the real painter and hosted controls without changing
+                        // the captured single-task scenarios or bypassing Start now's safety gate.
+                        auto reorderable           = task;
+                        reorderable.canMoveQueueUp = reorderable.canMoveQueueDown = true;
+                        renderer->DebugUpdateLiveVisualScenario({reorderable});
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        PopupLayoutDebugSnapshot reorderLayout{};
+                        reorderLayout.taskId       = task.taskId;
+                        const bool reorderVisible  = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), reorderLayout) &&
+                                                     reorderLayout.taskQueueMoveUpVisible && reorderLayout.taskQueueMoveDownVisible &&
+                                                     renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveUp, task.taskId) == 1u &&
+                                                     renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveDown, task.taskId) == 1u &&
+                                                     ! reorderLayout.taskStartNowVisible;
+                        reorderable.canMoveQueueUp = false;
+                        renderer->DebugUpdateLiveVisualScenario({reorderable});
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        const bool edgeVisible = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), reorderLayout) &&
+                                                 ! reorderLayout.taskQueueMoveUpVisible && reorderLayout.taskQueueMoveDownVisible &&
+                                                 renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveUp, task.taskId) == 0u &&
+                                                 renderer->DebugHostedHitCountForSelfTest(PopupHitTest::Kind::TaskQueueMoveDown, task.taskId) == 1u &&
+                                                 ! reorderLayout.taskStartNowVisible;
+                        if (! reorderVisible || ! edgeVisible)
+                            AppendLog(std::format(L"WaitingCard: reorder controls failed wait={} both={} edge={}", wait, reorderVisible, edgeVisible));
+                        passed = reorderVisible && edgeVisible && passed;
+                        renderer->DebugUpdateLiveVisualScenario({running});
+                        RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                        passed = ! renderer->DebugHostedRegionAccessibleTextForSelfTest(waitingReasonId, text, help) &&
+                                 DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), layout) && layout.taskSkipVisible && passed;
+                    }
                 }
         }
     }
-    return passed && manifest.good() && GetForegroundWindow() == foreground;
+    const bool desktopSafe = desktop.Finish();
+    if (! desktopSafe)
+        AppendLog(std::format(L"WaitingCard: no-activation observation failed at finish (failure={})", static_cast<unsigned int>(desktop.Failure())));
+    return passed && manifest.good() && desktopSafe;
 }
 
 [[nodiscard]] bool CaptureFileOpsCardHierarchy(SelfTestState& state)

@@ -5833,13 +5833,29 @@ private:
                       executorSource.find("random[0] = (static_cast<uint64_t>(GetCurrentProcessId())") == std::string::npos,
                   L"Transfer execution must classify read/write/publish interlock roles, derive resolved parents from the admitted provider profile, and fail "
                   L"closed instead of generating a predictable stage name.");
+    const std::string_view permanentDelete =
+        SourceBetween(executorSource, "const auto executePermanentDelete =", "if (_executionMode == ExecutionMode::PerItem)");
+    const std::vector<std::string_view> directoryLeaseBodies =
+        SourceFunctionBodies(executorSource, "HRESULT FolderWindow::FileOperationState::Task::AcquireDeferredDirectoryDeleteAuthoritiesForExecution");
     state.Require(executorSource.find("scope.exactDeleteAuthority = retainDeleteAuthority") != std::string::npos &&
                       executorSource.find("FILESYSTEM_BIND_DELETE") != std::string::npos &&
                       executorSource.find("current.authority.identity.revisionId != pinned.revisionId") != std::string::npos &&
-                      executorSource.find("retainedScope->root->retained.authority.boundObject->DeleteIfUnchanged") != std::string::npos &&
+                      permanentDelete.find("deleteAuthority = retainedScope->root->retained.authority.boundObject") != std::string_view::npos &&
+                      permanentDelete.find("if (retainedScope->deferredDirectoryDelete)") != std::string_view::npos &&
+                      permanentDelete.find("strict == _deferredDirectoryDeleteBindings.end() || ! strict->authority.boundObject") != std::string_view::npos &&
+                      permanentDelete.find("deleteAuthority = strict->authority.boundObject") != std::string_view::npos &&
+                      permanentDelete.find("deleteAuthority->DeleteIfUnchanged(deleteFlags, &deleteOptions, &mutationResult)") != std::string_view::npos &&
                       executorSource.find("_fileSystem->DeleteItem(sourceText.c_str(), itemFlags, &options") != std::string::npos,
                   L"Permanent Delete must retain an exact no-follow delete authority, re-check each confirmed pathname against it after the card's answer "
                   L"(C1), and call DeleteIfUnchanged on it; only Recycle may retain the provider pathname DeleteItem route.");
+    state.Require(
+        directoryLeaseBodies.size() == 1u &&
+            directoryLeaseBodies.front().find("FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE") != std::string_view::npos &&
+            directoryLeaseBodies.front().find("CrossCheckBoundObjectIdentity(witness, strict.authority, sameObject, sameRevision)") != std::string_view::npos &&
+            directoryLeaseBodies.front().find("! sameObject || ! sameRevision") != std::string_view::npos &&
+            directoryLeaseBodies.front().find("TakeDirectoryReadPinFrom(scope.root->retained.authority.boundObject.get())") != std::string_view::npos,
+        L"Deferred directory Delete must acquire a no-follow strict grant, validate the retained object's identity and revision, and hand off its metadata "
+        L"pin.");
     // I35 R7.3 (D-7.3): the one exception to exact authority is a root whose location opens it but exposes
     // no file identity. It is taken only from an Unsupported root binding (never an Indeterminate open),
     // pinned with corroboration facts through the provider's identity-delete contract, re-checked after

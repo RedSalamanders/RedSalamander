@@ -1,0 +1,1067 @@
+{
+  "schema": "redsalamander.perf-row-compaction.v1",
+  "input": {
+    "byteCount": 204061,
+    "retention": "Complete original remains in external archived run.",
+    "rowCount": 572,
+    "sha256": "ecffe273322429e30f5fcc46bc216e12b126543af1ed09114a5ae3274ee634c7"
+  },
+  "output": {
+    "rowBytes": "exact source bytes including original line endings",
+    "byteCount": 47059,
+    "file": "perf/perf_metrics.jsonl",
+    "rowCount": 131,
+    "sha256": "2782c3401873f5538398c287436f04531a17567073b8f467cca8f4bd83f1e268"
+  },
+  "selection": "All FileOps SelfTest, SharedTransfers, Interlock, DirectoryLeaseUs, Preparing.UiAdmissionUs and Queue metrics in original order. Input lines are one-based; offsets are zero-based.",
+  "rows": [
+    {
+      "inputLine": 69,
+      "inputByteOffset": 24962,
+      "byteLength": 344,
+      "outputByteOffset": 0,
+      "sha256": "ab7aa9e768a60dbd916bea0c6624935acad7836b049816e20be9095411f8beee",
+      "metric": "FileOps.Queue.NotifyAllCount"
+    },
+    {
+      "inputLine": 256,
+      "inputByteOffset": 91271,
+      "byteLength": 346,
+      "outputByteOffset": 344,
+      "sha256": "f65a279db88d493ad534d4f42c22fd26e1344f2b4326da3a21a9a42398e3b3c8",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 257,
+      "inputByteOffset": 91617,
+      "byteLength": 357,
+      "outputByteOffset": 690,
+      "sha256": "f2e5d13d3530de18c09c7c8cb973cf61dfae0935f119968a315b14a969a867e1",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 258,
+      "inputByteOffset": 91974,
+      "byteLength": 361,
+      "outputByteOffset": 1047,
+      "sha256": "20f0a973554dbe0b45233971dfb502e069f693d166ba9c8d9c345e5d9ec9348a",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 259,
+      "inputByteOffset": 92335,
+      "byteLength": 353,
+      "outputByteOffset": 1408,
+      "sha256": "c5fac904542afdc7caf773e335fa7564521a5deee2e5910e156c149ed8f10f48",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 260,
+      "inputByteOffset": 92688,
+      "byteLength": 373,
+      "outputByteOffset": 1761,
+      "sha256": "822cb706e0953efc36a105b12bc341332dddeb1fb55fa256031e583365321fba",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 261,
+      "inputByteOffset": 93061,
+      "byteLength": 355,
+      "outputByteOffset": 2134,
+      "sha256": "dedefdcf4203244e8299bf67ee478d000806f50e9e1ec64c5b73b636e2d59e87",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 262,
+      "inputByteOffset": 93416,
+      "byteLength": 356,
+      "outputByteOffset": 2489,
+      "sha256": "12a83857b3e52a91c33adcc8ac8d83b69341236c419c6a86dcd289bea97eb63f",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 263,
+      "inputByteOffset": 93772,
+      "byteLength": 363,
+      "outputByteOffset": 2845,
+      "sha256": "55987e720175c22a982ee6e40de128db29a9195b9e20ab22099687fa6db4a1d6",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 264,
+      "inputByteOffset": 94135,
+      "byteLength": 347,
+      "outputByteOffset": 3208,
+      "sha256": "533741ca2809391cb8147ffee825a5eda2c39752c2b00c6eb2363bf4ea095f62",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 297,
+      "inputByteOffset": 105797,
+      "byteLength": 349,
+      "outputByteOffset": 3555,
+      "sha256": "74ff7fcd1a04f964c2790bc651873718a716e1eabddbe4a5ff5b7ea69af528e7",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 298,
+      "inputByteOffset": 106146,
+      "byteLength": 357,
+      "outputByteOffset": 3904,
+      "sha256": "8cbe20c049e29062814a218765975dad2ca18f33beb393b2b148bac6ea86dc4d",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 299,
+      "inputByteOffset": 106503,
+      "byteLength": 364,
+      "outputByteOffset": 4261,
+      "sha256": "4bb2c64a386d1e758821ecca5f7bba762bf0fa0c1b20b0f09b640dead91d8217",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 300,
+      "inputByteOffset": 106867,
+      "byteLength": 353,
+      "outputByteOffset": 4625,
+      "sha256": "57a40046a6fde5e913833d072bc4913c582dc8b276148a90281f7eb2afdd222b",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 301,
+      "inputByteOffset": 107220,
+      "byteLength": 373,
+      "outputByteOffset": 4978,
+      "sha256": "cd0ee6629de7dc413adc5efd84ea39c61a4b582d44e9ae5c13f29eddba4bf4c0",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 302,
+      "inputByteOffset": 107593,
+      "byteLength": 355,
+      "outputByteOffset": 5351,
+      "sha256": "8b3df00e5a8dc59df9ac0a48485f11417b61508d0be276aa0814e2f431dc65f8",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 303,
+      "inputByteOffset": 107948,
+      "byteLength": 356,
+      "outputByteOffset": 5706,
+      "sha256": "4481c699d9311a4e4fd4c8a9379a6a974b10988617711431d847ea54ff816dfa",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 304,
+      "inputByteOffset": 108304,
+      "byteLength": 363,
+      "outputByteOffset": 6062,
+      "sha256": "6285066929810fa8d27e7c64b03ca58c6982559267b0b3223bf3565d7d40421f",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 305,
+      "inputByteOffset": 108667,
+      "byteLength": 350,
+      "outputByteOffset": 6425,
+      "sha256": "bebd85291e0678597be983df6e1b4b25eb06fb45d0924fb9d8d7c8787f66b803",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 306,
+      "inputByteOffset": 109017,
+      "byteLength": 362,
+      "outputByteOffset": 6775,
+      "sha256": "59fc35616e47001465f40e04f560891f699711458d6669aaee78aee65c71fa78",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 307,
+      "inputByteOffset": 109379,
+      "byteLength": 374,
+      "outputByteOffset": 7137,
+      "sha256": "667a7b4031d6f9f2a1a7b1758334a12ba98ae3ba3b663fe93a2fdf605da9ef3c",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 308,
+      "inputByteOffset": 109753,
+      "byteLength": 347,
+      "outputByteOffset": 7511,
+      "sha256": "ac8c56f559f20c7e710fd191ce3362d170840d0af82d71f18b7c3c088eee2ad7",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 309,
+      "inputByteOffset": 110100,
+      "byteLength": 362,
+      "outputByteOffset": 7858,
+      "sha256": "59fc35616e47001465f40e04f560891f699711458d6669aaee78aee65c71fa78",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 310,
+      "inputByteOffset": 110462,
+      "byteLength": 374,
+      "outputByteOffset": 8220,
+      "sha256": "667a7b4031d6f9f2a1a7b1758334a12ba98ae3ba3b663fe93a2fdf605da9ef3c",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 311,
+      "inputByteOffset": 110836,
+      "byteLength": 347,
+      "outputByteOffset": 8594,
+      "sha256": "e9c661609be42b590ae20ff49e4779581bd01553c0b702b0e0f636548da14e52",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 326,
+      "inputByteOffset": 115980,
+      "byteLength": 349,
+      "outputByteOffset": 8941,
+      "sha256": "6f1b75723806404cdf0ce1fcd29673c981770c1248c1e87d669746210d5100ac",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 327,
+      "inputByteOffset": 116329,
+      "byteLength": 357,
+      "outputByteOffset": 9290,
+      "sha256": "b5ca0b2399aff0352a108216d17cb874a8790c3ed44e8466fe4b82724d7d1e8c",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 328,
+      "inputByteOffset": 116686,
+      "byteLength": 364,
+      "outputByteOffset": 9647,
+      "sha256": "55dc6561179b73ae757c7965ac22991ddc2718b6295840312b221b250eec1af1",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 329,
+      "inputByteOffset": 117050,
+      "byteLength": 353,
+      "outputByteOffset": 10011,
+      "sha256": "4f0e93294c94539e55b3b8411ed36576fb7d377a28827481c41f5f1384e93d22",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 330,
+      "inputByteOffset": 117403,
+      "byteLength": 373,
+      "outputByteOffset": 10364,
+      "sha256": "97fb95673347952775adfa1efbc76e0631a3c50b7867e0682dca5b5d80dea20c",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 331,
+      "inputByteOffset": 117776,
+      "byteLength": 355,
+      "outputByteOffset": 10737,
+      "sha256": "eed3c2ef863e960032fb2bec72a0ff2134e60195690aaddf2fa76164f63928b1",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 332,
+      "inputByteOffset": 118131,
+      "byteLength": 356,
+      "outputByteOffset": 11092,
+      "sha256": "e55d56248e2eca65e843f46f4442e9967fe7b8ea96392e2a37df7babdc849f12",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 333,
+      "inputByteOffset": 118487,
+      "byteLength": 363,
+      "outputByteOffset": 11448,
+      "sha256": "7677fdd32a6f531a3a4a6368006ed264cc92ef08cbdf2a19d16a4226d6ac5a1e",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 334,
+      "inputByteOffset": 118850,
+      "byteLength": 350,
+      "outputByteOffset": 11811,
+      "sha256": "9eae275c14118bd64da3f255a3b95e019a6308f9c78313c3ba13f5c327a805f3",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 344,
+      "inputByteOffset": 122380,
+      "byteLength": 355,
+      "outputByteOffset": 12161,
+      "sha256": "632cab89abd2549c130584d895b4eb69c3a9b54edf69730e2c4a5833293718f8",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 345,
+      "inputByteOffset": 122735,
+      "byteLength": 366,
+      "outputByteOffset": 12516,
+      "sha256": "65a5f76ba76929b138235b2fc5b67e4028fac4baf87c13676977357314efdb01",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 346,
+      "inputByteOffset": 123101,
+      "byteLength": 370,
+      "outputByteOffset": 12882,
+      "sha256": "d59d8a3319197fec1dd1477eb52b1286796eedfcb84d6084999db90d651bd423",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 347,
+      "inputByteOffset": 123471,
+      "byteLength": 362,
+      "outputByteOffset": 13252,
+      "sha256": "6a12f1c0b8a64462fef56060fce2602fd3a1e2bea7421078003d75b1d961f5f0",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 348,
+      "inputByteOffset": 123833,
+      "byteLength": 382,
+      "outputByteOffset": 13614,
+      "sha256": "8709ca9aed411aabed15e2a1db0bfe63fa9a39d521a80da4882bc850e88562ae",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 349,
+      "inputByteOffset": 124215,
+      "byteLength": 364,
+      "outputByteOffset": 13996,
+      "sha256": "bc8f8e88e557d03a960ae43ad48d75989ac32a869591c0d85ef99b52bbd65c3a",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 350,
+      "inputByteOffset": 124579,
+      "byteLength": 365,
+      "outputByteOffset": 14360,
+      "sha256": "56054e724f8a0b1de71c87898f1b14c18fc47cf497ad07cb85c91a0c31041be1",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 351,
+      "inputByteOffset": 124944,
+      "byteLength": 372,
+      "outputByteOffset": 14725,
+      "sha256": "ce14e849a9e0a0ec20214f0db9f7de037cdb574e0bee8b0200286b72fc0262a6",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 352,
+      "inputByteOffset": 125316,
+      "byteLength": 356,
+      "outputByteOffset": 15097,
+      "sha256": "94c805fc7ce20f1da6fb68703f84f7e5c3392c0076dbb843344ae3660411d978",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 353,
+      "inputByteOffset": 125672,
+      "byteLength": 362,
+      "outputByteOffset": 15453,
+      "sha256": "5389eaa9cc443ba2de0d4df80445c6b8e3cae4712187d77443d4374bd63693b4",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 354,
+      "inputByteOffset": 126034,
+      "byteLength": 374,
+      "outputByteOffset": 15815,
+      "sha256": "e6fbe7c91b0784c205a428352db872e117a953c0964bb4305eabdfee2253c694",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 355,
+      "inputByteOffset": 126408,
+      "byteLength": 347,
+      "outputByteOffset": 16189,
+      "sha256": "c21e6e6db4b13006acc8612035c4687e3f6a7bf333383292f45640832374bba6",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 356,
+      "inputByteOffset": 126755,
+      "byteLength": 362,
+      "outputByteOffset": 16536,
+      "sha256": "5389eaa9cc443ba2de0d4df80445c6b8e3cae4712187d77443d4374bd63693b4",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 357,
+      "inputByteOffset": 127117,
+      "byteLength": 374,
+      "outputByteOffset": 16898,
+      "sha256": "e6fbe7c91b0784c205a428352db872e117a953c0964bb4305eabdfee2253c694",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 358,
+      "inputByteOffset": 127491,
+      "byteLength": 350,
+      "outputByteOffset": 17272,
+      "sha256": "3966e2ca31d50becf44f41e74beed4e8be8b04066cb522600ea31195c6c284d6",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 362,
+      "inputByteOffset": 128927,
+      "byteLength": 362,
+      "outputByteOffset": 17622,
+      "sha256": "5389eaa9cc443ba2de0d4df80445c6b8e3cae4712187d77443d4374bd63693b4",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 363,
+      "inputByteOffset": 129289,
+      "byteLength": 374,
+      "outputByteOffset": 17984,
+      "sha256": "e6fbe7c91b0784c205a428352db872e117a953c0964bb4305eabdfee2253c694",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 364,
+      "inputByteOffset": 129663,
+      "byteLength": 350,
+      "outputByteOffset": 18358,
+      "sha256": "3966e2ca31d50becf44f41e74beed4e8be8b04066cb522600ea31195c6c284d6",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 365,
+      "inputByteOffset": 130013,
+      "byteLength": 362,
+      "outputByteOffset": 18708,
+      "sha256": "5389eaa9cc443ba2de0d4df80445c6b8e3cae4712187d77443d4374bd63693b4",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 366,
+      "inputByteOffset": 130375,
+      "byteLength": 374,
+      "outputByteOffset": 19070,
+      "sha256": "e6fbe7c91b0784c205a428352db872e117a953c0964bb4305eabdfee2253c694",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 367,
+      "inputByteOffset": 130749,
+      "byteLength": 350,
+      "outputByteOffset": 19444,
+      "sha256": "3966e2ca31d50becf44f41e74beed4e8be8b04066cb522600ea31195c6c284d6",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 368,
+      "inputByteOffset": 131099,
+      "byteLength": 362,
+      "outputByteOffset": 19794,
+      "sha256": "5389eaa9cc443ba2de0d4df80445c6b8e3cae4712187d77443d4374bd63693b4",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 369,
+      "inputByteOffset": 131461,
+      "byteLength": 374,
+      "outputByteOffset": 20156,
+      "sha256": "e6fbe7c91b0784c205a428352db872e117a953c0964bb4305eabdfee2253c694",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 370,
+      "inputByteOffset": 131835,
+      "byteLength": 350,
+      "outputByteOffset": 20530,
+      "sha256": "3966e2ca31d50becf44f41e74beed4e8be8b04066cb522600ea31195c6c284d6",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 371,
+      "inputByteOffset": 132185,
+      "byteLength": 364,
+      "outputByteOffset": 20880,
+      "sha256": "87cf91ad591344662b06074b8c6a9e9276c36c3cdb0e7f76ef1e934e828a1aa9",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 372,
+      "inputByteOffset": 132549,
+      "byteLength": 376,
+      "outputByteOffset": 21244,
+      "sha256": "f52fd6cecf8097e57e78ad42e4f34c91e10b4d137ae96a3218642acfd896abd3",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 373,
+      "inputByteOffset": 132925,
+      "byteLength": 349,
+      "outputByteOffset": 21620,
+      "sha256": "907fa0d30776f415eaf232624b9f4a96c61e5b65e5ebb22f3da9b20cb2ce1744",
+      "metric": "FileOps.Interlock.OwnerDecisionUs"
+    },
+    {
+      "inputLine": 374,
+      "inputByteOffset": 133274,
+      "byteLength": 364,
+      "outputByteOffset": 21969,
+      "sha256": "87cf91ad591344662b06074b8c6a9e9276c36c3cdb0e7f76ef1e934e828a1aa9",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 375,
+      "inputByteOffset": 133638,
+      "byteLength": 376,
+      "outputByteOffset": 22333,
+      "sha256": "f52fd6cecf8097e57e78ad42e4f34c91e10b4d137ae96a3218642acfd896abd3",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 376,
+      "inputByteOffset": 134014,
+      "byteLength": 352,
+      "outputByteOffset": 22709,
+      "sha256": "b3cab2d8f522b4292bb99b0cef7d13a954d81393c61b89df9f28129a126f54bf",
+      "metric": "FileOps.Interlock.OwnerDecisionUs"
+    },
+    {
+      "inputLine": 381,
+      "inputByteOffset": 135808,
+      "byteLength": 364,
+      "outputByteOffset": 23061,
+      "sha256": "87cf91ad591344662b06074b8c6a9e9276c36c3cdb0e7f76ef1e934e828a1aa9",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 382,
+      "inputByteOffset": 136172,
+      "byteLength": 376,
+      "outputByteOffset": 23425,
+      "sha256": "f52fd6cecf8097e57e78ad42e4f34c91e10b4d137ae96a3218642acfd896abd3",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 383,
+      "inputByteOffset": 136548,
+      "byteLength": 349,
+      "outputByteOffset": 23801,
+      "sha256": "df0e3fff1a469914016ba9fd961facd117f5d218114c132b2b9a4ec36f8faf30",
+      "metric": "FileOps.Interlock.OwnerDecisionUs"
+    },
+    {
+      "inputLine": 396,
+      "inputByteOffset": 141263,
+      "byteLength": 361,
+      "outputByteOffset": 24150,
+      "sha256": "84a73dd582d9630238f9fee6dc5218fb49399ce5c6a9346a287f29eda4874155",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 397,
+      "inputByteOffset": 141624,
+      "byteLength": 368,
+      "outputByteOffset": 24511,
+      "sha256": "91da3286be26efa15da4ac1c0cf6877063f6925d422eb527227955f02d8f4a52",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 398,
+      "inputByteOffset": 141992,
+      "byteLength": 368,
+      "outputByteOffset": 24879,
+      "sha256": "822feb01e9e0b0a0983c8506ffa2d049fbb0bab3e8ec3fe28270532909f51a66",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 399,
+      "inputByteOffset": 142360,
+      "byteLength": 364,
+      "outputByteOffset": 25247,
+      "sha256": "72eadb08c7e9d316174f2fe5b6ef3d9cedad0b312ee4be55f327a8fb1bee9026",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 400,
+      "inputByteOffset": 142724,
+      "byteLength": 384,
+      "outputByteOffset": 25611,
+      "sha256": "ae78d5d8756dc2b1e41aa7cb961b6182c0f48933a5c6527300d3e1b4db616928",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 401,
+      "inputByteOffset": 143108,
+      "byteLength": 364,
+      "outputByteOffset": 25995,
+      "sha256": "73cc88366b19c6c956f75f09b434688b3f182e329d1bc6704cddbceb4b3903be",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 402,
+      "inputByteOffset": 143472,
+      "byteLength": 365,
+      "outputByteOffset": 26359,
+      "sha256": "be81a916e9a282829ee4ecd41d8416009ae625ec179aca7d628441ded467d1ea",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 403,
+      "inputByteOffset": 143837,
+      "byteLength": 372,
+      "outputByteOffset": 26724,
+      "sha256": "72c8f8986e6e1d2174c1f69a218b60b566d62ac0e5af943484d233d078b9ea32",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 404,
+      "inputByteOffset": 144209,
+      "byteLength": 358,
+      "outputByteOffset": 27096,
+      "sha256": "00e05b7536a0d751c9812c2dfb4be4e7abe97ac320b8e656a74c9b8f1468621e",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 421,
+      "inputByteOffset": 150161,
+      "byteLength": 350,
+      "outputByteOffset": 27454,
+      "sha256": "c91ca0a805cbea2fdfdc5f76ab53461ce9186250a8ad8a3bd9c8b8a3fde77815",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 422,
+      "inputByteOffset": 150511,
+      "byteLength": 359,
+      "outputByteOffset": 27804,
+      "sha256": "80152ce491561fc467fff1126ca48670ec2b91bbfa88b8a43cc1dd3a44e6435b",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 423,
+      "inputByteOffset": 150870,
+      "byteLength": 366,
+      "outputByteOffset": 28163,
+      "sha256": "9deeb39ac107ce38f365344e7e0cb1e2ea39a819168e2112236eb619466e49af",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 424,
+      "inputByteOffset": 151236,
+      "byteLength": 355,
+      "outputByteOffset": 28529,
+      "sha256": "93eb23e01d452a32c3d72c09a4cd3ef01e29baf51ccdd910d350cfafeb8042b0",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 425,
+      "inputByteOffset": 151591,
+      "byteLength": 375,
+      "outputByteOffset": 28884,
+      "sha256": "21b7375ad0da78e8b43cbd64aa83a30fa64a11c6606d347b944233f105db64a6",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 426,
+      "inputByteOffset": 151966,
+      "byteLength": 355,
+      "outputByteOffset": 29259,
+      "sha256": "938b05d071db4d3ef76c286c3c624112423094bd97c6cfc40153aecf4afb8d36",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 427,
+      "inputByteOffset": 152321,
+      "byteLength": 356,
+      "outputByteOffset": 29614,
+      "sha256": "170579e6c5e64689b2bde82cce24ec1b7f2df6624a99896e4302c0c450923321",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 428,
+      "inputByteOffset": 152677,
+      "byteLength": 363,
+      "outputByteOffset": 29970,
+      "sha256": "c99733d6350d339b7801e0083c28459ed5451ee88778e9ee2398851749bd6c5f",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 429,
+      "inputByteOffset": 153040,
+      "byteLength": 349,
+      "outputByteOffset": 30333,
+      "sha256": "9a239a85aee1ba66e8b358104471a743bdf58ad0d23e96947e1871a5c795bc41",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 430,
+      "inputByteOffset": 153389,
+      "byteLength": 362,
+      "outputByteOffset": 30682,
+      "sha256": "9b5bbf69ed701330817b27ad17324ee1013ef831ae889c1613ebb14a7f2acd4d",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 431,
+      "inputByteOffset": 153751,
+      "byteLength": 374,
+      "outputByteOffset": 31044,
+      "sha256": "f50dd2b28f4aaafc40e75d5b611479b8938881782ce82708b2a1a9ce44c6d654",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 432,
+      "inputByteOffset": 154125,
+      "byteLength": 347,
+      "outputByteOffset": 31418,
+      "sha256": "d293d64cad8757389ed2c1e858f7f779b15468f00f23c449a1ee0f8f7e3fdfba",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 434,
+      "inputByteOffset": 154813,
+      "byteLength": 355,
+      "outputByteOffset": 31765,
+      "sha256": "766968f1fcca2fd475d2206c4cb5e42fd27e089196f62796af3dd7d0a9fbf2c3",
+      "metric": "FileOps.Delete.DirectoryLeaseUs"
+    },
+    {
+      "inputLine": 450,
+      "inputByteOffset": 160425,
+      "byteLength": 350,
+      "outputByteOffset": 32120,
+      "sha256": "1f6992fbaf0da9c7527e36d0acc9c6d7799cee03c0eb4c21b7e20f140d0cef0e",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 451,
+      "inputByteOffset": 160775,
+      "byteLength": 359,
+      "outputByteOffset": 32470,
+      "sha256": "3f9626a1b1ee581d7ccae36ef20cf1b7687c99cadff6dde0d72eabe53f6d0f10",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 452,
+      "inputByteOffset": 161134,
+      "byteLength": 365,
+      "outputByteOffset": 32829,
+      "sha256": "ef439e2c473b5dc26dc0a84f8543c697dac236edf9d77baaf4737d1b7b9041ad",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 453,
+      "inputByteOffset": 161499,
+      "byteLength": 355,
+      "outputByteOffset": 33194,
+      "sha256": "7b0a6ad086afdc71d3f58e6cda8a75ba7d38ac4adb0c22e1635d2b08b91bb054",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 454,
+      "inputByteOffset": 161854,
+      "byteLength": 375,
+      "outputByteOffset": 33549,
+      "sha256": "fb62a4faa6cc081a7125c4797d888fd1aded8769e3e40c891f27d9d205f4f3b8",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 455,
+      "inputByteOffset": 162229,
+      "byteLength": 355,
+      "outputByteOffset": 33924,
+      "sha256": "3a557b970b00bbd6590e5d9122fa036560608e5fbda5799a8d96505deddd5d57",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 456,
+      "inputByteOffset": 162584,
+      "byteLength": 356,
+      "outputByteOffset": 34279,
+      "sha256": "7e74b2cd53618737743fc713e392aedd141e8476d26d5827b9ec1d8f7f10dbcf",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 457,
+      "inputByteOffset": 162940,
+      "byteLength": 363,
+      "outputByteOffset": 34635,
+      "sha256": "56010edf538880c65f43d0e5e1ff432ba95056b76426c5991eb51005f7a39ef8",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 458,
+      "inputByteOffset": 163303,
+      "byteLength": 349,
+      "outputByteOffset": 34998,
+      "sha256": "93a62c3eea496d1031b79732d41db001502d107b641dffb36f9e49e211361be8",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 459,
+      "inputByteOffset": 163652,
+      "byteLength": 362,
+      "outputByteOffset": 35347,
+      "sha256": "2c0b23dbb433be59f73cd11688f50505dbfbd0349223568ec989cac19214bbb5",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 460,
+      "inputByteOffset": 164014,
+      "byteLength": 374,
+      "outputByteOffset": 35709,
+      "sha256": "112779402f38548987ea498eb430f316399e821650e028f780b346ea70064afb",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 461,
+      "inputByteOffset": 164388,
+      "byteLength": 347,
+      "outputByteOffset": 36083,
+      "sha256": "a6ab4d25f555a79f9095da1b8c016629e518ddab9fbd8f4acd7ea6188b05b3e4",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 462,
+      "inputByteOffset": 164735,
+      "byteLength": 364,
+      "outputByteOffset": 36430,
+      "sha256": "ecc49beea482f70201c53dcef437e47eef971f671b9cc18d1b03747d5e393fd4",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 463,
+      "inputByteOffset": 165099,
+      "byteLength": 376,
+      "outputByteOffset": 36794,
+      "sha256": "4d436b9634252e57e93b22c0d4327353f4aae74a00df1af5713ba2f9c7311087",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 464,
+      "inputByteOffset": 165475,
+      "byteLength": 349,
+      "outputByteOffset": 37170,
+      "sha256": "c1d5801343d7538d3639df6e8e19e0a8bb6232486ed14704c0e48eff2722794c",
+      "metric": "FileOps.Interlock.OwnerDecisionUs"
+    },
+    {
+      "inputLine": 465,
+      "inputByteOffset": 165824,
+      "byteLength": 340,
+      "outputByteOffset": 37519,
+      "sha256": "69f4391c60edf067f9dfd51a6f4194993aec10aceeaa3c1a68e85c0f545e55ec",
+      "metric": "FileOps.Queue.EnterCount"
+    },
+    {
+      "inputLine": 466,
+      "inputByteOffset": 166164,
+      "byteLength": 338,
+      "outputByteOffset": 37859,
+      "sha256": "111a869d8d004792de3dbe24666d2e6f1f5ad8a1e7aa2d38ebf5850323518213",
+      "metric": "FileOps.Interlock.CheckUs"
+    },
+    {
+      "inputLine": 467,
+      "inputByteOffset": 166502,
+      "byteLength": 350,
+      "outputByteOffset": 38197,
+      "sha256": "06dd427822938bc3cea9f8b9a4e41e4daf6ef17a017d226075f11e29cfc1fe34",
+      "metric": "FileOps.Interlock.ScopeComparisons"
+    },
+    {
+      "inputLine": 468,
+      "inputByteOffset": 166852,
+      "byteLength": 350,
+      "outputByteOffset": 38547,
+      "sha256": "eaf7caaafb924b5fa07a565058400a7cfd0771c6ca10cd4456a8b02008de239e",
+      "metric": "FileOps.Interlock.ActiveCandidates"
+    },
+    {
+      "inputLine": 469,
+      "inputByteOffset": 167202,
+      "byteLength": 336,
+      "outputByteOffset": 38897,
+      "sha256": "ab8e23fb5d38b97a5cd8293f73b1092f9e991bd7b6594ae1558f0a78f7a37a0a",
+      "metric": "FileOps.Queue.WaitUs"
+    },
+    {
+      "inputLine": 470,
+      "inputByteOffset": 167538,
+      "byteLength": 340,
+      "outputByteOffset": 39233,
+      "sha256": "bf84266fac1937147052f52a8221e93d6bb1bed9cd197b1c42b1411837c9da58",
+      "metric": "FileOps.Interlock.WaitUs"
+    },
+    {
+      "inputLine": 471,
+      "inputByteOffset": 167878,
+      "byteLength": 342,
+      "outputByteOffset": 39573,
+      "sha256": "771aa265e31c8acdd8c9fe734aa3cea4bce8ed0552f50c4e5ce409f49c62fd5e",
+      "metric": "FileOps.Queue.DepthOnEnter"
+    },
+    {
+      "inputLine": 472,
+      "inputByteOffset": 168220,
+      "byteLength": 346,
+      "outputByteOffset": 39915,
+      "sha256": "dc5a12c685da4bc523e555020744f00a2a64dc3e7cd936092d54df2c1da18387",
+      "metric": "FileOps.Queue.ActiveOperations"
+    },
+    {
+      "inputLine": 474,
+      "inputByteOffset": 168907,
+      "byteLength": 346,
+      "outputByteOffset": 40261,
+      "sha256": "2d1afc63f3cfe5b99ee9b5b2f67bda842070f3ff8334d1a8d51eb25f9ecf5b5b",
+      "metric": "FileOps.Delete.DirectoryLeaseUs"
+    },
+    {
+      "inputLine": 479,
+      "inputByteOffset": 170680,
+      "byteLength": 371,
+      "outputByteOffset": 40607,
+      "sha256": "dba324351dc7c79121904bccbad3d347f7bf642b2dd8b292d444c40926f656f6",
+      "metric": "FileOps.SelfTest.DeferredDirectoryDeleteIdentity"
+    },
+    {
+      "inputLine": 480,
+      "inputByteOffset": 171051,
+      "byteLength": 344,
+      "outputByteOffset": 40978,
+      "sha256": "7b317bc93cb9e09bdf9122170fb9d5aa433f29fc40b9ecf56e5966caa903464a",
+      "metric": "FileOps.Queue.NotifyAllCount"
+    },
+    {
+      "inputLine": 496,
+      "inputByteOffset": 176678,
+      "byteLength": 354,
+      "outputByteOffset": 41322,
+      "sha256": "3258448fc6ee0f1aa6c77b3228d4b6fe8dbc23ee0771cb007edec6f33c6dcf20",
+      "metric": "FileOps.Preparing.UiAdmissionUs"
+    },
+    {
+      "inputLine": 500,
+      "inputByteOffset": 178077,
+      "byteLength": 346,
+      "outputByteOffset": 41676,
+      "sha256": "676027e0e2b8ff3316e3d415b4a9b7a4f3858a6ccb110dc94cb2c4a620d3a353",
+      "metric": "FileOps.Interlock.PrepareUs"
+    },
+    {
+      "inputLine": 501,
+      "inputByteOffset": 178423,
+      "byteLength": 357,
+      "outputByteOffset": 42022,
+      "sha256": "d1cdcbab6a49bcb47f9d2ccf3a8b4d82ee120e7b858f286d6f8837ce2be32ad0",
+      "metric": "FileOps.Interlock.PrepareLookupChecks"
+    },
+    {
+      "inputLine": 502,
+      "inputByteOffset": 178780,
+      "byteLength": 361,
+      "outputByteOffset": 42379,
+      "sha256": "156a236d9cc4dc5522f4b2b082cda3ead44137499bf4953a3d6a6edc33f70f6c",
+      "metric": "FileOps.Interlock.PrepareIndexStorage"
+    },
+    {
+      "inputLine": 503,
+      "inputByteOffset": 179141,
+      "byteLength": 353,
+      "outputByteOffset": 42740,
+      "sha256": "95c1cd29f0c169257c3e226b881ac66ed89b29f0280087b0be4f7377d1c21dd4",
+      "metric": "FileOps.Interlock.NewFileKeyBytes"
+    },
+    {
+      "inputLine": 504,
+      "inputByteOffset": 179494,
+      "byteLength": 373,
+      "outputByteOffset": 43093,
+      "sha256": "ead2b26aa120514b4a4ed0111474f376e4474ad01d7a566a029fb83461acbdc5",
+      "metric": "FileOps.Interlock.ProviderPathKeyCandidateStorage"
+    },
+    {
+      "inputLine": 505,
+      "inputByteOffset": 179867,
+      "byteLength": 355,
+      "outputByteOffset": 43466,
+      "sha256": "e0f1c4559eb74d41e8f403fb931e2a4c2c4cbd89f43d507d45a44f899ed9cd00",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 506,
+      "inputByteOffset": 180222,
+      "byteLength": 356,
+      "outputByteOffset": 43821,
+      "sha256": "b8ec3ac0b9003da76459fcdde1e1a40355b8d87edc052a403ddf9ae4ef4a6afe",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 507,
+      "inputByteOffset": 180578,
+      "byteLength": 363,
+      "outputByteOffset": 44177,
+      "sha256": "72404350e78e5e69220b9805bf3d0acb2c2d3479a2d207d75496021b8a82e1e3",
+      "metric": "FileOps.Interlock.ScopeCount"
+    },
+    {
+      "inputLine": 508,
+      "inputByteOffset": 180941,
+      "byteLength": 347,
+      "outputByteOffset": 44540,
+      "sha256": "b703f083790e654296f9a871bb0e16a43a9118d4d1e5f375837f036cceccd1bb",
+      "metric": "FileOps.Interlock.BindCount"
+    },
+    {
+      "inputLine": 509,
+      "inputByteOffset": 181288,
+      "byteLength": 362,
+      "outputByteOffset": 44887,
+      "sha256": "653102ebf78a1f7eaaf3eca295b61d11c0502611b604108a0afad6287dcd26ce",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 510,
+      "inputByteOffset": 181650,
+      "byteLength": 374,
+      "outputByteOffset": 45249,
+      "sha256": "b744082768fdb5612c890f73b702beb9bba53d97777062f4f3a8ece658bfeee1",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 511,
+      "inputByteOffset": 182024,
+      "byteLength": 347,
+      "outputByteOffset": 45623,
+      "sha256": "9c3af29770a6dc80aec3efbf817a5f6cc28824016613bcc6ca60701a3ccdd916",
+      "metric": "FileOps.Interlock.OwnerFreezeUs"
+    },
+    {
+      "inputLine": 515,
+      "inputByteOffset": 183463,
+      "byteLength": 364,
+      "outputByteOffset": 45970,
+      "sha256": "1782937cfc7515bd86824301e52758d662b873a1f1d3f969ccefbd7d2a08fc03",
+      "metric": "FileOps.Interlock.OwnerObjectsCreated"
+    },
+    {
+      "inputLine": 516,
+      "inputByteOffset": 183827,
+      "byteLength": 376,
+      "outputByteOffset": 46334,
+      "sha256": "ead17c2045f88652edf1f7f7e2eec3ddfe234005875b00f8bd338a8a31c67548",
+      "metric": "FileOps.Interlock.OwnerLogicalRetainedBytes"
+    },
+    {
+      "inputLine": 517,
+      "inputByteOffset": 184203,
+      "byteLength": 349,
+      "outputByteOffset": 46710,
+      "sha256": "c6c732f2ac10b32ba5e0e5f0b0772c87d4ed725cc8a1a69c4ce4f4536f5bc49d",
+      "metric": "FileOps.Interlock.OwnerDecisionUs"
+    }
+  ]
+}

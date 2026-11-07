@@ -1415,6 +1415,29 @@ struct DeleteDiscoveryState final
     uint64_t discoveredDirectories = 0;
 };
 
+// Singular calls retain the last reported totals and whether closure was attempted.
+// The callback runs under this mutex so concurrent reports cannot overtake closure.
+struct SingleDiscoveryState final
+{
+    SingleDiscoveryState()                                       = default;
+    SingleDiscoveryState(const SingleDiscoveryState&)            = delete;
+    SingleDiscoveryState(SingleDiscoveryState&&)                 = delete;
+    SingleDiscoveryState& operator=(const SingleDiscoveryState&) = delete;
+    SingleDiscoveryState& operator=(SingleDiscoveryState&&)      = delete;
+    ~SingleDiscoveryState()                                      = default;
+
+    std::mutex mutex;
+    uint64_t bytes       = 0;
+    uint64_t files       = 0;
+    uint64_t directories = 0;
+    uint32_t queued      = 0;
+    bool closeAttempted  = false;
+    bool callbackFailed  = false;
+    std::optional<uint8_t> expectedKind;
+    bool expectedDirectoryAttribute = false;
+    std::wstring expectedRoot;
+};
+
 // One governed bulk call is one discovery scope, because the caller supplies one operation-control
 // cookie for the whole call and has no way to tell one selected root's scope from another's. Each
 // root's traversal still produces its own cumulative stream starting at zero, so the call adds those
@@ -1571,6 +1594,7 @@ struct OperationContext
     DeleteDiscoveryState* deleteDiscovery = nullptr;
     // Set only by a bulk entry point, where several selected roots share one governed call scope.
     RootDiscoveryTranslation* discoveryTranslation = nullptr;
+    SingleDiscoveryState* singleDiscovery          = nullptr;
     NativeFileWorkCallState ownedFileWorkCall;
     NativeFileWorkCallState* fileWorkCall               = &ownedFileWorkCall;
     NativeFileWorkLeafState* fileWorkLeaf               = nullptr; // borrowed only for the outer logical-leaf retry scope
@@ -1591,6 +1615,9 @@ struct OperationContext
     const wchar_t* progressDestination                      = nullptr;
 
     ParallelOperationState* parallel = nullptr;
+    // Optional budget-only state; callback, cancellation and result state remain
+    // owned by this call's ParallelOperationState.
+    IFileSystemTaskTransferBudget* taskTransferBudget = nullptr;
 
     ULONGLONG lastProgressReportTick = 0;
 
@@ -4101,6 +4128,36 @@ void InitializeOperationContext(OperationContext& context,
     context.reparseRootDestinationPath.clear();
 }
 
+// Synchronous budget-wait probe includes the provider call's local stop state.
+// The host invokes it without holding its budget mutex.
+struct CopyBudgetCancelProbe final : IFileSystemOperationControl
+{
+    explicit CopyBudgetCancelProbe(OperationContext& operation) noexcept : context(operation)
+    {
+    }
+    CopyBudgetCancelProbe(const CopyBudgetCancelProbe&)            = delete;
+    CopyBudgetCancelProbe(CopyBudgetCancelProbe&&)                 = delete;
+    CopyBudgetCancelProbe& operator=(const CopyBudgetCancelProbe&) = delete;
+    CopyBudgetCancelProbe& operator=(CopyBudgetCancelProbe&&)      = delete;
+    HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+    {
+        if (! abort)
+            return E_POINTER;
+        const HRESULT hr = CheckCancel(context);
+        *abort           = FAILED(hr) ? TRUE : FALSE;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode*, void*) noexcept override
+    {
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+    {
+        return E_NOTIMPL;
+    }
+    OperationContext& context;
+};
+
 class ScopedCopyMoveTransferSlot final
 {
 public:
@@ -4117,6 +4174,23 @@ public:
 
     [[nodiscard]] HRESULT Acquire(OperationContext& context) noexcept
     {
+        if (context.taskTransferBudget)
+        {
+            CopyBudgetCancelProbe probe(context);
+            const HRESULT hr = context.taskTransferBudget->AcquireFile(&probe, nullptr, _budgetPermit.put());
+            if (FAILED(hr) || ! _budgetPermit)
+                return FAILED(hr) ? hr : E_UNEXPECTED;
+            // Retain the call-local active count for bandwidth accounting. The
+            // task budget is the only blocking gate for cooperative calls.
+            if (context.parallel)
+            {
+                _parallel = context.parallel;
+                std::scoped_lock lock(_parallel->copyMoveTransferMutex);
+                ++_parallel->activeCopyMoveTransfers;
+                _acquired = true;
+            }
+            return S_OK;
+        }
         ParallelOperationState* parallel = context.parallel;
         if (! parallel)
         {
@@ -4150,6 +4224,7 @@ public:
     {
         if (! _acquired || ! _parallel)
         {
+            _budgetPermit.reset();
             return;
         }
 
@@ -4164,11 +4239,13 @@ public:
         _parallel->copyMoveTransferCv.notify_one();
         _parallel = nullptr;
         _acquired = false;
+        _budgetPermit.reset();
     }
 
 private:
     ParallelOperationState* _parallel = nullptr;
-    bool _acquired                    = false;
+    wil::com_ptr<IUnknown> _budgetPermit;
+    bool _acquired = false;
 };
 
 HRESULT GetFileSizeBytes(const std::wstring& path, uint64_t* sizeBytes) noexcept
@@ -4757,18 +4834,87 @@ HRESULT SetHandleReadonlyAttribute(DeleteHandleSnapshot& snapshot, bool readonly
     return S_OK;
 }
 
-HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot) noexcept
+// Per-walk aggregates deliberately omit paths and are emitted only after the walk's workers have joined.
+// Independent relaxed counters are diagnostic only and never control scheduling or mutation.
+struct ByNameWalkMetrics final
 {
+    struct Stage final
+    {
+        Stage() noexcept               = default;
+        Stage(const Stage&)            = delete;
+        Stage(Stage&&)                 = delete;
+        Stage& operator=(const Stage&) = delete;
+        Stage& operator=(Stage&&)      = delete;
+
+        std::atomic<uint64_t> count{0u}, totalUs{0u}, maxUs{0u};
+        void Record(std::chrono::steady_clock::time_point start) noexcept
+        {
+            const auto elapsed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
+            count.fetch_add(1u, std::memory_order_relaxed);
+            totalUs.fetch_add(elapsed, std::memory_order_relaxed);
+            uint64_t prior = maxUs.load(std::memory_order_relaxed);
+            while (prior < elapsed && ! maxUs.compare_exchange_weak(prior, elapsed, std::memory_order_relaxed))
+            {
+            }
+        }
+        void Emit(std::wstring_view metric, HRESULT childWalkHr) const noexcept
+        {
+            Debug::Perf::EmitDurationUs(metric,
+                                        L"child-walk-total",
+                                        totalUs.load(std::memory_order_relaxed),
+                                        count.load(std::memory_order_relaxed),
+                                        maxUs.load(std::memory_order_relaxed),
+                                        childWalkHr);
+        }
+    };
+    ByNameWalkMetrics() noexcept                           = default;
+    ByNameWalkMetrics(const ByNameWalkMetrics&)            = delete;
+    ByNameWalkMetrics(ByNameWalkMetrics&&)                 = delete;
+    ByNameWalkMetrics& operator=(const ByNameWalkMetrics&) = delete;
+    ByNameWalkMetrics& operator=(ByNameWalkMetrics&&)      = delete;
+
+    const bool enabled = Debug::Perf::IsCaptureEnabled();
+    std::atomic<uint64_t> active{0u}, peak{0u}, parallelPasses{0u}, inlineBudget{0u}, inlineSingle{0u}, inlineNested{0u}, inlineNoWorkers{0u};
+    Stage open, facts, disposition, dispositionEx, dispositionLegacy, close, readonlyClear, readonlyRollback, completionCallback;
+    std::atomic<uint64_t> exSuccess{0u}, exInvalidParameter{0u}, exNotSupported{0u}, exOtherFailure{0u}, legacySuccess{0u}, legacyFailure{0u};
+    HRESULT childWalkHr = S_OK; // Set only by the joining thread; excludes final root disposition.
+    void Enter() noexcept
+    {
+        const uint64_t now = active.fetch_add(1u, std::memory_order_relaxed) + 1u;
+        uint64_t prior     = peak.load(std::memory_order_relaxed);
+        while (prior < now && ! peak.compare_exchange_weak(prior, now, std::memory_order_relaxed))
+        {
+        }
+    }
+};
+
+HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot, ByNameWalkMetrics* metrics = nullptr) noexcept
+{
+    const bool measure = metrics != nullptr && metrics->enabled;
 #ifdef FILE_DISPOSITION_FLAG_DELETE
     FILE_DISPOSITION_INFO_EX dispositionEx{};
-    dispositionEx.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS;
-    if (::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfoEx, &dispositionEx, sizeof(dispositionEx)))
+    dispositionEx.Flags    = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS;
+    const auto exStarted   = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const BOOL exSucceeded = ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfoEx, &dispositionEx, sizeof(dispositionEx));
+    const DWORD exError    = exSucceeded ? ERROR_SUCCESS : ::GetLastError();
+    if (measure)
     {
+        metrics->dispositionEx.Record(exStarted);
+        auto& outcome = exSucceeded                          ? metrics->exSuccess
+                        : exError == ERROR_INVALID_PARAMETER ? metrics->exInvalidParameter
+                        : exError == ERROR_NOT_SUPPORTED     ? metrics->exNotSupported
+                                                             : metrics->exOtherFailure;
+        outcome.fetch_add(1u, std::memory_order_relaxed);
+    }
+    if (exSucceeded)
+    {
+        const auto closeStarted = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         snapshot.handle.reset();
+        if (measure)
+            metrics->close.Record(closeStarted);
         return S_OK;
     }
 
-    const DWORD exError = ::GetLastError();
     if (exError != ERROR_INVALID_PARAMETER && exError != ERROR_NOT_SUPPORTED)
     {
         return HRESULT_FROM_WIN32(exError);
@@ -4776,13 +4922,22 @@ HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot) noexcept
 #endif
 
     FILE_DISPOSITION_INFO disposition{};
-    disposition.DeleteFile = TRUE;
-    if (! ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfo, &disposition, sizeof(disposition)))
+    disposition.DeleteFile     = TRUE;
+    const auto legacyStarted   = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const BOOL legacySucceeded = ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+    const DWORD legacyError    = legacySucceeded ? ERROR_SUCCESS : ::GetLastError();
+    if (measure)
     {
-        return HRESULT_FROM_WIN32(::GetLastError());
+        metrics->dispositionLegacy.Record(legacyStarted);
+        (legacySucceeded ? metrics->legacySuccess : metrics->legacyFailure).fetch_add(1u, std::memory_order_relaxed);
     }
+    if (! legacySucceeded)
+        return HRESULT_FROM_WIN32(legacyError);
 
+    const auto closeStarted = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     snapshot.handle.reset();
+    if (measure)
+        metrics->close.Record(closeStarted);
     return S_OK;
 }
 
@@ -4832,14 +4987,19 @@ HRESULT PauseAfterPermanentDeleteChildForSelfTest(std::wstring_view actualPath) 
 HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
                                  DeleteHandleSnapshot& snapshot,
                                  bool countCompletion,
-                                 [[maybe_unused]] std::wstring_view actualPath) noexcept
+                                 [[maybe_unused]] std::wstring_view actualPath,
+                                 ByNameWalkMetrics* metrics = nullptr) noexcept
 {
+    const bool measure        = metrics != nullptr && metrics->enabled;
     bool restoreReadonly      = false;
     auto restoreReadonlyScope = wil::scope_exit([&]() noexcept
     {
         if (restoreReadonly)
         {
+            const auto started = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             static_cast<void>(SetHandleReadonlyAttribute(snapshot, true));
+            if (measure)
+                metrics->readonlyRollback.Record(started);
         }
     });
 
@@ -4869,7 +5029,10 @@ HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         }
 
+        const auto started    = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         const HRESULT clearHr = SetHandleReadonlyAttribute(snapshot, false);
+        if (measure)
+            metrics->readonlyClear.Record(started);
         if (FAILED(clearHr))
         {
             return clearHr;
@@ -4877,7 +5040,7 @@ HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
         restoreReadonly = true;
     }
 
-    const HRESULT deleteHr = MarkHandleForDeletion(snapshot);
+    const HRESULT deleteHr = MarkHandleForDeletion(snapshot, metrics);
     if (FAILED(deleteHr))
     {
         return deleteHr;
@@ -4891,7 +5054,10 @@ HRESULT DeleteOpenedPathNoFollow(OperationContext& context,
         {
             AddCompletedBytes(context, snapshot.fileBytes);
         }
+        const auto started = measure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         ReportCompletedObject(context, actualPath.data(), snapshot.attributes, snapshot.fileBytes);
+        if (measure)
+            metrics->completionCallback.Record(started);
     }
 
 #if defined(ENABLE_TESTS)
@@ -5799,6 +5965,14 @@ PreserveReparsePointInternal(
 
     *bytesCopied = 0;
 
+    ScopedCopyMoveTransferSlot budgetSlot;
+    if (context.taskTransferBudget)
+    {
+        const HRESULT budgetHr = budgetSlot.Acquire(context);
+        if (FAILED(budgetHr))
+            return budgetHr;
+    }
+
     HRESULT hr = SetProgressPaths(context, source.display.c_str(), destination.display.c_str());
     if (FAILED(hr))
     {
@@ -5861,6 +6035,24 @@ HRESULT ReportRawDiscoveryProgress(OperationContext& context,
         return S_OK;
     }
 
+    std::unique_lock<std::mutex> singleLock;
+    if (context.singleDiscovery != nullptr)
+    {
+        SingleDiscoveryState& state = *context.singleDiscovery;
+        singleLock                  = std::unique_lock(state.mutex);
+        if (state.closeAttempted)
+            return S_OK;
+        state.bytes           = (std::max)(state.bytes, discoveredBytes);
+        state.files           = (std::max)(state.files, discoveredFiles);
+        state.directories     = (std::max)(state.directories, discoveredDirectories);
+        state.queued          = queuedItems;
+        discoveredBytes       = state.bytes;
+        discoveredFiles       = state.files;
+        discoveredDirectories = state.directories;
+        if (traversalClosed)
+            state.closeAttempted = true;
+    }
+
     FileSystemDiscoveryProgress progress{};
     progress.sizeBytes             = sizeof(progress);
     progress.discoveredBytes       = discoveredBytes;
@@ -5868,7 +6060,22 @@ HRESULT ReportRawDiscoveryProgress(OperationContext& context,
     progress.discoveredDirectories = discoveredDirectories;
     progress.queuedItems           = queuedItems;
     progress.traversalClosed       = traversalClosed ? TRUE : FALSE;
-    return context.options->operationControl->FileSystemReportDiscoveryProgress(&progress, context.options->operationControlCookie);
+    const HRESULT reportHr         = context.options->operationControl->FileSystemReportDiscoveryProgress(&progress, context.options->operationControlCookie);
+    if (context.singleDiscovery != nullptr && FAILED(reportHr))
+        context.singleDiscovery->callbackFailed = true;
+    return reportHr;
+}
+
+[[nodiscard]] HRESULT ValidateSingleDiscoveryShape(OperationContext& context, const PathInfo& source, LocalCopyPathKind kind, DWORD attributes) noexcept
+{
+    if (context.singleDiscovery == nullptr || ! context.singleDiscovery->expectedKind.has_value())
+        return S_OK;
+    if (! OrdinalString::EqualsNoCase(context.singleDiscovery->expectedRoot, source.extended))
+        return S_OK;
+    return static_cast<uint8_t>(kind) == context.singleDiscovery->expectedKind.value() &&
+                   IsDirectory(attributes) == context.singleDiscovery->expectedDirectoryAttribute
+               ? S_OK
+               : HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
 }
 
 // Every traversal reports through here. A single-root call passes its own cumulative totals straight
@@ -5920,7 +6127,12 @@ void ReportCallDiscoveryClosed(OperationContext& context, CallDiscoveryAggregato
         context, aggregate.discoveredBytes, aggregate.discoveredFiles, aggregate.discoveredDirectories, aggregate.queuedItems, true));
 }
 
-[[nodiscard]] HRESULT ReportTopLevelDiscovery(OperationContext& context, const std::wstring& sourcePath, bool recursiveDirectoryOwnsDiscovery) noexcept
+[[nodiscard]] HRESULT ReportTopLevelDiscovery(OperationContext& context,
+                                              const std::wstring& sourcePath,
+                                              bool recursiveDirectoryOwnsDiscovery,
+                                              bool* recursiveOwner         = nullptr,
+                                              LocalCopyPathKind* rootKind  = nullptr,
+                                              bool* rootDirectoryAttribute = nullptr) noexcept
 {
     if (context.options == nullptr || context.options->operationControl == nullptr)
     {
@@ -5934,26 +6146,53 @@ void ReportCallDiscoveryClosed(OperationContext& context, CallDiscoveryAggregato
         return HRESULT_FROM_WIN32(::GetLastError());
     }
 
-    const bool directory          = IsDirectory(data.dwFileAttributes);
-    const bool recursiveDirectory = recursiveDirectoryOwnsDiscovery && directory && ! IsReparsePoint(data.dwFileAttributes);
+#ifdef ENABLE_TESTS
+    {
+        // Exercise an observed reparse attribute on exactly one synthetic root,
+        // while requiring a real no-follow Local directory binding first.
+        static std::mutex selfTestMutex;
+        std::scoped_lock lock(selfTestMutex);
+        constexpr std::wstring_view variable = L"REDSALAMANDER_FILEOPS_TEST_DISCOVERY_REPARSE_SOURCE";
+        const std::wstring selected          = GetSelfTestEnvironmentString(variable);
+        if (context.type == FILESYSTEM_COPY && ! selected.empty() && OrdinalString::EqualsNoCase(selected, sourcePath) && IsDirectory(data.dwFileAttributes) &&
+            ! IsReparsePoint(data.dwFileAttributes) && context.objectBinding)
+        {
+            constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+            wil::com_ptr<IFileSystemBoundObject> bound;
+            FileSystemBoundObjectSnapshot snapshot{};
+            snapshot.sizeBytes = sizeof(snapshot);
+            if (SUCCEEDED(context.objectBinding->BindObject(sourcePath.c_str(), bindFlags, bound.put())) && bound && SUCCEEDED(bound->GetSnapshot(&snapshot)) &&
+                snapshot.kind == FILESYSTEM_BOUND_DIRECTORY && SetEnvironmentVariableW(variable.data(), nullptr) != FALSE)
+            {
+                data.dwFileAttributes |= FILE_ATTRIBUTE_REPARSE_POINT;
+            }
+        }
+    }
+#endif
+
+    const bool directory   = IsDirectory(data.dwFileAttributes);
+    LocalCopyPathKind kind = directory ? LocalCopyPathKind::RegularDirectory : LocalCopyPathKind::RegularFile;
+    if (context.type == FILESYSTEM_COPY && IsReparsePoint(data.dwFileAttributes))
+    {
+        const HRESULT kindHr = ClassifyLocalCopyPathKind(sourcePath, data.dwFileAttributes, kind);
+        if (FAILED(kindHr))
+            return kindHr;
+    }
+    const bool recursiveDirectory = recursiveDirectoryOwnsDiscovery && kind == LocalCopyPathKind::RegularDirectory;
+    if (recursiveOwner != nullptr)
+        *recursiveOwner = recursiveDirectory;
+    if (rootKind != nullptr)
+        *rootKind = kind;
+    if (rootDirectoryAttribute != nullptr)
+        *rootDirectoryAttribute = directory;
     if (recursiveDirectory)
     {
         // The recursive copy walker owns the root and descendant cumulative totals.
         return S_OK;
     }
 
-    bool literalCopyLink = false;
-    if (context.type == FILESYSTEM_COPY && IsReparsePoint(data.dwFileAttributes))
-    {
-        LocalCopyPathKind kind = LocalCopyPathKind::RegularFile;
-        const HRESULT kindHr   = ClassifyLocalCopyPathKind(sourcePath, data.dwFileAttributes, kind);
-        if (FAILED(kindHr))
-        {
-            return kindHr;
-        }
-        literalCopyLink = kind == LocalCopyPathKind::SemanticLink;
-    }
-    const uint64_t fileBytes = directory || literalCopyLink ? 0u : (static_cast<uint64_t>(data.nFileSizeHigh) << 32u) | data.nFileSizeLow;
+    const bool literalCopyLink = context.type == FILESYSTEM_COPY && kind == LocalCopyPathKind::SemanticLink;
+    const uint64_t fileBytes   = directory || literalCopyLink ? 0u : (static_cast<uint64_t>(data.nFileSizeHigh) << 32u) | data.nFileSizeLow;
     return ReportDiscoveryProgress(context, fileBytes, directory ? 0u : 1u, directory ? 1u : 0u, 1u, true);
 }
 
@@ -6342,9 +6581,10 @@ HRESULT CopyDirectoryInternal(OperationContext& context,
     const auto restoreFileWorkLeaf                = wil::scope_exit([&]() noexcept { context.fileWorkLeaf = previousFileWorkLeaf; });
     const bool ownsBudget                         = sharedBudget == nullptr;
     RecursiveCopySerialBudget& budget             = sharedBudget != nullptr ? *sharedBudget : localBudget;
+    bool discoveryStarted                         = false;
     const auto emitBudgetOnExit                   = wil::scope_exit([&]() noexcept
     {
-        if (ownsBudget)
+        if (ownsBudget && (discoveryStarted || context.singleDiscovery == nullptr))
         {
             static_cast<void>(ReportDiscoveryProgress(context, budget.discoveredBytes, budget.discoveredFiles, budget.discoveredDirectories, 0u, true));
             Debug::Perf::Emit(L"FileOps.CopyRecursiveSerial.MaxTraversalDepth", L"", 0u, budget.maxDepth, Common::FileOperations::kTraversalMaxDepth, S_OK);
@@ -6354,6 +6594,12 @@ HRESULT CopyDirectoryInternal(OperationContext& context,
                               budget.maxRetainedAncestorMetadataBytes,
                               Common::FileOperations::kTraversalMaxMetadataBytes,
                               S_OK);
+        }
+        else if (ownsBudget)
+        {
+            // A failed root setup may be retried by the caller; retain its known
+            // totals without finalizing the call before that decision.
+            static_cast<void>(ReportDiscoveryProgress(context, budget.discoveredBytes, budget.discoveredFiles, budget.discoveredDirectories, 0u, false));
         }
     });
     ++budget.discoveredDirectories;
@@ -6412,6 +6658,7 @@ HRESULT CopyDirectoryInternal(OperationContext& context,
     {
         return returnFailure(hr);
     }
+    discoveryStarted = true;
 
     // A grant that authorized this directory's own destination conflict must not leak into
     // the subtree: every child conflict below prompts on its own.
@@ -6687,6 +6934,9 @@ HRESULT CopyPathInternal(OperationContext& context, const PathInfo& source, cons
     {
         return kindHr;
     }
+    const HRESULT shapeHr = ValidateSingleDiscoveryShape(context, source, sourceKind, attributes);
+    if (FAILED(shapeHr))
+        return shapeHr;
     if (sourceKind == LocalCopyPathKind::SemanticLink)
     {
         if (context.reparsePointPolicy == FileSystemReparsePointPolicy::Skip)
@@ -6813,6 +7063,9 @@ struct RecursiveCopyWorkItem
     {
         return returnFailure(kindHr);
     }
+    const HRESULT shapeHr = ValidateSingleDiscoveryShape(rootContext, source, sourceKind, attributes);
+    if (FAILED(shapeHr))
+        return returnFailure(shapeHr);
     if (sourceKind != LocalCopyPathKind::RegularDirectory)
     {
         return CopyPathInternal(rootContext, source, destination, bytesCopied);
@@ -6825,7 +7078,22 @@ struct RecursiveCopyWorkItem
     // I35 S2 (R6.6): at concurrency 1 the single worker copies in listing order while the producer
     // lists ahead (bounded by the queue), so the directory's discovery closes when its listing ends.
     const unsigned int concurrency = std::max(1u, std::min<unsigned int>(requestedConcurrency, kMaxWorkers));
-    if (! GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
+    bool forceSerialForSelfTest    = false;
+#ifdef ENABLE_TESTS
+    {
+        // Consume only the selected synthetic source. This never changes global
+        // scheduler availability or another call's dispatch policy.
+        static std::mutex selfTestMutex;
+        std::scoped_lock lock(selfTestMutex);
+        constexpr std::wstring_view variable = L"REDSALAMANDER_FILEOPS_TEST_SERIAL_COPY_SOURCE";
+        const std::wstring selected          = GetSelfTestEnvironmentString(variable);
+        if (! selected.empty() && OrdinalString::EqualsNoCase(selected, source.extended))
+        {
+            forceSerialForSelfTest = SetEnvironmentVariableW(variable.data(), nullptr) != FALSE;
+        }
+    }
+#endif
+    if (forceSerialForSelfTest || ! GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
     {
         Debug::Perf::EmitCounter(L"FileOps.CopyRecursiveParallel.SerialFallback.SchedulerUnavailable");
         return CopyDirectoryInternal(rootContext, source, destination, bytesCopied);
@@ -6923,6 +7191,7 @@ struct RecursiveCopyWorkItem
             context, rootContext.type, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
         context.options                    = sharedOptionsState;
         context.parallel                   = &parallel;
+        context.taskTransferBudget         = rootContext.taskTransferBudget;
         context.fileWorkCall               = rootContext.fileWorkCall;
         context.totalBytes                 = 0; // discovery totals are reported by this same traversal
         context.progressStreamId           = progressStreamId;
@@ -7698,6 +7967,19 @@ struct RecursiveCopyWorkItem
     const auto retryFailedDirectory =
         [&](OperationContext& context, const RecursiveCopyWorkItem& item, RecursiveCopyWorkItem& selectedItem, HRESULT& itemHr) noexcept -> bool
     {
+        if (context.singleDiscovery != nullptr)
+        {
+            bool discoveryClosed = false;
+            {
+                std::scoped_lock lock(context.singleDiscovery->mutex);
+                discoveryClosed = context.singleDiscovery->closeAttempted || context.singleDiscovery->callbackFailed;
+            }
+            if (discoveryClosed)
+            {
+                completeWithError(itemHr);
+                return false;
+            }
+        }
         if (parallel.stopOnErrorRequested.load(std::memory_order_acquire))
         {
             // R6.7: a worker's failure already stopped the walk; never ask again or turn it into a
@@ -8057,10 +8339,14 @@ struct RecursiveCopyWorkItem
     }
     if (! discoveryClosureReported)
     {
-        // A walk that failed or stopped before its last listing closes its scope here, once.
-        discoveryClosureReported        = true;
+        // A singular root that failed before listing may still be retried by the
+        // outer conflict decision. Leave it open until that decision is final.
+        const bool deferPrewalkFailure =
+            rootContext.singleDiscovery != nullptr && FAILED(producerHr) && ! rootListingDone && discoveredFiles == 0u && discoveredDirectories == 1u;
+        discoveryClosureReported        = ! deferPrewalkFailure;
         const uint32_t finalQueuedItems = queuedWorkEntries();
-        const HRESULT discoveryCloseHr  = ReportDiscoveryProgress(rootContext, discoveredBytes, discoveredFiles, discoveredDirectories, finalQueuedItems, true);
+        const HRESULT discoveryCloseHr =
+            ReportDiscoveryProgress(rootContext, discoveredBytes, discoveredFiles, discoveredDirectories, finalQueuedItems, ! deferPrewalkFailure);
         if (FAILED(discoveryCloseHr))
         {
             completeWithError(discoveryCloseHr);
@@ -8193,6 +8479,9 @@ struct RecursiveCopyWorkItem
     {
         return kindHr;
     }
+    const HRESULT shapeHr = ValidateSingleDiscoveryShape(context, source, sourceKind, attributes);
+    if (FAILED(shapeHr))
+        return shapeHr;
     // I35 S2 (R6.6): a recursive directory always takes the producer/worker walker, one worker
     // included, so its discovery closes at its listing's end; CopyDirectoryInternal stays the
     // fallback when no scheduler workers are available.
@@ -10538,6 +10827,34 @@ struct ByNameTreeWalk final
           manifest(listed)
     {
     }
+    ~ByNameTreeWalk() noexcept
+    {
+        if (! metrics.enabled)
+            return;
+        Debug::Perf::Emit(
+            L"FileOps.Local.ByNameWalk.Budget", L"child-walk", 0u, concurrency, metrics.peak.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassParallel", metrics.parallelPasses.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineBudget", metrics.inlineBudget.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineSingle", metrics.inlineSingle.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineNested", metrics.inlineNested.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.PassInlineNoWorkers", metrics.inlineNoWorkers.load(std::memory_order_relaxed), metrics.childWalkHr);
+        metrics.open.Emit(L"FileOps.Local.ByNameWalk.OpenUs", metrics.childWalkHr);
+        metrics.facts.Emit(L"FileOps.Local.ByNameWalk.FactsUs", metrics.childWalkHr);
+        metrics.disposition.Emit(L"FileOps.Local.ByNameWalk.DispositionUs", metrics.childWalkHr);
+        metrics.dispositionEx.Emit(L"FileOps.Local.ByNameWalk.DispositionExUs", metrics.childWalkHr);
+        metrics.dispositionLegacy.Emit(L"FileOps.Local.ByNameWalk.DispositionLegacyUs", metrics.childWalkHr);
+        metrics.close.Emit(L"FileOps.Local.ByNameWalk.CloseUs", metrics.childWalkHr);
+        metrics.readonlyClear.Emit(L"FileOps.Local.ByNameWalk.ReadonlyClearUs", metrics.childWalkHr);
+        metrics.readonlyRollback.Emit(L"FileOps.Local.ByNameWalk.ReadonlyRollbackUs", metrics.childWalkHr);
+        metrics.completionCallback.Emit(L"FileOps.Local.ByNameWalk.CompletionCallbackUs", metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.ExSuccess", metrics.exSuccess.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(
+            L"FileOps.Local.ByNameWalk.ExInvalidParameter", metrics.exInvalidParameter.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.ExNotSupported", metrics.exNotSupported.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.ExOtherFailure", metrics.exOtherFailure.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.LegacySuccess", metrics.legacySuccess.load(std::memory_order_relaxed), metrics.childWalkHr);
+        Debug::Perf::EmitCounter(L"FileOps.Local.ByNameWalk.LegacyFailure", metrics.legacyFailure.load(std::memory_order_relaxed), metrics.childWalkHr);
+    }
     ByNameTreeWalk(const ByNameTreeWalk&)            = delete;
     ByNameTreeWalk& operator=(const ByNameTreeWalk&) = delete;
 
@@ -10547,6 +10864,7 @@ struct ByNameTreeWalk final
     std::vector<ByNameFolderNode> nodes;
     unsigned int concurrency = 1u;
     size_t holdBudget        = kDeleteByNameHeldFolderBudget;
+    ByNameWalkMetrics metrics;
     std::atomic<uint64_t> deleted{0u};
     std::atomic<bool> stopped{false};
     std::mutex stopMutex;
@@ -10623,19 +10941,22 @@ struct ByNameTreeWalk final
 // ERROR_REVISION_MISMATCH. Every folder above it is held already, so its path cannot be redirected.
 [[nodiscard]] HRESULT OpenListedEntryForDeleteByName(const std::wstring& extendedPath,
                                                      const FileSystemInternal::LocalDeleteManifestEntry& listed,
-                                                     DeleteHandleSnapshot& snapshot) noexcept
+                                                     DeleteHandleSnapshot& snapshot,
+                                                     ByNameWalkMetrics& metrics) noexcept
 {
-    snapshot = {};
-    wil::unique_handle handle(::CreateFileW(extendedPath.c_str(),
-                                            DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
-                                            FILE_SHARE_READ,
-                                            nullptr,
-                                            OPEN_EXISTING,
-                                            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                            nullptr));
+    snapshot               = {};
+    const auto openStarted = metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    // Only a listed readonly entry may need an attribute clear and rollback.
+    // The same-handle facts check below refuses a changed readonly bit.
+    const DWORD desiredAccess = DELETE | FILE_READ_ATTRIBUTES | ((listed.attributes & FILE_ATTRIBUTE_READONLY) != 0u ? FILE_WRITE_ATTRIBUTES : 0u);
+    wil::unique_handle handle(::CreateFileW(
+        extendedPath.c_str(), desiredAccess, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+    const DWORD openError = handle ? ERROR_SUCCESS : ::GetLastError();
+    if (metrics.enabled)
+        metrics.open.Record(openStarted);
     if (! handle)
     {
-        const DWORD error = ::GetLastError();
+        const DWORD error = openError;
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
         {
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
@@ -10643,9 +10964,14 @@ struct ByNameTreeWalk final
         return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_OPEN_FAILED);
     }
     BY_HANDLE_FILE_INFORMATION information{};
-    if (! ::GetFileInformationByHandle(handle.get(), &information))
+    const auto factsStarted = metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const BOOL factsOk      = ::GetFileInformationByHandle(handle.get(), &information);
+    const DWORD factsError  = factsOk ? ERROR_SUCCESS : ::GetLastError();
+    if (metrics.enabled)
+        metrics.facts.Record(factsStarted);
+    if (! factsOk)
     {
-        const DWORD error = ::GetLastError();
+        const DWORD error = factsError;
         return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
     }
     if (! FileSystemInternal::LocalDeleteManifestEntryMatches(listed, information))
@@ -10684,6 +11010,13 @@ struct ByNameTreeWalk final
 // A file or link of the pinned tree: checked on its own handle, then deleted through it.
 void DeleteByNameListedEntry(ByNameTreeWalk& walk, OperationContext& worker, const size_t entryIndex) noexcept
 {
+    if (walk.metrics.enabled)
+        walk.metrics.Enter();
+    const auto leave                                          = wil::scope_exit([&]() noexcept
+    {
+        if (walk.metrics.enabled)
+            walk.metrics.active.fetch_sub(1u, std::memory_order_relaxed);
+    });
     const FileSystemInternal::LocalDeleteManifestEntry& entry = walk.manifest.entries[entryIndex];
     const std::wstring display                                = AppendPath(walk.root.display, entry.relativePath);
     const std::wstring extended                               = AppendPath(walk.root.extended, entry.relativePath);
@@ -10692,13 +11025,16 @@ void DeleteByNameListedEntry(ByNameTreeWalk& walk, OperationContext& worker, con
         return;
     }
     DeleteHandleSnapshot child{};
-    HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, child);
+    HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, child, walk.metrics);
     if (FAILED(hr))
     {
         walk.Stop(hr, hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? L"compare-entry" : L"entry", display);
         return;
     }
-    hr = DeleteOpenedPathNoFollow(worker, child, true, extended);
+    const auto dispositionStarted = walk.metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    hr                            = DeleteOpenedPathNoFollow(worker, child, true, extended, &walk.metrics);
+    if (walk.metrics.enabled)
+        walk.metrics.disposition.Record(dispositionStarted);
     if (FAILED(hr))
     {
         walk.Stop(hr, L"entry", display);
@@ -10719,7 +11055,7 @@ void HoldByNameListedFolder(ByNameTreeWalk& walk, OperationContext& worker, cons
     {
         return;
     }
-    const HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, folder.hold);
+    const HRESULT hr = OpenListedEntryForDeleteByName(extended, entry, folder.hold, walk.metrics);
     if (FAILED(hr))
     {
         walk.Stop(hr, hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? L"compare-folder" : L"folder", display);
@@ -10737,7 +11073,10 @@ void DeleteByNameHeldFolder(ByNameTreeWalk& walk, OperationContext& worker, cons
     {
         return;
     }
-    const HRESULT hr = DeleteOpenedPathNoFollow(worker, folder.hold, true, AppendPath(walk.root.extended, path));
+    const auto dispositionStarted = walk.metrics.enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const HRESULT hr              = DeleteOpenedPathNoFollow(worker, folder.hold, true, AppendPath(walk.root.extended, path), &walk.metrics);
+    if (walk.metrics.enabled)
+        walk.metrics.disposition.Record(dispositionStarted);
     if (FAILED(hr))
     {
         walk.Stop(hr, L"folder", display);
@@ -10759,6 +11098,15 @@ template <typename Step> void RunByNamePass(ByNameTreeWalk& walk, std::span<cons
     OperationContext& context = walk.context;
     const bool parallelPass =
         walk.concurrency > 1u && items.size() > 1u && context.parallel == nullptr && GetSharedFileOpsJobScheduler().EnsureWorkersAvailable();
+    if (walk.metrics.enabled)
+    {
+        auto& counter = parallelPass                  ? walk.metrics.parallelPasses
+                        : walk.concurrency <= 1u      ? walk.metrics.inlineBudget
+                        : items.size() <= 1u          ? walk.metrics.inlineSingle
+                        : context.parallel != nullptr ? walk.metrics.inlineNested
+                                                      : walk.metrics.inlineNoWorkers;
+        counter.fetch_add(1u, std::memory_order_relaxed);
+    }
     if (! parallelPass)
     {
         for (const size_t item : items)
@@ -11116,11 +11464,13 @@ HRESULT DeleteRootByNameInternal(OperationContext& context,
         hr = BuildByNameFolderTree(walk);
         if (FAILED(hr))
         {
+            walk.metrics.childWalkHr = hr;
             return stopHere(hr, L"tree", path.display);
         }
         DeleteByNameFolderContents(walk, 0u);
         if (walk.Stopped())
         {
+            walk.metrics.childWalkHr = walk.stopHr;
             return stopHere(walk.stopHr, walk.stopStep, walk.stopAt);
         }
     }
@@ -12450,6 +12800,30 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
                                                IFileSystemCallback* callback,
                                                void* cookie) noexcept
 {
+    return CopyItemImpl(sourcePath, destinationPath, flags, options, callback, cookie, nullptr);
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::CopyItemWithTaskBudget(const wchar_t* sourcePath,
+                                                             const wchar_t* destinationPath,
+                                                             FileSystemFlags flags,
+                                                             const FileSystemOptions* options,
+                                                             IFileSystemCallback* callback,
+                                                             void* cookie,
+                                                             IFileSystemTaskTransferBudget* budget) noexcept
+{
+    if (! budget)
+        return E_POINTER;
+    return CopyItemImpl(sourcePath, destinationPath, flags, options, callback, cookie, budget);
+}
+
+HRESULT FileSystem::CopyItemImpl(const wchar_t* sourcePath,
+                                 const wchar_t* destinationPath,
+                                 FileSystemFlags flags,
+                                 const FileSystemOptions* options,
+                                 IFileSystemCallback* callback,
+                                 void* cookie,
+                                 IFileSystemTaskTransferBudget* budget) noexcept
+{
     if (! sourcePath || ! destinationPath)
     {
         return E_POINTER;
@@ -12478,7 +12852,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
 
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_COPY, flags, options, callback, cookie, 1, reparsePointPolicy);
-    context.objectBinding = static_cast<IFileSystemObjectBinding*>(this);
+    SingleDiscoveryState discovery{};
+    context.singleDiscovery    = &discovery;
+    const auto closeDiscovery  = wil::scope_exit([&]() noexcept { static_cast<void>(ReportRawDiscoveryProgress(context, 0u, 0u, 0u, 0u, true)); });
+    context.taskTransferBudget = budget;
+    context.objectBinding      = static_cast<IFileSystemObjectBinding*>(this);
     ReportNativeFileWork(context, FileSystemFileWorkPhase::ScopeSupported);
 
     const PathInfo source      = MakePathInfo(sourcePath);
@@ -12499,7 +12877,22 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
     HRESULT itemHr       = S_OK;
 
     const unsigned int maxConcurrency = ResolveCopyMoveConcurrencyLimit(copyMoveMaxConcurrency, options, kMaxCopyMoveMaxConcurrency, concurrencyMode);
-    itemHr                            = ReportTopLevelDiscovery(context, source.extended, context.recursive);
+    if (budget)
+    {
+        const HRESULT budgetHr = budget->NarrowParticipantLimit(std::min(maxConcurrency, 16u));
+        if (FAILED(budgetHr))
+            return budgetHr;
+    }
+    bool recursiveDiscoveryOwner   = false;
+    LocalCopyPathKind initialKind  = LocalCopyPathKind::RegularFile;
+    bool initialDirectoryAttribute = false;
+    itemHr = ReportTopLevelDiscovery(context, source.extended, context.recursive, &recursiveDiscoveryOwner, &initialKind, &initialDirectoryAttribute);
+    if (SUCCEEDED(itemHr) && context.options != nullptr && context.options->operationControl != nullptr)
+    {
+        discovery.expectedKind               = static_cast<uint8_t>(initialKind);
+        discovery.expectedDirectoryAttribute = initialDirectoryAttribute;
+        discovery.expectedRoot               = source.extended;
+    }
     if (SUCCEEDED(itemHr))
     {
         PathInfo selectedDestination = destination;
@@ -12519,6 +12912,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
             if (! callback || IsCancellationHr(itemHr))
             {
                 break;
+            }
+
+            // Once this call published final tree discovery, a fresh traversal under
+            // the same cookie would make that final snapshot false. Per-item retries
+            // remain in the walker; callers may start a fresh governed call instead.
+            {
+                std::scoped_lock lock(discovery.mutex);
+                if (discovery.callbackFailed || (recursiveDiscoveryOwner && discovery.closeAttempted))
+                    break;
             }
 
             FileSystemItemMutationResult attemptMutation{};
@@ -12638,7 +13040,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItem(const wchar_t* sourcePath,
 
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_MOVE, flags, options, callback, cookie, 1, reparsePointPolicy);
-    context.objectBinding = static_cast<IFileSystemObjectBinding*>(this);
+    SingleDiscoveryState discovery{};
+    context.singleDiscovery   = &discovery;
+    const auto closeDiscovery = wil::scope_exit([&]() noexcept { static_cast<void>(ReportRawDiscoveryProgress(context, 0u, 0u, 0u, 0u, true)); });
+    context.objectBinding     = static_cast<IFileSystemObjectBinding*>(this);
 
     const PathInfo source      = MakePathInfo(sourcePath);
     const PathInfo destination = MakePathInfo(destinationPath);

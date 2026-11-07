@@ -1,0 +1,45 @@
+{
+  "schema": "red-salamander.curated-case-results.v1",
+  "source_head": "a3608a639854d91e068cc6e0bf5d5c1afc764c57",
+  "build_receipt_id": "8683e99df3be1e9259952402043415da9a4486a7fc5c8b51ac9245ec72b20815",
+  "build_source_snapshot": "67de8e50ea53296f7da97ceab223d6f077b2b48b875314312b3d78e7d09e91d3",
+  "build_receipt_sha256": "8e56d2149e6270588bb64121193d5e4f5cf631e8e80302f7fe2fe37a56b80cdf",
+  "runs": [
+    {
+      "label": "a360-mtp-failed",
+      "run_id": "20261102T082930Z-96372-48666c1a05e74b759d526e9b133b805d",
+      "case_filter": "FileOps_CrossProviderMtpNewFile",
+      "wrapper_exit_code": 1,
+      "audit_issue_count": 40,
+      "suite": "FileOperations",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "failure_message": "A new file copied to an MTP device did not publish through the device writer, or left a temporary object; see trace.",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "duration_ms": 1250,
+          "repeat_index": 1
+        },
+        {
+          "name": "FileOps_CrossProviderMtpNewFile",
+          "status": "failed",
+          "duration_ms": 484,
+          "repeat_index": 1,
+          "reason": "A new file copied to an MTP device did not publish through the device writer, or left a temporary object; see trace."
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "duration_ms": 47,
+          "repeat_index": 1
+        }
+      ],
+      "raw_results_sha256": "528e329f5f5b9cda8be40e5a69cf63eb1a9885d225d43d7e66527c81a7b16abd",
+      "raw_wrapper_sha256": "57f0af2d8f4c8c8d7ddd11e36126fba2169164adda7d9937ffc176064c7f4ed5",
+      "raw_trace_sha256": "2af83b2c6af6994332d3345568088f5bfae9a5690374bee79a197e8a111214d0"
+    }
+  ]
+}

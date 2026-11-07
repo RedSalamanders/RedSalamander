@@ -1,0 +1,1 @@
+- Establish visible decision controls and fresh UIA providers before validating synchronous two-task conflict focus, preserving exact keyboard bindings and proving no render repairs the asserted transaction.

@@ -975,6 +975,26 @@ nested prompt unwound, `value1=1` when the selected source remained untouched, a
 correctness fields must match exactly. This is a correctness and bounded-teardown characterization;
 it makes no baseline or latency-improvement claim.
 
+Local pinned by-name Delete emits bounded `FileOps.Local.ByNameWalk.*` aggregates when capture is enabled.
+Each row represents one child walk after its workers join. Its HRESULT is the child-walk status, not the
+provider's final result: an `S_OK` row does not prove root deletion or task completion. The final root
+disposition is outside these measurements and can still fail. `Budget` is the clamped requested
+walk concurrency (count), with peak active file-entry handlers in `value1`; `PassParallel` and the
+`PassInlineBudget`, `PassInlineSingle`, `PassInlineNested`, and `PassInlineNoWorkers` counters report pass
+selection. `OpenUs`, `FactsUs`, and `DispositionUs` are typed microsecond sums, with operation count in
+`value0` and maximum in `value1`; zero is still a duration. Open and facts include held folders as well as
+files. Disposition includes child folders and files, excludes the final root, and includes callbacks. These
+are application wrapper elapsed times, not kernel or server latency. The file-handler peak does not measure
+simultaneous I/O. Within that disposition wrapper, `DispositionExUs`, `DispositionLegacyUs`, `CloseUs`,
+`ReadonlyClearUs`, `ReadonlyRollbackUs`, and `CompletionCallbackUs` measure individual wrapper calls using
+the same sum/count/max fields. The completion measurement includes the callback wrapper and its lock, even
+when no callback is installed. Close measures explicit handle closes after successful disposition; snapshot
+destruction on a failed walk and final-root close are outside that measurement. The six `ExSuccess`,
+`ExInvalidParameter`, `ExNotSupported`, `ExOtherFailure`,
+`LegacySuccess`, and `LegacyFailure` count metrics record the selected disposition outcomes; zero counts are
+valid, including builds without the extended disposition call. These independent diagnostics do not justify
+weakening identity checks.
+
 Single-pass File Operations discovery emits one bounded terminal metric set per task:
 `FileOps.Discovery.OpenUs`, `CallbackCount`, `CallbackUs`, `LockWaitUs`, `MaxQueueDepth`,
 `StarvationCount`, `FirstMutationBeforeClose`, `FirstMutationUs`,
@@ -1060,9 +1080,18 @@ and independent-volume qualification. The deterministic Dummy control copies 8 d
 test-only fake-MTP control copies 8 ordinary-name files of 64 KiB through one serialized session
 with a 25-ms backend delay, then cancels a second task once its transfer is live (since I35 S2 its
 one-listing folder has closed discovery by then).
-The fixed-volume control copies four 4-MiB files independently on marker-authorized C and D roots at
-16 MiB/s, then repeats both concurrently. It emits
+The fixed-volume control selects four bound regular files of 4 MiB each per task, with missing
+destination leaves, independently on marker-authorized C and D roots at 16 MiB/s, then repeats both
+concurrently. Both tasks must publish qualified new-file data admissions and be active together while
+their progress overlaps. The fixture temporarily ensures at least eight shared file permits and
+restores the prior limit after worker quiet. This control does not claim recursive directory discovery; the separate
+512-file wide-tree and multiple-folder discovery cases retain those proofs. It emits
 `FileOps.SelfTest.R4A19.{ProviderControl,ProviderCancel,IndependentVolumes,IndependentVolumeCIsolatedUs,IndependentVolumeDIsolatedUs}`.
+Earlier independent-volume runs that selected recursive directory roots are not a paired timing
+baseline for this regular-file admission scenario.
+The fixture captures one bounded scalar admission/interlock witness while both tasks are present and
+reports it only on failure or timeout. It retains no paths or bound authority across ticks; its measured
+capture cost is included in the unchanged concurrent interval and reported with the failure witness.
 The fake-MTP fixture, whose route the host bridge traverses, lists its one source folder at once, so
 since I35 S2 its scope closes when that folder is listed: it requires closure before the last byte
 (open-discovery bytes below the total), zero growth after closure, zero discovery starvation, and
@@ -1141,6 +1170,16 @@ These are inclusive elapsed intervals with clock/counter overhead, not isolated 
 The interleaved workload and total timer remain unchanged, including diagnostic clock overhead;
 these phase metrics must never replace the total-time gate or be subtracted from it.
 Any before/after optimization comparison must retain this same instrumented fixture on both sides.
+
+The explicit hosted `R0ePaired` diagnostic uses
+[`Tools/Invoke-R0ePairedValidation.ps1`](../../Tools/Invoke-R0ePairedValidation.ps1)
+to retain both full-solution Embedded Release builds and five fresh canonical processes per
+side on one native machine. It verifies the exact reviewed case projections, unchanged scale-1
+workload, eight raw metrics, closed archives, source/receipt identities and clean quarantine.
+It does not widen a timing gate or qualify Full coverage. A baseline that fails only the
+two-second assertion remains a failed native result and makes the hosted diagnostic fail;
+the candidate measurements and comparison remain useful diagnostic evidence. Missing evidence,
+other failed assertions and candidate timing failures cannot be classified as timing-only RED.
 
 R0e-OR1 fixed-volume Local reader cancellation evidence uses the test-enabled Release Commands case
 `cmd_pane_fileops_local_blocked_reader_cancel_is_bounded`. One real Local `Win32FileReader` issues an
@@ -1402,6 +1441,27 @@ baseline is 8,704 probes and 2,689 microseconds in
 Cartesian predicate as a fallback for conservative, legacy, or unkeyable scopes; an optimization may
 not convert incomplete identity into path authority.
 
+Local route-root validation retains the original 4,096-decision R0e workload and fixed
+Release ceiling. Existing 19-slot admission counters keep their original meaning:
+`RealVolumePathCalls` counts actual legacy API calls. Compatible action 5 reads the
+separate schema-2 root-proof counters after End; it does not change the original count
+schema or cache-control actions. F7 records schema, Local/UNC query counts and direct
+handle attempts/acceptances under `FileOps.LocalRootProbe.*` for every ingress, joined
+by the original sample tag and task ID. Verify that Local plus UNC equals route builds,
+accepted handles do not exceed attempts or Local queries, and Local queries equal
+accepted handles plus explicit fallbacks. Count legacy-resolver entries separately,
+including any storage probes, and require one or two actual legacy API calls per entry.
+Preserve independent native controls
+for ordinary files/directories, missing paths, leaf/ancestor junctions, noncanonical and
+extended spellings, rename and exact target inventory. An owned directory RH-oplock
+control must exercise the actual provider's metadata-open helper while a holder denies
+read sharing: the open must complete before releasing the holder and must not signal
+an oplock break. Cancel and complete the owned overlapped request, close the holder,
+and join its worker before releasing storage or the provider module. Unsupported
+filesystem availability is explicit and is not no-break qualification; retain a
+positive native NTFS execution. API-only C# experiments are
+descriptive cost attribution, not native R0e or Full qualification.
+
 `FileOps.Interlock.PrepareLookupChecks` and `FileOps.Interlock.PrepareIndexStorage` additionally
 record temporary preparation-index behavior once per task. The first row's numeric values are
 scope and ancestor predicate evaluations; the second row's values are retained key capacity bytes
@@ -1474,15 +1534,32 @@ any consent wait, while `DurableCommitUs` covers durable replacement and queue s
 Entry's event-driven replacement loop records wait segments with a `reprepare` label. A segment
 that waited in Queue mode is attributed to Queue even if the mode later changes; compare total
 queue plus interlock time when assessing that mixed-mode fixture.
-The deterministic `R4A02_RunConcurrentSameDestinationStaysSafe` case proves that one disclosed
-identity-bound relation admits both tasks without an interlock wait while a third undisclosed task
-still asks independently. `R4A02_LiveOutputGuardChoices` pauses a Local publisher immediately after
+The deterministic `R4A02_RunConcurrentSameDestinationStaysSafe` retains its historical exact-filter
+name but now proves the transfer-serialization policy: overlapping transfers withhold Run, the
+second waits, both result sets survive, and a third task still asks independently. Stale concurrent
+consent cannot bypass the backend transfer interlock. `R4A02_LiveOutputGuardChoices` pauses a Local publisher immediately after
 one exact item is published and pauses a permanent Delete immediately before the live-output guard;
 it covers Skip, exact-publisher Queue, explicit invalidation, terminal release, and a forced 256-entry
 overflow fallback that withholds the destructive choice. The protected case must complete without
 recursive enumeration or provider I/O added solely for correlation. The index high-water must not
 exceed 256, overflow must retain protection, and Queue wait duration is observation rather than a
 throughput claim because it intentionally includes the named publisher's remaining lifetime.
+
+The shared-transfer feature protects new regular files to a destination whose parent
+IDs are Unsupported. `FileOps_IdentityInterlockWaiting` records `FileOps.SharedTransfers.AcquireUs`
+and actual-I/O `FileOps.SelfTest.SharedTransfers.RealIoUs` with peak held files and configured target.
+Compare setting-one and setting-four scheduling in the same candidate build, retain the barriers
+and fixture sizes in provenance, and never call this a matched-source A/B or a NAS throughput
+benchmark. `FileOps.SelfTest.SharedTransfers.IndexUs` compares 64 and 4,096 selected-file sets;
+its probe count must remain at most 100 per selected file and match pairwise conflict controls.
+Budget tests must cover cancellation, exclusive fairness, live limit changes and zero holders/
+waiters at teardown. Archive captures for capacity/exclusive Waiting and summarize frame timing.
+
+Native-route Copy controls select the corpus directory root. Selecting its individual missing
+regular-file destinations now intentionally uses the host bridge for shared permits, even without
+an explicit destination provider. Native and bridge controls must verify the same corpus payload
+at their respective output paths. `FileOps.Bridge.FileAdmissionCount` counts directory-walk child
+admissions; zero alone does not prove a regular-file selection used the provider-native route.
 
 `FileOps.SelfTest.InterlockLargeSelectionRetainedAuthorityNodes` records preparation duration in
 `duration_us`, unique retained authority nodes in `value0`, and the fixed 256-item selection in
@@ -1802,7 +1879,12 @@ by the JSONL `build` field. Release runs are not acceptable evidence when the
 artifact is mislabeled as Debug or when the build flavor is unknown.
 
 For percentile-based decisions, `Tools/Show-PerfRuns.ps1` is the required
-first-pass analyzer. Use PowerShell 7+ for this script. Any p95 claim SHOULD have
+first-pass analyzer. Use PowerShell 7+ for this script. A metric's selected rows
+must have one consistent unit, and a comparison or trend must use the same unit
+for that metric across runs. The analyzer fails with a nonzero exit before
+publishing the affected summary when units differ, regardless of `-FailOnQuality`;
+it never converts counts to time or infers a zero duration from a count. A
+consistently omitted legacy unit remains unitless. Any p95 claim SHOULD have
 at least 200 samples for the requested metric unless an authoritative per-metric
 budget declares a smaller `minimumSamples`; p99 SHOULD have at least 1000
 samples. Automation that gates a p95 claim MUST pass `-FailOnQuality`, which
@@ -2377,7 +2459,11 @@ These retain the existing completion-wait quantization and do not establish fina
 16-MiB/s throttle, 8-MiB bridge buffer and Native slow-commit settings. Additional count-ink captures
 and bounded later-child sampling attempts are disclosed capture workload. Open traversal uses a
 separate sequential open-discovery route (32 nonempty sibling folders, 32 files/33 folders/64 MiB
-at 2 MiB/s, beyond the four-directory listing lookahead). Compare matched per-route
+at 2 MiB/s, beyond the four-directory listing lookahead). A source- and task-qualified test checkpoint
+holds that sequential traversal after a real positive open listing report through the ink capture;
+the case witnesses the checkpoint before and after capture, releases it on every exit, and observes
+cancellation and a bounded timeout. This hold is disclosed capture workload, not a throughput result.
+Compare matched per-route
 operation/progress callback and paint samples. These new observation routes bound their harness
 message batch to eight rather than the default
 1,024, while retaining 100-ms sampling, the 650-ms finalization witness and 1,500-ms native delay.

@@ -144,7 +144,6 @@ Describe 'Visible native audit contracts' {
         }
 
         $remainingFindings = @($remainingAudit.Output)
-        $remainingFindings.Count | Should BeGreaterThan 0
         foreach ($finding in $remainingFindings) {
             ($null -ne $finding.PSObject.Properties['Allowed']) | Should Be $true
             ($null -ne $finding.PSObject.Properties['Category']) | Should Be $true
@@ -152,8 +151,24 @@ Describe 'Visible native audit contracts' {
         }
         @($remainingFindings | Where-Object { -not $_.Allowed }).Count | Should Be 0
 
-        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester `
+        $fixtureParent = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester `
             -Case ('win32-audit-unclassified-' + [guid]::NewGuid().ToString('N'))
+        # The checkout's ancestors may be named .build; only its own build output is excluded.
+        $fixture = Join-Path $fixtureParent '.build\checkout'
+        [void][IO.Directory]::CreateDirectory($fixture)
+        $emptyAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings
+        }
+        $emptyAudit.Succeeded | Should Be $true
+        @($emptyAudit.Output).Count | Should Be 0
+        $allowedFixture = Join-Path $fixture 'RedSalamander\FolderView.Icons.cpp'
+        [void][IO.Directory]::CreateDirectory((Split-Path $allowedFixture))
+        [IO.File]::WriteAllText($allowedFixture, 'void Allowed() { GetDC(nullptr); }')
+        $allowedAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings
+        }
+        $allowedAudit.Succeeded | Should Be $true
+        @($allowedAudit.Output | Where-Object { $_.Allowed -and $_.Category -eq 'HDC text/selection bridge' }).Count | Should Be 1
         $fixtureSource = Join-Path $fixture 'RedSalamander\Unclassified.cpp'
         [void][IO.Directory]::CreateDirectory((Split-Path $fixtureSource))
         [IO.File]::WriteAllText($fixtureSource, 'void Unclassified() { CreateFontW(nullptr); }')
@@ -164,6 +179,42 @@ Describe 'Visible native audit contracts' {
         $unclassifiedAudit.Succeeded | Should Be $false
         $unclassifiedAudit.Error.Exception.Message | Should Match '1 unallowed finding'
         $unclassifiedAudit.Error.ScriptStackTrace | Should Match 'Audit-RemainingWin32UiDependencies\.ps1'
+
+        # Exercise the other scanner consumers from the same checkout-under-.build.
+        # Their scripts derive the root from PSScriptRoot, so copy only these test inputs.
+        $fixtureTools = Join-Path $fixture 'Tools'
+        $fixtureModules = Join-Path $fixtureTools 'Modules\Auditing'
+        [void][IO.Directory]::CreateDirectory($fixtureModules)
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools\Modules\Auditing\RepositorySourceScanner.psm1') -Destination $fixtureModules
+        foreach ($name in @('Audit-ComctlReportSurfaces.ps1', 'Audit-VisibleNativeSurfaces.ps1')) {
+            Copy-Item -LiteralPath (Join-Path $repoRoot "Tools\$name") -Destination $fixtureTools
+        }
+        [IO.File]::WriteAllText($fixtureSource, 'SysListView32 SysTreeView32 CreateFontW(nullptr);')
+        $comctlFixture = Invoke-RSTestBlock { & (Join-Path $fixtureTools 'Audit-ComctlReportSurfaces.ps1') }
+        $comctlFixture.Succeeded | Should Be $false
+        $comctlFixture.Error.Exception.Message | Should Match 'Comctl report-surface audit is out of date'
+        $visibleFixture = Invoke-RSTestBlock { & (Join-Path $fixtureTools 'Audit-VisibleNativeSurfaces.ps1') }
+        $visibleFixture.Succeeded | Should Be $false
+        $visibleFixture.Error.Exception.Message | Should Match 'Visible-native audit is out of date'
+        $typographyFixture = @(& (Join-Path $repoRoot 'Tools\Get-VisibleTypographyAudit.ps1') -RepoRoot $fixture)
+        @($typographyFixture | Where-Object { $_.Category -eq 'CreateFontW' -and $_.Path -match 'Unclassified\.cpp$' }).Count | Should Be 1
+        # The message-only Search parent is an exact exception, not an allowance
+        # for a visible Static window in the same test source.
+        [IO.File]::Delete($fixtureSource)
+        $searchFixture = Join-Path $fixture 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        [void][IO.Directory]::CreateDirectory((Split-Path $searchFixture))
+        [IO.File]::WriteAllText($searchFixture, 'CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);')
+        $messageOnlyAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings
+        }
+        $messageOnlyAudit.Succeeded | Should Be $true
+        @($messageOnlyAudit.Output | Where-Object { $_.Allowed -and $_.Visibility -eq 'test-only message-only parent' }).Count | Should Be 1
+        [IO.File]::WriteAllText($searchFixture, 'CreateWindowExW(0, L"STATIC", L"", WS_VISIBLE, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);')
+        $visibleVariantAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings | Out-Null
+        }
+        $visibleVariantAudit.Succeeded | Should Be $false
+        $visibleVariantAudit.Error.Exception.Message | Should Match '1 unallowed finding'
     }
 }
 Describe 'Keyboard shortcut documentation drift contracts' {
@@ -290,18 +341,140 @@ Describe 'File Operations popup documentation drift contracts' {
 }
 
 Describe 'Historical audit governance contracts' {
-    It 'marks every review campaign document as a non-live historical snapshot' {
-        $reviewFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Specs\Reviews') -File -Filter '*.md')
-        $reviewFiles.Count | Should BeGreaterThan 0
+    # The July routing reconciliation applies to this frozen set, not to later reviews.
+    # Require the exact roster so removing a campaign file cannot silently drop its guard.
+    $legacyReviewFiles = @(
+            'AppShell-Audit.md',
+            'AppShell-Findings.md',
+            'Command-System-Audit.md',
+            'Command-System-Findings.md',
+            'DxUi-Audit.md',
+            'DxUi-Findings.md',
+            'FS-Subsystem-Audit.md',
+            'FS-Subsystem-Findings.md',
+            'FileSystemBridge-2026-07-07-Findings.md',
+            'FolderView-Audit.md',
+            'FolderView-Findings.md',
+            'Monitor-Audit.md',
+            'Monitor-Findings.md',
+            'NavigationView-Audit.md',
+            'NavigationView-Findings.md',
+            'Preferences-Audit.md',
+            'Preferences-Findings.md',
+            'README.md',
+            'Settings-Persistence-Audit.md',
+            'Settings-Persistence-Findings.md',
+            'Squad-Decisions-Archive.md',
+            'ThreeDayDiff-2026-07-05-Findings.md',
+            'ThreeDayDiff-2026-07-06-Findings.md',
+            'Viewer-Plugins-Audit.md',
+            'Viewer-Plugins-Findings.md',
+            '_AuditProgress.md',
+            '_CampaignSummary.md'
+    )
+    function Test-ReviewSnapshotBanner([string]$Text, [bool]$Legacy) {
+        # This deliberately checks only the documented opening form, not arbitrary
+        # Markdown blocks: optional BOM, blank lines and one ATX title may precede it.
+        # Code masking is shared with the documentation inventory; the exact opening
+        # grammar also rules out later citations, nested quotes and indented code.
+        $prefix = $Text.Substring(0, [Math]::Min($Text.Length, 2048))
+        $pattern = '\A\uFEFF?(?:[ \t]*\r?\n)*(?: {0,3}#[ \t]+[^\r\n]+\r?\n(?:[ \t]*\r?\n)*)?(?<alert> {0,3}> \[!IMPORTANT\])\r?\n(?<banner> {0,3}> \*\*Historical snapshot — not a live work queue\.\*\*[^\r\n]*(?:\r?\n|$)(?: {0,3}>[^\r\n]*(?:\r?\n|$))*)'
+        $match = [regex]::Match($prefix, $pattern)
+        if ($match.Success -and (Get-RSMarkdownCodeMask -Text $prefix).Substring($match.Groups['alert'].Index, $match.Groups['alert'].Length) -ne $match.Groups['alert'].Value) { return $false }
+        if (-not $match.Success) { return $false }
+        $opening = Get-RSMarkdownCommentDelimiterMask -Text $match.Groups['banner'].Value
+        if ($opening -match '(?m)^ {0,3}>[ \t]*(`{3,}|~{3,})') { return $false }
+        if ($opening -match '(?m)^ {0,3}>[ \t]*>') { return $false }
+        # This bounded banner uses plain provenance, never bracket, math or escape syntax.
+        # Link titles, destinations, images and reference labels are not visible provenance.
+        if ($match.Groups['banner'].Value.IndexOfAny([char[]]'[]$\') -ge 0) { return $false }
+        # Reference definitions may also be nested inside a list item.
+        if ($opening -match '(?m)^ {0,3}>[ \t]*(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)') { return $false }
+        # The supported banner format excludes raw HTML. This one historical
+        # inline-code placeholder is literal text in two existing review banners.
+        $withoutDomainExample = $opening.Replace('`Specs/<Domain>/`', '')
+        if ($withoutDomainExample.Contains('<')) { return $false }
+        if ($opening -notmatch 'Historical snapshot — not a live work queue' -or
+            $opening -notmatch 'Specs/Plans/WIP/README\.md') { return $false }
+        if ($Legacy) {
+            return $opening -match '2026-07-17' -and $opening -match 'f4e0c8c3bed8' -and
+                   $opening -match 'Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15\.md'
+        }
+        $provenance = [regex]::Match($opening, 'Reviewed repository commit\s+`[0-9a-fA-F]{12,40}`\s*\((?<date>\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})\b')
+        if (-not $provenance.Success) { return $false }
+        $parsedDate = [datetime]::MinValue
+        return [datetime]::TryParseExact($provenance.Groups['date'].Value, [string[]]@('yyyy-MM-dd', 'd MMMM yyyy'),
+            [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AllowWhiteSpaces, [ref]$parsedDate)
+    }
 
+    It 'marks each review with its own bounded historical provenance and live index' {
+        $reviewFiles = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Specs\Reviews') -File -Filter '*.md')
+        foreach ($name in $legacyReviewFiles) {
+            Test-Path -LiteralPath (Join-Path $repoRoot "Specs\Reviews\$name") -PathType Leaf | Should Be $true
+        }
         foreach ($file in $reviewFiles) {
             $text = Get-Content -LiteralPath $file.FullName -Raw
-            $text | Should Match 'Historical snapshot — not a live work queue'
-            $text | Should Match '2026-07-17'
-            $text | Should Match 'f4e0c8c3bed8'
-            $text | Should Match 'Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15\.md'
-            $text | Should Match 'Specs/Plans/WIP/README\.md'
+            (Test-ReviewSnapshotBanner $text ($file.Name -in $legacyReviewFiles)) | Should Be $true
         }
+    }
+
+    It 'rejects missing or misplaced review provenance without assigning the July ledger to later reviews' {
+        $later = "> [!IMPORTANT]`n> **Historical snapshot — not a live work queue.** Reviewed repository commit ``eb779e0bd836`` (31 October 2026). Live work: Specs/Plans/WIP/README.md.`n"
+        (Test-ReviewSnapshotBanner $later $false) | Should Be $true
+        $warning = '> [!IMPORTANT]' + "`n" + '> **Historical snapshot — not a live work queue.** '
+        $metadata = 'Reviewed repository commit `eb779e0bd836` (31 October 2026). Live work: Specs/Plans/WIP/README.md.'
+        (Test-ReviewSnapshotBanner ($warning + '[details](/synthetic "' + $metadata + '")' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '[details](/synthetic/' + $metadata + ')' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '![image](/synthetic "' + $metadata + '")' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\[' + $metadata + '\]' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '$\phantom{' + $metadata + '}$' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\' + $metadata + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '> [' + $metadata + ']: /synthetic' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '>   [Reviewed repository commit `eb779e0bd836`' + "`n" + '> (31 October 2026) Specs/Plans/WIP/README.md]: /synthetic' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '> [escaped \] ' + $metadata + ']: /synthetic' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '> - [' + $metadata + ']: /synthetic' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n>`n" + '> 1. [' + $metadata + ']: /synthetic' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n" + '> ' + $metadata + "`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($warning + '<!-- ' + $metadata + ' -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\`<!-- ' + $metadata + ' -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\`<!--' + "`n" + '> ' + $metadata + "`n" + '> -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ('# Review \`sample`' + "`n`n" + $later) $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($warning + '`<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (31 October 2026). <!-- Specs/Plans/WIP/README.md -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (31 October 2026). <!--' + "`n" + '> Specs/Plans/WIP/README.md' + "`n" + '> -->' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + "`n" + '> > ' + $metadata + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\\`<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '\``<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '`open' + "`n" + '> closes` then `<!-- ' + $metadata + ' -->`' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '<span style="display:none">' + $metadata + '</span>' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + '<script>' + $metadata + '</script>' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($warning + $metadata + ' See `Specs/<Domain>/`.' + "`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($warning + '<!-- harmless note --> ' + $metadata + "`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($warning + 'Reviewed repository commit `eb779e0bd836` (2026-10-31). Live work: `Specs/Plans/WIP/README.md`.' + "`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later + "`n<!-- later historical note -->`n") $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '  >') $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ([string][char]0xFEFF + "`r`n# Historical review`r`n`r`n" + ($later -replace "`n", "`r`n")) $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ('```text' + "`n" + $later + '```' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ("~~~markdown`n" + $later + "~~~`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ("Review prose first.`n`n" + $later) $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ('> [!IMPORTANT]' + "`n" + '> **Historical snapshot — not a live work queue.**' + "`n" + '> ```' + "`n" + ($later -replace '(?m)^> ', '> ') + '> ```' + "`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ("<!--`n" + $later + "-->`n") $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '    >') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '(?m)^>', '> >') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '\*\*Historical snapshot — not a live work queue\.\*\*', '`Historical snapshot — not a live work queue.`') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace 'eb779e0bd836', 'not-a-commit') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', 'undated') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '99 October 2026') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '2026-10-31') $false) | Should Be $true
+        (Test-ReviewSnapshotBanner ($later -replace '31 October 2026', '2026-02-30') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace 'Historical snapshot — not a live work queue', 'Current plan') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner ($later -replace 'Specs/Plans/WIP/README.md', 'other') $false) | Should Be $false
+        (Test-ReviewSnapshotBanner (('x' * 2048) + $later) $false) | Should Be $false
+        (Test-ReviewSnapshotBanner $later $true) | Should Be $false
+        $legacy = "> [!IMPORTANT]`n> **Historical snapshot — not a live work queue.** 2026-07-17; f4e0c8c3bed8; Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md; Specs/Plans/WIP/README.md`n"
+        (Test-ReviewSnapshotBanner $legacy $true) | Should Be $true
+        (Test-ReviewSnapshotBanner ($legacy -replace 'f4e0c8c3bed8', 'eb779e0bd836') $true) | Should Be $false
+        (Test-ReviewSnapshotBanner ($legacy -replace 'Operation_Observatory', 'Operation_Other') $true) | Should Be $false
     }
 
     It 'records that the legacy root plans queue was archived to Done and deleted' {

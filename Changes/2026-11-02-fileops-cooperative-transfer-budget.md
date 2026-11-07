@@ -1,0 +1,1 @@
+- Preserve concurrent progress across roots of one File Operations task while keeping their combined file transfers within the shared limit. Cooperative Local Copy participates in the task budget; opaque providers retain exclusive fallback, cancellation and identity guards.

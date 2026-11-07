@@ -378,6 +378,14 @@ Native semantic-link qualification. No test changes the machine's privilege or D
 
 ## Supplied-review safety regressions (2026-10-16)
 
+`FileOps_IdentityInterlockWaiting` covers shared transfer admission and actual sandbox Copy/managed
+Move with unsupported destination IDs: equal-workload limit-one/four runs, a fifth waiting job,
+multiple files per job, cancellation, exact bytes, source cleanup and no leaked permits. Negative
+controls retain destination-name, source-alias, existing-target, folder and path-contract conflicts.
+The Preferences live File Operations case covers the new combo through real keyboard/UIA input,
+dirty restoration, Apply persistence/runtime notification and Cancel. Schema tests cover default
+pruning, boundaries and invalid types. These are focused witnesses, not complete qualification.
+
 ProductUiTests covers FULL, ID_BOTH and notification record truncation, record-local name bounds, alignment, nonprogress/overflow, unsafe leaf/path names and valid layouts. It also covers payload destination/message/type mismatch preservation, rightful adoption, distinct trivial types whose deleters may fold in Release, duplicate/stale delivery, teardown and unclaimed synchronous reclamation, plus deterministic entropy failure, zero and live-collision exhaustion. Existing coalescing/order and teardown stress remain required.
 
 `FileOps_ReviewRemediationContracts` owns descendant parent pin/race and cancellation coverage, plus XP-09 typed skip/refusal outcomes. `FileOps_SmallFileCopyCost` validates actual names and content on both routes and rejects missing/corrupt destination controls. ScopedTesting Pester fixtures change reusable workflows, composite actions, assets and imported scripts, and verify that a committed emptied reusable gate cannot delegate obligations. These focused checks do not qualify native ARM64, real hostile-server input delivery or all SMB/NAS implementations.

@@ -3,6 +3,11 @@
 ###############################################################################
 * text=auto
 
+# Identity-interlock waiting regression captures and measured source bytes.
+/Specs/TestRuns/Local-x64/FileOps/2026-10-31_IdentityInterlockWaiting/** -text -whitespace
+/Specs/TestRuns/Local-x64/FileOps/2026-11-01_SharedParallelTransfers/** -text -whitespace
+/Specs/TestRuns/Local-x64/FileOps/2026-11-01_PR200_PR201Review/** -text -whitespace
+
 # Immutable client inputs and imported patch context retain their original bytes.
 ThirdParty/RedMonitor/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 
@@ -519,3 +524,5 @@ Specs/TestRuns/4cb089111a23/Terminal/20261029_175658_ci146-ghostty14-current/** 
 /Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_213315-delete-ui-review-filter-rejected/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_213815-delete-ui-review-rate/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/FileOps/2026-10-30_214255-delete-ui-review-perf/** -text -whitespace
+
+/Specs/TestRuns/4cb089111a23/FileOps/2026-11-02_010139/** -text -whitespace

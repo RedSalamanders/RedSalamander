@@ -1,0 +1,1 @@
+- Preserve the approved alternate-volume test-sandbox root and ownership marker during run cleanup, including when retained evidence keeps the root nonempty. Add a post-cleanup marker guard.

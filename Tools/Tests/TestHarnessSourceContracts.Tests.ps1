@@ -392,12 +392,27 @@ Describe 'Test harness source contracts' {
 
     It 'keeps foreground admission diagnostics in the Commands failure summary' {
         $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
-        $failure = [regex]::Match($source, '(?s)state\.Require\(activated && foregroundAfter == inputWindow,.*?\);')
+        $failure = [regex]::Match($source, '(?s)if \(! activated \|\| foregroundAfter != inputWindow\).*?state\.Require\(false,.*?\);')
         $failure.Success | Should Be $true
-        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted')) {
+        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted',
+                'activationGuardEvaluated', 'activationGuardPassed', 'foregroundRequestAttempted',
+                'activationTargetThread', 'activationTargetProcess', 'activationWarningValid',
+                'activationWarningVisible', 'activationWarningThread', 'activationWarningProcess')) {
             $failure.Value | Should Match ([regex]::Escape('admission.' + $field))
         }
         $source | Should Match 'TryActivateOwnedWindow\(inputWindow, false, &admission\)'
+        $warning = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
+        $warning | Should Match '(?s)foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
+        $warning | Should Match '(?s)directActivated\s*=\s*request\.Activate\(\);\s*observed\.directAttempt\s*=\s*request\.attempt'
+        $warning | Should Match '(?s)if \(! request\.handled\)\s*return false;\s*observed\.hotkeyAttempt\s*=\s*request\.attempt'
+        $warning | Should Match '(?s)blockerActiveBeforeRequest\s*=\s*ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\);\s*foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
+        $warning | Should Match '(?s)bool Activate\(\) noexcept\s*\{\s*attempt\s*=\s*\{\};\s*activationGuardPassed\s*=\s*false;'
+        $failure.Value | Should Match 'traceAttempt\(L"direct", admission\.directAttempt\)'
+        $failure.Value | Should Match 'traceAttempt\(L"hotkey", admission\.hotkeyAttempt\)'
+        foreach ($field in @('lastInputKnown', 'lastInputTick', 'requestTick', 'threadId', 'guiKnown', 'guiError', 'desktopKnown', 'desktopError',
+                'hwndActive', 'hwndFocus', 'hwndMenuOwner', 'hwndMoveSize')) {
+            $failure.Value | Should Match ([regex]::Escape($field))
+        }
     }
 
     It 'keeps repeated shuffle qualification manual and separate from the PR gate' {
@@ -916,7 +931,10 @@ Describe 'Test harness source contracts' {
         $fileOps | Should Match 'TestSandboxPathEquals\(configuredRoot,\s*authorizedRoot\.value\(\)\)'
         $fileOps | Should Match 'alternateVolumeSandbox'
         $fileOps | Should Match 'PruneEmptyAlternateVolumeSandboxParents'
-        $fileOps | Should Match 'kTestSandboxMarkerFileName'
+        $prune = [regex]::Match($fileOps, '(?s)void PruneEmptyAlternateVolumeSandboxParents\(const std::filesystem::path& sandboxRoot\) noexcept\s*\{.*?(?=\[\[nodiscard\]\] std::optional<std::filesystem::path> TryCreateAlternateWritableVolumeSelfTestRoot)').Value
+        $prune | Should Not BeNullOrEmpty
+        $prune | Should Match 'IsExistingTestSandboxPathReparseFree'
+        $prune | Should Not Match 'kTestSandboxMarkerFileName|pruneIfEmpty\(testRoot\)|remove\(testRoot'
         $fileOps | Should Not Match 'RedSalamanderCrossVolumeSelfTest_'
     }
 
@@ -2674,6 +2692,31 @@ Specs\TestRuns\local_scratch
         $reacquiredIndex | Should BeGreaterThan $queuedCancelIndex
     }
 
+    It 'keeps FileOperations tick-spanning transfer fixtures under their runtime and cleanup owners' {
+        $runner = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+        $phase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
+        $state = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
+        $private = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Private.h'
+
+        # The asynchronous fixture spans ticks, so its retained original value must
+        # be restored only after workers drain, including the failure cleanup path.
+        $runner | Should Match 'void\s+SetSelfTestSharedTransferLimit\([\s\S]*?owner\.ApplyFileOperationSettings\(\)'
+        $runner | Should Match 'BeginSelfTestSharedTransferLimit\([\s\S]*?GetSharedParallelTransferLimit\(\)'
+        $runner | Should Match 'RestoreSelfTestSharedTransferLimit\([\s\S]*?sharedTransferLimitOriginal\.reset\(\)[\s\S]*?SetSelfTestSharedTransferLimit\(original\)'
+        $runner | Should Match 'g_fileOpsProgressIoGateForSelfTest\.Release\(\)[\s\S]*?CancelOutstandingSelfTestOperations\(state\.fileOps\)[\s\S]*?RestoreSelfTestSharedTransferLimit\(state\)'
+
+        # Accepted writer work reaches the gate before presentation throttling.
+        # Queue coverage requires a partial owned stage; popup coverage opts in
+        # explicitly, while cancellation and bounded cleanup retain their owner.
+        $state | Should Match 'const auto maybeReportProgress[\s\S]*?#ifdef ENABLE_TESTS[\s\S]*?if \(fileCompletedBytes > 0u &&[\s\S]*?txn\.useIdentityOwnedStage && fileCompletedBytes < fileTotalBytes[\s\S]*?g_fileOpsProgressIoGateForSelfTest\.Pause\(task\._taskId'
+        $checkpointIndex = $state.IndexOf('g_fileOpsProgressIoGateForSelfTest.Pause(task._taskId')
+        $throttleIndex = $state.IndexOf('(nowTick - lastProgressTick) < ProgressIntervalMs()', $checkpointIndex)
+        $checkpointIndex | Should BeGreaterThan -1
+        $throttleIndex | Should BeGreaterThan $checkpointIndex
+        $private | Should Match 'struct SelfTestProgressIoGate[\s\S]*?std::chrono::seconds\(30\)[\s\S]*?cancelled\(\)'
+        $phase05 | Should Match 'ioGate\.HasEntered\(state\.taskA\.value\(\)\)[\s\S]{0,150}ioGate\.HasEntered\(state\.taskB\.value\(\)\)'
+    }
+
     It 'keeps FileOperations popup fixtures inside the current self-test process' {
         $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
         $phase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
@@ -3817,16 +3860,39 @@ Specs\TestRuns\local_scratch
 
         # One governed provider call is one discovery scope. A single-root entry point reports and
         # closes its own root; a bulk entry point aggregates its roots and closes the call once.
-        # A mutation entry point that can leave a caller's scope open forever is the defect this
-        # guards, so each one must carry its closing construct.
+        # CopyItem's legacy and budget adapters delegate the same call to one owner;
+        # neither adapter may bypass that owner or publish a second closure.
         $closureByEntryPoint = @{
-            'CopyItem'    = 'ReportTopLevelDiscovery'
             'MoveItem'    = 'ReportTopLevelDiscovery'
             'CopyItems'   = 'ReportCallDiscoveryClosed'
             'MoveItems'   = 'ReportCallDiscoveryClosed'
             'DeleteItem'  = 'ReportDeleteDiscoveryClosed'
             'DeleteItems' = 'ReportDeleteDiscoveryClosed'
         }
+
+        $legacyCopy = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::CopyItem\([\s\S]*?\n\}\r?\n')
+        $budgetCopy = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::CopyItemWithTaskBudget\([\s\S]*?\n\}\r?\n')
+        $copyImpl = [regex]::Match($source, 'HRESULT\s+FileSystem::CopyItemImpl\([\s\S]*?\n\}\r?\n')
+        foreach ($body in @($legacyCopy, $budgetCopy, $copyImpl)) { $body.Success | Should Be $true }
+        $legacyRoute = 'return\s+CopyItemImpl\(sourcePath,\s*destinationPath,\s*flags,\s*options,\s*callback,\s*cookie,\s*nullptr\);'
+        $budgetRoute = 'return\s+CopyItemImpl\(sourcePath,\s*destinationPath,\s*flags,\s*options,\s*callback,\s*cookie,\s*budget\);'
+        $legacyCopy.Value | Should Match $legacyRoute
+        $budgetCopy.Value | Should Match $budgetRoute
+        ($legacyCopy.Value -replace 'CopyItemImpl\(', 'OtherImpl(') | Should Not Match $legacyRoute
+        ($budgetCopy.Value -replace ',\s*budget\);', ', nullptr);') | Should Not Match $budgetRoute
+        foreach ($body in @($legacyCopy.Value, $budgetCopy.Value)) {
+            $body | Should Not Match 'ReportRawDiscoveryProgress|ReportTopLevelDiscovery|scope_exit'
+        }
+        $copyImpl.Value | Should Match 'SingleDiscoveryState\s+discovery'
+        $copyImpl.Value | Should Match 'context\.singleDiscovery\s*=\s*&discovery'
+        $copyImpl.Value | Should Match 'scope_exit\([\s\S]*?ReportRawDiscoveryProgress\(context,\s*0u,\s*0u,\s*0u,\s*0u,\s*true\)'
+        $copyImpl.Value | Should Match 'ReportTopLevelDiscovery'
+        $copyImpl.Value | Should Match 'recursiveDiscoveryOwner[\s\S]*?discovery\.closeAttempted[\s\S]*?break'
+        $moveBody = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::MoveItem\([\s\S]*?\n\}\r?\n')
+        $moveBody.Success | Should Be $true
+        $moveBody.Value | Should Match 'SingleDiscoveryState\s+discovery'
+        $moveBody.Value | Should Match 'context\.singleDiscovery\s*=\s*&discovery'
+        $moveBody.Value | Should Match 'scope_exit\([\s\S]*?ReportRawDiscoveryProgress\(context,\s*0u,\s*0u,\s*0u,\s*0u,\s*true\)'
 
         foreach ($entryPoint in $closureByEntryPoint.Keys) {
             # The return type and the qualified name are sometimes split across lines.
@@ -4128,7 +4194,9 @@ Specs\TestRuns\local_scratch
         $selfTest | Should Match 'R4A02_LiveOutputGuardChoices'
         $selfTest | Should Match 'DebugForceLiveOutputIndexOverflowForSelfTest'
         $selfTest | Should Match 'Task::ConflictAction::RunConcurrently'
-        $selfTest | Should Match 'completedB->second\.interlockWaitCount\s*!=\s*0u'
+        $selfTest | Should Match 'state\.r4a02SerializedAdmissionObserved'
+        $header | Should Match '!\s*serializedTransfers'
+        $queue | Should Match 'candidate\.isTransfer\s*&&\s*published\.admission->isTransfer'
         $queue | Should Match 'DebugForceLiveOutputIndexOverflowForSelfTest[\s\S]{0,900}FileOps\.LiveOutput\.IndexOverflow'
     }
 
@@ -4540,7 +4608,7 @@ Specs\TestRuns\local_scratch
         $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
         $bridge | Should Not Match 'moveBridge->cookie\s*=\s*static_cast<void\*>\(&cookie\);'
         $bridge | Should Match 'hasManagedMovePlans\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,420}OperationStrategy::Managed'
-        $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\)\s*&&'
+        $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\s*\|\|\s*\(selectedAdmission->interlock\s*&&\s*selectedAdmission->interlock->parallelNewFiles\)\)\s*&&'
         $bridge | Should Match 'bridgeDestinationFileSystem\s*=\s*selectedAdmission->destination->fileSystem\s*\?\s*selectedAdmission->destination->fileSystem\.get\(\)\s*:\s*_fileSystem\.get\(\)'
         $bridge | Should Not Match 'strategy\.nativeBridgeRejected'
         $bridge | Should Not Match 'bridge\.move\.cleanup\.cancelled'
@@ -5159,7 +5227,7 @@ Specs\TestRuns\local_scratch
         $vcpkgInstall | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
         $vcpkgInstall | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$sharedDependencyScope'
         $deploymentTest | Should Match 'Invoke-RSStreamingProcess[\s\S]*?-DelegateArtifactOperation'
-        $deploymentTest | Should Match '-TimeoutMilliseconds \(15 \* 60 \* 1000\)'
+        $deploymentTest | Should Match '-TimeoutMilliseconds \(60 \* 60 \* 1000\)'
         $deploymentTest | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentTest | Should Not Match 'ReadToEndAsync|\.Result'
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'

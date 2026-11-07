@@ -1,0 +1,38 @@
+{
+  "sourceRunId": "20261101T203639Z-23512-d2a5d72faf0949a6a2d3a194de4330b0",
+  "filter": "R4A02_",
+  "gitHead": "b56632dfba695770732ccdfa4e034ccb53ee7247",
+  "receiptId": "c69af2e656608b23cdd6f36a1875adfd4c6371a6adc22141b53f2163653e457d",
+  "wrapperExit": 2,
+  "originalArtifactHashes": {
+    "nativeResults": {
+      "byteCount": 2266,
+      "sha256": "010d7978dcbe69e73447783311857b0286b02bfd526cb846ec1e07f9a587a86c"
+    },
+    "nativeTrace": {
+      "byteCount": 6538,
+      "sha256": "7874ca1192882534299e57296b9877a1e7880be3fe8453924654d32ea6cf9021"
+    },
+    "runnerResults": {
+      "byteCount": 14357,
+      "sha256": "b4429e863b9bf2f0550e8c8666e867662712cfce96cc7b4d08aad6e4237d1c47"
+    },
+    "wrapperLog": {
+      "byteCount": 1801,
+      "sha256": "d738402ae1e2ecad0aaa5d55218670ccc0af7ba6e1e68d070c1bd3fd19ab9886"
+    },
+    "receipt": {
+      "byteCount": 91306,
+      "sha256": "9134a80982fb4fa1c65b5dc558dd9906f81864d1f892c12678dc7c4f40174de8"
+    },
+    "fingerprint": {
+      "byteCount": 1694,
+      "sha256": "09a1e1bfcbd678b3e9b69f64f821a56091ec59076441956cc8d7926994768389"
+    },
+    "workspace": {
+      "byteCount": 40509,
+      "sha256": "c6a8e89ae34c0fc00dccc49b3dc9f880514a3c22ecee276d09b44934e9f39f13"
+    }
+  },
+  "note": "The original artifacts remain in the external completed-run archive or accompanying evidence. Derived results omit environment paths."
+}

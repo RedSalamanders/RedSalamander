@@ -1,0 +1,1 @@
+- Update the shared per-item scheduler fixture to verify exclusive task admission, the subsequent task handoff, and concurrency within each task under the current transfer policy.

@@ -8881,8 +8881,8 @@ struct ThroughputRestartSettingsSnapshot final
         const auto childSettingsPath      = ThroughputRestartSettingsPath(childRun);
         const auto childSettingsDirectory = childSettingsPath.parent_path();
         state.Require(SelfTest::EnsureDirectory(childSettingsDirectory), L"Could not create the isolated child settings directory.");
-        constexpr std::string_view seedSettingsJson = R"json({"schemaVersion":16,"fileOperations":{"popupThroughputExpanded":false}})json";
-        state.Require(SelfTest::WriteTextFile(childSettingsPath, seedSettingsJson), L"Could not seed the child-only collapsed popup preference.");
+        constexpr std::string_view seedSettingsJson = R"json({"schemaVersion":16})json";
+        state.Require(SelfTest::WriteTextFile(childSettingsPath, seedSettingsJson), L"Could not seed child-only settings with the default popup preference.");
         if (! state.failure.empty())
             return false;
         const auto executable = wil::GetModuleFileNameW();
@@ -10249,16 +10249,41 @@ struct ThroughputRestartSettingsSnapshot final
     wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
     wil::unique_bstr documentText;
     traceDetailState(L"before full-document UIA read");
-    state.Require(FindMatchingWindowHostRawProvider(popup.get(),
-                                                    UIA_EditControlTypeId,
-                                                    LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH),
-                                                    detailProvider.put(),
-                                                    L"FileOperations.PathDetail.Text") &&
-                      detailProvider && SUCCEEDED(detailProvider->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put())) && textPatternUnknown &&
-                      SUCCEEDED(textPatternUnknown.query_to(textPattern.put())) && textPattern &&
-                      SUCCEEDED(textPattern->get_DocumentRange(documentRange.put())) && documentRange &&
-                      SUCCEEDED(documentRange->GetText(-1, documentText.put())) && documentText && std::wstring_view(documentText.get()) == longDetailPath,
-                  L"Multiline TextPattern must expose the complete Unicode document, including the final suffix.");
+    const std::wstring expectedDetailName =
+        FormatStringResource(nullptr, IDS_FMT_FILEOPS_PATH_DETAIL_TITLE, fromLabel, LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_FIELD_FULL_PATH));
+    const bool providerFound =
+        FindMatchingWindowHostRawProvider(popup.get(), UIA_EditControlTypeId, expectedDetailName, detailProvider.put(), L"FileOperations.PathDetail.Text");
+    HRESULT patternHr = E_PENDING;
+    HRESULT queryHr   = E_PENDING;
+    HRESULT rangeHr   = E_PENDING;
+    HRESULT textHr    = E_PENDING;
+    if (providerFound && detailProvider)
+        patternHr = detailProvider->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put());
+    if (SUCCEEDED(patternHr) && textPatternUnknown)
+        queryHr = textPatternUnknown.query_to(textPattern.put());
+    if (SUCCEEDED(queryHr) && textPattern)
+        rangeHr = textPattern->get_DocumentRange(documentRange.put());
+    if (SUCCEEDED(rangeHr) && documentRange)
+        textHr = documentRange->GetText(-1, documentText.put());
+    const size_t actualLength = documentText ? static_cast<size_t>(SysStringLen(documentText.get())) : 0u;
+    const bool exactText      = documentText && std::wstring_view(documentText.get(), actualLength) == longDetailPath;
+    state.Require(providerFound && detailProvider && SUCCEEDED(patternHr) && textPatternUnknown && SUCCEEDED(queryHr) && textPattern && SUCCEEDED(rangeHr) &&
+                      documentRange && SUCCEEDED(textHr) && exactText,
+                  std::format(L"Multiline TextPattern must expose the complete Unicode document, including the final suffix: found={} provider={} "
+                              L"patternHr=0x{:08X} pattern={} queryHr=0x{:08X} interface={} rangeHr=0x{:08X} range={} textHr=0x{:08X} "
+                              L"actualLength={} expectedLength={} exact={}.",
+                              providerFound,
+                              static_cast<bool>(detailProvider),
+                              static_cast<unsigned long>(patternHr),
+                              static_cast<bool>(textPatternUnknown),
+                              static_cast<unsigned long>(queryHr),
+                              static_cast<bool>(textPattern),
+                              static_cast<unsigned long>(rangeHr),
+                              static_cast<bool>(documentRange),
+                              static_cast<unsigned long>(textHr),
+                              actualLength,
+                              longDetailPath.size(),
+                              exactText));
     traceDetailState(L"after full-document UIA read");
     if (! state.failure.empty())
         return false;
@@ -11079,6 +11104,7 @@ struct FileOperationsPopupTestFixture final
     FolderWindow::FileOperationState* fileOps = nullptr;
     HWND popup                                = nullptr;
     std::optional<uint64_t> taskId;
+    uint64_t completedBeforeConflictId = 0u;
     FileOperationsPopupInternal::TaskSnapshot taskSnapshot{};
     std::filesystem::path root;
     std::filesystem::path sourceDir;
@@ -11112,7 +11138,8 @@ struct FileOperationsPopupTestFixture final
                                                             FileOperationsPopupTestFixture& fixture,
                                                             const bool hideBeforeActionablePublish = false,
                                                             const bool secondCollision             = false,
-                                                            const bool expectFailureSurface        = false) noexcept
+                                                            const bool expectFailureSurface        = false,
+                                                            const bool completeCopyBeforeConflict  = false) noexcept
 {
     using namespace std::chrono_literals;
     using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
@@ -11253,6 +11280,46 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
+    if (completeCopyBeforeConflict)
+    {
+        // This real success must precede the exclusive conflicting Copy; it
+        // remains retained when that later prompt is presented.
+        const auto completedSource = sourceDir / L"cancel-all-finished.txt";
+        const auto completedDest   = destDir / completedSource.filename();
+        if (! state.Require(SelfTest::WriteTextFile(completedSource, "finished payload"), L"Seed the retained successful Copy before the conflict."))
+            return false;
+        const HRESULT completeHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                           FolderWindow::Pane::Left,
+                                                           FolderWindow::Pane::Right,
+                                                           leftFileSystem,
+                                                           {completedSource},
+                                                           destDir,
+                                                           FILESYSTEM_FLAG_NONE,
+                                                           false,
+                                                           0,
+                                                           FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                           false,
+                                                           rightFileSystem,
+                                                           &fixture.completedBeforeConflictId);
+        RedSalamander::TestSupport::MessagePumpWaitOptions wait{};
+        wait.timeout            = SelfTest::Scale(5000ms);
+        wait.maxMessagesPerPump = 16u;
+        const bool completed    = SUCCEEDED(completeHr) && fixture.completedBeforeConflictId != 0u &&
+                                  RedSalamander::TestSupport::PumpMessagesUntil(
+                                      [&]() noexcept
+        {
+            std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+            fileOps->CollectCompletedTasks(summaries);
+            const auto found = std::ranges::find(summaries, fixture.completedBeforeConflictId, &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+            return found != summaries.end() && found->resultHr == S_OK && found->completedBytes > 0u &&
+                   TextFileEqualsForFileOpsPrompt(completedDest, "finished payload");
+        },
+                                   wait)
+                                      .conditionMet;
+        if (! state.Require(completed, L"The preceding Copy must finish and retain its exact successful output before conflict admission."))
+            return false;
+        existingTaskIds.insert(fixture.completedBeforeConflictId);
+    }
     const auto metadataPauseBailout = SelfTest::Scale(10'000ms);
     SetFileOpsConflictMetadataPauseForSelfTest(true, static_cast<ULONGLONG>(metadataPauseBailout.count()));
     const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
@@ -15767,6 +15834,30 @@ struct FileOperationsPopupTestFixture final
     // an invisible control under that footer. No action is invoked here.
     RECT savedRect{};
     GetWindowRect(fixture.popup, &savedRect);
+    // Real informational producers precede operations in the retained list. Their
+    // owned cards force overflow even when the conflict comparison fits by itself.
+    std::array<uint64_t, 3> viewportTaskIds{};
+    const auto clearViewportTasks = [&]() noexcept
+    {
+        for (auto& taskId : viewportTaskIds)
+        {
+            fixture.fileOps->DismissInformationalTask(taskId);
+            taskId = 0u;
+        }
+    };
+    const auto clearViewportTasksOnExit = wil::scope_exit([&]() noexcept { clearViewportTasks(); });
+    for (size_t index = 0u; index < viewportTaskIds.size(); ++index)
+    {
+        FolderWindow::InformationalTaskUpdate update{};
+        update.kind                     = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+        update.title                    = std::format(L"Photo archive {}", index + 1u);
+        update.changeCaseEnumerating    = true;
+        update.changeCaseScannedEntries = 8u + index;
+        viewportTaskIds[index]          = fixture.fileOps->CreateOrUpdateInformationalTask(update);
+        state.Require(viewportTaskIds[index] != 0u, L"Create the owned informational card for the overflow fixture.");
+    }
+    if (! state.failure.empty())
+        return false;
     const UINT popupDpi = GetDpiForWindow(fixture.popup);
     SendMessageW(fixture.popup, WM_ENTERSIZEMOVE, 0, 0);
     SetWindowPos(fixture.popup,
@@ -15815,6 +15906,21 @@ struct FileOperationsPopupTestFixture final
         state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, beforeTab) && beforeTab.scrollPosition == 0 &&
                           beforeTab.hostedFocusedAutomationId == fromId,
                       L"Scrolling the short body must retain the exact previous task/action focus before traversal.");
+        const auto* popupState =
+            reinterpret_cast<const FileOperationsPopupInternal::FileOperationsPopupState*>(GetWindowLongPtrW(fixture.popup, GWLP_USERDATA));
+        D2D1_RECT_F beforeBounds{};
+        const bool boundsAvailable = popupState && popupState->DebugHostedDecisionActionBoundsForSelfTest(fixture.taskId.value(), beforeBounds, expectedId);
+        const float pixelsPerDip   = static_cast<float>(popupDpi) / 96.0f;
+        state.Require(boundsAvailable && beforeBounds.bottom > beforeBounds.top && beforeBounds.top * pixelsPerDip >= beforeTab.listViewportRect.bottom,
+                      std::format(L"The exact next decision must start below the viewport before traversal: expected={} available={} "
+                                  L"topDip={} bottomDip={} viewportBottom={}.",
+                                  expectedId,
+                                  boundsAvailable,
+                                  beforeBounds.top,
+                                  beforeBounds.bottom,
+                                  beforeTab.listViewportRect.bottom));
+        if (! state.failure.empty())
+            return;
         std::array<BYTE, 256> savedKeys{};
         const bool captured = GetKeyboardState(savedKeys.data()) != FALSE;
         state.Require(captured, L"Unable to preserve thread keyboard state for short-body traversal.");
@@ -15832,8 +15938,34 @@ struct FileOperationsPopupTestFixture final
         state.Require(SetKeyboardState(keys.data()) != FALSE, L"Unable to set routed traversal modifiers.");
         if (! state.failure.empty())
             return;
+        // The retained host tracks modifier key messages separately from the
+        // Win32 thread keyboard table. Route the owned Shift down/up as well;
+        // SetKeyboardState alone makes this journey traverse forward.
+        bool routedShift              = false;
+        const auto releaseHostedShift = [&]() noexcept
+        {
+            if (routedShift)
+            {
+                routedShift = false;
+                SendMessageW(fixture.popup, WM_KEYUP, VK_SHIFT, (LPARAM{1} << 30) | (LPARAM{1} << 31));
+            }
+        };
+        const auto releaseHostedShiftOnExit = wil::scope_exit([&]() noexcept { releaseHostedShift(); });
+        if (reverse)
+        {
+            routedShift = true;
+            SendMessageW(fixture.popup, WM_KEYDOWN, VK_SHIFT, 0);
+        }
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot routedModifiers{};
+        routedModifiers.taskId = fixture.taskId.value();
+        state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, routedModifiers) &&
+                          ((routedModifiers.hostedModifierState & MK_SHIFT) != 0u) == reverse,
+                      L"The retained host must observe the routed traversal modifier before Tab.");
+        if (! state.failure.empty())
+            return;
         SendMessageW(fixture.popup, WM_KEYDOWN, VK_TAB, 0);
         SendMessageW(fixture.popup, WM_KEYUP, VK_TAB, 0);
+        releaseHostedShift();
         PumpPendingMessages();
         redraw();
         FileOperationsPopupInternal::PopupLayoutDebugSnapshot shortLayout{};
@@ -15846,17 +15978,75 @@ struct FileOperationsPopupTestFixture final
         FileOperationsPopupInternal::TaskSnapshot currentTask{};
         const bool layoutAvailable = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, shortLayout);
         const bool taskAvailable   = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), currentTask);
+        const bool providerFound   = FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId);
+        const HRESULT fragmentHr   = providerFound && provider ? provider.query_to(fragment.put()) : E_NOINTERFACE;
+        const HRESULT boundsHr     = SUCCEEDED(fragmentHr) && fragment ? fragment->get_BoundingRectangle(&bounds) : E_NOINTERFACE;
+        const bool ownsForeground  = GetForegroundWindow() == fixture.popup;
+        const bool ownsFocus       = GetFocus() == fixture.popup;
         const bool revealed =
             layoutAvailable && taskAvailable && currentTask.conflict.active && currentTask.conflict.generation == shortTask.conflict.generation &&
-            GetForegroundWindow() == fixture.popup && GetFocus() == fixture.popup && shortLayout.scrollPosition > 0 &&
-            shortLayout.hostedFocusedAutomationId == expectedId &&
-            FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, expectedName, provider.put(), expectedId) && provider &&
-            SUCCEEDED(provider.query_to(fragment.put())) && SUCCEEDED(fragment->get_BoundingRectangle(&bounds)) && bounds.height > 0 &&
+            ownsForeground && ownsFocus && shortLayout.scrollPosition > beforeTab.scrollPosition && shortLayout.hostedFocusedAutomationId == expectedId &&
+            shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u && (shortLayout.hostedModifierState & MK_SHIFT) == 0u && providerFound &&
+            provider && SUCCEEDED(fragmentHr) && fragment && SUCCEEDED(boundsHr) && bounds.height > 0 &&
             bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top &&
             bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <= static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom;
+        std::wstring failureDetail;
+        if (! revealed)
+        {
+            failureDetail = std::format(L"Conflict traversal geometry: dpi={} origin={},{} viewportClient={},{},{},{} viewportScreen={},{},{},{} "
+                                        L"uiaBounds={},{},{},{} beforeBoundsDip={},{},{},{} layout={} task={} active={} generationMatch={} "
+                                        L"foreground={} focus={} scrolled={} focusIdMatch={} tabIncrement={} shiftReleased={} provider={} "
+                                        L"fragment={} boundsResult={} positiveHeight={} topVisible={} bottomVisible={} "
+                                        L"scrollBefore={} scrollAfter={} modifiersBefore={} modifiersAfter={} tabsBefore={} tabsAfter={}",
+                                        popupDpi,
+                                        origin.x,
+                                        origin.y,
+                                        shortLayout.listViewportRect.left,
+                                        shortLayout.listViewportRect.top,
+                                        shortLayout.listViewportRect.right,
+                                        shortLayout.listViewportRect.bottom,
+                                        static_cast<double>(origin.x) + shortLayout.listViewportRect.left,
+                                        static_cast<double>(origin.y) + shortLayout.listViewportRect.top,
+                                        static_cast<double>(origin.x) + shortLayout.listViewportRect.right,
+                                        static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom,
+                                        bounds.left,
+                                        bounds.top,
+                                        bounds.width,
+                                        bounds.height,
+                                        beforeBounds.left,
+                                        beforeBounds.top,
+                                        beforeBounds.right,
+                                        beforeBounds.bottom,
+                                        layoutAvailable,
+                                        taskAvailable,
+                                        currentTask.conflict.active,
+                                        currentTask.conflict.generation == shortTask.conflict.generation,
+                                        ownsForeground,
+                                        ownsFocus,
+                                        shortLayout.scrollPosition > beforeTab.scrollPosition,
+                                        shortLayout.hostedFocusedAutomationId == expectedId,
+                                        shortLayout.hostedNativeTabCount == beforeTab.hostedNativeTabCount + 1u,
+                                        (shortLayout.hostedModifierState & MK_SHIFT) == 0u,
+                                        providerFound && static_cast<bool>(provider),
+                                        SUCCEEDED(fragmentHr) && static_cast<bool>(fragment),
+                                        SUCCEEDED(boundsHr),
+                                        bounds.height > 0,
+                                        bounds.top >= static_cast<double>(origin.y) + shortLayout.listViewportRect.top,
+                                        bounds.top + bounds.height + 3.0 * static_cast<double>(popupDpi) / 96.0 <=
+                                            static_cast<double>(origin.y) + shortLayout.listViewportRect.bottom,
+                                        beforeTab.scrollPosition,
+                                        shortLayout.scrollPosition,
+                                        routedModifiers.hostedModifierState,
+                                        shortLayout.hostedModifierState,
+                                        beforeTab.hostedNativeTabCount,
+                                        shortLayout.hostedNativeTabCount);
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, failureDetail);
+        }
         state.Require(revealed,
                       std::format(L"{} must reveal the published action above the footer: expected={} scroll={} focused={} boundsTop={} height={} "
-                                  L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={}.",
+                                  L"viewportBottom={} layoutAvailable={} taskAvailable={} liveTask={} window={} visible={} finished={} conflictActive={} "
+                                  L"modifiersBefore={} modifiersAfter={} nativeTabsBefore={} nativeTabsAfter={} providerFound={} "
+                                  L"fragmentHr=0x{:08X} boundsHr=0x{:08X}. {}",
                                   reverse ? L"Shift+Tab" : L"Tab",
                                   expectedId,
                                   shortLayout.scrollPosition,
@@ -15870,7 +16060,15 @@ struct FileOperationsPopupTestFixture final
                                   IsWindow(fixture.popup) != FALSE,
                                   IsWindowVisible(fixture.popup) != FALSE,
                                   currentTask.finished,
-                                  currentTask.conflict.active));
+                                  currentTask.conflict.active,
+                                  routedModifiers.hostedModifierState,
+                                  shortLayout.hostedModifierState,
+                                  beforeTab.hostedNativeTabCount,
+                                  shortLayout.hostedNativeTabCount,
+                                  providerFound,
+                                  static_cast<unsigned long>(fragmentHr),
+                                  static_cast<unsigned long>(boundsHr),
+                                  failureDetail));
     };
     std::wstring previousId = actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(FileOperations::ConflictAction::Cancel));
     for (size_t remaining = primaryCount; remaining > 0u && state.failure.empty(); --remaining)
@@ -15905,6 +16103,7 @@ struct FileOperationsPopupTestFixture final
                  savedRect.bottom - savedRect.top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     SendMessageW(fixture.popup, WM_VSCROLL, SB_TOP, 0);
+    clearViewportTasks();
     redraw();
     if (! state.failure.empty())
         return false;
@@ -16034,7 +16233,23 @@ struct FileOperationsPopupTestFixture final
                     fixture.popup, PopupHitTest::Kind::TaskToggleCollapse, secondTask.taskId, 0u, IDS_FILEOPS_TOGGLE_TASK_DETAILS, provider) &&
                 provider;
             const HRESULT queryHr = resolved ? provider.query_to(fragment.put()) : E_NOINTERFACE;
+            UiaRect preFocusBounds{}, postFocusBounds{};
+            HRESULT preFocusBoundsHr = E_PENDING, postFocusBoundsHr = E_PENDING;
+            PopupLayoutDebugSnapshot preFocusLayout{}, postFocusLayout{};
+            bool preFocusLayoutRead = false, postFocusLayoutRead = false;
+            if (route == 3u && SUCCEEDED(queryHr) && fragment)
+            {
+                preFocusLayout.taskId = secondTask.taskId;
+                preFocusLayoutRead    = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, preFocusLayout);
+                preFocusBoundsHr      = fragment->get_BoundingRectangle(&preFocusBounds);
+            }
             const HRESULT focusHr = SUCCEEDED(queryHr) && fragment ? fragment->SetFocus() : E_NOINTERFACE;
+            if (route == 3u && SUCCEEDED(queryHr) && fragment)
+            {
+                postFocusLayout.taskId = secondTask.taskId;
+                postFocusLayoutRead    = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, postFocusLayout);
+                postFocusBoundsHr      = fragment->get_BoundingRectangle(&postFocusBounds);
+            }
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
                                        std::format(L"Pending disclosure preparation: route={} collapse={} visibleBeforeReveal={} snapshot={} scroll={} "
                                                    L"viewport=[{},{}] taskToggleVisible={} resolved={} queryHr=0x{:08X} focusHr=0x{:08X} id={}",
@@ -16098,9 +16313,72 @@ struct FileOperationsPopupTestFixture final
             {
                 UiaRect bounds{};
                 const HRESULT boundsHr = fragment->get_BoundingRectangle(&bounds);
+                std::wstring failureDetail;
+                if (FAILED(boundsHr) || bounds.width <= 0.0 || bounds.height <= 0.0)
+                {
+                    wil::com_ptr_nothrow<IRawElementProviderSimple> fresh;
+                    wil::com_ptr_nothrow<IRawElementProviderFragment> freshFragment;
+                    UiaRect freshBounds{};
+                    const bool freshFound       = FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, caption, fresh.put(), id) && fresh;
+                    const HRESULT freshQueryHr  = freshFound ? fresh.query_to(freshFragment.put()) : E_NOINTERFACE;
+                    const HRESULT freshBoundsHr = SUCCEEDED(freshQueryHr) && freshFragment ? freshFragment->get_BoundingRectangle(&freshBounds) : E_NOINTERFACE;
+                    POINT origin{};
+                    const bool originKnown = ClientToScreen(fixture.popup, &origin) != FALSE;
+                    failureDetail = std::format(L"Pending disclosure geometry: id={} dpi={} originKnown={} origin={},{} foreground={} nativeFocus={} "
+                                                L"preLayout={} preScroll={} preFocused={} preFocus={} preHr=0x{:08X} preBounds={},{},{},{} "
+                                                L"postLayout={} postScroll={} postFocused={} postFocus={} postHr=0x{:08X} postBounds={},{},{},{} "
+                                                L"redrawScroll={} redrawFocused={} redrawFocus={} viewportClient={},{},{},{} "
+                                                L"retainedHr=0x{:08X} retainedBounds={},{},{},{} freshFound={} freshQueryHr=0x{:08X} freshBoundsHr=0x{:08X} "
+                                                L"freshBounds={},{},{},{}",
+                                                id,
+                                                GetDpiForWindow(fixture.popup),
+                                                originKnown,
+                                                origin.x,
+                                                origin.y,
+                                                GetForegroundWindow() == fixture.popup,
+                                                GetFocus() == fixture.popup,
+                                                preFocusLayoutRead,
+                                                preFocusLayout.scrollPosition,
+                                                preFocusLayout.hostedFocusedAutomationId,
+                                                preFocusLayout.hostedFocusedHasFocus,
+                                                static_cast<unsigned long>(preFocusBoundsHr),
+                                                preFocusBounds.left,
+                                                preFocusBounds.top,
+                                                preFocusBounds.width,
+                                                preFocusBounds.height,
+                                                postFocusLayoutRead,
+                                                postFocusLayout.scrollPosition,
+                                                postFocusLayout.hostedFocusedAutomationId,
+                                                postFocusLayout.hostedFocusedHasFocus,
+                                                static_cast<unsigned long>(postFocusBoundsHr),
+                                                postFocusBounds.left,
+                                                postFocusBounds.top,
+                                                postFocusBounds.width,
+                                                postFocusBounds.height,
+                                                before.scrollPosition,
+                                                before.hostedFocusedAutomationId,
+                                                before.hostedFocusedHasFocus,
+                                                before.listViewportRect.left,
+                                                before.listViewportRect.top,
+                                                before.listViewportRect.right,
+                                                before.listViewportRect.bottom,
+                                                static_cast<unsigned long>(boundsHr),
+                                                bounds.left,
+                                                bounds.top,
+                                                bounds.width,
+                                                bounds.height,
+                                                freshFound,
+                                                static_cast<unsigned long>(freshQueryHr),
+                                                static_cast<unsigned long>(freshBoundsHr),
+                                                freshBounds.left,
+                                                freshBounds.top,
+                                                freshBounds.width,
+                                                freshBounds.height);
+                    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, failureDetail);
+                }
                 if (! state.Require(SUCCEEDED(boundsHr) && bounds.width > 0.0 && bounds.height > 0.0,
                                     std::format(L"The task disclosure must expose a measured pointer target: hr=0x{:08X} collapse={} "
-                                                L"bounds={},{},{},{} visible={} animating={} scroll={} viewport={},{},{},{}.",
+                                                L"bounds={},{},{},{} visible={} animating={} scroll={} viewport={},{},{},{}. {}",
                                                 static_cast<uint32_t>(boundsHr),
                                                 collapse,
                                                 bounds.left,
@@ -16113,7 +16391,8 @@ struct FileOperationsPopupTestFixture final
                                                 before.listViewportRect.left,
                                                 before.listViewportRect.top,
                                                 before.listViewportRect.right,
-                                                before.listViewportRect.bottom)))
+                                                before.listViewportRect.bottom,
+                                                failureDetail)))
                     return false;
                 POINT point{static_cast<LONG>(bounds.left + bounds.width * 0.5), static_cast<LONG>(bounds.top + bounds.height * 0.5)};
                 const HWND target = WindowFromPoint(point);
@@ -16420,10 +16699,11 @@ struct FileOperationsPopupTestFixture final
     const auto aContext = fixture.taskSnapshot.conflict.inspection;
     const auto bSource  = fixture.sourceDir / L"identity-b.txt";
     const auto bDest    = fixture.destDir / bSource.filename();
-    state.Require(SelfTest::WriteTextFile(bSource, "new B") && SelfTest::WriteTextFile(bDest, "existing B"), L"Seed separate same-root Copy collision B.");
+    state.Require(SelfTest::WriteTextFile(bSource, "new B") && SelfTest::WriteTextFile(bDest, "existing B"),
+                  L"Seed separate same-root native Move collision B.");
     if (! state.failure.empty())
         return false;
-    const HRESULT admitted = fileOps->AdmitOperation(FILESYSTEM_COPY,
+    const HRESULT admitted = fileOps->AdmitOperation(FILESYSTEM_MOVE,
                                                      FolderWindow::Pane::Left,
                                                      FolderWindow::Pane::Right,
                                                      fixture.leftFileSystem,
@@ -16435,7 +16715,7 @@ struct FileOperationsPopupTestFixture final
                                                      FolderWindow::FileOperationState::ExecutionMode::PerItem,
                                                      false,
                                                      fixture.rightFileSystem);
-    if (! state.Require(SUCCEEDED(admitted), L"Admit second real pending Copy in parallel mode."))
+    if (! state.Require(SUCCEEDED(admitted), L"Admit second real pending Move in parallel mode."))
         return false;
     const auto bId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, std::unordered_set<uint64_t>{aId}, SelfTest::Scale(5000ms));
     if (! state.Require(bId.has_value() && bId.value() != aId, L"Second collision must publish a distinct task ID."))
@@ -16452,6 +16732,21 @@ struct FileOperationsPopupTestFixture final
     },
                             wait)
                                   .conditionMet;
+    // Verify the immutable admitted route and frozen capacity classification before
+    // accepting the intended concurrent scenario. Native Move cannot fall back to
+    // copying; its object/path interlocks remain in force.
+    const auto* bTask         = fileOps->FindTask(bId.value());
+    const auto bAdmission     = bTask ? bTask->LoadSelectedAdmission() : nullptr;
+    const bool nativeOnlyMove = bAdmission && bAdmission->plans && ! bAdmission->plans->empty() && bAdmission->interlock &&
+                                ! bAdmission->interlock->hasDataTransfers &&
+                                std::ranges::all_of(*bAdmission->plans,
+                                                    [](const auto& plan) noexcept
+    {
+        const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
+        return transfer && transfer->intent == FileOperations::TransferIntent::Move && transfer->strategy == FileOperations::OperationStrategy::Native;
+    });
+    if (! state.Require(nativeOnlyMove, L"B must retain an immutable native-only Move admission with no data-transfer capacity."))
+        return false;
     if (! state.Require(bReady && fileOps->IsPendingConflictInspectionCurrent(aId, CurrentConflictPromptGenerationForSelfTest(fileOps, aId), aContext) &&
                             fileOps->IsPendingConflictInspectionCurrent(
                                 bId.value(), CurrentConflictPromptGenerationForSelfTest(fileOps, bId.value()), bBefore.conflict.inspection) &&
@@ -16532,44 +16827,314 @@ struct FileOperationsPopupTestFixture final
     if (! state.Require(inspectA(false), L"Exact A Source UIA inspection must return to A while B remains unresolved."))
         return false;
 
-    // A focus transaction is observable before another frame is dispatched. Its
-    // Enter/Escape authority must already belong to that exact task/generation.
-    // Acquire both providers first so lookup/repaint cannot repair stale bindings.
-    wil::com_ptr_nothrow<IRawElementProviderSimple> focusAProvider, focusBProvider;
-    wil::com_ptr_nothrow<IRawElementProviderFragment> focusA, focusB;
-    if (! state.Require(
-            FindExactFileOperationsActionForSelfTest(fixture.popup, Hit::TaskConflictInspectSource, aId, 0u, IDS_FILEOPS_INSPECTION_SOURCE, focusAProvider) &&
-                FindExactFileOperationsActionForSelfTest(
-                    fixture.popup, Hit::TaskConflictInspectSource, bId.value(), 0u, IDS_FILEOPS_INSPECTION_SOURCE, focusBProvider) &&
-                SUCCEEDED(focusAProvider.query_to(focusA.put())) && SUCCEEDED(focusBProvider.query_to(focusB.put())),
-            L"Acquire exact A and B focus providers before checking synchronous decision bindings."))
-        return false;
-    const auto focusOwnsDecision = [&](IRawElementProviderFragment& provider, uint64_t taskId) noexcept
     {
-        if (FAILED(provider.SetFocus()))
+        // Preserve direct A-to-B-to-A rebinding independently of the visible-Cancel
+        // positive controls below. Only setup may scroll or paint.
+        wil::com_ptr_nothrow<IRawElementProviderSimple> setupA, setupB;
+        if (! state.Require(
+                FindExactFileOperationsActionForSelfTest(fixture.popup, Hit::TaskConflictInspectSource, aId, 0u, IDS_FILEOPS_INSPECTION_SOURCE, setupA) &&
+                    FindExactFileOperationsActionForSelfTest(
+                        fixture.popup, Hit::TaskConflictInspectSource, bId.value(), 0u, IDS_FILEOPS_INSPECTION_SOURCE, setupB),
+                L"Settle both task cards before the direct focus witness."))
             return false;
-        FileOperationsPopupInternal::TaskSnapshot task{};
-        FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
-        layout.taskId = taskId;
-        return DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, task) && task.conflict.active && task.conflict.buttonsPublishable &&
-               DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, layout) &&
-               layout.hostedFocusedAutomationId ==
-                   std::format(L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictInspectSource), taskId, task.conflict.generation) &&
-               layout.hostedDefaultAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                                               static_cast<uint32_t>(Hit::TaskConflictAction),
-                                                               taskId,
-                                                               task.conflict.defaultAction,
-                                                               task.conflict.generation) &&
-               layout.hostedCancelAutomationId == std::format(L"FileOperations.Action.{}.{}.{}.{}",
-                                                              static_cast<uint32_t>(Hit::TaskConflictAction),
-                                                              taskId,
-                                                              task.conflict.escapeAction,
-                                                              task.conflict.generation);
-    };
-    if (! state.Require(focusOwnsDecision(*focusB, bId.value()) && focusOwnsDecision(*focusA, aId),
-                        L"UIA focus must synchronously rebind exact B then A default/cancel identities without pumping a frame."))
-        return false;
+        struct DirectFocusWitness final
+        {
+            uint64_t taskId = 0u;
+            FileOperationsPopupInternal::TaskSnapshot task{};
+            wil::com_ptr_nothrow<IRawElementProviderSimple> sourceProvider;
+            wil::com_ptr_nothrow<IRawElementProviderFragment> source;
+            bool sawAction     = false;
+            bool visibleAction = false;
+        };
+        DirectFocusWitness directA{.taskId = aId};
+        DirectFocusWitness directB{.taskId = bId.value()};
+        const auto* popupState =
+            reinterpret_cast<const FileOperationsPopupInternal::FileOperationsPopupState*>(GetWindowLongPtrW(fixture.popup, GWLP_USERDATA));
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot directLayout{};
+        POINT popupOrigin{};
+        if (! popupState || ! ClientToScreen(fixture.popup, &popupOrigin) || ! DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, directLayout))
+            return state.Require(false, L"Direct A-B-A witness requires the settled popup viewport.");
+        const auto viewport = directLayout.listViewportRect;
+        for (auto* witness : {&directA, &directB})
+        {
+            if (! DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, witness->taskId, witness->task) || ! witness->task.conflict.active ||
+                ! witness->task.conflict.buttonsPublishable)
+                return state.Require(false, L"Direct A-B-A witness requires both current actionable tasks.");
+            const auto sourceId = std::format(
+                L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictInspectSource), witness->taskId, witness->task.conflict.generation);
+            if (! FindMatchingWindowHostRawProvider(fixture.popup,
+                                                    UIA_ButtonControlTypeId,
+                                                    LoadStringResource(nullptr, IDS_FILEOPS_INSPECTION_SOURCE),
+                                                    witness->sourceProvider.put(),
+                                                    sourceId) ||
+                ! witness->sourceProvider || FAILED(witness->sourceProvider.query_to(witness->source.put())) || ! witness->source)
+                return state.Require(false, L"Direct A-B-A witness requires both exact-generation Source providers in one settled tree.");
+            const auto prefix   = std::format(L"FileOperations.Action.{}.{}.", static_cast<uint32_t>(Hit::TaskConflictAction), witness->taskId);
+            const auto suffix   = std::format(L".{}", witness->task.conflict.generation);
+            bool geometryFailed = false;
+            const auto visit    = VisitWindowHostRawProviderTree(fixture.popup,
+                                                                 true,
+                                                                 [&](IRawElementProviderSimple& simple) noexcept
+            {
+                std::wstring id;
+                if (! TryReadRawProviderStringProperty(simple, UIA_AutomationIdPropertyId, id) || ! id.starts_with(prefix) || ! id.ends_with(suffix))
+                    return true;
+                wil::com_ptr_nothrow<IRawElementProviderFragment> fragment;
+                UiaRect bounds{};
+                if (FAILED(simple.QueryInterface(IID_PPV_ARGS(fragment.put()))) || ! fragment || FAILED(fragment->get_BoundingRectangle(&bounds)))
+                {
+                    geometryFailed = true;
+                    return false;
+                }
+                witness->sawAction = true;
+                // UIA exposes actual screen-space bounds; zero/clipped rectangles are not visible.
+                if (bounds.width > 0.0 && bounds.height > 0.0 && bounds.left < static_cast<double>(popupOrigin.x) + viewport.right &&
+                    bounds.left + bounds.width > static_cast<double>(popupOrigin.x) + viewport.left &&
+                    bounds.top < static_cast<double>(popupOrigin.y) + viewport.bottom &&
+                    bounds.top + bounds.height > static_cast<double>(popupOrigin.y) + viewport.top)
+                    witness->visibleAction = true;
+                return true;
+            });
+            if (geometryFailed || ! witness->sawAction || visit != WindowHostRawProviderTreeVisitStatus::Complete)
+                return state.Require(false, L"Direct A-B-A witness could not measure the hosted primary actions.");
+        }
+        // The preceding inspection selected A; lookup must not change that task focus.
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot start{};
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, start) ||
+            start.hostedFocusedAutomationId != std::format(L"FileOperations.Action.{}.{}.0.{}",
+                                                           static_cast<uint32_t>(Hit::TaskConflictInspectSource),
+                                                           directA.taskId,
+                                                           directA.task.conflict.generation))
+            return state.Require(false, L"Direct A-B-A witness must start with exact A focus.");
+        const uint64_t beforeDirectRenders = popupState->DebugHostedRenderCount();
+        for (const auto* witness : {&directB, &directA})
+        {
+            const HRESULT focusHr = witness->source->SetFocus();
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot after{};
+            const bool read = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, after);
+            FileOperationsPopupInternal::TaskSnapshot afterTask{};
+            const bool taskRead      = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, witness->taskId, afterTask);
+            const auto expectedFocus = std::format(
+                L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictInspectSource), witness->taskId, witness->task.conflict.generation);
+            const auto expectedDefault = std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                     static_cast<uint32_t>(Hit::TaskConflictAction),
+                                                     witness->taskId,
+                                                     witness->task.conflict.defaultAction,
+                                                     witness->task.conflict.generation);
+            const auto expectedCancel  = std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                     static_cast<uint32_t>(Hit::TaskConflictAction),
+                                                     witness->taskId,
+                                                     witness->task.conflict.escapeAction,
+                                                     witness->task.conflict.generation);
+            const bool exact           = SUCCEEDED(focusHr) && read && taskRead && afterTask.conflict.active && afterTask.conflict.buttonsPublishable &&
+                                         afterTask.conflict.generation == witness->task.conflict.generation &&
+                                         popupState->DebugHostedRenderCount() == beforeDirectRenders && after.hostedFocusedAutomationId == expectedFocus &&
+                                         after.hostedDefaultAutomationId == expectedDefault &&
+                                         after.hostedCancelAutomationId == (witness->visibleAction ? expectedCancel : std::wstring{});
+            Trace(std::format(L"Direct focus task={} hr=0x{:08X} visibleAction={} focus='{}' default='{}' cancel='{}' renders={} exact={}",
+                              witness->taskId,
+                              static_cast<unsigned long>(focusHr),
+                              witness->visibleAction,
+                              after.hostedFocusedAutomationId,
+                              after.hostedDefaultAutomationId,
+                              after.hostedCancelAutomationId,
+                              popupState->DebugHostedRenderCount(),
+                              exact));
+            if (! state.Require(exact, L"Direct A-B-A focus must synchronously preserve exact decision authority without a frame."))
+                return false;
+        }
+    }
 
+    // Establish each visible decision independently. Provider lookup and paint are
+    // setup only; no frame may repair the subsequent focus/binding transaction.
+    const auto focusOwnsDecision = [&](uint64_t taskId, std::wstring_view leg) noexcept
+    {
+        const auto failSetup = [&](std::wstring_view stage) noexcept
+        {
+            const auto message = std::format(L"TwoPending settled {} task={} setup failed at {}.", leg, taskId, stage);
+            Trace(message);
+            return state.Require(false, message);
+        };
+        const auto* popupState =
+            reinterpret_cast<const FileOperationsPopupInternal::FileOperationsPopupState*>(GetWindowLongPtrW(fixture.popup, GWLP_USERDATA));
+        FileOperationsPopupInternal::TaskSnapshot task{};
+        if (! popupState || ! DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, task) || ! task.conflict.active ||
+            ! task.conflict.buttonsPublishable)
+            return failSetup(L"live task snapshot");
+        wil::com_ptr_nothrow<IRawElementProviderSimple> cancelProvider;
+        wil::com_ptr_nothrow<IRawElementProviderFragment> cancelFragment;
+        if (! FindExactFileOperationsActionForSelfTest(
+                fixture.popup, Hit::TaskConflictAction, taskId, task.conflict.escapeAction, IDS_FILEOP_BTN_CANCEL, cancelProvider) ||
+            ! cancelProvider || FAILED(cancelProvider.query_to(cancelFragment.put())) || ! cancelFragment)
+            return failSetup(L"exact Cancel lookup");
+        const auto cancelId = std::format(
+            L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(Hit::TaskConflictAction), taskId, task.conflict.escapeAction, task.conflict.generation);
+        const float scale = static_cast<float>(GetDpiForWindow(fixture.popup)) / 96.0f;
+        struct CancelObservation final
+        {
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+            FileOperationsPopupInternal::TaskSnapshot task{};
+            D2D1_RECT_F bounds{};
+            SCROLLINFO scroll{.cbSize = sizeof(SCROLLINFO), .fMask = SIF_ALL};
+            uint64_t renders = 0u;
+            bool layoutOk    = false;
+            bool taskOk      = false;
+            bool boundsOk    = false;
+            bool scrollOk    = false;
+        };
+        const auto observeCancel = [&]() noexcept
+        {
+            CancelObservation observation{};
+            observation.layout.taskId = taskId;
+            observation.layoutOk      = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, observation.layout);
+            observation.taskOk        = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, observation.task);
+            observation.boundsOk      = popupState->DebugHostedDecisionActionBoundsForSelfTest(taskId, observation.bounds, cancelId);
+            observation.scrollOk      = GetScrollInfo(fixture.popup, SB_VERT, &observation.scroll) != FALSE;
+            observation.renders       = popupState->DebugHostedRenderCount();
+            return observation;
+        };
+        std::wstring cancelProviderId;
+        const bool cancelProviderIdOk                = TryReadRawProviderStringProperty(*cancelProvider, UIA_AutomationIdPropertyId, cancelProviderId);
+        const CancelObservation beforeCancelFocus    = observeCancel();
+        const HRESULT cancelFocusHr                  = cancelFragment->SetFocus();
+        const CancelObservation immediateCancelFocus = observeCancel();
+        if (! cancelProviderIdOk || cancelProviderId != cancelId || FAILED(cancelFocusHr))
+            return failSetup(std::format(L"Cancel provider identity or focus: id='{}' expected='{}' hr=0x{:08X}",
+                                         cancelProviderId,
+                                         cancelId,
+                                         static_cast<unsigned long>(cancelFocusHr)));
+        RedrawWindow(fixture.popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        CancelObservation settledCancel{};
+        const auto ready = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            settledCancel = observeCancel();
+            return settledCancel.renders > beforeCancelFocus.renders && settledCancel.layoutOk && settledCancel.taskOk && settledCancel.boundsOk &&
+                   settledCancel.task.conflict.active && settledCancel.task.conflict.buttonsPublishable &&
+                   settledCancel.task.conflict.generation == task.conflict.generation && settledCancel.layout.hostedFocusedAutomationId == cancelId &&
+                   settledCancel.bounds.bottom > settledCancel.bounds.top && settledCancel.bounds.top * scale >= settledCancel.layout.listViewportRect.top &&
+                   settledCancel.bounds.bottom * scale <= settledCancel.layout.listViewportRect.bottom;
+        },
+            wait);
+        const auto traceCancel = [&](std::wstring_view phase, const CancelObservation& observation) noexcept
+        {
+            Trace(std::format(L"TwoPending Cancel setup {} {}: render={} layout={} task={} bounds={} focus='{}' scroll={} range=[{},{}] page={} "
+                              L"scrollRead={} boundsDip=({},{}) viewport=({},{}) scale={} generation={}",
+                              leg,
+                              phase,
+                              observation.renders,
+                              observation.layoutOk,
+                              observation.taskOk,
+                              observation.boundsOk,
+                              observation.layout.hostedFocusedAutomationId,
+                              observation.layout.scrollPosition,
+                              observation.scroll.nMin,
+                              observation.scroll.nMax,
+                              observation.scroll.nPage,
+                              observation.scrollOk,
+                              observation.bounds.top,
+                              observation.bounds.bottom,
+                              observation.layout.listViewportRect.top,
+                              observation.layout.listViewportRect.bottom,
+                              scale,
+                              observation.task.conflict.generation));
+        };
+        traceCancel(L"before", beforeCancelFocus);
+        traceCancel(L"immediate", immediateCancelFocus);
+        traceCancel(L"settled", settledCancel);
+        if (! ready.conditionMet)
+            return failSetup(std::format(L"visible Cancel after a new hosted frame: id='{}' hr=0x{:08X} {}",
+                                         cancelId,
+                                         static_cast<unsigned long>(cancelFocusHr),
+                                         ready.timeoutDiagnostic));
+        // Reacquire the current exact provider after the setup frame; lookup does not paint.
+        wil::com_ptr_nothrow<IRawElementProviderSimple> settledCancelProvider;
+        std::wstring settledCancelId;
+        if (! FindMatchingWindowHostRawProvider(
+                fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL), settledCancelProvider.put(), cancelId) ||
+            ! settledCancelProvider || ! TryReadRawProviderStringProperty(*settledCancelProvider, UIA_AutomationIdPropertyId, settledCancelId) ||
+            settledCancelId != cancelId)
+            return failSetup(L"reacquire exact Cancel provider after setup frame");
+        Trace(std::format(L"TwoPending Cancel provider {}: before='{}' settled='{}' expected='{}'.", leg, cancelProviderId, settledCancelId, cancelId));
+
+        // The canonical exact provider lookup does not scroll or redraw.
+        const auto optionsId = std::format(L"FileOperations.Action.{}.0.0", static_cast<uint32_t>(Hit::FooterOptions));
+        wil::com_ptr_nothrow<IRawElementProviderSimple> optionsProvider;
+        wil::com_ptr_nothrow<IRawElementProviderFragment> options;
+        if (! FindMatchingWindowHostRawProvider(
+                fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_FOOTER_OPTIONS), optionsProvider.put(), optionsId) ||
+            ! optionsProvider || FAILED(optionsProvider.query_to(options.put())) || ! options || FAILED(options->SetFocus()))
+            return failSetup(L"global Options lookup or focus");
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot baseline{};
+        baseline.taskId = taskId;
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, baseline) || baseline.hostedFocusedAutomationId != optionsId ||
+            ! baseline.hostedDefaultAutomationId.empty() || ! baseline.hostedCancelAutomationId.empty())
+            return failSetup(std::format(L"global Options baseline: focus='{}' default='{}' cancel='{}'",
+                                         baseline.hostedFocusedAutomationId,
+                                         baseline.hostedDefaultAutomationId,
+                                         baseline.hostedCancelAutomationId));
+        D2D1_RECT_F baselineCancelBounds{};
+        if (! popupState->DebugHostedDecisionActionBoundsForSelfTest(taskId, baselineCancelBounds, cancelId) ||
+            baselineCancelBounds.bottom <= baselineCancelBounds.top || baselineCancelBounds.top * scale < baseline.listViewportRect.top ||
+            baselineCancelBounds.bottom * scale > baseline.listViewportRect.bottom)
+            return failSetup(std::format(L"visible Cancel after Options baseline: boundsDip=({},{}) scale={} viewport=({},{})",
+                                         baselineCancelBounds.top,
+                                         baselineCancelBounds.bottom,
+                                         scale,
+                                         baseline.listViewportRect.top,
+                                         baseline.listViewportRect.bottom));
+        const auto expectedFocus =
+            std::format(L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictInspectSource), taskId, task.conflict.generation);
+        const auto expectedDefault = std::format(L"FileOperations.Action.{}.{}.{}.{}",
+                                                 static_cast<uint32_t>(Hit::TaskConflictAction),
+                                                 taskId,
+                                                 task.conflict.defaultAction,
+                                                 task.conflict.generation);
+        wil::com_ptr_nothrow<IRawElementProviderSimple> inspectProvider;
+        wil::com_ptr_nothrow<IRawElementProviderFragment> inspect;
+        if (! FindMatchingWindowHostRawProvider(
+                fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_INSPECTION_SOURCE), inspectProvider.put(), expectedFocus) ||
+            ! inspectProvider || FAILED(inspectProvider.query_to(inspect.put())) || ! inspect)
+            return failSetup(L"exact Source inspection provider lookup");
+        const uint64_t rendersBefore = popupState->DebugHostedRenderCount();
+        const HRESULT focusHr        = inspect->SetFocus();
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot after{};
+        after.taskId = taskId;
+        FileOperationsPopupInternal::TaskSnapshot afterTask{};
+        const bool layoutOk         = DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, after);
+        const bool taskOk           = DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, taskId, afterTask);
+        const uint64_t rendersAfter = popupState->DebugHostedRenderCount();
+        const bool exact            = SUCCEEDED(focusHr) && layoutOk && taskOk && afterTask.conflict.active && afterTask.conflict.buttonsPublishable &&
+                                      afterTask.conflict.generation == task.conflict.generation && rendersBefore == rendersAfter &&
+                                      after.hostedFocusedAutomationId == expectedFocus && after.hostedDefaultAutomationId == expectedDefault &&
+                                      after.hostedCancelAutomationId == cancelId;
+        Trace(std::format(L"TwoPending settled {}: hr=0x{:08X} renders={}->{} focus='{}' expectedFocus='{}' default='{}' expectedDefault='{}' "
+                          L"cancel='{}' expectedCancel='{}' visibleCancelDip=({},{}), viewport=({},{}), exact={}",
+                          leg,
+                          static_cast<unsigned long>(focusHr),
+                          rendersBefore,
+                          rendersAfter,
+                          after.hostedFocusedAutomationId,
+                          expectedFocus,
+                          after.hostedDefaultAutomationId,
+                          expectedDefault,
+                          after.hostedCancelAutomationId,
+                          cancelId,
+                          baselineCancelBounds.top,
+                          baselineCancelBounds.bottom,
+                          baseline.listViewportRect.top,
+                          baseline.listViewportRect.bottom,
+                          exact));
+        return exact;
+    };
+    if (! state.Require(
+            focusOwnsDecision(bId.value(), L"B") && focusOwnsDecision(aId, L"A") &&
+                fileOps->IsPendingConflictInspectionCurrent(aId, CurrentConflictPromptGenerationForSelfTest(fileOps, aId), aContext) &&
+                fileOps->IsPendingConflictInspectionCurrent(bId.value(), CurrentConflictPromptGenerationForSelfTest(fileOps, bId.value()), bContext) &&
+                TextFileEqualsForFileOpsPrompt(fixture.dest, "existing payload") && TextFileEqualsForFileOpsPrompt(bSource, "new B") &&
+                TextFileEqualsForFileOpsPrompt(bDest, "existing B"),
+            L"UIA focus must synchronously bind exact B then A default/cancel identities without a frame and preserve both collisions."))
+        return false;
     if (! state.Require(InvokeExactFileOperationsActionForSelfTest(
                             fixture.popup, Hit::TaskConflictAction, bId.value(), static_cast<uint32_t>(ConflictAction::Skip), IDS_FILEOPS_CONFLICT_BTN_SKIP),
                         L"Resolve B through its own exact visible Skip UIA action."))
@@ -16614,7 +17179,7 @@ struct FileOperationsPopupTestFixture final
                 std::ranges::none_of(diagnostics, [&](const Entry& entry) noexcept { return entry.taskId == aId && entry.acceptedDecision.has_value(); }) &&
                 fileOps->IsPendingConflictInspectionCurrent(aId, CurrentConflictPromptGenerationForSelfTest(fileOps, aId), aContext) &&
                 TextFileEqualsForFileOpsPrompt(bSource, "new B") && TextFileEqualsForFileOpsPrompt(bDest, "existing B"),
-            L"Only B must record a typed user Skip; A stays pending and both destinations retain bytes."))
+            L"Only B must record a typed user Skip; A stays pending and B source and destination retain their exact bytes."))
         return false;
     // B is finished now; the second A route still has to return to A's own control.
     // Do not call inspectA here because its B-pending predicate is intentionally false.
@@ -18354,26 +18919,44 @@ namespace
                       ! hasTransactionTemporary() && readReport(successful.front(), afterCollision) && afterCollision == originalText,
                   L"A deterministic report-name collision must fail without overwriting the existing completed report.");
 
-    struct ExportTransactionFault final
     {
-        void (*inject)(HRESULT) noexcept;
-        std::wstring_view label;
-    };
-    constexpr ExportTransactionFault transactionFaults[]{{Common::Files::Testing::FailNextLocalFileTransactionWrite, L"write"},
-                                                         {Common::Files::Testing::FailNextLocalFileTransactionFlush, L"flush"},
-                                                         {Common::Files::Testing::FailNextLocalFileTransactionPublish, L"publish"}};
-    for (const ExportTransactionFault& fault : transactionFaults)
-    {
-        std::wstring afterFailure;
-        std::filesystem::path failedOutput;
-        fault.inject(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
-        const bool exported = fileOps->ExportTaskIssuesReport(fixture.taskId.value(), &failedOutput, false);
-        const auto files    = reportFiles();
-        state.Require(! exported && failedOutput.empty() && files.size() == 1u && files.front() == successful.front() &&
-                          readReport(successful.front(), afterFailure) && afterFailure == originalText && ! hasTransactionTemporary(),
-                      std::format(L"Injected {} failure must leave no partial report or transaction sibling and preserve the prior report.", fault.label));
-        if (! state.failure.empty())
-            return finish();
+        // The collision route must not short-circuit the transaction fault witnesses.
+        // Clear the one-shot seams and fixed filename before fixture teardown.
+        const auto resetFaults = wil::scope_exit([&]() noexcept
+        {
+            static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionWriteFailure());
+            static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionFlushFailure());
+            static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure());
+            fileOps->DebugConfigureIssuesExportRouteForSelfTest(reportDir, false);
+        });
+        fileOps->DebugConfigureIssuesExportRouteForSelfTest(reportDir, false, L"fault-witness.txt");
+        struct ExportTransactionFault final
+        {
+            void (*inject)(HRESULT) noexcept;
+            HRESULT (*take)() noexcept;
+            std::wstring_view label;
+        };
+        constexpr ExportTransactionFault transactionFaults[]{
+            {Common::Files::Testing::FailNextLocalFileTransactionWrite, Common::Files::Testing::TakeNextLocalFileTransactionWriteFailure, L"write"},
+            {Common::Files::Testing::FailNextLocalFileTransactionFlush, Common::Files::Testing::TakeNextLocalFileTransactionFlushFailure, L"flush"},
+            {Common::Files::Testing::FailNextLocalFileTransactionPublish, Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure, L"publish"}};
+        for (const ExportTransactionFault& fault : transactionFaults)
+        {
+            if (! state.failure.empty())
+                break;
+            std::wstring afterFailure;
+            std::filesystem::path failedOutput;
+            fault.inject(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
+            const bool exported             = fileOps->ExportTaskIssuesReport(fixture.taskId.value(), &failedOutput, false);
+            const HRESULT unconsumedFailure = fault.take();
+            const auto files                = reportFiles();
+            state.Require(unconsumedFailure == S_OK && ! exported && failedOutput.empty() && files.size() == 1u && files.front() == successful.front() &&
+                              readReport(successful.front(), afterFailure) && afterFailure == originalText && ! hasTransactionTemporary(),
+                          std::format(L"Injected {} failure must be consumed and leave no partial report or transaction sibling and preserve the prior report.",
+                                      fault.label));
+            if (! state.failure.empty())
+                break;
+        }
     }
     if (! state.failure.empty())
         return finish();
@@ -18686,8 +19269,8 @@ namespace
 }
 
 // Exercise the hosted footer buttons and their actual DxUI menu-item callbacks.
-// The fixture holds a real Copy at an actionable conflict, so a second Copy can
-// prove that Queue/Parallel changes admission and release, not just footer text.
+// The real conflict holds exclusive admission: changing Queue to Parallel must
+// preserve that guard, then the same queued Copy runs after the conflict resolves.
 [[nodiscard]] bool TestFileOperationsPopupFooterMenuActionRoutes(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -18820,9 +19403,20 @@ namespace
                   L"Queue selected through the menu must hold the second Copy behind the active conflict without writing its destination.");
     state.Require(choose(openMenu(Hit::FooterQueueMode, queueLabel()), IDS_FILEOPS_BTN_MODE_PARALLEL) && ! fileOps->GetQueueNewTasks(),
                   L"The Parallel UIA menu item must apply Parallel mode through its callback.");
-    state.Require(waitFor([&]() noexcept { return TextFileEqualsForFileOpsPrompt(queuedDestination, "queue route payload"); }) &&
-                      waitFor([&]() noexcept { return layoutMatches(false, false, false); }),
-                  L"Parallel selected through the menu must release the queued Copy and update the rendered selector.");
+    state.Require(queuedId.has_value() &&
+                      waitFor(
+                          [&]() noexcept
+    {
+        auto* task = fileOps->FindTask(queuedId.value());
+        std::error_code ec;
+        return task && ! task->HasEnteredOperation() && task->_waitingForExclusiveTransfer.load(std::memory_order_acquire) &&
+               ! std::filesystem::exists(queuedDestination, ec) && ! ec;
+    }) && waitFor([&]() noexcept { return layoutMatches(false, false, false); }),
+                  L"Parallel must update the selector while the second Copy remains behind the exclusive conflict without publishing bytes.");
+    if (! state.failure.empty() || ! ResolveInitialFileOperationsPopupConflict(fixture))
+        return false;
+    state.Require(waitFor([&]() noexcept { return TextFileEqualsForFileOpsPrompt(queuedDestination, "queue route payload"); }),
+                  L"The same queued Copy must publish its exact bytes after the exclusive conflict resolves.");
     const auto retainedSecondCopy = [&]() noexcept
     {
         if (! queuedId.has_value())
@@ -18832,6 +19426,39 @@ namespace
         return std::ranges::find(completed, queuedId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId) != completed.end();
     };
     state.Require(waitFor(retainedSecondCopy), L"The second Copy must reach a retained successful completion while auto-dismiss is off.");
+    if (! state.failure.empty())
+        return false;
+    // Re-establish a real unresolved conflict after the queued success. The
+    // remaining Options checks still run against that exact live card and the
+    // retained completed neighbor; no two transfers overlap.
+    uint64_t replacementTaskId  = 0u;
+    const HRESULT replacementHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                          FolderWindow::Pane::Left,
+                                                          FolderWindow::Pane::Right,
+                                                          fixture.leftFileSystem,
+                                                          {fixture.source},
+                                                          fixture.destDir,
+                                                          FILESYSTEM_FLAG_NONE,
+                                                          false,
+                                                          0,
+                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                          false,
+                                                          fixture.rightFileSystem,
+                                                          &replacementTaskId);
+    if (! state.Require(SUCCEEDED(replacementHr) && replacementTaskId != 0u && replacementTaskId != queuedId.value(),
+                        L"Admit a fresh exact conflict beside the already-retained success."))
+        return false;
+    FileOperationsPopupInternal::TaskSnapshot replacement{};
+    const bool replacementReady = waitFor([&]() noexcept
+    {
+        return DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, replacementTaskId, replacement) && replacement.conflict.active &&
+               replacement.conflict.inspection && replacement.conflict.buttonsPublishable;
+    });
+    if (! state.Require(replacementReady && TextFileEqualsForFileOpsPrompt(fixture.dest, "existing payload"),
+                        L"The replacement conflict must be actionable and preserve the original destination."))
+        return false;
+    fixture.taskId       = replacementTaskId;
+    fixture.taskSnapshot = replacement;
     if (! state.failure.empty())
     {
         state.Require(fixture.Cleanup(), L"Footer menu route fixture did not clean after scheduling failure.");
@@ -18992,7 +19619,7 @@ namespace
 {
     using namespace std::chrono_literals;
     FileOperationsPopupTestFixture fixture(state);
-    if (! InitializeFileOperationsPopupTestFixture(mainWindow, fixture))
+    if (! InitializeFileOperationsPopupTestFixture(mainWindow, fixture, false, false, false, true))
         return false;
     auto* const fileOps                  = fixture.fileOps;
     const uint64_t taskId                = fixture.taskId.value();
@@ -19012,33 +19639,19 @@ namespace
                    fixture.popup, FileOperationsPopupInternal::PopupHitTest::Kind::FooterCancelAll, 0u, 0u, IDS_FILEOPS_BTN_CANCEL_ALL);
     };
     RedSalamander::TestSupport::MessagePumpWaitOptions wait{};
-    wait.timeout                 = SelfTest::Scale(5000ms);
-    wait.maxMessagesPerPump      = 16u;
-    const bool originalQueueMode = fileOps->GetQueueNewTasks();
-    const auto restoreQueueMode  = wil::scope_exit([&]() noexcept
+    wait.timeout                  = SelfTest::Scale(5000ms);
+    wait.maxMessagesPerPump       = 16u;
+    const bool originalQueueMode  = fileOps->GetQueueNewTasks();
+    const auto restoreQueueMode   = wil::scope_exit([&]() noexcept
     {
         // Drain the owned cohort before restoring Parallel can release a queued
         // task on an early failure. Report cleanup failures even on that path.
         state.Require(fixture.Cleanup(), L"Mixed Cancel-all fixture did not clean its owned cohort.");
         fileOps->ApplyQueueMode(originalQueueMode);
     });
-    const auto completedSource   = fixture.sourceDir / L"cancel-all-finished.txt";
-    const auto completedDest     = fixture.destDir / completedSource.filename();
-    state.Require(SelfTest::WriteTextFile(completedSource, "finished payload"), L"Could not seed the finished Cancel-all cohort item.");
-    uint64_t completedId          = 0u;
-    const HRESULT completeHr      = fileOps->AdmitOperation(FILESYSTEM_COPY,
-                                                            FolderWindow::Pane::Left,
-                                                            FolderWindow::Pane::Right,
-                                                            fixture.leftFileSystem,
-                                                            {completedSource},
-                                                            fixture.destDir,
-                                                            FILESYSTEM_FLAG_NONE,
-                                                            false,
-                                                            0,
-                                                            FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                            false,
-                                                            fixture.rightFileSystem,
-                                                            &completedId);
+    const auto completedSource    = fixture.sourceDir / L"cancel-all-finished.txt";
+    const auto completedDest      = fixture.destDir / completedSource.filename();
+    const uint64_t completedId    = fixture.completedBeforeConflictId;
     const auto completedUnchanged = [&]() noexcept
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
@@ -19047,7 +19660,7 @@ namespace
         return found != completed.end() && found->resultHr == S_OK && found->completedBytes > 0u &&
                TextFileEqualsForFileOpsPrompt(completedDest, "finished payload");
     };
-    state.Require(SUCCEEDED(completeHr) && completedId != 0u && RedSalamander::TestSupport::PumpMessagesUntil(completedUnchanged, wait).conditionMet,
+    state.Require(completedId != 0u && RedSalamander::TestSupport::PumpMessagesUntil(completedUnchanged, wait).conditionMet,
                   L"Cancel-all cohort requires a real retained successful Copy.");
     if (! state.failure.empty())
         return false;

@@ -1,0 +1,1 @@
+- Align overlapping Copy test actions with serialized admission, explicitly recurse the live-output directory fixture and fail unexpected publisher prompts early. Preserve no-activation path-detail coverage by checking initial focus before UIA Invoke and separately observing virtualized cards and retained actions clipped outside the viewport.

@@ -485,6 +485,11 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK "競合する操作の完了を待っています。この操作ではファイル ID を取得できないため、単独で実行する必要があります。"
+    IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE "並列転送(&P)"
+    IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC "ファイル操作間で共有する上限です（1～16、既定値は4）。異なるファイルを新しい転送先名に同時に転送できます。上書きと競合する操作は順番に実行します。"
+    IDS_FILEOPS_WAITING_PARALLEL_LIMIT_FMT "転送枠が空くのを待っています。共有上限は {0} です。"
+    IDS_FILEOPS_WAITING_EXCLUSIVE_TRANSFER "単独で実行する必要がある操作の完了を待っています。"
     IDS_FMT_FILEOPS_TRANSFER_AMOUNT "{0} / {1}"
     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
     IDS_FMT_FILEOPS_SELECTION_KINDS "ファイル {0:L} 個、フォルダー {1:L} 個"

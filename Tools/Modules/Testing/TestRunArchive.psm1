@@ -263,7 +263,19 @@ function Get-RSTestRunArchiveGrandfatheredRelocationState {
         return $null
     }
 
-    foreach ($commit in @($ExpectedSourceCommit, $ExpectedBaselineCommit)) {
+    # The published parentless snapshot preserves the reviewed baseline identities.
+    # Only the implicit production baseline may fall back; explicit baselines stay exact.
+    $verificationBaseline = $ExpectedBaselineCommit
+    & git -C $root rev-parse --verify "$ExpectedBaselineCommit^{commit}" *> $null
+    if ($LASTEXITCODE -ne 0 -and -not $PSBoundParameters.ContainsKey('ExpectedBaselineCommit') -and
+        $ExpectedBaselineCommit -ceq $script:RSTestRunArchiveRelocationBaselineCommit) {
+        & git -C $root rev-parse --verify "$script:RSTestRunArchiveImportedBaselineCommit^{commit}" *> $null
+        if ($LASTEXITCODE -eq 0) {
+            & git -C $root merge-base --is-ancestor $script:RSTestRunArchiveImportedBaselineCommit HEAD *> $null
+            if ($LASTEXITCODE -eq 0) { $verificationBaseline = $script:RSTestRunArchiveImportedBaselineCommit }
+        }
+    }
+    foreach ($commit in @($ExpectedSourceCommit, $verificationBaseline)) {
         & git -C $root rev-parse --verify "$commit^{commit}" *> $null
         if ($LASTEXITCODE -ne 0) {
             $errors.Add("Required immutable relocation commit is unavailable: $commit")
@@ -280,7 +292,7 @@ function Get-RSTestRunArchiveGrandfatheredRelocationState {
     $baselineTree = @{}
     foreach ($spec in @(
             [pscustomobject]@{ Commit = $ExpectedSourceCommit; Destination = $sourceTree },
-            [pscustomobject]@{ Commit = $ExpectedBaselineCommit; Destination = $baselineTree }
+            [pscustomobject]@{ Commit = $verificationBaseline; Destination = $baselineTree }
         )) {
         $output = & git -C $root ls-tree -r --full-tree $spec.Commit -- Specs/TestRuns 2>$null
         if ($LASTEXITCODE -ne 0) {

@@ -161,6 +161,15 @@ $allowedResidualDependencies = @(
     @{
         Category      = 'Native visible control creation'
         Path          = 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        LinePattern   = 'CreateWindowExW\(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW\(nullptr\), nullptr\)'
+        Visibility    = 'test-only message-only parent'
+        Owner         = 'Find dialog command self-tests'
+        Reason        = 'The private-thread queue-order probe uses an owned message-only Static parent without WS_VISIBLE or desktop activation.'
+        ExitCondition = 'Remove if the drain-order test gains a non-HWND message queue probe.'
+    },
+    @{
+        Category      = 'Native visible control creation'
+        Path          = 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         LinePattern   = 'CreateWindowExW\(0, L"STATIC", L"", WS_(POPUP|CHILD)'
         Visibility    = 'test-only hidden queue probe'
         Owner         = 'Find dialog command self-tests'

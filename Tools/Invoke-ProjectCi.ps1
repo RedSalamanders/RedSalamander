@@ -9,7 +9,7 @@ and evidence use the governed sandbox. No product publication is performed here.
 .PARAMETER Phase
 Compiler-free PR checks, Release test build, regression execution, production ZIP, or explicit qualification.
 .PARAMETER EngineRoot
-Checkout of the exact shared engine commit in .ci/project.json.
+Checkout of the exact shared engine commit in .ci/project.json. Relative paths resolve from the current PowerShell filesystem location.
 .PARAMETER Platform
 Matching native x64 or ARM64 hosted runner.
 .PARAMETER Descriptor
@@ -19,7 +19,7 @@ Immutable PR comparison base for changelog validation.
 .PARAMETER Configuration
 Debug, Release or ASan Debug for an explicit qualification only.
 .PARAMETER QualificationScope
-Normal regression or explicit Full qualification; never advances automatic Release state.
+Normal regression, explicit Full qualification, a fixed filtered diagnostic, the manual R0e paired study, or read-only DesktopProbe; never advances automatic Release state.
 .PARAMETER DevelopmentEngine
 Allows a local engine under development for compiler-free checks only.
 .OUTPUTS
@@ -29,6 +29,12 @@ Requires PowerShell 7.4 and Git. Native build phases bootstrap the pinned vcpkg
 tool/baseline and install the selected platform dependencies before building.
 Native work is hosted-only and uses the matching architecture.
 Static never invokes compiler fixtures. No publication or source/pin updates.
+Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for repository coverage.
+DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
+Hosted interactive native entries use a verified boundary on Default inside the existing entry lease and restore it after child drain.
+Eligible hosted native ARM64 entries may first request the two approved stock-window closes, retaining create-only marked-root evidence.
+Their neutral fixture may use one bounded registered nontext-key handoff after direct foreground refusal; native suite warnings and input assertions remain required.
+Paired comparisons retain the original desktop for both sources.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
 .EXAMPLE
 ./Tools/Invoke-ProjectCi.ps1 -Phase Static -EngineRoot ../RedSalamanders.CI -Base origin/main -DevelopmentEngine
@@ -37,16 +43,53 @@ See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual a
 param([Parameter(Mandatory)][ValidateSet('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')][string]$Phase,
     [Parameter(Mandatory)][string]$EngineRoot, [ValidateSet('x64','ARM64')][string]$Platform = 'x64',
     [string]$Descriptor = '', [string]$Base = 'origin/main',
-    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
+    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe') -and $Phase -ne 'Qualification') {
+    throw 'Filtered diagnostic scopes are only valid for explicit Qualification.'
+}
+if ($QualificationScope -ceq 'R0ePaired' -and $Configuration -cne 'Release') { throw 'R0e paired validation requires Release.' }
+if ($QualificationScope -ceq 'DesktopProbe' -and $env:GITHUB_ACTIONS -cne 'true') { throw 'Hosted desktop diagnostics are restricted to GitHub Actions.' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$EngineRoot = [IO.Path]::GetFullPath($EngineRoot)
+$engineProvider = $null
+$engineDrive = $null
+$EngineRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($EngineRoot, [ref]$engineProvider, [ref]$engineDrive)
+if ($engineProvider.Name -cne 'FileSystem') { throw 'EngineRoot requires the FileSystem provider.' }
 Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Policy.psm1') -ErrorAction Stop
 Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.Project.psm1') -ErrorAction Stop
 $context = New-CiProjectContext -Root $root -EngineRoot $EngineRoot -Phase $Phase -Platform $Platform -Descriptor $Descriptor -DevelopmentEngine:$DevelopmentEngine
+$pairedDispatch = $null
+if ($QualificationScope -ceq 'R0ePaired') {
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1')
+    if ([string]::IsNullOrWhiteSpace($env:GITHUB_EVENT_PATH) -or -not (Test-Path -LiteralPath $env:GITHUB_EVENT_PATH -PathType Leaf)) {
+        throw 'R0e paired validation requires the manual dispatch event payload.'
+    }
+    $pairedDispatch = Get-RSHostedPairedDispatch -EventName $env:GITHUB_EVENT_NAME -EventJson ([IO.File]::ReadAllText($env:GITHUB_EVENT_PATH)) -CandidateHead $env:GITHUB_SHA
+    $candidateHead = (Invoke-CiGit $root @('rev-parse','HEAD')).stdout.Trim()
+    $candidateStatus = (Invoke-CiGit $root @('status','--porcelain')).stdout.Trim()
+    $baselineCommit = (Invoke-CiGit $root @('rev-parse','--verify',($pairedDispatch.baseline + '^{commit}'))).stdout.Trim()
+    if ($candidateHead -cne $pairedDispatch.candidate -or $context.batch.commit -cne $pairedDispatch.candidate -or $candidateStatus) {
+        throw 'R0e candidate checkout must be clean and match the frozen descriptor and dispatch SHA.'
+    }
+    if ($baselineCommit -cne $pairedDispatch.baseline) { throw 'R0e baseline must name the exact available commit object.' }
+}
 function Run([string]$Script, [string[]]$CommandArguments = @()) {
     Invoke-CiProjectScript -Context $context -Script $Script -Arguments $CommandArguments
+}
+if ($QualificationScope -ceq 'DesktopProbe') {
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedTestDesktop.psm1')
+    Import-Module (Join-Path $root 'Tools/Modules/Testing/TestSandbox.psm1')
+    $probeRoot = Join-Path ([IO.Path]::GetPathRoot($root)) 'RedSalamander.Perf'
+    $null = Initialize-RSTestSandboxRoot -TestRoot $probeRoot -RepoRoot $root -AllowExternalInitialization
+    $probeDirectory = Assert-RSTestSandboxContainedPath -TestRoot $probeRoot -Path (Join-Path $probeRoot "evidence/desktop-probe/$($env:GITHUB_RUN_ID)/$Platform") -RequireDescendant
+    [void][IO.Directory]::CreateDirectory($probeDirectory)
+    $probe = [ordered]@{ schema='red-salamander.hosted-desktop-probe.v1'; head=$context.batch.commit; platform=$Platform;
+        observed_utc=[DateTime]::UtcNow.ToString('o'); repository_verdict='NOT_EVALUATED'; desktop=(Get-RSHostedDesktopDiagnostics) }
+    $probe | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $probeDirectory 'desktop.json') -Encoding utf8
+    if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('evidence_directory=' + (Join-Path $probeRoot 'evidence')) }
+    Write-Host ('Read-only hosted desktop probe: ' + ($probe | ConvertTo-Json -Depth 8 -Compress))
+    return
 }
 function Test-PinnedDxUiMatrix {
     Import-Module (Join-Path $root 'Tools/Modules/Build/DxUiDependency.psm1')
@@ -104,6 +147,7 @@ if ($Phase -eq 'Production') {
     return
 }
 $env:RSBuildEnableTests = 'true'
+if ($QualificationScope -ceq 'R0ePaired') { $env:RSBuildCompilerDebugInformation = 'Embedded' }
 if ($Phase -in @('ReleaseTestBuild','Qualification')) {
     Run 'build.ps1' ($profile + @('-BuildNumber',$number))
     Test-PinnedDxUiMatrix
@@ -121,10 +165,92 @@ if ($Configuration -eq 'ASan Debug') {
         throw 'The seeded heap overflow was not rejected with an AddressSanitizer diagnostic.'
     }
 }
+$priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+$priorStockPreparationRequest = [Environment]::GetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', 'Process')
+try {
+# Clear an inherited request unless the current hosted role selects this fixture.
+[Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP',
+    (Get-RSHostedInputDesktopRequest -PairedComparison:($QualificationScope -ceq 'R0ePaired')), 'Process')
+[Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION',
+    (Get-RSHostedStockPreparationRequest -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope), 'Process')
 Invoke-RSWithHostedTestDesktop -Action {
+    if ($QualificationScope -ceq 'R0ePaired') {
+        [void][IO.Directory]::CreateDirectory($receiptDirectory)
+        $command = Assert-CiContainedPath $root (Join-Path $root 'Tools/Invoke-R0ePairedValidation.ps1')
+        $hostPath = (Get-Process -Id $PID).Path
+        $pairArgs = @('-NoProfile','-NonInteractive','-File',$command,'-BaselineHead',$pairedDispatch.baseline,
+            '-CandidateHead',$pairedDispatch.candidate,'-Platform',$Platform,'-BuildNumber',$number,
+            '-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-EngineRoot',$EngineRoot)
+        $process = Invoke-CiProcess -FilePath $hostPath -Arguments $pairArgs -WorkingDirectory $root -TimeoutSeconds 18000 -Stream -AllowFailure
+        [IO.File]::WriteAllText((Join-Path $receiptDirectory 'r0e-paired.stdout.log'), $process.stdout)
+        [IO.File]::WriteAllText((Join-Path $receiptDirectory 'r0e-paired.stderr.log'), $process.stderr)
+        if ($process.exitCode -eq 2) { throw 'R0e paired diagnostic retained a timing-only RED baseline; qualification remains NOT_EVALUATED.' }
+        if ($process.exitCode -ne 0) { throw "R0e paired diagnostic failed with exit $($process.exitCode); preserve its evidence." }
+        [void](Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21)
+        Write-Host 'R0e paired diagnostic completed; repository coverage remains NOT_EVALUATED.'
+        return
+    }
+    if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture')) {
+        Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+        Import-Module (Join-Path $root 'Tools/Modules/Build/BuildEvidence.psm1')
+        $selection = Get-RSHostedDiagnosticSelection -Scope $QualificationScope
+        [void][IO.Directory]::CreateDirectory($receiptDirectory)
+        $diagnosticMarker = [ordered]@{scope=$QualificationScope; suite=$selection.suite; case=$selection.case; run_id=$null;
+            platform=$Platform; configuration=$Configuration; source_snapshot_id=$null; build_receipt_id=$null;
+            native_result_sha256=$null; runner_summary_sha256=$null; archive_intent_sha256=$null;
+            assertion_probe_passed=$false; status='incomplete'; repository_verdict='NOT_EVALUATED'; coverage='filtered'}
+        try {
+            $buildOutput = Join-Path $root ".build/$Platform/$Configuration"
+            $receipt = Read-RSBuildReceipt -BuildOutputDir $buildOutput -SchemaPath (Join-Path $root 'Specs/Build/BuildReceipt.schema.json')
+            $receiptHash = (Get-FileHash -LiteralPath (Join-Path $buildOutput 'build-receipt.json') -Algorithm SHA256).Hash
+            $snapshot = Get-RSBuildSourceSnapshot -RepoRoot $root
+            $requiredExe = ".build/$Platform/$Configuration/RedSalamander.exe"
+            $receiptVerified = Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot $snapshot -Platform $Platform -Configuration $Configuration -RepoRoot $root -RequiredRelativePath @($requiredExe)
+            if (-not $receiptVerified) { throw 'Diagnostic full-solution source/artifact receipt is invalid.' }
+            $runner = Assert-CiContainedPath $root (Join-Path $root 'Tools/Run-AllTests.ps1')
+            $hostPath = (Get-Process -Id $PID).Path
+            $runnerArgs = @('-NoProfile','-NonInteractive','-File',$runner) + $profile + @('-Suite',$selection.suite,'-CaseFilter',$selection.case,
+                '-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot')
+            $invocationStartedUtc = [DateTimeOffset]::UtcNow
+            $process = Invoke-CiProcess -FilePath $hostPath -Arguments $runnerArgs -WorkingDirectory $root -TimeoutSeconds 18000 -Stream -AllowFailure
+            $invocationEndedUtc = [DateTimeOffset]::UtcNow
+            [IO.File]::WriteAllText((Join-Path $receiptDirectory 'diagnostic-runner.stdout.log'), $process.stdout)
+            [IO.File]::WriteAllText((Join-Path $receiptDirectory 'diagnostic-runner.stderr.log'), $process.stderr)
+            if ($process.exitCode -ne 2) { throw "Filtered diagnostic runner returned unexpected exit $($process.exitCode)." }
+            $runId = Get-RSHostedDiagnosticRunId -Output $process.stdout
+            $diagnosticMarker.run_id = $runId
+            $evidence = Read-RSHostedDiagnosticEvidence -TestRoot $env:REDSALAMANDER_TEST_ROOT -RunId $runId -Selection $selection
+            $after = Get-RSBuildSourceSnapshot -RepoRoot $root
+            $afterReceipt = Read-RSBuildReceipt -BuildOutputDir $buildOutput -SchemaPath (Join-Path $root 'Specs/Build/BuildReceipt.schema.json')
+            $stillVerified = $after.SnapshotId -ceq $snapshot.SnapshotId -and $null -ne $afterReceipt -and
+                $receipt.receipt_id -ceq $afterReceipt.receipt_id -and
+                $receiptHash -ceq (Get-FileHash -LiteralPath (Join-Path $buildOutput 'build-receipt.json') -Algorithm SHA256).Hash -and
+                (Test-RSBuildReceiptForArtifactUse -Receipt $afterReceipt -SourceSnapshot $after -Platform $Platform -Configuration $Configuration -RepoRoot $root -RequiredRelativePath @($requiredExe))
+            [void](Test-RSHostedDiagnosticOutcome -ExitCode $process.exitCode -RunId $runId -Selection $selection -Summary $evidence.summary -Native $evidence.native -Platform $Platform -Configuration $Configuration -ReceiptVerified $stillVerified -ExpectedExePath ([IO.Path]::GetFullPath((Join-Path $buildOutput 'RedSalamander.exe'))) -InvocationStartedUtc $invocationStartedUtc -InvocationEndedUtc $invocationEndedUtc)
+            $diagnosticMarker.source_snapshot_id = $snapshot.SnapshotId
+            $diagnosticMarker.build_receipt_id = $receipt.receipt_id
+            $diagnosticMarker.native_result_sha256 = $evidence.nativeSha256
+            $diagnosticMarker.runner_summary_sha256 = $evidence.summarySha256
+            $diagnosticMarker.archive_intent_sha256 = $evidence.archiveIntentSha256
+            $diagnosticMarker.assertion_probe_passed = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
+            $diagnosticMarker.status = 'passed'
+            Write-Host "Filtered diagnostic $QualificationScope passed its selected case; repository coverage remains NOT_EVALUATED."
+        } catch {
+            $diagnosticMarker.status = 'failed'
+            throw
+        } finally {
+            $diagnosticMarker | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $receiptDirectory 'diagnostic-coverage.json') -Encoding utf8
+        }
+        return
+    }
     $suite = if ($Phase -eq 'Qualification' -and $QualificationScope -eq 'Full') { 'Full' } else { 'CI' }
     Run 'Tools/Run-AllTests.ps1' ($profile + @('-Suite',$suite,'-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot'))
 }
+} finally {
+    [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $priorStockPreparationRequest, 'Process')
+    [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process')
+}
+if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished; it does not authorize production or publication.'; return }
 $summaries = @(Get-ChildItem (Join-Path $env:REDSALAMANDER_TEST_ROOT 'evidence/completed-runs') -Recurse -Filter 'run-all-tests-results.json' -File | Where-Object LastWriteTimeUtc -ge $started)

@@ -140,14 +140,17 @@ function Get-RSTestRunPlan {
         # callback witnesses avoid desktop-global assertions and input.
         # Keep this admission case-sensitive and closed to proof injections.
         $ownedFolderProgressCase = $Suite -eq 'FileOps' -and
-            ($CaseFilter -ceq 'DiscoveryScope_FolderLiveProgress' -or
+            ($CaseFilter -ceq 'DiscoveryScope_LocalDirectApi' -or
+             $CaseFilter -ceq 'DiscoveryScope_FolderLiveProgress' -or
              $CaseFilter -ceq 'DiscoveryScope_MultipleFoldersLiveProgress' -or
              $CaseFilter -ceq 'FileOps_RepeatDecisionContracts' -or
              $CaseFilter -ceq 'FileOps_ReviewRemediationContracts' -or
+             $CaseFilter -ceq 'FileOps_IdentityInterlockWaiting' -or
              $CaseFilter -ceq 'FileOps_CrossRootLocalCopy' -or
              $CaseFilter -ceq 'FileOps_SmallFileCopyCost' -or
              $CaseFilter -ceq 'FileOps_SelectionShapeLocal' -or
-             $CaseFilter -ceq 'FileOps_SelectionShapeSmb') -and
+             $CaseFilter -ceq 'FileOps_SelectionShapeSmb' -or
+             $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeChangedEntry') -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and
             [string]::IsNullOrEmpty($SelfTestOrderProofCase)
         $ownedProductGallery = $Suite -eq 'Commands' -and $CaseFilter -ceq 'cmd_product_documentation_gallery' -and

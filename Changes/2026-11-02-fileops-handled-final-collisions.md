@@ -1,0 +1,1 @@
+- Keep a handled new-file commit collision out of the File Operations error count when Skip preserves the appeared occupant. Other commit failures retain their diagnostics.

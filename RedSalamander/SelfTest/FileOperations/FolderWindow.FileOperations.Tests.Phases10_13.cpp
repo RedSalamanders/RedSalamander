@@ -1188,6 +1188,7 @@ case SelfTestState::Step::Phase10_PermanentDelete:
             Fail(L"Failed to create recursive permanent-delete fixture.");
             return true;
         }
+        SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(true);
         HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         state.taskC = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_DELETE,
@@ -1204,6 +1205,8 @@ case SelfTestState::Step::Phase10_PermanentDelete:
         HostClearTestPromptResultOverride();
         if (! state.taskC.has_value())
         {
+            ReleaseFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest();
+            SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(false);
             Fail(L"Failed to start recursive exact-authority permanent-delete task.");
             return true;
         }
@@ -1212,6 +1215,37 @@ case SelfTestState::Step::Phase10_PermanentDelete:
     }
 
     if (state.stepState == 5)
+    {
+        if (! HasFileOpsPermanentDeleteBeforeRecheckPauseEnteredForSelfTest())
+        {
+            if (state.taskC.has_value() && state.completedTasks.contains(state.taskC.value()))
+            {
+                Fail(L"The directory Delete completed before its strict confirmation lease was observed.");
+                return true;
+            }
+            return false;
+        }
+        const std::filesystem::path renamed = delDir / L"recursive-delete-renamed";
+        const BOOL moved                    = MoveFileExW(recursiveDeleteRoot.c_str(), renamed.c_str(), MOVEFILE_WRITE_THROUGH);
+        const DWORD moveError               = GetLastError();
+        const auto* directoryTask           = state.fileOps->FindTask(state.taskC.value());
+        const bool stillPreparing           = directoryTask && directoryTask->HasReservedOperation() && ! directoryTask->HasEnteredOperation() &&
+                                              directoryTask->GetLifecyclePhase() == FileOperations::TaskLifecyclePhase::PreparingExecution;
+        ReleaseFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest();
+        SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(false);
+        if (moved != FALSE || moveError != ERROR_SHARING_VIOLATION || ! stillPreparing)
+        {
+            Fail(std::format(L"The confirmed directory Delete must retain its strict root lease before execution (moved={}, error={}, preparing={}).",
+                             moved != FALSE,
+                             moveError,
+                             stillPreparing));
+            return true;
+        }
+        state.stepState = 6;
+        return false;
+    }
+
+    if (state.stepState == 6)
     {
         const auto completed = state.taskC.has_value() ? state.completedTasks.find(state.taskC.value()) : state.completedTasks.end();
         if (completed == state.completedTasks.end())
@@ -1225,7 +1259,7 @@ case SelfTestState::Step::Phase10_PermanentDelete:
                              static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
-        state.stepState = 6;
+        state.stepState = 7;
     }
 
     std::error_code ec;
@@ -1509,10 +1543,13 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
         {
             HRESULT workerHr              = E_PENDING;
             ConflictAction selectedAction = ConflictAction::None;
-            const bool applyEligible      = scenario.risk != FileOperations::DeferredConsentRisk::RecycleEscalation;
-            std::jthread worker([&](std::stop_token) noexcept {
+            std::atomic<bool> workerReturned{false};
+            const bool applyEligible = scenario.risk != FileOperations::DeferredConsentRisk::RecycleEscalation;
+            std::jthread worker([&](std::stop_token) noexcept
+            {
                 workerHr = consentTask.DebugRequestDeferredConsentForSelfTest(
                     scenario.risk, applyEligible, true, 7u, true, 12'345u, scenario.itemIndex, &selectedAction);
+                workerReturned.store(true, std::memory_order_release);
             });
 
             std::optional<Task::ConflictPromptState> prompt;
@@ -1530,8 +1567,30 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
                 prompt->actionCount == 0u || prompt->defaultAction != ConflictAction::Cancel || prompt->escapeAction != ConflictAction::Cancel ||
                 ! PromptHasAction(prompt.value(), ConflictAction::Cancel) || ! PromptHasAction(prompt.value(), scenario.decision))
             {
+                const bool returnedBeforeCancel = workerReturned.load(std::memory_order_acquire);
+                bool activeBeforeCancel         = false;
+                bool loadingBeforeCancel        = false;
+                uint64_t generationBeforeCancel = 0u;
+                {
+                    std::scoped_lock lock(consentTask._conflictArbiter.mutex);
+                    activeBeforeCancel     = consentTask._conflictArbiter.prompt.active;
+                    loadingBeforeCancel    = consentTask._conflictArbiter.prompt.metadataLoading;
+                    generationBeforeCancel = consentTask._conflictArbiter.prompt.generation;
+                }
+                const bool cancelledBeforeCancel = consentTask._cancelled.load(std::memory_order_acquire);
+                const bool stoppedBeforeCancel   = consentTask._stopToken.stop_requested();
                 consentTask.RequestCancel();
                 worker.join();
+                AppendLog(std::format(L"Deferred-consent diagnostic: returnedBeforeCancel={} active={} loading={} generation={} cancelled={} stopped={} "
+                                      L"hrAfterJoin=0x{:08X} actionAfterJoin={}",
+                                      returnedBeforeCancel,
+                                      activeBeforeCancel,
+                                      loadingBeforeCancel,
+                                      generationBeforeCancel,
+                                      cancelledBeforeCancel,
+                                      stoppedBeforeCancel,
+                                      static_cast<unsigned long>(workerHr),
+                                      static_cast<unsigned>(selectedAction)));
                 if (prompt.has_value())
                 {
                     Fail(std::format(L"Deferred-consent risk matrix mismatch: risk={} deferred={} bucket={}/{} countKnown={} count={} "
@@ -1557,7 +1616,9 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
                 }
                 else
                 {
-                    Fail(std::format(L"Deferred-consent risk matrix did not publish its prompt: risk={}.", static_cast<unsigned>(scenario.risk)));
+                    Fail(std::format(L"Deferred-consent risk matrix did not publish its prompt: risk={} itemIndex={}.",
+                                     static_cast<unsigned>(scenario.risk),
+                                     scenario.itemIndex));
                 }
                 return true;
             }
@@ -1570,7 +1631,16 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
                 return true;
             }
 
-            static_cast<void>(consentTask.SubmitConflictDecision(prompt.value().generation, scenario.decision, true));
+            // This matrix exercises distinct item-scoped receipts; selecting the
+            // advertised apply-to-all option would intentionally reuse the first
+            // matching typed decision instead of publishing later prompts.
+            if (! consentTask.SubmitConflictDecision(prompt.value().generation, scenario.decision, false))
+            {
+                consentTask.RequestCancel();
+                worker.join();
+                Fail(L"Deferred-consent matrix could not submit its item-scoped decision.");
+                return true;
+            }
             worker.join();
             if (FAILED(workerHr) || selectedAction != scenario.decision)
             {
@@ -7716,6 +7786,7 @@ case SelfTestState::Step::Phase11_BridgePipelineDummyToDummyPerf:
 }
 case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
 {
+    auto& ioGate            = FolderWindowFileOperationsStateInternal::g_fileOpsProgressIoGateForSelfTest;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 240'000ull))
     {
@@ -7988,6 +8059,7 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
 
     if (state.stepState == 0)
     {
+        BeginSelfTestSharedTransferLimit(state, 16u);
         state.taskA.reset();
         state.taskB.reset();
         state.connOverridePerfRunStartTick           = 0;
@@ -8065,9 +8137,22 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
             return false;
         }
 
-        if (! applyConnectionOverride(kCandidateConcurrency, L"@conn precedence candidate") ||
-            ! startCopy(makeDestinationFolder(L"candidate"), state.taskB, L"@conn precedence candidate"))
+        if (! applyConnectionOverride(kCandidateConcurrency, L"@conn precedence candidate"))
         {
+            restoreOverridePerfState();
+            return true;
+        }
+        // Keep real writer work in flight through the product's normal reveal
+        // delay so this case can inspect the popup's actual diagnostic values.
+        if (! ioGate.Arm(true))
+        {
+            restoreOverridePerfState();
+            Fail(L"A previous bridge I/O checkpoint is still active.");
+            return true;
+        }
+        if (! startCopy(makeDestinationFolder(L"candidate"), state.taskB, L"@conn precedence candidate"))
+        {
+            ioGate.Release();
             restoreOverridePerfState();
             return true;
         }
@@ -8077,6 +8162,24 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
         return false;
     }
 
+    if (ioGate.TimedOut())
+    {
+        ioGate.Release();
+        restoreOverridePerfState();
+        Fail(L"The @conn precedence bridge I/O checkpoint timed out.");
+        return true;
+    }
+    if (! state.connOverridePerfCandidatePopupObserved && state.taskB.has_value() && ! ioGate.HasEntered(state.taskB.value()))
+    {
+        if (state.completedTasks.contains(state.taskB.value()))
+        {
+            ioGate.Release();
+            restoreOverridePerfState();
+            Fail(L"The @conn precedence candidate completed before its bridge I/O checkpoint.");
+            return true;
+        }
+        return false;
+    }
     observeConfigured(state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr,
                       state.connOverridePerfCandidateConfigured,
                       state.connOverridePerfRunStartTick);
@@ -8087,9 +8190,12 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
                                                                    L"@conn precedence candidate");
     if (candidatePopupStatus < 0)
     {
+        ioGate.Release();
         restoreOverridePerfState();
         return true;
     }
+    if (candidatePopupStatus > 0)
+        ioGate.Release();
 
     const int candidateStatus = finalizeCopy(state.taskB,
                                              resolvedCandidateFolder,
@@ -8114,7 +8220,7 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
     }
 
     const std::wstring detail = std::format(L"fileCount={} fileBytes={} chunkLatencyMs={} baselineConfigured={} candidateConfigured={} "
-                                            L"baselineOverride=inherit candidateOverride={} popupResolved={} popupApplied={}",
+                                            L"baselineOverride=inherit candidateOverride={} popupResolved={} popupApplied={} candidateCheckpoint=heldForPopup",
                                             kFileCount,
                                             kFileBytes,
                                             kStreamChunkLatencyMs,
@@ -8123,23 +8229,23 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
                                             kCandidateConcurrency,
                                             state.connOverridePerfCandidatePopupResolved,
                                             state.connOverridePerfCandidatePopupApplied);
-    Debug::Perf::Emit(
+    Debug::Perf::EmitDurationUs(
         L"FileOps.SelfTest.ConnectionOverrideInherit", detail, state.connOverridePerfBaselineUs, state.connOverridePerfBaselineConfigured, 0, S_OK);
-    Debug::Perf::Emit(L"FileOps.SelfTest.ConnectionOverrideApplied",
-                      detail,
-                      state.connOverridePerfCandidateUs,
-                      state.connOverridePerfCandidateConfigured,
-                      kCandidateConcurrency,
-                      S_OK);
+    Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.ConnectionOverrideApplied",
+                                detail,
+                                state.connOverridePerfCandidateUs,
+                                state.connOverridePerfCandidateConfigured,
+                                kCandidateConcurrency,
+                                S_OK);
     const uint64_t durationDeltaUs = (state.connOverridePerfCandidateUs >= state.connOverridePerfBaselineUs)
                                          ? (state.connOverridePerfCandidateUs - state.connOverridePerfBaselineUs)
                                          : (state.connOverridePerfBaselineUs - state.connOverridePerfCandidateUs);
-    Debug::Perf::Emit(L"FileOps.SelfTest.ConnectionOverrideDurationDelta",
-                      detail,
-                      durationDeltaUs,
-                      state.connOverridePerfBaselineUs,
-                      state.connOverridePerfCandidateUs,
-                      S_OK);
+    Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.ConnectionOverrideDurationDelta",
+                                detail,
+                                durationDeltaUs,
+                                state.connOverridePerfBaselineUs,
+                                state.connOverridePerfCandidateUs,
+                                S_OK);
 
     AppendLog(std::format(L"Phase11_ConnectionOverridePrecedence baseline={}us candidate={}us configured={} -> {}",
                           state.connOverridePerfBaselineUs,
@@ -8148,6 +8254,7 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
                           state.connOverridePerfCandidateConfigured));
 
     restoreOverridePerfState();
+    RestoreSelfTestSharedTransferLimit(state);
     NextStep(state, SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate);
     return false;
 }

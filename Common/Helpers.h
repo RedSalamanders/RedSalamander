@@ -1784,6 +1784,8 @@ inline void PublishString(std::wstring_view payload) noexcept
 
 // Perf JSONL sink -- implementation lives in Common.dll (PerfJsonl.cpp).
 COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept;
+COMMON_API void WritePerfJsonlDuration(
+    std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept;
 
 COMMON_API bool HasPerfJsonlOutput() noexcept;
 } // namespace detail
@@ -1819,9 +1821,15 @@ inline bool IsCaptureEnabled() noexcept
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
 }
 
-inline void Emit(std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+namespace implementation
 {
-    detail::WritePerfJsonl(name, detail, durationUs, value0, value1, hr);
+inline void EmitWithKind(
+    std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr, bool isDuration) noexcept
+{
+    if (isDuration)
+        detail::WritePerfJsonlDuration(name, detail, durationUs, value0, value1, hr);
+    else
+        detail::WritePerfJsonl(name, detail, durationUs, value0, value1, hr);
 
     if (! IsEnabled())
     {
@@ -1843,6 +1851,13 @@ inline void Emit(std::wstring_view name, std::wstring_view detail, uint64_t dura
                       TraceLoggingUInt32(static_cast<uint32_t>(hr), "Hr"));
 }
 
+} // namespace implementation
+
+inline void Emit(std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+{
+    implementation::EmitWithKind(name, detail, durationUs, value0, value1, hr, false);
+}
+
 inline void EmitCounter(std::wstring_view name, uint64_t value = 1, HRESULT hr = S_OK) noexcept
 {
     Emit(name, L"counter", 0, value, 0, hr);
@@ -1853,9 +1868,15 @@ inline void EmitValue(std::wstring_view name, uint64_t value, HRESULT hr = S_OK)
     Emit(name, L"value", 0, value, 0, hr);
 }
 
+inline void EmitDurationUs(
+    std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+{
+    implementation::EmitWithKind(name, detail, durationUs, value0, value1, hr, true);
+}
+
 inline void EmitDurationUs(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
 {
-    Emit(name, L"duration", durationUs, value0, value1, hr);
+    EmitDurationUs(name, L"duration", durationUs, value0, value1, hr);
 }
 
 COMMON_API void ConfigureJsonlOutput(const std::filesystem::path& path,
@@ -1899,7 +1920,7 @@ public:
 
         if (_jsonlEnabled)
         {
-            detail::WritePerfJsonl(_name, _detail, durationUs, _value0, _value1, static_cast<HRESULT>(_hr));
+            detail::WritePerfJsonlDuration(_name, _detail, durationUs, _value0, _value1, static_cast<HRESULT>(_hr));
         }
 
         if (! _etwEnabled)

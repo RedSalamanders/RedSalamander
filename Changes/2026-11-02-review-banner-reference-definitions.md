@@ -1,0 +1,1 @@
+- Require historical-review banner provenance to appear outside hidden Markdown reference definitions.
