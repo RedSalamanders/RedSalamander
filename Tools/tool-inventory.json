@@ -2,6 +2,52 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Invoke-R0ePairedValidation.ps1",
+      "kind": "command",
+      "visibility": "public",
+      "lifecycle": "active",
+      "purpose": "Retain a source-bound, same-machine five-process Release R0e baseline/candidate diagnostic without qualifying Full coverage.",
+      "usage": "Invoked only by the explicitly dispatched R0ePaired Qualification scope with immutable commits and the frozen hosted build number.",
+      "usedBy": ["Tools/Invoke-ProjectCi.ps1"],
+      "prerequisites": ["PowerShell 7.4", "native matching Windows architecture", "Git", "pinned CI engine and toolchain", "existing marked TestSandbox", "verified candidate full-solution Release receipt", "exact available baseline commit", "network for missing pinned dependencies"],
+      "sideEffects": ["Creates and retains an isolated baseline worktree and its build outputs under repository .build", "May fetch the exact baseline object and install its pinned dependencies", "Runs ten canonical filtered native test processes using existing desktop admission", "Writes partial and terminal diagnostic evidence in the marked test sandbox"],
+      "outputs": ["Create-only R0e cohort manifests, source and receipt identities, raw logs, archived-run references and comparison assessment", "Exit 2 preserves a fully validated timing-only RED baseline; no regression or production receipt"],
+      "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
+      "tests": ["Tools/Tests/R0ePairedValidation.Tests.ps1", "Tools/Tests/BuildReproducibility.Tests.ps1"],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Modules/Testing/R0ePairedValidation.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Verify the reviewed R0e workload, closed raw archives, exact sample invariants and matched five-process diagnostic comparison.",
+      "usage": "Imported by the hosted paired command and its focused negative controls; never promotes repository coverage.",
+      "consumerClosure": "derived-references",
+      "usedBy": ["Tools/Invoke-R0ePairedValidation.ps1", "Tools/Tests/R0ePairedValidation.Tests.ps1"],
+      "prerequisites": ["PowerShell 7", "marked TestSandbox for archived evidence"],
+      "sideEffects": ["Reads source text and exact archived native, runner and metric evidence"],
+      "outputs": ["Validated sample facts and NOT_EVALUATED paired diagnostic assessment"],
+      "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
+      "tests": ["Tools/Tests/R0ePairedValidation.Tests.ps1"],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Validate exact filtered hosted diagnostic cases without promoting repository coverage.",
+      "usage": "Imported by the project CI adapter for fixed explicit diagnostic scopes and immutable paired-dispatch admission.",
+      "usedBy": ["Tools/Invoke-ProjectCi.ps1"],
+      "prerequisites": ["PowerShell 7", "marked TestSandbox", "verified full-solution receipt"],
+      "sideEffects": ["Reads exact archived runner and native case evidence"],
+      "outputs": ["Validated filtered diagnostic selection and evidence"],
+      "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
+      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"],
+      "replacement": null
+    },
+    {
       "purpose": "Acquire the pinned native formatter without Python, with checksum and executable validation.",
       "prerequisites": [
         "PowerShell 7",
@@ -415,7 +461,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift; validate strict-mode UI audits and exact Win32 residual classifications; and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence. Unified CI guards retain archived plan routing and scheduled dependency metadata without automatic pin adoption.",
+      "purpose": "Guard rendered opening review warnings, exact July routing provenance and separately bounded later review banners, owned agent/skill package references with the canonical Markdown parser and documentation/schema/shortcut drift; validate strict-mode UI audits and exact Win32 residual classifications; and bind the ten File Operations plus 47 wider product scenarios to native synthetic capture hashes, origin receipts, no-activation metadata and complete-frame review. Supplemental scenarios also bind shell-free Terminal, canceled utilities, fake-provider browsing and generated-media playback evidence. Unified CI guards retain archived plan routing and scheduled dependency metadata without automatic pin adoption.",
       "usage": "Run with Pester or the current tooling aggregate after documentation, schema, shortcut or published capture changes.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -1510,6 +1556,7 @@
         "Can build the selected platform/configuration",
         "Suspends and re-attests only the selected profile around a declared artifact writer",
         "Runs contained test executables and Pester",
+        "Writes a unique create-only raw native self-test exit record before result parsing; a write failure fails execution",
         "Holds the Windows-session mutex only around plan entries marked RequiresInteractiveDesktop",
         "Creates run, temp, archive, and evidence state only beneath exact X:/RedSalamander.Perf",
         "Projects explicitly configured non-secret Connection Manager profile names, SMB roots, MTP selectors, and one exact alternate local test root into the runner process and restores the caller environment",
@@ -1518,6 +1565,7 @@
       ],
       "outputs": [
         "Aggregate-v2 run summary with v1 sidecar",
+        "Per-launch artifacts/native-process-exits/<guid>.json with raw signed process exit, PID, executable and UTC observation",
         "Normalized terminal results and verified promotions",
         "Validation plan, content-addressed decisions, fingerprints, and checkpoints",
         "Typed PASSED/FAILED/NOT_EVALUATED/invalid/blocked/corrupt process exit",
@@ -1837,7 +1885,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Centralize repository source discovery and stable relative-path conversion for audit commands.",
+      "purpose": "Centralize repository source discovery, repository-relative tree exclusions, and stable relative-path conversion for audit commands.",
       "usage": "Import from repository source-audit entry points instead of duplicating recursive scan policy.",
       "usedBy": [
         "Tools/Audit-ComctlReportSurfaces.ps1",
@@ -1936,7 +1984,10 @@
         ".github/workflows/ci.yml",
         ".github/workflows/nightly-flake.yml",
         "Tools/Run-AllTests.ps1",
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Invoke-R0ePairedValidation.ps1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
+        "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "prerequisites": [
@@ -2037,11 +2088,12 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Normalize duplicate process-environment keys, preserve distinct null-removal and present-empty child overrides, construct kill-on-close contained child-process environments whose job also ends a crash without a Windows Error Reporting dialog, and expose local current-parent identity for delegation checks.",
-      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread; historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
+      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread. The project GitHub-hosted interactive-entry fixture scopes contained children explicitly to the rendered Default desktop; scope retirement is thread-bound and reverse-ordered. Historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
       "usedBy": [
         "build.ps1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
         "Tools/Modules/Build/ProcessStreaming.psm1",
+        "Tools/Modules/Testing/HostedTestDesktop.psm1",
         "Tools/Modules/Packaging/PortablePackageSmoke.psm1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
         "Tools/Run-AllTests.ps1",
@@ -2418,7 +2470,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation with ancestral public-snapshot fallback when the implicit legacy baseline is missing, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
@@ -2643,11 +2695,14 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Establish a sufficient driver-supported display fixture for hosted native UI qualification and restore the original mode on success or failure.",
-      "usage": "Import in the reusable native CI/Full job and shuffle-repeat consumer, then wrap synchronous validation in Invoke-RSWithHostedTestDesktop. Local invocation is refused.",
+      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry.",
+      "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest and Get-RSHostedStockPreparationRequest for pure policy selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. The project adapter opts eligible hosted native ARM64 entries into the wrapper's private stock preparation; paired studies retain the original fixture. Local preparation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
-        ".github/workflows/nightly-flake.yml"
+        ".github/workflows/nightly-flake.yml",
+        ".github/workflows/ghostty-runtime-product-qualification.yml",
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Run-AllTests.ps1"
       ],
       "prerequisites": [
         "Windows GitHub Actions runner with an interactive display",
@@ -2655,10 +2710,17 @@
       ],
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
-        "Restores the original mode in finally; setup and restoration failures remain errors"
+        "Restores the original mode in finally; setup and restoration failures remain errors",
+        "Hosted interactive entries retain Default inside the held entry lease, require a thread-owned neutral foreground/focus window before native execution, enable automatic return only after verified acquisition, service the restoration queue within the original deadlines, restore the original foreground and native focus after contained child drain, join the window thread and close the retained desktop handle; they never create or switch input desktops",
+        "A retirement threshold records failure but retains the interactive lease until the owned window thread exits; hosted supervision terminates a permanently stalled owner",
+        "With explicit project adapter opt-in on this repository's hosted native ARM64, may request one guarded WM_CLOSE each for the exact approved stock account, Search and WSL update startup foreground surfaces while the interactive mutex is held; WSL requires exact parsed arguments and matching held-process/CIM creation identity; never closes other windows or kills processes",
+        "After direct foreground refusal in that same native ARM64 role, may use one 500 ms registered Alt+F24 handoff to the existing owned neutral window; accounts for partial inserted key prefixes and releases, retains callback lifetime through owner-thread join, and preserves all native suite warnings and actual input/focus assertions"
       ],
       "outputs": [
-        "Qualification action output and display/work-area/session/foreground diagnostics"
+        "Qualification action output and display/work-area/session/foreground diagnostics",
+        "Read-only calling/input/foreground desktop names with individual Windows query errors",
+        "Rendered Default-desktop identity, positive neutral foreground boundary and verified restoration diagnostics",
+        "Create-only marked-root stock preparation start/completion and per-action intent/result records"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
@@ -2779,7 +2841,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, one exact static product-documentation Commands exception and eight exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite.",
+      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, one exact static product-documentation Commands exception and ten exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite.",
       "usage": "Loaded through the TestRunPlan facade; current commands and inventory tooling consume Get-RSTestRunPlan through that facade, Full's first writer inherits the caller-selected platform/configuration, and Commands family selection is limited to -Suite Commands iteration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -2807,7 +2869,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, plus the manifest-pinned one-to-one I27 relocation guard for stock-Windows path compatibility, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. The exact I55 CI implementation closeout has date-sibling and companion rejection; I56 hosted acceptance is not admitted as completed. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links. Canonical code masking admits only zero-to-three-space top-level fences, rejects backticks in backtick-fence info and requires whitespace-only closing tails, preserving subsequent inline/prose link and heading checks. The six retired August advisor-survey records have individual exact-file admission, with date-sibling, companion and premature I58-closeout rejection; current documentation work remains indexed as I58.",
+      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, plus the manifest-pinned one-to-one I27 relocation guard for stock-Windows path compatibility, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. The exact I55 CI implementation closeout has date-sibling and companion rejection; I56 hosted acceptance is not admitted as completed. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links. The bounded provenance comment-delimiter mask preserves offsets and masks all raw comment-shaped spans; existing heading/link parsing stays unchanged. Canonical code masking admits only zero-to-three-space top-level fences, rejects backticks in backtick-fence info and requires whitespace-only closing tails, preserving subsequent inline/prose link and heading checks. The six retired August advisor-survey records have individual exact-file admission, with date-sibling, companion and premature I58-closeout rejection; current documentation work remains indexed as I58.",
       "usage": "Import through Get-SpecInventory.ps1 or focused specification tests.",
       "usedBy": [
         "Tools/Get-SpecInventory.ps1",
@@ -5056,10 +5118,12 @@
       "lifecycle": "active",
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
       "visibility": "public",
-      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Native local work uses canonical build/test entry points.",
+      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification alone permits fixed CommandsHandoff, FileOpsVolumes and ViewerSpaceCapture filtered diagnostics, the manual Release R0ePaired study and the read-only DesktopProbe; none publishes regression receipts. Native local work uses canonical build/test entry points.",
       "tests": [
         "Tools/Tests/ToolingGovernance.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Tests/VcpkgBootstrap.Tests.ps1"
       ],
       "usedBy": [
@@ -5069,6 +5133,8 @@
       ],
       "outputs": [
         "Governed RedSalamander.Perf evidence and regression receipt",
+        "Filtered diagnostic coverage marker and runner output without a regression receipt",
+        "Source-bound read-only hosted desktop.json evidence for DesktopProbe, without build or test receipts",
         ".build production ZIP and source-bound receipt",
         "GitHub job output paths",
         "Pinned tool/registry and platform-private installed dependencies beneath .build"
@@ -5082,8 +5148,8 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide focused Pester regression coverage for repository tooling or a source contract.",
-      "usage": "Executed by the Tools Pester lane in the canonical CI and Full test plans.",
+      "purpose": "Provide focused Pester regression coverage for repository tooling, bounded native-build fixtures, and source contracts.",
+      "usage": "Executed by the Tools Pester lane in the canonical CI and Full test plans; build-toolchain cases use Full's tagged artifact-mutating entry and its receipt-bound platform, configuration, and build number.",
       "usedBy": [
         "Tools/Run-AllTests.ps1"
       ],
@@ -5092,10 +5158,12 @@
         "Repository working tree"
       ],
       "sideEffects": [
-        "May create isolated fixtures beneath the shared test sandbox"
+        "May create isolated fixtures beneath the shared test sandbox",
+        "RequiresBuildToolchain fixtures may replace outputs and receipts only for the runner-selected platform/configuration"
       ],
       "outputs": [
-        "Pester pass/fail result"
+        "Pester pass/fail result",
+        "Selected-profile build/runtime outputs and receipts from tagged artifact-mutating fixtures"
       ],
       "ownerSpec": "Specs/Testing/Testing_TestCoverage.md",
       "tests": [

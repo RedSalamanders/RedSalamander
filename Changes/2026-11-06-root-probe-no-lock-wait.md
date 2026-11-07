@@ -1,0 +1,1 @@
+- Keep Local root probes limited to attribute and synchronization access so a directory oplock cannot force the UI to wait for a lock acknowledgment. Exercise the actual provider helper against an owned read-handle oplock and preserve exact fixture bytes.

@@ -220,7 +220,9 @@ attributes, creation time, listed index) until its own deletion through that ver
 program can rename it, turn it into a link or replace it meanwhile, and no path below a held folder can
 be redirected; folders are held top-down, a level at a time. Each file and link is opened no-follow
 through its held folders, sharing only reads, and deleted through that handle once its facts equal the
-listed ones. Files and links go first (a chunk's folders taken in turn, so entries deleted at the same
+listed ones. That handle requests attribute-write access only when the listed entry is readonly and
+may require the separately consented readonly clear and rollback; the readonly bit is among the facts
+checked on the same handle, so a changed bit refuses deletion. Files and links go first (a chunk's folders taken in turn, so entries deleted at the same
 time rarely share a folder), then folders deepest level first, each pass on the shared File Operations
 scheduler with the provider's delete concurrency; at most 1,024 folders are held at once
 (plus the chain above them): a larger tree goes in chunks of sibling subtrees that fit, a subtree that
@@ -595,6 +597,28 @@ path mutation occurred; these remain ordinary conflicts for the user to resolve.
 `Commit()` may have left partial destination content and is reported as publication Unknown, with no
 automatic retry or path-based cleanup. A managed Move without exact publication proof keeps its
 source even when the destination reports successful Commit; it is a copied result with source retained.
+The bridge's own publication and stage facts also guard the outer item executor: a failed attempt
+with Unknown or Published final publication, or a Retained, Unknown or RetainedIncomplete owned stage,
+must not enter a generic conflict decision or replay the primary operation. Preserve each independent
+publication, source and stage fact and the original failure phase and status. Continue-on-error may
+advance to a different item without replaying this one; an explicit descendant Skip and cancellation
+retain their existing terminal handling. A failed, known NotPublished attempt with no retained or
+uncertain stage remains eligible for the ordinary conflict policy.
+Bridge Skip-only partial outcomes use an attempt-local terminal witness produced after the selected
+root's traversal completes without an independent failure; a previously observed Skip alone never
+turns a later traversal failure into a Skip. Unknown publication and retained or uncertain stage debt
+take precedence over that witness. Root and descendant Skips retain their distinct result semantics;
+`S_FALSE` alone is not a Skip, including when publication succeeded but verification was unavailable.
+An explicit directory-shell conflict Skip participates in that witness, with a selected-root Skip
+distinguished from a skipped descendant; a failed sibling walk still takes precedence.
+A selected reparse-tagged root that binds no-follow as a directory uses the same completed-directory
+Skip classification as an ordinary directory root. A skipped descendant is not a skipped root, and a
+failed walk or independent unknown publication or stage debt never becomes Skip-only partial work.
+Copy-only Move never performs source deletion, so its source remains Retained on a failed bridge
+attempt or uncertain stage cleanup even when destination publication is unknown or already occurred.
+A skip-only partial result with known publication and no stage debt retains its explicit Skip;
+independent unknown publication or stage debt takes precedence. An Unavailable verification result
+from a sibling cannot turn a failed or indeterminate directory result into a completed publication.
 
 For ordinary built-in Local Copy of a regular file to an absent destination name, the provider uses
 the visible direct-final publication shape: it creates the final leaf exclusively, retains the exact
@@ -1539,6 +1563,19 @@ callback, that status carries no exact destination authority. The host may still
 Both, Skip, Skip All, or Cancel when otherwise valid, but MUST withhold Overwrite, Replace read-only,
 and Replace link. A destructive button is never offered merely because an HRESULT resembles Exists.
 
+A no-overwrite atomic-final or direct-final writer may report an appeared occupant as a known
+non-commit. The bridge may re-admit that item through its bounded collision loop after releasing
+the attempt's permits and writer. Re-admission reads the current occupant and applies the ordinary
+destructive-action authority policy before offering Overwrite; an identity-less conditional replacement
+still requires the observed occupant expectation and a writer that accepts it. Exhaustion or cancellation
+retains the existing failure or cancellation path; no generic provider-returned collision gains authority.
+
+For a file retried within that bridge call, logical transfer progress adds only newly observed written
+bytes above that file's highest previous attempt, including partial failed attempts. This high-water is
+a written-byte observation, not a publication or source-stability receipt: source mutation between
+attempts can change the bytes or size. The separate physical byte count includes every retransmitted
+write for bandwidth pacing; verification remains separately counted under the same bandwidth budget.
+
 ## Delete and Recycle
 
 Recycle and Permanent are distinct `DeletePlan` modes. Permanent Delete requires fresh explicit
@@ -2123,10 +2160,12 @@ provider's reason and a `preparation.destinationName` diagnostic before any inte
 execution keeps its own re-query against that admitted join.
 
 Inline Rename does not enter the source mutation phase until the worker is about to call
-`RenameIfUnchanged`. A pre-bind, provider-name refusal, live-output Skip, or other early failure is
-therefore reported as a typed `Failed`/`NotPublished`/`Retained` item; it must not become
-`Unknown` merely because no mutation receipt was produced. Batch Rename retains its task-wide
-mutation gate because its executor may touch multiple roots.
+`RenameIfUnchanged`. A provider-name refusal during Preparing reports typed
+`Failed`/`NotAttempted`/`Retained` with the provider's status, as for other pre-Ready failures.
+An executor pre-bind or other early failure reports `Failed`/`NotPublished`/`Retained`; an
+early Skip retains its own skipped result. None becomes `Unknown` merely because no mutation
+receipt was produced. Batch Rename retains its task-wide mutation gate because its executor may
+touch multiple roots.
 
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation
@@ -3306,7 +3345,11 @@ The File Operations selftest and provider-contract matrix cover:
   receipt; `Delete_IdentityLessPinnedTreeConcurrentWriter`); a folder over a test-only entry bound is
   refused at Preparing with its plain reason and no card (`Delete_IdentityLessPinnedTreeBudget`); a
   listed file changed or removed at that pause stops the delete with nothing deleted and a known
-  non-commit receipt (`Delete_IdentityLessPinnedTreeChangedEntry`); a refused Recycle escalated by name
+  non-commit receipt (`Delete_IdentityLessPinnedTreeChangedEntry`). Its private ACL variants durably
+  save the OS-creation descriptor before reapplying the new fixture's existing DACL/protection as a
+  seed, then save a separate seeded baseline before fault injection. Surviving objects are restored
+  and checked against that exact seeded baseline after worker quiet; failures retain the sandbox and
+  available private backups. This is fixture initialization, not restoration of a user's ACL; a refused Recycle escalated by name
   stops on a file written at that pause and reports the same partial delete
   (`Delete_IdentityLessPinnedTreeEscalationPartial`); a listed folder swapped for a junction at that
   pause, with a listing that reports no file index and a decoy forged with the listed file's facts, never
@@ -3410,7 +3453,10 @@ coherently. Verification weighting and selected-root result reduction remain unc
 `DiscoveryScope_FolderLiveProgress` copies real nested files through serial, overwrite, parallel,
 bridge and Verify routes and checks exact counts/bytes, independent destination content, actual
 advancing meter pixels, delayed finalization and known-size Publishing. Separate controls cover
-open traversal, empty roots and publication followed by committed-error/proof failure.
+open traversal, empty roots and publication followed by committed-error/proof failure. The open
+traversal capture holds its selected sequential producer after a positive open listing report and
+requires the same task checkpoint throughout capture; it releases the bounded, cancellation-aware
+test hold before draining the operation.
 `DiscoveryScope_MultipleFoldersLiveProgress` covers real concurrent selected roots and zero-payload
 file links. Its Native `CopyItems` API control uses the production reducer on a non-admitted task;
 it does not bypass the product's Bulk Copy admission policy or claim a product Bulk popup route.

@@ -1,0 +1,687 @@
+{
+  "baselineManifestHashes": {
+    "pr201": "2b025b2a0d051a46c1bb628c18d8921076f894b16e060720a2c480d3b1a3b373",
+    "pr200": "15c37f2a8f6174225f5e31d212ba4a8a428a272550ccf376ff672f5910cf448c"
+  },
+  "metricSelection": "Original FileOps.Bridge.CopyUs JSONL rows only, in source order, by exact metric name; indices are one-based raw JSONL line numbers. They are measurements, not timing, percentile, throughput, or pass/fail claims; raw SHA-256 and row count are retained.",
+  "sourceLocations": {
+    "production": "RedSalamander/FolderWindow.FileOperations.State.cpp: CopyLinkOnce, TraverseAndPublishPath/finishDirectory",
+    "test": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Fairstream.cpp: Riptide_BridgeNestedDirVsFileSkipContinuesSiblings, Causeway_BridgeFileReparsePolicy"
+  },
+  "runs": [
+    {
+      "raw": [
+        {
+          "rows": null,
+          "sha256": "a6aaaa5a62582601a4e43651e9d81ea9ba341745001ade9ea12803132692ce83",
+          "name": "fileops\\results.json",
+          "bytes": 905
+        },
+        {
+          "rows": null,
+          "sha256": "d2287a0caa750cd353d59f07069624fe0a51f94af9ccd9772d1e3fbe41e3ff3f",
+          "name": "fileops\\trace.txt",
+          "bytes": 9138
+        },
+        {
+          "rows": null,
+          "sha256": "de1b06e121bb755ac8f28a295dbe9bfa2a4ff004cf5c5154fbebac23bc52c805",
+          "name": "results.json",
+          "bytes": 1483
+        },
+        {
+          "rows": null,
+          "sha256": "2d1c6d169f4555a751adf3ba8c0f345deeb8a2d7af109ce6b19a9f0ecd748b33",
+          "name": "trace.txt",
+          "bytes": 23570
+        },
+        {
+          "rows": 2044,
+          "sha256": "d3f482ec54eb3a492021fb9e85f16efa6aeafd7094650ac7c74251e4c1e0bc83",
+          "name": "perf\\perf_metrics.jsonl",
+          "bytes": 748492
+        },
+        {
+          "rows": null,
+          "sha256": "b895dc9712f368dc384462b91ccec364f300f79a4123675edbae357fc1fd3fac",
+          "name": "run-all-tests-results.json",
+          "bytes": 13414
+        }
+      ],
+      "nativeCounts": {
+        "passed": 3,
+        "skipped": 0,
+        "failed": 0
+      },
+      "configuration": "Release",
+      "testsEnabled": true,
+      "platform": "x64",
+      "receiptSha256": "87e9468c07d322bc5f5586abca8e3d198f44313135274a274118ef2e5475352c",
+      "selectedTrace": [
+        {
+          "text": "[193283750] Riptide selected reparse-directory child-directory Skip: injected=1 bound=1 prompts=1 copiedBytes=22 publication=2 source=1 completion=1.",
+          "line": 35
+        },
+        {
+          "text": "[193283906] Riptide selected reparse-directory child-file Skip: injected=1 bound=1 prompts=1 copiedBytes=22 publication=2 source=1 completion=1.",
+          "line": 36
+        }
+      ],
+      "pr": 200,
+      "receiptId": "cbd2c7421a317cbe0535452131488b9d243b3fdd68920f6b2c4a3ebd8b627a01",
+      "wrapperSha256": "288e7b43a827e81bef58d6fc974503f4ac631d93db1b9ffe8e0cc7ddb2affae0",
+      "sourceSnapshot": "b8a82a730e807b9aaceb112d6795809c85fdfcef5284095000b105cc7e60889b",
+      "cases": [
+        {
+          "reason": null,
+          "durationMs": 1266,
+          "status": "passed",
+          "name": "Setup"
+        },
+        {
+          "reason": null,
+          "durationMs": 828,
+          "status": "passed",
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings"
+        },
+        {
+          "reason": null,
+          "durationMs": 109,
+          "status": "passed",
+          "name": "Cleanup_RestorePluginConfig"
+        }
+      ],
+      "head": "827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4",
+      "run": "20261102T160554Z-71652-2c21d249dd0b4de79cf4df1f4238c261",
+      "runnerWorkspace": {
+        "bytes": 18900,
+        "snapshotId": "399373418dfdc2353bc2ffc4ba8e92a6f8b3400c06654007f3bac080b00e8ee9",
+        "sha256": "9cda721a081a23cc5c136bff22947fdd18fb71b794cde21b2b0acb73deb8f8f6",
+        "gitHead": "827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4",
+        "domain": "runner workspace projection, distinct from build receipt sourceSnapshot"
+      },
+      "selectedMetrics": {
+        "rows": 4,
+        "sha256": "df9c970da8d29dbb589e1467de2ab5fa5478d25f0e8be00f7f780ac90459d56a",
+        "file": "metrics-20261102T160554Z-71652-2c21d249dd0b4de79cf4df1f4238c261.jsonl",
+        "bytes": 1369,
+        "rawLineNumbers": [
+          378,
+          844,
+          1387,
+          1750
+        ]
+      }
+    },
+    {
+      "raw": [
+        {
+          "rows": null,
+          "sha256": "1a05d9fce252ffdbabf1b2ea46d698a297aa6cf1d9d274b4b665fce50c07b350",
+          "name": "fileops\\results.json",
+          "bytes": 887
+        },
+        {
+          "rows": null,
+          "sha256": "530bbf24d67e409a93e7335ede08affbd3b9f35c4eefb80187e39e2bf3b5000b",
+          "name": "fileops\\trace.txt",
+          "bytes": 5408
+        },
+        {
+          "rows": null,
+          "sha256": "76b20126d257e131a2fd9aca5c4931a62ae49742c3a43a1dc39ad926729a5c81",
+          "name": "results.json",
+          "bytes": 1429
+        },
+        {
+          "rows": null,
+          "sha256": "9cf5c771ec9a98e9828a88b0611adc591e03d77ee5709eb754bb384f92974580",
+          "name": "trace.txt",
+          "bytes": 19838
+        },
+        {
+          "rows": 950,
+          "sha256": "76b4cb79c85dca9dce8b9ae8982bbb85f75f6b1636c097db13934bbb89008836",
+          "name": "perf\\perf_metrics.jsonl",
+          "bytes": 353358
+        },
+        {
+          "rows": null,
+          "sha256": "db677a8cf6126c12506c6c39582f14e215b3c632d82654973b05e9d90849c9c9",
+          "name": "run-all-tests-results.json",
+          "bytes": 13378
+        }
+      ],
+      "nativeCounts": {
+        "passed": 3,
+        "skipped": 0,
+        "failed": 0
+      },
+      "configuration": "Release",
+      "testsEnabled": true,
+      "platform": "x64",
+      "receiptSha256": "87e9468c07d322bc5f5586abca8e3d198f44313135274a274118ef2e5475352c",
+      "selectedTrace": [],
+      "pr": 200,
+      "receiptId": "cbd2c7421a317cbe0535452131488b9d243b3fdd68920f6b2c4a3ebd8b627a01",
+      "wrapperSha256": "e22588aa57148d131fe01bf806ef454501a818786b2777b41e272abf16da4d55",
+      "sourceSnapshot": "b8a82a730e807b9aaceb112d6795809c85fdfcef5284095000b105cc7e60889b",
+      "cases": [
+        {
+          "reason": null,
+          "durationMs": 1391,
+          "status": "passed",
+          "name": "Setup"
+        },
+        {
+          "reason": null,
+          "durationMs": 218,
+          "status": "passed",
+          "name": "Causeway_BridgeFileReparsePolicy"
+        },
+        {
+          "reason": null,
+          "durationMs": 110,
+          "status": "passed",
+          "name": "Cleanup_RestorePluginConfig"
+        }
+      ],
+      "head": "827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4",
+      "run": "20261102T160711Z-98896-a6fe8f63ce1a4e96abefae59970388cc",
+      "runnerWorkspace": {
+        "bytes": 18900,
+        "snapshotId": "399373418dfdc2353bc2ffc4ba8e92a6f8b3400c06654007f3bac080b00e8ee9",
+        "sha256": "f67c2a7a194d17568b8e87e7d650ab577ba2ab33807baeca9c077cbabd75155c",
+        "gitHead": "827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4",
+        "domain": "runner workspace projection, distinct from build receipt sourceSnapshot"
+      },
+      "selectedMetrics": {
+        "rows": 2,
+        "sha256": "1eaf30cd229b7465cb29620ea5280d9cda8ffac6be25e6c221a25a7e70191428",
+        "file": "metrics-20261102T160711Z-98896-a6fe8f63ce1a4e96abefae59970388cc.jsonl",
+        "bytes": 692,
+        "rawLineNumbers": [
+          398,
+          727
+        ]
+      }
+    },
+    {
+      "raw": [
+        {
+          "rows": null,
+          "sha256": "cd3ce1cef257e9aa1a46c115830e75a5ec7b3961feafd3aaf96a3d6192520bad",
+          "name": "fileops\\results.json",
+          "bytes": 905
+        },
+        {
+          "rows": null,
+          "sha256": "7f55f4fdd8434cdc716645da6679014c6b7dd33e7d6d1fe90cf35274e7b46d9f",
+          "name": "fileops\\trace.txt",
+          "bytes": 9138
+        },
+        {
+          "rows": null,
+          "sha256": "64f7442394a2f549bd9a41df5aed9a524b2d89fdbae31ef7cabd91d6b9f5c5e2",
+          "name": "results.json",
+          "bytes": 1483
+        },
+        {
+          "rows": null,
+          "sha256": "2664f81732621da21682c463e4e539fb22cc06080fe4ab0a755e83938173e31f",
+          "name": "trace.txt",
+          "bytes": 23810
+        },
+        {
+          "rows": 2163,
+          "sha256": "a13b62a8c1b0f61777cf1d4cb0d53e5d40bea7d0709eef88b723673283caac57",
+          "name": "perf\\perf_metrics.jsonl",
+          "bytes": 778238
+        },
+        {
+          "rows": null,
+          "sha256": "cf74ec12d5c6832e2b5dfa5c882026f1ec1a4f54bd3ad5965d47ca272c147da5",
+          "name": "run-all-tests-results.json",
+          "bytes": 13424
+        }
+      ],
+      "nativeCounts": {
+        "passed": 3,
+        "skipped": 0,
+        "failed": 0
+      },
+      "configuration": "Release",
+      "testsEnabled": true,
+      "platform": "x64",
+      "receiptSha256": "fa42864df8849d1e9b5a715d7ce898334e309983e103a9c2631840dbce6d0ecf",
+      "selectedTrace": [
+        {
+          "text": "[193501687] Riptide selected reparse-directory child-directory Skip: injected=1 bound=1 prompts=1 copiedBytes=22 publication=2 source=1 completion=1.",
+          "line": 35
+        },
+        {
+          "text": "[193501875] Riptide selected reparse-directory child-file Skip: injected=1 bound=1 prompts=1 copiedBytes=22 publication=2 source=1 completion=1.",
+          "line": 36
+        }
+      ],
+      "pr": 201,
+      "receiptId": "b4a5aff62dae450ed7b133ac5231896de92eea3d5a094e78c33ba6833b1fa9ef",
+      "wrapperSha256": "ab581d13242a7c61dbf7d80aed2bda2b1b3f6e3023c07150c5b0250843b033b6",
+      "sourceSnapshot": "8de4626a206f73d1a2d949bdc705aa8ad4857a7606d43e63d81a82f5a98c2998",
+      "cases": [
+        {
+          "reason": null,
+          "durationMs": 1282,
+          "status": "passed",
+          "name": "Setup"
+        },
+        {
+          "reason": null,
+          "durationMs": 797,
+          "status": "passed",
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings"
+        },
+        {
+          "reason": null,
+          "durationMs": 109,
+          "status": "passed",
+          "name": "Cleanup_RestorePluginConfig"
+        }
+      ],
+      "head": "2ccf9f15e974edd9b58a7474613a38f201527b51",
+      "run": "20261102T160929Z-99128-742298bcf882460fa1381e13919a3164",
+      "runnerWorkspace": {
+        "bytes": 49261,
+        "snapshotId": "1747a7b3d4ae6e5d12418621a0a01639c4534e76b73d58d9cc0dcf198b47543a",
+        "sha256": "e8dcdb9f273c233f1035356aacf2db62977e082554a1a00af2bca26ab9879b88",
+        "gitHead": "2ccf9f15e974edd9b58a7474613a38f201527b51",
+        "domain": "runner workspace projection, distinct from build receipt sourceSnapshot"
+      },
+      "selectedMetrics": {
+        "rows": 4,
+        "sha256": "402affc11d35db6b848f62c5e87cdf1ccce0425cd0afe3e8f26ccbf002a5a4fc",
+        "file": "metrics-20261102T160929Z-99128-742298bcf882460fa1381e13919a3164.jsonl",
+        "bytes": 1347,
+        "rawLineNumbers": [
+          382,
+          867,
+          1434,
+          1877
+        ]
+      }
+    },
+    {
+      "testsEnabled": true,
+      "configuration": "Release",
+      "raw": [
+        {
+          "sha256": "b323fdfc156ea335e7c4593be4141666e43f81cad4062b232ce56a9685786a99",
+          "bytes": 886,
+          "name": "fileops\\results.json",
+          "rows": null
+        },
+        {
+          "sha256": "dddc3086036b29596936dd9f825491716d9451481106ba721ea78041e259d8e7",
+          "bytes": 5408,
+          "name": "fileops\\trace.txt",
+          "rows": null
+        },
+        {
+          "sha256": "aea628ad5fa81e8f10f9778163a11b99e22c2b3837d898d15b560829cc49a935",
+          "bytes": 1428,
+          "name": "results.json",
+          "rows": null
+        },
+        {
+          "sha256": "e64688ec185937ce3fd2032c313d02206b88523d9b24ea2e5c3fa98283c0a8ed",
+          "bytes": 20080,
+          "name": "trace.txt",
+          "rows": null
+        },
+        {
+          "sha256": "ca3c4574b7668654091c50edd57c80bda1124eb5c9d185425e4bdb6409625c84",
+          "bytes": 344356,
+          "name": "perf\\perf_metrics.jsonl",
+          "rows": 940
+        },
+        {
+          "sha256": "5c579f33982d6553d821dc5fca3cdcd93beac655b4e7ff5113fb09ba9ccf594d",
+          "bytes": 13387,
+          "name": "run-all-tests-results.json",
+          "rows": null
+        }
+      ],
+      "pr": 201,
+      "selectedTrace": [],
+      "run": "20261102T161113Z-73700-06a00a52a355479caebbfdffd1d48d3e",
+      "sourceSnapshot": "8de4626a206f73d1a2d949bdc705aa8ad4857a7606d43e63d81a82f5a98c2998",
+      "cases": [
+        {
+          "status": "passed",
+          "durationMs": 1282,
+          "name": "Setup",
+          "reason": null
+        },
+        {
+          "status": "passed",
+          "durationMs": 218,
+          "name": "Causeway_BridgeFileReparsePolicy",
+          "reason": null
+        },
+        {
+          "status": "passed",
+          "durationMs": 94,
+          "name": "Cleanup_RestorePluginConfig",
+          "reason": null
+        }
+      ],
+      "receiptId": "b4a5aff62dae450ed7b133ac5231896de92eea3d5a094e78c33ba6833b1fa9ef",
+      "nativeCounts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      "platform": "x64",
+      "head": "2ccf9f15e974edd9b58a7474613a38f201527b51",
+      "wrapperSha256": "622d12bc511195bf8f2dbeb72c44769f76f02f0ed3884ed392fc8a2a9b7f6fcb",
+      "receiptSha256": "fa42864df8849d1e9b5a715d7ce898334e309983e103a9c2631840dbce6d0ecf",
+      "runnerWorkspace": {
+        "bytes": 49261,
+        "snapshotId": "1747a7b3d4ae6e5d12418621a0a01639c4534e76b73d58d9cc0dcf198b47543a",
+        "sha256": "c12d9776db0d8ab388e5eb07c3fa5e8ee83f191cb983bb878585a899489e729c",
+        "gitHead": "2ccf9f15e974edd9b58a7474613a38f201527b51",
+        "domain": "runner workspace projection, distinct from build receipt sourceSnapshot"
+      },
+      "selectedMetrics": {
+        "rows": 2,
+        "sha256": "d616010adccabe5ea62bf69ae33384f56dcdb31290a914f89993a4a10d6eed8c",
+        "file": "metrics-20261102T161113Z-73700-06a00a52a355479caebbfdffd1d48d3e.jsonl",
+        "bytes": 681,
+        "rawLineNumbers": [
+          402,
+          734
+        ]
+      }
+    },
+    {
+      "pr": 200,
+      "sourceSnapshot": "b8a82a730e807b9aaceb112d6795809c85fdfcef5284095000b105cc7e60889b",
+      "configuration": "Release",
+      "nativeCounts": {
+        "passed": 3,
+        "skipped": 0,
+        "failed": 0
+      },
+      "testsEnabled": true,
+      "selectedMetrics": {
+        "sha256": "2893f79fec57533f97f877c04ffb26c39c82da250c7aabd9b007e7e55bfbb0ad",
+        "rawLineNumbers": [
+          396,
+          637,
+          929,
+          1238,
+          1490,
+          1731
+        ],
+        "bytes": 2050,
+        "rows": 6,
+        "file": "metrics-20261102T161401Z-30484-ae66ca085e3e400d9f93b17ebc652ff1.jsonl"
+      },
+      "selectedTrace": [],
+      "platform": "x64",
+      "run": "20261102T161401Z-30484-ae66ca085e3e400d9f93b17ebc652ff1",
+      "runnerWorkspace": {
+        "snapshotId": "399373418dfdc2353bc2ffc4ba8e92a6f8b3400c06654007f3bac080b00e8ee9",
+        "domain": "runner workspace projection, distinct from build receipt sourceSnapshot",
+        "bytes": 18900,
+        "sha256": "bae35e30d65edac9f819e676b2873d28259fffeec181ef983a90fefbe78457a7",
+        "gitHead": "827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4"
+      },
+      "receiptId": "cbd2c7421a317cbe0535452131488b9d243b3fdd68920f6b2c4a3ebd8b627a01",
+      "raw": [
+        {
+          "rows": null,
+          "name": "fileops\\results.json",
+          "bytes": 881,
+          "sha256": "fa1e30148d2d0d0c5975cc19094d0f4ddd196f3b9ee4e7c074ac6631f99feeca"
+        },
+        {
+          "rows": null,
+          "name": "fileops\\trace.txt",
+          "bytes": 5384,
+          "sha256": "7760442708edebb8d836728e0eede779ed5422cca6356c35fcadf5e51fd21645"
+        },
+        {
+          "rows": null,
+          "name": "results.json",
+          "bytes": 1411,
+          "sha256": "60f2c3cbae73742e46385200fdbd09c26aed83b7c20135b59586fde94e52c37a"
+        },
+        {
+          "rows": null,
+          "name": "trace.txt",
+          "bytes": 19814,
+          "sha256": "08dd09d7ee7f5d47a939dad55263b8378adf6ebb9f61e8f40a1688100344f876"
+        },
+        {
+          "rows": 2010,
+          "name": "perf\\perf_metrics.jsonl",
+          "bytes": 731643,
+          "sha256": "ebcbf8a472d8829ef6f0532feb3a5ab2fe3bf54f39bc223ee421577fc11cd39a"
+        },
+        {
+          "rows": null,
+          "name": "run-all-tests-results.json",
+          "bytes": 13366,
+          "sha256": "4bea8ea1a6baa0b14572220d6df390caaca408268b0c487b3c35e9fcbaea12b8"
+        }
+      ],
+      "receiptSha256": "87e9468c07d322bc5f5586abca8e3d198f44313135274a274118ef2e5475352c",
+      "cases": [
+        {
+          "name": "Setup",
+          "durationMs": 1234,
+          "status": "passed",
+          "reason": null
+        },
+        {
+          "name": "Phase12_ReparsePointPolicy",
+          "durationMs": 578,
+          "status": "passed",
+          "reason": null
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "durationMs": 109,
+          "status": "passed",
+          "reason": null
+        }
+      ],
+      "head": "827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4",
+      "wrapperSha256": "ee1acca8e94c8f0be2a72c7e913e358f8ae753c09657de76fb7a1049114c9cef"
+    },
+    {
+      "selectedMetrics": {
+        "sha256": "14760f8e8fcd8d6ea92190712d3ba03f250e17683573fb7d1101bfef153301fc",
+        "rawLineNumbers": [
+          402,
+          644,
+          922,
+          1196,
+          1504,
+          1733
+        ],
+        "bytes": 2023,
+        "rows": 6,
+        "file": "metrics-20261102T161857Z-60708-e7e01c9b420549499ad60bd7d99a0e22.jsonl"
+      },
+      "receiptId": "b4a5aff62dae450ed7b133ac5231896de92eea3d5a094e78c33ba6833b1fa9ef",
+      "pr": 201,
+      "sourceSnapshot": "8de4626a206f73d1a2d949bdc705aa8ad4857a7606d43e63d81a82f5a98c2998",
+      "platform": "x64",
+      "raw": [
+        {
+          "sha256": "cf2ee6d86619daf89aeb024b5adaaa2172f6372b1db912e5ca31d5c3d70544d0",
+          "bytes": 880,
+          "name": "fileops\\results.json",
+          "rows": null
+        },
+        {
+          "sha256": "d7c5eb9a83ebdc1fa63e9fca2ebf4b304fcdc2b74d3642fc083e270e00848b96",
+          "bytes": 5384,
+          "name": "fileops\\trace.txt",
+          "rows": null
+        },
+        {
+          "sha256": "00bc223afaf545a71c6fbec8063d0fd87275561028f288fe82005ac381438cd9",
+          "bytes": 1410,
+          "name": "results.json",
+          "rows": null
+        },
+        {
+          "sha256": "c57aa6e20e808d21eb1e30e3bf076941c506302db5460afb7d94a83721cc9e86",
+          "bytes": 20056,
+          "name": "trace.txt",
+          "rows": null
+        },
+        {
+          "sha256": "1b8268a5a818f8b68c581dc693c3cee7cf3a72fbd5d814b620f838b2fc9ab9fc",
+          "bytes": 728069,
+          "name": "perf\\perf_metrics.jsonl",
+          "rows": 2027
+        },
+        {
+          "sha256": "1983e178805ed3530e1a6615b57623bac81b41766b0c23e40d295846418d55cd",
+          "bytes": 13375,
+          "name": "run-all-tests-results.json",
+          "rows": null
+        }
+      ],
+      "receiptSha256": "fa42864df8849d1e9b5a715d7ce898334e309983e103a9c2631840dbce6d0ecf",
+      "cases": [
+        {
+          "status": "passed",
+          "durationMs": 1234,
+          "reason": null,
+          "name": "Setup"
+        },
+        {
+          "status": "passed",
+          "durationMs": 859,
+          "reason": null,
+          "name": "Phase12_ReparsePointPolicy"
+        },
+        {
+          "status": "passed",
+          "durationMs": 79,
+          "reason": null,
+          "name": "Cleanup_RestorePluginConfig"
+        }
+      ],
+      "run": "20261102T161857Z-60708-e7e01c9b420549499ad60bd7d99a0e22",
+      "wrapperSha256": "34f010e885f425e80030ce70a6db9462138a81391665df6a6a568bab9b58fbbf",
+      "nativeCounts": {
+        "failed": 0,
+        "skipped": 0,
+        "passed": 3
+      },
+      "selectedTrace": [],
+      "head": "2ccf9f15e974edd9b58a7474613a38f201527b51",
+      "runnerWorkspace": {
+        "sha256": "4239f7c7078d2580381f74199894120ca0c8dc0543a71b944a2f04ab168a717e",
+        "gitHead": "2ccf9f15e974edd9b58a7474613a38f201527b51",
+        "snapshotId": "1747a7b3d4ae6e5d12418621a0a01639c4534e76b73d58d9cc0dcf198b47543a",
+        "bytes": 49261,
+        "domain": "runner workspace projection, distinct from build receipt sourceSnapshot"
+      },
+      "testsEnabled": true,
+      "configuration": "Release"
+    }
+  ],
+  "baseline": "EA50 and 77828 already include the production repair. Their failures are fixture-assertion history, not reproduction of the original production defect.",
+  "scope": "Focused correctness controls; not Full qualification or a throughput comparison.",
+  "pending": null,
+  "interpretiveLimits": "Wrapper exit 2 is the focused scoped-runner outcome; native case results are 3 passed, 0 failed, 0 skipped. Causeway uses an injected Dummy file reparse flag, not a real filesystem link. Run-level duration is not evidence of throughput or a paired baseline.",
+  "fixtureFailureHistory": [
+    {
+      "manifest": {
+        "name": "pr200-ea50-riptide-failure-hashes.json",
+        "bytes": 1212,
+        "sha256": "15c37f2a8f6174225f5e31d212ba4a8a428a272550ccf376ff672f5910cf448c"
+      },
+      "counts": {
+        "failed": 1,
+        "skipped": 0,
+        "passed": 2
+      },
+      "head": "ea50cef3501e6ace0c5244693983bd3f16385b04",
+      "run": "20261102T153950Z-72896-665b38ba1c8248a499dee887e7e00cac",
+      "result": {
+        "sha256": "27bd895598a13f23aa5c531a5d14e822700a9492bd3cc3e9d18b3c3a703c4b74",
+        "bytes": 1130
+      },
+      "trace": {
+        "sha256": "c6acbda63d1c5ae327e860aefea996df200d8268f8b2e0f4def32eb195495536",
+        "bytes": 8952
+      },
+      "cases": [
+        {
+          "status": "passed",
+          "name": "Setup",
+          "reason": null
+        },
+        {
+          "status": "failed",
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+          "reason": "Riptide selected reparse-directory Skip lacked its exact current TypeMismatch decision."
+        },
+        {
+          "status": "passed",
+          "name": "Cleanup_RestorePluginConfig",
+          "reason": null
+        }
+      ],
+      "pr": 200
+    },
+    {
+      "manifest": {
+        "name": "manifest.json",
+        "bytes": 1199,
+        "sha256": "2b025b2a0d051a46c1bb628c18d8921076f894b16e060720a2c480d3b1a3b373"
+      },
+      "counts": {
+        "failed": 1,
+        "skipped": 0,
+        "passed": 2
+      },
+      "head": "77828ddd4d76968cb6080ea92c5c65fd03aaf4dd",
+      "run": "20261102T153957Z-46608-2493fe6192d0487cb0e474f60a6325fe",
+      "result": {
+        "sha256": "8175921777a2b8ba40aafec94d5a522e28cd7fe315efcd4434a4e3078dfb9e43",
+        "bytes": 1130
+      },
+      "trace": {
+        "sha256": "1c09d63dafda056eba90691d38ac31bb23769c629b15339c934861f62b9164b2",
+        "bytes": 8952
+      },
+      "cases": [
+        {
+          "status": "passed",
+          "name": "Setup",
+          "reason": null
+        },
+        {
+          "status": "failed",
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+          "reason": "Riptide selected reparse-directory Skip lacked its exact current TypeMismatch decision."
+        },
+        {
+          "status": "passed",
+          "name": "Cleanup_RestorePluginConfig",
+          "reason": null
+        }
+      ],
+      "pr": 201
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+- Record bounded, failure-only admission diagnostics for the independent-volume File Operations fixture, including the time spent capturing its scalar witness.

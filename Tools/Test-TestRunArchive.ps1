@@ -15,6 +15,8 @@
     Validates every archive added or modified since its immutable contract baseline.
     The history-free import uses its parentless pre-contract snapshot. Missing or
     unrelated baseline ancestry validates every tracked archive instead.
+    Relocation verification uses that ancestral snapshot if the implicit original
+    relocation baseline is unavailable; explicit baselines do not fall back.
 
 .PARAMETER BaselineRunPath
     Selects the Product/baseline Terminal VT run for paired admission comparison. CandidateRunPath is required.

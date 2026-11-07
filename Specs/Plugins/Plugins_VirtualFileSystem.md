@@ -1134,6 +1134,14 @@ Normative rules:
 - Missing, malformed, unstable, or unsupported typed name identity semantics are
   unavailable or a provider contract violation. Predictive planners reject before
   mutation rather than guessing.
+- For a path identity accepting backslashes, canonical parent derivation preserves the
+  terminating separator of an absolute drive root, extended drive root, or structurally
+  supported Win32 volume-GUID filesystem root; that root has no parent. A bare volume device spelling
+  is not the directory root. This is a lexical boundary, not a grant to open a path or
+  an equivalence between distinct provider roots; UNC and slash-only provider semantics
+  remain governed by their existing contracts.
+  Every separator in a recognized Win32 root prefix must be admitted by that identity;
+  an unaccepted slash remains component text.
 - The canonical composite child-name helper invokes `ValidateChildName`, `JoinPath`,
   and `GetChildNameCollisionKey` against one retained typed-route generation and
   copies every output before return. Provider Invalid preserves its exact failure;
@@ -1188,7 +1196,18 @@ value is admission qualification, not object mutation authority; exact source/de
 still comes from binding and boundary revalidation.
 
 Local resolves the requested path's lexical volume root and queries that exact
-mount root's current volume GUID on every route query. A short-lived route cache
+mount root's current volume GUID on every route query. Canonical existing ordinary
+drive paths may establish the root with fresh metadata-only handles: observe a direct
+physical DOS-device mapping, open its volume root, and open the relative path with
+`OBJ_DONT_REPARSE`. Both root and leaf must be non-reparse, the normalized DOS path
+must match exactly, and the opened root's volume GUID must match a fresh query of
+the current drive root. Both opens request only `FILE_READ_ATTRIBUTES | SYNCHRONIZE`;
+the directory open must not request `FILE_TRAVERSE` or cause an oplock-break
+acknowledgment wait. All handles close before returning. This path never follows
+a leaf or ancestor link and does not replace mutation authority. Noncanonical,
+missing, long, extended, remote, SUBST, unknown-mapping, unsupported or uncertain
+observations retain the existing Win32 resolver; fresh drive-type classification
+still applies on every query. A short-lived route cache
 may reuse the encoded root token only when both the lexical root and freshly
 observed GUID match its entry. It MUST NOT open the requested path to follow a
 final reparse point: route identity follows the same lexical mount-root semantics
@@ -1258,6 +1277,17 @@ copy reports nothing for its root, because the walker owns the root and descenda
 conditional delete reports its closed record for files only, because a bound directory delete
 continues into a recursive removal that owns its own accounting.
 
+Required-argument rejection and malformed option headers occur before the provider accepts a
+discovery scope; in particular, malformed headers are never used to read callback fields.
+For a valid singular Local Copy or Move, the provider retains one call-owned closure state from
+accepted arguments through worker quiescence. A failed callback is still a closure attempt; it is
+not retried as another closure. A recursive Copy may resolve a root setup conflict before discovery
+is final. After a recursive call publishes its final discovery record, it never starts a new
+whole-tree traversal under that cookie: a later failure retains its original result and mutation
+truth. Item-level retries already owned by the walker remain available, as does a new governed call. If a
+subsequent root probe observes a different object kind or directory attribute after the initial
+discovery classification, Local refuses that attempt with ERROR_FILE_INVALID. This comparison is
+not an object-identity pin and does not remove later filesystem races.
 Discovery describes what a call had to discover, not what it moved. A Move of a directory is one
 rename that relocates the whole subtree without enumerating it, so that root contributes one
 directory and no descendant files or bytes, while a Copy of the same directory walks it and reports

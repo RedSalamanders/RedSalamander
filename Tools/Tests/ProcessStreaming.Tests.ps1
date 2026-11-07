@@ -520,6 +520,9 @@ Write-Output "delegated=$hasDelegation"
         }
         $buildScript = Join-Path $TestDrive 'build.ps1'
         $repoRoot = $TestDrive
+        $previousCiRunNumber = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
+        [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', '64', 'Process')
+        $script:capturedBuildArguments = @()
         Invoke-Expression $wrapperAst.Extent.Text
         function Invoke-RSStreamingProcess {
             param(
@@ -535,23 +538,28 @@ Write-Output "delegated=$hasDelegation"
                 [scriptblock]$OutputLineCallback
             )
 
+            $script:capturedBuildArguments = @($Arguments)
             throw [System.TimeoutException]::new('simulated streaming timeout')
         }
 
         $capturedException = $null
         try {
-            Invoke-RSTargetedBuildForDeploymentTest -Platform x64 -Configuration Debug
+            Invoke-RSTargetedBuildForDeploymentTest -Platform x64 -Configuration Debug -BuildNumber 533
         }
         catch {
             $capturedException = $_.Exception
         }
         finally {
+            [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', $previousCiRunNumber, 'Process')
             Remove-Item Function:\Invoke-RSTargetedBuildForDeploymentTest -ErrorAction SilentlyContinue
             Remove-Item Function:\Invoke-RSStreamingProcess -ErrorAction SilentlyContinue
             Remove-Item Function:\New-RSTestSandboxScratchDirectory -ErrorAction SilentlyContinue
         }
 
         $null -eq $capturedException | Should Be $false
+        $numberIndex = [array]::IndexOf($script:capturedBuildArguments, '-BuildNumber')
+        $numberIndex | Should BeGreaterThan -1
+        $script:capturedBuildArguments[$numberIndex + 1] | Should Be '533'
         [System.IO.Path]::GetFullPath([string]$script:scratchAllocation.RepoRoot) |
             Should Be ([System.IO.Path]::GetFullPath([string]$TestDrive))
         $script:scratchAllocation.Harness | Should Be 'pester-targeted-plugin-deployment'
@@ -574,7 +582,7 @@ Write-Output "delegated=$hasDelegation"
 
         $deploymentSource | Should Match 'Invoke-RSStreamingProcess[\s\S]*?-DelegateArtifactOperation'
         $deploymentSource | Should Match '-LogPath \$stdoutLog[\s\S]*?-ErrorLogPath \$stderrLog'
-        $deploymentSource | Should Match '-TimeoutMilliseconds \(15 \* 60 \* 1000\)'
+        $deploymentSource | Should Match '-TimeoutMilliseconds \(60 \* 60 \* 1000\)'
         $deploymentSource | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentSource | Should Match 'throw \[System\.InvalidOperationException\]::new\(\$message, \$originalException\)'
         $deploymentSource | Should Not Match 'ReadToEndAsync|\.Result'

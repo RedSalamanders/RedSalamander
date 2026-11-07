@@ -1,0 +1,1 @@
+- Keep the deferred-consent matrix item-scoped so each expected prompt is independently exercised and checked.

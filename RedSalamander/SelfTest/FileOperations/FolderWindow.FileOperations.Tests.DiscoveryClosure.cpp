@@ -372,6 +372,7 @@ private:
     const auto restoreSettings = [&]() noexcept
     {
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
+        FolderWindowFileOperationsStateInternal::g_fileOpsBridgeOpenListingPausePoint.Release();
         if (! CancelOutstandingSelfTestOperations(operations))
         {
             AppendLog(L"Folder live progress cleanup: worker quiet point failed; preserve fixture and configuration.");
@@ -407,6 +408,7 @@ private:
     const auto removeRoot                        = wil::scope_exit([&]() noexcept
     {
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
+        FolderWindowFileOperationsStateInternal::g_fileOpsBridgeOpenListingPausePoint.Release();
         if (CancelOutstandingSelfTestOperations(operations))
             static_cast<void>(SelfTest::RemoveAll(root));
     });
@@ -864,6 +866,21 @@ private:
             if (! WriteFilledTestFile(wideSource / std::format(L"branch-{0:02}", index) / L"payload.bin", kWideLeafBytes, static_cast<BYTE>(0x40u + index)))
                 return false;
         }
+        {
+            FolderWindowFileOperationsStateInternal::SelfTestPausePoint control;
+            if (! control.ArmForSource(wideSource.native()))
+                return reject(L"the source-scoped checkpoint negative control could not be armed");
+            const auto releaseControl = wil::scope_exit([&]() noexcept { control.Release(); });
+            control.PauseForSource(L"unrelated-synthetic-source", 1u, 1u, []() noexcept { return false; });
+            const bool unrelatedEntered = control.HasEnteredForTask(1u);
+            control.PauseForSource(wideSource.native(), 2u, 1u, []() noexcept { return true; });
+            if (unrelatedEntered || control.HasEnteredForTask(2u) || control.HasTimedOut())
+                return reject(L"the source-scoped checkpoint accepted another source or ignored cancellation");
+        }
+        auto& listingPause = FolderWindowFileOperationsStateInternal::g_fileOpsBridgeOpenListingPausePoint;
+        if (! listingPause.ArmForSource(wideSource.native()))
+            return reject(L"the task-scoped open-listing checkpoint could not be armed");
+        const auto releaseListing = wil::scope_exit([&]() noexcept { listingPause.Release(); });
         struct OpenPrefix final
         {
             unsigned long files;
@@ -922,6 +939,9 @@ private:
                 const auto expected = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNTING_FOUND, prefix.directories, prefix.files);
                 if (painted.taskPaintedDiscoveryText != expected)
                     continue;
+                const bool enteredBefore = listingPause.HasEnteredForTask(running._taskId) && ! listingPause.HasTimedOut();
+                if (! enteredBefore)
+                    continue;
                 attempted[index] = true;
                 RECT client{};
                 const auto row = painted.taskPaintedDiscoveryRect;
@@ -943,32 +963,39 @@ private:
                                           DebugGetFileOperationsPopupLayoutSnapshot(popup, afterPaint) && ! afterTask.discoveryClosed &&
                                           afterTask.discoveredFileCount == prefix.files && afterTask.discoveredDirectoryCount == prefix.directories &&
                                           afterTask.discoveredTotalBytes == prefix.bytes && afterPaint.taskPaintedDiscoveryText == expected;
-                openInkSeen             = inside && SUCCEEDED(captured) && remainedOpen;
-                AppendLog(
-                    std::format(L"FolderLiveProgressOpenCapture: prefix={} files={} directories={} bytes={} inside={} hr=0x{:08X} inkPixels={} remainedOpen={}",
-                                index,
-                                prefix.files,
-                                prefix.directories,
-                                prefix.bytes,
-                                inside,
-                                static_cast<unsigned long>(captured),
-                                probes[0].matchedPixels,
-                                remainedOpen));
+                const bool enteredAfter = listingPause.HasEnteredForTask(running._taskId) && ! listingPause.HasTimedOut();
+                openInkSeen             = inside && SUCCEEDED(captured) && remainedOpen && enteredBefore && enteredAfter;
+                AppendLog(std::format(L"FolderLiveProgressOpenCapture: prefix={} files={} directories={} bytes={} inside={} hr=0x{:08X} inkPixels={} "
+                                      L"remainedOpen={} checkpointBefore={} checkpointAfter={}",
+                                      index,
+                                      prefix.files,
+                                      prefix.directories,
+                                      prefix.bytes,
+                                      inside,
+                                      static_cast<unsigned long>(captured),
+                                      probes[0].matchedPixels,
+                                      remainedOpen,
+                                      enteredBefore,
+                                      enteredAfter));
+                listingPause.Release();
                 break;
             }
         };
-        const auto result = scope.Run(FILESYSTEM_COPY,
-                                      state.fsDummy,
-                                      {wideSource},
-                                      wideDestination,
-                                      kWideSpeed,
-                                      onPump,
-                                      {},
-                                      {},
-                                      {},
-                                      FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                      FILESYSTEM_FLAG_NONE,
-                                      8u);
+        const auto result          = scope.Run(FILESYSTEM_COPY,
+                                               state.fsDummy,
+                                               {wideSource},
+                                               wideDestination,
+                                               kWideSpeed,
+                                               onPump,
+                                               {},
+                                               {},
+                                               {},
+                                               FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                               FILESYSTEM_FLAG_NONE,
+                                               8u);
+        const bool listingTimedOut = listingPause.HasTimedOut();
+        listingPause.Release();
+        record(! listingTimedOut, route, L"task-owned producer checkpoint did not time out");
         record(openInkSeen, route, L"real open traversal paints independently defined positive count/size prefixes with visible ink");
         record(closureSeen, route, L"wide traversal closes on exact 32-file/33-folder/64-MiB totals while copying");
         record(result.has_value() && SUCCEEDED(result.value().hr) && result.value().discoveredFiles == kWideFiles &&

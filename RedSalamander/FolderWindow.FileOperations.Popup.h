@@ -639,6 +639,7 @@ struct PopupLayoutDebugSnapshot
     bool hostedReducedMotion        = false;
     std::wstring hostedFocusedAutomationId;
     uint64_t hostedNativeTabCount   = 0u;
+    uint32_t hostedModifierState    = 0u;
     uint64_t hostedFocusChangeCount = 0u;
     std::wstring hostedPreviousFocusTargetId;
     std::wstring hostedLastFocusTargetId;
@@ -1070,6 +1071,35 @@ public:
         for (const PopupHitTest& hit : _hostedButtonHits)
             count += hit.kind == kind && hit.taskId == taskId ? 1u : 0u;
         return count;
+    }
+    // Union of retained primary decision bounds in DIPs, before viewport clipping.
+    // An exact automation ID also admits the overflow decision button.
+    [[nodiscard]] bool DebugHostedDecisionActionBoundsForSelfTest(uint64_t taskId, D2D1_RECT_F& bounds, std::wstring_view automationId = {}) const noexcept
+    {
+        bool found = false;
+        for (size_t index = 0u; index < _hostedButtons.size() && index < _hostedButtonHits.size(); ++index)
+        {
+            const DxUi::Button* button = _hostedButtons[index];
+            const auto& hit            = _hostedButtonHits[index];
+            const bool decision =
+                hit.kind == PopupHitTest::Kind::TaskConflictAction || (! automationId.empty() && hit.kind == PopupHitTest::Kind::TaskConflictMore);
+            if (! button || hit.taskId != taskId || ! decision || (! automationId.empty() && button->GetAccessibleAutomationId() != automationId))
+                continue;
+            const auto current = button->GetBounds();
+            if (! found)
+            {
+                bounds = current;
+                found  = true;
+            }
+            else
+            {
+                bounds.left   = std::min(bounds.left, current.left);
+                bounds.top    = std::min(bounds.top, current.top);
+                bounds.right  = std::max(bounds.right, current.right);
+                bounds.bottom = std::max(bounds.bottom, current.bottom);
+            }
+        }
+        return found;
     }
     [[nodiscard]] uint64_t DebugHostedRenderCount() const noexcept
     {

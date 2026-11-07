@@ -1,0 +1,1 @@
+- Use the Full suite's bounded build parallelism for its targeted plugin deployment fixture, retaining the timeout, output restaging and receipt checks.

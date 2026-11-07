@@ -1,0 +1,1 @@
+- Prevent a failed bridge transfer with unknown or already published output, or retained stage debt, from replaying the primary operation. Preserve source retention for copy-only Move failures, and distinguish intentional Skips and successful unverified copies from independently failed work.

@@ -1,0 +1,1 @@
+- Allow the explicitly approved hosted ARM64 WSL update startup console to retire after strict process and argument verification.

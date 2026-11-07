@@ -1,0 +1,1 @@
+- Verify grandfathered TestRuns relocations against the ancestral public snapshot when the original implicit baseline is unavailable, preserving exact manifest identities and fail-closed custom baselines.

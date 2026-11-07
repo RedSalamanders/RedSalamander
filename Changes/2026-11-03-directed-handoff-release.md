@@ -1,0 +1,1 @@
+- Permit one guarded foreground request after a refused dispatched hotkey and complete key release, retaining strict hotkey-only admission and independent handoff diagnostics.

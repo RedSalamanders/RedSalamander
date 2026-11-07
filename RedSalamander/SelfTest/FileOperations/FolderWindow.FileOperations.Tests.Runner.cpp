@@ -96,6 +96,7 @@
 #include "FolderWindow.FileOperations.Tests.OwnedShutdown.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
+#include "HandleIo.h"
 #include "HostServices.h"
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
@@ -677,6 +678,14 @@ void UnregisterPlaceholderSyncRoot(PlaceholderSyncRoot* root) noexcept
 
 using UniquePlaceholderSyncRoot = wil::unique_any<PlaceholderSyncRoot*, decltype(&UnregisterPlaceholderSyncRoot), UnregisterPlaceholderSyncRoot>;
 
+// The callback shares ownership independently of SelfTestState during failure and teardown.
+// Arrival witnesses the point after overlap advisory and before consumption.
+struct R4A02PreparationGate final
+{
+    std::atomic<bool> entered{false};
+    wil::unique_handle release{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+};
+
 struct SelfTestState
 {
     // Explicitly delete copy/move operations (self-test state is not copyable/movable).
@@ -1044,6 +1053,7 @@ struct SelfTestState
     HWND mainWindow = nullptr;
 
     std::filesystem::path tempRoot;
+    std::shared_ptr<R4A02PreparationGate> r4a02PreparationGate;
     // Test-only storage proof failure preserves governed scratch after normal worker drain.
     bool retainTempRootOnFailure = false;
     std::filesystem::path fileOpsAlternateVolumeRoot;
@@ -3152,8 +3162,10 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     static_cast<void>(TakeFileOpsBridgeInjectHostileChildNameAttemptsForSelfTest());
     SetFileOpsBridgeInjectFileReparseForSelfTest(0);
     static_cast<void>(TakeFileOpsBridgeInjectFileReparseAttemptsForSelfTest());
+    SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(0);
     SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride::None);
     SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN);
+    FolderWindowFileOperationsStateInternal::g_fileOpsBridgeOpenListingPausePoint.Release();
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
     SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
     ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
@@ -3191,6 +3203,10 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_PATH", nullptr));
     static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_FIRED", nullptr));
 
+    if (state.r4a02PreparationGate && state.r4a02PreparationGate->release)
+    {
+        static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
+    }
     // The host timer guards against reentrant Tick calls while the shared message pump dispatches
     // completion notifications. All injected worker barriers above are released before cancellation.
     if (! CancelOutstandingSelfTestOperations(state.fileOps))
@@ -6774,7 +6790,7 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         const auto pruneIfEmpty = [](const std::filesystem::path& path) noexcept
         {
             std::error_code ec;
-            if (! std::filesystem::is_directory(path, ec) || ec)
+            if (! Common::Testing::IsExistingTestSandboxPathReparseFree(path, ec) || ec || ! std::filesystem::is_directory(path, ec) || ec)
             {
                 return false;
             }
@@ -6802,13 +6818,7 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
             return;
         }
 
-        std::error_code ec;
-        const std::filesystem::path markerPath = testRoot / std::wstring(Common::Testing::kTestSandboxMarkerFileName);
-        if (! std::filesystem::remove(markerPath, ec) || ec)
-        {
-            return;
-        }
-        static_cast<void>(pruneIfEmpty(testRoot));
+        // The approved root and its ownership marker outlive each run, including when the root is otherwise empty.
     }
     catch (const std::bad_alloc&)
     {
@@ -7126,8 +7136,10 @@ struct DummyReentrantWatchCallback final : public IFileSystemDirectoryWatchCallb
 // stream itself rather than the host's view of it: the host clamps a regressing cumulative value
 // to a zero delta and counts late discovery without rejecting either, so a provider that reports
 // out of order, or never closes, passes any test that only checks return codes.
-struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
+struct DirectApiDiscoveryRecorder : IFileSystemOperationControl
 {
+    virtual ~DirectApiDiscoveryRecorder() = default;
+
     struct Event final
     {
         uint64_t bytes       = 0;
@@ -7138,6 +7150,10 @@ struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
 
     std::mutex mutex;
     std::vector<Event> events;
+    HRESULT reportResult = S_OK;
+    bool failOnlyAtClose = false;
+    std::filesystem::path destinationExpectedAbsentAtClose;
+    bool closedBeforeDestination = false;
 
     HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void* /*cookie*/) noexcept override
     {
@@ -7165,7 +7181,10 @@ struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
         }
         std::scoped_lock lock(mutex);
         events.push_back(Event{progress->discoveredBytes, progress->discoveredFiles, progress->discoveredDirectories, progress->traversalClosed != FALSE});
-        return S_OK;
+        if (progress->traversalClosed != FALSE && ! destinationExpectedAbsentAtClose.empty())
+            closedBeforeDestination =
+                GetFileAttributesW(destinationExpectedAbsentAtClose.c_str()) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+        return failOnlyAtClose && progress->traversalClosed == FALSE ? S_OK : reportResult;
     }
 };
 
@@ -9646,13 +9665,21 @@ using TickResult = std::optional<bool>;
     return desktop.Finish() || reject(L"owned-window no-activation witness failed");
 }
 
-[[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state, std::wstring& failureReason) noexcept
 {
     using namespace std::chrono_literals;
     using namespace FileOperationsPopupInternal;
-    using State       = FolderWindow::FileOperationState;
-    const auto reject = [](std::wstring_view reason) noexcept
+    using State = FolderWindow::FileOperationState;
+    failureReason.clear();
+    const auto recordFailure = [&](std::wstring_view reason) noexcept
     {
+        if (! failureReason.empty())
+            failureReason.append(L"; ");
+        failureReason.append(reason);
+    };
+    const auto reject = [&](std::wstring_view reason) noexcept
+    {
+        recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
         return false;
     };
@@ -9663,6 +9690,7 @@ using TickResult = std::optional<bool>;
     const auto fail = [&](std::wstring_view reason) noexcept
     {
         ++failures;
+        recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
     auto* folder     = TryGetFolderWindow(state.mainWindow);
@@ -11134,8 +11162,11 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"could not acquire the no-activation window guard");
-    const HWND foreground     = GetForegroundWindow();
-    const auto resetInjection = wil::scope_exit([]() noexcept
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+        return reject(std::format(L"process-scoped no-activation witness unavailable (failure={})", static_cast<unsigned int>(desktop.Failure())));
+    const auto foregroundBefore = desktop.LastObservation();
+    const auto resetInjection   = wil::scope_exit([]() noexcept
     {
         DebugFailNextFileOperationsD2DTargetAttempts(0u);
         DebugFailNextFileOperationsPopupLayoutMeasurements(0u);
@@ -11365,9 +11396,25 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
         return reject(L"the backoff timer did not re-attach the host from the failure surface");
     }
     static_cast<void>(describe(L"recovered"));
-    AppendLog(std::format(L"Popup failure-surface recovery: second surface selected after {} ms.", GetTickCount64() - failingSince));
-    if (GetForegroundWindow() != foreground)
-        return reject(L"recovery changed the foreground window");
+    AppendLog(std::format(L"Popup failure-surface recovery: elapsed from second persistent failure through recovery={} ms.", GetTickCount64() - failingSince));
+    const bool observed         = desktop.Finish();
+    const auto& foregroundAfter = desktop.LastObservation();
+    AppendLog(std::format(L"Popup recovery desktop observation: beforeHwnd=0x{:X} beforePid={} beforeTid={} afterHwnd=0x{:X} afterPid={} afterTid={} "
+                          L"afterAvailable={} ownedTransitions={} sampledForegroundChanges={} samples={} drainUs={} failure={}",
+                          reinterpret_cast<uintptr_t>(foregroundBefore.foregroundWindow),
+                          foregroundBefore.foregroundProcessId,
+                          foregroundBefore.foregroundThreadId,
+                          reinterpret_cast<uintptr_t>(foregroundAfter.foregroundWindow),
+                          foregroundAfter.foregroundProcessId,
+                          foregroundAfter.foregroundThreadId,
+                          desktop.LastObservationAvailable(),
+                          desktop.OwnedForegroundTransitions(),
+                          desktop.Stats().foregroundChanges,
+                          desktop.Stats().samples,
+                          desktop.Stats().barrierUs,
+                          static_cast<unsigned int>(desktop.Failure())));
+    if (! observed)
+        return reject(L"process-scoped no-activation observation or event drain failed");
     return true;
 }
 
@@ -15304,16 +15351,24 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! operations)
                 return false;
             bool contractsPassed = true;
-            const auto check     = [&](std::wstring_view name, const auto& runCheck) noexcept
+            std::vector<std::wstring> failedContracts;
+            std::wstring conflictInspectionFailure;
+            size_t unexecutedContracts = 0u;
+            const auto check           = [&](std::wstring_view name, const auto& runCheck) noexcept
             {
                 if (state.retainTempRootOnFailure)
                 {
                     AppendLog(std::format(L"Safety contract {}: NOT EXECUTED after retained failure", name));
                     contractsPassed = false;
+                    ++unexecutedContracts;
                     return;
                 }
                 const bool passed = runCheck();
                 AppendLog(std::format(L"Safety contract {}: {}", name, passed ? L"passed" : L"FAILED"));
+                if (! passed)
+                {
+                    failedContracts.emplace_back(name);
+                }
                 contractsPassed = contractsPassed && passed;
             };
             check(L"mutation interlock indexed lookup differential",
@@ -15371,7 +15426,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                   [&] { return RunFileOpsPopupStatusAccessibilityChecks(state); });
             check(L"conflict inspection follows a refresh, ends Canceled on a user cancel, breaks a same-name tie by kind and ends Stale with its "
                   L"popup, prompt, cleared pane path or disconnect",
-                  [&] { return RunFileOpsConflictInspectionSettlementChecks(state); });
+                  [&] { return RunFileOpsConflictInspectionSettlementChecks(state, conflictInspectionFailure); });
             const FileOperations::QualifiedEndpoint dummyEndpoint{
                 .pluginId               = L"builtin/file-system-dummy",
                 .instanceId             = L"host/default",
@@ -15397,7 +15452,20 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             check(L"retained popup idle telemetry measurement", [&] { return RecordFileOpsPopupIdleTelemetry(state); });
             if (! contractsPassed)
             {
-                Fail(L"File Operations safety contracts failed; see individual witnesses in the trace.");
+                std::wstring failures;
+                for (const std::wstring& name : failedContracts)
+                {
+                    if (! failures.empty())
+                        failures.append(L"; ");
+                    failures.append(name);
+                }
+                if (! conflictInspectionFailure.empty())
+                    failures.append(std::format(L" (conflict inspection: {})", conflictInspectionFailure));
+                Fail(std::format(L"File Operations safety contracts failed: {}. Failed witnesses={}, not executed after retained failure={}. "
+                                 L"See individual witnesses in the trace.",
+                                 failures,
+                                 failedContracts.size(),
+                                 unexecutedContracts));
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
@@ -15443,6 +15511,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
             AppendLog(L"Owned-volume operation-path controls passed without mounting a disk or taking focus.");
+            std::wstring directRootFailure;
+            if (! AdmissionBaselineSelfTest::RunDirectRootProbeControls(state, directRootFailure))
+            {
+                Fail(std::format(L"Direct Local root proof controls failed: {}", directRootFailure));
+                return true;
+            }
             if (! RunFileOpsInterruptedMoveWriterChecks(state))
             {
                 Fail(L"Interrupted Move writer, selection, notice ownership or history-retention contracts failed.");
@@ -15772,10 +15846,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             inProgress                 = true;
             const auto resetInProgress = wil::scope_exit([]() noexcept { inProgress = false; });
-            if (! RunFileOpsPopupIdleCadenceChecks(state))
+            std::wstring failureReason;
+            if (! RunFileOpsPopupIdleCadenceChecks(state, failureReason))
             {
-                Fail(L"A paused, queued or prompt-blocked task, open path detail or retained history kept the popup or owner timer doing per-tick work; see "
-                     L"trace.");
+                Fail(std::format(L"Popup idle cadence failed: {}. See individual witnesses in the trace.", failureReason));
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

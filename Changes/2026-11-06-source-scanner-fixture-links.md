@@ -1,0 +1,1 @@
+- Retire source-scanner fixture junctions and file links in finally blocks, preserving their target bytes. Successful scanner checks now leave relocatable run evidence rather than failing the final archive on an absolute link.

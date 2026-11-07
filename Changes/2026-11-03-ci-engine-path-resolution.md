@@ -1,0 +1,1 @@
+- Resolve relative CI engine checkout paths from the current PowerShell filesystem location.

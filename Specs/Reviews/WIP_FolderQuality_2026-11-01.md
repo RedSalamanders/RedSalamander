@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **Historical snapshot — not a live work queue.** Reviewed repository commit `eb779e0bd836` (31 October 2026, 22:38 Europe/Paris), `main` after the changelog fold in pull request #198. This file authorizes no implementation, no plan move, and no index edit. Live work stays indexed by [Specs/Plans/WIP/README.md](../Plans/WIP/README.md). Domain specs under `Specs/<Domain>/` remain the behavior authority.
+> **Historical snapshot — not a live work queue.** Reviewed repository commit `eb779e0bd836` (31 October 2026, 22:38 Europe/Paris), `main` after the changelog fold in pull request #198. This file authorizes no implementation, no plan move, and no index edit. Live work stays indexed by `Specs/Plans/WIP/README.md`. Domain specs under `Specs/<Domain>/` remain the behavior authority.
 
 # WIP folder quality — 1 November 2026
 

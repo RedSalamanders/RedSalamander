@@ -392,12 +392,27 @@ Describe 'Test harness source contracts' {
 
     It 'keeps foreground admission diagnostics in the Commands failure summary' {
         $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
-        $failure = [regex]::Match($source, '(?s)state\.Require\(activated && foregroundAfter == inputWindow,.*?\);')
+        $failure = [regex]::Match($source, '(?s)if \(! activated \|\| foregroundAfter != inputWindow\).*?state\.Require\(false,.*?\);')
         $failure.Success | Should Be $true
-        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted')) {
+        foreach ($field in @('stage', 'win32Error', 'heldKey', 'sentInputCount', 'foregroundRequestAccepted',
+                'activationGuardEvaluated', 'activationGuardPassed', 'foregroundRequestAttempted',
+                'activationTargetThread', 'activationTargetProcess', 'activationWarningValid',
+                'activationWarningVisible', 'activationWarningThread', 'activationWarningProcess')) {
             $failure.Value | Should Match ([regex]::Escape('admission.' + $field))
         }
         $source | Should Match 'TryActivateOwnedWindow\(inputWindow, false, &admission\)'
+        $warning = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
+        $warning | Should Match '(?s)foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
+        $warning | Should Match '(?s)directActivated\s*=\s*request\.Activate\(\);\s*observed\.directAttempt\s*=\s*request\.attempt'
+        $warning | Should Match '(?s)if \(! request\.handled\)\s*return false;\s*observed\.hotkeyAttempt\s*=\s*request\.attempt'
+        $warning | Should Match '(?s)blockerActiveBeforeRequest\s*=\s*ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\);\s*foregroundRequestAttempted\s*=\s*true;\s*foregroundRequestAccepted\s*=\s*Common::RequestForegroundWindow\(target\)'
+        $warning | Should Match '(?s)bool Activate\(\) noexcept\s*\{\s*attempt\s*=\s*\{\};\s*activationGuardPassed\s*=\s*false;'
+        $failure.Value | Should Match 'traceAttempt\(L"direct", admission\.directAttempt\)'
+        $failure.Value | Should Match 'traceAttempt\(L"hotkey", admission\.hotkeyAttempt\)'
+        foreach ($field in @('lastInputKnown', 'lastInputTick', 'requestTick', 'threadId', 'guiKnown', 'guiError', 'desktopKnown', 'desktopError',
+                'hwndActive', 'hwndFocus', 'hwndMenuOwner', 'hwndMoveSize')) {
+            $failure.Value | Should Match ([regex]::Escape($field))
+        }
     }
 
     It 'keeps repeated shuffle qualification manual and separate from the PR gate' {
@@ -916,7 +931,10 @@ Describe 'Test harness source contracts' {
         $fileOps | Should Match 'TestSandboxPathEquals\(configuredRoot,\s*authorizedRoot\.value\(\)\)'
         $fileOps | Should Match 'alternateVolumeSandbox'
         $fileOps | Should Match 'PruneEmptyAlternateVolumeSandboxParents'
-        $fileOps | Should Match 'kTestSandboxMarkerFileName'
+        $prune = [regex]::Match($fileOps, '(?s)void PruneEmptyAlternateVolumeSandboxParents\(const std::filesystem::path& sandboxRoot\) noexcept\s*\{.*?(?=\[\[nodiscard\]\] std::optional<std::filesystem::path> TryCreateAlternateWritableVolumeSelfTestRoot)').Value
+        $prune | Should Not BeNullOrEmpty
+        $prune | Should Match 'IsExistingTestSandboxPathReparseFree'
+        $prune | Should Not Match 'kTestSandboxMarkerFileName|pruneIfEmpty\(testRoot\)|remove\(testRoot'
         $fileOps | Should Not Match 'RedSalamanderCrossVolumeSelfTest_'
     }
 
@@ -3828,6 +3846,16 @@ Specs\TestRuns\local_scratch
             'DeleteItems' = 'ReportDeleteDiscoveryClosed'
         }
 
+        foreach ($name in @('CopyItem', 'MoveItem')) {
+            $body = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::' + $name + '\([\s\S]*?\n\}\r?\n')
+            $body.Success | Should Be $true
+            $body.Value | Should Match 'SingleDiscoveryState\s+discovery'
+            $body.Value | Should Match 'context\.singleDiscovery\s*=\s*&discovery'
+            $body.Value | Should Match 'scope_exit\([\s\S]*?ReportRawDiscoveryProgress\(context,\s*0u,\s*0u,\s*0u,\s*0u,\s*true\)'
+        }
+        $copyBody = [regex]::Match($source, 'HRESULT STDMETHODCALLTYPE\s+FileSystem::CopyItem\([\s\S]*?\n\}\r?\n')
+        $copyBody.Value | Should Match 'recursiveDiscoveryOwner[\s\S]*?discovery\.closeAttempted[\s\S]*?break'
+
         foreach ($entryPoint in $closureByEntryPoint.Keys) {
             # The return type and the qualified name are sometimes split across lines.
             $pattern = 'HRESULT STDMETHODCALLTYPE\s+FileSystem::' + $entryPoint + '\([\s\S]*?\n\}\r?\n'
@@ -5159,7 +5187,7 @@ Specs\TestRuns\local_scratch
         $vcpkgInstall | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
         $vcpkgInstall | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$sharedDependencyScope'
         $deploymentTest | Should Match 'Invoke-RSStreamingProcess[\s\S]*?-DelegateArtifactOperation'
-        $deploymentTest | Should Match '-TimeoutMilliseconds \(15 \* 60 \* 1000\)'
+        $deploymentTest | Should Match '-TimeoutMilliseconds \(60 \* 60 \* 1000\)'
         $deploymentTest | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentTest | Should Not Match 'ReadToEndAsync|\.Result'
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'

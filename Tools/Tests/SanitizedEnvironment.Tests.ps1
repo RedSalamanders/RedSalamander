@@ -4,6 +4,51 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $helperModule = Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1'
 
+Describe 'Hosted Default process desktop scopes' {
+    BeforeAll {
+        Import-Module $helperModule -Force -ErrorAction Stop
+    }
+    BeforeEach {
+        $script:priorDesktopScopeEnvironment=@{}
+        foreach($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY')) {
+            $script:priorDesktopScopeEnvironment[$name]=[Environment]::GetEnvironmentVariable($name,'Process')
+        }
+        $env:GITHUB_ACTIONS='true';$env:RUNNER_ENVIRONMENT='github-hosted';$env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
+    }
+    AfterEach {
+        foreach($name in $script:priorDesktopScopeEnvironment.Keys) {
+            [Environment]::SetEnvironmentVariable($name,$script:priorDesktopScopeEnvironment[$name],'Process')
+        }
+    }
+    It 'refuses a local explicit Default desktop scope before creating one' {
+        $env:GITHUB_ACTIONS='false'
+        $failure=$null
+        try { [RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop() } catch { $failure=$_.Exception.Message }
+        ($null -ne $failure) | Should Be $true
+        $failure | Should Match "Only this project's hosted rendered Default desktop"
+    }
+    It 'refuses a self-hosted explicit Default desktop scope' {
+        $env:RUNNER_ENVIRONMENT='self-hosted'
+        { [RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop() } | Should Throw 'hosted rendered Default desktop'
+    }
+    It 'refuses another repository explicit Default desktop scope' {
+        $env:GITHUB_REPOSITORY='example/other'
+        { [RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop() } | Should Throw 'hosted rendered Default desktop'
+    }
+    It 'requires reverse scope retirement and allows safe repeated disposal without launching a child' {
+        $outer=[RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop()
+        $inner=[RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop()
+        try {
+            $outer.Desktop | Should Be 'WinSta0\Default'
+            $inner.Desktop | Should Be 'WinSta0\Default'
+            $failure=$null
+            try { $outer.Dispose() } catch { $failure=$_.Exception.Message }
+            ($null -ne $failure) | Should Be $true
+            $failure | Should Match 'reverse order'
+        } finally { $inner.Dispose(); $outer.Dispose(); $outer.Dispose() }
+    }
+}
+
 Describe 'SanitizedEnvironment helper' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop

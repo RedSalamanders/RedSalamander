@@ -1,0 +1,1 @@
+- Keep the hosted UI desktop lease until its owned window thread has stopped, including slow retirement failures, so cleanup cannot change focus after another interactive test starts.
