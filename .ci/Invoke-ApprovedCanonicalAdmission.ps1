@@ -48,6 +48,9 @@ $failure=$null;$transcriptStarted=$false;$cleanupFailures=[Collections.Generic.L
 try{
  Start-Transcript -LiteralPath (Join-Path $e 'fixture-transcript.txt') -NoClobber | Out-Null;$transcriptStarted=$true
  Import-Module $modulePath
+ . (Join-Path $BootstrapRoot '.ci/Read-HostedInputCapability.ps1')
+ try { $beforeCapability=Get-PrivateHostedInputCapability } catch { $beforeCapability=@{schema='private.hosted-input-capability.v1';error=$_.Exception.ToString()} }
+ Write-PrivateCreateOnlyJson (Join-Path $e 'input-capability-before.json') $beforeCapability
  $desktop=Get-RSHostedInputDesktopRequest -PairedComparison:$false
  $stock=Get-RSHostedStockPreparationRequest -Phase Qualification -Platform ARM64 -QualificationScope CommandsHandoff
  $record.desktop_request=$desktop;$record.stock_request=$stock
@@ -66,6 +69,12 @@ try{
  }finally{if($held){$mutex.ReleaseMutex()};$mutex.Dispose()}
 }catch{$failure=$_;$record.error=$_.Exception.ToString()}
 finally{
+ try {
+  if (Get-Command Get-PrivateHostedInputCapability -ErrorAction SilentlyContinue) {
+   try { $afterCapability=Get-PrivateHostedInputCapability } catch { $afterCapability=@{schema='private.hosted-input-capability.v1';error=$_.Exception.ToString()} }
+  } else { $afterCapability=@{schema='private.hosted-input-capability.v1';error='Capability helper unavailable before fixture operation.'} }
+  Write-PrivateCreateOnlyJson (Join-Path $e 'input-capability-after.json') $afterCapability
+ } catch { $cleanupFailures.Add($_.Exception) }
  try{
   $afterHead=(& git -C $CandidateRoot rev-parse HEAD | Out-String).Trim()
   if($LASTEXITCODE -ne 0 -or $afterHead -cne $expected){throw 'Candidate head changed during admission.'}
