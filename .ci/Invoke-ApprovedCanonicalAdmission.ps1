@@ -5,7 +5,7 @@ param([Parameter(Mandatory)][string]$CandidateRoot,[Parameter(Mandatory)][string
       [ValidateSet('Canonical','Explicit','Inherited')][string]$AttachmentVariant='Canonical')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop';$PSNativeCommandUseErrorActionPreference=$false
-$expected=if($AttachmentVariant -ceq 'Canonical'){'883ad92d9e5449f4e65d3792c2a278626df6d5fc'}else{'3871a05da6109106d26b53ede1937e5ef29ec341'}
+$expected=if($AttachmentVariant -ceq 'Canonical'){'fb9fb829fd7a52c03ae83ea85d5434dc3e417529'}else{'3871a05da6109106d26b53ede1937e5ef29ec341'}
 if(-not $ApproveAccountClose -or -not $ApproveSearchClose -or $env:GITHUB_ACTIONS -cne 'true' -or
    $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
    $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
