@@ -9,9 +9,10 @@ int main()
 {
     if (! std::getenv("GITHUB_ACTIONS") || ! std::getenv("RUNNER_ENVIRONMENT"))
         return 2;
+    const BOOL dpiReady = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const HWND original = GetForegroundWindow();
     wil::unique_hwnd target(CreateWindowExW(WS_EX_APPWINDOW | WS_EX_TOPMOST,
-                                           L"STATIC",
+                                           L"BUTTON",
                                            L"RedSalamander private foreground diagnostic",
                                            WS_POPUP | WS_VISIBLE,
                                            32, 32, 320, 360,
@@ -60,6 +61,18 @@ int main()
                 idle = idle && (GetAsyncKeyState(key) & 0x8000) == 0;
             LASTINPUTINFO before{.cbSize = sizeof(LASTINPUTINFO)};
             const bool ownedHit = button && ClientToScreen(target.get(), &point) && WindowFromPoint(point) == button.get();
+            const HWND hit = WindowFromPoint(point);
+            wchar_t hitClass[128]{};
+            DWORD hitPid = 0u;
+            GetClassNameW(hit, hitClass, static_cast<int>(std::size(hitClass)));
+            GetWindowThreadProcessId(hit, &hitPid);
+            RECT rectangle{};
+            GetWindowRect(button.get(), &rectangle);
+            std::printf("PRIVATE_NATIVE_HIT dpiReady=%d dpi=%u point=%ld,%ld childRect=%ld,%ld,%ld,%ld child=%p hit=%p hitPid=%lu class=%ls targetVisible=%d childVisible=%d\n",
+                        dpiReady, GetDpiForWindow(target.get()), point.x, point.y,
+                        rectangle.left, rectangle.top, rectangle.right, rectangle.bottom,
+                        static_cast<void*>(button.get()), static_cast<void*>(hit), hitPid, hitClass,
+                        IsWindowVisible(target.get()), IsWindowVisible(button.get()));
             const bool admitted = ownedHit && idle && warning.IsVisible() && GetCursorPos(&cursor) && GetLastInputInfo(&before) &&
                                   GetForegroundWindow() == original && ! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread();
             UINT sent = 0u;
