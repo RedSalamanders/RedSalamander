@@ -161,7 +161,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 883ad92d9e5449f4e65d3792c2a278626df6d5fc
+          ref: fb9fb829fd7a52c03ae83ea85d5434dc3e417529
           path: candidate
           persist-credentials: false
           fetch-depth: 0
@@ -207,7 +207,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 883ad92d9e5449f4e65d3792c2a278626df6d5fc
+          ref: fb9fb829fd7a52c03ae83ea85d5434dc3e417529
           path: candidate
           persist-credentials: false
           fetch-depth: 0
