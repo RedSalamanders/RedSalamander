@@ -6607,7 +6607,10 @@ struct UiaValuePatternState
     CONTROLTYPEID controlType = 0;
     std::wstring name;
     std::wstring value;
-    bool isReadOnly = false;
+    bool isReadOnly     = false;
+    HRESULT valueReadHr = E_PENDING;
+    std::wstring automationId;
+    UIA_HWND nativeHwnd = nullptr;
 };
 
 struct UiaControlValueState
@@ -7924,7 +7927,9 @@ template <typename Predicate>
     return false;
 }
 
-[[nodiscard]] std::optional<UiaValuePatternState> CollectVisibleDescendantValuePatternState(HWND hwnd, const CONTROLTYPEID expectedControlType) noexcept
+[[nodiscard]] std::optional<UiaValuePatternState> CollectVisibleDescendantValuePatternState(HWND hwnd,
+                                                                                            const CONTROLTYPEID expectedControlType,
+                                                                                            bool captureIdentity = false) noexcept
 {
     for (const auto& element : FindMatchingVisibleDescendantElements(hwnd, expectedControlType))
     {
@@ -7941,6 +7946,13 @@ template <typename Predicate>
 
         UiaValuePatternState state{};
         static_cast<void>(element->get_CurrentControlType(&state.controlType));
+        if (captureIdentity)
+        {
+            static_cast<void>(element->get_CurrentNativeWindowHandle(&state.nativeHwnd));
+            wil::unique_bstr automationId;
+            if (SUCCEEDED(element->get_CurrentAutomationId(&automationId)))
+                state.automationId.assign(automationId.get() ? automationId.get() : L"");
+        }
 
         wil::unique_bstr name;
         if (SUCCEEDED(element->get_CurrentName(&name)))
@@ -7949,7 +7961,8 @@ template <typename Predicate>
         }
 
         wil::unique_bstr value;
-        if (SUCCEEDED(valuePattern->get_CurrentValue(&value)))
+        state.valueReadHr = valuePattern->get_CurrentValue(&value);
+        if (SUCCEEDED(state.valueReadHr))
         {
             state.value.assign(value.get() ? value.get() : L"");
         }

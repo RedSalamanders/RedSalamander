@@ -405,6 +405,149 @@ namespace RedSalamander.Testing {
 '@
 }
 
+function Initialize-RSHostedStockSurfaceNative {
+    if ('RedSalamander.Testing.HostedStockSurface' -as [type]) { return }
+    Initialize-RSHostedDesktopNative
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using Microsoft.Win32.SafeHandles;
+namespace RedSalamander.Testing {
+    // The only actionable surfaces are the two explicitly approved stock windows.
+    // A retained process handle and a fresh HWND/thread/session check precede WM_CLOSE.
+    public sealed class HostedStockSurface : IDisposable {
+        private sealed class DesktopHandle : SafeHandleZeroOrMinusOneIsInvalid {
+            public DesktopHandle() : base(true) {}
+            [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool CloseDesktop(IntPtr h);
+            protected override bool ReleaseHandle() { return CloseDesktop(handle); }
+        }
+        [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] static extern IntPtr GetProcessWindowStation();
+        [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] static extern IntPtr GetThreadDesktop(uint tid);
+        [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] static extern DesktopHandle OpenInputDesktop(uint flags,bool inherit,uint access);
+        [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool GetUserObjectInformationW(IntPtr h,int index,StringBuilder name,uint bytes,out uint needed);
+        [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll", ExactSpelling=true)] static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);
+        [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetWindowTextW(IntPtr h,StringBuilder s,int n);
+        [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetClassNameW(IntPtr h,StringBuilder s,int n);
+        [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindow(IntPtr h);
+        [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool PostMessageW(IntPtr h,uint m,UIntPtr w,IntPtr l);
+        [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] static extern SafeProcessHandle OpenProcess(uint access,bool inherit,uint pid);
+        [DllImport("kernel32.dll", ExactSpelling=true)] static extern uint GetCurrentProcessId();
+        [DllImport("kernel32.dll", ExactSpelling=true)] static extern uint GetCurrentThreadId();
+        [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] static extern uint GetProcessId(SafeProcessHandle process);
+        [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool ProcessIdToSessionId(uint pid,out uint session);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool QueryFullProcessImageNameW(SafeProcessHandle p,uint flags,StringBuilder s,ref uint n);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetApplicationUserModelId(SafeProcessHandle p,ref uint n,StringBuilder s);
+        [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmGetWindowAttribute(IntPtr h,uint attr,out uint value,uint size);
+        private readonly SafeProcessHandle process;
+        private readonly IntPtr window;
+        private bool closed;
+        public string Kind { get; private set; }
+        public long Window { get { return window.ToInt64(); } }
+        public uint Thread { get; private set; }
+        public uint Process { get; private set; }
+        public uint Session { get; private set; }
+        public string Title { get; private set; }
+        public string Class { get; private set; }
+        public string Image { get; private set; }
+        public string ApplicationId { get; private set; }
+        public string ForegroundDesktop { get; private set; }
+        public int ForegroundDesktopError { get; private set; }
+        private HostedStockSurface(IntPtr h,uint tid,uint pid,uint session,SafeProcessHandle p,string title,string cls,string image,string app,string kind) {
+            window=h;Thread=tid;Process=pid;Session=session;process=p;Title=title;Class=cls;Image=image;ApplicationId=app;Kind=kind;
+        }
+        private static void RequireHostedArm64() {
+            if(Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION")!="1" ||
+               Environment.GetEnvironmentVariable("GITHUB_ACTIONS")!="true" || Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT")!="github-hosted" ||
+               Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")!="RedSalamanders/RedSalamander" ||
+               RuntimeInformation.OSArchitecture!=Architecture.Arm64 || RuntimeInformation.ProcessArchitecture!=Architecture.Arm64)
+                throw new InvalidOperationException("Stock surface preparation is limited to the explicitly selected project-hosted native ARM64 role.");
+        }
+        private static string ObjectName(IntPtr h) {
+            if(h==IntPtr.Zero)throw new InvalidOperationException("Desktop or window station is unavailable.");
+            var name=new StringBuilder(256);uint needed;
+            if(!GetUserObjectInformationW(h,2,name,(uint)(name.Capacity*2),out needed))throw new Win32Exception(Marshal.GetLastWin32Error(),"Cannot identify desktop or station.");
+            return name.ToString();
+        }
+        private static void RequireDefault(uint thread) {
+            if(ObjectName(GetProcessWindowStation())!="WinSta0" || ObjectName(GetThreadDesktop(GetCurrentThreadId()))!="Default")
+                throw new InvalidOperationException("Stock preparation requires WinSta0 and the Default caller desktop.");
+            using(var input=OpenInputDesktop(0,false,1)) {
+                if(input==null || input.IsInvalid || ObjectName(input.DangerousGetHandle())!="Default")
+                    throw new InvalidOperationException("Stock preparation requires the Default input desktop.");
+            }
+        }
+        private static string ReadTitle(IntPtr h) {var s=new StringBuilder(1024);GetWindowTextW(h,s,s.Capacity);return s.ToString();}
+        private static string ReadClass(IntPtr h) {var s=new StringBuilder(256);GetClassNameW(h,s,s.Capacity);return s.ToString();}
+        private static string ReadImage(SafeProcessHandle p) {uint n=4096;var s=new StringBuilder((int)n);if(!QueryFullProcessImageNameW(p,0,s,ref n))throw new Win32Exception(Marshal.GetLastWin32Error(),"Cannot identify the hosted foreground image.");return s.ToString();}
+        private static string ReadApp(SafeProcessHandle p) {uint n=2048;var s=new StringBuilder((int)n);int hr=GetApplicationUserModelId(p,ref n,s);return hr==0?s.ToString():"";}
+        private static string Classify(IntPtr h,string title,string cls,string image,string app) {
+            string windows=Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if(h==GetShellWindow() && cls=="Progman" && String.Equals(image,System.IO.Path.Combine(windows,"explorer.exe"),StringComparison.OrdinalIgnoreCase))return "Shell";
+            if(title=="Microsoft account" && cls=="Windows.UI.Core.CoreWindow" && app=="Microsoft.Windows.CloudExperienceHost_cw5n1h2txyewy!App" &&
+               String.Equals(image,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WWAHost.exe"),StringComparison.OrdinalIgnoreCase))return "Account";
+            if(title=="Search" && cls=="Windows.UI.Core.CoreWindow" && app=="MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI" &&
+               String.Equals(image,System.IO.Path.Combine(windows,"SystemApps","MicrosoftWindows.Client.CBS_cw5n1h2txyewy","SearchHost.exe"),StringComparison.OrdinalIgnoreCase))return "Search";
+            return "Unknown";
+        }
+        public static HostedStockSurface Capture() {
+            RequireHostedArm64();IntPtr h=GetForegroundWindow();uint pid;uint tid=GetWindowThreadProcessId(h,out pid);RequireDefault(tid);
+            if(h==IntPtr.Zero && pid==0 && tid==0 && GetForegroundWindow()==IntPtr.Zero)return new HostedStockSurface(h,0,0,0,null,"","","","","Empty");
+            if(h==IntPtr.Zero || pid==0 || tid==0)throw new InvalidOperationException("Foreground identity is unavailable.");
+            uint session,own;if(!ProcessIdToSessionId(pid,out session) || !ProcessIdToSessionId(GetCurrentProcessId(),out own) || session!=own)
+                throw new InvalidOperationException("Foreground and runner session differ or are unavailable.");
+            var p=OpenProcess(0x1000,false,pid);if(p==null || p.IsInvalid){int error=Marshal.GetLastWin32Error();if(p!=null)p.Dispose();throw new Win32Exception(error,"Cannot retain the foreground process.");}
+            bool transferred=false;
+            try {
+                string title=ReadTitle(h),cls=ReadClass(h),image=ReadImage(p),app=ReadApp(p);
+                uint currentPid;uint currentTid=GetWindowThreadProcessId(h,out currentPid);
+                if(GetProcessId(p)!=pid || GetForegroundWindow()!=h || currentPid!=pid || currentTid!=tid)throw new InvalidOperationException("Foreground changed while captured.");
+                string kind=Classify(h,title,cls,image,app);
+                var result=new HostedStockSurface(h,tid,pid,session,p,title,cls,image,app,kind);
+                // Foreign thread desktop access is often denied by hosted Windows. It is
+                // diagnostic only; WinSta0, caller/input Default and session are required.
+                IntPtr foregroundDesktop=GetThreadDesktop(tid);
+                if(foregroundDesktop==IntPtr.Zero)result.ForegroundDesktopError=Marshal.GetLastWin32Error();
+                else {var name=new StringBuilder(256);uint needed;if(GetUserObjectInformationW(foregroundDesktop,2,name,(uint)(name.Capacity*2),out needed))result.ForegroundDesktop=name.ToString();else result.ForegroundDesktopError=Marshal.GetLastWin32Error();}
+                transferred=true;return result;
+            } finally { if(!transferred)p.Dispose(); }
+        }
+        private bool Retired() {
+            if(!IsWindow(window))return true;
+            uint pid;uint tid=GetWindowThreadProcessId(window,out pid);
+            if(pid!=Process || tid!=Thread || GetForegroundWindow()==window)return false;
+            bool hidden=!IsWindowVisible(window);
+            if(!hidden && Kind=="Search"){uint mask;int hr=DwmGetWindowAttribute(window,14,out mask,sizeof(uint));hidden=hr>=0 && mask==2u;}
+            if(!hidden)return false;
+            if(!IsWindow(window))return true;
+            tid=GetWindowThreadProcessId(window,out pid);return pid==Process && tid==Thread && GetForegroundWindow()!=window;
+        }
+        public void RequestClose() {
+            RequireHostedArm64();RequireDefault(Thread);
+            if(closed || (Kind!="Account" && Kind!="Search") || process==null || process.IsInvalid)throw new InvalidOperationException("Only one close for a captured approved stock surface is allowed.");
+            uint pid;uint tid=GetWindowThreadProcessId(window,out pid);uint session, ownSession;
+            if(GetForegroundWindow()!=window || pid!=Process || tid!=Thread || GetProcessId(process)!=Process ||
+               !ProcessIdToSessionId(pid,out session) || !ProcessIdToSessionId(GetCurrentProcessId(),out ownSession) || session!=Session || session!=ownSession || ReadTitle(window)!=Title || ReadClass(window)!=Class ||
+               ReadApp(process)!=ApplicationId || !String.Equals(ReadImage(process),Image,StringComparison.OrdinalIgnoreCase) ||
+               Classify(window,Title,Class,Image,ApplicationId)!=Kind)
+                throw new InvalidOperationException("Approved stock surface changed before close.");
+            closed=true;
+            if(!PostMessageW(window,0x0010,UIntPtr.Zero,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error(),"Approved stock surface refused WM_CLOSE.");
+            var timer=System.Diagnostics.Stopwatch.StartNew();
+            while(!Retired() && timer.ElapsedMilliseconds<5000)System.Threading.Thread.Sleep(25);
+            if(!Retired())throw new InvalidOperationException("Approved stock surface did not retire within five seconds.");
+        }
+        public void Dispose() { if(process!=null)process.Dispose(); }
+    }
+}
+'@
+}
+
 function Get-RSHostedDesktopState {
     Initialize-RSHostedDesktopNative
     $mode = [RedSalamander.Testing.DisplayMode]::new()
@@ -498,6 +641,141 @@ function Get-RSHostedInputDesktopRequest {
     'default'
 }
 
+function Get-RSHostedStockPreparationRequest {
+    <#
+    .SYNOPSIS
+        Selects the approved stock-surface preparation for an eligible hosted ARM64 native role.
+    .DESCRIPTION
+        Returns 1 only for this repository's native ARM64 hosted ReleaseTest or an interactive
+        Qualification. Local, x64, self-hosted, other repositories and paired studies return null.
+        This pure policy performs no desktop calls. The native guard independently verifies the host.
+    .PARAMETER Phase
+        Canonical project adapter phase.
+    .PARAMETER Platform
+        Canonical native target platform.
+    .PARAMETER QualificationScope
+        Canonical project adapter scope; paired studies and read-only probes are excluded.
+    .PARAMETER OsArchitecture
+        Policy-test override; the native action independently verifies the actual OS architecture.
+    .PARAMETER ProcessArchitecture
+        Policy-test override; the native action independently verifies the actual process architecture.
+    .OUTPUTS
+        String 1 for the approved role, otherwise null.
+    .EXAMPLE
+        Get-RSHostedStockPreparationRequest -Phase ReleaseTest -Platform ARM64 -QualificationScope Normal
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Phase,[Parameter(Mandatory)][string]$Platform,
+          [Parameter(Mandatory)][string]$QualificationScope,
+          [string]$OsArchitecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(),
+          [string]$ProcessArchitecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString())
+    if($Platform -cne 'ARM64' -or $OsArchitecture -cne 'Arm64' -or $ProcessArchitecture -cne 'Arm64' -or
+       $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+       $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
+       $QualificationScope -cin @('R0ePaired','DesktopProbe') -or
+       ($Phase -cne 'ReleaseTest' -and ($Phase -cne 'Qualification' -or $QualificationScope -cnotin @('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture')))) {return $null}
+    '1'
+}
+
+function Get-RSHostedStockSurface {
+    Initialize-RSHostedStockSurfaceNative
+    [RedSalamander.Testing.HostedStockSurface]::Capture()
+}
+
+function Invoke-RSHostedArm64StockPreparation {
+    <#
+    .SYNOPSIS
+        Prepare the hosted ARM64 Default desktop for an interactive native entry.
+    .DESCRIPTION
+        Under the runner's existing interactive mutex, inspects only the foreground and may
+        request one ordinary close each for the explicitly approved stock Microsoft account
+        and Search windows. Exact image, AUMID, class, title, session, desktop and captured
+        HWND/thread/process identity are checked with retained process handles. Unknown surfaces
+        fail closed. A bounded five-second observation after account close catches the delayed
+        Search transition; no input, process termination, generic window dismissal or policy
+        change is performed. Each close has a create-only intent and result under the marked root.
+    .PARAMETER RepoRoot
+        Project checkout for the current runner entry and sandbox ownership check.
+    .OUTPUTS
+        Hosted preparation audit directory path. Does not establish a test or qualification pass.
+    .EXAMPLE
+        Invoke-RSHostedArm64StockPreparation -RepoRoot $PWD
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    if($env:RS_HOSTED_ARM64_STOCK_PREPARATION -cne '1' -or
+       $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+       $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
+       [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -cne 'Arm64' -or
+       [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne 'Arm64'){
+        throw 'Stock-surface preparation is restricted to the selected project-hosted native ARM64 role.'
+    }
+    Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1')
+    $root=Assert-RSTestSandboxContainedPath -TestRoot $env:REDSALAMANDER_TEST_ROOT -Path $env:REDSALAMANDER_TEST_ROOT
+    $directory=Assert-RSTestSandboxContainedPath -TestRoot $root -Path (Join-Path $root ('evidence/hosted-stock-preparation/'+[guid]::NewGuid().ToString('N'))) -RequireDescendant
+    if(Test-Path -LiteralPath $directory){throw 'Stock preparation audit directory already exists.'}
+    [void][IO.Directory]::CreateDirectory($directory)
+    $sourceHead = (& git -C $RepoRoot rev-parse HEAD | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $sourceHead -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot bind stock preparation to the exact checkout head.' }
+    Invoke-RSHostedStockPreparationCore -Directory $directory -SourceHead $sourceHead
+    Write-Host ("Hosted ARM64 stock preparation audit: $directory")
+    return $directory
+}
+
+# Internal state machine is separated so fixtures can mock observations and closes;
+# the guarded entry above always supplies the fixed five-second observation window.
+function Invoke-RSHostedStockPreparationCore {
+    param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$SourceHead,[int]$ObservationMilliseconds=5000)
+    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$failure=$null
+    $start=[ordered]@{schema='red-salamander.hosted-stock-preparation.v1';source_head=$SourceHead;started_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+    $startBytes=[Text.UTF8Encoding]::new($false).GetBytes(($start|ConvertTo-Json));$startStream=[IO.File]::Open((Join-Path $directory 'start.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+    try{$startStream.Write($startBytes,0,$startBytes.Length);$startStream.Flush($true)}finally{$startStream.Dispose()}
+    try { while($true){
+        $surface=Get-RSHostedStockSurface
+        try {
+            $lastObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;title=$surface.Title;class=$surface.Class;image=$surface.Image;application_id=$surface.ApplicationId;foreground_desktop=$surface.ForegroundDesktop;foreground_desktop_error=$surface.ForegroundDesktopError}
+            if($surface.Kind -cnotin @('Empty','Shell','Account','Search')){throw 'An unapproved foreground surface prevents hosted preparation.'}
+            if($surface.Kind -cin @('Account','Search')){
+                if($seen.ContainsKey($surface.Kind)){throw 'An approved stock surface reappeared after its one permitted close.'}
+                $seen[$surface.Kind]=$true
+                $intentPath=Join-Path $directory ($surface.Kind.ToLowerInvariant()+'-intent.json')
+                $resultPath=Join-Path $directory ($surface.Kind.ToLowerInvariant()+'-result.json')
+                $intent=[ordered]@{schema='red-salamander.hosted-stock-intent.v1';kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;
+                    title=$surface.Title;class=$surface.Class;image=$surface.Image;application_id=$surface.ApplicationId;
+                    foreground_desktop=$surface.ForegroundDesktop;foreground_desktop_error=$surface.ForegroundDesktopError;source_head=$SourceHead;requested_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+                $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($intent|ConvertTo-Json -Depth 4))
+                $stream=[IO.File]::Open($intentPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+                try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+                $errorText=$null;$success=$false;$closeFailure=$null;$resultFailure=$null
+                try{$surface.RequestClose();$success=$true}catch{$closeFailure=$_;$errorText=$_.Exception.Message}
+                try {
+                    $result=[ordered]@{schema='red-salamander.hosted-stock-result.v1';intent_sha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;retired=$success;error=$errorText;observed_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+                    $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($result|ConvertTo-Json -Depth 4))
+                    $stream=[IO.File]::Open($resultPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+                    try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+                } catch { $resultFailure=$_ }
+                if($closeFailure -and $resultFailure){throw [AggregateException]::new('Stock close and audit result both failed.', [Exception[]]@($closeFailure.Exception,$resultFailure.Exception))}
+                if($closeFailure){throw $closeFailure}
+                if($resultFailure){throw $resultFailure}
+                if($surface.Kind -ceq 'Account'){$timer.Restart()}
+                continue
+            }
+        } finally {if($null -ne $surface){$surface.Dispose()}}
+        if($timer.ElapsedMilliseconds -ge $ObservationMilliseconds){break}
+        Start-Sleep -Milliseconds 100
+    };$completed=$true } catch {$failure=$_;$preparationError=$_.Exception.Message}
+    try {
+        $completion=[ordered]@{schema='red-salamander.hosted-stock-preparation-result.v1';completed=$completed;error=$preparationError;
+            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');last_observation=$lastObservation;finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+        $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($completion|ConvertTo-Json -Depth 5));$stream=[IO.File]::Open((Join-Path $directory 'completion.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+        try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+    } catch {
+        if($failure){throw [AggregateException]::new('Stock preparation and completion audit both failed.', [Exception[]]@($failure.Exception,$_.Exception))}
+        throw
+    }
+    if($failure){throw $failure}
+}
+
 function New-RSHostedDefaultDesktop {
     Initialize-RSHostedDesktopNative
     [RedSalamander.Testing.HostedDesktopNative]::EnterDefaultDesktop()
@@ -532,7 +810,9 @@ function Invoke-RSWithHostedDefaultDesktop {
         Action output and boundary/readiness/restoration diagnostics.
     .NOTES
         Owns only a neutral foreground window on the ephemeral hosted runner's Default desktop.
-        No foreign windows, processes, hooks or foreground-lock settings are changed.
+        With the project adapter's approved ARM64 opt-in, prepares only the two identified
+        stock foreground surfaces before creating the boundary. Other windows, processes,
+        hooks and foreground-lock settings are unchanged.
     .EXAMPLE
         Invoke-RSWithHostedDefaultDesktop -Action { Invoke-OwnedNativeTestEntry }
     #>
@@ -544,6 +824,9 @@ function Invoke-RSWithHostedDefaultDesktop {
     }
     $desktop = $null; $processScope = $null; $actionError = $null; $restoreError = $null
     try {
+        if ($env:RS_HOSTED_ARM64_STOCK_PREPARATION -ceq '1') {
+            [void](Invoke-RSHostedArm64StockPreparation -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))))
+        }
         $desktop = New-RSHostedDefaultDesktop
         if ($desktop.ForegroundBoundaryReady -cne $true) { throw 'The hosted Default desktop has no verified foreground boundary.' }
         Write-Host ('Hosted Default desktop entered: ' + $desktop.Name + '; foregroundBoundaryReady=' + $desktop.ForegroundBoundaryReady)
@@ -636,4 +919,4 @@ function Invoke-RSWithHostedTestDesktop {
     }
 }
 
-Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest
+Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest

@@ -4748,6 +4748,8 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         bool opened                 = false;
         bool ownedByMainWindow      = false;
         bool capturedSnapshot       = false;
+        bool capturedAfterValue     = false;
+        bool samePromptAfterValue   = false;
         bool setEnabled             = false;
         bool setText                = false;
         bool expandHelp             = false;
@@ -4756,6 +4758,7 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         bool actionIssued           = false;
         bool closed                 = false;
         FolderViewPaneFilterPromptDebugSnapshot snapshot{};
+        FolderViewPaneFilterPromptDebugSnapshot afterValueSnapshot{};
         FolderViewPaneFilterPromptDebugSnapshot expandedHelpSnapshot{};
         FolderViewPaneFilterPromptDebugSnapshot editedSnapshot{};
         std::optional<UiaValuePatternState> valueState;
@@ -4764,6 +4767,14 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         std::optional<UiaTogglePatternState> editedToggleState;
         std::optional<UiaDescendantPatternStats> uiaPatternStats;
         std::optional<UiaNamedElementState> buttonState;
+        HWND foregroundBefore     = nullptr;
+        HWND foregroundAfter      = nullptr;
+        DWORD foregroundBeforePid = 0;
+        DWORD foregroundAfterPid  = 0;
+        HWND focusBefore          = nullptr;
+        HWND focusAfter           = nullptr;
+        bool focusBeforeKnown     = false;
+        bool focusAfterKnown      = false;
     };
 
     const auto runCycle = [&](bool enabled, std::wstring_view requestedText, bool accept, std::wstring_view failureContext) noexcept
@@ -4780,9 +4791,24 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
                 return;
             }
 
-            cycle.ownedByMainWindow      = IsOwnedBy(prompt, mainWindow);
-            cycle.capturedSnapshot       = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.snapshot);
-            cycle.valueState             = CollectVisibleDescendantValuePatternState(prompt, UIA_ComboBoxControlTypeId);
+            const auto captureFocus = [&](HWND& foreground, DWORD& pid, HWND& focus, bool& known) noexcept
+            {
+                foreground = GetForegroundWindow();
+                if (foreground)
+                    static_cast<void>(GetWindowThreadProcessId(foreground, &pid));
+                GUITHREADINFO info{sizeof(info)};
+                const DWORD thread = GetWindowThreadProcessId(prompt, nullptr);
+                known              = thread != 0 && GetGUIThreadInfo(thread, &info) != FALSE;
+                if (known)
+                    focus = info.hwndFocus;
+            };
+            cycle.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
+            captureFocus(cycle.foregroundBefore, cycle.foregroundBeforePid, cycle.focusBefore, cycle.focusBeforeKnown);
+            cycle.capturedSnapshot     = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.snapshot);
+            cycle.valueState           = CollectVisibleDescendantValuePatternState(prompt, UIA_ComboBoxControlTypeId, true);
+            cycle.capturedAfterValue   = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.afterValueSnapshot);
+            cycle.samePromptAfterValue = GetFolderViewPaneFilterPromptHandle() == prompt;
+            captureFocus(cycle.foregroundAfter, cycle.foregroundAfterPid, cycle.focusAfter, cycle.focusAfterKnown);
             cycle.toggleState            = CollectVisibleDescendantTogglePatternState(prompt);
             cycle.uiaPatternStats        = CollectVisibleUiaDescendantPatternStats(prompt);
             cycle.buttonState            = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
@@ -4822,6 +4848,39 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         state.Require(cycle.valueState.has_value(), std::format(L"Pane Filter prompt should expose a visible editable DX field during {}.", failureContext));
         if (cycle.valueState.has_value())
         {
+            if (cycle.valueState->value != cycle.snapshot.text || FAILED(cycle.valueState->valueReadHr))
+            {
+                // Only print values from this fixture's known masks; unexpected text is reported by length.
+                const auto fixtureValue = [](std::wstring_view text) noexcept -> std::wstring_view
+                { return text.empty() || text == L"*.txt" || text == L"*.log" ? text : std::wstring_view(L"(other)"); };
+                Trace(std::format(L"pane_filter_value_mismatch: context={} before='{}' beforeLen={} afterCaptured={} after='{}' afterLen={} "
+                                  L"samePrompt={} coherent={} uia='{}' uiaLen={} hr=0x{:08X} type={} automationIdLen={} nativeHwnd={:#x} "
+                                  L"foregroundBefore={:#x}/{} foregroundAfter={:#x}/{} focusBeforeKnown={} focusBefore={:#x} focusAfterKnown={} "
+                                  L"focusAfter={:#x} prompt={:#x}",
+                                  failureContext,
+                                  fixtureValue(cycle.snapshot.text),
+                                  cycle.snapshot.text.size(),
+                                  cycle.capturedAfterValue,
+                                  fixtureValue(cycle.afterValueSnapshot.text),
+                                  cycle.afterValueSnapshot.text.size(),
+                                  cycle.samePromptAfterValue,
+                                  cycle.capturedAfterValue && cycle.samePromptAfterValue && cycle.snapshot.text == cycle.afterValueSnapshot.text,
+                                  fixtureValue(cycle.valueState->value),
+                                  cycle.valueState->value.size(),
+                                  static_cast<unsigned long>(cycle.valueState->valueReadHr),
+                                  cycle.valueState->controlType,
+                                  cycle.valueState->automationId.size(),
+                                  reinterpret_cast<uintptr_t>(cycle.valueState->nativeHwnd),
+                                  reinterpret_cast<uintptr_t>(cycle.foregroundBefore),
+                                  cycle.foregroundBeforePid,
+                                  reinterpret_cast<uintptr_t>(cycle.foregroundAfter),
+                                  cycle.foregroundAfterPid,
+                                  cycle.focusBeforeKnown,
+                                  reinterpret_cast<uintptr_t>(cycle.focusBefore),
+                                  cycle.focusAfterKnown,
+                                  reinterpret_cast<uintptr_t>(cycle.focusAfter),
+                                  reinterpret_cast<uintptr_t>(cycle.prompt)));
+            }
             state.Require(! cycle.valueState->isReadOnly, std::format(L"Pane Filter prompt field should be editable during {}.", failureContext));
             state.Require(! cycle.valueState->name.empty(),
                           std::format(L"Pane Filter prompt editable DX field should expose a stable accessible name during {}.", failureContext));

@@ -689,7 +689,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   are restored, the desktop handle closes and the interactive mutex releases. A foreign desktop or
   foreground change is preserved and fails the fixture; failed setup, restoration or handle retirement also
   fails. Preserve both the native and restoration error when both occur. Never change foreign
-  windows/processes, foreground-lock policy or input queues. A setup witness alone does not establish
+  windows/processes except the two explicitly approved hosted ARM64 stock-surface requests below,
+  foreground-lock policy or input queues. A setup witness alone does not establish
   native handoff, screenshot or input coverage; those cases still require actual execution on
   each architecture. R0ePaired retains the original desktop for both historical and
   current sources. Adapter selection clears an inherited request when this role does not
@@ -698,6 +699,23 @@ Environment variables may select alternate test inputs such as profile names, bu
   diagnostic remains NOT_EVALUATED.
   Active direct hosted callers, including native reusable builds, shuffle qualification and
   current Ghostty product Commands, select the same fixture and restore the caller's request.
+- The project adapter may opt native ARM64 GitHub-hosted `ReleaseTest` and interactive
+  `Qualification` entries into stock-surface preparation immediately before their Default
+  boundary, while the same interactive mutex is held. The user's exception permits only one
+  ordinary `WM_CLOSE` each for the foreground stock `Microsoft account` WWAHost surface and
+  `Search` SearchHost surface, after exact path, title, class, AUMID, session, WinSta0 and
+  caller/input Default checks and captured HWND/thread/process revalidation with a held process
+  handle. A denied foreign-thread desktop query is retained as diagnostic, never as positive proof.
+  Search retirement accepts a destroyed HWND, or the same non-foreground HWND when hidden or when
+  DWM successfully reports exactly shell-cloaked mask 2; all other states fail within five seconds.
+  The account-to-Search transition is observed for five seconds after account retirement. A
+  verified same-session Progman shell is recognized only by `GetShellWindow`, exact Explorer
+  image and revalidated HWND/process; unknown foreground surfaces fail closed. Start/completion
+  and each close intent/result are retained create-only under the marked test root. There is no
+  kill, input injection, foreground-policy change or permission to dismiss any other window.
+  The adapter clears and restores its opt-in; local, x64, self-hosted, other-repository and
+  R0ePaired roles never perform the stock-surface actions. Fingerprints include this opt-in.
+  This preparation does not waive native foreground, input, capture or qualification assertions.
   Their evidence uploads retain `artifacts/native-process-exits` from unarchived runs as well
   as completed evidence. Sealed historical Terminal evaluation/closeout lanes retain their
   reviewed historical desktop context and cannot qualify the current product.
@@ -778,6 +796,9 @@ Environment variables may select alternate test inputs such as profile names, bu
   its individual conditions, client viewport, client-to-screen origin, full UIA rectangle,
   actual DPI and focus/input state. Do not compare screen-space UIA bounds directly with a
   client-space viewport or treat a later diagnostic query as the original observation.
+- Pane-filter prompt accessibility mismatch diagnostics retain the initial and post-read fixture
+  snapshots, ValuePattern read HRESULT and element/foreground/focus witnesses. The existing
+  equality assertion and wait budget remain unchanged; unexpected text is reported by length.
 - ViewerSpace capture failures retain the original capture HRESULT and all probe results before
   querying diagnostic geometry. Record actual window/navigation DPI, monitor and client bounds,
   palette/render context and each probe's bounds, required count and matched count in the native
