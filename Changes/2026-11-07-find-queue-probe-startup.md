@@ -1,0 +1,1 @@
+- Settle the private Find Files queue probe's window-creation notifications before injecting ordering witnesses, and independently verify that a DWM notification blocks result draining. Preserve the exact queue-head and child-input assertions.

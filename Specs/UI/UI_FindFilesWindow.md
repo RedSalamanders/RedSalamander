@@ -128,7 +128,7 @@ capability, identity, or bind work. No result is suppressed from the search set.
 ## Regression Coverage
 
 - `cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states` covers action enablement and the split-button menu pointer route.
-- `cmd_pane_find_dialog_result_drains_respect_child_input_queue_order` covers the queue-order guard that prevents Find result/progress coalescing from skipping older child-window input messages.
+- `cmd_pane_find_dialog_result_drains_respect_child_input_queue_order` covers the queue-order guard that prevents Find result/progress coalescing from skipping older child-window input messages. Its private window thread services creation notifications before posting witnesses, then preserves the exact queue throughout each assertion. Unrelated application work and `WM_DWMNCRENDERINGCHANGED` are independent preceding-message controls.
 - `cmd_pane_find_dialog_resized_columns_survive_sort_cycles` covers resized-column stability across header sort cycles.
 - `cmd_pane_find_dialog_header_drag_reorders_columns_without_sort` covers header drag behavior without accidental sort changes.
 - `cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances` covers focused-pane initial scope and multiple modeless instances.

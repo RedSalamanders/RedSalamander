@@ -717,6 +717,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   positive control, then require the empty action to be unhandled and preserve the exact system
   clipboard text, fallback text and sequence; clearing the clipboard or reporting a handled
   empty copy cannot satisfy this control.
+- Find Files' queue-order probe services window-creation notifications only on its private
+  message-only-window thread before posting its ordering witnesses. No messages are pumped
+  during the assertions. Child input, unrelated application work and a DWM nonclient-rendering
+  notification must each block result draining until that exact preceding message is removed;
+  the production guard still observes the unfiltered thread-queue head.
 - Batch Rename's normal test snapshot/mode-switch helpers may settle owned current work within
   the existing bound. Their explicit immediate mode performs no such wait. The existing blocked
   provider fixture uses immediate observation and dispatch to require disabled mode switching,

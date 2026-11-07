@@ -2338,7 +2338,17 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                 result.error   = GetLastError();
                 return;
             }
-            constexpr UINT interveningMessage = WM_APP + 0x3A0u;
+            // Creating even message-only windows can enqueue DWM notifications.
+            // Service only this private thread's setup traffic before injecting
+            // the witnesses; nothing is pumped during the ordering assertions.
+            static_cast<void>(TestSupport::PumpPendingMessages());
+            MSG setupMessage{};
+            if (PeekMessageW(&setupMessage, nullptr, 0, 0, PM_NOREMOVE) != FALSE)
+            {
+                result.failure         = L"Owned queue setup did not settle before posting witnesses";
+                result.observedMessage = setupMessage.message;
+                return;
+            }
             if (! PostMessageW(child.get(), WM_MOUSEMOVE, 0, MAKELPARAM(1, 1)) || ! PostMessageW(parent.get(), WndMsg::kFindSearchResults, 0, 0))
             {
                 result.failure = L"Post owned queue witnesses";
@@ -2389,30 +2399,34 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
             if (! removeExpected(parent.get(), WndMsg::kFindSearchResults, L"Remove the expected result"))
                 return;
 
-            // Independent counterfactual: unrelated queued work must also stop
-            // the same guard before the result becomes eligible.
-            if (! PostMessageW(parent.get(), interveningMessage, 0, 0) || ! PostMessageW(parent.get(), WndMsg::kFindSearchResults, 0, 0))
+            // Independent counterfactuals: application work and the actual DWM
+            // setup notification must each stop the same unfiltered guard.
+            for (const UINT interveningMessage : {WM_APP + 0x3A0u, static_cast<UINT>(WM_DWMNCRENDERINGCHANGED)})
             {
-                result.failure = L"Post intervening queue witnesses";
-                result.error   = GetLastError();
-                return;
+                if (! PostMessageW(parent.get(), interveningMessage, 0, 0) || ! PostMessageW(parent.get(), WndMsg::kFindSearchResults, 0, 0))
+                {
+                    result.failure = L"Post intervening queue witnesses";
+                    result.error   = GetLastError();
+                    return;
+                }
+                if (! requireHead(parent.get(), interveningMessage, L"Intervening message must be the exact next queue item"))
+                    return;
+                if (DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
+                {
+                    result.failure = L"Result must not bypass intervening work";
+                    return;
+                }
+                if (! removeExpected(parent.get(), interveningMessage, L"Remove the expected intervening message") ||
+                    ! requireHead(parent.get(), WndMsg::kFindSearchResults, L"Result must follow the intervening message"))
+                    return;
+                if (! DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
+                {
+                    result.failure = L"Result must become eligible after intervening work is removed";
+                    return;
+                }
+                if (! removeExpected(parent.get(), WndMsg::kFindSearchResults, L"Remove the expected result after intervening work"))
+                    return;
             }
-            if (! requireHead(parent.get(), interveningMessage, L"Intervening message must be the exact next queue item"))
-                return;
-            if (DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
-            {
-                result.failure = L"Result must not bypass intervening work";
-                return;
-            }
-            if (! removeExpected(parent.get(), interveningMessage, L"Remove the expected intervening message") ||
-                ! requireHead(parent.get(), WndMsg::kFindSearchResults, L"Result must follow the intervening message"))
-                return;
-            if (! DebugFindFilesIsNextQueuedMessage(parent.get(), WndMsg::kFindSearchResults))
-            {
-                result.failure = L"Result must become eligible after intervening work is removed";
-                return;
-            }
-            static_cast<void>(removeExpected(parent.get(), WndMsg::kFindSearchResults, L"Remove the expected result after intervening work"));
         });
         worker.join();
     }
