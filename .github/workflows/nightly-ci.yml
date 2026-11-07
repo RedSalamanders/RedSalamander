@@ -10,7 +10,7 @@ on:
         default: Release
       scope:
         type: choice
-        options: [DesktopProbe, DesktopIdentity]
+        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity]
         default: DesktopProbe
       dismiss_hosted_account_surface:
         description: Explicit owner-approved exception for the stock hosted ARM64 account window
@@ -23,6 +23,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   metadata:
+    if: inputs.scope != 'ApprovedCloseIdentity'
     name: Private desktop diagnostic (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -94,4 +95,38 @@ jobs:
             ${{ matrix.testRoot }}/runs/**/wgc-admission.json
             ${{ matrix.testRoot }}/runs/**/native-foreground.txt
             ${{ matrix.testRoot }}/runs/**/account-dismissal-*.json
+          if-no-files-found: error
+  approved-close-identity:
+    if: inputs.scope == 'ApprovedCloseIdentity'
+    name: Private approved ARM64 close and metadata
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 15
+    steps:
+      - name: Require explicit account-window authorization
+        shell: pwsh
+        if: inputs.dismiss_hosted_account_surface != true
+        run: throw 'ApprovedCloseIdentity requires the explicit account-window authorization input.'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: bootstrap
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Close only the approved foreground account surface, then query metadata in a fresh process
+        shell: pwsh
+        env:
+          APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCloseIdentity.ps1 -RepoRoot "$env:GITHUB_WORKSPACE/bootstrap" -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true')
+      - name: Retain bounded job status even if preflight fails
+        if: always()
+        shell: pwsh
+        run: |
+          @{ scope='ApprovedCloseIdentity'; job_status='${{ job.status }}'; repository_coverage='NOT_EVALUATED' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'approved-close-identity-preflight.json') -Encoding utf8
+      - name: Retain only close and foreground metadata
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approved-close-identity-ARM64
+          path: |
+            C:/RedSalamander.Perf/evidence/approved-close-identity/**
+            ${{ runner.temp }}/approved-close-identity-preflight.json
           if-no-files-found: error

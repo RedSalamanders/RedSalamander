@@ -1,7 +1,16 @@
 [CmdletBinding()]
-param([string]$TestRoot='D:\RedSalamander.Perf',[switch]$DismissHostedAccountSurface)
+param([string]$TestRoot='D:\RedSalamander.Perf',[switch]$DismissHostedAccountSurface,
+      [switch]$CloseOnly,[switch]$SnapshotOnly,[string]$RepoRoot)
 $ErrorActionPreference='Stop'
-$repo=Split-Path -Parent $PSScriptRoot
+$repo=if($RepoRoot){[IO.Path]::GetFullPath($RepoRoot)}else{Split-Path -Parent $PSScriptRoot}
+if($CloseOnly -and -not $DismissHostedAccountSurface){throw 'CloseOnly requires the explicit hosted account-surface authorization.'}
+if($SnapshotOnly -and ($CloseOnly -or $DismissHostedAccountSurface)){throw 'SnapshotOnly cannot request a close.'}
+if(($CloseOnly -or $SnapshotOnly) -and ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+    $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
+    [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -cne 'Arm64' -or
+    [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne 'Arm64')){
+    throw 'This diagnostic requires this repository manual hosted native ARM64 execution.'
+}
 $env:REDSALAMANDER_TEST_ROOT=$TestRoot
 [Environment]::SetEnvironmentVariable('REDSALAMANDER_TEST_RUN_ID',$null,'Process')
 Import-Module (Join-Path $repo 'Tools\Modules\Testing\TestSandbox.psm1') -Force
@@ -62,6 +71,9 @@ public static class WgcDesktopAdmissionProbe {
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool QueryFullProcessImageNameW(Microsoft.Win32.SafeHandles.SafeProcessHandle process,uint flags,StringBuilder image,ref uint capacity);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetApplicationUserModelId(Microsoft.Win32.SafeHandles.SafeProcessHandle process,ref uint capacity,StringBuilder id);
     public static uint CurrentForegroundProcess() { uint process;GetWindowThreadProcessId(GetForegroundWindow(),out process);return process; }
+    public static long CurrentForegroundWindow() { return GetForegroundWindow().ToInt64(); }
+    public static uint CurrentForegroundThread() { uint process;return GetWindowThreadProcessId(GetForegroundWindow(),out process); }
+    public static string CurrentForegroundClass() {var cls=new StringBuilder(256);GetClassNameW(GetForegroundWindow(),cls,cls.Capacity);return cls.ToString();}
     public static string CurrentForegroundTitle() {var title=new StringBuilder(1024);GetWindowTextW(GetForegroundWindow(),title,title.Capacity);return title.ToString();}
     public static string CurrentForegroundApplicationId() {
         using(var process=OpenProcess(0x1000,false,CurrentForegroundProcess())) {
@@ -70,7 +82,7 @@ public static class WgcDesktopAdmissionProbe {
             return status==0?id.ToString():"unavailable:"+status.ToString();
         }
     }
-    public static bool CloseVerifiedHostedAccountSurface(uint expectedProcess) {
+    public static bool CloseVerifiedHostedAccountSurface(long expectedWindow,uint expectedThread,uint expectedProcess) {
         // This method remains unreachable without the explicit manual workflow
         // switch. It posts one ordinary close request, never kills a process,
         // sends authentication input, or changes a global foreground policy.
@@ -80,7 +92,8 @@ public static class WgcDesktopAdmissionProbe {
            Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")!="ARM64")
             throw new InvalidOperationException("Account-surface dismissal is confined to this project's ephemeral hosted ARM64 runner.");
         IntPtr window=GetForegroundWindow();uint processId;uint threadId=GetWindowThreadProcessId(window,out processId);
-        if(window==IntPtr.Zero || threadId==0 || processId!=expectedProcess)throw new InvalidOperationException("Account-surface identity changed.");
+        if(window==IntPtr.Zero || window.ToInt64()!=expectedWindow || threadId==0 || threadId!=expectedThread || processId!=expectedProcess)
+            throw new InvalidOperationException("Account-surface identity changed.");
         using(var process=OpenProcess(0x1000,false,processId)) {
             if(process==null || process.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error(),"Account-surface process identity unavailable");
             uint capacity=4096;var image=new StringBuilder((int)capacity);
@@ -236,6 +249,32 @@ public static class WgcDesktopAdmissionProbe {
     }
 }
 '@
+function Get-PrivateForegroundSnapshot {
+    $window=[WgcDesktopAdmissionProbe]::CurrentForegroundWindow()
+    $process=[WgcDesktopAdmissionProbe]::CurrentForegroundProcess()
+    $title=[WgcDesktopAdmissionProbe]::CurrentForegroundTitle()
+    $class=[WgcDesktopAdmissionProbe]::CurrentForegroundClass()
+    $application=[WgcDesktopAdmissionProbe]::CurrentForegroundApplicationId()
+    $image=$null;$session=$null;$queryError=$null
+    if($process){
+        try{$info=Get-CimInstance Win32_Process -Filter ('ProcessId='+$process) -ErrorAction Stop
+            if($null -ne $info){$image=$info.ExecutablePath;$session=$info.SessionId}else{$queryError='process-not-found'}}
+        catch{$queryError=$_.Exception.Message}
+    }
+    # A changed foreground during this read is surfaced, never silently paired.
+    $afterWindow=[WgcDesktopAdmissionProbe]::CurrentForegroundWindow();$afterProcess=[WgcDesktopAdmissionProbe]::CurrentForegroundProcess()
+    return [ordered]@{ObservedUtc=[DateTime]::UtcNow.ToString('o');Window=$window;Process=$process;Title=$title;Class=$class;ApplicationId=$application;
+        Image=$image;Session=$session;QueryError=$queryError;Stable=($window -eq $afterWindow -and $process -eq $afterProcess)}
+}
+if($SnapshotOnly){
+    $snapshotPath=Join-Path $taskTemp 'foreground-snapshot.json'
+    if(Test-Path -LiteralPath $snapshotPath){throw 'Preserve existing foreground snapshot.'}
+    [IO.File]::WriteAllText($snapshotPath,((Get-PrivateForegroundSnapshot)|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
+    Write-Host "Foreground snapshot: $snapshotPath"
+    return
+}
+$initialForegroundWindow=[WgcDesktopAdmissionProbe]::CurrentForegroundWindow()
+$initialForegroundThread=[WgcDesktopAdmissionProbe]::CurrentForegroundThread()
 $initialForegroundProcess=[WgcDesktopAdmissionProbe]::CurrentForegroundProcess()
 $initialForegroundTitle=[WgcDesktopAdmissionProbe]::CurrentForegroundTitle()
 $initialForegroundApplicationId=[WgcDesktopAdmissionProbe]::CurrentForegroundApplicationId()
@@ -250,14 +289,19 @@ if($DismissHostedAccountSurface){
     $intentPath=Join-Path $taskTemp 'account-dismissal-intent.json'
     $resultPath=Join-Path $taskTemp 'account-dismissal-result.json'
     if((Test-Path -LiteralPath $intentPath) -or (Test-Path -LiteralPath $resultPath)){throw 'Preserve account-window intervention evidence.'}
-    $intent=[ordered]@{Scope='Explicit manual hosted ARM64 account-window close only';RequestedUtc=[DateTime]::UtcNow.ToString('o');Head=(& git -C $repo rev-parse HEAD);Process=$initialForegroundProcess;Title=$initialForegroundTitle;ApplicationId=$initialForegroundApplicationId;Identity=$initialForegroundIdentity;DesktopContext=$context}
+    $intent=[ordered]@{Scope='Explicit manual hosted ARM64 account-window close only';RequestedUtc=[DateTime]::UtcNow.ToString('o');Head=(& git -C $repo rev-parse HEAD);Window=$initialForegroundWindow;Thread=$initialForegroundThread;Process=$initialForegroundProcess;Title=$initialForegroundTitle;ApplicationId=$initialForegroundApplicationId;Identity=$initialForegroundIdentity;DesktopContext=$context}
     [IO.File]::WriteAllText($intentPath,($intent|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
     $closeError=$null
-    try{$accountSurfaceDismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedAccountSurface($initialForegroundProcess)}catch{$closeError=$_.Exception.Message;throw}finally{
-        $outcome=[ordered]@{CompletedUtc=[DateTime]::UtcNow.ToString('o');IntentSha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;Dismissed=$accountSurfaceDismissed;Error=$closeError}
+    $noTarget=$false
+    try{if($CloseOnly -and $initialForegroundWindow -eq 0 -and $initialForegroundThread -eq 0 -and $initialForegroundProcess -eq 0 -and [WgcDesktopAdmissionProbe]::CurrentForegroundWindow() -eq 0){$noTarget=$true}else{$accountSurfaceDismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedAccountSurface($initialForegroundWindow,$initialForegroundThread,$initialForegroundProcess)}}catch{$closeError=$_.Exception.Message;throw}finally{
+        $postClose=$null;$snapshotError=$null
+        try{$postClose=Get-PrivateForegroundSnapshot}catch{$snapshotError=$_.Exception.Message}
+        $outcome=[ordered]@{CompletedUtc=[DateTime]::UtcNow.ToString('o');IntentSha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;Dismissed=$accountSurfaceDismissed;NoTarget=$noTarget;NoTargetScope='No foreground window observed, not a desktop-wide stock-window absence proof';Error=$closeError;PostCloseForeground=$postClose;SnapshotError=$snapshotError}
         [IO.File]::WriteAllText($resultPath,($outcome|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
+        if($CloseOnly){Write-Host "Close intent: $intentPath";Write-Host "Close result: $resultPath"}
     }
 }
+if($CloseOnly){return}
 $result=[WgcDesktopAdmissionProbe]::Run()
 $ownedResult=@()
 $foregroundBefore=$null;$foregroundAfter=$null;$grant=$null
@@ -283,7 +327,8 @@ if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hos
 }
 $path=Join-Path $taskTemp 'wgc-admission.json'
 if(Test-Path -LiteralPath $path){throw 'Preserve existing probe evidence'}
-$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Private desktop control: no application build, image, authentication input, or qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;InitialForegroundProcess=$initialForegroundProcess;InitialForegroundTitle=$initialForegroundTitle;InitialForegroundApplicationId=$initialForegroundApplicationId;InitialForegroundIdentity=$initialForegroundIdentity;AccountSurfaceDismissed=$accountSurfaceDismissed;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter}
+$finalForeground=Get-PrivateForegroundSnapshot
+$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Private desktop control: no application build, image, authentication input, or qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;InitialForegroundProcess=$initialForegroundProcess;InitialForegroundTitle=$initialForegroundTitle;InitialForegroundApplicationId=$initialForegroundApplicationId;InitialForegroundIdentity=$initialForegroundIdentity;AccountSurfaceDismissed=$accountSurfaceDismissed;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter;FinalForeground=$finalForeground}
 [IO.File]::WriteAllText($path,($report|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
 $report|ConvertTo-Json -Depth 6 -Compress
 Write-Host ('Probe evidence: '+$path)
