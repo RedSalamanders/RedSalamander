@@ -1,0 +1,156 @@
+{
+  "schema": "red-salamander.curated-copy-provenance.v1",
+  "scope": "Selected immutable diagnostic snapshots, not complete runs",
+  "copies": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-efd-filter-prompt-live-preservation-01\\commands-results-snapshot.json",
+      "destination": "full-efd-filter-prompt-live-preservation-01/commands-results-snapshot.json",
+      "bytes": 173365,
+      "sha256": "1d2e9f008553b868c2ed209d231f0022e99c07f25e014bd83d51a03025d3f255"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-efd-filter-prompt-live-preservation-01\\commands-trace-prefix.txt",
+      "destination": "full-efd-filter-prompt-live-preservation-01/commands-trace-prefix.txt",
+      "bytes": 905262,
+      "sha256": "1ad155a0f66fc9092c64c01bce7ced3b33f487ac3a87c2902a40e29d078cd990"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-efd-filter-prompt-live-preservation-01\\manifest.json",
+      "destination": "full-efd-filter-prompt-live-preservation-01/manifest.json",
+      "bytes": 2220,
+      "sha256": "9df604d63d461a4d0ecf09391d3c920f57959e0c760d9be5eb52ffa12990e3ff"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-efd-filter-prompt-live-preservation-01\\native-exit-6c2612d701c04bf491c90eba97032dbe.json",
+      "destination": "full-efd-filter-prompt-live-preservation-01/native-exit-6c2612d701c04bf491c90eba97032dbe.json",
+      "bytes": 251,
+      "sha256": "8e1deb512bfbafec12efa978254ff45b7bed9793434cde021e9f2d714cfc8d3d"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-efd-filter-prompt-live-preservation-01\\run-state-snapshot.json",
+      "destination": "full-efd-filter-prompt-live-preservation-01/run-state-snapshot.json",
+      "bytes": 6578,
+      "sha256": "f0054eb9df2aaf427f5a69805f4a280020188e7a40eacc582f54dffd0e4888af"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\commands-results-snapshot.json",
+      "destination": "full-ab5-commands-live-preservation-01/commands-results-snapshot.json",
+      "bytes": 25212,
+      "sha256": "eee4c3092e68933479c653246eb0ed7b2a9656e6d36535a8605d6d05f2ba258f"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\commands-trace-prefix.txt",
+      "destination": "full-ab5-commands-live-preservation-01/commands-trace-prefix.txt",
+      "bytes": 51626,
+      "sha256": "bd2f4b173a12e9d296986f5b2eb4ea88c03f878ce9f7aafa79082d70679862b9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\manifest.json",
+      "destination": "full-ab5-commands-live-preservation-01/manifest.json",
+      "bytes": 10710,
+      "sha256": "597bde644c597e5d2c50fd2c2b52cde043df94d722ff09e865275cdbe4fba2ac"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\native-exit-ec525adc341a4b20a01a2b7995c0c904.json",
+      "destination": "full-ab5-commands-live-preservation-01/native-exit-ec525adc341a4b20a01a2b7995c0c904.json",
+      "bytes": 241,
+      "sha256": "604cd14c42c2b3ea79ee1e2d7df675ebd24793597a75006b08b450cc48925e50"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-results.json",
+      "destination": "full-ab5-commands-live-preservation-01/parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-results.json",
+      "bytes": 1910,
+      "sha256": "8b97c54c04b3efd26fa761f07892277bf5fd0156e4106a6e052f74102ad46703"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-startup-trace.txt",
+      "destination": "full-ab5-commands-live-preservation-01/parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-startup-trace.txt",
+      "bytes": 22182,
+      "sha256": "2458ddb8903a2f66daafad7f3dd488fec28741ad0c770f63a5fc877b4ddc65de"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-trace.txt",
+      "destination": "full-ab5-commands-live-preservation-01/parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-trace.txt",
+      "bytes": 7740,
+      "sha256": "bc7d353a01805b0d085dc81fa0590672f20b5d85b6e900dad4b84b829ddc1c4e"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-01\\run-state-snapshot.json",
+      "destination": "full-ab5-commands-live-preservation-01/run-state-snapshot.json",
+      "bytes": 6578,
+      "sha256": "c87866eac9442e2cac365e490d77cb15344d2bd0b0ad4ac9870ffde4254f835a"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-02\\commands-results-snapshot.json",
+      "destination": "full-ab5-commands-live-preservation-02/commands-results-snapshot.json",
+      "bytes": 38994,
+      "sha256": "872ac92fcdd658f36c397c4dd91b00c6abaeaba96131a09b951a8004fd335a1e"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-02\\commands-trace-prefix.txt",
+      "destination": "full-ab5-commands-live-preservation-02/commands-trace-prefix.txt",
+      "bytes": 78950,
+      "sha256": "b0f275fb0ad8d6fcb3e351367ea4a7a3c3271a8760616521b33dfbb6a5632a45"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-02\\manifest.json",
+      "destination": "full-ab5-commands-live-preservation-02/manifest.json",
+      "bytes": 1264,
+      "sha256": "84d166dcd739d078724889f223a13fe3d8b77aa0b2bbe6a179a80eafa27d553a"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-commands-live-preservation-02\\run-state-snapshot.json",
+      "destination": "full-ab5-commands-live-preservation-02/run-state-snapshot.json",
+      "bytes": 6578,
+      "sha256": "c87866eac9442e2cac365e490d77cb15344d2bd0b0ad4ac9870ffde4254f835a"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\controlled-efd-waiting-mutex-stop-01\\intent.json",
+      "destination": "controlled-efd-waiting-mutex-stop-01/intent.json",
+      "bytes": 1625,
+      "sha256": "36ef2e41cc4ad355cc944a9c8f40a292226902830950152490009284c1954535"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\controlled-efd-waiting-mutex-stop-01\\result.json",
+      "destination": "controlled-efd-waiting-mutex-stop-01/result.json",
+      "bytes": 124,
+      "sha256": "802c9d03c6fd89edb23de8a20d6705cf031210906bf7a6150cc8ed44551b0bbf"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\controlled-efd-waiting-mutex-stop-01\\run-state-before.json",
+      "destination": "controlled-efd-waiting-mutex-stop-01/run-state-before.json",
+      "bytes": 6577,
+      "sha256": "a997fc1ff5803b30758e7123c4543721b322b379e5a48aea524c463ba8bc724d"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-hosted-stock-managed-check-01\\transcript.txt",
+      "destination": "root-hosted-stock-managed-check-01/transcript.txt",
+      "bytes": 12679,
+      "sha256": "7449f03e091941cb6c1fe7cd9b93c25d9f48835d76dca32bbb06f436d7057e65"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-hosted-stock-managed-check-02\\transcript.txt",
+      "destination": "root-hosted-stock-managed-check-02/transcript.txt",
+      "bytes": 14065,
+      "sha256": "868cc49c825c913f47bec31345e8570fc8b1236695d9947e55f86bff346fc49b"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-hosted-stock-managed-check-03\\result.json",
+      "destination": "root-hosted-stock-managed-check-03/result.json",
+      "bytes": 994,
+      "sha256": "83fcb15b5ca381b8f9c788eb817abf2c31d31334ed265687db31ed204215c75d"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-hosted-stock-managed-check-03\\transcript.txt",
+      "destination": "root-hosted-stock-managed-check-03/transcript.txt",
+      "bytes": 13840,
+      "sha256": "3ef4ceca6d259bccf07186a4cae9504950f239f775fea8338f33975c149ab2c3"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pr201-efd5-synchronized-final1.json",
+      "destination": "final-full5-pr201-efd5-synchronized-final1.json",
+      "bytes": 1897,
+      "sha256": "dfa98d5f6d3d9e9452cc229d167f6ce43cdcc530b664c9d82a1819fbc812e79b"
+    }
+  ]
+}

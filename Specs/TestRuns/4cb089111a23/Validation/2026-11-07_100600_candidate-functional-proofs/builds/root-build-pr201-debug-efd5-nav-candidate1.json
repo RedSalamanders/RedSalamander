@@ -1,0 +1,19 @@
+{
+  "Project": "PR201",
+  "Head": "efd597e40e26d17bfcd9dbb32fa8438ff757873b",
+  "Configuration": "Debug",
+  "CompilerDebugInformation": "ProgramDatabase",
+  "Rebuild": false,
+  "MaxCpuCount": 4,
+  "StartedUtc": "2026-11-07T09:42:46.7922020Z",
+  "EndedUtc": "2026-11-07T09:47:38.8531092Z",
+  "ExitCode": 0,
+  "Warnings": 0,
+  "Errors": 0,
+  "ReceiptId": "ad135dfe6b318286e3e01d6ad292be8ad5764b5a99d906e9ec6adb7985077ed2",
+  "SnapshotId": "a56996240cc856f8d166d4e1dfa89abe032ab05ded253ea8e756cc06bd11f0e0",
+  "SourceClean": true,
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-debug-efd5-nav-candidate1.log",
+  "LogSha256": "715E1963124047DD47B26A72A5AA2E443843DBB588B4C97C857BB2FC03026073",
+  "Accepted": true
+}

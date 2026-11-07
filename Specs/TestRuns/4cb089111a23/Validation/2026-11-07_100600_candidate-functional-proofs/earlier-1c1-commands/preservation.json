@@ -1,0 +1,32 @@
+{
+  "Head": "1c1de763ed284dc7643d460c97377266da3f082b",
+  "Run": "20261107T080725Z-8528-b7d3b4d41fb9469ab745e0f0eaaed4e7",
+  "NativeExit": 1,
+  "Records": [
+    {
+      "SHA256": "AC3485699AB13685CED974C2FAAC2CA311D4E36CC2EA846BBDB172D50FB9F6C9",
+      "Source": "Z:\\RedSalamander.Perf\\runs\\20261107T080725Z-8528-b7d3b4d41fb9469ab745e0f0eaaed4e7\\artifacts\\selftest\\last_run\\results.json",
+      "Bytes": 238380,
+      "Copy": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\results.json"
+    },
+    {
+      "SHA256": "9BF942D10A17B9FD0D8E817606E846A8501E79F1BD40DBEF1E6ED3A251785725",
+      "Source": "Z:\\RedSalamander.Perf\\runs\\20261107T080725Z-8528-b7d3b4d41fb9469ab745e0f0eaaed4e7\\artifacts\\selftest\\last_run\\trace.txt",
+      "Bytes": 11253018,
+      "Copy": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\trace.txt"
+    },
+    {
+      "SHA256": "386B75ED40CB195825751FD97D6BA3CA3A8CD6ED53402C162FA6D863E350BB15",
+      "Source": "Z:\\RedSalamander.Perf\\runs\\20261107T080725Z-8528-b7d3b4d41fb9469ab745e0f0eaaed4e7\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "Bytes": 191535,
+      "Copy": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\commands\\results.json"
+    },
+    {
+      "SHA256": "1F5BB1453BB776B9E9C757971DA33984D728D0147BEE3FD90343AC5CD206C649",
+      "Source": "Z:\\RedSalamander.Perf\\runs\\20261107T080725Z-8528-b7d3b4d41fb9469ab745e0f0eaaed4e7\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "Bytes": 946836,
+      "Copy": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\commands\\trace.txt"
+    }
+  ],
+  "ObservedUtc": "2026-11-07T09:21:53.8072428Z"
+}

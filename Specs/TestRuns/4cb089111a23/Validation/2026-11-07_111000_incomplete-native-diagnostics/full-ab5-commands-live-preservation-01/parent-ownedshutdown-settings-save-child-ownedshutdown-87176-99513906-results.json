@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-11-07T10:56:22.806Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 232,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "The notified foreground handoff failed before Commands case 'settings_save_queue_serializes_coalesces_and_flushes': foreground=0x508C2, pid=42616, target=0x2B31914, stage=hotkey-activation-refused, error=0, heldKey=0, sent=4, requestAccepted=true, guardEvaluated=true, guardPassed=true, requestAttempted=true, targetValid=true, targetThread=89428, targetPid=83128, warningValid=true, warningVisible=true, warningThread=89428, warningPid=83128, currentThread=89428, selfPid=83128, foregroundThread=41568, selfSessionKnown=true, selfSession=1, foregroundSessionKnown=true, foregroundSession=1, currentDesktopAvailable=true, foregroundDesktopAvailable=true.",
+    "cases": [
+        {
+            "name": "settings_save_queue_serializes_coalesces_and_flushes",
+            "status": "failed",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "reason": "The notified foreground handoff failed before Commands case 'settings_save_queue_serializes_coalesces_and_flushes': foreground=0x508C2, pid=42616, target=0x2B31914, stage=hotkey-activation-refused, error=0, heldKey=0, sent=4, requestAccepted=true, guardEvaluated=true, guardPassed=true, requestAttempted=true, targetValid=true, targetThread=89428, targetPid=83128, warningValid=true, warningVisible=true, warningThread=89428, warningPid=83128, currentThread=89428, selfPid=83128, foregroundThread=41568, selfSessionKnown=true, selfSession=1, foregroundSessionKnown=true, foregroundSession=1, currentDesktopAvailable=true, foregroundDesktopAvailable=true."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

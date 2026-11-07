@@ -1,0 +1,9 @@
+{
+  "schema": "private.approved-close-identity.v1",
+  "bootstrap_head": "171ea93ef2be0a5603b6cae449b4cf5455fab62d",
+  "status": "OBSERVED_ONLY",
+  "coverage": "NOT_EVALUATED",
+  "close_exit": 0,
+  "snapshot_exit": 0,
+  "error": null
+}

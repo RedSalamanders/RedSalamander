@@ -1,0 +1,101 @@
+{
+  "schema": "managed-control-provenance-v1",
+  "scope": "Managed and compiler-free controls and diagnostic history only",
+  "committed_drain07_module_sha256": "DB7B954595F006EF20D8AF6775E84231F356751A709ABACE3B2AF4A1E2503405",
+  "committed_drain07_counts": {
+    "passed": 54,
+    "skipped": 0,
+    "failed": 0
+  },
+  "preceding_drain06_module_sha256": "A1E6080A40F4F19554479BFE6CA7FEA10FF5F89FFBC64B579CE4EDB7201E04AB",
+  "preceding_drain06_counts": {
+    "passed": 205,
+    "skipped": 0,
+    "failed": 0
+  },
+  "records": [
+    {
+      "file": "root-final-committed-drain07-summary.json",
+      "source_record": "root-final-committed-drain07-summary.json",
+      "bytes": 748,
+      "sha256": "1792E973885BDCB24B81E29ACFBF4A39D1626CA7440BCD3338B8B6084C62F2CC"
+    },
+    {
+      "file": "root-final-drain06-summary.json",
+      "source_record": "root-final-drain06-summary.json",
+      "bytes": 1992,
+      "sha256": "23D0F549191262D73D5596B84E92094C9CD352198793164D493E3A305FC1336C"
+    },
+    {
+      "file": "final-full3-pr200-01399-final1.json",
+      "source_record": "final-full3-pr200-01399-final1.json",
+      "bytes": 1688,
+      "sha256": "7BAF915D2B6FB5B3F104533FEADF7EDB81786871732C01926B577F47D8014798"
+    },
+    {
+      "file": "root-correctness-v6-pr200-01399-phase7-family-observed1.json",
+      "source_record": "root-correctness-v6-pr200-01399-phase7-family-observed1.json",
+      "bytes": 1056,
+      "sha256": "1B5C8A6741832670AAD47140F1F54F066F3C3BCB4496CCBB13A2B64F610BEE0C"
+    },
+    {
+      "file": "root-correctness-v8-pr200-f497-matrix-release1.json",
+      "source_record": "root-correctness-v8-pr200-f497-matrix-release1.json",
+      "bytes": 2161,
+      "sha256": "2C25D55B4488BF528294E6A4C363D8D66F48CF322BEE78F9E4D222F928E58B17"
+    },
+    {
+      "file": "root-correctness-v8-pr200-f497-phase7-asan1.json",
+      "source_record": "root-correctness-v8-pr200-f497-phase7-asan1.json",
+      "bytes": 5263,
+      "sha256": "ABA1B9C00EC76EF916FE26D2A46970666A32BB26C6E7ECC7EEBA847E1DC3537B"
+    },
+    {
+      "file": "root-build-pr201-debug-drain-clean-final1.json",
+      "source_record": "root-build-pr201-debug-drain-clean-final1.json",
+      "bytes": 769,
+      "sha256": "42BD431B32A909A1FC987D8D559144EB75BC9071FE7B7B7B4D84C4CC073A0C52"
+    },
+    {
+      "file": "final-full5-pr200-f322-drain-final1.json",
+      "source_record": "final-full5-pr200-f322-drain-final1.json",
+      "bytes": 6806,
+      "sha256": "8F6CDACB407ACD9E789B34ADF007EE18B33721B0760AC3FBF22E8912A8FC96AB"
+    },
+    {
+      "file": "final-full5-pr201-73d-drain-final1.json",
+      "source_record": "final-full5-pr201-73d-drain-final1.json",
+      "bytes": 6728,
+      "sha256": "0F4C8BC6CD059C7E3610C60F4D3ED76977357D952F459818674BFB988D57188D"
+    },
+    {
+      "file": "pr200-f322-fileops-results.json",
+      "source_record": "full5-f322-r4a02-forensics-01\\01-results.json",
+      "bytes": 61533,
+      "sha256": "D25B32684877E56C1A545852D20F4CCF26DE5630DA4CBF748877E8B3A44056BA"
+    },
+    {
+      "file": "pr200-f322-native-exit.json",
+      "source_record": "full5-f322-r4a02-forensics-01\\native-exit-9a970e811f8a480f998c1b39f389e3ca.json",
+      "bytes": 241,
+      "sha256": "0EB4534EB673F0AFD6B95481DB33E5952306C6F5D472880B2CE294F1618F069F"
+    },
+    {
+      "file": "pr201-73d-fileops-results.json",
+      "source_record": "full5-73d-fileops-pass-intermediate-01\\results.json",
+      "bytes": 60985,
+      "sha256": "7D544471D9424E9AD33AE2EC6E16DD2EA4AE1DA8C93C97BFD985271851A7EDF0"
+    },
+    {
+      "file": "pr201-73d-native-exit.json",
+      "source_record": "full5-73d-fileops-pass-intermediate-01\\native-exit.json",
+      "bytes": 251,
+      "sha256": "F3B0F1F5E863FC6532445FB7B91F990783969B74793AC850E831A690A356B37A"
+    }
+  ],
+  "preceding_pr200_head": "f32285ab537f9d31805a170e6ed30359ccea48f7",
+  "preceding_pr201_head": "73d562a6b25f96a29980be567af12cb31c9bfb5d",
+  "current_candidate_pr200_head": "1c1de763ed284dc7643d460c97377266da3f082b",
+  "current_candidate_pr201_head": "cb12b043bc22cbd5786ad1aa3579a80e8ead1df4",
+  "current_candidate_qualification": "pending"
+}

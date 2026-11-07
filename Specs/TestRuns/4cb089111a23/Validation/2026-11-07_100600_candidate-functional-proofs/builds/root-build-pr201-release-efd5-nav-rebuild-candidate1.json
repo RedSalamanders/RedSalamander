@@ -1,0 +1,19 @@
+{
+  "Project": "PR201",
+  "Head": "efd597e40e26d17bfcd9dbb32fa8438ff757873b",
+  "Configuration": "Release",
+  "CompilerDebugInformation": "Embedded",
+  "Rebuild": true,
+  "MaxCpuCount": 4,
+  "StartedUtc": "2026-11-07T09:33:56.1657145Z",
+  "EndedUtc": "2026-11-07T09:42:06.3554998Z",
+  "ExitCode": 0,
+  "Warnings": 0,
+  "Errors": 0,
+  "ReceiptId": "932fd5a924ed38f7dc953eacd2e7d1c38dd5d7dedf422f099a88ba8512ec4e63",
+  "SnapshotId": "a56996240cc856f8d166d4e1dfa89abe032ab05ded253ea8e756cc06bd11f0e0",
+  "SourceClean": true,
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-release-efd5-nav-rebuild-candidate1.log",
+  "LogSha256": "ADCDB6277554858916569241B696BD49696AC5A054B64653BBBB90DD14361FE1",
+  "Accepted": true
+}

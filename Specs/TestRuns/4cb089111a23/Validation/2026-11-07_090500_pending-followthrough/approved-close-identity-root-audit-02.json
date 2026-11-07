@@ -1,0 +1,40 @@
+{
+  "Run": 42357742717,
+  "PassedMetadataBinding": true,
+  "ApplicationCoverage": "NOT_EVALUATED",
+  "AccountDismissed": true,
+  "FreshForeground": "Stock Search flyout",
+  "SearchActionAuthorized": false,
+  "Inventory": [
+    {
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-close-identity-download-02\\42357742717-1\\account-dismissal-intent.json",
+      "Bytes": 843,
+      "SHA256": "F7668C51D19C5585FD9BA2428B8681E8D6A08C75130B0DEDFB6A41BB6DA3DE8C"
+    },
+    {
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-close-identity-download-02\\42357742717-1\\account-dismissal-result.json",
+      "Bytes": 625,
+      "SHA256": "C687531C64F1CC78267D5469F8F3DC1234200BDB1EB3253490C38153CD69ABF5"
+    },
+    {
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-close-identity-download-02\\42357742717-1\\close.log",
+      "Bytes": 358,
+      "SHA256": "3D5DA2E7592143D3A904966CE83174A72282B2CF507C8D45EF0CB76E83C6F80F"
+    },
+    {
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-close-identity-download-02\\42357742717-1\\diagnostic.json",
+      "Bytes": 244,
+      "SHA256": "E876ABDC1715C8D9E5E2850CB5BE53572322E7B6058DADE1E58647105D7C5625"
+    },
+    {
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-close-identity-download-02\\42357742717-1\\foreground-snapshot.json",
+      "Bytes": 389,
+      "SHA256": "601358AF379A136FD13A68CA24EDED64C973C4CF40DB174F19DF18F4A8597144"
+    },
+    {
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-close-identity-download-02\\42357742717-1\\snapshot.log",
+      "Bytes": 181,
+      "SHA256": "F4886604B31895DFE41747AD7977E9703031E7DCDC1C56A9A1048B44D90DEE4A"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "Head": "f32285ab537f9d31805a170e6ed30359ccea48f7",
+  "ModuleSHA": "DB7B954595F006EF20D8AF6775E84231F356751A709ABACE3B2AF4A1E2503405",
+  "Controls": [
+    {
+      "Name": "HostedTestDesktop",
+      "Passed": 28,
+      "Failed": 0,
+      "Skipped": 0,
+      "LogSHA": "8775CC1E29587169C2335B2CE6B4300E989C954C1DA5D95B24A5D305FBDF2618"
+    },
+    {
+      "Name": "ToolInventory",
+      "Passed": 17,
+      "Failed": 0,
+      "Skipped": 0,
+      "LogSHA": "075F8D72B7B619EEADCA92E56F4FB58BDFBB8CA9C7141E464F9746278CCBEBC9"
+    },
+    {
+      "Name": "ScopedTesting",
+      "Passed": 9,
+      "Failed": 0,
+      "Skipped": 0,
+      "LogSHA": "AEB35619B5AD96C0032517D62170F8810E5924D0539714C45485923935D22C10"
+    }
+  ]
+}

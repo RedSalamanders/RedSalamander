@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-11-07T09:51:12.342Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261107T094934Z-77508-835c7a41b3e84f728ea9d9a6178a609c\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 887,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_navigationView_edit_suggest_keyboard_routing",
+            "status": "passed",
+            "duration_ms": 343,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

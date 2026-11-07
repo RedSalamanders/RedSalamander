@@ -1,0 +1,19 @@
+{
+  "Project": "PR201",
+  "Head": "73d562a6b25f96a29980be567af12cb31c9bfb5d",
+  "Configuration": "Debug",
+  "CompilerDebugInformation": "ProgramDatabase",
+  "Rebuild": true,
+  "MaxCpuCount": 4,
+  "StartedUtc": "2026-11-07T04:50:38.9798241Z",
+  "EndedUtc": "2026-11-07T04:56:19.7374148Z",
+  "ExitCode": 0,
+  "Warnings": 0,
+  "Errors": 0,
+  "ReceiptId": "9efe22ff3314d225163920f9432d4b422dcd54915509eaa09458733a966b2a01",
+  "SnapshotId": "af1985af0dc866d2fd488dc513203a744904e4816c304e03e850f812bf33b595",
+  "SourceClean": true,
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-debug-drain-clean-final1.log",
+  "LogSha256": "2E94AD116E5185D6DAA972D8919D1B9234FDE5EA3BB3048DC0D901E431D6B5E3",
+  "Accepted": true
+}

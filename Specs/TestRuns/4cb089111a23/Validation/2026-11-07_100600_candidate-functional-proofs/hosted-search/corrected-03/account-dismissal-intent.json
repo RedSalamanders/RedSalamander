@@ -1,0 +1,26 @@
+{
+  "Scope": "Explicit manual hosted ARM64 account-window close only",
+  "RequestedUtc": "2026-11-07T09:58:45.1423653Z",
+  "Head": "a00ab0724de17f6b395a98f3df28c75d6ebcb1fc",
+  "Window": 262234,
+  "Thread": 7628,
+  "Process": 7660,
+  "Title": "Microsoft account",
+  "ApplicationId": "Microsoft.Windows.CloudExperienceHost_cw5n1h2txyewy!App",
+  "Identity": {
+    "Name": "WWAHost.exe",
+    "ExecutablePath": "C:\\Windows\\system32\\wwahost.exe",
+    "CommandLine": "\"C:\\Windows\\system32\\wwahost.exe\" -ServerName:App.wwa",
+    "SessionId": 2
+  },
+  "DesktopContext": {
+    "WindowStation": "WinSta0",
+    "WindowStationError": 0,
+    "ThreadDesktop": "Default",
+    "ThreadDesktopError": 0,
+    "InputDesktop": "Default",
+    "InputDesktopError": 0,
+    "ForegroundDesktop": "",
+    "ForegroundDesktopError": 5
+  }
+}

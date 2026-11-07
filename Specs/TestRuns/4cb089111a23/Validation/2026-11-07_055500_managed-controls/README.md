@@ -1,0 +1,23 @@
+# Managed controls and historical failure ledger
+
+This archive records bounded controls and diagnostic history for preceding published PR200 head `f32285ab537f9d31805a170e6ed30359ccea48f7` and PR201 head `73d562a6b25f96a29980be567af12cb31c9bfb5d`. The current candidate heads are PR200 `1c1de763ed284dc7643d460c97377266da3f082b` and PR201 `cb12b043bc22cbd5786ad1aa3579a80e8ead1df4`; their qualification is pending. `provenance.json` identifies and hashes each copied original record. The copied summaries refer to local logs and raw artifacts that are not included here; their embedded log hashes do not make those absent files independently reviewable from this archive.
+
+- The committed PR200 drain07 summary identifies the preceding PR200 head and module SHA-256 `DB7B954595F006EF20D8AF6775E84231F356751A709ABACE3B2AF4A1E2503405`. Its HostedTestDesktop, ToolInventory and ScopedTesting controls total 54 passed, zero failed and zero skipped.
+- The earlier drain06 summary records 205 passed, zero failed and zero skipped across six managed/compiler-free control groups, against the preceding module SHA-256 `A1E6080A40F4F19554479BFE6CA7FEA10FF5F89FFBC64B579CE4EDB7201E04AB`. It is not relabeled as the committed drain07 module.
+- The PR201 Debug build summary records a clean rebuild at the stated preceding PR201 head, with zero warnings and errors. This is build evidence, not runtime qualification.
+
+## Preceding-head Full results and candidate fix
+
+- PR200 Fresh Full Release scale 3 at `f32285ab537f9d31805a170e6ed30359ccea48f7` failed: 2,761 passed, one failed, 61 skipped, with 17 of 18 entries promoted. The preserved native FileOperations result has 295 passed, one failed, 26 skipped; `R4A02_SameDestinationWarns` reported completion without the expected overlap warning, and the owned native process exit was 1. This is a declared assertion failure, distinct from the unexplained earlier `0139` missing-terminal event.
+- PR201 Fresh Full Release scale 3 at `73d562a6b25f96a29980be567af12cb31c9bfb5d` passed with 2,772 passed, zero failed, 56 skipped and 18 verified promotions. Its native FileOperations result records 302 passed, zero failed, 21 skipped and process exit 0. This supported scale-3 result is for the preceding head; it does not erase the retained default NAS deadline failures or qualify the current candidate.
+- The new test synchronization holds the first prepared copy until the second warning and verifies that canceled B publishes no members. Qualification at the new heads remains pending; this description is not a runtime proof of the fix.
+
+The invalid `05-*` log and the original preservation manifest are excluded: the shared-log read failed and the later preservation record identified stale bytes. Raw traces, logs and the promotion-certificate cache remain local. These compact records alone do not allow independent recomputation of the entire Full verdict.
+## Historical failures and diagnostic follow-up
+
+- The earlier PR200 Full Release scale-3 attempt at `013998dfb710632c26867f1009eddca11dfcdf11` failed. The native FileOperations entry ended before publishing its terminal result, and archive closure also refused a remaining test reparse link. The preserved wrapper summary reports exit 1 and no Full pass. The native exit cause has not been established; missing terminal JSON does not prove a crash. Raw run `20261107T011010Z-47716-ea0dc1da50794fec8d7f4e7da0c621bb` and the corresponding logs remain in local governed evidence.
+- The subsequent family attempt at the same intermediate head also failed before a terminal result; its copied summary records no focused correctness pass. A later isolated scheduler run and held-handle family runs passed as diagnostic observations at that intermediate head; they do not establish why the earlier runs ended or qualify the final source.
+- At intermediate PR200 head `f49703f25841f0271a0757e3c3e14b2bac9a6434`, the copied selected Release matrix and ASan Debug Phase 7 family summaries record focused correctness passes. They are not final-head Full, performance, or hosted qualification. The subsequent Full attempt at that head was deliberately interrupted after a fixture correction required a new source head; its record remains in local evidence.
+- Earlier PR201 Debug intermediate-database artifacts were retained locally for forensics; the copied preceding-head clean Debug rebuild summary records the later build outcome. No raw binaries, dumps, screenshots, personal paths, or full logs are published in this archive.
+
+Current-candidate Full runs and performance evidence are separate and pending. This folder makes no current-candidate Full, performance, default NAS deadline, or hosted native qualification claim.

@@ -1,0 +1,229 @@
+{
+  "Profile": "FullReleaseScale3",
+  "DefaultScale1And2NASFailuresRetained": true,
+  "Project": "PR201",
+  "Head": "73d562a6b25f96a29980be567af12cb31c9bfb5d",
+  "ReceiptBefore": "f75cb0a92ba04afde8a08d47fefd5684aa002aa3aa476a002906fe7d1306209a",
+  "ReceiptBeforeSha256": "58180B1D2153B9F332416A6C8F77C5F4E082416D218B0A3E13877B626A66B562",
+  "SnapshotBefore": "af1985af0dc866d2fd488dc513203a744904e4816c304e03e850f812bf33b595",
+  "StartedUtc": "2026-11-07T04:58:05.5592963Z",
+  "EndedUtc": "2026-11-07T07:51:15.3934142Z",
+  "WrapperExit": 0,
+  "RunId": "20261107T045808Z-70044-920eab89c9534c4f85f2bc5f029a4255",
+  "SourceClean": true,
+  "SnapshotAfter": "af1985af0dc866d2fd488dc513203a744904e4816c304e03e850f812bf33b595",
+  "ReceiptAfter": "12e3ac71b55cdd5ecfdc599871defb1fc47d031e62336db2ce41b9c3d0a2565a",
+  "ReceiptAfterSha256": "943881D5F92F8B2959565BBFCB2A2F17B9DA143F61F3620F6C81C22FAA5AD323",
+  "ReceiptAfterVerified": true,
+  "ResultPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T045808Z-70044-920eab89c9534c4f85f2bc5f029a4255\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "ResultSha256": "5D760E55093E3F947D310AF44FFCFFE27688DC39EF4887AB96157FB9B61844DE",
+  "LegacyPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T045808Z-70044-920eab89c9534c4f85f2bc5f029a4255\\artifacts\\selftest\\last_run\\run-all-tests-results-v1.json",
+  "LegacySha256": "E8693050D129EB015CB851FEF54AB6266FF8E15566E5B7A682C0871ABFC44858",
+  "StatePath": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261107T045808Z-70044-920eab89c9534c4f85f2bc5f029a4255\\run-state.json",
+  "StateSha256": "28FA7CAC65343CE133A9329DBE2E47A43B03DDE188B7C172D94413D5490E6960",
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pr201-73d-drain-final1.log",
+  "LogSha256": "B049F81B3F4041BC6DECD7A52390C2323B454ED98D59DB6D3D3F18636EF1A400",
+  "PrecheckLog": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pr201-73d-drain-final1-prechecks.log",
+  "PrecheckLogSha256": "385E7DC681D24F2284EC4D460F829EAD50ACAD2CA2109D6DEA774685E725ABD4",
+  "ChangelogPassed": true,
+  "NativeNamesCount": 118,
+  "ValidationMode": "Fresh",
+  "RequestedGate": "Full",
+  "CoverageScope": "complete",
+  "RepositoryVerdict": "PASSED",
+  "ChangeVerdict": "PASSED",
+  "Counts": {
+    "executed": 18,
+    "incomplete": 0,
+    "invalidated": 0,
+    "promoted": 18,
+    "provisional": 0,
+    "reused": 0
+  },
+  "CaseCounts": {
+    "failed": 0,
+    "passed": 2772,
+    "skipped": 56,
+    "total": 2828
+  },
+  "ArtifactEpoch": 1,
+  "Quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "Entries": [
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "tooling.pester-build-toolchain",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "selftest.compare-directories",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "selftest.commands",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "selftest.file-operations",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.product-ui",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "viewer-pe.noninteractive",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "viewer-pe.interactive",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "viewer-sqlite.noninteractive",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "viewer-sqlite.interactive",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.filesystem-curl",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.localization",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.red-configure",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.plugin-contract",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.settings-schema",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "standalone.crash-handling",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "perf.performance-tests2",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "tooling.pester",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "promotion_state": "promoted",
+      "execution": "executed",
+      "id": "tooling.vcpkg-merge-synthetic",
+      "reason_codes": [
+        "FORCED"
+      ]
+    }
+  ],
+  "VerifiedPromotions": 18,
+  "FullProfilePassed": true,
+  "Error": null
+}

@@ -1,0 +1,199 @@
+{
+  "schema": "candidate-functional-proof-copies.v1",
+  "interpretation": "Byte-identical copies only; source files remain authoritative.",
+  "copied_files": [
+    {
+      "sha256": "72A4DB2CAC04F8A2280AF3EB729808C47ECD39F5222ABDC1A24E397ED004D9F1",
+      "bytes": 775,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr200-release-ab5f-nav-rebuild-candidate1.json",
+      "path": "builds/root-build-pr200-release-ab5f-nav-rebuild-candidate1.json"
+    },
+    {
+      "sha256": "4E76A8D3972978F5C5F0E042C60E931BD5A7A41B53D32A7B5722EFE713AC79DA",
+      "bytes": 775,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-release-efd5-nav-rebuild-candidate1.json",
+      "path": "builds/root-build-pr201-release-efd5-nav-rebuild-candidate1.json"
+    },
+    {
+      "sha256": "65BACACFEB54BE48855B2F34D7BA4B283C12A9957A4E7643336448FF8274C5B3",
+      "bytes": 771,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-debug-efd5-nav-candidate1.json",
+      "path": "builds/root-build-pr201-debug-efd5-nav-candidate1.json"
+    },
+    {
+      "sha256": "108E095B6BBF1F30EBD15A822401A813998014A650FAD4D813048E9A6770DF71",
+      "bytes": 1899,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-correctness-v10-pr200-ab5f-navigation-release1.json",
+      "path": "focused/navigation-pr200-release/summary.json"
+    },
+    {
+      "sha256": "4A621B9003FFEEADF78C4B3DC86FA270A0CD8BFBAB3014F77A3F11BE62F72A30",
+      "bytes": 591,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-77508-835c7a41b3e84f728ea9d9a6178a609c\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "path": "focused/navigation-pr200-release/results.json"
+    },
+    {
+      "sha256": "6ED2C286BA5B63BEF76AD3DE7F00DA9BCFA85BFF3B7D5F8640A4E1E2A75D6110",
+      "bytes": 1458,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-77508-835c7a41b3e84f728ea9d9a6178a609c\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "path": "focused/navigation-pr200-release/trace.txt"
+    },
+    {
+      "sha256": "2550282AD3BF471E0199B2186A4BC47EDEA8EE46EFFDA7024FE6B6E2E7A7B9AC",
+      "bytes": 1899,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-correctness-v10-pr201-efd5-navigation-release1.json",
+      "path": "focused/navigation-pr201-release/summary.json"
+    },
+    {
+      "sha256": "C1445384CC6768A42EB2B90784C5FD407CD400A9CD435EAD76A16EA472CC5D1F",
+      "bytes": 592,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094301Z-68764-c3d802906ffe4fc8a101b58f988198cd\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "path": "focused/navigation-pr201-release/results.json"
+    },
+    {
+      "sha256": "67683EFCC37365564029CBFC2CA70236D1222466303B11F3FE4E9BADD8226D9D",
+      "bytes": 1482,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094301Z-68764-c3d802906ffe4fc8a101b58f988198cd\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "path": "focused/navigation-pr201-release/trace.txt"
+    },
+    {
+      "sha256": "B842F9A3E50A342579556C0D91F0FC41C059102A5D4B6EA5A26DD45A21180CFF",
+      "bytes": 2183,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-correctness-v9-pr201-efd5-riptide-debug1.json",
+      "path": "focused/riptide-pr201-debug/summary.json"
+    },
+    {
+      "sha256": "80726722EAB3DDDB07B7D6202588C76D474CCA1677E2B9EA423757CDF1C90B2D",
+      "bytes": 914,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "path": "focused/riptide-pr201-debug/results.json"
+    },
+    {
+      "sha256": "60EB88E50972E227855D763370173640E88CED63F4D1BB687DF2E17A0B9CF89B",
+      "bytes": 5336,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "path": "focused/riptide-pr201-debug/trace.txt"
+    },
+    {
+      "sha256": "16EB160B7D08336251EEDDFE705499E6E0C435074099D33FB9B0D419FBFEBF5B",
+      "bytes": 750,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-01\\42360931106-1\\diagnostic.json",
+      "path": "hosted-search/strict-01/diagnostic.json"
+    },
+    {
+      "sha256": "3CEF8B441E77CD9AA91F79EEFF4A8427FFE9880C86EFC5C3814612E4F3A379F5",
+      "bytes": 822,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-01\\42360931106-1\\search-dismissal-result.json",
+      "path": "hosted-search/strict-01/search-dismissal-result.json"
+    },
+    {
+      "sha256": "8C80C3B92313192F063C4FA2A96EC511455F0A3CF342737404F4472112A2E451",
+      "bytes": 750,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-02\\42361402444-1\\diagnostic.json",
+      "path": "hosted-search/strict-02/diagnostic.json"
+    },
+    {
+      "sha256": "CA387CD1D798EFA1D9875E8EED76AF6651FBCF2B68FFCD5809CB3E51E08F72FD",
+      "bytes": 1358,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-02\\42361402444-1\\search-dismissal-result.json",
+      "path": "hosted-search/strict-02/search-dismissal-result.json"
+    },
+    {
+      "sha256": "E1D649C30EEFECDDE00FDCFAAB0E356EDAABB9F350A5A39A23404D6778CD4041",
+      "bytes": 844,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\account-dismissal-intent.json",
+      "path": "hosted-search/corrected-03/account-dismissal-intent.json"
+    },
+    {
+      "sha256": "CB5E6A2BC1EAC7329A005EC6AF4A8B26BE15FD0F22C552D40A7C03B01ED5EC80",
+      "bytes": 664,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\account-dismissal-result.json",
+      "path": "hosted-search/corrected-03/account-dismissal-result.json"
+    },
+    {
+      "sha256": "0991D9EE24D60F6C593D0C32EB2D933371A57A4978A340CA6B30FEE45F985412",
+      "bytes": 358,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\close.log",
+      "path": "hosted-search/corrected-03/close.log"
+    },
+    {
+      "sha256": "55CCCCA0552DBF6BB2C9CAA1E677F3917C1C49C002FEE855B742F666D5E67AF1",
+      "bytes": 378,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\diagnostic.json",
+      "path": "hosted-search/corrected-03/diagnostic.json"
+    },
+    {
+      "sha256": "222BB2531CA6A74A5F89C45601C25B3D71C79496CB7EC73BA9111220BA677628",
+      "bytes": 325,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\foreground-snapshot.json",
+      "path": "hosted-search/corrected-03/foreground-snapshot.json"
+    },
+    {
+      "sha256": "59628E560DDB1658515C9032260CC0D14D419E47041F71917BD6BE7A6230E2CB",
+      "bytes": 360,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\search-close.log",
+      "path": "hosted-search/corrected-03/search-close.log"
+    },
+    {
+      "sha256": "B18ED1B481F8DAAB5532938F2D07E254EDB47955253D3C5B7D0DB60CEDAA8C22",
+      "bytes": 975,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\search-dismissal-intent.json",
+      "path": "hosted-search/corrected-03/search-dismissal-intent.json"
+    },
+    {
+      "sha256": "A41D8DE70A7FAB6525B5AA0BE934A0DD80335706C7B6E83AA8635E9CD52F6876",
+      "bytes": 1168,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\search-dismissal-result.json",
+      "path": "hosted-search/corrected-03/search-dismissal-result.json"
+    },
+    {
+      "sha256": "F7CA16DECAF6FA27DA32171E3C7C68C40CEC5D26209A0311B9017628A72467C9",
+      "bytes": 181,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\snapshot.log",
+      "path": "hosted-search/corrected-03/snapshot.log"
+    },
+    {
+      "sha256": "429D4197F7C3679F8F473DC2C9C5C7CDF14FC97F22A0C10FF8FCA89C81AB0013",
+      "bytes": 2788,
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-root-audit-03.json",
+      "path": "hosted-search/corrected-03/root-audit.json"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\results.json",
+      "bytes": 238380,
+      "path": "earlier-1c1-commands/root-results.json",
+      "sha256": "AC3485699AB13685CED974C2FAAC2CA311D4E36CC2EA846BBDB172D50FB9F6C9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\commands\\results.json",
+      "bytes": 191535,
+      "path": "earlier-1c1-commands/commands-results.json",
+      "sha256": "386B75ED40CB195825751FD97D6BA3CA3A8CD6ED53402C162FA6D863E350BB15"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\commands\\trace.txt",
+      "bytes": 946836,
+      "path": "earlier-1c1-commands/commands-trace.txt",
+      "sha256": "1F5BB1453BB776B9E9C757971DA33984D728D0147BEE3FD90343AC5CD206C649"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\preservation.json",
+      "bytes": 1829,
+      "path": "earlier-1c1-commands/preservation.json",
+      "sha256": "9C39C05151D1E43E20E90765FE79BDE3DDAAEE35D8B07E9C671F949740001054"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\commands-native-exit.json",
+      "bytes": 241,
+      "path": "earlier-1c1-commands/native-exit.json",
+      "sha256": "C14C031C7CF752364C3A81F4C0826F406ED5A8A9DA65043366ECAC1BE3C8B2CF"
+    }
+  ],
+  "retained_large_trace": {
+    "sha256": "9BF942D10A17B9FD0D8E817606E846A8501E79F1BD40DBEF1E6ED3A251785725",
+    "bytes": 11253018,
+    "path": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-1c1-commands-failure-01\\trace.txt",
+    "source": "preservation.json",
+    "reason": "Original root trace exceeds the 2 MiB per-file packet limit and remains in local approved evidence."
+  }
+}

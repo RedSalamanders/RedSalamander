@@ -1,0 +1,55 @@
+{
+  "Run": 42361854353,
+  "Head": "a00ab0724de17f6b395a98f3df28c75d6ebcb1fc",
+  "ApprovedAccountAndSearchControl": true,
+  "ApplicationQualification": "NOT_EVALUATED",
+  "SearchRetiredByShellCloaking": true,
+  "VerifiedForegroundShell": true,
+  "Inventory": [
+    {
+      "Bytes": 844,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\account-dismissal-intent.json",
+      "SHA256": "E1D649C30EEFECDDE00FDCFAAB0E356EDAABB9F350A5A39A23404D6778CD4041"
+    },
+    {
+      "Bytes": 664,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\account-dismissal-result.json",
+      "SHA256": "CB5E6A2BC1EAC7329A005EC6AF4A8B26BE15FD0F22C552D40A7C03B01ED5EC80"
+    },
+    {
+      "Bytes": 358,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\close.log",
+      "SHA256": "0991D9EE24D60F6C593D0C32EB2D933371A57A4978A340CA6B30FEE45F985412"
+    },
+    {
+      "Bytes": 378,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\diagnostic.json",
+      "SHA256": "55CCCCA0552DBF6BB2C9CAA1E677F3917C1C49C002FEE855B742F666D5E67AF1"
+    },
+    {
+      "Bytes": 325,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\foreground-snapshot.json",
+      "SHA256": "222BB2531CA6A74A5F89C45601C25B3D71C79496CB7EC73BA9111220BA677628"
+    },
+    {
+      "Bytes": 360,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\search-close.log",
+      "SHA256": "59628E560DDB1658515C9032260CC0D14D419E47041F71917BD6BE7A6230E2CB"
+    },
+    {
+      "Bytes": 975,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\search-dismissal-intent.json",
+      "SHA256": "B18ED1B481F8DAAB5532938F2D07E254EDB47955253D3C5B7D0DB60CEDAA8C22"
+    },
+    {
+      "Bytes": 1168,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\search-dismissal-result.json",
+      "SHA256": "A41D8DE70A7FAB6525B5AA0BE934A0DD80335706C7B6E83AA8635E9CD52F6876"
+    },
+    {
+      "Bytes": 181,
+      "File": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-search-close-control-download-03\\42361854353-1\\snapshot.log",
+      "SHA256": "F7CA16DECAF6FA27DA32171E3C7C68C40CEC5D26209A0311B9017628A72467C9"
+    }
+  ]
+}

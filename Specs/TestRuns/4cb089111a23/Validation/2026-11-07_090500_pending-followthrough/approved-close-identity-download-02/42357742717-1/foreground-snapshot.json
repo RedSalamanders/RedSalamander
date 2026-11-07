@@ -1,0 +1,12 @@
+{
+  "ObservedUtc": "2026-11-07T09:00:26.0765308Z",
+  "Window": 65984,
+  "Process": 9036,
+  "Title": "Search",
+  "Class": "Windows.UI.Core.CoreWindow",
+  "ApplicationId": "MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI",
+  "Image": "C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\SearchHost.exe",
+  "Session": 2,
+  "QueryError": null,
+  "Stable": true
+}

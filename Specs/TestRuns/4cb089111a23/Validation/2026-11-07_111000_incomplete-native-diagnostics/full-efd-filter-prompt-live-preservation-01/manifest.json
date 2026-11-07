@@ -1,0 +1,37 @@
+{
+  "observed_utc": "2026-11-07T10:52:58.1344631+00:00",
+  "head": "efd597e40e26d17bfcd9dbb32fa8438ff757873b",
+  "run_id": "20261107T094935Z-64612-63b2b011c5e7454d9f26230cee7b75a6",
+  "assertion": "cmd_pane_filter_prompt_uses_dxui_surface: Pane Filter prompt field value should match the live prompt snapshot during empty confirm pass.",
+  "scope": "Live evidence snapshot before any retry; source preserved",
+  "records": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T094935Z-64612-63b2b011c5e7454d9f26230cee7b75a6\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "copy": "commands-trace-prefix.txt",
+      "initial_length": 905262,
+      "sha256": "1AD155A0F66FC9092C64C01BCE7CED3B33F487AC3A87C2902A40E29D078CD990",
+      "semantics": "Live initial-length read; may be partial or superseded; no terminal status inferred"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T094935Z-64612-63b2b011c5e7454d9f26230cee7b75a6\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "copy": "commands-results-snapshot.json",
+      "initial_length": 173365,
+      "sha256": "1D2E9F008553B868C2ED209D231F0022E99C07F25E014BD83D51A03025D3F255",
+      "semantics": "Live initial-length read; may be partial or superseded; no terminal status inferred"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261107T094935Z-64612-63b2b011c5e7454d9f26230cee7b75a6\\run-state.json",
+      "copy": "run-state-snapshot.json",
+      "initial_length": 6578,
+      "sha256": "F0054EB9DF2AAF427F5A69805F4A280020188E7A40EACC582F54DFFD0E4888AF",
+      "semantics": "Live initial-length read; may be partial or superseded; no terminal status inferred"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T094935Z-64612-63b2b011c5e7454d9f26230cee7b75a6\\artifacts\\native-process-exits\\6c2612d701c04bf491c90eba97032dbe.json",
+      "copy": "native-exit-6c2612d701c04bf491c90eba97032dbe.json",
+      "initial_length": 251,
+      "sha256": "8E1DEB512BFBAFEC12EFA978254FF45B7BED9793434CDE021E9F2D714CFC8D3D",
+      "semantics": "Live initial-length read; may be partial or superseded; no terminal status inferred"
+    }
+  ]
+}

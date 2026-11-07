@@ -1,0 +1,22 @@
+{
+  "CompletedUtc": "2026-11-07T09:58:45.3822455Z",
+  "IntentSha256": "E1D649C30EEFECDDE00FDCFAAB0E356EDAABB9F350A5A39A23404D6778CD4041",
+  "Dismissed": true,
+  "NoTarget": false,
+  "NoTargetScope": "No foreground window observed, not a desktop-wide stock-window absence proof",
+  "Error": null,
+  "PostCloseForeground": {
+    "ObservedUtc": "2026-11-07T09:58:45.3820837Z",
+    "Window": 0,
+    "Process": 0,
+    "Title": "",
+    "Class": "",
+    "ApplicationId": "unavailable:open-process",
+    "Image": null,
+    "Session": null,
+    "QueryError": null,
+    "Stable": true,
+    "VerifiedShellForeground": false
+  },
+  "SnapshotError": null
+}

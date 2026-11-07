@@ -1,0 +1,42 @@
+{
+  "CompletedUtc": "2026-11-07T09:58:52.3790072Z",
+  "IntentSha256": "B18ED1B481F8DAAB5532938F2D07E254EDB47955253D3C5B7D0DB60CEDAA8C22",
+  "Dismissed": true,
+  "NoTarget": false,
+  "NoTargetScope": null,
+  "Error": null,
+  "SearchRetirement": {
+    "ExpectedWindow": 131530,
+    "ExpectedProcess": 9092,
+    "ExpectedThread": 9192,
+    "WindowExists": true,
+    "SameIdentity": true,
+    "ObservedProcess": 9092,
+    "ObservedThread": 9192,
+    "Visible": true,
+    "StyleVisible": true,
+    "Iconic": false,
+    "Style": 2483027968,
+    "StyleReadError": null,
+    "CloakedHresult": 0,
+    "CloakedMask": 2,
+    "CloakedQueryError": null,
+    "ForegroundWindow": 131368,
+    "ForegroundProcess": 2216,
+    "ForegroundThread": 2168
+  },
+  "PostCloseForeground": {
+    "ObservedUtc": "2026-11-07T09:58:52.3789073Z",
+    "Window": 131368,
+    "Process": 2216,
+    "Title": "Program Manager",
+    "Class": "Progman",
+    "ApplicationId": "unavailable:15703",
+    "Image": "C:\\Windows\\Explorer.EXE",
+    "Session": 2,
+    "QueryError": null,
+    "Stable": true,
+    "VerifiedShellForeground": true
+  },
+  "SnapshotError": null
+}

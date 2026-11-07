@@ -1,0 +1,21 @@
+{
+  "CompletedUtc": "2026-11-07T09:45:07.3247270Z",
+  "IntentSha256": "0C41059A2DB968A1B1D6CBA1131723B66517755D8EB2243410A87496907BE0B3",
+  "Dismissed": false,
+  "NoTarget": false,
+  "NoTargetScope": "No foreground window observed, not desktop-wide absence",
+  "Error": "Exception calling \"CloseVerifiedHostedSearchSurface\" with \"4\" argument(s): \"The stock Search flyout did not close; no process termination or input fallback is permitted.\"",
+  "PostCloseForeground": {
+    "ObservedUtc": "2026-11-07T09:45:07.3110678Z",
+    "Window": 131360,
+    "Process": 3544,
+    "Title": "Program Manager",
+    "Class": "Progman",
+    "ApplicationId": "unavailable:15703",
+    "Image": "C:\\Windows\\Explorer.EXE",
+    "Session": 2,
+    "QueryError": null,
+    "Stable": true
+  },
+  "SnapshotError": null
+}

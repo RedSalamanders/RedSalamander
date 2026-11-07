@@ -1,0 +1,30 @@
+{
+  "Scope": "Separate explicit manual hosted ARM64 stock Search close only",
+  "RequestedUtc": "2026-11-07T09:58:51.9384089Z",
+  "Head": "a00ab0724de17f6b395a98f3df28c75d6ebcb1fc",
+  "Before": {
+    "ObservedUtc": "2026-11-07T09:58:51.9308957Z",
+    "Window": 131530,
+    "Process": 9092,
+    "Title": "Search",
+    "Class": "Windows.UI.Core.CoreWindow",
+    "ApplicationId": "MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI",
+    "Image": "C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\SearchHost.exe",
+    "Session": 2,
+    "QueryError": null,
+    "Stable": true,
+    "VerifiedShellForeground": false
+  },
+  "Thread": 9192,
+  "ExpectedSession": 2,
+  "DesktopContext": {
+    "WindowStation": "WinSta0",
+    "WindowStationError": 0,
+    "ThreadDesktop": "Default",
+    "ThreadDesktopError": 0,
+    "InputDesktop": "Default",
+    "InputDesktopError": 0,
+    "ForegroundDesktop": "",
+    "ForegroundDesktopError": 5
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "CompletedUtc": "2026-11-07T09:52:09.5207383Z",
+  "IntentSha256": "5A51E1FF3BD6B4A9A5BD51A6A1EEFB21D054A99E77384FB24C4261C6C0E0B283",
+  "Dismissed": false,
+  "NoTarget": false,
+  "NoTargetScope": "No foreground window observed, not desktop-wide absence",
+  "Error": "Exception calling \"CloseVerifiedHostedSearchSurface\" with \"4\" argument(s): \"The stock Search flyout did not close; no process termination or input fallback is permitted.\"",
+  "SearchRetirement": {
+    "ExpectedWindow": 131532,
+    "ExpectedProcess": 9128,
+    "ExpectedThread": 8292,
+    "WindowExists": true,
+    "SameIdentity": true,
+    "ObservedProcess": 9128,
+    "ObservedThread": 8292,
+    "Visible": true,
+    "StyleVisible": true,
+    "Iconic": false,
+    "Style": 2483027968,
+    "StyleReadError": null,
+    "CloakedHresult": 0,
+    "CloakedMask": 2,
+    "CloakedQueryError": null,
+    "ForegroundWindow": 131340,
+    "ForegroundProcess": 2116,
+    "ForegroundThread": 5784
+  },
+  "PostCloseForeground": {
+    "ObservedUtc": "2026-11-07T09:52:09.5205888Z",
+    "Window": 131340,
+    "Process": 2116,
+    "Title": "Program Manager",
+    "Class": "Progman",
+    "ApplicationId": "unavailable:15703",
+    "Image": "C:\\Windows\\Explorer.EXE",
+    "Session": 2,
+    "QueryError": null,
+    "Stable": true
+  },
+  "SnapshotError": null
+}

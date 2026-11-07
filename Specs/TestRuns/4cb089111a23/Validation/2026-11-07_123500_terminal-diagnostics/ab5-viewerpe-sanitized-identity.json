@@ -1,0 +1,19 @@
+{
+  "scope": "Read-only root-provided CIM process observation correlated with retained ViewerPE artifact timestamps",
+  "observed_utc": "2026-11-07T12:12:00Z (approximately)",
+  "observed_foreground": {
+    "pid": 56440,
+    "creation_utc": "2026-11-07T11:47:53.984367Z",
+    "image_basename": "Antigravity.exe"
+  },
+  "saved_foreground": {
+    "pid": 18272,
+    "creation_utc": "2026-11-06T07:18:59.862187Z",
+    "image_basename": "ChatGPT.exe"
+  },
+  "viewer_output_creation_utc": "2026-11-07T11:59:57Z (filesystem timestamp rounded to seconds)",
+  "viewer_output_last_write_utc": "2026-11-07T12:03:02Z (filesystem timestamp rounded to seconds)",
+  "post_entry_snapshot_utc": "2026-11-07T12:03:11.7164011Z",
+  "basis": "Parent agent reported both PIDs alive at observation with stated creation times; this agent verified retained output timestamps and post-entry snapshot. Output creation is after each reported process creation and before reported live observation; absent timestamp tampering, no PID reuse between those bounds.",
+  "limitation": "Does not establish who caused activation or input; this is an observed external foreground and never grants restoration authority."
+}

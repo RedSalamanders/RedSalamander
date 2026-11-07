@@ -1,0 +1,14 @@
+{
+  "schema": "private.approved-close-identity.v1",
+  "bootstrap_head": "e2d05b15a7480c1e422d98e9fbc9c27ef8923010",
+  "status": "INCOMPLETE",
+  "coverage": "NOT_EVALUATED",
+  "close_exit": 0,
+  "snapshot_exit": 0,
+  "error": "Search diagnostic failed: Exception calling \"CloseVerifiedHostedSearchSurface\" with \"4\" argument(s): \"The stock Search flyout did not close; no process termination or input fallback is permitted.\"",
+  "search_requested": true,
+  "search_exit": 1,
+  "search_dismissed": false,
+  "search_no_target": false,
+  "search_error": "Exception calling \"CloseVerifiedHostedSearchSurface\" with \"4\" argument(s): \"The stock Search flyout did not close; no process termination or input fallback is permitted.\""
+}

@@ -1,0 +1,12 @@
+{
+  "scope": "Deliberately added regression against old wait predicate; a failing native case is expected and retained",
+  "head": "a8400a395b0fa34decf9cffcd3fdd99f6f2f4e9b",
+  "receipt": "22f12ec8907a584cd3636e391f012a46edc520c2aeee051d1ea70b806fe7cf6a",
+  "run_id": "20261107T111548Z-14656-78ecedf289c14fdd9e0620421597642a",
+  "red_regression_observed": true,
+  "source_clean": true,
+  "receipt_after_verified": true,
+  "reason": "Waiting snapshot must settle the pending preview and enable mode: pending=true enabled=false rows=2 names=2 changed=2 errors=0.",
+  "summary_sha256": "692709A928606EA43F29701BF811584443DB4922A7F06CA366179FEFC98DC359",
+  "observed_utc": "2026-11-07T12:04:03.0535735+00:00"
+}

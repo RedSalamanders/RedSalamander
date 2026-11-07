@@ -1,0 +1,21 @@
+{
+  "reason": "Stop obsolete efd Full after preserved Commands failure, while next interactive entry has no child and the other owned Commands entry holds the session lease. No active native UI is interrupted.",
+  "scope": "Controlled interruption; incomplete Full, never a pass",
+  "observed_utc": "2026-11-07T10:59:35.1453874+00:00",
+  "runner": {
+    "ProcessId": 64612,
+    "ParentProcessId": 68264,
+    "CreationDate": "2026-11-07T10:49:33.611337+01:00",
+    "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe",
+    "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe\" -NoProfile -File .\\Tools\\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -Configuration Release -Platform x64 -BuildNumber 1 -TimeoutMultiplier 3 -SelfTestRepeat 1 -SkipBuild -TestRoot Z:\\RedSalamander.Perf -AllowAlternateVolumeTestRoot"
+  },
+  "other_interactive_owner": {
+    "ProcessId": 87176,
+    "ParentProcessId": 45200,
+    "CreationDate": "2026-11-07T11:55:36.955321+01:00",
+    "ExecutablePath": "Z:\\src\\RedSalamander\\.build\\ci-closeout\\checkout\\.build\\x64\\Release\\RedSalamander.exe",
+    "CommandLine": "Z:\\src\\RedSalamander\\.build\\ci-closeout\\checkout\\.build\\x64\\Release\\RedSalamander.exe --commands-selftest --selftest-timeout-multiplier=3"
+  },
+  "current_children": [],
+  "action": "Stop only runner 64612; wrapper remains for source/receipt readback"
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "private.approved-close-identity.v1",
+  "bootstrap_head": "a00ab0724de17f6b395a98f3df28c75d6ebcb1fc",
+  "status": "OBSERVED_ONLY",
+  "coverage": "NOT_EVALUATED",
+  "close_exit": 0,
+  "snapshot_exit": 0,
+  "error": null,
+  "search_requested": true,
+  "search_exit": 0,
+  "search_dismissed": true,
+  "search_no_target": false,
+  "search_error": null
+}

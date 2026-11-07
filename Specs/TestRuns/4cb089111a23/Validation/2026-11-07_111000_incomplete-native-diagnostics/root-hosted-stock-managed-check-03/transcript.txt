@@ -1,0 +1,178 @@
+**********************
+PowerShell transcript start
+Start time: 20261107115554
+Username: SINON\eric
+RunAs User: SINON\eric
+Configuration Name: 
+Machine: SINON (Microsoft Windows NT 10.0.26300.0)
+Host Application: C:\Program Files\WindowsApps\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\dependencies\native\powershell\pwsh.dll -NoProfile -File Z:\RedSalamander.Perf\evidence\pr200-201-review-20261101\root-hosted-stock-managed-check-03.ps1
+Process ID: 74708
+PSVersion: 7.6.5
+PSEdition: Core
+GitCommitId: 7.6.5
+OS: Microsoft Windows 10.0.26300
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+
+Describing Hosted desktop fixture lifecycle
+Hosted desktop before: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+Hosted desktop ready: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+Hosted desktop restored: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+ [+] selects a sufficient enumerated mode and restores it after successful qualification 329ms
+Hosted desktop before: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+Hosted desktop ready: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+PS>TerminatingError(): "seeded native failure"
+Hosted desktop restored: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+PS>TerminatingError(): "seeded native failure"
+>> TerminatingError(): "seeded native failure"
+ [+] restores the display while propagating a failing native action 46ms
+Hosted desktop before: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+Hosted desktop ready: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+PS>TerminatingError(): "Native fixture failed with exit code 7."
+Hosted desktop restored: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+PS>TerminatingError(): "Native fixture failed with exit code 7."
+>> TerminatingError(): "Native fixture failed with exit code 7."
+ [+] propagates a checked nonzero native child exit while restoring the display 205ms
+Hosted desktop before: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.5}
+Hosted desktop ready: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+Hosted desktop restored: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.5}
+ [+] accounts for display coordinate scaling instead of choosing a clipped physical mode 67ms
+Hosted desktop before: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+Hosted desktop ready: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+ [+] preserves an already sufficient display without any mode change 9ms
+Hosted desktop before: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+PS>TerminatingError(): "No supported hosted display mode can contain the required native capture viewports."
+>> TerminatingError(): "No supported hosted display mode can contain the required native capture viewports."
+ [+] fails before native execution when the driver offers no sufficient mode 10ms
+PS>TerminatingError(): "Hosted desktop setup is restricted to GitHub Actions."
+>> TerminatingError(): "Hosted desktop setup is restricted to GitHub Actions."
+ [+] refuses local invocation before reading or changing the desktop 8ms
+Hosted desktop before: {"Width":1024,"Height":768,"WorkWidth":1024,"WorkHeight":728,"CoordinateScale":1.0}
+Hosted desktop ready: {"Width":1920,"Height":1080,"WorkWidth":1920,"WorkHeight":1040,"CoordinateScale":1.0}
+PS>TerminatingError(): "seeded restoration failure"
+>> TerminatingError(): "seeded restoration failure"
+>> TerminatingError(): "seeded restoration failure"
+>> TerminatingError(): "seeded restoration failure"
+>> TerminatingError(): "seeded restoration failure"
+>> TerminatingError(): "seeded restoration failure"
+>> TerminatingError(): "seeded restoration failure"
+ [+] fails qualification when display restoration fails 13ms
+ [+] reads desktop diagnostics without changing the display or invoking qualification 16ms
+PS>TerminatingError(): "Hosted desktop diagnostics are restricted to GitHub Actions."
+ [+] refuses local diagnostics before reading the desktop 7ms
+Describing Hosted Default desktop entry lifetime
+ [+] selects the rendered Default fixture for this project hosted native entry without native calls 91ms
+ [+] preserves the original fixture for both sources of a paired comparison 5ms
+ [+] does not select a hosted boundary for local execution 26ms
+ [+] does not select a hosted boundary for a self hosted runner 6ms
+ [+] does not select a hosted boundary for another repository 4ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+Hosted Default desktop retired: Default; restored=True
+ [+] restores after contained entry drain and preserves the action result 27ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+PS>TerminatingError(): "seeded native entry failure"
+Hosted Default desktop retired: Default; restored=True
+PS>TerminatingError(): "seeded native entry failure"
+>> TerminatingError(): "seeded native entry failure"
+ [+] preserves a failing native entry after restoring the original desktop 10ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+PS>TerminatingError(): "seeded process scope creation failure"
+>> TerminatingError(): "seeded process scope creation failure"
+>> TerminatingError(): "seeded process scope creation failure"
+>> TerminatingError(): "seeded process scope creation failure"
+>> TerminatingError(): "seeded process scope creation failure"
+Hosted Default desktop retired: Default; restored=True
+PS>TerminatingError(): "seeded process scope creation failure"
+>> TerminatingError(): "seeded process scope creation failure"
+ [+] restores when process scope construction fails 10ms
+PS>TerminatingError(): "seeded desktop creation failure"
+>> TerminatingError(): "seeded desktop creation failure"
+>> TerminatingError(): "seeded desktop creation failure"
+>> TerminatingError(): "seeded desktop creation failure"
+>> TerminatingError(): "seeded desktop creation failure"
+>> TerminatingError(): "seeded desktop creation failure"
+>> TerminatingError(): "seeded desktop creation failure"
+ [+] does not execute the action after desktop creation fails 9ms
+Hosted Default desktop retired: Default; restored=True
+PS>TerminatingError(): "The hosted Default desktop has no verified foreground boundary."
+>> TerminatingError(): "The hosted Default desktop has no verified foreground boundary."
+ [+] restores and refuses native execution without a positive foreground boundary witness 8ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+PS>TerminatingError(): "seeded native entry failure"
+>> TerminatingError(): "Native entry and hosted desktop restoration both failed. (seeded native entry failure) (Exception calling "Dispose" with "0" argument(s): "seeded restore failure")"
+>> TerminatingError(): "Native entry and hosted desktop restoration both failed. (seeded native entry failure) (Exception calling "Dispose" with "0" argument(s): "seeded restore failure")"
+ [+] retains both native and restoration failures 11ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+PS>TerminatingError(): "Exception calling "Dispose" with "0" argument(s): "seeded restore failure""
+>> TerminatingError(): "Exception calling "Dispose" with "0" argument(s): "seeded restore failure""
+ [+] fails an otherwise successful action when restoration fails 9ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+PS>TerminatingError(): "Exception calling "Dispose" with "0" argument(s): "seeded process scope retirement failure""
+>> TerminatingError(): "Exception calling "Dispose" with "0" argument(s): "seeded process scope retirement failure""
+ [+] still restores the input desktop if process scope retirement fails 9ms
+Hosted Default desktop entered: Default; foregroundBoundaryReady=True
+Hosted Default desktop retired: Default; restored=False
+PS>TerminatingError(): "The hosted Default desktop did not restore its original foreground and focus."
+>> TerminatingError(): "The hosted Default desktop did not restore its original foreground and focus."
+ [+] rejects a missing positive restoration witness 10ms
+PS>TerminatingError(): "Hosted foreground boundaries are restricted to the project GitHub-hosted runner."
+>> TerminatingError(): "Hosted foreground boundaries are restricted to the project GitHub-hosted runner."
+ [+] refuses local invocation before any desktop or native action 10ms
+PS>TerminatingError(): "Hosted foreground boundaries are restricted to the project GitHub-hosted runner."
+>> TerminatingError(): "Hosted foreground boundaries are restricted to the project GitHub-hosted runner."
+ [+] refuses another repository before any desktop or native action 6ms
+PS>TerminatingError(): "Hosted foreground boundaries are restricted to the project GitHub-hosted runner."
+>> TerminatingError(): "Hosted foreground boundaries are restricted to the project GitHub-hosted runner."
+ [+] refuses a self-hosted runner before any desktop or native action 6ms
+Describing Hosted boundary managed drain
+ [+] keeps disposal pending after its threshold until a stalled managed worker exits 378ms
+Describing Approved hosted ARM64 stock preparation
+ [+] limits opt-in to native ARM64 hosted project roles 21ms
+ [+] completes only after the approved account and search retire and shell is observed 64ms
+PS>TerminatingError(): "Exception calling "RequestClose" with "0" argument(s): "seeded close failure""
+>> TerminatingError(): "Exception calling "RequestClose" with "0" argument(s): "seeded close failure""
+>> TerminatingError(): "Exception calling "RequestClose" with "0" argument(s): "seeded close failure""
+ [+] retains a failing close and never requests a second close 58ms
+PS>TerminatingError(): "An approved stock surface reappeared after its one permitted close."
+>> TerminatingError(): "An approved stock surface reappeared after its one permitted close."
+>> TerminatingError(): "An approved stock surface reappeared after its one permitted close."
+ [+] refuses a second appearance without sending another close 33ms
+PS>TerminatingError(): "Exception calling "Open" with "4" argument(s): "The file 'Z:\RedSalamander.Perf\runs\20261107T105556Z-74708-3d021586c2e340318fd394b2211a0b84\scratch\tools-pester\hosted-stock-audit-dace5a1c74d048df9847428bbe339a72\search-intent.json' already exists.""
+>> TerminatingError(): "Exception calling "Open" with "4" argument(s): "The file 'Z:\RedSalamander.Perf\runs\20261107T105556Z-74708-3d021586c2e340318fd394b2211a0b84\scratch\tools-pester\hosted-stock-audit-dace5a1c74d048df9847428bbe339a72\search-intent.json' already exists.""
+>> TerminatingError(): "Exception calling "Open" with "4" argument(s): "The file 'Z:\RedSalamander.Perf\runs\20261107T105556Z-74708-3d021586c2e340318fd394b2211a0b84\scratch\tools-pester\hosted-stock-audit-dace5a1c74d048df9847428bbe339a72\search-intent.json' already exists.""
+ [+] refuses to close when its create-only intent already exists 32ms
+PS>TerminatingError(): "An unapproved foreground surface prevents hosted preparation."
+>> TerminatingError(): "An unapproved foreground surface prevents hosted preparation."
+>> TerminatingError(): "An unapproved foreground surface prevents hosted preparation."
+ [+] retains approved one-close intents and refuses an unknown foreground 40ms
+Tests completed in 1.61s
+Passed: 34 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+Describing Scoped testing and PR coverage contracts
+ [+] forwards explicit alternate-volume opt-in through Full and focused FileOps without enabling it by default 1.35s
+ [+] accounts for all active native sources with contextual test names 702ms
+ [+] defers only complete equal PR contracts and retains changed arguments, writers and selftests 141ms
+ [+] preserves every full entry when no PR contract matches 249ms
+ [+] leaves long in-product scenarios local although the PR gate exists 325ms
+PS>TerminatingError(): "Unknown test scope 'Unknown'. Available: PR, Commands, Compare, FileOps, Tooling"
+ [+] rejects nonexistent scope before any runtime execution 11ms
+warning: in the working copy of '.github/workflows/build.yml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.github/workflows/ci.yml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.github/workflows/build.yml', LF will be replaced by CRLF the next time Git touches it
+ [+] binds PR delegation to clean committed bytes despite concurrent changes 1.76s
+PS>TerminatingError(): "Missing PR YAML input: .github/workflows/build.yml"
+ [+] invalidates reviewed PR coverage for the complete execution dependency surface 462ms
+ [+] skips scheduled unchanged code only after the latest attempt succeeds 7ms
+Describing Hosted stock preparation evidence identity
+ [+] changes the scoped environment identity when the opt-in changes 103ms
+Tests completed in 5.11s
+Passed: 10 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+Changelog valid: 59 pending fragment(s); CHANGELOG.md changes since origin/main are exact folds.
+**********************
+PowerShell transcript end
+End time: 20261107115604
+**********************

@@ -1,0 +1,12 @@
+{
+  "schema": "root.canonical-fixture-admission-intent.v1",
+  "bootstrap_head": "53c85ee416da78e4622514aa7793857c64cce506",
+  "candidate_head": "3871a05da6109106d26b53ede1937e5ef29ec341",
+  "scope": "ApprovedCanonicalAdmission",
+  "account_close_approved": true,
+  "search_close_approved": true,
+  "created_utc": "2026-11-07T12:30:34.7314187+00:00",
+  "coverage": "NOT_EVALUATED",
+  "purpose": "Read-only WTS connection, visible station and input desktop observations before and after actual reviewed canonical fixture admission. No session reconnection, desktop switch, ACL, token or elevation changes. No product build or qualification.",
+  "authorization": "Existing hosted keyboard/focus test approval and both exact stock-close approvals"
+}

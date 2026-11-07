@@ -1,0 +1,29 @@
+{
+  "scope": "Managed controls and declaration compilation only; no desktop action or native qualification",
+  "observed_utc": "2026-11-07T11:59:53.6836492+00:00",
+  "repo": "Z:\\src\\RedSalamander-worktrees\\pr200-postreview-fixes-20261102",
+  "head": "aca8bd81934b2de2b8446b0ca2e66497ed33d266",
+  "source_dirty": true,
+  "module_sha256": "A31B72B0DECBBCB63CC3235E56FED44904D2C6DDEBF10F065CE3ED58CBAD5CDE",
+  "results": [
+    {
+      "name": "HostedTestDesktop",
+      "test_file_sha256": "BF4935A7F4BB10E48C0D32C7BBD5182DB7F84078F254C32A6E2E141D1E6A92B3",
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0,
+      "total": 37
+    },
+    {
+      "name": "ScopedTesting",
+      "test_file_sha256": "908616DD2EE5163A26519571D1F7FB3324543498DC0B1EEACC155845CC0CDCB4",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "total": 10
+    }
+  ],
+  "stock_declarations_compiled": true,
+  "inventory_blocking_findings": 0,
+  "changelog_passed": true
+}

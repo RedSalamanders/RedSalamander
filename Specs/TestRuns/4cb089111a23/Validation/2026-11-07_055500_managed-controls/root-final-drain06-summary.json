@@ -1,0 +1,55 @@
+{
+  "WorkflowDigest": "9ef505af6857d273f7e31df456179a9b773f30fdc8ea3935253f548953d1f48a",
+  "ModuleSHA": "A1E6080A40F4F19554479BFE6CA7FEA10FF5F89FFBC64B579CE4EDB7201E04AB",
+  "Checks": [
+    {
+      "Name": "HostedTestDesktop",
+      "Passed": 28,
+      "Failed": 0,
+      "Skipped": 0,
+      "TestSHA": "E41265A8C003F274A11A12E2DEB05219694D5351C55AB99E9802289701033380",
+      "LogSHA": "8DA1227AB746628C5256A4B87C63FD0C5AAB2BBBDD8728C8C35803F702A6E096"
+    },
+    {
+      "Name": "SanitizedEnvironment",
+      "Passed": 14,
+      "Failed": 0,
+      "Skipped": 0,
+      "TestSHA": "0E92062EC917059CCBD50959F11994BEB6E052D5A9DEB412E520E9F277F2BA71",
+      "LogSHA": "FFD7E58411459A01A0C2A5FEBC6E7459C2C85C5A4990C5CBD014228B6EC20A46"
+    },
+    {
+      "Name": "RunAllTestsPlan",
+      "Passed": 97,
+      "Failed": 0,
+      "Skipped": 0,
+      "TestSHA": "C7C3E73168858FC9EE15AFF49799C75E3DD0BCA9067EDF0AF247450F178BE705",
+      "LogSHA": "B069F5D86409AD4811E51F13408B249FEFF376D36F73562414DDBFF5D63F58EE"
+    },
+    {
+      "Name": "ReleaseWorkflowPolicy",
+      "Passed": 40,
+      "Failed": 0,
+      "Skipped": 0,
+      "TestSHA": "88C2BF18A6FA23D5F0C37EA81BCBAD076C71BE7D0F567D3566741699F1C1CED1",
+      "LogSHA": "626D6DAB333DC76AA17DF2B48D08201976011C004CAF4C42852F163ECF6B5867"
+    },
+    {
+      "Name": "ToolInventory",
+      "Passed": 17,
+      "Failed": 0,
+      "Skipped": 0,
+      "TestSHA": "E0B570BF25F22F633E85BDA109CDE3CEF2F92350CC9DD284C67DC4DBB13FC1B7",
+      "LogSHA": "FCB9173FB381991D96EDF8FF8076C7678B1066E25F6A70170C6F4E3A2E80E4CE"
+    },
+    {
+      "Name": "ScopedTesting",
+      "Passed": 9,
+      "Failed": 0,
+      "Skipped": 0,
+      "TestSHA": "C20A5B7746291F5796A9F02D83D0CF0B081F260F6432EC509DD2964C2AC0B9F9",
+      "LogSHA": "72AECE0F1AFC99CC5C5D2C02D8A9A93DD924504C5D69159743B3B28D8AAC6F06"
+    }
+  ],
+  "Scope": "Final drain managed and compiler-free controls; no native stalled-call qualification"
+}

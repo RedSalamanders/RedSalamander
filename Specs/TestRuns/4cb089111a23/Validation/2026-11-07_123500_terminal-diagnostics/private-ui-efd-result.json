@@ -1,0 +1,48 @@
+{
+  "schema": "private.approved-current-ui.v1",
+  "label": "PR201",
+  "head": "efd597e40e26d17bfcd9dbb32fa8438ff757873b",
+  "bootstrap_head": "a00ab0724de17f6b395a98f3df28c75d6ebcb1fc",
+  "status": "INCOMPLETE",
+  "repository_coverage": "NOT_EVALUATED",
+  "receipt": "737cd15a5398335f78c56296ce13d376ac825197d5116aa8d3f353957a2d12f4",
+  "source_snapshot": "42a21e35f8b74e1294880a4cfc440ece399aae655a7a42dcda90cef37cbc8e96",
+  "cases": [
+    {
+      "scope": "CommandsHandoff",
+      "run_id": null,
+      "runner_exit": null,
+      "log": "C:\\RedSalamander.Perf\\evidence\\approved-current-ui\\42362210857-1-PR201\\CommandsHandoff-runner.log",
+      "status": "FAILED_BEFORE_RUN_ID",
+      "native_sha256": null,
+      "summary_sha256": null,
+      "intent_sha256": null
+    },
+    {
+      "scope": "ViewerSpaceCapture",
+      "run_id": null,
+      "runner_exit": null,
+      "log": "C:\\RedSalamander.Perf\\evidence\\approved-current-ui\\42362210857-1-PR201\\ViewerSpaceCapture-runner.log",
+      "status": "FAILED_BEFORE_RUN_ID",
+      "native_sha256": null,
+      "summary_sha256": null,
+      "intent_sha256": null
+    }
+  ],
+  "assertion_probe_exit": 21,
+  "foreground_snapshot": {
+    "ObservedUtc": "2026-11-07T11:24:38.8559715Z",
+    "Window": 42468258,
+    "Process": 4080,
+    "Title": "C:\\Windows\\system32\\wsl.exe",
+    "Class": "CASCADIA_HOSTING_WINDOW_CLASS",
+    "ApplicationId": "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App",
+    "Image": "C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.24.12741.0_arm64__8wekyb3d8bbwe\\WindowsTerminal.exe",
+    "Session": 2,
+    "QueryError": null,
+    "Stable": true,
+    "VerifiedShellForeground": false
+  },
+  "foreground_snapshot_error": null,
+  "error": "Filtered diagnostics failed: CommandsHandoff: Runner launch failed or did not report its exact planned run ID; available identified evidence retained.; ViewerSpaceCapture: Runner launch failed or did not report its exact planned run ID; available identified evidence retained."
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-11-07T09:50:12.498Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 4296,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1218,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+            "status": "passed",
+            "duration_ms": 3047,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

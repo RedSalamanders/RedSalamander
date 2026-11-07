@@ -1,0 +1,50 @@
+{
+  "TimeoutMultiplier": 1,
+  "NASProofRequired": false,
+  "NASProofPassed": true,
+  "NASMetrics": [],
+  "Project": "PR201",
+  "Configuration": "Debug",
+  "Head": "efd597e40e26d17bfcd9dbb32fa8438ff757873b",
+  "Receipt": "ad135dfe6b318286e3e01d6ad292be8ad5764b5a99d906e9ec6adb7985077ed2",
+  "ReceiptSha256": "5FE9FCE72451CCE0BFE31CCC7AF172A1E754E8BD6DC75EA50E23BBA4CB6987A2",
+  "SourceSnapshot": "a56996240cc856f8d166d4e1dfa89abe032ab05ded253ea8e756cc06bd11f0e0",
+  "StartedUtc": "2026-11-07T09:49:32.9624621Z",
+  "EndedUtc": "2026-11-07T09:50:33.4081297Z",
+  "WrapperExit": 2,
+  "RunId": "20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6",
+  "NativePath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6\\artifacts\\selftest\\last_run\\fileops\\results.json",
+  "NativeSha256": "80726722EAB3DDDB07B7D6202588C76D474CCA1677E2B9EA423757CDF1C90B2D",
+  "RunnerPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "RunnerSha256": "1791103331A1B3BFE7698A8C06718B8041C610B6DFAB3D13405E6355E4601128",
+  "Cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1218,
+      "repeat_index": 1
+    },
+    {
+      "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+      "status": "passed",
+      "duration_ms": 3047,
+      "repeat_index": 1
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 31,
+      "repeat_index": 1
+    }
+  ],
+  "QuarantineClean": true,
+  "SourceClean": true,
+  "ReceiptAfterVerified": true,
+  "FocusedCorrectnessPassed": true,
+  "OplockProofRequired": false,
+  "OplockProofPassed": true,
+  "ProofMetrics": [],
+  "MetricsPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T094934Z-23128-a7178e700f3b4936b882be8751233cd6\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "MetricsSha256": "",
+  "Scope": "Exact selected-case or family correctness only; no timing, performance or Full qualification claim"
+}

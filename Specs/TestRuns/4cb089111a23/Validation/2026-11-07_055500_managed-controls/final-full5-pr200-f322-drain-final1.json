@@ -1,0 +1,229 @@
+{
+  "Profile": "FullReleaseScale3",
+  "DefaultScale1And2NASFailuresRetained": true,
+  "Project": "PR200",
+  "Head": "f32285ab537f9d31805a170e6ed30359ccea48f7",
+  "ReceiptBefore": "e6a229db229fbc2de87e19849df16fa908dc83dc6adfa7c40c7263f5c10433f0",
+  "ReceiptBeforeSha256": "7BD047300140204075B9235AF8D3EF2B8A6253F43AFCACB3305CE3900682CDA9",
+  "SnapshotBefore": "4f6e76c060fd3f9b2957396678afb96d6ffded9f2d14580535eef9f83dcc764c",
+  "StartedUtc": "2026-11-07T04:46:32.3856489Z",
+  "EndedUtc": "2026-11-07T07:50:39.1738160Z",
+  "WrapperExit": 1,
+  "RunId": "20261107T044635Z-44316-56fae939c08d408abacae9c234a2be11",
+  "SourceClean": true,
+  "SnapshotAfter": "4f6e76c060fd3f9b2957396678afb96d6ffded9f2d14580535eef9f83dcc764c",
+  "ReceiptAfter": "60c07e2aade2f448fdd964c24a1d5bb4828fe86386252f415b04871886a31b58",
+  "ReceiptAfterSha256": "FFC1A2F267884A65FD3349B277CE49DB780ADAA972A94BF9C450A6DDCA87969A",
+  "ReceiptAfterVerified": true,
+  "ResultPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T044635Z-44316-56fae939c08d408abacae9c234a2be11\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "ResultSha256": "F8F5BA3EAD323FBD46CC9394539351A9BBE4E4E49C0FE67F0C3A052FF02B123B",
+  "LegacyPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T044635Z-44316-56fae939c08d408abacae9c234a2be11\\artifacts\\selftest\\last_run\\run-all-tests-results-v1.json",
+  "LegacySha256": "08E90A15E9934C7335382895CE35DC15ADDB4AA8D76E846943FB4A0A10F6F864",
+  "StatePath": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261107T044635Z-44316-56fae939c08d408abacae9c234a2be11\\run-state.json",
+  "StateSha256": "72319144AC53B923A26B14DD7DE51D3538C7D00D0CC97C3C12C00A1E3B8F60DB",
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pr200-f322-drain-final1.log",
+  "LogSha256": "E17AF38E513C9D335871A9B0476D190E5FCBE583C23837BFFAC78597B617030D",
+  "PrecheckLog": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pr200-f322-drain-final1-prechecks.log",
+  "PrecheckLogSha256": "458245E5ABD884C52AFFA95348589DF21E716A3C62625A8F446FFBFA1B595B7A",
+  "ChangelogPassed": true,
+  "NativeNamesCount": 118,
+  "ValidationMode": "Fresh",
+  "RequestedGate": "Full",
+  "CoverageScope": "complete",
+  "RepositoryVerdict": "FAILED",
+  "ChangeVerdict": "FAILED",
+  "Counts": {
+    "executed": 18,
+    "incomplete": 1,
+    "invalidated": 0,
+    "promoted": 17,
+    "provisional": 0,
+    "reused": 0
+  },
+  "CaseCounts": {
+    "failed": 1,
+    "passed": 2761,
+    "skipped": 61,
+    "total": 2823
+  },
+  "ArtifactEpoch": 1,
+  "Quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "Entries": [
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "tooling.pester-build-toolchain",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "selftest.compare-directories",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "selftest.commands",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "selftest.file-operations",
+      "promotion_state": "incomplete",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.product-ui",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "viewer-pe.noninteractive",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "viewer-pe.interactive",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "viewer-sqlite.noninteractive",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "viewer-sqlite.interactive",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.filesystem-curl",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.localization",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.red-configure",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.plugin-contract",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.settings-schema",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "standalone.crash-handling",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "perf.performance-tests2",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "tooling.pester",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    },
+    {
+      "artifact_epoch": 1,
+      "execution": "executed",
+      "id": "tooling.vcpkg-merge-synthetic",
+      "promotion_state": "promoted",
+      "reason_codes": [
+        "FORCED"
+      ]
+    }
+  ],
+  "VerifiedPromotions": 0,
+  "FullProfilePassed": false,
+  "Error": "Canonical result or identity checks did not qualify the complete Fresh plan."
+}

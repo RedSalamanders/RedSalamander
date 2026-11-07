@@ -1,0 +1,19 @@
+{
+  "Project": "PR201",
+  "Head": "a8400a395b0fa34decf9cffcd3fdd99f6f2f4e9b",
+  "Configuration": "Release",
+  "CompilerDebugInformation": "Embedded",
+  "Rebuild": false,
+  "MaxCpuCount": 4,
+  "StartedUtc": "2026-11-07T11:08:03.0174535Z",
+  "EndedUtc": "2026-11-07T11:15:00.6991824Z",
+  "ExitCode": 0,
+  "Warnings": 0,
+  "Errors": 0,
+  "ReceiptId": "22f12ec8907a584cd3636e391f012a46edc520c2aeee051d1ea70b806fe7cf6a",
+  "SnapshotId": "2cf375e6db258b384268227d3e71682991d9967b8cce294031706b4cd3170ef1",
+  "SourceClean": true,
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-release-a840-batch-regression-red1.log",
+  "LogSha256": "8B26EC07B24CFE1EDF0971D0AA8D4CC8486638306839487E66C0E095F3DDD3C1",
+  "Accepted": true
+}

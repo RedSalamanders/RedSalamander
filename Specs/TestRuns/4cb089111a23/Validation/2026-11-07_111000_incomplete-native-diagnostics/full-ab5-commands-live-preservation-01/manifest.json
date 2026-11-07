@@ -1,0 +1,171 @@
+{
+  "observed_utc": "2026-11-07T10:57:40.9639925+00:00",
+  "head": "ab5f142c3ca54d4c2c559a2654f8a2e8df4229eb",
+  "run_id": "20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038",
+  "quiet_child_root": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906",
+  "child_diagnostic": "owned-settings-shutdown.json unavailable, filesystemError=2 attributeError=2; child cleanup deferred",
+  "scope": "Live evidence retained before retry; no terminal status inferred",
+  "records": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "copy": "commands-trace-prefix.txt",
+      "initial_length": 51626,
+      "sha256": "BD2F4B173A12E9D296986F5B2EB4EA88C03F878CE9F7AAFA79082D70679862B9",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "copy": "commands-results-snapshot.json",
+      "initial_length": 25212,
+      "sha256": "EEE4C3092E68933479C653246EB0ED7B2A9656E6D36535A8605D6D05F2BA258F",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\run-state.json",
+      "copy": "run-state-snapshot.json",
+      "initial_length": 6578,
+      "sha256": "C87866EAC9442E2CAC365E490D77CB15344D2BD0B0AD4AC9870FFDE4254F835A",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\selftest\\last_run\\commands\\settings-save-child-ownedshutdown-87176-99513906-results.json",
+      "copy": "parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-results.json",
+      "initial_length": 1910,
+      "sha256": "8B97C54C04B3EFD26FA761F07892277BF5FD0156E4106A6E052F74102AD46703",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\selftest\\last_run\\commands\\settings-save-child-ownedshutdown-87176-99513906-startup-trace.txt",
+      "copy": "parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-startup-trace.txt",
+      "initial_length": 22182,
+      "sha256": "2458DDB8903A2F66DAAFAD7F3DD488FEC28741AD0C770F63A5FC877B4DDC65DE",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\selftest\\last_run\\commands\\settings-save-child-ownedshutdown-87176-99513906-trace.txt",
+      "copy": "parent-ownedshutdown-settings-save-child-ownedshutdown-87176-99513906-trace.txt",
+      "initial_length": 7740,
+      "sha256": "BC7D353A01805B0D085DC81FA0590672F20B5D85B6E900DAD4B84B829DDC1C4E",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\native-process-exits\\ec525adc341a4b20a01a2b7995c0c904.json",
+      "copy": "native-exit-ec525adc341a4b20a01a2b7995c0c904.json",
+      "initial_length": 241,
+      "sha256": "604CD14C42C2B3EA79EE1E2D7DF675EBD24793597A75006B08B450CC48925E50",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\commands_results.json",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/commands_results.json",
+      "initial_length": 1910,
+      "sha256": "8B97C54C04B3EFD26FA761F07892277BF5FD0156E4106A6E052F74102AD46703",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\commands_trace.txt",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/commands_trace.txt",
+      "initial_length": 7740,
+      "sha256": "BC7D353A01805B0D085DC81FA0590672F20B5D85B6E900DAD4B84B829DDC1C4E",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\compare_trace.txt",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/compare_trace.txt",
+      "initial_length": 2,
+      "sha256": "B3D510EF04275CA8E698E5B3CBB0ECE3949EF9252F0CDC839E9EE347409A2209",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\env.txt",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/env.txt",
+      "initial_length": 642,
+      "sha256": "86B364B5BC55C94F145C37B62C7EA341C792F04D1591BF51F1C1C8D3A39BD1BD",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\fileops_trace.txt",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/fileops_trace.txt",
+      "initial_length": 2,
+      "sha256": "B3D510EF04275CA8E698E5B3CBB0ECE3949EF9252F0CDC839E9EE347409A2209",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\selftest_run_results.json",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/selftest_run_results.json",
+      "initial_length": 2411,
+      "sha256": "EBD83BA14A78C48D6F9196632BEB03254DFCD94113273BA5EA1699C28A06BBC2",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\selftest_run_trace.txt",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/selftest_run_trace.txt",
+      "initial_length": 22182,
+      "sha256": "2458DDB8903A2F66DAAFAD7F3DD488FEC28741AD0C770F63A5FC877B4DDC65DE",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\selftest.txt",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/selftest.txt",
+      "initial_length": 85,
+      "sha256": "5CDC2BAA81781BA60187A01C8343205B71ADC9443832049AFB62422F6FF23E99",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\archive\\4cb089111a23\\Commands\\2026-11-07_115623\\perf\\perf_metrics.jsonl",
+      "copy": "child/artifacts/archive/4cb089111a23/Commands/2026-11-07_115623/perf/perf_metrics.jsonl",
+      "initial_length": 65963,
+      "sha256": "9F75B63A707D8BE2D274FDF4FD1099FF56E9E6BD0C8604E2A55B25134231CBA4",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\results.json",
+      "copy": "child/artifacts/selftest/last_run/results.json",
+      "initial_length": 2411,
+      "sha256": "EBD83BA14A78C48D6F9196632BEB03254DFCD94113273BA5EA1699C28A06BBC2",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\trace.txt",
+      "copy": "child/artifacts/selftest/last_run/trace.txt",
+      "initial_length": 22182,
+      "sha256": "2458DDB8903A2F66DAAFAD7F3DD488FEC28741AD0C770F63A5FC877B4DDC65DE",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "copy": "child/artifacts/selftest/last_run/commands/results.json",
+      "initial_length": 1910,
+      "sha256": "8B97C54C04B3EFD26FA761F07892277BF5FD0156E4106A6E052F74102AD46703",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "copy": "child/artifacts/selftest/last_run/commands/trace.txt",
+      "initial_length": 7740,
+      "sha256": "BC7D353A01805B0D085DC81FA0590672F20B5D85B6E900DAD4B84B829DDC1C4E",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\compare\\trace.txt",
+      "copy": "child/artifacts/selftest/last_run/compare/trace.txt",
+      "initial_length": 2,
+      "sha256": "B3D510EF04275CA8E698E5B3CBB0ECE3949EF9252F0CDC839E9EE347409A2209",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "copy": "child/artifacts/selftest/last_run/fileops/trace.txt",
+      "initial_length": 2,
+      "sha256": "B3D510EF04275CA8E698E5B3CBB0ECE3949EF9252F0CDC839E9EE347409A2209",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\runs\\ss-87176-99513906\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "copy": "child/artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "initial_length": 65963,
+      "sha256": "9F75B63A707D8BE2D274FDF4FD1099FF56E9E6BD0C8604E2A55B25134231CBA4",
+      "semantics": "Live initial-length snapshot; may be partial or superseded"
+    }
+  ]
+}

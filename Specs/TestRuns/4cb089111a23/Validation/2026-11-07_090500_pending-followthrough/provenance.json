@@ -1,0 +1,87 @@
+{
+  "schema": "pending-followthrough-provenance.v1",
+  "scope": "Diagnostic records; qualification pending",
+  "pr200_candidate": "cb4b49841a91f3a0cd9e9057d138c2386941b42d",
+  "pr201_candidate": "8b97e4d30140c02103e7f95ea910419965582797",
+  "origin": "Approved local evidence pr200-201-review-20261101",
+  "records": [
+    {
+      "file": "root-build-pr201-release-8b97-terminal-rebuild-final1.json",
+      "origin_relative": "root-build-pr201-release-8b97-terminal-rebuild-final1.json",
+      "bytes": 653,
+      "sha256": "6D91F130B071FA75804A63AEA8E3DCFB2C928B8E21C8A71818E303D8B2DF19A1"
+    },
+    {
+      "file": "failed-8b97-terminal-warning-msbuild-01.log",
+      "origin_relative": "failed-8b97-terminal-warning-msbuild-01.log",
+      "bytes": 47885,
+      "sha256": "C2B6EF7974B350B2444385861DFC06CE2CEBA8AA1EC9BF7785DA6DBD8D7090FD"
+    },
+    {
+      "file": "controlled-cb12-interruption-03/intent.json",
+      "origin_relative": "controlled-cb12-interruption-03/intent.json",
+      "bytes": 2299,
+      "sha256": "16D7DA19DA2E809189EADD597DDC785F530550D8AAAF782EAB9C133EE3A40BC7"
+    },
+    {
+      "file": "controlled-cb12-interruption-03/stopped.json",
+      "origin_relative": "controlled-cb12-interruption-03/stopped.json",
+      "bytes": 2298,
+      "sha256": "704191B5D30CDAA5A032CA6F08E3E32EA2BD1C9523FF7F556A9A7963D8BECC29"
+    },
+    {
+      "file": "controlled-cb12-interruption-03/run-state-before.json",
+      "origin_relative": "controlled-cb12-interruption-03/run-state-before.json",
+      "bytes": 6578,
+      "sha256": "6B09687AE94253940887EE40550E73CFC1DCECC506B1A0DD6C71A7863E4CF987"
+    },
+    {
+      "file": "final-full5-pr201-cb12-synchronized-final1.json",
+      "origin_relative": "final-full5-pr201-cb12-synchronized-final1.json",
+      "bytes": 1897,
+      "sha256": "5474CC1FCABBB232F880F5F6EBB07018693158970D3DC5BB9C4C24E592FC8B0E"
+    },
+    {
+      "file": "approved-close-identity-root-audit-02.json",
+      "origin_relative": "approved-close-identity-root-audit-02.json",
+      "bytes": 1868,
+      "sha256": "FE07069D0CFF911F1D169585F88B2A235D75698E5C277394ACA81DB698B2EF5B"
+    },
+    {
+      "file": "approved-close-identity-download-02/42357742717-1/account-dismissal-intent.json",
+      "origin_relative": "approved-close-identity-download-02/42357742717-1/account-dismissal-intent.json",
+      "bytes": 843,
+      "sha256": "F7668C51D19C5585FD9BA2428B8681E8D6A08C75130B0DEDFB6A41BB6DA3DE8C"
+    },
+    {
+      "file": "approved-close-identity-download-02/42357742717-1/account-dismissal-result.json",
+      "origin_relative": "approved-close-identity-download-02/42357742717-1/account-dismissal-result.json",
+      "bytes": 625,
+      "sha256": "C687531C64F1CC78267D5469F8F3DC1234200BDB1EB3253490C38153CD69ABF5"
+    },
+    {
+      "file": "approved-close-identity-download-02/42357742717-1/close.log",
+      "origin_relative": "approved-close-identity-download-02/42357742717-1/close.log",
+      "bytes": 358,
+      "sha256": "3D5DA2E7592143D3A904966CE83174A72282B2CF507C8D45EF0CB76E83C6F80F"
+    },
+    {
+      "file": "approved-close-identity-download-02/42357742717-1/diagnostic.json",
+      "origin_relative": "approved-close-identity-download-02/42357742717-1/diagnostic.json",
+      "bytes": 244,
+      "sha256": "E876ABDC1715C8D9E5E2850CB5BE53572322E7B6058DADE1E58647105D7C5625"
+    },
+    {
+      "file": "approved-close-identity-download-02/42357742717-1/foreground-snapshot.json",
+      "origin_relative": "approved-close-identity-download-02/42357742717-1/foreground-snapshot.json",
+      "bytes": 389,
+      "sha256": "601358AF379A136FD13A68CA24EDED64C973C4CF40DB174F19DF18F4A8597144"
+    },
+    {
+      "file": "approved-close-identity-download-02/42357742717-1/snapshot.log",
+      "origin_relative": "approved-close-identity-download-02/42357742717-1/snapshot.log",
+      "bytes": 181,
+      "sha256": "F4886604B31895DFE41747AD7977E9703031E7DCDC1C56A9A1048B44D90DEE4A"
+    }
+  ]
+}

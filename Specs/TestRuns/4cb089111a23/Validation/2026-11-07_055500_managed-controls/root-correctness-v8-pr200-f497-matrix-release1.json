@@ -1,0 +1,50 @@
+{
+  "TimeoutMultiplier": 3,
+  "NASProofRequired": false,
+  "NASProofPassed": true,
+  "NASMetrics": [],
+  "Project": "PR200",
+  "Configuration": "Release",
+  "Head": "f49703f25841f0271a0757e3c3e14b2bac9a6434",
+  "Receipt": "bb80d18eae17077aa6b49a3d859de9bf3e1bb5aad6d7e02d2d2492ca73d58c3b",
+  "ReceiptSha256": "C7D0AB057A3820E925C5910F4A752CEDEFDA6F14BC3B3E169676B8458D41E7C2",
+  "SourceSnapshot": "9b5515bd876ec43a06905bb6bb22924d956e41d6d987972a1fc6ac01036526ee",
+  "StartedUtc": "2026-11-07T04:07:12.3890930Z",
+  "EndedUtc": "2026-11-07T04:10:16.2478874Z",
+  "WrapperExit": 2,
+  "RunId": "20261107T040713Z-69888-afa41f64bc0349b5a048d2e41e22e5a9",
+  "NativePath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T040713Z-69888-afa41f64bc0349b5a048d2e41e22e5a9\\artifacts\\selftest\\last_run\\fileops\\results.json",
+  "NativeSha256": "C2FF60E972D6817F41BAC12229375A64179CEEEA6B182414DE76447CBE5674EF",
+  "RunnerPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T040713Z-69888-afa41f64bc0349b5a048d2e41e22e5a9\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "RunnerSha256": "0F7E066C987E79484CC4234A40F2A8B9470BFC9EF6AD3E5BF02CB054EA5D659B",
+  "Cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1172,
+      "repeat_index": 1
+    },
+    {
+      "name": "Phase7_CopyRecursiveParallelismMatrix",
+      "status": "passed",
+      "duration_ms": 94,
+      "repeat_index": 1
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 47,
+      "repeat_index": 1
+    }
+  ],
+  "QuarantineClean": true,
+  "SourceClean": true,
+  "ReceiptAfterVerified": true,
+  "FocusedCorrectnessPassed": true,
+  "OplockProofRequired": false,
+  "OplockProofPassed": true,
+  "ProofMetrics": [],
+  "MetricsPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T040713Z-69888-afa41f64bc0349b5a048d2e41e22e5a9\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "MetricsSha256": "",
+  "Scope": "Exact selected-case or family correctness only; no timing, performance or Full qualification claim"
+}

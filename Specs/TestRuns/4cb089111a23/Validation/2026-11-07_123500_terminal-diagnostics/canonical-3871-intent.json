@@ -1,0 +1,15 @@
+{
+  "schema": "private.canonical-admission-intent.v1",
+  "candidate_head": "3871a05da6109106d26b53ede1937e5ef29ec341",
+  "candidate_module_sha256": "F511231AFD85492E60C3FA82A5214A8A6472092FC028DA7C5EC5CEB1EC9CA7F3",
+  "bootstrap_head": "5b5b09382620f6d278b3c7ae637cb8df547bfd3a",
+  "run_id": "42371312449",
+  "run_attempt": "1",
+  "job": "approved-canonical-admission",
+  "account_approved": true,
+  "search_approved": true,
+  "os_architecture": "Arm64",
+  "process_architecture": "Arm64",
+  "coverage": "NOT_EVALUATED",
+  "created_utc": "2026-11-07T12:13:24.3050920+00:00"
+}

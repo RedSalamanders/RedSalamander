@@ -1,0 +1,19 @@
+{
+  "Project": "PR201",
+  "Head": "8b97e4d30140c02103e7f95ea910419965582797",
+  "Configuration": "Release",
+  "CompilerDebugInformation": "Embedded",
+  "Rebuild": true,
+  "MaxCpuCount": 4,
+  "StartedUtc": "2026-11-07T08:58:20.0619640Z",
+  "EndedUtc": "2026-11-07T09:04:56.2578035Z",
+  "ExitCode": 1,
+  "Warnings": 4,
+  "Errors": 0,
+  "ReceiptId": null,
+  "SnapshotId": null,
+  "SourceClean": true,
+  "Log": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-release-8b97-terminal-rebuild-final1.log",
+  "LogSha256": "80E390579E9AC9C503B407E500ED942C2D291E2AD5C5B87F3EA39852BFD9BAA3",
+  "Accepted": false
+}

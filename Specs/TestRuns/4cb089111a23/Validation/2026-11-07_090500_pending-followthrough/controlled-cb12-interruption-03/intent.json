@@ -1,0 +1,28 @@
+{
+  "Utc": "2026-11-07T08:56:42.3402246Z",
+  "Coverage": "INCOMPLETE",
+  "Reason": "Controlled interruption while no child is running and other owned runner is executing Commands; preserve wrapper for postchecks",
+  "Runner": {
+    "ProcessId": 71768,
+    "ParentProcessId": 22176,
+    "CreationDate": "2026-11-07T09:14:00.335078+01:00",
+    "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe",
+    "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe\" -NoProfile -File .\\Tools\\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -Configuration Release -Platform x64 -BuildNumber 1 -TimeoutMultiplier 3 -SelfTestRepeat 1 -SkipBuild -TestRoot Z:\\RedSalamander.Perf -AllowAlternateVolumeTestRoot"
+  },
+  "Wrapper": {
+    "ProcessId": 22176,
+    "ParentProcessId": 88360,
+    "CreationDate": "2026-11-07T09:13:40.326705+01:00",
+    "ExecutablePath": "C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe",
+    "CommandLine": "\"C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1026-487-0_26.1026.487.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe\" -NoProfile -File Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pending.ps1 -Project PR201 -ExpectedHead cb12b043bc22cbd5786ad1aa3579a80e8ead1df4 -ExpectedReceipt 1c9b3a005932889f16f54c0f4bb84d593a898a30d815d4a0888d56cbdb6d7c72 -Attempt cb12-synchronized-final1 -NativeWindowReleased"
+  },
+  "OtherOwnedActiveCommands": {
+    "ProcessId": 48732,
+    "ParentProcessId": 8528,
+    "CreationDate": "2026-11-07T09:52:38.784657+01:00",
+    "ExecutablePath": "Z:\\src\\RedSalamander\\.build\\ci-closeout\\checkout\\.build\\x64\\Release\\RedSalamander.exe",
+    "CommandLine": "Z:\\src\\RedSalamander\\.build\\ci-closeout\\checkout\\.build\\x64\\Release\\RedSalamander.exe --commands-selftest --selftest-timeout-multiplier=3"
+  },
+  "PrefixSha256": "DAB55B689AC2269AC6B31DB0C9453EB855F51D9B08244C9019F9852FCB46E3C0",
+  "Stopped": false
+}

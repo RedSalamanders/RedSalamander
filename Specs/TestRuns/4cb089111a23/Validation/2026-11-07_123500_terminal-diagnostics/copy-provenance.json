@@ -1,0 +1,102 @@
+{
+  "copies": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\final-full5-pr200-ab5f-synchronized-final1.json",
+      "destination": "ab5-full-summary.json",
+      "sha256": "e01d25b7caef826bb81ce4e639fdafb67c0cd59b4d0df9f81237a639b437356c",
+      "bytes": 6825
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261107T095246Z-45200-eb91aa5f20c640368c1d085b8b258038\\artifacts\\selftest\\previous_run\\commands\\results.json",
+      "destination": "ab5-commands-results.json",
+      "sha256": "2f9ac7c6f9bb0236da5c09c44f4393966711d37cca6bca956daec17ceadbb9fd",
+      "bytes": 193081
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-viewerpe-preservation-01\\ViewerPETests.Interactive.output.log",
+      "destination": "ab5-viewerpe-output.txt",
+      "sha256": "c7e09b5859ff395830891e987760c1595d71e22be02424be89ec2eaba5657789",
+      "bytes": 278849
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\full-ab5-viewerpe-preservation-01\\sanitized-identity-observation.json",
+      "destination": "ab5-viewerpe-sanitized-identity.json",
+      "sha256": "b705906ecb1159a7254f441a0fdba055f668d5e5dbb349577fcc7eb81700e767",
+      "bytes": 1202
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-build-pr201-release-a840-batch-regression-red1.json",
+      "destination": "a840-build-summary.json",
+      "sha256": "f35e203431a934e67fedbc5ee9012afb0706bc1648c7ca6d322fa3f05a7c401c",
+      "bytes": 775
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-correctness-v11-pr201-a840-batch-red-control1.json",
+      "destination": "a840-focused-red-summary.json",
+      "sha256": "692709a928606ea43f29701bf811584443db4922a7f06ca366179fefc98dc359",
+      "bytes": 2043
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\batch-pending-wait-red-root-assessment-01.json",
+      "destination": "a840-red-assessment.json",
+      "sha256": "a9134dbecebcfd2f0a36ad0a000464c05458d0c1fc7a50f5094583a01e01873f",
+      "bytes": 719
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-hosted-stock-managed-check-04\\transcript.txt",
+      "destination": "managed-04-failed.txt",
+      "sha256": "f0ce2e34cafa13b4ba77f0733c011c532cf461fd7bde15eb16f9b49d87a18d1e",
+      "bytes": 13563
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\root-hosted-stock-managed-check-05\\result.json",
+      "destination": "managed-05-result.json",
+      "sha256": "20acf242d5d8a3d56f4a8641462cf6a9ead828d7e3285bb128ecfc6ddab0b980",
+      "bytes": 994
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\canonical-fixture-admission-a555-probe-01\\approved-canonical-admission-ARM64\\approved-canonical-admission\\42369067369-1\\intent.json",
+      "destination": "canonical-6a-intent.json",
+      "sha256": "21c5c66c3e32423fb188471186d6d18a1a00f61763e1b4fa41f88035726ace7d",
+      "bytes": 589
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\canonical-fixture-admission-a555-probe-01\\approved-canonical-admission-ARM64\\approved-canonical-admission\\42369067369-1\\result.json",
+      "destination": "canonical-6a-result.json",
+      "sha256": "84a9f01eb2bda6b3c40b38d4d04453c82e9528dd62c3506a5e5d4fcd636de53a",
+      "bytes": 3234
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\canonical-fixture-admission-3871-probe-01\\approved-canonical-admission-ARM64\\approved-canonical-admission\\42371312449-1\\intent.json",
+      "destination": "canonical-3871-intent.json",
+      "sha256": "b22f7954719265a0828ce230d196cbdb9689766f68ff0e60bfead7d2e8118bbd",
+      "bytes": 589
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\canonical-fixture-admission-3871-probe-01\\approved-canonical-admission-ARM64\\approved-canonical-admission\\42371312449-1\\result.json",
+      "destination": "canonical-3871-result.json",
+      "sha256": "a02e3788de111d6f4b4d01aca72c3a463b091d29bed97f49dcd15ff993099609",
+      "bytes": 3786
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\canonical-fixture-capability-intent-01.json",
+      "destination": "capability-probe-intent.json",
+      "sha256": "a264eaff49d2d35d6ec7e14069441f5e26a4e6d6c0d4209107351793c79ba2b2",
+      "bytes": 756
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-current-ui-42362210857-pr200-download-01\\artifact\\42362210857-1-PR200\\diagnostic.json",
+      "destination": "private-ui-ab5-result.json",
+      "sha256": "627ebbec00f65fb30c3775cdc30fcc366b2a07769077c9d7afbf31c459868fad",
+      "bytes": 2055
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\pr200-201-review-20261101\\approved-current-ui-42362210857-pr201-download-01\\42362210857-1-PR201\\diagnostic.json",
+      "destination": "private-ui-efd-result.json",
+      "sha256": "fab16ed69c479ed7de1acbff21a10b5d202d41e114c674427a6a53b81707e606",
+      "bytes": 2055
+    }
+  ],
+  "scope": "Selected historical results and diagnostics; not current qualification",
+  "schema": "red-salamander.curated-copy-provenance.v1"
+}
