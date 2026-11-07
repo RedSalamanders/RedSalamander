@@ -85,6 +85,7 @@ namespace RedSalamander.Testing {
         private readonly AutoResetEvent stop = new AutoResetEvent(false);
         private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
         private readonly Thread thread;
+        private readonly TimeSpan joinThreshold;
         private volatile bool canceled;
         private volatile Exception failure;
         private bool threadStarted;
@@ -92,7 +93,17 @@ namespace RedSalamander.Testing {
         internal bool Restored { get; private set; }
         internal HostedForegroundBoundary(SafeDesktopHandle desktop) {
             this.desktop = desktop;
+            joinThreshold = TimeSpan.FromSeconds(10);
             thread = new Thread(Run) { IsBackground = true, Name = "RedSalamander hosted foreground boundary" };
+        }
+        // Managed-only control: an already-started synthetic thread and short threshold;
+        // it never invokes Run or opens a desktop/window. Production always uses ten seconds.
+        internal HostedForegroundBoundary(Thread managedWorker, TimeSpan managedThreshold) {
+            if (managedWorker == null || !managedWorker.IsAlive || managedThreshold <= TimeSpan.Zero)
+                throw new ArgumentException("The managed drain control requires a live worker and positive threshold.");
+            thread = managedWorker;
+            threadStarted = true;
+            joinThreshold = managedThreshold;
         }
         internal void Start() {
             thread.Start();
@@ -230,10 +241,18 @@ namespace RedSalamander.Testing {
         public void Dispose() {
             if (disposed) return;
             Cancel();
-            if (threadStarted && !thread.Join(TimeSpan.FromSeconds(10)))
-                throw new TimeoutException("The hosted foreground thread did not retire.");
+            bool timeout = threadStarted && !thread.Join(joinThreshold);
+            // Preserve the caller-owned interactive mutex while a boundary can still
+            // touch foreground. Hosted supervision is the fail-stop if it never exits.
+            if (timeout) {
+                try { Console.Error.WriteLine("HostedDefaultDesktop.BoundaryJoinThresholdExceeded=1; retaining interactive lease until worker exit."); }
+                catch (System.IO.IOException) { /* Preserve the timeout and continue safe drain if diagnostics fail. */ }
+                catch (ObjectDisposedException) { /* Preserve the timeout and continue safe drain if diagnostics are closed. */ }
+                thread.Join();
+            }
             disposed = true;
             ready.Dispose(); stop.Dispose();
+            if (timeout) throw new TimeoutException("The hosted foreground thread exceeded its retirement threshold and later drained.", failure);
             if (failure != null) throw new InvalidOperationException("The hosted foreground boundary failed.", failure);
         }
     }
@@ -241,7 +260,6 @@ namespace RedSalamander.Testing {
         private readonly SafeDesktopHandle desktop;
         private HostedForegroundBoundary boundary;
         private readonly object disposalLock = new object();
-        private bool cleanupScheduled;
         private bool disposed;
         public readonly string Name = "Default";
         public bool Restored { get; private set; }
@@ -251,23 +269,6 @@ namespace RedSalamander.Testing {
             boundary = new HostedForegroundBoundary(desktop);
             boundary.Start();
             ForegroundBoundaryReady = true;
-        }
-        private void ScheduleDeferredCleanup() {
-            if (cleanupScheduled) return;
-            var cleanup = new Thread(() => {
-                // Retain this lease, desktop and events until the worker actually exits.
-                // The original caller already received the timeout/failure; retry only cleanup.
-                for (;;) {
-                    try { Dispose(); return; }
-                    catch (TimeoutException) { }
-                    catch (InvalidOperationException) { return; }
-                    catch (Win32Exception) { return; }
-                    catch (AggregateException) { return; }
-                }
-            }) { IsBackground = true, Name = "RedSalamander hosted boundary deferred cleanup" };
-            cleanup.Start();
-            // The cleanup thread cannot enter Dispose until this caller releases disposalLock.
-            cleanupScheduled = true;
         }
         public void Dispose() {
             lock (disposalLock) {
@@ -280,18 +281,7 @@ namespace RedSalamander.Testing {
                 } catch (Win32Exception error) { desktopFailure = error; }
                   catch (InvalidOperationException error) { desktopFailure = error; }
                 try { if (boundary != null) boundary.Dispose(); }
-                catch (TimeoutException timeout) {
-                    Exception schedulingFailure = null;
-                    try { ScheduleDeferredCleanup(); }
-                    catch (ThreadStateException error) { schedulingFailure = error; }
-                    var pending = new System.Collections.Generic.List<Exception> { timeout };
-                    if (desktopFailure != null) pending.Add(desktopFailure);
-                    if (schedulingFailure != null) pending.Add(schedulingFailure);
-                    // Stay a TimeoutException so deferred cleanup keeps retrying; retain all
-                    // simultaneous failures inside its aggregate. The active worker holds
-                    // the boundary and its desktop handle until it exits.
-                    throw new TimeoutException("Hosted boundary remains active; cleanup is pending.", new AggregateException(pending));
-                }
+                catch (TimeoutException timeout) { boundaryFailure = timeout; }
                 catch (InvalidOperationException error) { boundaryFailure = error; }
                 // The join completed before closing the handle; CloseDesktop rejects handles
                 // still in use by a thread, including the boundary's own thread.
@@ -531,6 +521,8 @@ function Invoke-RSWithHostedDefaultDesktop {
         acquire real foreground and focus before the action starts. After contained child drain,
         restores the original foreground and native focus, joins the live window thread and
         closes its retained desktop handle. No input desktop is created or switched.
+        A ten-second retirement threshold records a failure; the caller retains its interactive
+        lease until the worker exits. Hosted workflow supervision handles a worker that never drains.
         Refuses secure or unknown desktops.
         Native focus/input assertions are unchanged. A foreign desktop switch is preserved
         and reported as a fixture failure. Local use is refused before native calls.

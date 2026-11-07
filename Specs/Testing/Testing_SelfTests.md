@@ -674,9 +674,12 @@ Environment variables may select alternate test inputs such as profile names, bu
   already restored original), and is joined before the retained desktop handle closes. Setup or retirement
   failure fails qualification; a setup witness alone does not prove screenshot or input coverage.
   Startup cancellation never waits on an in-flight window API: the worker checks it before each
-  subsequent activation step and readiness, while the original API may still complete. If the bounded worker join
-  expires, deferred cleanup retains its desktop handle and synchronization objects until the
-  worker actually exits. Retirement preserves simultaneous action, restoration, join and
+  subsequent activation step and readiness, while the original API may still complete. A ten-second
+  worker-join threshold records a failure, but the mutex-owning caller stays inside the fixture
+  until that worker actually exits. Never defer foreground work beyond the interactive lease.
+  Existing hosted workflow supervision terminates the owning process if native retirement never
+  completes. Desktop handles and synchronization objects retire only after the join.
+  Retirement preserves simultaneous action, restoration, join and
   handle-release errors; a timeout is never reported as successful restoration.
   The child uses the existing native warning and original focus/input assertions. Its containment job
   must drain before the process-desktop scope retires, the original foreground and native focus
