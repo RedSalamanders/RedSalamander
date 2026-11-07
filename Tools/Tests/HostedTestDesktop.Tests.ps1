@@ -481,3 +481,28 @@ Describe 'Hosted foreground chord role policy' {
         }
     }
 }
+
+Describe 'Hosted boundary inherited desktop policy' {
+    It 'requires positive WinSta0 and Default thread and input identities without errors' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $assembly = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly
+        $boundary = $assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $contextType = $assembly.GetType('RedSalamander.Testing.DesktopContext', $true)
+        $method = $boundary.GetMethod('IsVerifiedInheritedDesktop', ([Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic))
+        $method | Should Not BeNullOrEmpty
+        $context = [Activator]::CreateInstance($contextType)
+        $context.WindowStation='WinSta0'; $context.ThreadDesktop='Default'; $context.InputDesktop='Default'
+        $method.Invoke($null, [object[]]@($context)) | Should Be $true
+        foreach($property in @('WindowStation','ThreadDesktop','InputDesktop')) {
+            $saved=$context.$property
+            $context.$property=''; $method.Invoke($null, [object[]]@($context)) | Should Be $false
+            $context.$property='Other'; $method.Invoke($null, [object[]]@($context)) | Should Be $false
+            $context.$property=$saved
+        }
+        foreach($property in @('WindowStationError','ThreadDesktopError','InputDesktopError')) {
+            $context.$property=5; $method.Invoke($null, [object[]]@($context)) | Should Be $false
+            $context.$property=0
+        }
+        $method.Invoke($null, [object[]]@($null)) | Should Be $false
+    }
+}

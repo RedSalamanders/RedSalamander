@@ -84,8 +84,6 @@ namespace RedSalamander.Testing {
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] input, int size);
         [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentProcessId();
         [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentThreadId();
-        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(SafeDesktopHandle desktop);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
         private static extern SafeWindowHandle CreateWindowExW(uint extended, string className, string name, uint style,
             int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr parameter);
@@ -331,10 +329,18 @@ namespace RedSalamander.Testing {
                 }
             }
         }
+        // Pure predicate shared by the actual worker and managed-only controls.
+        internal static bool IsVerifiedInheritedDesktop(DesktopContext context) {
+            return context != null && context.WindowStation == "WinSta0" && context.WindowStationError == 0 &&
+                context.ThreadDesktop == "Default" && context.ThreadDesktopError == 0 &&
+                context.InputDesktop == "Default" && context.InputDesktopError == 0;
+        }
         private void Run() {
             try {
-                if (!SetThreadDesktop(desktop))
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot attach the hosted foreground thread to Default.");
+                // The fresh worker inherits its process desktop. Verify the actual
+                // worker and input context without narrowing its inherited handle rights.
+                if (desktop == null || desktop.IsInvalid || !IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)))
+                    throw new InvalidOperationException("The hosted foreground worker did not inherit WinSta0/Default and the Default input desktop.");
                 IntPtr original = GetForegroundWindow();
                 uint originalProcess = 0;
                 uint originalThread = original == IntPtr.Zero ? 0 : GetWindowThreadProcessId(original, out originalProcess);
@@ -442,8 +448,8 @@ namespace RedSalamander.Testing {
                 try { if (boundary != null) boundary.Dispose(); }
                 catch (TimeoutException timeout) { boundaryFailure = timeout; }
                 catch (InvalidOperationException error) { boundaryFailure = error; }
-                // The join completed before closing the handle; CloseDesktop rejects handles
-                // still in use by a thread, including the boundary's own thread.
+                // The worker has drained before the retained lease handle closes; no
+                // foreground work may outlive the interactive mutex.
                 desktop.Dispose();
                 disposed = true;
                 if (desktop.ReleaseError != 0) {
