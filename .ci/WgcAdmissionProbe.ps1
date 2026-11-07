@@ -53,6 +53,10 @@ public static class WgcDesktopAdmissionProbe {
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern Window CreateWindowExW(uint ex,string cls,string title,uint style,int x,int y,int w,int h,IntPtr parent,IntPtr menu,IntPtr module,IntPtr param);
     [DllImport("user32.dll", ExactSpelling=true)] static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", ExactSpelling=true)] static extern uint GetWindowThreadProcessId(IntPtr window,out uint process);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetWindowTextW(IntPtr window,StringBuilder title,int capacity);
+    public static uint CurrentForegroundProcess() { uint process;GetWindowThreadProcessId(GetForegroundWindow(),out process);return process; }
+    public static string CurrentForegroundTitle() {var title=new StringBuilder(1024);GetWindowTextW(GetForegroundWindow(),title,title.Capacity);return title.ToString();}
     [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmFlush();
     [DllImport("user32.dll", ExactSpelling=true,SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool AllowSetForegroundWindow(uint process);
@@ -185,6 +189,9 @@ public static class WgcDesktopAdmissionProbe {
     }
 }
 '@
+$initialForegroundProcess=[WgcDesktopAdmissionProbe]::CurrentForegroundProcess()
+$initialForegroundTitle=[WgcDesktopAdmissionProbe]::CurrentForegroundTitle()
+$initialForegroundIdentity=if($initialForegroundProcess){Get-CimInstance Win32_Process -Filter ('ProcessId='+$initialForegroundProcess)|Select-Object Name,ExecutablePath,CommandLine,SessionId}else{$null}
 $result=[WgcDesktopAdmissionProbe]::Run()
 $ownedResult=@()
 $foregroundBefore=$null;$foregroundAfter=$null;$grant=$null
@@ -210,7 +217,7 @@ if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hos
 }
 $path=Join-Path $taskTemp 'wgc-admission.json'
 if(Test-Path -LiteralPath $path){throw 'Preserve existing probe evidence'}
-$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image or injected input; active owned desktop uses canonical hosted entry lease; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter}
+$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image or injected input; active owned desktop uses canonical hosted entry lease; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;InitialForegroundProcess=$initialForegroundProcess;InitialForegroundTitle=$initialForegroundTitle;InitialForegroundIdentity=$initialForegroundIdentity;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter}
 [IO.File]::WriteAllText($path,($report|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
 $report|ConvertTo-Json -Depth 6 -Compress
 Write-Host ('Probe evidence: '+$path)
