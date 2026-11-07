@@ -12694,22 +12694,43 @@ case SelfTestState::Step::R4A02_ReadReadDoesNotWarn:
 case SelfTestState::Step::R4A02_SameDestinationWarns:
 {
     using Task = FolderWindow::FileOperationState::Task;
-    // Two tasks are injected back-to-back with the same publish leaf. Their immutable scope vectors
-    // are published before either advisory scan, so at least the later scan must name the other task
-    // even when both workers finish Preparing before either enters operation.
+    // Hold A after it publishes its scopes and completes its advisory, but before mutation.
+    // B must then compare its prepared scopes with A's still-registered prepared scopes.
     const std::filesystem::path rootA       = state.tempRoot / L"r4a02-same-destination-a";
     const std::filesystem::path rootB       = state.tempRoot / L"r4a02-same-destination-b";
     const std::filesystem::path sourceA     = rootA / L"shared";
     const std::filesystem::path sourceB     = rootB / L"shared";
     const std::filesystem::path destination = state.tempRoot / L"r4a02-same-destination-out";
     const ULONGLONG nowTick                 = GetTickCount64();
+    const auto fail                         = [&](std::wstring message) noexcept
+    {
+        if (state.r4a02PreparationGate && state.r4a02PreparationGate->release)
+            static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
+        AppendLog(std::format(L"R4A02 same destination: A={} B={} gate={} step={}",
+                              state.taskA.value_or(0u),
+                              state.taskB.value_or(0u),
+                              state.r4a02PreparationGate && state.r4a02PreparationGate->entered.load(std::memory_order_acquire),
+                              state.stepState));
+        for (const auto id : {state.taskA, state.taskB})
+        {
+            if (id.has_value())
+            {
+                const auto done = state.completedTasks.find(id.value());
+                if (done != state.completedTasks.end())
+                    AppendLog(std::format(L"R4A02 same destination: task {} terminal hr=0x{:08X}.", id.value(), static_cast<unsigned long>(done->second.hr)));
+            }
+        }
+        Fail(std::move(message));
+    };
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
-        Fail(std::format(L"R4A02 same destination timed out at step {}.", state.stepState));
+        fail(std::format(L"R4A02 same destination timed out at step {}.", state.stepState));
         return true;
     }
     if (state.stepState == 0u)
     {
+        state.taskA.reset();
+        state.taskB.reset();
         std::error_code ec;
         for (const auto& path : {rootA, rootB, destination})
         {
@@ -12723,19 +12744,59 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
             if (! WriteTestFile(sourceA / std::format(L"a{:03}.bin", index), 64u * 1024u) ||
                 ! WriteTestFile(sourceB / std::format(L"b{:03}.bin", index), 64u * 1024u))
             {
-                Fail(std::format(L"R4A02 same destination could not stage source file {}.", index));
+                fail(std::format(L"R4A02 same destination could not stage source file {}.", index));
                 return true;
             }
         }
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {sourceA},
-                                                 destination,
-                                                 FILESYSTEM_FLAG_RECURSIVE,
-                                                 false);
+        state.r4a02PreparationGate = std::make_shared<R4A02PreparationGate>();
+        if (! state.r4a02PreparationGate->release)
+        {
+            fail(L"R4A02 same destination could not create the preparation gate.");
+            return true;
+        }
+        const auto gate = state.r4a02PreparationGate;
+        state.taskA     = StartFileOperationAndGetId(state.fileOps,
+                                                     FILESYSTEM_COPY,
+                                                     FolderWindow::Pane::Left,
+                                                     FolderWindow::Pane::Right,
+                                                     state.fsLocal,
+                                                     {sourceA},
+                                                     destination,
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     false,
+                                                     0u,
+                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                     false,
+                                                     nullptr,
+                                                     {},
+                                                     std::nullopt,
+                                                     {},
+                                                     [gate]() noexcept -> HRESULT
+        {
+            gate->entered.store(true, std::memory_order_release);
+            const DWORD wait = WaitForSingleObject(gate->release.get(), 180'000u);
+            return wait == WAIT_OBJECT_0 ? S_OK : wait == WAIT_TIMEOUT ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : HRESULT_FROM_WIN32(GetLastError());
+        });
+        if (! state.taskA.has_value())
+        {
+            fail(L"R4A02 same destination could not start Copy A.");
+            return true;
+        }
+        state.stepState = 1u;
+        return false;
+    }
+    if (state.stepState == 1u)
+    {
+        if (! state.r4a02PreparationGate->entered.load(std::memory_order_acquire))
+        {
+            if (state.completedTasks.contains(state.taskA.value()))
+            {
+                fail(L"R4A02 Copy A completed before reaching its preparation gate.");
+                return true;
+            }
+            return false;
+        }
+        AppendLog(std::format(L"R4A02 same destination: A={} reached prepared gate; admitting B.", state.taskA.value()));
         state.taskB = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -12745,15 +12806,15 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
                                                  destination,
                                                  FILESYSTEM_FLAG_RECURSIVE,
                                                  false);
-        if (! state.taskA.has_value() || ! state.taskB.has_value())
+        if (! state.taskB.has_value())
         {
-            Fail(L"R4A02 same destination could not start both Copies.");
+            fail(L"R4A02 same destination could not start Copy B.");
             return true;
         }
-        state.stepState = 1u;
+        state.stepState = 2u;
         return false;
     }
-    if (state.stepState == 1u)
+    if (state.stepState == 2u)
     {
         Task* const taskA  = state.fileOps->FindTask(state.taskA.value());
         Task* const taskB  = state.fileOps->FindTask(state.taskB.value());
@@ -12763,7 +12824,7 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
         {
             if (state.completedTasks.contains(state.taskA.value()) || state.completedTasks.contains(state.taskB.value()))
             {
-                Fail(L"R4A02 same destination completed without an overlap warning.");
+                fail(L"R4A02 same destination completed without an overlap warning.");
                 return true;
             }
             return false;
@@ -12775,29 +12836,22 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
                    prompt.defaultAction == Task::ConflictAction::Proceed && prompt.escapeAction == Task::ConflictAction::Cancel &&
                    prompt.overlapTaskId == otherTaskId;
         };
-        if ((promptA.has_value() && ! validPrompt(promptA.value(), state.taskB.value())) ||
-            (promptB.has_value() && ! validPrompt(promptB.value(), state.taskA.value())))
+        if (promptA.has_value() || ! promptB.has_value() || ! validPrompt(promptB.value(), state.taskA.value()))
         {
-            Fail(L"R4A02 same destination warning must name the peer Copy and offer Queue and Don't start without Run concurrently.");
+            if (promptB.has_value())
+                AppendLog(std::format(L"R4A02 same destination: B prompt bucket={} named task={}.",
+                                      static_cast<unsigned int>(promptB.value().bucket),
+                                      promptB.value().overlapTaskId));
+            fail(L"R4A02 same destination warning must name the held prepared Copy and offer Queue and Don't start without Run concurrently.");
             return true;
         }
-        if (promptA.has_value())
-        {
-            taskA->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
-            if (promptB.has_value())
-            {
-                taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Proceed, false);
-            }
-            state.stepState = 2u; // A canceled, B completes.
-        }
-        else
-        {
-            taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
-            state.stepState = 3u; // B canceled, A completes.
-        }
+        AppendLog(std::format(L"R4A02 same destination: B={} warning names A={}; canceling B and releasing A.", state.taskB.value(), state.taskA.value()));
+        taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
+        static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
+        state.stepState = 3u;
         return false;
     }
-    if (state.stepState == 2u || state.stepState == 3u)
+    if (state.stepState == 3u)
     {
         const auto completedA = state.completedTasks.find(state.taskA.value());
         const auto completedB = state.completedTasks.find(state.taskB.value());
@@ -12805,15 +12859,30 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
         {
             return false;
         }
-        const HRESULT canceledHr = state.stepState == 2u ? completedA->second.hr : completedB->second.hr;
-        const HRESULT successHr  = state.stepState == 2u ? completedB->second.hr : completedA->second.hr;
+        const HRESULT canceledHr = completedB->second.hr;
+        const HRESULT successHr  = completedA->second.hr;
+        AppendLog(std::format(L"R4A02 same destination: A={} hr=0x{:08X}, B={} hr=0x{:08X}.",
+                              state.taskA.value(),
+                              static_cast<unsigned long>(successHr),
+                              state.taskB.value(),
+                              static_cast<unsigned long>(canceledHr)));
         if (canceledHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || FAILED(successHr))
         {
-            Fail(std::format(L"R4A02 same destination expected one pre-mutation cancel and one success (cancel=0x{:08X}, success=0x{:08X}).",
+            fail(std::format(L"R4A02 same destination expected one pre-mutation cancel and one success (cancel=0x{:08X}, success=0x{:08X}).",
                              static_cast<unsigned long>(canceledHr),
                              static_cast<unsigned long>(successHr)));
             return true;
         }
+        for (uint32_t index = 0u; index < 96u; ++index)
+        {
+            std::error_code ec;
+            if (std::filesystem::exists(destination / L"shared" / std::format(L"b{:03}.bin", index), ec) || ec)
+            {
+                fail(std::format(L"R4A02 canceled Copy B published a destination member or could not be checked (index {}).", index));
+                return true;
+            }
+        }
+        state.r4a02PreparationGate.reset();
         NextStep(state, SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe);
         return false;
     }
