@@ -86,7 +86,8 @@ try {
     $outcome.Error -or $outcome.SnapshotError -or $null -eq $outcome.PostCloseForeground){throw 'Approved close intent/result binding failed.'}
  $postAccount=$outcome.PostCloseForeground
  if($postAccount.Stable -isnot [bool] -or -not $postAccount.Stable){throw 'Post-account foreground is unstable; stop before UI.'}
- if($postAccount.Window -ne 0 -or $postAccount.Process -ne 0){
+ if(($postAccount.Window -ne 0 -or $postAccount.Process -ne 0) -and
+    ($postAccount.VerifiedShellForeground -isnot [bool] -or -not $postAccount.VerifiedShellForeground)){
   $searchImage=[IO.Path]::Combine([Environment]::GetFolderPath([Environment+SpecialFolder]::Windows),'SystemApps','MicrosoftWindows.Client.CBS_cw5n1h2txyewy','SearchHost.exe')
   if($postAccount.Window -eq 0 -or $postAccount.Process -eq 0 -or $postAccount.Title -cne 'Search' -or
      $postAccount.Class -cne 'Windows.UI.Core.CoreWindow' -or $postAccount.ApplicationId -cne 'MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI' -or
@@ -108,8 +109,10 @@ try {
     $searchIntent.DesktopContext.ThreadDesktop -cne 'Default' -or $searchOutcome.IntentSha256 -ine (Get-FileHash -LiteralPath $searchIntentPath -Algorithm SHA256).Hash -or
     $searchOutcome.Dismissed -isnot [bool] -or $searchOutcome.NoTarget -isnot [bool] -or $searchOutcome.Dismissed -eq $searchOutcome.NoTarget -or
     $searchOutcome.Error -or $searchOutcome.SnapshotError -or $null -eq $searchOutcome.PostCloseForeground){throw 'Approved Search intent/result binding failed.'}
- if($searchOutcome.PostCloseForeground.Stable -isnot [bool] -or -not $searchOutcome.PostCloseForeground.Stable -or
-    $searchOutcome.PostCloseForeground.Window -ne 0 -or $searchOutcome.PostCloseForeground.Process -ne 0){throw 'Post-Search foreground is unstable or nonempty; stop before UI.'}
+ $postSearch=$searchOutcome.PostCloseForeground
+ if($postSearch.Stable -isnot [bool] -or -not $postSearch.Stable -or
+    (($postSearch.Window -ne 0 -or $postSearch.Process -ne 0) -and
+     ($postSearch.VerifiedShellForeground -isnot [bool] -or -not $postSearch.VerifiedShellForeground))){throw 'Post-Search foreground is unstable or is not the verified shell; stop before UI.'}
  Import-Module (Join-Path $CandidateRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
  Import-Module (Join-Path $CandidateRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
  $caseFailures=[Collections.Generic.List[string]]::new()
