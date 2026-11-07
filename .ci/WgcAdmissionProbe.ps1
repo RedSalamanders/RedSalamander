@@ -1,11 +1,14 @@
 [CmdletBinding()]
 param([string]$TestRoot='D:\RedSalamander.Perf',[switch]$DismissHostedAccountSurface,
-      [switch]$CloseOnly,[switch]$SnapshotOnly,[string]$RepoRoot)
+      [switch]$CloseOnly,[switch]$SnapshotOnly,[switch]$CloseSearchOnly,[switch]$DismissHostedSearchSurface,[string]$RepoRoot)
 $ErrorActionPreference='Stop'
 $repo=if($RepoRoot){[IO.Path]::GetFullPath($RepoRoot)}else{Split-Path -Parent $PSScriptRoot}
 if($CloseOnly -and -not $DismissHostedAccountSurface){throw 'CloseOnly requires the explicit hosted account-surface authorization.'}
+if($CloseSearchOnly -and -not $DismissHostedSearchSurface){throw 'Search close requires separate explicit authorization.'}
+if($DismissHostedSearchSurface -and -not $CloseSearchOnly){throw 'Search authorization is valid only for CloseSearchOnly.'}
+if($CloseSearchOnly -and ($CloseOnly -or $DismissHostedAccountSurface -or $SnapshotOnly)){throw 'Search close cannot be combined with another intervention or probe.'}
 if($SnapshotOnly -and ($CloseOnly -or $DismissHostedAccountSurface)){throw 'SnapshotOnly cannot request a close.'}
-if(($CloseOnly -or $SnapshotOnly) -and ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
+if(($CloseOnly -or $CloseSearchOnly -or $SnapshotOnly) -and ($env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
     $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or $env:GITHUB_EVENT_NAME -cne 'workflow_dispatch' -or
     [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -cne 'Arm64' -or
     [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne 'Arm64')){
@@ -68,6 +71,7 @@ public static class WgcDesktopAdmissionProbe {
     [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool PostMessageW(IntPtr window,uint message,UIntPtr wParam,IntPtr lParam);
     [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint access,bool inherit,uint process);
+    [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool ProcessIdToSessionId(uint process,out uint session);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool QueryFullProcessImageNameW(Microsoft.Win32.SafeHandles.SafeProcessHandle process,uint flags,StringBuilder image,ref uint capacity);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetApplicationUserModelId(Microsoft.Win32.SafeHandles.SafeProcessHandle process,ref uint capacity,StringBuilder id);
     public static uint CurrentForegroundProcess() { uint process;GetWindowThreadProcessId(GetForegroundWindow(),out process);return process; }
@@ -80,6 +84,46 @@ public static class WgcDesktopAdmissionProbe {
             if(process==null || process.IsInvalid)return "unavailable:open-process";
             uint capacity=2048;var id=new StringBuilder((int)capacity);int status=GetApplicationUserModelId(process,ref capacity,id);
             return status==0?id.ToString():"unavailable:"+status.ToString();
+        }
+    }
+    public static uint CurrentForegroundSession() {
+        uint process=CurrentForegroundProcess(), session;
+        if(process==0 || !ProcessIdToSessionId(process,out session))throw new Win32Exception(Marshal.GetLastWin32Error(),"Foreground session unavailable.");
+        return session;
+    }
+    public static bool CloseVerifiedHostedSearchSurface(long expectedWindow,uint expectedThread,uint expectedProcess,uint expectedSession) {
+        if(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")!="true" ||
+           Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT")!="github-hosted" ||
+           Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")!="RedSalamanders/RedSalamander" ||
+           Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME")!="workflow_dispatch" ||
+           Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")!="ARM64")
+            throw new InvalidOperationException("Search dismissal is confined to this project's manual hosted ARM64 run.");
+        IntPtr window=GetForegroundWindow();uint processId;uint threadId=GetWindowThreadProcessId(window,out processId);
+        if(window==IntPtr.Zero || window.ToInt64()!=expectedWindow || threadId==0 || threadId!=expectedThread || processId!=expectedProcess)
+            throw new InvalidOperationException("Search foreground identity changed.");
+        uint processSession,ownSession;
+        if(!ProcessIdToSessionId(processId,out processSession) || !ProcessIdToSessionId(GetCurrentProcessId(),out ownSession))
+            throw new Win32Exception(Marshal.GetLastWin32Error(),"Search session identity unavailable.");
+        if(processSession!=expectedSession || processSession!=ownSession)throw new InvalidOperationException("Search session identity changed.");
+        using(var process=OpenProcess(0x1000,false,processId)) {
+            if(process==null || process.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error(),"Search process identity unavailable.");
+            uint capacity=4096;var image=new StringBuilder((int)capacity);
+            if(!QueryFullProcessImageNameW(process,0,image,ref capacity))throw new Win32Exception(Marshal.GetLastWin32Error());
+            string expected=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"SystemApps","MicrosoftWindows.Client.CBS_cw5n1h2txyewy","SearchHost.exe");
+            var title=new StringBuilder(1024);var cls=new StringBuilder(256);GetWindowTextW(window,title,title.Capacity);GetClassNameW(window,cls,cls.Capacity);
+            uint appCapacity=2048;var application=new StringBuilder((int)appCapacity);int appStatus=GetApplicationUserModelId(process,ref appCapacity,application);
+            if(!String.Equals(image.ToString(),expected,StringComparison.OrdinalIgnoreCase) || title.ToString()!="Search" ||
+               cls.ToString()!="Windows.UI.Core.CoreWindow" || appStatus!=0 || application.ToString()!="MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI")
+                throw new InvalidOperationException("The foreground surface is not the verified stock Search flyout.");
+            uint checkedProcess,checkedSession;uint checkedThread=GetWindowThreadProcessId(window,out checkedProcess);
+            if(GetForegroundWindow()!=window || checkedProcess!=processId || checkedThread!=threadId || CurrentForegroundTitle()!="Search" ||
+               !ProcessIdToSessionId(checkedProcess,out checkedSession) || checkedSession!=expectedSession)
+                throw new InvalidOperationException("The approved Search surface drifted before its close request.");
+            if(!PostMessageW(window,0x0010,UIntPtr.Zero,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error(),"Search flyout refused its ordinary close request.");
+            var deadline=System.Diagnostics.Stopwatch.StartNew();
+            while(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window) && deadline.ElapsedMilliseconds<5000)Thread.Sleep(25);
+            if(IsWindow(window) && (IsWindowVisible(window) || GetForegroundWindow()==window))throw new InvalidOperationException("The stock Search flyout did not close; no process termination or input fallback is permitted.");
+            return true;
         }
     }
     public static bool CloseVerifiedHostedAccountSurface(long expectedWindow,uint expectedThread,uint expectedProcess) {
@@ -271,6 +315,32 @@ if($SnapshotOnly){
     if(Test-Path -LiteralPath $snapshotPath){throw 'Preserve existing foreground snapshot.'}
     [IO.File]::WriteAllText($snapshotPath,((Get-PrivateForegroundSnapshot)|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
     Write-Host "Foreground snapshot: $snapshotPath"
+    return
+}
+if($CloseSearchOnly){
+    Import-Module (Join-Path $repo 'Tools/Modules/Testing/HostedTestDesktop.psm1')
+    $context=(Get-RSHostedDesktopDiagnostics).DesktopContext
+    if($context.WindowStation -cne 'WinSta0' -or $context.InputDesktop -cne 'Default' -or $context.ThreadDesktop -cne 'Default'){
+        throw 'Refuse Search intervention on an unknown or secure desktop.'
+    }
+    $before=Get-PrivateForegroundSnapshot
+    if(-not $before.Stable){throw 'Search foreground changed during pre-close observation.'}
+    $thread=[WgcDesktopAdmissionProbe]::CurrentForegroundThread()
+    $session=if($before.Process){[WgcDesktopAdmissionProbe]::CurrentForegroundSession()}else{$null}
+    $intentPath=Join-Path $taskTemp 'search-dismissal-intent.json';$resultPath=Join-Path $taskTemp 'search-dismissal-result.json'
+    if((Test-Path -LiteralPath $intentPath) -or (Test-Path -LiteralPath $resultPath)){throw 'Preserve Search intervention evidence.'}
+    $intent=[ordered]@{Scope='Separate explicit manual hosted ARM64 stock Search close only';RequestedUtc=[DateTime]::UtcNow.ToString('o');Head=(& git -C $repo rev-parse HEAD);Before=$before;Thread=$thread;ExpectedSession=$session;DesktopContext=$context}
+    [IO.File]::WriteAllText($intentPath,($intent|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+    $dismissed=$false;$noTarget=$false;$closeError=$null
+    try{
+        if($before.Window -eq 0 -and $before.Process -eq 0 -and $thread -eq 0 -and [WgcDesktopAdmissionProbe]::CurrentForegroundWindow() -eq 0){$noTarget=$true}
+        else{$dismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedSearchSurface($before.Window,$thread,$before.Process,$session)}
+    }catch{$closeError=$_.Exception.Message;throw}finally{
+        $postClose=$null;$snapshotError=$null;try{$postClose=Get-PrivateForegroundSnapshot}catch{$snapshotError=$_.Exception.Message}
+        $outcome=[ordered]@{CompletedUtc=[DateTime]::UtcNow.ToString('o');IntentSha256=(Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash;Dismissed=$dismissed;NoTarget=$noTarget;NoTargetScope='No foreground window observed, not desktop-wide absence';Error=$closeError;PostCloseForeground=$postClose;SnapshotError=$snapshotError}
+        [IO.File]::WriteAllText($resultPath,($outcome|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+        Write-Host "Search intent: $intentPath";Write-Host "Search result: $resultPath"
+    }
     return
 }
 $initialForegroundWindow=[WgcDesktopAdmissionProbe]::CurrentForegroundWindow()

@@ -1,6 +1,6 @@
-# PRIVATE, TEMPORARY API CONTROL. No application build, image capture or qualification receipt.
+# PRIVATE, TEMPORARY DIAGNOSTICS. Filtered UI mode builds and captures; it never provides Full qualification.
 name: Manual Native Suite
-run-name: "DIAGNOSTIC ONLY WGC admission (${{ inputs.configuration }})"
+run-name: "DIAGNOSTIC ONLY ${{ inputs.scope }} (${{ inputs.configuration }})"
 on:
   workflow_dispatch:
     inputs:
@@ -10,10 +10,14 @@ on:
         default: Release
       scope:
         type: choice
-        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity]
+        options: [DesktopProbe, DesktopIdentity, ApprovedCloseIdentity, ApprovedCurrentUi]
         default: DesktopProbe
       dismiss_hosted_account_surface:
         description: Explicit owner-approved exception for the stock hosted ARM64 account window
+        type: boolean
+        default: false
+      dismiss_hosted_search_surface:
+        description: Separate explicit owner approval for the exact stock hosted ARM64 Search flyout
         type: boolean
         default: false
 permissions:
@@ -23,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   metadata:
-    if: inputs.scope != 'ApprovedCloseIdentity'
+    if: inputs.scope != 'ApprovedCloseIdentity' && inputs.scope != 'ApprovedCurrentUi'
     name: Private desktop diagnostic (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -134,4 +138,63 @@ jobs:
         with:
           name: approved-close-identity-preflight-ARM64
           path: ${{ runner.temp }}/approved-close-identity-preflight.json
+          if-no-files-found: error
+  approved-current-ui:
+    if: inputs.scope == 'ApprovedCurrentUi'
+    name: Private approved ARM64 UI (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: PR200
+            head: ab5f142c3ca54d4c2c559a2654f8a2e8df4229eb
+          - label: PR201
+            head: efd597e40e26d17bfcd9dbb32fa8438ff757873b
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 240
+    steps:
+      - name: Require both separate explicit authorizations
+        if: inputs.dismiss_hosted_account_surface != true || inputs.dismiss_hosted_search_surface != true
+        shell: pwsh
+        run: throw 'ApprovedCurrentUi requires separate explicit account and Search authorization inputs.'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: bootstrap
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.head }}
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./candidate/.github/actions/setup-msvc
+        with:
+          platform: ARM64
+      - name: Build and run exact filtered diagnostics
+        shell: pwsh
+        env:
+          APPROVED_CANDIDATE_HEAD: ${{ matrix.head }}
+          APPROVED_CANDIDATE_LABEL: ${{ matrix.label }}
+          APPROVED_ACCOUNT_CLOSE: ${{ inputs.dismiss_hosted_account_surface }}
+          APPROVED_SEARCH_CLOSE: ${{ inputs.dismiss_hosted_search_surface }}
+        run: ./bootstrap/.ci/Invoke-ApprovedCurrentUi.ps1 -CandidateRoot "$env:GITHUB_WORKSPACE/candidate" -BootstrapRoot "$env:GITHUB_WORKSPACE/bootstrap" -ExpectedHead $env:APPROVED_CANDIDATE_HEAD -Label $env:APPROVED_CANDIDATE_LABEL -ApproveAccountClose:($env:APPROVED_ACCOUNT_CLOSE -ceq 'true') -ApproveSearchClose:($env:APPROVED_SEARCH_CLOSE -ceq 'true')
+      - name: Retain bounded job status even if preflight fails
+        if: always()
+        shell: pwsh
+        run: |
+          @{ scope='ApprovedCurrentUi'; candidate='${{ matrix.label }}'; head='${{ matrix.head }}'; job_status='${{ job.status }}'; repository_coverage='NOT_EVALUATED' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'approved-current-ui-preflight.json') -Encoding utf8
+      - name: Retain private diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approved-current-ui-${{ matrix.label }}-ARM64
+          path: C:/RedSalamander.Perf/evidence/approved-current-ui/
+          if-no-files-found: warn
+      - name: Retain preflight status separately
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approved-current-ui-preflight-${{ matrix.label }}-ARM64
+          path: ${{ runner.temp }}/approved-current-ui-preflight.json
           if-no-files-found: error
