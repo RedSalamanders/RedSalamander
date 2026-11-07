@@ -12,7 +12,9 @@ keep its queue live, and restore the original foreground and native focus after 
 child drain. Its thread joins before the retained desktop handle closes. The canonical
 boundary clears its no-activation style only after verified acquisition, preserving all
 other style bits; restoration services at most one queued message per bounded wait.
-interactive entry holds its existing mutex, explicitly directs contained children to Default,
+After an accepted return request it tolerates a transient null foreground within the existing deadline,
+while still rejecting another window and requiring the original foreground and focus.
+Each interactive entry holds its existing mutex, explicitly directs contained children to Default,
 and uses the existing native warning and assertions. No input desktop is created or switched.
 Boundary setup and restoration errors remain failures. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
