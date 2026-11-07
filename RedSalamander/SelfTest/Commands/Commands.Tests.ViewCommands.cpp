@@ -6722,6 +6722,65 @@ private:
         return false;
     }
 
+    // This keyboard fixture parks on its owned edit host so delivered pointer hover cannot select a row.
+    // Checks sample cursor position; they cannot exclude movement between samples or the final restore check.
+    POINT originalCursor{};
+    POINT parkedCursor{};
+    bool cursorParked          = false;
+    bool cursorInterference    = false;
+    const auto ownedForeground = [&]() noexcept
+    {
+        const HWND root = GetAncestor(mainWindow, GA_ROOT);
+        DWORD processId = 0;
+        return root && GetForegroundWindow() == root && GetWindowThreadProcessId(root, &processId) == GetCurrentThreadId() &&
+               processId == GetCurrentProcessId();
+    };
+    const auto stillParkedAndOwned = [&]() noexcept
+    {
+        POINT current{};
+        if (cursorInterference || ! ownedForeground() || GetCursorPos(&current) == FALSE || current.x != parkedCursor.x || current.y != parkedCursor.y)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        return true;
+    };
+    state.Require(GetCursorPos(&originalCursor) != FALSE, L"Could not capture the cursor before edit-suggest keyboard isolation.");
+    if (! state.failure.empty())
+        return false;
+    const auto restoreIsolatedCursor = wil::scope_exit([&]() noexcept
+    {
+        if (! cursorParked)
+            return;
+        NavigationViewDebugSnapshot snapshot{};
+        bool retired = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot);
+        for (unsigned int attempt = 0; retired && snapshot.editMode && attempt < 2u; ++attempt)
+        {
+            const HWND input     = snapshot.currentEditInputHwnd;
+            DWORD processId      = 0;
+            const DWORD threadId = input ? GetWindowThreadProcessId(input, &processId) : 0;
+            if (! stillParkedAndOwned() || ! input || IsWindow(input) == FALSE || processId != GetCurrentProcessId() || threadId != GetCurrentThreadId())
+            {
+                retired = false;
+                break;
+            }
+            SendMessageW(input, WM_KEYDOWN, VK_ESCAPE, 0);
+            SendMessageW(input, WM_KEYUP, VK_ESCAPE, 0);
+            PumpPendingMessages();
+            retired = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot);
+        }
+        retired = retired && ! snapshot.editMode && ! snapshot.editSuggestPopupVisible;
+        if (! retired || ! stillParkedAndOwned())
+        {
+            SelfTest::AppendSuiteTrace(
+                SelfTest::SelfTestSuite::Commands,
+                L"Edit-suggest cursor isolation cleanup could not verify retired edit/popup and unchanged parked cursor; cursor preserved.");
+            state.Require(false, L"Edit-suggest cursor isolation cleanup could not verify retired edit/popup and unchanged parked cursor; cursor preserved.");
+            return;
+        }
+        state.Require(SetCursorPos(originalCursor.x, originalCursor.y) != FALSE, L"Edit-suggest cursor isolation could not restore the original cursor.");
+    });
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for navigation-view edit-suggest test.");
     if (suiteRoot.empty())
@@ -6893,6 +6952,83 @@ private:
         return false;
     }
 
+    const auto parkOwnedCursor = [&]() noexcept
+    {
+        NavigationViewDebugSnapshot fresh{};
+        POINT current{};
+        const POINT expected = cursorParked ? parkedCursor : originalCursor;
+        if (cursorInterference || ! ownedForeground() || GetCursorPos(&current) == FALSE || current.x != expected.x || current.y != expected.y ||
+            ! g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, fresh))
+        {
+            cursorInterference = true;
+            return false;
+        }
+        const HWND host = fresh.currentEditHostHwnd;
+        RECT rect{};
+        DWORD processId = 0;
+        if (! host || IsWindow(host) == FALSE || GetWindowThreadProcessId(host, &processId) != GetCurrentThreadId() || processId != GetCurrentProcessId() ||
+            GetWindowRect(host, &rect) == FALSE || rect.right <= rect.left || rect.bottom <= rect.top)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        const POINT next{rect.left + (rect.right - rect.left) / 2, rect.top + (rect.bottom - rect.top) / 2};
+        const HWND hit = WindowFromPoint(next);
+        RECT popup{};
+        if (! hit || (hit != host && IsChild(host, hit) == FALSE) ||
+            (fresh.editSuggestPopupVisible && (! fresh.editSuggestPopupHwnd || IsWindow(fresh.editSuggestPopupHwnd) == FALSE ||
+                                               GetWindowRect(fresh.editSuggestPopupHwnd, &popup) == FALSE || PtInRect(&popup, next) != FALSE)) ||
+            ! ownedForeground() || GetCursorPos(&current) == FALSE || current.x != expected.x || current.y != expected.y)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        if (SetCursorPos(next.x, next.y) == FALSE)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        parkedCursor = next;
+        cursorParked = true;
+        PumpPendingMessages();
+        return stillParkedAndOwned();
+    };
+    state.Require(parkOwnedCursor(), L"Could not safely park the cursor on the owned edit host.");
+    if (! state.failure.empty())
+        return false;
+    const auto verifyCursorIsolation = [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        POINT current{};
+        if (! stillParkedAndOwned() || GetCursorPos(&current) == FALSE || current.x != parkedCursor.x || current.y != parkedCursor.y)
+        {
+            cursorInterference = true;
+            return false;
+        }
+        DWORD processId = 0;
+        const HWND host = value.currentEditHostHwnd;
+        const HWND hit  = WindowFromPoint(current);
+        if (! host || IsWindow(host) == FALSE || GetWindowThreadProcessId(host, &processId) != GetCurrentThreadId() || processId != GetCurrentProcessId() ||
+            ! hit || (hit != host && IsChild(host, hit) == FALSE))
+        {
+            cursorInterference = true;
+            return false;
+        }
+        if (value.editSuggestPopupVisible)
+        {
+            RECT popup{};
+            if (! value.editSuggestPopupHwnd || IsWindow(value.editSuggestPopupHwnd) == FALSE || GetWindowRect(value.editSuggestPopupHwnd, &popup) == FALSE ||
+                PtInRect(&popup, current) != FALSE)
+            {
+                cursorInterference = true;
+                return false;
+            }
+        }
+        return true;
+    };
+    state.Require(verifyCursorIsolation(editSnapshot), L"Edit-suggest cursor isolation failed immediately after parking.");
+    if (! state.failure.empty())
+        return false;
+
     const auto pathEditAcceptsDirectedInput = [](const NavigationViewDebugSnapshot& value) noexcept
     {
         if (value.focusTarget == NavigationViewDebugFocusTarget::PathEdit)
@@ -7021,6 +7157,11 @@ private:
 
     const auto setEditTextAndMoveCaret = [&](std::wstring_view text, std::wstring_view context) noexcept
     {
+        NavigationViewDebugSnapshot cursorSnapshot{};
+        state.Require(g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, cursorSnapshot) && verifyCursorIsolation(cursorSnapshot),
+                      std::format(L"Edit-suggest cursor isolation failed before {}.", context));
+        if (! state.failure.empty())
+            return false;
         const std::wstring queryText(text);
         state.Require(queryText.starts_with(rootText),
                       std::format(L"Navigation-view edit-suggest query did not share the expected root prefix during {}.", context));
@@ -7084,9 +7225,9 @@ private:
         const bool reached = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
                                                            [&](const NavigationViewDebugSnapshot& value) noexcept
         {
-            return pathEditAcceptsDirectedInput(value) && value.editMode && value.editSuggestPopupVisible && value.editSuggestItemCount >= 1u &&
-                   value.editSuggestSelectedIndex == expectedSelectedIndex && ! value.historyDropdownVisible && ! value.fullPathPopupVisible &&
-                   ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 1u && value.currentPathText == rootText &&
+            return verifyCursorIsolation(value) && pathEditAcceptsDirectedInput(value) && value.editMode && value.editSuggestPopupVisible &&
+                   value.editSuggestItemCount >= 1u && value.editSuggestSelectedIndex == expectedSelectedIndex && ! value.historyDropdownVisible &&
+                   ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 1u && value.currentPathText == rootText &&
                    value.currentEditText == expectedText && g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
                    g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
@@ -7102,16 +7243,44 @@ private:
                 snapshot = currentSnapshot;
             }
 
+            POINT cursor{};
+            const bool cursorKnown = GetCursorPos(&cursor) != FALSE;
+            RECT popupRect{};
+            const bool popupRectKnown = snapshot.editSuggestPopupHwnd && GetWindowRect(snapshot.editSuggestPopupHwnd, &popupRect) != FALSE;
             state.Require(false,
                           std::format(L"Navigation view did not expose the edit-suggest popup during {}. focusTarget={} editMode={} popupVisible={} "
-                                      L"popupItems={} selectedIndex={} visibleChildren={} currentEdit='{}' currentPath='{}'",
+                                      L"popupItems={} selectedIndex={} expectedIndex={} hoveredIndex={} visibleChildren={} history={} fullPath={} "
+                                      L"fullPathEdit={} refresh={}/{} items={}/{} selected={}/{} cursorKnown={} cursor=({}, {}) parked=({}, {}) "
+                                      L"cursorInterference={} popupRectKnown={} popupRect=({}, {}, {}, {}) currentEdit='{}' currentPath='{}'",
                                       context,
                                       static_cast<int>(snapshot.focusTarget),
                                       snapshot.editMode,
                                       snapshot.editSuggestPopupVisible,
                                       snapshot.editSuggestItemCount,
                                       snapshot.editSuggestSelectedIndex,
+                                      expectedSelectedIndex,
+                                      snapshot.editSuggestHoveredIndex,
                                       snapshot.visibleChildWindowCount,
+                                      snapshot.historyDropdownVisible,
+                                      snapshot.fullPathPopupVisible,
+                                      snapshot.fullPathPopupEditMode,
+                                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                                      baselineRefreshCount,
+                                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                                      baselineItemCount,
+                                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                                      baselineSelectedCount,
+                                      cursorKnown,
+                                      cursor.x,
+                                      cursor.y,
+                                      parkedCursor.x,
+                                      parkedCursor.y,
+                                      cursorInterference,
+                                      popupRectKnown,
+                                      popupRect.left,
+                                      popupRect.top,
+                                      popupRect.right,
+                                      popupRect.bottom,
                                       snapshot.currentEditText,
                                       snapshot.currentPathText));
         }
@@ -7224,7 +7393,9 @@ private:
                  WM_DPICHANGED,
                  static_cast<WPARAM>(static_cast<DWORD>(MAKELONG(static_cast<WORD>(suggestTestDpi), static_cast<WORD>(suggestTestDpi)))),
                  reinterpret_cast<LPARAM>(&suggestScaledRect));
-    PumpPendingMessages();
+    state.Require(parkOwnedCursor(), L"Could not safely repark the cursor after the DPI transition.");
+    if (! state.failure.empty())
+        return false;
 
     NavigationViewDebugSnapshot dpiSuggestSnapshot{};
     state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
@@ -7259,6 +7430,7 @@ private:
 
     state.Require(hasPathEditFocus(dpiSuggestSnapshot),
                   L"Path edit should retain Win32 focus while the live edit-suggest popup reflows across the synthetic DPI transition.");
+    state.Require(verifyCursorIsolation(dpiSuggestSnapshot), L"Edit-suggest cursor isolation failed after the DPI transition.");
     if (! state.failure.empty())
     {
         return false;
