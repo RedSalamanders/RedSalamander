@@ -12,6 +12,10 @@ on:
         type: choice
         options: [DesktopProbe, DesktopIdentity]
         default: DesktopProbe
+      dismiss_hosted_account_surface:
+        description: Explicit owner-approved exception for the stock hosted ARM64 account window
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -38,7 +42,7 @@ jobs:
           persist-credentials: false
       - name: Query owned-window admission and active desktop through the canonical lease
         shell: pwsh
-        run: ./.ci/WgcAdmissionProbe.ps1 -TestRoot '${{ matrix.testRoot }}'
+        run: ./.ci/WgcAdmissionProbe.ps1 -TestRoot '${{ matrix.testRoot }}' -DismissHostedAccountSurface:('${{ inputs.dismiss_hosted_account_surface }}' -ceq 'true' -and '${{ matrix.arch }}' -ceq 'ARM64')
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: inputs.scope != 'DesktopIdentity'
         with:

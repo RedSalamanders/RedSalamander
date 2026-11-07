@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$TestRoot='D:\RedSalamander.Perf')
+param([string]$TestRoot='D:\RedSalamander.Perf',[switch]$DismissHostedAccountSurface)
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $env:REDSALAMANDER_TEST_ROOT=$TestRoot
@@ -55,8 +55,52 @@ public static class WgcDesktopAdmissionProbe {
     [DllImport("user32.dll", ExactSpelling=true)] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll", ExactSpelling=true)] static extern uint GetWindowThreadProcessId(IntPtr window,out uint process);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetWindowTextW(IntPtr window,StringBuilder title,int capacity);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)] static extern int GetClassNameW(IntPtr window,StringBuilder title,int capacity);
+    [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll", ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool PostMessageW(IntPtr window,uint message,UIntPtr wParam,IntPtr lParam);
+    [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)] static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint access,bool inherit,uint process);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool QueryFullProcessImageNameW(Microsoft.Win32.SafeHandles.SafeProcessHandle process,uint flags,StringBuilder image,ref uint capacity);
+    [DllImport("kernel32.dll", ExactSpelling=true)] static extern int GetApplicationUserModelId(Microsoft.Win32.SafeHandles.SafeProcessHandle process,ref uint capacity,StringBuilder id);
     public static uint CurrentForegroundProcess() { uint process;GetWindowThreadProcessId(GetForegroundWindow(),out process);return process; }
     public static string CurrentForegroundTitle() {var title=new StringBuilder(1024);GetWindowTextW(GetForegroundWindow(),title,title.Capacity);return title.ToString();}
+    public static string CurrentForegroundApplicationId() {
+        using(var process=OpenProcess(0x1000,false,CurrentForegroundProcess())) {
+            if(process==null || process.IsInvalid)return "unavailable:open-process";
+            uint capacity=2048;var id=new StringBuilder((int)capacity);int status=GetApplicationUserModelId(process,ref capacity,id);
+            return status==0?id.ToString():"unavailable:"+status.ToString();
+        }
+    }
+    public static bool CloseVerifiedHostedAccountSurface(uint expectedProcess) {
+        // This method remains unreachable without the explicit manual workflow
+        // switch. It posts one ordinary close request, never kills a process,
+        // sends authentication input, or changes a global foreground policy.
+        if(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")!="true" ||
+           Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT")!="github-hosted" ||
+           Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")!="RedSalamanders/RedSalamander" ||
+           Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")!="ARM64")
+            throw new InvalidOperationException("Account-surface dismissal is confined to this project's ephemeral hosted ARM64 runner.");
+        IntPtr window=GetForegroundWindow();uint processId;uint threadId=GetWindowThreadProcessId(window,out processId);
+        if(window==IntPtr.Zero || threadId==0 || processId!=expectedProcess)throw new InvalidOperationException("Account-surface identity changed.");
+        using(var process=OpenProcess(0x1000,false,processId)) {
+            if(process==null || process.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error(),"Account-surface process identity unavailable");
+            uint capacity=4096;var image=new StringBuilder((int)capacity);
+            if(!QueryFullProcessImageNameW(process,0,image,ref capacity))throw new Win32Exception(Marshal.GetLastWin32Error());
+            string expected=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WWAHost.exe");
+            var title=new StringBuilder(1024);var cls=new StringBuilder(256);
+            GetWindowTextW(window,title,title.Capacity);GetClassNameW(window,cls,cls.Capacity);
+            if(!String.Equals(image.ToString(),expected,StringComparison.OrdinalIgnoreCase) ||
+               title.ToString()!="Microsoft account" || cls.ToString()!="Windows.UI.Core.CoreWindow")
+                throw new InvalidOperationException("The foreground surface is not the verified stock account window.");
+            uint checkedProcess;uint checkedThread=GetWindowThreadProcessId(window,out checkedProcess);
+            if(GetForegroundWindow()!=window || checkedProcess!=processId || checkedThread!=threadId || CurrentForegroundTitle()!="Microsoft account")
+                throw new InvalidOperationException("The approved account surface drifted before its close request.");
+            if(!PostMessageW(window,0x0010,UIntPtr.Zero,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error(),"Account window refused its ordinary close request");
+            var deadline=System.Diagnostics.Stopwatch.StartNew();
+            while(IsWindow(window) && deadline.ElapsedMilliseconds<5000)Thread.Sleep(25);
+            if(IsWindow(window))throw new InvalidOperationException("The stock account window did not close; no process termination or input fallback is permitted.");
+            return true;
+        }
+    }
     [DllImport("user32.dll", ExactSpelling=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("dwmapi.dll", ExactSpelling=true)] static extern int DwmFlush();
     [DllImport("user32.dll", ExactSpelling=true,SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] static extern bool AllowSetForegroundWindow(uint process);
@@ -191,7 +235,10 @@ public static class WgcDesktopAdmissionProbe {
 '@
 $initialForegroundProcess=[WgcDesktopAdmissionProbe]::CurrentForegroundProcess()
 $initialForegroundTitle=[WgcDesktopAdmissionProbe]::CurrentForegroundTitle()
+$initialForegroundApplicationId=[WgcDesktopAdmissionProbe]::CurrentForegroundApplicationId()
 $initialForegroundIdentity=if($initialForegroundProcess){Get-CimInstance Win32_Process -Filter ('ProcessId='+$initialForegroundProcess)|Select-Object Name,ExecutablePath,CommandLine,SessionId}else{$null}
+$accountSurfaceDismissed=$false
+if($DismissHostedAccountSurface){$accountSurfaceDismissed=[WgcDesktopAdmissionProbe]::CloseVerifiedHostedAccountSurface($initialForegroundProcess)}
 $result=[WgcDesktopAdmissionProbe]::Run()
 $ownedResult=@()
 $foregroundBefore=$null;$foregroundAfter=$null;$grant=$null
@@ -217,7 +264,7 @@ if($env:GITHUB_ACTIONS -ceq 'true' -and $env:RUNNER_ENVIRONMENT -ceq 'github-hos
 }
 $path=Join-Path $taskTemp 'wgc-admission.json'
 if(Test-Path -LiteralPath $path){throw 'Preserve existing probe evidence'}
-$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Metadata admission only: no image or injected input; active owned desktop uses canonical hosted entry lease; no qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;InitialForegroundProcess=$initialForegroundProcess;InitialForegroundTitle=$initialForegroundTitle;InitialForegroundIdentity=$initialForegroundIdentity;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter}
+$report=[ordered]@{Schema='private.wgc-admission.v1';Scope='Private desktop control: no application build, image, authentication input, or qualification receipt';Head=(& git -C $repo rev-parse HEAD);Architecture=$env:PROCESSOR_ARCHITECTURE;InitialForegroundProcess=$initialForegroundProcess;InitialForegroundTitle=$initialForegroundTitle;InitialForegroundApplicationId=$initialForegroundApplicationId;InitialForegroundIdentity=$initialForegroundIdentity;AccountSurfaceDismissed=$accountSurfaceDismissed;OriginalForegroundBefore=[WgcDesktopAdmissionProbe]::OriginalForegroundBefore;OriginalForegroundAfter=[WgcDesktopAdmissionProbe]::OriginalForegroundAfter;Results=$result;OwnedActiveResults=$ownedResult;DefaultForegroundBefore=$foregroundBefore;SpecificSelfGrant=$grant;DefaultForegroundAfter=$foregroundAfter}
 [IO.File]::WriteAllText($path,($report|ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
 $report|ConvertTo-Json -Depth 6 -Compress
 Write-Host ('Probe evidence: '+$path)
