@@ -482,6 +482,29 @@ Describe 'Hosted foreground chord role policy' {
     }
 }
 
+Describe 'Hosted boundary return policy' {
+    It 'clears only the no-activation extended style' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $style = $boundary.GetMethod('BoundaryReturnStyle', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $style.Invoke($null, [object[]]@([long]0x08040080)) | Should Be ([long]0x00040080)
+        $style.Invoke($null, [object[]]@([long]0x08000000)) | Should Be ([long]0)
+        $style.Invoke($null, [object[]]@([long]0x00040080)) | Should Be ([long]0x00040080)
+    }
+    It 'bounds each message wait by the original restoration deadline' {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $wait = $boundary.GetMethod('RestoreWaitMilliseconds', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        foreach ($sample in @(@{elapsed=0; expected=10}, @{elapsed=1490; expected=10}, @{elapsed=1499; expected=1}, @{elapsed=1500; expected=0}, @{elapsed=1501; expected=0})) {
+            $wait.Invoke($null, [object[]]@([long]$sample.elapsed)) | Should Be ([uint32]$sample.expected)
+        }
+        $caught = $null
+        try { [void]$wait.Invoke($null, [object[]]@([long]-1)) }
+        catch [System.Management.Automation.MethodInvocationException] { $caught = $_.Exception.GetBaseException() }
+        ($caught -is [ArgumentOutOfRangeException]) | Should Be $true
+    }
+}
+
 Describe 'Hosted boundary inherited desktop policy' {
     It 'requires positive WinSta0 and Default thread and input identities without errors' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }

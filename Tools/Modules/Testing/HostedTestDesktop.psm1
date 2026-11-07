@@ -92,6 +92,10 @@ namespace RedSalamander.Testing {
         [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr SetFocus(IntPtr window);
         [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr GetFocus();
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetWindowLongPtrW(IntPtr window, int index);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr SetWindowLongPtrW(IntPtr window, int index, IntPtr value);
+        [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
         [DllImport("user32.dll", ExactSpelling = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
         [DllImport("user32.dll", ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr window);
@@ -294,6 +298,58 @@ namespace RedSalamander.Testing {
             if (HostedDesktopNative.InputDesktopName() != "Default" || GetForegroundWindow() != handle || GetFocus() != handle)
                 throw new InvalidOperationException("The owned hosted hotkey foreground or focus was lost after release.");
         }
+        internal static long BoundaryReturnStyle(long style) { return style & ~0x08000000L; }
+        private void EnableBoundaryReturn(IntPtr handle) {
+            uint process;
+            if (canceled || !IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(handle) ||
+                GetWindowThreadProcessId(handle, out process) != GetCurrentThreadId() || process != GetCurrentProcessId() ||
+                GetForegroundWindow() != handle || GetFocus() != handle)
+                throw new InvalidOperationException("Hosted boundary ownership changed before enabling automatic return.");
+            Marshal.SetLastPInvokeError(0);
+            long before = GetWindowLongPtrW(handle, -20).ToInt64();
+            int error = Marshal.GetLastWin32Error();
+            if (before == 0 && error != 0) throw new Win32Exception(error, "Cannot read hosted boundary extended style.");
+            if ((before & 0x08000000L) == 0) throw new InvalidOperationException("Hosted boundary was not created without automatic activation.");
+            if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before style change.");
+            long expected = BoundaryReturnStyle(before);
+            Marshal.SetLastPInvokeError(0);
+            IntPtr previous = SetWindowLongPtrW(handle, -20, new IntPtr(expected));
+            error = Marshal.GetLastWin32Error();
+            if (previous == IntPtr.Zero && error != 0) throw new Win32Exception(error, "Cannot enable hosted boundary return.");
+            if (previous.ToInt64() != before) throw new InvalidOperationException("Hosted boundary extended style changed unexpectedly.");
+            if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled during style change.");
+            if (!SetWindowPos(handle, IntPtr.Zero, 0, 0, 0, 0, 0x0037))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot apply hosted boundary extended style.");
+            Marshal.SetLastPInvokeError(0);
+            long after = GetWindowLongPtrW(handle, -20).ToInt64();
+            error = Marshal.GetLastWin32Error();
+            if (after == 0 && error != 0) throw new Win32Exception(error, "Cannot verify hosted boundary extended style.");
+            if (canceled || after != expected || !IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) ||
+                !IsWindow(handle) || GetWindowThreadProcessId(handle, out process) != GetCurrentThreadId() || process != GetCurrentProcessId() ||
+                GetForegroundWindow() != handle || GetFocus() != handle)
+                throw new InvalidOperationException("Hosted boundary ownership or style changed during return setup.");
+            try { Console.Error.WriteLine("HostedDefaultDesktop.BoundaryStyle before=" + before + "; after=" + after); }
+            catch (System.IO.IOException) { /* Preserve setup result if diagnostics are unavailable. */ }
+            catch (ObjectDisposedException) { /* Preserve setup result if diagnostics were disposed. */ }
+        }
+        internal static uint RestoreWaitMilliseconds(long elapsed) {
+            if (elapsed < 0) throw new ArgumentOutOfRangeException(nameof(elapsed));
+            return elapsed >= 1500 ? 0u : (uint)Math.Min(10, 1500 - elapsed);
+        }
+        private static void WaitOneRestoreMessage(System.Diagnostics.Stopwatch timer) {
+            uint interval = RestoreWaitMilliseconds(timer.ElapsedMilliseconds);
+            if (interval == 0) return;
+            uint wait = MsgWaitForMultipleObjectsEx(0, null, interval, 0x04ff, 0x0004);
+            if (wait == 0xffffffff) throw new Win32Exception(Marshal.GetLastWin32Error(), "The hosted restoration queue wait failed.");
+            if (wait == 0) {
+                Message message;
+                if (PeekMessageW(out message, IntPtr.Zero, 0, 0, 1)) {
+                    if (message.Id == 0x0012) throw new InvalidOperationException("The hosted restoration queue was quit.");
+                    TranslateMessage(ref message);
+                    DispatchMessageW(ref message);
+                }
+            }
+        }
         private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
             if (HostedDesktopNative.InputDesktopName() != "Default")
                 throw new InvalidOperationException("A foreign input-desktop change must not be replaced by the hosted fixture.");
@@ -313,7 +369,11 @@ namespace RedSalamander.Testing {
                     if (current == original) break;
                     if (current != handle || timer.ElapsedMilliseconds >= 1500)
                         throw new InvalidOperationException("The original hosted foreground window was not restored.");
-                    Thread.Sleep(10);
+                    WaitOneRestoreMessage(timer);
+                    uint checkedProcess;
+                    if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
+                        GetWindowThreadProcessId(original, out checkedProcess) != originalThread || checkedProcess != originalProcess)
+                        throw new InvalidOperationException("The hosted desktop or original identity changed during restoration.");
                 } while (true);
             }
             // A previously empty foreground is verified after retiring our HWND.
@@ -325,7 +385,11 @@ namespace RedSalamander.Testing {
                 while (ReadFocus(originalThread).Focus != originalFocus) {
                     if (GetForegroundWindow() != original || timer.ElapsedMilliseconds >= 1500)
                         throw new InvalidOperationException("The original hosted native focus was not restored.");
-                    Thread.Sleep(10);
+                    WaitOneRestoreMessage(timer);
+                    uint checkedProcess;
+                    if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
+                        GetWindowThreadProcessId(original, out checkedProcess) != originalThread || checkedProcess != originalProcess)
+                        throw new InvalidOperationException("The hosted desktop or original identity changed during focus restoration.");
                 }
             }
         }
@@ -366,6 +430,7 @@ namespace RedSalamander.Testing {
                         if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled during focus acquisition.");
                         if (GetForegroundWindow() != handle || GetFocus() != handle)
                             throw new InvalidOperationException("The hosted boundary did not acquire real native focus.");
+                        EnableBoundaryReturn(handle);
                         if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before readiness.");
                         ready.Set();
                         var waits = new[] { stop.SafeWaitHandle.DangerousGetHandle() };
