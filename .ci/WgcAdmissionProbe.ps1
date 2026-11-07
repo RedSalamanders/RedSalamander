@@ -93,7 +93,7 @@ public static class WgcDesktopAdmissionProbe {
             try { using(var desktop=OpenDesktopW("Default",0,false,0x1ff)) {
                 if(desktop==null || desktop.IsInvalid || !SetThreadDesktop(desktop)) throw new Win32Exception(Marshal.GetLastWin32Error());
                 int initialized=RoInitialize(1);if(initialized<0)Marshal.ThrowExceptionForHR(initialized);
-                try { using(var window=CreateWindowExW(0x08040000,"STATIC","Owned default foreground control",0x90000000,Math.Max(0,GetSystemMetrics(0)-12),Math.Max(0,GetSystemMetrics(1)-12),12,12,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero)) {
+                try { using(var window=CreateWindowExW(0x00040000,"STATIC","Owned default foreground control",0x90000000,Math.Max(0,GetSystemMetrics(0)-12),Math.Max(0,GetSystemMetrics(1)-12),12,12,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero)) {
                     if(window==null || window.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error());
                     ready.Set();var waits=new[]{request.SafeWaitHandle.DangerousGetHandle(),stop.SafeWaitHandle.DangerousGetHandle()};
                     for(;;){uint wait=MsgWaitForMultipleObjectsEx(2,waits,0xffffffff,0x04ff,4);
