@@ -71,8 +71,9 @@ the resulting absolute path for both sandbox checks and creation, even when the 
 Hosted CI/Full and nightly shuffle UI runs wrap native validation in
 `Invoke-RSWithHostedTestDesktop` from `Modules/Testing/HostedTestDesktop.psm1`.
 It selects a supported sufficient display mode, reports work-area/session/foreground facts,
-and restores the original mode on failure or success. It refuses local invocation; native
-focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
+and restores the original mode on failure or success. Its verified neutral window becomes
+eligible for automatic return after modal teardown and may appear on the hosted taskbar.
+It refuses local invocation; native focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
 
 The nightly shuffle consumer restores the exact pinned DxUi source before importing its portable
 attestation; receipt use still verifies that source identity and every attested output byte.

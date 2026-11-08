@@ -1,0 +1,150 @@
+{
+  "schema": "red-salamander.hosted-modal-focus-diagnostic.v1",
+  "run": "https://github.com/RedSalamanders/RedSalamander/actions/runs/42470431914",
+  "artifactId": 13612738425,
+  "artifactSha256": "9350f0d5925df165214ae50b05316c4e03b8840f01a4446c15ad811588310a8f",
+  "candidateHead": "4c84a44ec74e51dc55b6f465a1c93e37aa4177c1",
+  "productInitializerSha256": "273743C5C1077963A05FFB487C8AD7CF4B5AB13635D17DEF6FE3287C14A1213A",
+  "comparison": "same runner; canonical control followed by one-line private style transform",
+  "qualification": "NOT_EVALUATED",
+  "groups": [
+    {
+      "group": "control",
+      "sourceVerified": true,
+      "cleanupErrors": 0,
+      "initializerOriginalSha256": null,
+      "initializerExecutedSha256": null,
+      "fixtureScope": "CANONICAL_FIXTURE"
+    },
+    {
+      "group": "style",
+      "sourceVerified": true,
+      "cleanupErrors": 0,
+      "initializerOriginalSha256": "DB7A73F297AF7AD87FF296811E72F9275EBE454FA9721A26D4895FDB149FE281",
+      "initializerExecutedSha256": "273743C5C1077963A05FFB487C8AD7CF4B5AB13635D17DEF6FE3287C14A1213A",
+      "fixtureScope": "PRIVATE_TRANSFORMED_FIXTURE"
+    }
+  ],
+  "cases": [
+    {
+      "group": "control",
+      "lease": 1,
+      "childExit": 11,
+      "expectedControlFailure": true,
+      "stdoutMember": "42470431914-1-control/lease-1-child-stdout.txt",
+      "stdoutSha256": "e1eaf3e206f1d32507c501db9f03182b633f7e38b63fadb0822ab5326591e302",
+      "stdoutBytes": 736,
+      "zipHeaderOffset": 920,
+      "witnesses": [
+        {
+          "offset": 71,
+          "bytes": 103,
+          "sha256": "f7c9877c47c756a0f74242d122020afed7652b34f0bc491ce6662e3eb2da81fe",
+          "text": "BOUNDARY_START valid=1 hwnd=0000000000020148 pid=4188 tid=7812 focus=0000000000020148 inputTick=50312"
+        },
+        {
+          "offset": 386,
+          "bytes": 159,
+          "sha256": "4a3aee363cb269599f509f1f38e2302ae2f2601be784213dde03866cf6075dd1",
+          "text": "BOUNDARY_MODAL activated=1 ownerReturned=1 neutralNext=0 inputKnown=1 inputTick=50312 modal=0000000000080014 current=00000000000301E2 target=00000000000301E2"
+        },
+        {
+          "offset": 545,
+          "bytes": 191,
+          "sha256": "87e65d650ab83def92a55e4e60b0f172719e3aded94390ffcf9c34303ea3fed3",
+          "text": "BOUNDARY_RESULT status=not-returned original=0000000000020148 pid=4188 tid=7812 focus=0000000000020148 current=0000000000020134 currentPid=9148 currentTid=9132 currentFocus=0000000000000000"
+        }
+      ]
+    },
+    {
+      "group": "style",
+      "lease": 1,
+      "childExit": 0,
+      "expectedControlFailure": false,
+      "stdoutMember": "42470431914-1-style/lease-1-child-stdout.txt",
+      "stdoutSha256": "2dcf8c4d0883d0f7541ba87413bbdcad92f08c6359639ccc444675a428e127ec",
+      "stdoutBytes": 728,
+      "zipHeaderOffset": 4852,
+      "witnesses": [
+        {
+          "offset": 71,
+          "bytes": 103,
+          "sha256": "89b8fa21ee68f7a1b52e5cfef6f3c28128f90a61a52136e071b9c502e63da4b4",
+          "text": "BOUNDARY_START valid=1 hwnd=000000000004016A pid=9072 tid=6828 focus=000000000004016A inputTick=50312"
+        },
+        {
+          "offset": 386,
+          "bytes": 159,
+          "sha256": "2ed1f6587e2ef14dd8c30625fefbca4ac6d5eb094b5ed8d386d51ebecfc123f4",
+          "text": "BOUNDARY_MODAL activated=1 ownerReturned=1 neutralNext=0 inputKnown=1 inputTick=50312 modal=0000000000090014 current=00000000000401E2 target=00000000000401E2"
+        },
+        {
+          "offset": 545,
+          "bytes": 183,
+          "sha256": "509d7176020e990ca4483487052912494e7aa75e0d3b658ddc312da8fc2bbaf4",
+          "text": "BOUNDARY_RESULT status=pass original=000000000004016A pid=9072 tid=6828 focus=000000000004016A current=000000000004016A currentPid=9072 currentTid=6828 currentFocus=000000000004016A"
+        }
+      ]
+    },
+    {
+      "group": "style",
+      "lease": 2,
+      "childExit": 0,
+      "expectedControlFailure": false,
+      "stdoutMember": "42470431914-1-style/lease-2-child-stdout.txt",
+      "stdoutSha256": "6b60b5d435a8c40a86b9c7a68b6a7d88952b5014e0e586ed2a3de8c2e255c68b",
+      "stdoutBytes": 728,
+      "zipHeaderOffset": 7547,
+      "witnesses": [
+        {
+          "offset": 71,
+          "bytes": 103,
+          "sha256": "88aaf81ccecf945fe0630be493477adeb70dd57a6dd538e7f17ea64f5dbb0092",
+          "text": "BOUNDARY_START valid=1 hwnd=0000000000050162 pid=9072 tid=3656 focus=0000000000050162 inputTick=50312"
+        },
+        {
+          "offset": 386,
+          "bytes": 159,
+          "sha256": "2a4b9e0f5649ac32d00c5045c914b377d6b6e650d1eb7ba5378593cc3171cb0e",
+          "text": "BOUNDARY_MODAL activated=1 ownerReturned=1 neutralNext=0 inputKnown=1 inputTick=50312 modal=00000000000A0014 current=00000000000501E2 target=00000000000501E2"
+        },
+        {
+          "offset": 545,
+          "bytes": 183,
+          "sha256": "3585d32e8b4d5bde9aa30c20828fbaf229c57005387d9cbcc5c88ae57c1482f1",
+          "text": "BOUNDARY_RESULT status=pass original=0000000000050162 pid=9072 tid=3656 focus=0000000000050162 current=0000000000050162 currentPid=9072 currentTid=3656 currentFocus=0000000000050162"
+        }
+      ]
+    },
+    {
+      "group": "style",
+      "lease": 3,
+      "childExit": 0,
+      "expectedControlFailure": false,
+      "stdoutMember": "42470431914-1-style/lease-3-child-stdout.txt",
+      "stdoutSha256": "bf0d8ed55ced0b3db1ecde0cf01523f007c8e64ebc5fb609e69e2e9fc231131b",
+      "stdoutBytes": 728,
+      "zipHeaderOffset": 10238,
+      "witnesses": [
+        {
+          "offset": 71,
+          "bytes": 103,
+          "sha256": "3c7f74c317cb860adda94178445f16f97e11c7715c5fa03d67d7a96a28f77598",
+          "text": "BOUNDARY_START valid=1 hwnd=000000000007016C pid=9072 tid=4940 focus=000000000007016C inputTick=50312"
+        },
+        {
+          "offset": 386,
+          "bytes": 159,
+          "sha256": "b4c26d3c302833fde1ab4f6fc0b4ea474007ad335ac9fc2b0b5b8ed4ed7f073f",
+          "text": "BOUNDARY_MODAL activated=1 ownerReturned=1 neutralNext=0 inputKnown=1 inputTick=50312 modal=00000000000B0014 current=00000000000601E2 target=00000000000601E2"
+        },
+        {
+          "offset": 545,
+          "bytes": 183,
+          "sha256": "1b429e88ea996075f1f2a79e57d808d67fe1e199c1782906281a1df32138970d",
+          "text": "BOUNDARY_RESULT status=pass original=000000000007016C pid=9072 tid=4940 focus=000000000007016C current=000000000007016C currentPid=9072 currentTid=4940 currentFocus=000000000007016C"
+        }
+      ]
+    }
+  ]
+}

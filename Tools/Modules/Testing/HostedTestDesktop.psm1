@@ -301,7 +301,7 @@ namespace RedSalamander.Testing {
             if (HostedDesktopNative.InputDesktopName() != "Default" || GetForegroundWindow() != handle || GetFocus() != handle)
                 throw new InvalidOperationException("The owned hosted hotkey foreground or focus was lost after release.");
         }
-        internal static long BoundaryReturnStyle(long style) { return style & ~0x08000000L; }
+        internal static long BoundaryReturnStyle(long style) { return style & ~0x08000080L; }
         private void EnableBoundaryReturn(IntPtr handle) {
             uint process;
             if (canceled || !IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(handle) ||
@@ -1108,8 +1108,10 @@ function Invoke-RSWithHostedDefaultDesktop {
     .DESCRIPTION
         Hosted-only and called inside the runner's interactive mutex. Requires WinSta0 and
         Default for both the caller and input desktop, explicitly directs contained children
-        there and uses the existing native input warning. A thread-owned neutral window must
-        acquire real foreground and focus before the action starts. After contained child drain,
+        there and uses the existing native input warning. After verified acquisition the owned
+        neutral window becomes eligible for automatic return and may appear on the taskbar.
+        A thread-owned neutral window must acquire real foreground and focus before the action
+        starts. After contained child drain,
         restores the original foreground and native focus, joins the live window thread and
         closes its retained desktop handle. No input desktop is created or switched.
          A transient null foreground is tolerated only after an accepted return request,
