@@ -504,13 +504,15 @@ Describe 'Hosted boundary return policy' {
         catch [System.Management.Automation.MethodInvocationException] { $caught = $_.Exception.GetBaseException() }
         ($caught -is [ArgumentOutOfRangeException]) | Should Be $true
     }
-    It 'clears only the no-activation extended style' {
+    It 'clears the no-activation and tool-window styles while preserving other bits' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
         $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
         $style = $boundary.GetMethod('BoundaryReturnStyle', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
-        $style.Invoke($null, [object[]]@([long]0x08040080)) | Should Be ([long]0x00040080)
+        $style.Invoke($null, [object[]]@([long]0x08040080)) | Should Be ([long]0x00040000)
         $style.Invoke($null, [object[]]@([long]0x08000000)) | Should Be ([long]0)
-        $style.Invoke($null, [object[]]@([long]0x00040080)) | Should Be ([long]0x00040080)
+        $style.Invoke($null, [object[]]@([long]0x00040080)) | Should Be ([long]0x00040000)
+        $style.Invoke($null, [object[]]@([long]0x00000080)) | Should Be ([long]0)
+        $style.Invoke($null, [object[]]@([long]0x00400020)) | Should Be ([long]0x00400020)
     }
     It 'bounds each message wait by the original restoration deadline' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }

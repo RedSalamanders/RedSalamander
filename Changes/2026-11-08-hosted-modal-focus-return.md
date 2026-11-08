@@ -1,0 +1,1 @@
+- Fix hosted test focus restoration after modal viewers close by making the owned return window eligible for automatic activation.

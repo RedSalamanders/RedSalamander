@@ -652,8 +652,10 @@ Environment variables may select alternate test inputs such as profile names, bu
   boundary without using a foreign process. No input desktop is created or switched.
   The neutral window is created without activation; only after verifying its own foreground,
   focus, desktop and thread/process identity may its owning thread clear the no-activation
-  extended style, preserving all other style bits and verifying the result without a new
-  activation request. Restoration uses bounded message-aware waits that continue to check
+  and tool-window extended styles, preserving all other style bits and verifying the result
+  without a new activation request. This makes the owned boundary eligible for automatic
+  return after a modal viewer closes; it may appear on the hosted taskbar until the entry ends.
+  Restoration uses bounded message-aware waits that continue to check
   the original window identity and input desktop, preserving the existing deadlines. After one accepted
   original-foreground request, a transient null foreground or the owned boundary may be observed while
   waiting; any other foreground fails, and the original foreground and native focus must still be verified.
