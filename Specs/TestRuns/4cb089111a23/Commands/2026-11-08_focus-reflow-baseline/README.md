@@ -1,0 +1,3 @@
+Focused three-repeat File Operations conflict traversal; source raw evidence is retained under the listed run ID. Baseline and candidate have the same machine and test case, but the candidate adds controlled viewport resizing and manual scroll checks, so their render timing comparison is directional, not a strict paired performance claim. Both runs are focused and do not establish a Full verdict. The original metric stream is digest-bound in provenance.json; perf_metrics.jsonl retains every Render.TotalUs row in source order. Hosted Full and NAS qualification remain open.
+
+Same-machine diagnostic: 465 render frames, median 1,332 us, p95 3,143 us, maximum 7,602 us. All three focused repetitions passed; repository verdict NOT_EVALUATED.

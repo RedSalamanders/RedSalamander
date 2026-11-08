@@ -633,6 +633,7 @@ struct PopupLayoutDebugSnapshot
     bool completedGroupBadgeTooltipsInformative   = false;
     uint64_t hostedAccessibilityNotificationCount = 0u;
     int scrollPosition                            = 0;
+    bool pendingFocusReveal                       = false;
     D2D1_RECT_F listViewportRect{};
     bool hostedKeyboardFocusVisible = false;
     bool hostedFocusedHasFocus      = false;
@@ -1857,6 +1858,7 @@ private:
     bool _hostedAccessibleTextFlush   = false;
     bool _hostedAccessibleTextPending = false;
     // A focus restore after controls were retired must not scroll the list (popup-b#3).
+    std::optional<PopupHitTest> _pendingFocusReveal;
     bool _restoringHostedFocus                   = false;
     uint64_t _recycleEscalationFocusedTaskId     = 0u;
     uint64_t _recycleEscalationFocusedGeneration = 0u;

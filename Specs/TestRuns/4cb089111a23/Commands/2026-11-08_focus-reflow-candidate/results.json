@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-11-08T21:11:19.924Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261108T210908Z-69828-531f34dcac5548adaa6f6600cf1737bf\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 19839,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 6233,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 6099,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 6331,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 3
+}

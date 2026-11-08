@@ -287,6 +287,11 @@ and its child controls retire on the first frame, even while their height transi
 Consecutive focus requests before the next paint MUST translate retained bounds from their painted
 scroll origin to the pending native offset before deciding whether to scroll. The final focused
 control and its focus chrome must remain visible; an already valid pending offset is preserved.
+A focus request also gets one correction after the next hosted layout, using the exact task,
+action and prompt generation. Explicit wheel or scrollbar input cancels that pending correction;
+subsequent live layout changes preserve the user's position. The short-viewport witness changes
+viewport geometry between focus and paint and verifies the same full focus-chrome clearance. A separate
+scrollbar witness cancels a pending reveal and verifies the scroll position and focus after paint.
 The short-viewport keyboard witness follows the published action order: `More...` precedes the
 primary actions and Cancel is last. Starting at the exact task/prompt Cancel control, reverse Tab
 must reveal each preceding primary action and then More; forward Tab from More must reveal the first

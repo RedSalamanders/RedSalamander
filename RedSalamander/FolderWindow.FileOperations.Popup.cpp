@@ -12505,6 +12505,21 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                           hrEndDraw);
     }
     SyncHostedControls(hwnd, snapshot);
+    // Correct the focus transaction once after layout; later content changes
+    // and explicit scrolling must retain the user's position.
+    if (_pendingFocusReveal)
+    {
+        const PopupHitTest pending = _pendingFocusReveal.value();
+        _pendingFocusReveal.reset();
+        const auto focused = std::ranges::find(_hostedButtons, _controlsHost.GetFocusControl());
+        const size_t index = static_cast<size_t>(std::distance(_hostedButtons.begin(), focused));
+        if (index < _hostedButtonHits.size())
+        {
+            const auto& hit = _hostedButtonHits[index];
+            if (hit.kind == pending.kind && hit.taskId == pending.taskId && hit.data == pending.data && hit.promptGeneration == pending.promptGeneration)
+                EnsureHostedFocusVisible(hwnd, *focused);
+        }
+    }
 
     if (capturePerf)
     {
@@ -14091,6 +14106,14 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::TryAttachHost(HWND h
         // Reconciliation binds once after its control arrays are consistent.
         if (! _syncingHostedControls && _pathDetailId.empty())
             static_cast<void>(SyncHostedConflictKeyboardBindings());
+        _pendingFocusReveal.reset();
+        if (! _syncingHostedControls && ! _restoringHostedFocus && control)
+        {
+            const auto found   = std::ranges::find(_hostedButtons, control);
+            const size_t index = static_cast<size_t>(std::distance(_hostedButtons.begin(), found));
+            if (index < _hostedButtonHits.size() && _hostedButtonHits[index].taskId != 0u)
+                _pendingFocusReveal = _hostedButtonHits[index];
+        }
         EnsureHostedFocusVisible(hwnd, control);
     });
     _controlsHost.SetOnEscape([this, hwnd]
@@ -14516,6 +14539,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnExitSizeMove(HW
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnVScroll(HWND hwnd, UINT request) noexcept
 {
+    _pendingFocusReveal.reset();
     if (! _pathDetailId.empty())
         return 0;
     if (! hwnd)
@@ -15288,6 +15312,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     result.hostedPreviousFocusTargetId          = _debugPreviousFocusTargetId;
     result.hostedLastFocusTargetId              = _debugLastFocusTargetId;
     result.scrollPosition                       = _scrollPos;
+    result.pendingFocusReveal                   = _pendingFocusReveal.has_value();
     result.listViewportRect                     = _listViewportRect;
     if (const auto* focusedControl = _controlsHost.GetFocusControl())
     {
@@ -16277,6 +16302,7 @@ FileOperationsPopupInternal::PopupPointerDebugSnapshot FileOperationsPopupIntern
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnMouseWheel(HWND hwnd, int delta, POINT screenPoint) noexcept
 {
+    _pendingFocusReveal.reset();
     POINT point = screenPoint;
     ScreenToClient(hwnd, &point);
     if (! _pathDetailId.empty())

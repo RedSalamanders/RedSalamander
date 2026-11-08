@@ -15895,7 +15895,9 @@ struct FileOperationsPopupTestFixture final
     state.Require(primaryCount > 0u && primaryCount <= shortTask.conflict.primaryActions.size() && shortTask.conflict.overflowActionCount > 0u &&
                       shortTask.conflict.primaryActions[primaryCount - 1u] == static_cast<uint8_t>(FileOperations::ConflictAction::Cancel),
                   L"The short-viewport fixture must publish More before primary actions ending with Cancel.");
-    const auto revealByTab = [&](bool reverse, std::wstring_view fromId, std::wstring_view expectedId, std::wstring_view expectedName)
+    bool exerciseFocusReflow = true;
+    const auto revealByTab =
+        [&](bool reverse, std::wstring_view fromId, std::wstring_view expectedId, std::wstring_view expectedName, bool cancelReveal = false)
     {
         if (! state.failure.empty())
             return;
@@ -15966,6 +15968,48 @@ struct FileOperationsPopupTestFixture final
         SendMessageW(fixture.popup, WM_KEYDOWN, VK_TAB, 0);
         SendMessageW(fixture.popup, WM_KEYUP, VK_TAB, 0);
         releaseHostedShift();
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot requestedReveal{};
+        requestedReveal.taskId = fixture.taskId.value();
+        state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, requestedReveal) && requestedReveal.pendingFocusReveal &&
+                          requestedReveal.scrollPosition > beforeTab.scrollPosition && requestedReveal.hostedFocusedAutomationId == expectedId,
+                      L"Tab must schedule a reveal before the controlled layout change.");
+        if (cancelReveal)
+        {
+            SendMessageW(fixture.popup, WM_VSCROLL, SB_TOP, 0);
+            redraw();
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot cancelledReveal{};
+            cancelledReveal.taskId = fixture.taskId.value();
+            state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, cancelledReveal) && ! cancelledReveal.pendingFocusReveal &&
+                              cancelledReveal.scrollPosition == 0 && cancelledReveal.hostedFocusedAutomationId == expectedId,
+                          L"Explicit scrollbar input must cancel the pending reveal and preserve focus and scroll position after paint.");
+            return;
+        }
+        if (exerciseFocusReflow)
+        {
+            exerciseFocusReflow = false;
+            RECT beforeReflow{};
+            GetWindowRect(fixture.popup, &beforeReflow);
+            // Change the viewport after focus selected its target but before the
+            // next explicit paint, so the old reveal offset is insufficient.
+            SendMessageW(fixture.popup, WM_ENTERSIZEMOVE, 0, 0);
+            state.Require(SetWindowPos(fixture.popup,
+                                       nullptr,
+                                       0,
+                                       0,
+                                       beforeReflow.right - beforeReflow.left,
+                                       beforeReflow.bottom - beforeReflow.top - MulDiv(48, static_cast<int>(popupDpi), 96),
+                                       SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+                          L"The focus reflow witness must resize the viewport.");
+            SendMessageW(fixture.popup, WM_EXITSIZEMOVE, 0, 0);
+            RECT afterReflow{};
+            GetWindowRect(fixture.popup, &afterReflow);
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot beforeReflowPaint{};
+            beforeReflowPaint.taskId = fixture.taskId.value();
+            state.Require(beforeReflow.bottom - beforeReflow.top - (afterReflow.bottom - afterReflow.top) == MulDiv(48, static_cast<int>(popupDpi), 96) &&
+                              DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, beforeReflowPaint) && beforeReflowPaint.pendingFocusReveal &&
+                              beforeReflowPaint.scrollPosition == requestedReveal.scrollPosition,
+                          L"The controlled resize must precede the pending focus correction.");
+        }
         PumpPendingMessages();
         redraw();
         FileOperationsPopupInternal::PopupLayoutDebugSnapshot shortLayout{};
@@ -16095,6 +16139,15 @@ struct FileOperationsPopupTestFixture final
     }
     state.Require(SUCCEEDED(RedSalamander::TestSupport::SaveWindowScreenshot(fixture.popup, captures / L"short-body-focused-action__fr-FR.png")),
                   L"Capture the short viewport through the application harness.");
+    if (state.failure.empty() && primaryCount > 1u)
+    {
+        const auto first = static_cast<FileOperations::ConflictAction>(shortTask.conflict.primaryActions[0]);
+        revealByTab(true,
+                    actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(first)),
+                    actionId(HitKind::TaskConflictMore, static_cast<uint32_t>(shortTask.conflict.overflowActionCount)),
+                    LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE),
+                    true);
+    }
     SetWindowPos(fixture.popup,
                  nullptr,
                  savedRect.left,
