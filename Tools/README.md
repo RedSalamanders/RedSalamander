@@ -29,7 +29,7 @@ the marked test root. It observes the delayed Search transition for five seconds
 retirement. Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
 studies do not perform these actions. Native focus, input and capture assertions are unchanged.
 
-When direct foreground acquisition is refused, that same native ARM64 role may use one
+When direct foreground acquisition is refused, the selected hosted native x64 role or the opted-in native ARM64 role may use one
 registered Alt+F24 handoff to the owned neutral fixture window within 500 ms. The inline
 .NET host checks held input and current desktop/foreground/focus, accounts for partial
 key insertion and release, and retires its callback before owner-thread drain. This runner
