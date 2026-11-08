@@ -1064,6 +1064,7 @@ struct SelfTestState
     wil::com_ptr<IFileSystem> fsLocal;
     wil::com_ptr<IInformations> infoLocal;
     std::string localConfigOriginal;
+    std::string conflictConvergencePriorLocalConfig;
     bool localConfigDirty = false;
 
     wil::com_ptr<IFileSystem> fsDummy;
@@ -3144,6 +3145,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
 // changing provider configuration or scratch; a failed family must not poison the next family.
 [[nodiscard]] bool CancelOutstandingSelfTestOperations(FolderWindow::FileOperationState* fileOps) noexcept
 {
+    FolderWindowFileOperationsStateInternal::g_fileOpsConflictConvergenceItemPausePoint.Release();
     if (! fileOps || ! fileOps->HasActiveOperations())
     {
         return true;

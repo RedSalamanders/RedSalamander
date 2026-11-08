@@ -6791,6 +6791,21 @@ case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache:
 
     if (state.stepState == 0)
     {
+        const char* priorConfig = nullptr;
+        if (! state.infoLocal || FAILED(state.infoLocal->GetConfiguration(&priorConfig)) || ! priorConfig)
+        {
+            Fail(L"Apply-to-all: could not snapshot Local configuration.");
+            return true;
+        }
+        state.conflictConvergencePriorLocalConfig = priorConfig;
+        BeginSelfTestSharedTransferLimit(state, 4u);
+        if (! SetPluginConfiguration(
+                state.infoLocal.get(),
+                R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"reparsePointPolicy":"preserve"})json"))
+        {
+            Fail(L"Apply-to-all: could not configure four per-item workers.");
+            return true;
+        }
         if (! RecreateEmptyDirectory(srcDir) || ! RecreateEmptyDirectory(dstDir))
         {
             Fail(L"Failed to reset applyall-src/applyall-dst directories.");
@@ -6812,6 +6827,12 @@ case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache:
             sourceFiles.push_back(srcPath);
         }
 
+        auto& convergenceGate = FolderWindowFileOperationsStateInternal::g_fileOpsConflictConvergenceItemPausePoint;
+        if (! convergenceGate.ArmForSource((srcDir / L"b.bin").native()))
+        {
+            Fail(L"Apply-to-all: could not arm source-scoped convergence gate.");
+            return true;
+        }
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
         state.taskA                 = StartFileOperationAndGetId(state.fileOps,
                                                                  FILESYSTEM_COPY,
@@ -6834,7 +6855,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache:
         return false;
     }
 
-    if (state.stepState == 1)
+    if (state.stepState == 1 || state.stepState == 4)
     {
         Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         if (! task)
@@ -6864,8 +6885,32 @@ case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache:
             return true;
         }
 
+        if (state.stepState == 1)
+        {
+            auto& gate = FolderWindowFileOperationsStateInternal::g_fileOpsConflictConvergenceItemPausePoint;
+            if (gate.HasTimedOut())
+            {
+                Fail(L"Apply-to-all: source-scoped convergence gate timed out.");
+                return true;
+            }
+            if (! gate.HasEnteredForTask(state.taskA.value()))
+                return false;
+            if (task->_effectiveConcurrencyBudget.load(std::memory_order_acquire) < 2u)
+            {
+                Fail(L"Apply-to-all: fewer than two per-item workers were admitted.");
+                return true;
+            }
+            task->_dbgConflictWaitBeforeSleepReached.store(false, std::memory_order_release);
+            gate.Release();
+            AppendLog(L"Apply-to-all: held source entered; releasing it toward the active conflict checkpoint.");
+            state.stepState = 4;
+            return false;
+        }
+        if (! task->_dbgConflictWaitBeforeSleepReached.load(std::memory_order_acquire))
+            return false;
         if (state.markerTick == 0)
         {
+            AppendLog(L"Apply-to-all: non-owner conflict wait observed; starting prompt hold.");
             state.markerTick = nowTick;
             return false;
         }
@@ -6988,6 +7033,13 @@ case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache:
             ec.clear();
         }
 
+        if (! SetPluginConfiguration(state.infoLocal.get(), state.conflictConvergencePriorLocalConfig))
+        {
+            Fail(L"Apply-to-all: could not restore Local configuration.");
+            return true;
+        }
+        state.conflictConvergencePriorLocalConfig.clear();
+        RestoreSelfTestSharedTransferLimit(state);
         NextStep(state, SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility);
         return false;
     }

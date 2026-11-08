@@ -214,6 +214,7 @@ SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
+SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 
 namespace
 {
@@ -14364,10 +14365,11 @@ void FolderWindow::FileOperationState::Task::WaitWhilePaused(const std::atomic<b
             const bool ready = ! waitingForConflict || stillPaused || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested() ||
                                (externalStop != nullptr && externalStop->load(std::memory_order_acquire));
 #ifdef ENABLE_TESTS
-            if (! ready && _dbgConflictWaitBeforeSleepGate.load(std::memory_order_acquire))
+            if (! ready)
             {
                 _dbgConflictWaitBeforeSleepReached.store(true, std::memory_order_release);
-                _dbgConflictWaitBeforeSleepGate.wait(true, std::memory_order_acquire);
+                if (_dbgConflictWaitBeforeSleepGate.load(std::memory_order_acquire))
+                    _dbgConflictWaitBeforeSleepGate.wait(true, std::memory_order_acquire);
             }
 #endif
             return ready;
@@ -25421,6 +25423,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
                         for (;;)
                         {
+#ifdef ENABLE_TESTS
+                            auto& convergenceGate = FolderWindowFileOperationsStateInternal::g_fileOpsConflictConvergenceItemPausePoint;
+                            if (convergenceGate.enabled.load(std::memory_order_acquire))
+                                convergenceGate.PauseForSource(sourceText, task._taskId, 120'000ull, [&]() noexcept {
+                                    return _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
+                                });
+#endif
                             task.WaitWhilePaused();
                             if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
                             {

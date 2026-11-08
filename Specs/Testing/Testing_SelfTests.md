@@ -1,5 +1,14 @@
 # SelfTest Specification
 
+The File Operations apply-to-all convergence fixture holds one named per-item worker before its
+checkpoint until another worker publishes the conflict prompt, then witnesses the real non-owner
+wait before holding the prompt for 250 ms. It retains four conflicting files, one cached prompt,
+at least 100,000 microseconds of measured checkpoint convergence, and the scaled 120-second case
+deadline. The test snapshots Local configuration, selects four workers, and restores configuration;
+cleanup releases the cancellation-aware, 120-second worker gate before cancelling and draining tasks.
+The fixture also scopes the shared transfer limit to four and restores its prior value after the
+case, or after worker drain on failure, so a serial user preference cannot prevent the peer witness.
+
 The explicit hosted CommandsHandoff and FileOpsVolumes diagnostic scopes each select one fixed
 case and retain filtered NOT_EVALUATED repository coverage. The adapter verifies the selected
 case and every setup/cleanup result, quarantine state and source-bound build receipt before
