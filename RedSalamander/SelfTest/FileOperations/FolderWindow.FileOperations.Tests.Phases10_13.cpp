@@ -1570,7 +1570,15 @@ case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
                 return true;
             }
 
-            static_cast<void>(consentTask.SubmitConflictDecision(prompt.value().generation, scenario.decision, true));
+            // Each matrix row requires a fresh item-scoped decision. Apply-to-all
+            // would reuse the first matching decision rather than show later prompts.
+            if (! consentTask.SubmitConflictDecision(prompt.value().generation, scenario.decision, false))
+            {
+                consentTask.RequestCancel();
+                worker.join();
+                Fail(L"Deferred-consent matrix could not submit its item-scoped decision.");
+                return true;
+            }
             worker.join();
             if (FAILED(workerHr) || selectedAction != scenario.decision)
             {

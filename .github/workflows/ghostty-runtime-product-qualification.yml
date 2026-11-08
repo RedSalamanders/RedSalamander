@@ -179,21 +179,31 @@ jobs:
           RS_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($caseFilter in @(
-              'terminal_',
-              'cmd_pane_embedded_terminal_',
-              'cmd_pane_open_command_shell_prefers_windows_terminal')) {
-            .\Tools\Run-AllTests.ps1 `
-              -Suite Commands `
-              -ValidationMode Fresh `
-              -SkipBuild `
-              -CaseFilter $caseFilter `
-              -Configuration Debug `
-              -Platform ARM64 `
-              -AllowExternalTestRoot `
-              -BuildNumber ([int]$env:RS_BUILD_NUMBER)
-            if ($LASTEXITCODE -ne 0) {
-              throw "Native ARM64 Commands filter '$caseFilter' failed with exit code $LASTEXITCODE."
+          Import-Module ./Tools/Modules/Testing/HostedTestDesktop.psm1
+          Invoke-RSWithHostedTestDesktop -Action {
+            $priorDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+            try {
+              $desktopRequest = Get-RSHostedInputDesktopRequest
+              [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $desktopRequest, 'Process')
+              foreach ($caseFilter in @(
+                  'terminal_',
+                  'cmd_pane_embedded_terminal_',
+                  'cmd_pane_open_command_shell_prefers_windows_terminal')) {
+                .\Tools\Run-AllTests.ps1 `
+                  -Suite Commands `
+                  -ValidationMode Fresh `
+                  -SkipBuild `
+                  -CaseFilter $caseFilter `
+                  -Configuration Debug `
+                  -Platform ARM64 `
+                  -AllowExternalTestRoot `
+                  -BuildNumber ([int]$env:RS_BUILD_NUMBER)
+                if ($LASTEXITCODE -ne 0) {
+                  throw "Native ARM64 Commands filter '$caseFilter' failed with exit code $LASTEXITCODE."
+                }
+              }
+            } finally {
+              [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorDesktopRequest, 'Process')
             }
           }
 

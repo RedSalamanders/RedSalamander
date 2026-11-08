@@ -1,10 +1,12 @@
 #include "FileSystemPathIdentity.h"
+#include "PathUtils.h"
 #include "YyjsonHelpers.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
 
+#include <algorithm>
 #include <limits>
 #include <string>
 
@@ -465,6 +467,40 @@ int CompareFileSystemPathsByComponents(const FileSystemPathIdentity& identity, c
 
 namespace
 {
+// Recognize Win32 filesystem root spellings using Local's existing lexical
+// envelope. The root separator must be accepted by the admitted identity and
+// distinguishes the directory root from the volume device; this is not a grant.
+[[nodiscard]] size_t WindowsFilesystemRootLength(const FileSystemPathIdentity& identity, const std::wstring_view path) noexcept
+{
+    if (! IsAcceptedSeparator(identity, L'\\'))
+    {
+        return 0u;
+    }
+    const auto pathClass = Common::Paths::ClassifyWindowsPath(path);
+    if (pathClass == Common::Paths::WindowsPathClass::DriveAbsolute && IsAcceptedSeparator(identity, path[2]))
+    {
+        return 3u;
+    }
+    if (pathClass == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute && IsAcceptedSeparator(identity, path[0]) &&
+        IsAcceptedSeparator(identity, path[1]) && IsAcceptedSeparator(identity, path[3]) && IsAcceptedSeparator(identity, path[6]))
+    {
+        return 7u;
+    }
+
+    constexpr std::wstring_view prefix = LR"(\\?\Volume{)";
+    if (pathClass != Common::Paths::WindowsPathClass::ExtendedOther || ! Common::Paths::StartsWithAsciiNoCase(path, prefix) ||
+        ! Common::Paths::IsSupportedLocalFileOperationPath(path))
+    {
+        return 0u;
+    }
+    const size_t closeOffset = path.find(L'}', prefix.size());
+    if (closeOffset == std::wstring_view::npos || closeOffset + 1u >= path.size() || ! IsAcceptedSeparator(identity, path[closeOffset + 1u]))
+    {
+        return 0u;
+    }
+    return closeOffset + 2u;
+}
+
 // Length of the UNC share root (`\\server\share` or `\\?\UNC\server\share`) at the start of
 // `path`, or 0 when the path is not a complete UNC path. The share root is the topmost container of
 // its route: nothing above it is an object a provider can bind or a parent a rename can target.
@@ -512,9 +548,14 @@ bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity, std::wst
         return false;
     }
 
-    while (path.size() > 1u && IsAcceptedSeparator(identity, path.back()))
+    const size_t filesystemRootLength = WindowsFilesystemRootLength(identity, path);
+    while (path.size() > (std::max)(size_t{1u}, filesystemRootLength) && IsAcceptedSeparator(identity, path.back()))
     {
         path.remove_suffix(1u);
+    }
+    if (filesystemRootLength != 0u && path.size() == filesystemRootLength)
+    {
+        return false;
     }
 
     const size_t separator = path.find_last_of(identity.acceptedSeparators);
@@ -526,6 +567,11 @@ bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity, std::wst
     {
         // The share root itself has no parent.
         return false;
+    }
+    if (filesystemRootLength != 0u && separator + 1u == filesystemRootLength)
+    {
+        parentOut.assign(path.substr(0u, filesystemRootLength));
+        return true;
     }
     if (separator == 0u)
     {

@@ -33,6 +33,11 @@ Each mapping pins its old/new path, mode, blob, and canonical Git-blob SHA-256
 to the source commit; continuation entries must also match the immutable archive
 baseline. The validator requires every old path to be absent and every mapped file
 to exist with exact identity, and rejects duplicate, changed, or unmapped siblings.
+When the original relocation baseline commit is absent in a public checkout, the
+implicit baseline may use the published parentless snapshot only if that snapshot
+exists and is an ancestor of HEAD. Manifest provenance remains the original commit;
+each baseline path, mode and blob must still match the snapshot. An explicitly
+selected baseline never falls back.
 Directory aliases shorten only physical path components; archived bytes, embedded
 run IDs, manifests, and provenance remain unchanged. No live resolver treats an
 alias as a historical run ID, and no ordinary archive cap or semantic rule is

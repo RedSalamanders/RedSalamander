@@ -1,0 +1,1 @@
+- Correct the ViewerSpace keyboard fixture to verify that Escape clears the filter, hides analysis, and then closes the viewer from the focused map.

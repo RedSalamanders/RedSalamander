@@ -1063,6 +1063,9 @@ one-listing folder has closed discovery by then).
 The fixed-volume control copies four 4-MiB files independently on marker-authorized C and D roots at
 16 MiB/s, then repeats both concurrently. It emits
 `FileOps.SelfTest.R4A19.{ProviderControl,ProviderCancel,IndependentVolumes,IndependentVolumeCIsolatedUs,IndependentVolumeDIsolatedUs}`.
+The fixture captures one bounded scalar admission/interlock witness while both tasks are present and
+reports it only on failure or timeout. It retains no paths or bound authority across ticks; its measured
+capture cost is included in the unchanged concurrent interval and reported with the failure witness.
 The fake-MTP fixture, whose route the host bridge traverses, lists its one source folder at once, so
 since I35 S2 its scope closes when that folder is listed: it requires closure before the last byte
 (open-discovery bytes below the total), zero growth after closure, zero discovery starvation, and
@@ -1141,6 +1144,16 @@ These are inclusive elapsed intervals with clock/counter overhead, not isolated 
 The interleaved workload and total timer remain unchanged, including diagnostic clock overhead;
 these phase metrics must never replace the total-time gate or be subtracted from it.
 Any before/after optimization comparison must retain this same instrumented fixture on both sides.
+
+The explicit hosted `R0ePaired` diagnostic uses
+[`Tools/Invoke-R0ePairedValidation.ps1`](../../Tools/Invoke-R0ePairedValidation.ps1)
+to retain both full-solution Embedded Release builds and five fresh canonical processes per
+side on one native machine. It verifies the exact reviewed case projections, unchanged scale-1
+workload, eight raw metrics, closed archives, source/receipt identities and clean quarantine.
+It does not widen a timing gate or qualify Full coverage. A baseline that fails only the
+two-second assertion remains a failed native result and makes the hosted diagnostic fail;
+the candidate measurements and comparison remain useful diagnostic evidence. Missing evidence,
+other failed assertions and candidate timing failures cannot be classified as timing-only RED.
 
 R0e-OR1 fixed-volume Local reader cancellation evidence uses the test-enabled Release Commands case
 `cmd_pane_fileops_local_blocked_reader_cancel_is_bounded`. One real Local `Win32FileReader` issues an
@@ -1401,6 +1414,27 @@ baseline is 8,704 probes and 2,689 microseconds in
 `Specs/TestRuns/4cb089111a23/FileOps/2026-08-29_024402/`. The indexed path must preserve the exact
 Cartesian predicate as a fallback for conservative, legacy, or unkeyable scopes; an optimization may
 not convert incomplete identity into path authority.
+
+Local route-root validation retains the original 4,096-decision R0e workload and fixed
+Release ceiling. Existing 19-slot admission counters keep their original meaning:
+`RealVolumePathCalls` counts actual legacy API calls. Compatible action 5 reads the
+separate schema-2 root-proof counters after End; it does not change the original count
+schema or cache-control actions. F7 records schema, Local/UNC query counts and direct
+handle attempts/acceptances under `FileOps.LocalRootProbe.*` for every ingress, joined
+by the original sample tag and task ID. Verify that Local plus UNC equals route builds,
+accepted handles do not exceed attempts or Local queries, and Local queries equal
+accepted handles plus explicit fallbacks. Count legacy-resolver entries separately,
+including any storage probes, and require one or two actual legacy API calls per entry.
+Preserve independent native controls
+for ordinary files/directories, missing paths, leaf/ancestor junctions, noncanonical and
+extended spellings, rename and exact target inventory. An owned directory RH-oplock
+control must exercise the actual provider's metadata-open helper while a holder denies
+read sharing: the open must complete before releasing the holder and must not signal
+an oplock break. Cancel and complete the owned overlapped request, close the holder,
+and join its worker before releasing storage or the provider module. Unsupported
+filesystem availability is explicit and is not no-break qualification; retain a
+positive native NTFS execution. API-only C# experiments are
+descriptive cost attribution, not native R0e or Full qualification.
 
 `FileOps.Interlock.PrepareLookupChecks` and `FileOps.Interlock.PrepareIndexStorage` additionally
 record temporary preparation-index behavior once per task. The first row's numeric values are
@@ -2377,7 +2411,11 @@ These retain the existing completion-wait quantization and do not establish fina
 16-MiB/s throttle, 8-MiB bridge buffer and Native slow-commit settings. Additional count-ink captures
 and bounded later-child sampling attempts are disclosed capture workload. Open traversal uses a
 separate sequential open-discovery route (32 nonempty sibling folders, 32 files/33 folders/64 MiB
-at 2 MiB/s, beyond the four-directory listing lookahead). Compare matched per-route
+at 2 MiB/s, beyond the four-directory listing lookahead). A source- and task-qualified test checkpoint
+holds that sequential traversal after a real positive open listing report through the ink capture;
+the case witnesses the checkpoint before and after capture, releases it on every exit, and observes
+cancellation and a bounded timeout. This hold is disclosed capture workload, not a throughput result.
+Compare matched per-route
 operation/progress callback and paint samples. These new observation routes bound their harness
 message batch to eight rather than the default
 1,024, while retaining 100-ms sampling, the 650-ms finalization witness and 1,500-ms native delay.

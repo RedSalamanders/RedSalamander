@@ -16183,10 +16183,91 @@ struct ViewerSpaceBlockingDirectoryControl final
                        SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW) != FALSE,
           L"ViewerSpace owned test window expands so the analysis panel is visible",
           success);
-    Check(RedSalamander::TestSupport::DirectedSelfTestInputWarning::TryActivateOwnedWindow(viewerWindow),
-          L"ViewerSpace keyboard test activates only its owned window under the directed-input warning",
-          success);
-    if (GetForegroundWindow() != viewerWindow)
+    using DirectedInputWarning = RedSalamander::TestSupport::DirectedSelfTestInputWarning;
+    DirectedInputWarning::ForegroundAdmissionDiagnostics admission{};
+    const bool activated = DirectedInputWarning::TryActivateOwnedWindow(viewerWindow, false, &admission);
+    Check(activated, L"ViewerSpace keyboard test activates only its owned window under the directed-input warning", success);
+    const bool ownsForeground = GetForegroundWindow() == viewerWindow;
+    if (! activated || ! ownsForeground)
+    {
+        DWORD foregroundPid          = 0u;
+        const HWND foreground        = GetForegroundWindow();
+        const DWORD foregroundThread = GetWindowThreadProcessId(foreground, &foregroundPid);
+        DWORD selfSession = 0u, foregroundSession = 0u;
+        const bool selfSessionKnown       = ProcessIdToSessionId(GetCurrentProcessId(), &selfSession) != FALSE;
+        const bool foregroundSessionKnown = foregroundPid != 0u && ProcessIdToSessionId(foregroundPid, &foregroundSession) != FALSE;
+        std::wcout << std::format(L"[INFO] ViewerSpace foreground admission: foreground=0x{:X}, pid={}, target=0x{:X}, "
+                                  L"stage={}, error={}, heldKey={}, sent={}, requestAccepted={}, guardEvaluated={}, guardPassed={}, requestAttempted={}, "
+                                  L"targetValid={}, targetThread={}, targetPid={}, warningValid={}, warningVisible={}, warningThread={}, warningPid={}, "
+                                  L"currentThread={}, selfPid={}, foregroundThread={}, selfSessionKnown={}, selfSession={}, foregroundSessionKnown={}, "
+                                  L"foregroundSession={}, currentDesktopAvailable={}, foregroundDesktopAvailable={}.\n",
+                                  reinterpret_cast<uintptr_t>(foreground),
+                                  foregroundPid,
+                                  reinterpret_cast<uintptr_t>(viewerWindow),
+                                  admission.stage,
+                                  admission.win32Error,
+                                  admission.heldKey,
+                                  admission.sentInputCount,
+                                  admission.foregroundRequestAccepted,
+                                  admission.activationGuardEvaluated,
+                                  admission.activationGuardPassed,
+                                  admission.foregroundRequestAttempted,
+                                  IsWindow(viewerWindow) != FALSE,
+                                  admission.activationTargetThread,
+                                  admission.activationTargetProcess,
+                                  admission.activationWarningValid,
+                                  admission.activationWarningVisible,
+                                  admission.activationWarningThread,
+                                  admission.activationWarningProcess,
+                                  GetCurrentThreadId(),
+                                  GetCurrentProcessId(),
+                                  foregroundThread,
+                                  selfSessionKnown,
+                                  selfSession,
+                                  foregroundSessionKnown,
+                                  foregroundSession,
+                                  GetThreadDesktop(GetCurrentThreadId()) != nullptr,
+                                  foregroundThread != 0u && GetThreadDesktop(foregroundThread) != nullptr);
+        const auto logAttempt = [](std::wstring_view label, const DirectedInputWarning::ForegroundAttemptEvidence& attempt) noexcept
+        {
+            std::wcout << std::format(L"[INFO] ViewerSpace foreground {} attempt: observed={} blockerBeforeRequest={} requestAccepted={} "
+                                      L"before=0x{:X}/{} after=0x{:X}/{} lastInputKnown={} lastInputTick={} requestTick={}.\n",
+                                      label,
+                                      attempt.observed,
+                                      attempt.blockerActiveBeforeRequest,
+                                      attempt.requestAccepted,
+                                      reinterpret_cast<uintptr_t>(attempt.foregroundBefore),
+                                      attempt.foregroundBeforePid,
+                                      reinterpret_cast<uintptr_t>(attempt.foregroundAfter),
+                                      attempt.foregroundAfterPid,
+                                      attempt.lastInputKnown,
+                                      attempt.lastInputTick,
+                                      attempt.requestTick);
+            const auto logThread = [&](std::wstring_view role, const DirectedInputWarning::ForegroundThreadEvidence& evidence) noexcept
+            {
+                std::wcout << std::format(L"[INFO] ViewerSpace foreground {} {} thread: threadId={} guiKnown={} guiError={} flags={} "
+                                          L"active=0x{:X} focus=0x{:X} menu=0x{:X} moveSize=0x{:X} desktopKnown={} desktopError={}.\n",
+                                          label,
+                                          role,
+                                          evidence.threadId,
+                                          evidence.guiKnown,
+                                          evidence.guiError,
+                                          evidence.gui.flags,
+                                          reinterpret_cast<uintptr_t>(evidence.gui.hwndActive),
+                                          reinterpret_cast<uintptr_t>(evidence.gui.hwndFocus),
+                                          reinterpret_cast<uintptr_t>(evidence.gui.hwndMenuOwner),
+                                          reinterpret_cast<uintptr_t>(evidence.gui.hwndMoveSize),
+                                          evidence.desktopKnown,
+                                          evidence.desktopError);
+            };
+            logThread(L"target", attempt.targetThread);
+            logThread(L"foreground", attempt.foregroundThread);
+        };
+        logAttempt(L"direct", admission.directAttempt);
+        logAttempt(L"hotkey", admission.hotkeyAttempt);
+        logAttempt(L"post-release", admission.postReleaseAttempt);
+    }
+    if (! ownsForeground)
     {
         static_cast<void>(viewer->Close());
         return false;
@@ -16430,6 +16511,10 @@ struct ViewerSpaceBlockingDirectoryControl final
             const POINT center{(bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2};
             const HWND logicalTarget  = WindowFromPoint(center);
             const HWND physicalTarget = WindowFromPhysicalPoint(center);
+            DWORD logicalPid          = 0u;
+            DWORD physicalPid         = 0u;
+            const DWORD logicalTid    = GetWindowThreadProcessId(logicalTarget, &logicalPid);
+            const DWORD physicalTid   = GetWindowThreadProcessId(physicalTarget, &physicalPid);
             const auto state          = readSnapshot();
             RECT analysisBounds{};
             static_cast<void>(GetWindowRect(state.analysisHwnd, &analysisBounds));
@@ -16437,26 +16522,34 @@ struct ViewerSpaceBlockingDirectoryControl final
             std::array<wchar_t, 128u> physicalClass{};
             static_cast<void>(GetClassNameW(logicalTarget, logicalClass.data(), static_cast<int>(logicalClass.size())));
             static_cast<void>(GetClassNameW(physicalTarget, physicalClass.data(), static_cast<int>(physicalClass.size())));
-            std::wcout << std::format(L"[INFO] Splitter pointer: dpi={} awareness={} logicalCursor={},{},{} physicalCursor={},{},{} "
-                                      L"logicalTarget=0x{:X} '{}' physicalTarget=0x{:X} '{}' analysis=0x{:X} rect={},{},{},{} buttonDown={}\n",
-                                      GetDpiForWindow(viewerWindow),
-                                      static_cast<int>(GetAwarenessFromDpiAwarenessContext(GetThreadDpiAwarenessContext())),
-                                      logicalAvailable != FALSE,
-                                      logicalCursor.x,
-                                      logicalCursor.y,
-                                      physicalAvailable != FALSE,
-                                      physicalCursor.x,
-                                      physicalCursor.y,
-                                      reinterpret_cast<uintptr_t>(logicalTarget),
-                                      logicalClass.data(),
-                                      reinterpret_cast<uintptr_t>(physicalTarget),
-                                      physicalClass.data(),
-                                      reinterpret_cast<uintptr_t>(state.analysisHwnd),
-                                      analysisBounds.left,
-                                      analysisBounds.top,
-                                      analysisBounds.right,
-                                      analysisBounds.bottom,
-                                      (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0);
+            std::wcout << std::format(
+                L"[INFO] Splitter pointer: dpi={} awareness={} logicalCursor={},{},{} physicalCursor={},{},{} "
+                L"logicalTarget=0x{:X} '{}' pid={} tid={} owned={} physicalTarget=0x{:X} '{}' pid={} tid={} owned={} "
+                L"analysis=0x{:X} rect={},{},{},{} buttonDown={}\n",
+                GetDpiForWindow(viewerWindow),
+                static_cast<int>(GetAwarenessFromDpiAwarenessContext(GetThreadDpiAwarenessContext())),
+                logicalAvailable != FALSE,
+                logicalCursor.x,
+                logicalCursor.y,
+                physicalAvailable != FALSE,
+                physicalCursor.x,
+                physicalCursor.y,
+                reinterpret_cast<uintptr_t>(logicalTarget),
+                logicalClass.data(),
+                logicalPid,
+                logicalTid,
+                logicalPid == GetCurrentProcessId() && (logicalTarget == state.analysisHwnd || IsChild(state.analysisHwnd, logicalTarget) != FALSE),
+                reinterpret_cast<uintptr_t>(physicalTarget),
+                physicalClass.data(),
+                physicalPid,
+                physicalTid,
+                physicalPid == GetCurrentProcessId() && (physicalTarget == state.analysisHwnd || IsChild(state.analysisHwnd, physicalTarget) != FALSE),
+                reinterpret_cast<uintptr_t>(state.analysisHwnd),
+                analysisBounds.left,
+                analysisBounds.top,
+                analysisBounds.right,
+                analysisBounds.bottom,
+                (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0);
             return false;
         };
         if (! findAutomationId(id, element) ||
@@ -16876,7 +16969,29 @@ struct ViewerSpaceBlockingDirectoryControl final
             2000ms);
         Check(filterCleared && IsWindow(viewerWindow) != FALSE, L"ViewerSpace Escape clears a focused nonempty filter without closing its window", success);
         Check(SUCCEEDED(filterElement->SetFocus()), L"ViewerSpace empty filter remains a focusable command surface", success);
+        const auto beforePanelEscape = readSnapshot();
+        Check(beforePanelEscape.analysisHost.visible && beforePanelEscape.displayGeneration != 0u,
+              L"ViewerSpace analysis is visible on a published generation before the second Escape",
+              success);
         Check(sendKeyboard(VK_ESCAPE), L"ViewerSpace sends a second real Escape from the focused empty filter", success);
+        const bool panelHidden = PumpUntil(
+            [&]() noexcept
+        {
+            const auto snapshot = readSnapshot();
+            return beforePanelEscape.analysisHost.visible && beforePanelEscape.displayGeneration != 0u && IsWindow(viewerWindow) != FALSE &&
+                   ! snapshot.analysisHost.visible && snapshot.displayGeneration == beforePanelEscape.displayGeneration;
+        },
+            2000ms);
+        Check(panelHidden, L"ViewerSpace second Escape hides analysis without closing or rescanning the viewer", success);
+        if (panelHidden)
+        {
+            if (GetForegroundWindow() == viewerWindow)
+                static_cast<void>(SetFocus(viewerWindow));
+            const bool mapFocused = GetForegroundWindow() == viewerWindow && GetFocus() == viewerWindow;
+            Check(mapFocused, L"ViewerSpace owned map regains foreground keyboard focus after analysis hides", success);
+            if (mapFocused)
+                Check(sendKeyboard(VK_ESCAPE), L"ViewerSpace sends a third real Escape from the owned map", success);
+        }
     }
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerSpace Escape closes the window cleanly", success);
     closeViewerAndDrainProvider();

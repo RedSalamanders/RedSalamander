@@ -1,0 +1,1 @@
+- Record focused File Operations popup geometry and accessibility witnesses when conflict traversal or task disclosure assertions fail.

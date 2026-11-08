@@ -54,6 +54,13 @@ nonempty values. Parameter binding must preserve that distinction before convert
 non-null values to strings. None of these child overrides changes the caller's
 environment. Constructor tests and an actual contained child cover all three states.
 
+The hosted interactive-entry fixture may give `ContainedProcess` a synchronous, thread-bound
+owned-desktop scope. It accepts only `WinSta0\RedSalamander.Test.<32 lowercase hexadecimal digits>`
+and sets `STARTUPINFO.lpDesktop` for contained children; it does not switch the input desktop.
+Scopes retire in reverse order on their creating thread, including failure paths. The canonical
+entry lease and hosted desktop fixture own desktop creation, child-job drain and restoration;
+ordinary build, packaging and local launches retain their original desktop behavior.
+
 ## Pinned DxUi consumption
 
 `Dependencies/DxUi.lock.json` records the API revision the product has adopted (4) and selects the single `DxUi.lib`
@@ -484,6 +491,11 @@ the writer can delete bytes, and permits the writer to lock, remove, and rebuild
 `.build/<platform>/<configuration>`. Re-attestation republishes a verified receipt for
 that same profile before any artifact reader is admitted. Release and ARM64 validation
 must never mutate x64 Debug as a hidden side effect.
+The nested deployment build uses the same bounded MSBuild fan-out as the Full suite and
+a finite 60-minute compiler-operation guard. Real output removal, restaging assertions,
+and receipt checks remain in force; the guard does not change product performance budgets.
+The [hosted calibration record](../TestRuns/Hosted/Validation/2026-11-02_164125/README.md)
+retains the completed initial build timings and interrupted targeted-build outcomes.
 
 Later Startrail affected/resume phases do not change build authority until their own
 normative activation gates land. A plan checkbox alone does not activate those modes.

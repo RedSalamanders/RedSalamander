@@ -4,6 +4,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1')
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunSummary.psm1')
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1')
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1')
 $sandboxModule = Get-Module TestSandbox
 $testRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
 
@@ -192,6 +193,73 @@ Describe 'Verified same-volume run evidence archival' {
             $other = New-RSTestRunArchiveFixture -TestRoot $testRoot
             (Save-RSTestSandboxRunEvidence -TestRoot $other.Root -RunId $other.Id).Status | Should Be 'Archived'
         } finally { $lease.Dispose() }
+    }
+}
+
+Describe 'Hosted diagnostic archive record leaves' {
+    BeforeEach { $script:fixture = New-RSTestRunArchiveFixture -TestRoot $testRoot }
+    AfterEach {
+        if ([IO.Directory]::Exists($fixture.Source)) {
+            Remove-RSTestSandboxExactRunDirectory -TestRoot $fixture.Root -RunId $fixture.Id
+        }
+    }
+    foreach ($recordName in @('intent.json', 'complete.json')) {
+        It "rejects a reparse-point $recordName leaf" {
+            $nativeDir = Join-Path $fixture.Source 'artifacts/selftest/last_run/fileops'
+            [void][IO.Directory]::CreateDirectory($nativeDir)
+            [IO.File]::WriteAllText((Join-Path $nativeDir 'results.json'), '{}')
+            [IO.File]::WriteAllText((Join-Path $fixture.Source 'artifacts/selftest/last_run/run-all-tests-results.json'), '{}')
+            [void](Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id)
+            $leaf = Join-Path $fixture.Records $recordName
+            $saved = [IO.File]::ReadAllBytes($leaf)
+            $target = Join-Path $fixture.Destination 'unique.txt'
+            try {
+                Remove-Item -LiteralPath $leaf
+                New-RSTestSandboxLink -ItemType SymbolicLink -Path $leaf -Target $target | Out-Null
+                { Read-RSHostedDiagnosticEvidence -TestRoot $fixture.Root -RunId $fixture.Id -Selection (Get-RSHostedDiagnosticSelection FileOpsVolumes) } | Should Throw 'reparse-point component'
+            } finally {
+                if (Test-Path -LiteralPath $leaf) { Remove-Item -LiteralPath $leaf }
+                [IO.File]::WriteAllBytes($leaf, $saved)
+            }
+        }
+    }
+    It 'rejects mismatched source and native inventory length in otherwise coherent records' {
+        $nativeDir = Join-Path $fixture.Source 'artifacts/selftest/last_run/fileops'
+        [void][IO.Directory]::CreateDirectory($nativeDir)
+        [IO.File]::WriteAllText((Join-Path $nativeDir 'results.json'), '{}')
+        [IO.File]::WriteAllText((Join-Path $fixture.Source 'artifacts/selftest/last_run/run-all-tests-results.json'), '{}')
+        [void](Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id)
+        $intentPath = Join-Path $fixture.Records 'intent.json'
+        $completePath = Join-Path $fixture.Records 'complete.json'
+        $intentBytes = [IO.File]::ReadAllBytes($intentPath)
+        $completeBytes = [IO.File]::ReadAllBytes($completePath)
+        $selection = Get-RSHostedDiagnosticSelection FileOpsVolumes
+        try {
+            [void](Read-RSHostedDiagnosticEvidence -TestRoot $fixture.Root -RunId $fixture.Id -Selection $selection)
+            $intent = Get-Content -LiteralPath $intentPath -Raw | ConvertFrom-Json -AsHashtable
+            $complete = Get-Content -LiteralPath $completePath -Raw | ConvertFrom-Json -AsHashtable
+            $intent.source = Join-Path $fixture.Root 'runs/other'
+            $intent | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $intentPath -Encoding utf8
+            $complete.intent_sha256 = (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash
+            $complete | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $completePath -Encoding utf8
+            { Read-RSHostedDiagnosticEvidence -TestRoot $fixture.Root -RunId $fixture.Id -Selection $selection } | Should Throw 'archive proof is invalid'
+            $intent.source = $fixture.Source
+            $complete.source = Join-Path $fixture.Root 'runs/other'
+            $intent | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $intentPath -Encoding utf8
+            $complete.intent_sha256 = (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash
+            $complete | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $completePath -Encoding utf8
+            { Read-RSHostedDiagnosticEvidence -TestRoot $fixture.Root -RunId $fixture.Id -Selection $selection } | Should Throw 'archive proof is invalid'
+            $complete.source = $fixture.Source
+            $nativeRow = @($intent.inventory | Where-Object { $_.path -ieq 'artifacts\selftest\last_run\fileops\results.json' })[0]
+            $nativeRow.length = [int64]$nativeRow.length + 1
+            $intent | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $intentPath -Encoding utf8
+            $complete.intent_sha256 = (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash
+            $complete | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $completePath -Encoding utf8
+            { Read-RSHostedDiagnosticEvidence -TestRoot $fixture.Root -RunId $fixture.Id -Selection $selection } | Should Throw 'does not match the archive'
+        } finally {
+            [IO.File]::WriteAllBytes($intentPath, $intentBytes)
+            [IO.File]::WriteAllBytes($completePath, $completeBytes)
+        }
     }
 }
 

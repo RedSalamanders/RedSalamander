@@ -287,12 +287,22 @@ and its child controls retire on the first frame, even while their height transi
 Consecutive focus requests before the next paint MUST translate retained bounds from their painted
 scroll origin to the pending native offset before deciding whether to scroll. The final focused
 control and its focus chrome must remain visible; an already valid pending offset is preserved.
+A focus request also gets one correction after the next hosted layout, using the exact task,
+action and prompt generation. Explicit wheel or scrollbar input cancels that pending correction;
+subsequent live layout changes preserve the user's position. The short-viewport witness changes
+viewport geometry between focus and paint and verifies the same full focus-chrome clearance. A separate
+scrollbar witness cancels a pending reveal and verifies the scroll position and focus after paint.
 The short-viewport keyboard witness follows the published action order: `More...` precedes the
 primary actions and Cancel is last. Starting at the exact task/prompt Cancel control, reverse Tab
 must reveal each preceding primary action and then More; forward Tab from More must reveal the first
 primary action. Each step first restores the top scroll position and verifies the previous focus
 identity, then requires positive native scrolling and visible UIA bounds, including focus chrome,
 above the footer. Traversal never submits an action or changes foreground ownership.
+Routed modifier tests deliver owned Shift key messages to the retained host as well as setting
+the thread keyboard table used by native shortcut checks. The host caches modifiers from its
+message stream; changing the table alone does not establish reverse traversal. The debug layout
+snapshot exposes that modifier mask. Each step verifies the mask before Tab, one native Tab
+delivery, and cleared routed Shift afterward, including scoped cleanup on failure.
 First-frame collapse tests MUST inspect the actual raw provider tree, including offscreen children,
 after witnessing each case-owned task before collapse. Missing roots, traversal failures and logical
 visibility flags alone cannot establish that providers retired.

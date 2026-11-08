@@ -191,6 +191,38 @@ namespace RedSalamander.Tooling
 
     public sealed class ContainedProcess : IDisposable
     {
+        // A synchronous hosted interactive entry explicitly selects the rendered
+        // Default desktop for contained children. The scope never switches desktops.
+        [ThreadStatic] private static DesktopProcessScope entryDesktopScope;
+        private sealed class DesktopProcessScope : IDisposable
+        {
+            private readonly int thread = Thread.CurrentThread.ManagedThreadId;
+            private readonly DesktopProcessScope previous;
+            public readonly string Desktop;
+            private bool disposed;
+            public DesktopProcessScope(string desktop)
+            {
+                if (desktop != @"WinSta0\Default" ||
+                    Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
+                    Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT") != "github-hosted" ||
+                    Environment.GetEnvironmentVariable("GITHUB_REPOSITORY") != "RedSalamanders/RedSalamander")
+                    throw new ArgumentException("Only this project's hosted rendered Default desktop may be selected.", "desktop");
+                previous = entryDesktopScope;
+                Desktop = desktop;
+                entryDesktopScope = this;
+            }
+            public void Dispose()
+            {
+                if (Thread.CurrentThread.ManagedThreadId != thread)
+                    throw new InvalidOperationException("The contained-process desktop scope must retire on its creating thread.");
+                if (disposed) return;
+                if (!Object.ReferenceEquals(entryDesktopScope, this))
+                    throw new InvalidOperationException("Contained-process desktop scopes must retire in reverse order.");
+                entryDesktopScope = previous;
+                disposed = true;
+            }
+        }
+        public static IDisposable UseHostedDefaultDesktop() { return new DesktopProcessScope(@"WinSta0\Default"); }
         private const uint CreateNoWindow = 0x08000000;
         private const uint CreateUnicodeEnvironment = 0x00000400;
         private const uint ExtendedStartupInfoPresent = 0x00080000;
@@ -524,6 +556,7 @@ namespace RedSalamander.Tooling
 
                 StartupInfoEx startupInfo = new StartupInfoEx();
                 startupInfo.StartupInfo.Size = Marshal.SizeOf(typeof(StartupInfoEx));
+                startupInfo.StartupInfo.Desktop = entryDesktopScope == null ? null : entryDesktopScope.Desktop;
                 startupInfo.AttributeList = attributeList;
                 if (useStandardHandles)
                 {

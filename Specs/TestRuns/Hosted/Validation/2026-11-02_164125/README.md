@@ -1,0 +1,9 @@
+# Compiler-process guard calibration
+
+The old PR 201 native Full run 41466676368 measured head `9ff0197d03713aba75ee65b6e4cc996de0233382`, and PR 200 run 41466654761 measured head `97306b2033bb8d7e01e4eb568e174e01a7c62d37`. Both architecture jobs failed in each run. PR 201 initial Release solution builds took 49:16 (x64) and 41:49 (ARM64); PR 200 took 49:11 and 40:10. Each reported zero warnings and errors. The ARM64 Ghostty Zig subprocess completed in 258 seconds within the initial build; do not add it to the total. These are completed initial build times, not targeted-build completion times or performance comparisons.
+
+The later targeted plugin deployment Pester case was interrupted after its 900-second compiler-process guard on each platform. It did not establish a completed targeted-build time. The x64 Pester outcome was 28/2/0; ARM64 was 27/3/0. The relocated-sandbox failure followed the interrupted dependency marker on both. ARM64 Commands membership failed because its executable was absent after interruption; the specific action that caused absence is unproven. Re-attestation was blocked. The nested Commands trace is a filtered tooling smoke, not the Full Commands family.
+
+The proposed 60-minute finite compiler-process guard is a calibration proposal, not a passing result. Genuine rebuild, deletion/restaging assertions, process containment, drainage, receipt checks and fail-closed recovery remain required. No NAS, F7 or other application scenario deadline changes are implied. Native Full and exact-current-head qualification remain pending.
+
+`packet.json` binds each retained hosted job log by SHA-256 and byte count, and gives one-based original line numbers and exact selected safe lines. It intentionally preserves only the failed case details plus totals; all original passing rows remain in the external raw logs.

@@ -1,0 +1,266 @@
+{
+  "proposal": "60-minute finite compiler-process guard; proposal only, not a completed run.",
+  "jobs": [
+    {
+      "jobId": 125349294651,
+      "selectedEvents": [
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:23:42.6618764Z Diagnostics: 0 warning(s), 0 error(s)",
+          "line": 2741
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:23:42.6619666Z BUILD SUCCEEDED: RedSalamander | x64 | Release | 00:49:16",
+          "line": 2743
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:23:42.6620399Z Diagnostics: 0 warning(s), 0 error(s)",
+          "line": 2744
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.3975496Z  [-] repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander 900.3s",
+          "line": 2817
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.3976862Z    RuntimeException: Timed out after 900000 milliseconds running 'pwsh.exe' (PID 8184).",
+          "line": 2818
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.5173957Z  [-] uses an authorized explicit root without a checkout and still rejects invalid roots 2.27s",
+          "line": 2830
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.5174846Z    Expected: {0}",
+          "line": 2831
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.5175318Z    But was:  {1}",
+          "line": 2832
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.5180163Z Passed: 28 Failed: 2 Skipped: 0 Pending: 0 Inconclusive: 0",
+          "line": 2839
+        },
+        {
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:41:25.5201369Z BLOCKED ATTESTATION: profile re-attestation failed after 'tooling.pester-build-toolchain'.",
+          "line": 2876
+        }
+      ],
+      "pesterCounts": "28 passed / 2 failed / 0 skipped",
+      "result": "failure",
+      "rawJobLog": {
+        "sha256": "f6ccd38aa191b27c510dea7ee4c0772f63613d3a21dddfcaf283acf083661284",
+        "bytes": 470286,
+        "lineCount": 2970
+      },
+      "architecture": "x64",
+      "note": "Relocated sandbox direct MSBuild was blocked by the interrupted shared-dependency marker.",
+      "head": "9ff0197d03713aba75ee65b6e4cc996de0233382",
+      "runId": 41466676368
+    },
+    {
+      "jobId": 125349295313,
+      "selectedEvents": [
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:24:17.1812563Z   [GhosttyRuntime] completed elapsedSeconds=258: R:\\.build\\TerminalEngine\\Toolchains\\zig-aarch64-windows-0.17.0\\zig.exe cwd=R:\\.build\\TerminalEngine\\Sources\\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd",
+          "line": 2725
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:24:17.1879587Z Diagnostics: 0 warning(s), 0 error(s)",
+          "line": 2893
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:24:17.1880443Z BUILD SUCCEEDED: RedSalamander | ARM64 | Release | 00:41:49",
+          "line": 2895
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:24:17.1882248Z Diagnostics: 0 warning(s), 0 error(s)",
+          "line": 2896
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9805424Z  [-] repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander 900.32s",
+          "line": 2969
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9806090Z    RuntimeException: Timed out after 900000 milliseconds running 'pwsh.exe' (PID 3236).",
+          "line": 2970
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9842090Z  [-] uses an authorized explicit root without a checkout and still rejects invalid roots 2.83s",
+          "line": 2982
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9842489Z    Expected: {0}",
+          "line": 2983
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9842657Z    But was:  {1}",
+          "line": 2984
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9844181Z  [-] partitions the broad native inventory into an exact non-overlapping family union 136ms",
+          "line": 2989
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9844574Z    Expected: {True}",
+          "line": 2990
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9844747Z    But was:  {False}",
+          "line": 2991
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9845030Z    2669:         Test-Path -LiteralPath $exe -PathType Leaf | Should Be $true",
+          "line": 2992
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9846704Z Passed: 27 Failed: 3 Skipped: 0 Pending: 0 Inconclusive: 0",
+          "line": 2996
+        },
+        {
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:43:02.9856758Z BLOCKED ATTESTATION: profile re-attestation failed after 'tooling.pester-build-toolchain'.",
+          "line": 3033
+        }
+      ],
+      "pesterCounts": "27 passed / 3 failed / 0 skipped",
+      "result": "failure",
+      "rawJobLog": {
+        "sha256": "296a5d976c446a2832b1ea42c2bd018c65b7a2b22bfc3fd429188d18141ae38c",
+        "bytes": 504196,
+        "lineCount": 3127
+      },
+      "architecture": "arm64",
+      "note": "Relocated sandbox direct MSBuild was blocked by the interrupted shared-dependency marker; Commands membership failed its executable-exists precondition after the interruption. The action causing the missing executable is unproven.",
+      "head": "9ff0197d03713aba75ee65b6e4cc996de0233382",
+      "runId": 41466676368
+    },
+    {
+      "pesterCounts": "28 passed / 2 failed / 0 skipped",
+      "rawJobLog": {
+        "bytes": 469881,
+        "lineCount": 2967,
+        "sha256": "06647bbfc4b818a2c5e933f45d740f210c58bc296e1bb1df784b93ec3a7dbe41"
+      },
+      "result": "failure",
+      "architecture": "x64",
+      "head": "97306b2033bb8d7e01e4eb568e174e01a7c62d37",
+      "selectedEvents": [
+        {
+          "line": 2738,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:21:53.3536127Z Diagnostics: 0 warning(s), 0 error(s)"
+        },
+        {
+          "line": 2740,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:21:53.3542121Z BUILD SUCCEEDED: RedSalamander | x64 | Release | 00:49:11"
+        },
+        {
+          "line": 2741,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:21:53.3542659Z Diagnostics: 0 warning(s), 0 error(s)"
+        },
+        {
+          "line": 2814,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1155794Z  [-] repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander 900.26s"
+        },
+        {
+          "line": 2815,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1156518Z    RuntimeException: Timed out after 900000 milliseconds running 'pwsh.exe' (PID 9436)."
+        },
+        {
+          "line": 2827,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1190736Z  [-] uses an authorized explicit root without a checkout and still rejects invalid roots 2.49s"
+        },
+        {
+          "line": 2828,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1191302Z    Expected: {0}"
+        },
+        {
+          "line": 2829,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1191561Z    But was:  {1}"
+        },
+        {
+          "line": 2836,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1194517Z Passed: 28 Failed: 2 Skipped: 0 Pending: 0 Inconclusive: 0"
+        },
+        {
+          "line": 2873,
+          "text": "qualification / native (x64, windows-2025-vs2026)\tUNKNOWN STEP\t2026-11-02T16:39:37.1207548Z BLOCKED ATTESTATION: profile re-attestation failed after 'tooling.pester-build-toolchain'."
+        }
+      ],
+      "note": "Relocated sandbox direct MSBuild was blocked by the interrupted shared-dependency marker.",
+      "runId": 41466654761,
+      "jobId": 125349226362
+    },
+    {
+      "pesterCounts": "27 passed / 3 failed / 0 skipped",
+      "rawJobLog": {
+        "bytes": 498516,
+        "lineCount": 3085,
+        "sha256": "86184f5c1fad82fa5323cf43722a63d6d486b18a302e03947aaad6586d2e355b"
+      },
+      "result": "failure",
+      "architecture": "arm64",
+      "head": "97306b2033bb8d7e01e4eb568e174e01a7c62d37",
+      "selectedEvents": [
+        {
+          "line": 2851,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:18:11.5425532Z Diagnostics: 0 warning(s), 0 error(s)"
+        },
+        {
+          "line": 2853,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:18:11.5426431Z BUILD SUCCEEDED: RedSalamander | ARM64 | Release | 00:40:10"
+        },
+        {
+          "line": 2854,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:18:11.5426735Z Diagnostics: 0 warning(s), 0 error(s)"
+        },
+        {
+          "line": 2927,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8651363Z  [-] repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander 900.31s"
+        },
+        {
+          "line": 2928,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8652012Z    RuntimeException: Timed out after 900000 milliseconds running 'pwsh.exe' (PID 10756)."
+        },
+        {
+          "line": 2940,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8695355Z  [-] uses an authorized explicit root without a checkout and still rejects invalid roots 2.13s"
+        },
+        {
+          "line": 2941,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8695767Z    Expected: {0}"
+        },
+        {
+          "line": 2942,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8695947Z    But was:  {1}"
+        },
+        {
+          "line": 2947,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8697518Z  [-] partitions the broad native inventory into an exact non-overlapping family union 134ms"
+        },
+        {
+          "line": 2948,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8697952Z    Expected: {True}"
+        },
+        {
+          "line": 2949,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8698530Z    But was:  {False}"
+        },
+        {
+          "line": 2950,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8698821Z    2669:         Test-Path -LiteralPath $exe -PathType Leaf | Should Be $true"
+        },
+        {
+          "line": 2954,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8700089Z Passed: 27 Failed: 3 Skipped: 0 Pending: 0 Inconclusive: 0"
+        },
+        {
+          "line": 2991,
+          "text": "qualification / native (ARM64, windows-11-vs2026-arm)\tUNKNOWN STEP\t2026-11-02T16:37:02.8723866Z BLOCKED ATTESTATION: profile re-attestation failed after 'tooling.pester-build-toolchain'."
+        }
+      ],
+      "note": "Relocated sandbox direct MSBuild was blocked by the interrupted shared-dependency marker; Commands membership failed its executable-exists precondition after interruption. The action causing the missing executable is unproven.",
+      "runId": 41466654761,
+      "jobId": 125349226729
+    }
+  ],
+  "scope": "Failure-only Pester case evidence; all passing individual case rows remain in the original raw logs."
+}

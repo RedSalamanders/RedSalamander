@@ -5365,7 +5365,9 @@ void BatchRenameWindow::DebugPumpWhileTasksActive(const bool waitForExecution) n
     const auto dispatch      = HoldForDispatch();
     const ULONGLONG deadline = GetTickCount64() + 30000ull;
     const auto tasksActive   = [this, waitForExecution]() noexcept
-    { return _hWnd && (waitForExecution ? (_executing || _collecting || _previewing) : (_collecting || _previewing)); };
+    {
+        return _hWnd && (_collecting || _previewing || (waitForExecution && _executing) || (! _executing && (_previewRebuildPending || _targetRebuildPending)));
+    };
 
     while (tasksActive() && GetTickCount64() < deadline)
     {

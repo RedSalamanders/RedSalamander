@@ -1,5 +1,66 @@
 # Repository tooling
 
+The manual native suite defaults to Full. Its explicit CommandsHandoff, FileOpsVolumes and
+ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
+after checking exact archived native results, quarantine state and source-bound receipt.
+These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
+
+Hosted native interactive entries use the rendered `WinSta0\Default` desktop on this project's
+GitHub-hosted runner. Paired comparisons retain the original fixture on both sources.
+A thread-owned neutral window must prove real foreground and focus before child launch,
+keep its queue live, and restore the original foreground and native focus after contained
+child drain. Its thread joins before the retained desktop handle closes. The canonical
+boundary clears its no-activation style only after verified acquisition, preserving all
+other style bits; restoration services at most one queued message per bounded wait.
+After an accepted return request it tolerates a transient null foreground within the existing deadline,
+while still rejecting another window and requiring the original foreground and focus.
+Each interactive entry holds its existing mutex, explicitly directs contained children to Default,
+and uses the existing native warning and assertions. No input desktop is created or switched.
+Boundary setup and restoration errors remain failures. A filtered diagnostic remains
+NOT_EVALUATED; complete native qualification still requires its full selected plan.
+
+The project adapter selects approved stock-surface preparation only for its hosted native ARM64
+ReleaseTest and interactive Qualification entries. Inside the existing interactive mutex, it may
+request one ordinary close each for the exact stock Microsoft account, Search and WSL update
+startup foreground surfaces after identity and session revalidation. WSL also requires its
+held process creation to match query-only CIM and exact parsed update arguments. The fixture retains
+create-only audit records beneath
+the marked test root. It observes the delayed Search transition for five seconds after account
+retirement. Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
+studies do not perform these actions. Native focus, input and capture assertions are unchanged.
+
+When direct foreground acquisition is refused, the selected hosted native x64 role or the opted-in native ARM64 role may use one
+registered Alt+F24 handoff to the owned neutral fixture window within 500 ms. The inline
+.NET host checks held input and current desktop/foreground/focus, accounts for partial
+key insertion and release, and retires its callback before owner-thread drain. This runner
+prelude precedes the child warning; product keyboard input keeps the canonical native
+warning and lead time. Actual foreground, native focus and restoration remain required.
+
+The explicit DesktopProbe choice reads window-station, calling/input/foreground desktop
+names and query errors on the existing hosted runners before dependency installation or
+builds. It retains source-bound `desktop.json` evidence without input, activation or display
+changes. Missing names remain unknown, and its result is NOT_EVALUATED for native coverage.
+
+The explicit Release R0ePaired choice requires an immutable `baseline_ref` and runs
+`Invoke-R0ePairedValidation.ps1` on each matching native architecture. It retains an isolated
+baseline build and five fresh canonical processes per side with the same hosted build number,
+dependencies and profile. The two-second ceiling, exact workload/counts and matched p95
+bound remain enforced. Partial logs and failed native results remain available. A timing-only
+RED baseline ends with a failed diagnostic job and NOT_EVALUATED coverage; it never becomes
+a passing native, Full or release receipt. No diagnostic choice publishes production artifacts.
+
+Source-scanner reparse fixtures retire their exact owned links in finally blocks and
+verify target bytes before completed-run archival. The archive refuses retained absolute
+links; passing scanner assertions do not waive that final archive gate.
+
+The Full tooling deployment fixture bounds its contained targeted compiler operation to
+60 minutes; product performance budgets remain independent. See the
+[rebuild and receipt contract](../Specs/Build/Build_Toolchain.md).
+
+Artifact-writing fixtures receive the verified receipt's build number through the
+runner-owned `RS_VALIDATION_BUILD_NUMBER` process value. Their targeted rebuild and
+subsequent full-profile re-attestation retain that same number.
+
 The root build captures native artifact and DxUi provenance after native compilation, then
 verifies captured bytes and uniform test-surface metadata before receipt publication. ZIP
 staging must preserve that native closure; see [build evidence authority](../Specs/Build/Build_Toolchain.md#build-evidence-authority-operation-startrail-implemented).
@@ -10,8 +71,9 @@ the resulting absolute path for both sandbox checks and creation, even when the 
 Hosted CI/Full and nightly shuffle UI runs wrap native validation in
 `Invoke-RSWithHostedTestDesktop` from `Modules/Testing/HostedTestDesktop.psm1`.
 It selects a supported sufficient display mode, reports work-area/session/foreground facts,
-and restores the original mode on failure or success. It refuses local invocation; native
-focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
+and restores the original mode on failure or success. Its verified neutral window becomes
+eligible for automatic return after modal teardown and may appear on the hosted taskbar.
+It refuses local invocation; native focus warnings and leases remain required. See the [self-test contract](../Specs/Testing/Testing_SelfTests.md).
 
 The nightly shuffle consumer restores the exact pinned DxUi source before importing its portable
 attestation; receipt use still verifies that source identity and every attested output byte.
@@ -278,6 +340,10 @@ firewall rules, accesses a device, or rewrites checked-in assets, read its
 ## Common entry points
 
 `Run-AllTests.ps1` keeps active execution beneath the marked `runs/<runId>` tree.
+Each contained native self-test also leaves a unique `artifacts/native-process-exits/<guid>.json`
+with its original signed process exit, PID, executable and UTC observation before result
+normalization. Missing/stale results can fail coverage independently of that exit. Retry
+records are separate, write failures stop execution, and archive refusal preserves the records.
 After children and owned-disk teardown finish, it verifies and renames the complete
 tree into `evidence/completed-runs/<runId>` on the same volume. Summary/dashboard
 links use that final location. Failed, skipped and interrupted witnesses are retained;
@@ -331,6 +397,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Get-VisibleTypographyAudit.ps1` | Public UI source audit | Finds visible typography paths outside the intended DirectWrite model. |
 | `Install-ClangFormat.ps1` | Public formatter acquisition | Checksum-pinned native formatter download/offline extraction, cache verification and failure-preserving publication. |
 | `Invoke-ProjectCi.ps1` | Public hosted CI adapter | Runs compiler-free PR checks or admitted native roles with pinned dependencies, governed test evidence and internal ZIPs. |
+| `Invoke-R0ePairedValidation.ps1` | Explicit hosted paired diagnostic | Retains an immutable baseline build and five fresh Release R0e processes per side with strict raw-evidence validation; never qualifies Full coverage. |
 | `Invoke-SanitizedMsbuild.ps1` | Public build diagnostic command | Runs contained MSBuild with normalized environment plus explicit profile/dependency coordination. |
 | `InvokeSolutionCloc.ps1` | Supported manual compatibility command | Preserves hand-run raw cloc arguments while forwarding solution discovery to `Measure-SourceLines.ps1 -Scope Solution`. |
 | `Manage-WindowsCredentials.ps1` | Public support command | Lists or, with confirmation, removes selected Windows credentials. |
@@ -358,7 +425,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Test-TerminalEngineRound4Closeout.ps1` | Historical closeout command | Reauthenticates the frozen Round-4 selection evidence. |
 | `Test-Changelog.ps1` | Public read-only validator | Checks fragment names/content and the changelog; pending fragments are expected. -Base refuses any CHANGELOG.md change that is not an exact fold of fragments the merge base holds (PrePush: origin/main; CI: HEAD^1); -RequireFolded checks a finished fold. |
 | `Test-ChangelogWorkflow.ps1` | Internal tooling fixture entrypoint | Runs shared behavior fixtures (local Git repositories and a bare remote) in the existing marked sandbox through the Changelog Pester adapter. |
-| `Test-TestRunArchive.ps1` | Public evidence command | Validates changed, staged, complete, or paired Terminal VT `Specs/TestRuns` archives, including area schemas and identity/performance bindings. |
+| `Test-TestRunArchive.ps1` | Public evidence command | Validates changed, staged, complete, or paired Terminal VT `Specs/TestRuns` archives, including area schemas and identity/performance bindings; the public ancestral snapshot supplies missing implicit relocation-baseline identities. |
 | `TestRunPlan.ps1` | Internal compatibility loader | Preserves sealed historical test paths; current callers import `Modules/Testing/TestRunPlan.psm1`. |
 | `tool-inventory.json` | Tooling-governance data | Machine-readable contract consumed by the validator and tests. |
 | `validation-impact.json` | Trusted-validation policy data | Reviewed path-to-impact/build mapping, including executable `Specs` data; specific rules accumulate and unknown relevant JSON/JSON5 widens to Full. |
@@ -373,7 +440,7 @@ and focused tests.
 
 | Module | Responsibility |
 |---|---|
-| `Modules/Auditing/RepositorySourceScanner.psm1` | Deterministic repository source discovery and match scanning. |
+| `Modules/Auditing/RepositorySourceScanner.psm1` | Deterministic repository source discovery and match scanning with repository-relative exclusions. |
 | `Modules/Documentation/Changelog.psm1` | Shared Changes validation, exact-fold comparison with a base, deterministic merge, duplicate-pending-entry refusal, staged publication and retry-safe cleanup. |
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
@@ -395,7 +462,9 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
-| `Modules/Testing/HostedTestDesktop.psm1` | Hosted-only supported display selection, work-area/session/foreground diagnostics, and restoration around native qualification. |
+| `Modules/Testing/HostedTestDesktop.psm1` | Hosted desktop/access diagnostics, display restoration, pure input-fixture selection and a leased owned input desktop with verified restoration. |
+| `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
+| `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source, closed raw sample archives and fixed same-machine paired comparison. |
 | `Modules/Testing/TestInventory.psm1` | Source-derived test registration plus stable-ID/policy/resource run-plan inventory. |
 | `Modules/Testing/ScopedTesting.psm1` | Native test naming, reviewed candidate PR coverage, and latest-attempt scheduled source-monitor decisions. |
 | `Modules/Testing/TestInvocation.psm1` | Self-test, Pester, and build invocation parameters, bounded Pester failure/skip case normalization, and result classification. |
@@ -410,7 +479,7 @@ and focused tests.
 | `Modules/Testing/ValidationFingerprint.psm1` | Exact canonical JSON/digests, streaming read bounds, atomic replace or create-only record I/O, timed base/index/worktree snapshots, one-time receipt-closure binding, and versioned component-aware entry fingerprints. |
 | `Modules/Testing/ValidationEvidence.psm1` | Schema-validated normalized terminal results, atomic hashed/quota-bound result artifacts, immutable content-addressed decisions/evidence/promotions, one exact direct-child run resolver and semantic promotion loader shared by Resume/summary/history/prune provenance, crash-safe artifact epochs/read barriers, interruption repair, and identity-bound pruning. |
 | `Modules/Testing/ValidationImpact.psm1` | Governed impact-manifest/build-graph validation and deterministic shadow or enforced Affected decisions. |
-| `Modules/Tooling/SpecInformationArchitecture.psm1` | Specification inventory, WIP indexing, consistency, canonical inline/fenced Markdown masking for links/headings, and exact reviewed Done-plan/capture-companion admission, including the 2026-10-16 File Operations card hierarchy record, with unreviewed sibling rejection. |
+| `Modules/Tooling/SpecInformationArchitecture.psm1` | Specification inventory, WIP indexing, consistency, canonical inline/fenced Markdown masking for links/headings and bounded conservative provenance comment-delimiter masking, and exact reviewed Done-plan/capture-companion admission, including the 2026-10-16 File Operations card hierarchy record, with unreviewed sibling rejection. |
 | `Modules/Tooling/ToolInventory.psm1` | Tools manifest reconciliation, validation, and rendering. |
 
 ## Adding or changing a tool
@@ -479,6 +548,8 @@ all broader or modified selections retain the ordinary Commands classification.
 `ViewerPETests TestViewerDocumentationGallery --no-activate` captures generated
 viewer fixtures; `TestViewerSpaceLifecycleCaptures --no-activate` covers Space.
 These focused captures do not qualify keyboard interaction or a Full run.
+
+Historical review guards preserve the exact July campaign roster and routing provenance while later reviews require their own bounded commit, date, historical banner and live-index link.
 
 `Tests/DocumentationDriftContracts.Tests.ps1` runs through the current tooling
 profile. It binds the ten public File Operations PNGs to adjacent native capture

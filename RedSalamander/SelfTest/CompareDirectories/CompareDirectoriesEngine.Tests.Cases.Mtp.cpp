@@ -47,7 +47,26 @@ const auto WithMtpJournalSandbox      = [&](std::wstring_view caseName, auto cal
     };
 };
 
-const auto extractJsonUInt               = SelfTest::ExtractJsonUInt;
+const auto extractJsonUInt = SelfTest::ExtractJsonUInt;
+// These two delayed-reader fixtures arm the short watchdog only after reader setup;
+// unlike generic configuration parsing this verifies the live MTP instance's value.
+const auto armDelayedReaderWatchdog = [&](SelfTest::CaseState& state, IFileSystem* fileSystem) noexcept
+{
+    wil::com_ptr<IInformations> informations;
+    const HRESULT qiHr  = fileSystem->QueryInterface(__uuidof(IInformations), informations.put_void());
+    const HRESULT setHr = SUCCEEDED(qiHr) && informations ? informations->SetConfiguration(R"json({"readOnly":true,"commandTimeoutMs":50})json") : qiHr;
+    const char* json    = nullptr;
+    const HRESULT getHr = SUCCEEDED(setHr) && informations ? informations->GetConfiguration(&json) : setHr;
+    const bool armed    = SUCCEEDED(getHr) && json && extractJsonUInt(json, "commandTimeoutMs").value_or(0u) == 50u;
+    state.Require(armed,
+                  std::format(L"MTP delayed-reader watchdog arm failed. qi=0x{:08X} set=0x{:08X} get=0x{:08X}",
+                              static_cast<unsigned long>(qiHr),
+                              static_cast<unsigned long>(setHr),
+                              static_cast<unsigned long>(getHr)));
+    if (armed)
+        SelfTest::AppendSelfTestTrace(L"MTP delayed-reader watchdog armed to 50 ms after reader setup, before Read.");
+    return armed;
+};
 const auto narrowAscii                   = SelfTest::NarrowAscii;
 const auto stableDeviceHash              = SelfTest::StableDeviceHash;
 const auto ensureDirectoryExists         = SelfTest::EnsureDirectoryExists;
@@ -1144,8 +1163,7 @@ SelfTest::RunCase(options,
                                         [&](SelfTest::CaseState& state) noexcept
 {
     CreatedFileSystemInstance created;
-    const HRESULT createHr =
-        TryCreateFakeMtpFileSystemInstance(R"json({"readFileDelayMs":2000})json", R"json({"readOnly":true,"commandTimeoutMs":50})json", L"/", created);
+    const HRESULT createHr = TryCreateFakeMtpFileSystemInstance(R"json({"readFileDelayMs":2000})json", R"json({"readOnly":true})json", L"/", created);
     if (createHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
     {
         return state.Skip(L"MTP fake backend export is available only in debug plugin builds.");
@@ -1186,6 +1204,8 @@ SelfTest::RunCase(options,
     {
         return false;
     }
+    if (! armDelayedReaderWatchdog(state, created.fileSystem.get()))
+        return false;
 
     char byte               = 0;
     unsigned long bytesRead = 0;
@@ -1206,7 +1226,7 @@ SelfTest::RunCase(options,
     wil::com_ptr<IFileSystemInitialize> initializer;
     const HRESULT initializerHr = created.fileSystem->QueryInterface(__uuidof(IFileSystemInitialize), initializer.put_void());
     state.Require(SUCCEEDED(initializerHr) && initializer, L"MTP hung watchdog: missing IFileSystemInitialize.");
-    const HRESULT reinitializeHr = initializer ? initializer->Initialize(L"/", R"json({"readOnly":true,"commandTimeoutMs":50})json") : initializerHr;
+    const HRESULT reinitializeHr = initializer ? initializer->Initialize(L"/", R"json({"readOnly":true,"commandTimeoutMs":120000})json") : initializerHr;
     state.Require(SUCCEEDED(reinitializeHr),
                   std::format(L"MTP hung watchdog: Initialize did not recreate the backend worker. hr=0x{:08X}.", static_cast<unsigned long>(reinitializeHr)));
     unsigned long attributes  = 0;
@@ -1343,8 +1363,7 @@ SelfTest::RunCase(options,
 
     const std::filesystem::path mtpPluginPath = initialEntry->path;
     CreatedFileSystemInstance created;
-    const HRESULT createHr =
-        TryCreateFakeMtpFileSystemInstance(R"json({"readFileDelayMs":5000})json", R"json({"readOnly":true,"commandTimeoutMs":50})json", L"/", created);
+    const HRESULT createHr = TryCreateFakeMtpFileSystemInstance(R"json({"readFileDelayMs":5000})json", R"json({"readOnly":true})json", L"/", created);
     if (createHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
     {
         return state.Skip(L"MTP fake backend export is available only in debug plugin builds.");
@@ -1384,6 +1403,8 @@ SelfTest::RunCase(options,
     {
         return false;
     }
+    if (! armDelayedReaderWatchdog(state, created.fileSystem.get()))
+        return false;
 
     char byte               = 0;
     unsigned long bytesRead = 0;

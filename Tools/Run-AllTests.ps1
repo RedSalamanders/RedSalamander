@@ -30,6 +30,8 @@
     MTP recovery journals cannot reuse or change the caller's profile state.
     Case inventory uses the early-exit, nonactivating --selftest-list-cases path
     without a desktop lease. Actual native execution retains its entry's desktop admission.
+    Every native self-test launch records its actual process exit separately under the run's
+    artifacts/native-process-exits directory, before coverage and archive processing.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -167,6 +169,7 @@
 
 .NOTES
     Prerequisites: PowerShell 7, the repository build toolchain unless -SkipBuild is used, and an interactive desktop for UI-driven suites. Side effects: acquires the selected platform/configuration artifact lock, holds the Windows-session mutex only around marked interactive entries, may build the solution, launches contained child test processes, and replaces runner-owned directories beneath the selected marked sandbox. Alternate-volume roots require an explicit switch. It does not terminate unrelated processes or block other profiles/worktrees. Primary consumers: local closeout, GitHub CI, and nightly test workflows.
+    The hosted handoff pilot can request an owned input desktop only during a marked entry's held interactive lease; it restores the original desktop after contained child drain. Noninteractive entries clear this internal request for descendant harnesses.
 
 .EXAMPLE
     .\Tools\Run-AllTests.ps1
@@ -482,6 +485,10 @@ namespace RedSalamander
             Write-Warning 'Unable to prevent system/display idle while the interactive test entry runs.'
         }
 
+        if ($env:REDSALAMANDER_HOSTED_TEST_DESKTOP -ceq 'default') {
+            Import-Module (Join-Path $PSScriptRoot 'Modules/Testing/HostedTestDesktop.psm1')
+            return Invoke-RSWithHostedDefaultDesktop -Action $Operation
+        }
         return & $Operation
     }
     finally {
@@ -564,6 +571,15 @@ function Invoke-RSTestPlanEntry {
     if (-not [string]::IsNullOrWhiteSpace($ArtifactRoot) -and $Entry.Kind -in @('Executable', 'CppUnitTest')) {
         $safeName = ([string]$Entry.Name) -replace '[^A-Za-z0-9_.-]', '_'
         $outputLogPath = Join-Path $ArtifactRoot "$safeName.output.log"
+    }
+
+    $priorHostedDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
+    $priorStockPreparationRequest = [Environment]::GetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', 'Process')
+    if (-not (Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry)) {
+        # Tooling and other noninteractive entries must not pass an interactive
+        # fixture request into their synthetic/negative child harness controls.
+        [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $null, 'Process')
+        [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $null, 'Process')
     }
 
     try {
@@ -664,6 +680,9 @@ function Invoke-RSTestPlanEntry {
     } catch {
         $exitCode = 1
         $failureReason = $_.Exception.Message
+    } finally {
+        [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process')
+        [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $priorStockPreparationRequest, 'Process')
     }
 
     $end = Get-Date
@@ -1091,7 +1110,21 @@ function Invoke-RSSelfTestProcess {
             try {
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
                 $process.WaitForExit()
-                return $process.ExitCode
+                $nativeExitCode = $process.ExitCode
+                $exitDirectory = Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot `
+                    -Path (Join-Path $testRunContext.RunRoot 'artifacts/native-process-exits') -RequireDescendant
+                [void](New-Item -ItemType Directory -Path $exitDirectory -Force -ErrorAction Stop)
+                $exitPath = Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot `
+                    -Path (Join-Path $exitDirectory (([guid]::NewGuid().ToString('N')) + '.json')) -RequireDescendant
+                $exitRecord = [ordered]@{
+                    schema = 'red-salamander.native-process-exit.v1'
+                    process_id = $process.Id
+                    executable = [IO.Path]::GetFullPath($startInfo.FileName, $startInfo.WorkingDirectory)
+                    observed_utc = [DateTime]::UtcNow.ToString('o')
+                    exit_code = $nativeExitCode
+                }
+                $exitRecord | ConvertTo-Json -Compress | Out-File -LiteralPath $exitPath -Encoding utf8NoBOM -NoClobber -ErrorAction Stop
+                return $nativeExitCode
             }
             finally {
                 Close-RSContainedProcess -Process $process
@@ -1609,7 +1642,7 @@ function New-RSRunnerEntryFingerprintRecord {
             switch ([string]$environmentInput) {
                 'env.profile' { $capabilityInputs[$environmentInput] = "$Platform|$Configuration" }
                 'env.windows-11' { $capabilityInputs[$environmentInput] = [Environment]::OSVersion.Version.ToString() }
-                'env.interactive-desktop' { $capabilityInputs[$environmentInput] = [Environment]::UserInteractive }
+                'env.interactive-desktop' { $capabilityInputs[$environmentInput] = [ordered]@{ user_interactive=[Environment]::UserInteractive; hosted_fixture=[string]$env:REDSALAMANDER_HOSTED_TEST_DESKTOP; hosted_stock_preparation=[string]$env:RS_HOSTED_ARM64_STOCK_PREPARATION } }
                 'env.network' { $capabilityInputs[$environmentInput] = [Net.NetworkInformation.NetworkInterface]::GetIsNetworkAvailable() }
                 'env.test-resources' { $capabilityInputs[$environmentInput] = $testMachineResources.CapabilityDigest }
                 default { throw "Validation entry '$($executionEntry.Id)' declares an unknown environment input '$environmentInput'." }
@@ -1871,7 +1904,7 @@ function Assert-RSRunnerArtifactReadBarrier {
 }
 
 function Invoke-RSRunnerStandaloneValidationEntry {
-    param([Parameter(Mandatory = $true)][object]$Entry, [switch]$DeferEvidence)
+    param([Parameter(Mandatory = $true)][object]$Entry, [switch]$DeferEvidence, [int]$ArtifactBuildNumber = 0)
 
     Write-Header "Running: $($Entry.Name)"
     if ($null -ne $validationEvidenceRun) {
@@ -1888,6 +1921,10 @@ function Invoke-RSRunnerStandaloneValidationEntry {
     if (@($Entry.ArtifactWriteIds).Count -gt 0) {
         $profileEnvironment['RS_VALIDATION_PLATFORM'] = $Platform
         $profileEnvironment['RS_VALIDATION_CONFIGURATION'] = $Configuration
+        if ($ArtifactBuildNumber -lt 1 -or $ArtifactBuildNumber -gt 65535) {
+            throw 'An artifact writer requires the validated pre-mutation build number.'
+        }
+        $profileEnvironment['RS_VALIDATION_BUILD_NUMBER'] = $ArtifactBuildNumber
     }
     $previousProfileEnvironment = @{}
     try {
@@ -1950,22 +1987,25 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
         Write-Host "BLOCKED ATTESTATION: artifact writer '$($artifactMutator.Id)' cannot open from an unstable epoch." -ForegroundColor Red
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }
+    $buildNumberArgument = @($preMutationReceipt.build_arguments | Where-Object { $_ -clike 'build-number=*' })
+    $reattestBuildNumber = 0
+    if ($buildNumberArgument.Count -ne 1 -or
+        $buildNumberArgument[0] -cnotmatch '^build-number=[0-9]+$' -or
+        -not [int]::TryParse(($buildNumberArgument[0] -replace '^build-number=', ''), [ref]$reattestBuildNumber) -or
+        $reattestBuildNumber -lt 1 -or $reattestBuildNumber -gt 65535) {
+        Write-Host 'BLOCKED ATTESTATION: the pre-mutation receipt does not bind one valid build number.' -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
     # Fail closed before the writer can delete or replace any selected-profile byte.
     # A crash after this point leaves no usable receipt and a durable mutating epoch.
     Suspend-RSBuildReceipt -BuildOutputDir $buildOutputDir
     $receipt = $null
     $artifactEpoch = Start-RSValidationArtifactMutation -Run $validationEvidenceRun `
         -Plan $validationPlan -WrittenArtifactId @($artifactMutator.ArtifactWriteIds)
-    $mutationExecution = Invoke-RSRunnerStandaloneValidationEntry -Entry $artifactMutator -DeferEvidence
+    $mutationExecution = Invoke-RSRunnerStandaloneValidationEntry -Entry $artifactMutator -DeferEvidence -ArtifactBuildNumber $reattestBuildNumber
     if ($mutationExecution.Result.ExitCode -ne 0) { $overallExitCode = 1 }
 
     Write-Header "Re-attesting profile after: $($artifactMutator.Name)"
-    $buildNumberArgument = @($preMutationReceipt.build_arguments | Where-Object { $_ -match '^build-number=([0-9]+)$' } | Select-Object -First 1)
-    if ($buildNumberArgument.Count -ne 1) {
-        Write-Host 'BLOCKED ATTESTATION: the pre-mutation receipt does not bind one build number.' -ForegroundColor Red
-        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
-    }
-    $reattestBuildNumber = [int]($buildNumberArgument[0] -replace '^build-number=', '')
     $reattestEnvironmentOverrides = Get-RSBuildEnvironmentOverrides -Suite $Suite
     $previousReattestEnvironment = @{}
     foreach ($key in @($reattestEnvironmentOverrides.Keys)) {

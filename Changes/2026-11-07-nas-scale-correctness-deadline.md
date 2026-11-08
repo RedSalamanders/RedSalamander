@@ -1,0 +1,1 @@
+- Allow the configured NAS identity-less scale correctness case one scaled three-minute post-consent deadline while retaining its safety and full-deletion checks.

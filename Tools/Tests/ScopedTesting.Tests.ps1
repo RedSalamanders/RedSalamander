@@ -195,3 +195,16 @@ $global:LASTEXITCODE=2
         (Test-RSScheduledTestsRequired schedule current ([pscustomobject]@{})) | Should Be $true
     }
 }
+
+Describe 'Hosted stock preparation evidence identity' {
+    It 'changes the scoped environment identity when the opt-in changes' {
+        $old=$env:RS_HOSTED_ARM64_STOCK_PREPARATION
+        try {
+            $env:RS_HOSTED_ARM64_STOCK_PREPARATION=$null
+            $without=Get-ScopedEnvironmentIdentity
+            $env:RS_HOSTED_ARM64_STOCK_PREPARATION='1'
+            $with=Get-ScopedEnvironmentIdentity
+            $with | Should Not Be $without
+        } finally { $env:RS_HOSTED_ARM64_STOCK_PREPARATION=$old }
+    }
+}

@@ -2089,7 +2089,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     const auto monitors = GetFileOpsGalleryMonitors();
     if (! folder || monitors.empty() || output.empty() || ! SelfTest::EnsureDirectory(output))
         return false;
-    const HWND foreground    = GetForegroundWindow();
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+    {
+        AppendLog(std::format(L"WaitingCard: no-activation observation could not start (failure={})", static_cast<unsigned int>(desktop.Failure())));
+        return false;
+    }
     const auto previousTheme = folder->GetTheme();
     Localization::LanguagePreference previousLanguage{};
     if (g_settings.ui.has_value() && ! g_settings.ui.value().language.empty() && g_settings.ui.value().language != L"system")
@@ -2197,11 +2202,15 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                           layout.taskPaintedFileProgressCount,
                                           layout.taskPaintedPathCount,
                                           layout.taskConcurrencyText));
-                    passed = correct && passed;
+                    correct = desktop.Sample() && correct;
+                    passed  = correct && passed;
                 }
         }
     }
-    return passed && manifest.good() && GetForegroundWindow() == foreground;
+    const bool desktopSafe = desktop.Finish();
+    if (! desktopSafe)
+        AppendLog(std::format(L"WaitingCard: no-activation observation failed at finish (failure={})", static_cast<unsigned int>(desktop.Failure())));
+    return passed && manifest.good() && desktopSafe;
 }
 
 [[nodiscard]] bool CaptureFileOpsCardHierarchy(SelfTestState& state)

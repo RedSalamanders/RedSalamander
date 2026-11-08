@@ -2739,8 +2739,19 @@ struct BatchRenameLocalStampParts final
     state.Require(DebugGetBatchRenameWindowSnapshot(snapshot), L"Async collection snapshot should become available after releasing the provider.");
     state.Require(snapshot.previewRowCount == 1u && snapshot.originalNames == std::vector<std::wstring>{L"slow.txt"},
                   L"Background provider collection should populate the preview after completion.");
-    state.Require(snapshot.modeSwitchEnabled && DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual),
-                  L"Mode switching must become available after the current preview completes.");
+    state.Require(snapshot.modeSwitchEnabled,
+                  std::format(L"Mode switching must become available after the current preview completes: pending={} enabled={} rules={} manual={} "
+                              L"rows={} names={} changed={} errors={}.",
+                              snapshot.previewRebuildPending,
+                              snapshot.modeSwitchEnabled,
+                              snapshot.rulesModeSelected,
+                              snapshot.manualModeSelected,
+                              snapshot.previewRowCount,
+                              snapshot.newNames.size(),
+                              snapshot.changedRowCount,
+                              snapshot.errorRowCount));
+    if (snapshot.modeSwitchEnabled)
+        state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual), L"Manual mode switch must succeed after the current preview completes.");
     state.Require(DebugGetBatchRenameWindowSnapshot(snapshot) && snapshot.manualModeSelected && snapshot.manualText == L"slow.txt" &&
                       snapshot.newNames == std::vector<std::wstring>{L"slow.txt"},
                   L"An admitted Manual switch must seed the complete current preview after the blocked provider resumes.");
@@ -3610,7 +3621,7 @@ struct BatchRenameLocalStampParts final
                   L"Batch Rename debounce test should edit the real name-template field.");
 
     BatchRenameDebugSnapshot pendingSnapshot{};
-    state.Require(DebugGetBatchRenameWindowSnapshot(pendingSnapshot), L"Batch Rename debounce pending snapshot should be available.");
+    state.Require(DebugGetBatchRenameWindowSnapshot(pendingSnapshot, false), L"Batch Rename debounce pending snapshot should be available.");
     state.Require(pendingSnapshot.nameTemplateText == L"renamed_{counter:000}{ext}", L"Debounced field text should update immediately.");
     state.Require(pendingSnapshot.previewRebuildPending, L"Text edits should schedule a debounced preview rebuild.");
     state.Require(pendingSnapshot.newNames == std::vector<std::wstring>{L"alpha.txt", L"beta.md"},
@@ -3624,6 +3635,26 @@ struct BatchRenameLocalStampParts final
     state.Require(flushedSnapshot.newNames == std::vector<std::wstring>{L"renamed_001.txt", L"renamed_002.md"},
                   L"Flushed debounce should recompute the preview with the latest field text.");
     state.Require(flushedSnapshot.changedRowCount == 2u, L"Flushed debounce should update preview stats.");
+
+    // No message pump occurs between this edit and the no-wait observation: the timer is still queued,
+    // so the ordinary waiting snapshot must settle the pending rebuild itself.
+    state.Require(DebugSetBatchRenameWindowRuleFieldText(BatchRenameDebugRuleField::NameTemplate, L"settled_{counter:000}{ext}"),
+                  L"The waiting snapshot control should schedule a second independent preview.");
+    BatchRenameDebugSnapshot beforeWait{};
+    state.Require(DebugGetBatchRenameWindowSnapshot(beforeWait, false) && beforeWait.previewRebuildPending && ! beforeWait.modeSwitchEnabled &&
+                      beforeWait.newNames == std::vector<std::wstring>{L"renamed_001.txt", L"renamed_002.md"},
+                  L"The waiting snapshot control must observe pending work, disabled mode and the previous preview before pumping.");
+    BatchRenameDebugSnapshot afterWait{};
+    state.Require(DebugGetBatchRenameWindowSnapshot(afterWait, true), L"The waiting snapshot control should return a live snapshot.");
+    state.Require(! afterWait.previewRebuildPending && afterWait.modeSwitchEnabled &&
+                      afterWait.newNames == std::vector<std::wstring>{L"settled_001.txt", L"settled_002.md"} && afterWait.changedRowCount == 2u,
+                  std::format(L"Waiting snapshot must settle the pending preview and enable mode: pending={} enabled={} rows={} names={} changed={} errors={}.",
+                              afterWait.previewRebuildPending,
+                              afterWait.modeSwitchEnabled,
+                              afterWait.previewRowCount,
+                              afterWait.newNames.size(),
+                              afterWait.changedRowCount,
+                              afterWait.errorRowCount));
 
     return state.failure.empty();
 }

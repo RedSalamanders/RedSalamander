@@ -1,0 +1,9 @@
+# Reparse-directory Skip: focused correctness evidence
+
+These focused x64 Release runs exercise the selected-root reparse-directory Skip correction and its neighboring file-reparse policy control. The measured sources are PR 200 at `827dd94bcbfebb0ea6ae5a1b655cab9e8e64f0c4` and PR 201 at `2ccf9f15e974edd9b58a7474613a38f201527b51`. The receipt source snapshot and runner workspace projection are distinct domains; each run's identifiers and SHA-256 bindings are in `packet.json`.
+
+The two Riptide variants inject only the selected-root observed reparse attribute and require a real Local no-follow directory binding. The quiet trace reports a single injection and directory binding for each variant, one prompt, 22 copied sibling bytes, and Published/Retained/Skipped. Exact blocker, source, inventory, decision and status assertions are part of the test. Causeway uses a simulated Dummy file reparse attribute; it is not an operating-system link. Phase12 real-junction controls passed on both measured heads.
+
+EA50 and 77828 already contained the production repair; their failed Riptide controls are preserved fixture-assertion history, not runtime reproduction of the original defect. Copilot's original report was validated against the source. These focused runs do not establish full qualification or a throughput gain.
+
+`packet.json` records case verdicts, exact raw byte counts and digests, trace witness source lines, receipt and workspace identities, and original one-based row indices. The selected JSONL files retain the exact `FileOps.Bridge.CopyUs` rows in original order; they are measurements only. Their mixed legacy zero-value units and tiny deterministic sample sizes are not suitable for percentile or speedup claims. Raw inputs remain in the marked external evidence store. Broader exact-head local, hosted x64/ARM64 and required performance qualification remains pending.

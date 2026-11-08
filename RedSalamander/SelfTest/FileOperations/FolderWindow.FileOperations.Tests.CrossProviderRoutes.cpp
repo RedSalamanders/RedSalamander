@@ -118,7 +118,10 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
     std::vector<std::filesystem::path> sources,
     const std::filesystem::path& destinationFolder,
     FolderWindow::FileOperationState::Task::ConflictAction action,
-    FileSystemOperation operationType = FILESYSTEM_COPY)
+    FileSystemOperation operationType                                                  = FILESYSTEM_COPY,
+    uint64_t* maximumObservedProgress                                                  = nullptr,
+    const std::function<bool()>& beforeDecision                                        = {},
+    std::optional<FolderWindow::FileOperationState::Task::ConflictAction> secondAction = std::nullopt)
 {
     const bool localSource = source.get() == state.fsLocal.get();
     const auto admitted    = StartFileOperationAndGetId(operations,
@@ -140,25 +143,36 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
     }
     const uint64_t taskId = admitted.value();
     tasks.push_back(taskId);
-    bool answered   = false;
-    const auto done = RedSalamander::TestSupport::PumpMessagesUntil(
+    std::optional<uint64_t> answeredGeneration;
+    unsigned int answeredCount = 0u;
+    const auto done            = RedSalamander::TestSupport::PumpMessagesUntil(
         [&]() noexcept
     {
         FolderWindow::FileOperationState::Task* task = operations->FindTask(taskId);
+        if (task && maximumObservedProgress)
+        {
+            std::scoped_lock lock(task->_progressMutex);
+            *maximumObservedProgress = (std::max)(*maximumObservedProgress, task->_progressCompletedBytes);
+        }
         if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
         {
-            if (answered || ! task || ! task->SubmitConflictDecision(prompt->generation, action, false))
+            if (answeredGeneration == prompt->generation)
+                return false; // The worker has not yet retired the accepted generation.
+            if (answeredCount > 1u || (answeredCount == 1u && ! secondAction.has_value()) || ! task ||
+                (answeredCount == 0u && beforeDecision && ! beforeDecision()) ||
+                ! task->SubmitConflictDecision(prompt->generation, answeredCount == 0u ? action : secondAction.value(), false))
             {
                 AppendLog(L"Cross-provider direct-create conflict prompt could not be answered exactly once.");
                 return true;
             }
-            answered = true;
+            answeredGeneration = prompt->generation;
+            ++answeredCount;
             return false;
         }
         return state.completedTasks.contains(taskId) && task == nullptr;
     },
         {.timeout = SelfTest::Scale(kCrossProviderWait), .operationName = L"cross-provider direct-create conflict resolution"});
-    if (! done.conditionMet || ! state.completedTasks.contains(taskId) || ! answered)
+    if (! done.conditionMet || ! state.completedTasks.contains(taskId) || answeredCount != (secondAction.has_value() ? 2u : 1u))
     {
         return std::nullopt;
     }
@@ -182,7 +196,10 @@ constexpr auto kCrossProviderWait = std::chrono::seconds(30);
 class CrossProviderCaseScope final
 {
 public:
-    CrossProviderCaseScope(SelfTestState& state, FolderWindow::FileOperationState* operations) noexcept : _state(state), _operations(operations)
+    CrossProviderCaseScope(SelfTestState& state, FolderWindow::FileOperationState* operations, bool* strictDrainSucceeded = nullptr) noexcept
+        : _state(state),
+          _operations(operations),
+          _strictDrainSucceeded(strictDrainSucceeded)
     {
         _verify        = EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy;
         _autoDismiss   = operations->GetAutoDismissSuccess();
@@ -194,6 +211,17 @@ public:
     ~CrossProviderCaseScope()
     {
         const bool quiet = CancelOutstandingSelfTestOperations(_operations);
+        if (_strictDrainSucceeded)
+        {
+            *_strictDrainSucceeded = quiet;
+            if (! quiet)
+            {
+                // XP-01 holds a process-wide environment lease and plugin module. Keep both alive
+                // until owned workers join even when normal bounded cancellation failed.
+                AppendLog(L"XP-01 bounded cancellation failed; shutting down the owned File Operations state before releasing MTP.");
+                _operations->Shutdown();
+            }
+        }
         for (const uint64_t taskId : tasks)
         {
             if (quiet)
@@ -215,13 +243,14 @@ public:
 private:
     SelfTestState& _state;
     FolderWindow::FileOperationState* _operations = nullptr;
+    bool* _strictDrainSucceeded                   = nullptr;
     HWND _originalPopup                           = nullptr;
     bool _verify                                  = false;
     bool _autoDismiss                             = false;
 };
 } // namespace
 
-[[nodiscard]] bool RunFileOpsCrossProviderMtpNewFileChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunFileOpsCrossProviderMtpNewFileChecksIsolated(SelfTestState& state, bool& strictDrainSucceeded) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
     {
@@ -282,7 +311,7 @@ private:
     if (FAILED(mtpDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
         return reject(L"fake-MTP destination folder could not be created");
 
-    CrossProviderCaseScope scope(state, operations);
+    CrossProviderCaseScope scope(state, operations, &strictDrainSucceeded);
     EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = false;
     const auto summary = RunCrossProviderTransfer(state, operations, scope.tasks, mtp, {file, tree}, std::filesystem::path(kMtpDestination), false);
     if (! summary.has_value())
@@ -421,8 +450,8 @@ private:
 
     // If another writer takes the new name after discovery, the direct exclusive create reports a
     // known no-commit conflict. Skip preserves that occupant; Overwrite re-enters the guarded PUID swap.
-    const std::filesystem::path skipRaceSource      = root / L"race-skip-source.bin";
-    const std::filesystem::path overwriteRaceSource = root / L"race-overwrite-source.bin";
+    const std::filesystem::path skipRaceSource      = root / L"appeared-skip.bin";
+    const std::filesystem::path overwriteRaceSource = root / L"appeared-overwrite.bin";
     if (! WriteFilledTestFile(skipRaceSource, 2'048u, 0x31u) || ! WriteFilledTestFile(overwriteRaceSource, 2'049u, 0x32u))
     {
         return reject(L"appeared-occupant sources unavailable");
@@ -446,10 +475,21 @@ private:
                                                                            std::filesystem::path(kMtpDestination),
                                                                            FolderWindow::FileOperationState::Task::ConflictAction::Skip);
     std::string skipOccupant;
-    const auto skipDestination = std::filesystem::path(kMtpDestination) / kSkipRaceLeaf;
-    if (! skipRaceSummary.has_value() || skipRaceSummary->skippedItemCount != 1u || skipRaceSummary->errorCount != 0u ||
-        ! ReadFileTextFsIo(skipRaceIo, skipDestination, skipOccupant) || skipOccupant != "concurrent occupant preserved")
+    const auto skipDestination     = std::filesystem::path(kMtpDestination) / kSkipRaceLeaf;
+    const bool skipOccupantRead    = ReadFileTextFsIo(skipRaceIo, skipDestination, skipOccupant);
+    const bool skipOccupantMatches = skipOccupantRead && skipOccupant == "concurrent occupant preserved";
+    if (! skipRaceSummary.has_value() || skipRaceSummary->skippedItemCount != 1u || skipRaceSummary->errorCount != 0u || ! skipOccupantMatches)
     {
+        AppendLog(std::format(
+            L"XP-01 direct-create Skip witness: summary={} hr=0x{:08X} skipped={} errors={} occupantRead={} occupantBytes={} occupantMatches={} diagnostics={}",
+            skipRaceSummary.has_value(),
+            static_cast<unsigned long>(skipRaceSummary.has_value() ? skipRaceSummary->resultHr : E_PENDING),
+            skipRaceSummary.has_value() ? skipRaceSummary->skippedItemCount : 0u,
+            skipRaceSummary.has_value() ? skipRaceSummary->errorCount : 0u,
+            skipOccupantRead,
+            skipOccupant.size(),
+            skipOccupantMatches,
+            skipRaceSummary.has_value() ? DescribeCrossProviderDiagnostics(skipRaceSummary.value()) : std::wstring{}));
         return reject(L"direct-create collision Skip must preserve the appeared occupant and follow the ordinary conflict prompt");
     }
 
@@ -479,6 +519,209 @@ private:
         return reject(L"explicit Overwrite after a direct-create collision must use the existing guarded replacement route");
     }
 
+    // One real directory call carries both files through the same bridge. The injected first
+    // commit collides after the bytes were written, so the accepted replacement replays that
+    // file while the logical task total must count it only once.
+    constexpr uint64_t kRetryBytes          = 8'192u;
+    constexpr uint64_t kPeerBytes           = 4'096u;
+    const std::filesystem::path batchSource = root / L"retry-batch";
+    const std::filesystem::path retrySource = batchSource / L"appeared-batch.bin";
+    const std::filesystem::path peerSource  = batchSource / L"peer.bin";
+    if (! RecreateEmptyDirectory(batchSource) || ! WriteFilledTestFile(retrySource, kRetryBytes, 0x51u) || ! WriteFilledTestFile(peerSource, kPeerBytes, 0x52u))
+    {
+        return reject(L"multi-file retry source unavailable");
+    }
+    wil::com_ptr<IFileSystem> batchMtp;
+    wil::com_ptr<IFileSystemIO> batchIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> batchDirectories;
+    hr = createConfiguredMtp(R"json({"directCreateRaceOncePathContains":"appeared-batch.bin"})json", batchMtp, batchIo, batchDirectories);
+    if (FAILED(hr) || ! batchDirectories || FAILED(batchDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+        return reject(L"multi-file retry fake MTP setup failed");
+    const auto batchDestination = std::filesystem::path(kMtpDestination) / batchSource.filename();
+    const auto retryDestination = batchDestination / retrySource.filename();
+    const auto peerDestination  = batchDestination / peerSource.filename();
+    std::vector<PerfMetricSample> copyMetricsBefore;
+    std::vector<PerfMetricSample> accountingBefore;
+    if (! TryReadPerfMetricSamples("FileOps.Bridge.Copy", copyMetricsBefore) ||
+        ! TryReadPerfMetricSamples("FileOps.SelfTest.BridgeDirectoryAccounting", accountingBefore))
+        return reject(L"multi-file retry accounting baseline unavailable");
+    bool sawExpectedOccupant         = false;
+    uint64_t maximumObservedProgress = 0u;
+    const auto batchSummary          = RunCrossProviderTransferAnsweringConflict(state,
+                                                                                 operations,
+                                                                                 scope.tasks,
+                                                                                 state.fsLocal,
+                                                                                 batchMtp,
+                                                                                 {batchSource},
+                                                                                 std::filesystem::path(kMtpDestination),
+                                                                                 FolderWindow::FileOperationState::Task::ConflictAction::Overwrite,
+                                                                                 FILESYSTEM_COPY,
+                                                                                 &maximumObservedProgress,
+                                                                                 [&]() noexcept
+    {
+        std::string occupant;
+        const char* properties  = nullptr;
+        const std::wstring path = retryDestination.native();
+        sawExpectedOccupant     = ReadFileTextFsIo(batchIo, retryDestination, occupant) && occupant == "concurrent occupant preserved" &&
+                                  SUCCEEDED(batchIo->GetItemProperties(path.c_str(), &properties)) && properties != nullptr &&
+                                  std::string_view(properties).find("\"persistentId\":\"puid-") != std::string_view::npos;
+        return sawExpectedOccupant;
+    });
+    std::vector<PerfMetricSample> copyMetricsAfter;
+    std::vector<PerfMetricSample> accountingAfter;
+    std::string retryBytes;
+    std::string peerBytes;
+    std::string expectedRetry;
+    std::string expectedPeer;
+    const auto completed       = scope.tasks.empty() ? state.completedTasks.end() : state.completedTasks.find(scope.tasks.back());
+    uint64_t physicalCopyBytes = 0u;
+    const bool haveCopyMetrics = TryReadPerfMetricSamples("FileOps.Bridge.Copy", copyMetricsAfter) && copyMetricsAfter.size() >= copyMetricsBefore.size();
+    const bool accountingValid = TryReadPerfMetricSamples("FileOps.SelfTest.BridgeDirectoryAccounting", accountingAfter) &&
+                                 accountingAfter.size() == accountingBefore.size() + 1u && accountingAfter.back().value0 == 0u &&
+                                 accountingAfter.back().value1 == kRetryBytes + kPeerBytes && accountingAfter.back().hr == S_OK;
+    size_t retryCopySamples    = 0u;
+    size_t peerCopySamples     = 0u;
+    if (haveCopyMetrics)
+        for (size_t index = copyMetricsBefore.size(); index < copyMetricsAfter.size(); ++index)
+        {
+            physicalCopyBytes += copyMetricsAfter[index].value0;
+            retryCopySamples += copyMetricsAfter[index].value0 == kRetryBytes ? 1u : 0u;
+            peerCopySamples += copyMetricsAfter[index].value0 == kPeerBytes ? 1u : 0u;
+        }
+    const auto batchChildren = ListCrossProviderChildNames(batchMtp.get(), batchDestination.wstring());
+    if (! batchSummary.has_value() || batchSummary->resultHr != S_OK || batchSummary->errorCount != 0u || ! sawExpectedOccupant ||
+        completed == state.completedTasks.end() || completed->second.progressCompletedBytes != kRetryBytes + kPeerBytes ||
+        maximumObservedProgress > kRetryBytes + kPeerBytes || ! accountingValid || ! haveCopyMetrics || physicalCopyBytes != 2u * kRetryBytes + kPeerBytes ||
+        retryCopySamples != 2u || peerCopySamples != 1u || batchChildren.size() != 2u || ! ReadFileTextFsIo(batchIo, retryDestination, retryBytes) ||
+        ! ReadFileTextFsIo(batchIo, peerDestination, peerBytes) || ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), retrySource, expectedRetry) ||
+        ! ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), peerSource, expectedPeer) || retryBytes != expectedRetry || peerBytes != expectedPeer)
+    {
+        AppendLog(std::format(L"XP-01 multi-file retry: summary={} occupant={} completed={} logical={} maxLogical={} accounting={} accountingBefore={} "
+                              L"accountingAfter={} rawTotal={} rawLogical={} physical={} metric={} replaySamples={} "
+                              L"peerSamples={} children={}",
+                              batchSummary.has_value(),
+                              sawExpectedOccupant,
+                              completed != state.completedTasks.end(),
+                              completed != state.completedTasks.end() ? completed->second.progressCompletedBytes : 0u,
+                              maximumObservedProgress,
+                              accountingValid,
+                              accountingBefore.size(),
+                              accountingAfter.size(),
+                              accountingAfter.empty() ? 0u : accountingAfter.back().value0,
+                              accountingAfter.empty() ? 0u : accountingAfter.back().value1,
+                              physicalCopyBytes,
+                              haveCopyMetrics,
+                              retryCopySamples,
+                              peerCopySamples,
+                              batchChildren.size()));
+        return reject(L"multi-file late-collision retry must preserve logical progress, physical replay and exact destination contents");
+    }
+
+    // The fake device replaces the observed PUID during the replacement upload. A fresh
+    // generation must ask again; choosing Skip preserves the newer occupant, not the old grant.
+    // Recovery must retain the identified temp and its contents beside the newer occupant.
+    // The metrics below observe recovery branches; the Compare journal fixtures separately
+    // check the retained journal file and are not replaced by this object-safety control.
+    const std::filesystem::path changedSource = root / L"guard-race.bin";
+    if (! WriteFilledTestFile(changedSource, 4'097u, 0x53u))
+        return reject(L"changed-occupant source unavailable");
+    wil::com_ptr<IFileSystem> changedMtp;
+    wil::com_ptr<IFileSystemIO> changedIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> changedDirectories;
+    const std::string changedOptions =
+        R"json({"directCreateRaceOncePathContains":"guard-race.bin","replaceDestinationDuringOverwriteUpload":"/Fake Phone/Internal Storage/xp01/guard-race.bin"})json";
+    hr = createConfiguredMtp(changedOptions, changedMtp, changedIo, changedDirectories);
+    if (FAILED(hr) || ! changedDirectories || FAILED(changedDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+        return reject(L"changed-occupant fake MTP setup failed");
+    constexpr std::array<std::string_view, 4u> kRecoveryMetrics{"mtp.overwrite.journal_temp_identity_recorded",
+                                                                "mtp.overwrite.delete_original_failed",
+                                                                "mtp.overwrite.journal_replay_destination_identity_rejected",
+                                                                "mtp.overwrite.journal_replay_stale_quarantined"};
+    const std::array<HRESULT, 4u> recoveryExpected{S_OK, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), HRESULT_FROM_WIN32(ERROR_INVALID_DATA), S_OK};
+    std::array<std::vector<PerfMetricSample>, kRecoveryMetrics.size()> recoveryBefore;
+    for (size_t index = 0u; index < kRecoveryMetrics.size(); ++index)
+        if (! TryReadPerfMetricSamples(kRecoveryMetrics[index], recoveryBefore[index]))
+            return reject(L"changed-occupant recovery metrics baseline unavailable");
+    const auto changedSummary     = RunCrossProviderTransferAnsweringConflict(state,
+                                                                              operations,
+                                                                              scope.tasks,
+                                                                              state.fsLocal,
+                                                                              changedMtp,
+                                                                              {changedSource},
+                                                                              std::filesystem::path(kMtpDestination),
+                                                                              FolderWindow::FileOperationState::Task::ConflictAction::Overwrite,
+                                                                              FILESYSTEM_COPY,
+                                                                              nullptr,
+                                                                              {},
+                                                                              FolderWindow::FileOperationState::Task::ConflictAction::Skip);
+    const auto changedDestination = std::filesystem::path(kMtpDestination) / changedSource.filename();
+    std::string changedBytes;
+    const auto changedChildren = ListCrossProviderChildNames(changedMtp.get(), std::filesystem::path(kMtpDestination).wstring());
+    const auto temp            = std::ranges::find_if(
+        changedChildren, [](const std::wstring& name) noexcept { return name.starts_with(L".guard-race.bin.rs-mtp-overwrite-") && name.ends_with(L".tmp"); });
+    const bool exactChildren = changedChildren.size() == 2u && temp != changedChildren.end() &&
+                               std::ranges::count_if(changedChildren, [](const std::wstring& name) noexcept { return name == L"guard-race.bin"; }) == 1 &&
+                               std::ranges::count_if(changedChildren, [](const std::wstring& name) noexcept {
+        return name.starts_with(L".guard-race.bin.rs-mtp-overwrite-") && name.ends_with(L".tmp");
+    }) == 1;
+    const std::filesystem::path tempDestination = temp != changedChildren.end() ? std::filesystem::path(kMtpDestination) / *temp : std::filesystem::path{};
+    std::array<std::string, 2u> persistentIds;
+    bool identityRead = exactChildren;
+    if (identityRead)
+    {
+        const std::array<std::filesystem::path, 2u> identityPaths{changedDestination, tempDestination};
+        for (size_t index = 0u; index < identityPaths.size(); ++index)
+        {
+            const char* properties = nullptr;
+            if (FAILED(changedIo->GetItemProperties(identityPaths[index].c_str(), &properties)) || properties == nullptr)
+            {
+                identityRead = false;
+                break;
+            }
+            const auto object = Common::Json::ParseObjectDocument(properties, 0u);
+            const auto id     = object ? Common::Json::GetStringMember(object.root, "persistentId", Common::Json::MemberRequirement::Required)
+                                       : Common::Json::MemberResult<std::string_view>{};
+            if (! id.HasValue() || id.value.empty())
+            {
+                identityRead = false;
+                break;
+            }
+            persistentIds[index] = id.value;
+        }
+    }
+    const bool changedIdentity = identityRead && persistentIds[0].ends_with("-replaced") && persistentIds[0] != persistentIds[1];
+    bool recoveryMetricsValid  = true;
+    for (size_t index = 0u; index < kRecoveryMetrics.size(); ++index)
+    {
+        std::vector<PerfMetricSample> after;
+        if (! TryReadPerfMetricSamples(kRecoveryMetrics[index], after) || after.size() != recoveryBefore[index].size() + 1u ||
+            after.back().hr != recoveryExpected[index])
+        {
+            AppendLog(std::format(L"XP-01 changed-occupant recovery metric {} missing or unexpected", index));
+            recoveryMetricsValid = false;
+        }
+    }
+    std::string tempBytes;
+    std::string expectedTempBytes;
+    const bool tempContents = exactChildren && ReadFileTextFsIo(changedIo, tempDestination, tempBytes) &&
+                              ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), changedSource, expectedTempBytes) && tempBytes.size() == 4'097u &&
+                              tempBytes == expectedTempBytes;
+    std::error_code changedSourceError;
+    const bool changedSourceExists = std::filesystem::exists(changedSource, changedSourceError);
+    if (! changedSummary.has_value() || changedSummary->skippedItemCount != 1u || changedSummary->errorCount == 0u || ! changedIdentity || changedSourceError ||
+        ! changedSourceExists || ! ReadFileTextFsIo(changedIo, changedDestination, changedBytes) || changedBytes != "replaced occupant" || ! exactChildren ||
+        ! tempContents || ! recoveryMetricsValid)
+    {
+        AppendLog(std::format(L"XP-01 changed occupant: summary={} skipped={} errors={} changedIdentity={} bytes={} children={}",
+                              changedSummary.has_value(),
+                              changedSummary.has_value() ? changedSummary->skippedItemCount : 0u,
+                              changedSummary.has_value() ? changedSummary->errorCount : 0u,
+                              changedIdentity,
+                              changedBytes.size(),
+                              changedChildren.size()));
+        return reject(L"changed PUID must be re-prompted and the newer occupant preserved after Skip");
+    }
+
     // A partial upload is not a known conflict. E_FAIL must leave the item Unknown and non-retryable.
     const std::filesystem::path partialMoveSource = root / L"partial-move-source.bin";
     if (! WriteFilledTestFile(partialMoveSource, 4'096u, 0x4Bu))
@@ -506,15 +749,179 @@ private:
                                                                                   FILESYSTEM_MOVE);
     const std::filesystem::path partialDestination = std::filesystem::path(kMtpDestination) / partialMoveSource.filename();
     std::string partialBytes;
-    const auto partialWriteCalls = readWriteCallCount(partialIo.get(), partialDestination.native());
-    if (! partialSummary.has_value() || partialSummary->unknownPublicationItemCount != 1u || partialSummary->errorCount == 0u ||
-        partialSummary->retainedSourceCount != 1u || ! std::filesystem::exists(partialMoveSource) || ! partialWriteCalls.has_value() ||
-        partialWriteCalls.value() != 1u || ! ReadFileTextFsIo(partialIo, partialDestination, partialBytes) || partialBytes.size() != 17u)
+    std::string partialMoveSourceBytes;
+    const auto partialWriteCalls  = readWriteCallCount(partialIo.get(), partialDestination.native());
+    const auto partialCompletion  = scope.tasks.empty() ? state.completedTasks.end() : state.completedTasks.find(scope.tasks.back());
+    const bool partialCommitError = partialSummary.has_value() && std::ranges::any_of(partialSummary->issueDiagnostics, [](const auto& issue) noexcept {
+        return issue.category == L"bridge.commit" && issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error && issue.status == E_FAIL;
+    });
+    std::error_code partialSourceError;
+    const bool partialSourceExists       = std::filesystem::exists(partialMoveSource, partialSourceError);
+    const bool partialDestinationRead    = ReadFileTextFsIo(partialIo, partialDestination, partialBytes);
+    const bool partialSourceRead         = ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialMoveSource, partialMoveSourceBytes);
+    const bool partialDestinationMatches = partialBytes == std::string(17u, '\x4B');
+    const bool partialSourceMatches      = partialMoveSourceBytes == std::string(4'096u, '\x4B');
+    if (! partialSummary.has_value() || partialSummary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) || partialSummary->indeterminateItemCount != 1u ||
+        partialSummary->unknownPublicationItemCount != 1u || partialSummary->errorCount == 0u || partialSummary->retainedSourceCount != 1u ||
+        ! partialCommitError || partialCompletion == state.completedTasks.end() || partialCompletion->second.conflictPromptCount != 0u || partialSourceError ||
+        ! partialSourceExists || ! partialWriteCalls.has_value() || partialWriteCalls.value() != 1u || ! partialDestinationRead ||
+        ! partialDestinationMatches || ! partialSourceRead || ! partialSourceMatches)
     {
+        AppendLog(std::format(L"XP-01 partial Move: summary={} hr=0x{:08X} unknown={} indeterminate={} retained={} errors={} commitError={} "
+                              L"completion={} prompts={} sourceExists={} sourceError={} writesPresent={} writes={} destinationRead={} destinationSize={} "
+                              L"destinationMatches={} sourceRead={} sourceSize={} sourceMatches={}",
+                              partialSummary.has_value(),
+                              partialSummary ? static_cast<unsigned long>(partialSummary->resultHr) : 0ul,
+                              partialSummary ? partialSummary->unknownPublicationItemCount : 0u,
+                              partialSummary ? partialSummary->indeterminateItemCount : 0u,
+                              partialSummary ? partialSummary->retainedSourceCount : 0u,
+                              partialSummary ? partialSummary->errorCount : 0u,
+                              partialCommitError,
+                              partialCompletion != state.completedTasks.end(),
+                              partialCompletion != state.completedTasks.end() ? partialCompletion->second.conflictPromptCount : 0u,
+                              partialSourceExists,
+                              partialSourceError.value(),
+                              partialWriteCalls.has_value(),
+                              partialWriteCalls.value_or(0u),
+                              partialDestinationRead,
+                              partialBytes.size(),
+                              partialDestinationMatches,
+                              partialSourceRead,
+                              partialMoveSourceBytes.size(),
+                              partialSourceMatches));
         return reject(L"partial direct Commit must retain the source, preserve partial destination bytes, and report Unknown without retry");
+    }
+
+    // Copy has no source-removal phase, but the same ambiguous direct commit must not offer
+    // Retry or start another upload: retain the partial object and report the original error.
+    const std::filesystem::path partialCopySource = root / L"partial-copy-source.bin";
+    if (! WriteFilledTestFile(partialCopySource, 4'098u, 0x5Cu))
+        return reject(L"partial direct-create Copy source unavailable");
+    wil::com_ptr<IFileSystem> partialCopyMtp;
+    wil::com_ptr<IFileSystemIO> partialCopyIo;
+    wil::com_ptr<IFileSystemDirectoryOperations> partialCopyDirectories;
+    const std::string partialCopyOptions = R"json({"directCreateFailOncePathContains":"partial-copy-source.bin","directCreateFailAfterBytes":17})json";
+    hr                                   = createConfiguredMtp(partialCopyOptions, partialCopyMtp, partialCopyIo, partialCopyDirectories);
+    if (FAILED(hr) || ! partialCopyDirectories || FAILED(partialCopyDirectories->CreateDirectory(std::wstring(kMtpDestination).c_str())))
+        return reject(L"partial direct-create Copy fake MTP setup failed");
+    const auto partialCopySummary     = RunCrossProviderTransferFrom(state,
+                                                                     operations,
+                                                                     scope.tasks,
+                                                                     state.fsLocal,
+                                                                     partialCopyMtp,
+                                                                     {partialCopySource},
+                                                                     std::filesystem::path(kMtpDestination),
+                                                                     false,
+                                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                                     FILESYSTEM_COPY);
+    const auto partialCopyDestination = std::filesystem::path(kMtpDestination) / partialCopySource.filename();
+    const auto partialCopyWriteCalls  = readWriteCallCount(partialCopyIo.get(), partialCopyDestination.native());
+    const auto partialCopyCompletion  = scope.tasks.empty() ? state.completedTasks.end() : state.completedTasks.find(scope.tasks.back());
+    const bool partialCopyCommitError = partialCopySummary.has_value() && std::ranges::any_of(partialCopySummary->issueDiagnostics,
+                                                                                              [](const auto& issue) noexcept
+    { return issue.category == L"bridge.commit" && issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error && issue.status == E_FAIL; });
+    std::error_code partialCopySourceError;
+    const bool partialCopySourceExists = std::filesystem::exists(partialCopySource, partialCopySourceError);
+    std::string partialCopyBytes;
+    std::string partialCopySourceBytes;
+    const bool partialCopyDestinationRead    = ReadFileTextFsIo(partialCopyIo, partialCopyDestination, partialCopyBytes);
+    const bool partialCopySourceRead         = ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), partialCopySource, partialCopySourceBytes);
+    const bool partialCopyDestinationMatches = partialCopyBytes == std::string(17u, '\x5C');
+    const bool partialCopySourceMatches      = partialCopySourceBytes == std::string(4'098u, '\x5C');
+    if (! partialCopySummary.has_value() || partialCopySummary->resultHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) ||
+        partialCopySummary->indeterminateItemCount != 1u || partialCopySummary->unknownPublicationItemCount != 1u || partialCopySummary->errorCount == 0u ||
+        partialCopySummary->retainedSourceCount != 1u || ! partialCopyCommitError || partialCopyCompletion == state.completedTasks.end() ||
+        partialCopyCompletion->second.conflictPromptCount != 0u || partialCopySourceError || ! partialCopySourceExists || ! partialCopyWriteCalls.has_value() ||
+        partialCopyWriteCalls.value() != 1u || ! partialCopyDestinationRead || ! partialCopyDestinationMatches || ! partialCopySourceRead ||
+        ! partialCopySourceMatches)
+    {
+        AppendLog(std::format(L"XP-01 partial Copy: summary={} hr=0x{:08X} unknown={} indeterminate={} retained={} errors={} commitError={} "
+                              L"completion={} prompts={} sourceExists={} sourceError={} writesPresent={} writes={} destinationRead={} destinationSize={} "
+                              L"destinationMatches={} sourceRead={} sourceSize={} sourceMatches={}",
+                              partialCopySummary.has_value(),
+                              partialCopySummary ? static_cast<unsigned long>(partialCopySummary->resultHr) : 0ul,
+                              partialCopySummary ? partialCopySummary->unknownPublicationItemCount : 0u,
+                              partialCopySummary ? partialCopySummary->indeterminateItemCount : 0u,
+                              partialCopySummary ? partialCopySummary->retainedSourceCount : 0u,
+                              partialCopySummary ? partialCopySummary->errorCount : 0u,
+                              partialCopyCommitError,
+                              partialCopyCompletion != state.completedTasks.end(),
+                              partialCopyCompletion != state.completedTasks.end() ? partialCopyCompletion->second.conflictPromptCount : 0u,
+                              partialCopySourceExists,
+                              partialCopySourceError.value(),
+                              partialCopyWriteCalls.has_value(),
+                              partialCopyWriteCalls.value_or(0u),
+                              partialCopyDestinationRead,
+                              partialCopyBytes.size(),
+                              partialCopyDestinationMatches,
+                              partialCopySourceRead,
+                              partialCopySourceBytes.size(),
+                              partialCopySourceMatches));
+        return reject(L"partial direct Copy Commit must retain the source and partial bytes, report Unknown, and never offer or perform Retry");
     }
     Debug::Perf::Emit(L"FileOps.SelfTest.CrossProviderMtpNewFile", L"local-to-mtp=new-file+new-folder;no-temp-left", 0u, 2u, 0u, S_OK);
     return true;
+}
+
+[[nodiscard]] bool RunFileOpsCrossProviderMtpNewFileChecks(SelfTestState& state) noexcept
+{
+    auto* const operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    if (! operations || ! CancelOutstandingSelfTestOperations(operations))
+    {
+        AppendLog(L"XP-01 requires an initial worker quiet point before redirecting MTP journal state.");
+        return false;
+    }
+
+    try
+    {
+        std::wstring id;
+        if (FAILED(Common::Settings::CreateConnectionProfileId(id)) || id.empty())
+        {
+            AppendLog(L"XP-01 could not create an isolated journal sandbox identifier.");
+            return false;
+        }
+        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::FileOperations, std::format(L"xp01-mtp-journal-{}", id));
+        std::error_code emptyError;
+        if (! sandbox.IsValid() || ! std::filesystem::is_empty(sandbox.root, emptyError) || emptyError)
+        {
+            AppendLog(L"XP-01 isolated journal sandbox is unavailable or not empty.");
+            return false;
+        }
+        using RedSalamander::TestSupport::ReadEnvironmentValue;
+        using RedSalamander::TestSupport::ScopedEnvironmentVariable;
+        const auto original = ReadEnvironmentValue(L"LOCALAPPDATA");
+        if (original.error != ERROR_SUCCESS)
+        {
+            AppendLog(L"XP-01 could not capture the original journal environment.");
+            return false;
+        }
+        bool strictDrainSucceeded = true;
+        bool casePassed           = false;
+        {
+            const std::wstring sandboxPath = sandbox.root.wstring();
+            const ScopedEnvironmentVariable journalEnvironment(L"LOCALAPPDATA", sandboxPath);
+            // The inner call owns every fake instance and its module. Its strict scope joins
+            // owned workers before those objects and this environment lease are released.
+            casePassed = RunFileOpsCrossProviderMtpNewFileChecksIsolated(state, strictDrainSucceeded);
+        }
+        const auto restored = ReadEnvironmentValue(L"LOCALAPPDATA");
+        if (restored.error != ERROR_SUCCESS || restored.value != original.value)
+        {
+            AppendLog(L"XP-01 could not verify restoration of the journal environment.");
+            return false;
+        }
+        return casePassed && strictDrainSucceeded;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::system_error& error)
+    {
+        // Environment ownership is a fixture boundary; report the failure after RAII restoration.
+        Debug::Error(L"XP-01 isolated journal environment failed: {}", error.code().value());
+        return false;
+    }
 }
 
 [[nodiscard]] bool RunFileOpsVerifyAvailabilityChecks(SelfTestState& state) noexcept

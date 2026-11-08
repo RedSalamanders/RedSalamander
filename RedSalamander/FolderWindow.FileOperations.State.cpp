@@ -153,6 +153,9 @@ std::atomic<bool> g_fileOpsBridgeInjectHostileChildNames{false};
 std::atomic<unsigned long> g_fileOpsBridgeInjectHostileChildNameAttempts{0};
 std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseCount{0};
 std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseAttempts{0};
+std::atomic<unsigned long> g_fileOpsBridgeInjectRootDirectoryReparseCount{0};
+std::atomic<unsigned long> g_fileOpsBridgeInjectRootDirectoryReparseAttempts{0};
+std::atomic<unsigned long> g_fileOpsBridgeInjectedRootBoundDirectoryCount{0};
 std::atomic<int> g_fileOpsBridgeReparsePolicyOverride{-1};
 std::atomic<unsigned long> g_fileOpsBridgeReplacePublishedDestinationAttempts{0};
 std::mutex g_fileOpsBridgeCommittedErrorMutex;
@@ -208,6 +211,8 @@ SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoint;
 SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
+SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
+SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 
 namespace
 {
@@ -13501,10 +13506,11 @@ void FolderWindow::FileOperationState::Task::WaitWhilePaused(const std::atomic<b
             const bool ready = ! waitingForConflict || stillPaused || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested() ||
                                (externalStop != nullptr && externalStop->load(std::memory_order_acquire));
 #ifdef ENABLE_TESTS
-            if (! ready && _dbgConflictWaitBeforeSleepGate.load(std::memory_order_acquire))
+            if (! ready)
             {
                 _dbgConflictWaitBeforeSleepReached.store(true, std::memory_order_release);
-                _dbgConflictWaitBeforeSleepGate.wait(true, std::memory_order_acquire);
+                if (_dbgConflictWaitBeforeSleepGate.load(std::memory_order_acquire))
+                    _dbgConflictWaitBeforeSleepGate.wait(true, std::memory_order_acquire);
             }
 #endif
             return ready;
@@ -14653,13 +14659,27 @@ struct CrossFileSystemBridge
     bool renameMerge = false;
     std::atomic<bool> rootSourceRemoved{false};
 
+    enum class TerminalSkip : uint8_t
+    {
+        None,
+        Root,
+        Descendant
+    };
+    // Written only by the traversal owner after the selected root's work has quiesced.
+    TerminalSkip terminalSkip = TerminalSkip::None;
+#ifdef ENABLE_TESTS
+    bool rootDirectoryReparseInjected = false;
+#endif
+
     // Total bytes is best-effort: if unknown, keep 0.
-    uint64_t totalBytes                        = 0;
-    uint64_t completedBytes                    = 0;
-    unsigned long skippedDirectoryReparseCount = 0;
-    unsigned long skippedFileReparseCount      = 0;
-    bool rootDirectoryReparseSkipped           = false;
-    bool unsupportedReparseEncountered         = false;
+    uint64_t totalBytes                         = 0;
+    uint64_t completedBytes                     = 0;
+    unsigned long skippedDirectoryReparseCount  = 0;
+    unsigned long skippedFileReparseCount       = 0;
+    unsigned long skippedDirectoryConflictCount = 0;
+    bool rootDirectoryConflictSkipped           = false;
+    bool rootDirectoryReparseSkipped            = false;
+    bool unsupportedReparseEncountered          = false;
     std::atomic<bool> anyDestinationPublished{false};
     std::atomic<bool> destinationPublicationUnknown{false};
     // Set once a created folder could not be bound again by its path (a destination without FileIdInfo, such as the
@@ -14752,6 +14772,8 @@ struct CrossFileSystemBridge
     bool connectionLimitsInitialized = false;
 
     std::atomic<uint64_t>* completedBytesAtomic = nullptr;
+    // Bandwidth accounts actual writes, including retransmission; logical progress does not.
+    std::atomic<uint64_t> physicalWrittenBytes{0u};
 
     ULONGLONG startTick = 0;
     FileSystemOptions options{};
@@ -16370,7 +16392,15 @@ struct CrossFileSystemBridge
                     }
                     continue;
                 }
-                if (promptHr == S_FALSE || FAILED(promptHr))
+                if (promptHr == S_FALSE)
+                {
+                    // Directory shells run on the traversal owner; preserve this specific
+                    // decision until the whole walk has completed without a failure.
+                    ++skippedDirectoryConflictCount;
+                    rootDirectoryConflictSkipped = rootDirectoryConflictSkipped || sourcePath == rootSourcePath;
+                    return S_FALSE;
+                }
+                if (FAILED(promptHr))
                 {
                     return promptHr;
                 }
@@ -16902,8 +16932,7 @@ struct CrossFileSystemBridge
                         // at a deterministic readback checkpoint.
                         g_fileOpsVerificationReadbackPausePoint.Pause(5'000ull);
 #endif
-                        const uint64_t transferredBytes =
-                            completedBytesAtomic != nullptr ? completedBytesAtomic->load(std::memory_order_acquire) : completedBytes;
+                        const uint64_t transferredBytes = physicalWrittenBytes.load(std::memory_order_acquire);
                         ThrottleThreadSafe(transferredBytes + completedAfter);
                     }
                     if (SUCCEEDED(hr) && fileVerifiedBytes != expectedSizeBytes)
@@ -16964,7 +16993,7 @@ struct CrossFileSystemBridge
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
             const uint64_t completedAfter   = completedBefore + expectedSizeBytes;
-            const uint64_t transferredBytes = completedBytesAtomic != nullptr ? completedBytesAtomic->load(std::memory_order_acquire) : completedBytes;
+            const uint64_t transferredBytes = physicalWrittenBytes.load(std::memory_order_acquire);
             // An opaque provider proof may complete in one callback, but its verified byte
             // count still shares the configured data budget with transfer work.
             ThrottleThreadSafe(transferredBytes + completedAfter);
@@ -17527,6 +17556,7 @@ struct CrossFileSystemBridge
                                      unsigned long chunkBytes,
                                      uint64_t fileTotalBytes,
                                      uint64_t& fileCompletedBytes,
+                                     uint64_t& fileProgressHighWater,
                                      std::atomic<uint64_t>& overallCompletedBytes,
                                      uint64_t& writeUs,
                                      ReportProgressFn&& reportProgress) noexcept
@@ -17571,13 +17601,20 @@ struct CrossFileSystemBridge
             }
             fileCompletedBytes += bytesWritten;
 
-            const uint64_t previousOverall = overallCompletedBytes.fetch_add(bytesWritten, std::memory_order_acq_rel);
-            if (previousOverall > (std::numeric_limits<uint64_t>::max)() - static_cast<uint64_t>(bytesWritten))
+            const uint64_t logicalDelta    = fileCompletedBytes > fileProgressHighWater ? fileCompletedBytes - fileProgressHighWater : 0u;
+            fileProgressHighWater          = (std::max)(fileProgressHighWater, fileCompletedBytes);
+            const uint64_t previousOverall = overallCompletedBytes.fetch_add(logicalDelta, std::memory_order_acq_rel);
+            if (previousOverall > (std::numeric_limits<uint64_t>::max)() - logicalDelta)
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
-            const uint64_t overallAfter = previousOverall + static_cast<uint64_t>(bytesWritten);
-            const bool forceProgress    = fileTotalBytes > 0 && fileCompletedBytes >= fileTotalBytes;
+            const uint64_t overallAfter   = previousOverall + logicalDelta;
+            const uint64_t physicalBefore = physicalWrittenBytes.fetch_add(bytesWritten, std::memory_order_acq_rel);
+            if (physicalBefore > (std::numeric_limits<uint64_t>::max)() - static_cast<uint64_t>(bytesWritten))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
+            const bool forceProgress = fileTotalBytes > 0 && fileCompletedBytes >= fileTotalBytes;
 
             const HRESULT hrProgress = reportProgress(overallAfter, forceProgress);
             if (FAILED(hrProgress))
@@ -17585,7 +17622,7 @@ struct CrossFileSystemBridge
                 return hrProgress;
             }
 
-            ThrottleThreadSafe(overallAfter);
+            ThrottleThreadSafe(physicalBefore + static_cast<uint64_t>(bytesWritten));
         }
         return S_OK;
     }
@@ -17708,6 +17745,8 @@ struct CrossFileSystemBridge
                            finalStatus);
         });
         constexpr unsigned int kMaxReplaceRePrompts = 2u;
+        // One file owns its high-water across attempts; retries never add the same logical bytes twice.
+        uint64_t fileProgressHighWater = 0u;
         for (unsigned int attempt = 0u;; ++attempt)
         {
             bool replaceRefused = false;
@@ -17717,6 +17756,7 @@ struct CrossFileSystemBridge
                                                          bufferBytesIn,
                                                          progressStreamId,
                                                          overallCompletedBytes,
+                                                         fileProgressHighWater,
                                                          adoptFileSizeAsTotalWhenUnknown,
                                                          publishSelectedLeafDiscovery,
                                                          replaceRefused);
@@ -18223,7 +18263,8 @@ struct CrossFileSystemBridge
                                std::byte* bufferIn,
                                unsigned long bufferBytesIn,
                                uint64_t progressStreamId,
-                               std::atomic<uint64_t>& overallCompletedBytes) noexcept
+                               std::atomic<uint64_t>& overallCompletedBytes,
+                               uint64_t& fileProgressHighWater) noexcept
     {
         const std::wstring& sourcePath                                                  = txn.sourcePath;
         const std::wstring& destinationPath                                             = txn.destinationPath;
@@ -18378,8 +18419,15 @@ struct CrossFileSystemBridge
                     static_cast<void>(proofHasher->Update(std::span<const std::byte>(bufferIn, bytesRead)));
                 }
 
-                const HRESULT hrWrite =
-                    WriteChunk(*writer, bufferIn, bytesRead, fileTotalBytes, fileCompletedBytes, overallCompletedBytes, copyPerf.writeUs, maybeReportProgress);
+                const HRESULT hrWrite = WriteChunk(*writer,
+                                                   bufferIn,
+                                                   bytesRead,
+                                                   fileTotalBytes,
+                                                   fileCompletedBytes,
+                                                   fileProgressHighWater,
+                                                   overallCompletedBytes,
+                                                   copyPerf.writeUs,
+                                                   maybeReportProgress);
                 if (FAILED(hrWrite))
                 {
                     return hrWrite;
@@ -18552,6 +18600,7 @@ struct CrossFileSystemBridge
                                     slotBytesRead,
                                     fileTotalBytes,
                                     fileCompletedBytes,
+                                    fileProgressHighWater,
                                     overallCompletedBytes,
                                     writerWriteUs,
                                     maybeReportProgress);
@@ -18653,6 +18702,15 @@ struct CrossFileSystemBridge
             if (! useIdentityOwnedStage && ! definitiveNonCommit)
             {
                 destinationPublicationUnknown.store(true, std::memory_order_release);
+            }
+            // A new-name final writer reports an appeared occupant as a known non-commit.
+            // Bounded re-admission owns the fresh authority check and question; logging an
+            // error here would leave a false problem after the user chooses Skip.
+            if ((txn.useAtomicFinalWriter || txn.useDirectFinalWriter) && ! txn.overwriteGranted &&
+                (hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)))
+            {
+                replaceRefused = true;
+                return hr;
             }
             if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && identityLessReplace)
             {
@@ -18995,6 +19053,7 @@ struct CrossFileSystemBridge
                                    unsigned long bufferBytesIn,
                                    uint64_t progressStreamId,
                                    std::atomic<uint64_t>& overallCompletedBytes,
+                                   uint64_t& fileProgressHighWater,
                                    bool adoptFileSizeAsTotalWhenUnknown,
                                    bool publishSelectedLeafDiscovery,
                                    bool& replaceRefused) noexcept
@@ -19107,7 +19166,7 @@ struct CrossFileSystemBridge
         {
             return hr;
         }
-        hr = Pump(txn, bufferIn, bufferBytesIn, progressStreamId, overallCompletedBytes);
+        hr = Pump(txn, bufferIn, bufferBytesIn, progressStreamId, overallCompletedBytes, fileProgressHighWater);
         if (FAILED(hr))
         {
             return hr;
@@ -19324,11 +19383,13 @@ struct CrossFileSystemBridge
     HRESULT CopyLink(const std::wstring& sourcePath,
                      std::wstring destinationPath,
                      bool sourceIsDirectory,
-                     uint64_t directoryDepth   = 0u,
-                     bool* traverseAsDirectory = nullptr,
-                     bool* enqueueAsFile       = nullptr) noexcept
+                     uint64_t directoryDepth      = 0u,
+                     bool* traverseAsDirectory    = nullptr,
+                     bool* enqueueAsFile          = nullptr,
+                     bool* traversedRootDirectory = nullptr) noexcept
     {
-        const HRESULT status = CopyLinkOnce(sourcePath, destinationPath, sourceIsDirectory, directoryDepth, traverseAsDirectory, enqueueAsFile);
+        const HRESULT status =
+            CopyLinkOnce(sourcePath, destinationPath, sourceIsDirectory, directoryDepth, traverseAsDirectory, enqueueAsFile, traversedRootDirectory);
         ReportFileWork(FileSystemFileWorkPhase::Terminal,
                        sourcePath,
                        destinationPath,
@@ -19346,7 +19407,8 @@ struct CrossFileSystemBridge
                          bool sourceIsDirectory,
                          uint64_t directoryDepth,
                          bool* traverseAsDirectory,
-                         bool* enqueueAsFile) noexcept
+                         bool* enqueueAsFile,
+                         bool* traversedRootDirectory) noexcept
     {
         const bool isRoot   = traverseAsDirectory == nullptr;
         const auto skipLink = [&]() noexcept -> HRESULT
@@ -19416,12 +19478,22 @@ struct CrossFileSystemBridge
         }
         if (classification.authority.kind == FILESYSTEM_BOUND_DIRECTORY)
         {
+#ifdef ENABLE_TESTS
+            if (traversedRootDirectory != nullptr && rootDirectoryReparseInjected)
+            {
+                g_fileOpsBridgeInjectedRootBoundDirectoryCount.fetch_add(1u, std::memory_order_acq_rel);
+            }
+#endif
             // Name-surrogate tags are links; other directory reparse tags remain a
             // directory namespace and are traversed without following another target.
             if (traverseAsDirectory != nullptr)
             {
                 *traverseAsDirectory = true;
                 return S_OK;
+            }
+            if (traversedRootDirectory != nullptr)
+            {
+                *traversedRootDirectory = true;
             }
             return CopyDirectorySequential(sourcePath, destinationPath, directoryDepth);
         }
@@ -19743,7 +19815,17 @@ struct CrossFileSystemBridge
                 }
             }
         }
-        return ReportDiscovery(0u, false);
+        const HRESULT discoveryHr = ReportDiscovery(0u, false);
+#ifdef ENABLE_TESTS
+        // This sequential listing owns no queue lock. Hold the selected traversal
+        // after its real positive open report until the capture finishes or cancels.
+        if (SUCCEEDED(discoveryHr) && discoveredFiles > 0u && discoveredBytes > 0u)
+        {
+            g_fileOpsBridgeOpenListingPausePoint.PauseForSource(
+                rootSourcePath, task._taskId, 30'000u, [&]() noexcept { return task.CancelRequestedDurable(); });
+        }
+#endif
+        return discoveryHr;
     }
 
     void MaybeCloseSequentialDiscovery() noexcept
@@ -21214,6 +21296,11 @@ struct CrossFileSystemBridge
 
     HRESULT CopyDirectory(const std::wstring& sourcePath, std::wstring destinationPath) noexcept
     {
+#ifdef ENABLE_TESTS
+        // Capture the actual call denominator and logical total after its workers have drained.
+        const auto accountingWitness = wil::scope_exit([&]() noexcept
+        { Debug::Perf::Emit(L"FileOps.SelfTest.BridgeDirectoryAccounting", std::format(L"taskId={}", task._taskId), 0u, totalBytes, completedBytes, S_OK); });
+#endif
         const unsigned int withinFolderBudget = ComputeWithinFolderBudget();
         if (withinFolderBudget <= 1u)
         {
@@ -21300,6 +21387,15 @@ struct CrossFileSystemBridge
             }
         }
 
+#ifdef ENABLE_TESTS
+        // Test-only routing seam: the real provider must still bind this directory no-follow.
+        if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+            ConsumeBridgeCounterForSelfTest(g_fileOpsBridgeInjectRootDirectoryReparseCount, g_fileOpsBridgeInjectRootDirectoryReparseAttempts))
+        {
+            attributes |= FILE_ATTRIBUTE_REPARSE_POINT;
+            rootDirectoryReparseInjected = true;
+        }
+#endif
         const bool isDirectory        = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         const bool isReparse          = (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
         rootVerificationNotApplicable = isDirectory || isReparse;
@@ -21317,38 +21413,54 @@ struct CrossFileSystemBridge
         {
             return discoveryHr;
         }
-        if (isReparse)
+        const auto finishDirectory = [&](HRESULT dirHr) noexcept -> HRESULT
         {
-            const HRESULT linkHr = CopyLink(sourcePath, destinationPath, isDirectory);
-            if (FAILED(linkHr))
-            {
-                return linkHr;
-            }
-            return linkHr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
-        }
-        if (isDirectory)
-        {
-            const HRESULT dirHr = CopyDirectory(sourcePath, destinationPath);
             if (FAILED(dirHr))
             {
                 return dirHr;
             }
-            if (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedFileConflictCount.load(std::memory_order_acquire) > 0)
+            if (skippedDirectoryReparseCount > 0 || skippedFileReparseCount > 0 || skippedDirectoryConflictCount > 0 ||
+                skippedFileConflictCount.load(std::memory_order_acquire) > 0)
             {
-                // Some child files were skipped at a conflict prompt; the tree is not a
-                // full copy. Caller treats PARTIAL as "source preserved" for MOVE.
+                // Publish a Skip-only witness only after the directory walk succeeded.
+                terminalSkip = rootDirectoryConflictSkipped ? TerminalSkip::Root : TerminalSkip::Descendant;
                 return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
             }
             return dirHr;
+        };
+        if (isReparse)
+        {
+            bool traversedRootDirectory = false;
+            const HRESULT linkHr        = CopyLink(sourcePath, destinationPath, isDirectory, 0u, nullptr, nullptr, &traversedRootDirectory);
+            if (traversedRootDirectory)
+            {
+                return finishDirectory(linkHr);
+            }
+            if (FAILED(linkHr))
+            {
+                return linkHr;
+            }
+            if (linkHr == S_FALSE &&
+                (rootDirectoryReparseSkipped || skippedFileConflictCount.load(std::memory_order_acquire) > 0u || skippedFileReparseCount > 0u))
+            {
+                terminalSkip = TerminalSkip::Root;
+                return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+            }
+            return linkHr;
+        }
+        if (isDirectory)
+        {
+            return finishDirectory(CopyDirectory(sourcePath, destinationPath));
         }
 
         // The selected root is one known regular file. Its exact size is not readable until the
         // source binds, so this root's byte total and its closure are published there, before any
         // writer, stage or payload work. The exit guard above stays the idempotent terminal fallback.
         const HRESULT fileHr = CopyFile(sourcePath, destinationPath, true);
-        if (fileHr == S_FALSE)
+        if (fileHr == S_FALSE && skippedFileConflictCount.load(std::memory_order_acquire) > 0u)
         {
             // Single top-level file skipped at its conflict prompt.
+            terminalSkip = TerminalSkip::Root;
             return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
         return fileHr;
@@ -21687,7 +21799,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
         if (cleanupIndeterminate)
         {
             result.publication       = partialPublication.value_or(FileOperations::PublicationState::Unknown);
-            result.sourceDisposition = result.publication == FileOperations::PublicationState::Published && _operation == FILESYSTEM_MOVE
+            result.sourceDisposition = result.publication == FileOperations::PublicationState::Published && _operation == FILESYSTEM_MOVE &&
+                                               strategy != FileOperations::OperationStrategy::CopyOnly && ! managedSourceRetained
                                            ? FileOperations::SourceDisposition::Unknown
                                            : FileOperations::SourceDisposition::Retained;
             result.completion        = FileOperations::ItemCompletion::Indeterminate;
@@ -21703,6 +21816,24 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             // mutation committed (for example, a directory Copy that skipped one child).
             // The reducer keeps publication/source truth independent from completion.
             applyProviderReduction(receiptState, status, skipped, partiallySkipped);
+        }
+        else if (partialPublication.has_value() && FAILED(status) && ! IsCancellationOutcome(status) && ! skipped && ! partiallySkipped &&
+                 (partialPublication.value() == FileOperations::PublicationState::Unknown ||
+                  partialPublication.value() == FileOperations::PublicationState::Published ||
+                  result.ownedStageDisposition == FileOperations::OwnedStageDisposition::Retained ||
+                  OwnedStageDispositionIsIndeterminate(result.ownedStageDisposition)))
+        {
+            // Bridge publication is an independent fact; source retention is not success.
+            result.publication       = partialPublication.value();
+            result.sourceDisposition = (_operation == FILESYSTEM_COPY || strategy == FileOperations::OperationStrategy::CopyOnly || managedSourceRetained)
+                                           ? FileOperations::SourceDisposition::Retained
+                                           : FileOperations::SourceDisposition::Unknown;
+            result.completion =
+                result.publication == FileOperations::PublicationState::Unknown || OwnedStageDispositionIsIndeterminate(result.ownedStageDisposition)
+                    ? FileOperations::ItemCompletion::Indeterminate
+                    : FileOperations::ItemCompletion::Failed;
+            if (result.completion == FileOperations::ItemCompletion::Indeterminate)
+                result.status = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         else if (partiallyFailed)
         {
@@ -21736,7 +21867,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             // which object was consumed nor whether the accepted source still exists.
             applyProviderReduction(FileOperationItemResultReducer::ReceiptState::Missing, status, false, false);
         }
-        else if (succeeded || managedSourceRetained)
+        else if (succeeded || (managedSourceRetained && SUCCEEDED(status)))
         {
             // A successful directory merge can publish nothing. The bridge's exact
             // mutation facts stay authoritative even when the requested intent is fulfilled.
@@ -21788,7 +21919,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
             result.status     = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
         if (verification == FileOperations::VerificationState::Failed || verification == FileOperations::VerificationState::Canceled ||
-            verification == FileOperations::VerificationState::Unavailable)
+            (verification == FileOperations::VerificationState::Unavailable && SUCCEEDED(status) && ! skipped && ! partiallySkipped))
         {
             result.publication       = FileOperations::PublicationState::Published;
             result.sourceDisposition = FileOperations::SourceDisposition::Retained;
@@ -23737,16 +23868,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
         struct QualifiedItemMutationResult final
         {
-            HRESULT hr                                       = E_NOTIMPL;
-            unsigned long bridgeSkippedDirectoryReparseCount = 0;
-            bool bridgeRootDirectoryReparseSkipped           = false;
-            bool bridgeUnsupportedReparse                    = false;
-            bool providerMutationAttempted                   = false;
-            bool managedSourceRetained                       = false;
-            bool managedCleanupIndeterminate                 = false;
-            bool ownedStageCleanupIndeterminate              = false;
-            FileOperations::VerificationState verification   = FileOperations::VerificationState::NotRequested;
-            bool verificationNotApplicableForSelectedRoot    = false;
+            HRESULT hr                                             = E_NOTIMPL;
+            unsigned long bridgeSkippedDirectoryReparseCount       = 0;
+            bool bridgeRootDirectoryReparseSkipped                 = false;
+            bool bridgeUnsupportedReparse                          = false;
+            bool hostBridgeAttempt                                 = false;
+            CrossFileSystemBridge::TerminalSkip bridgeTerminalSkip = CrossFileSystemBridge::TerminalSkip::None;
+            bool providerMutationAttempted                         = false;
+            bool managedSourceRetained                             = false;
+            bool managedCleanupIndeterminate                       = false;
+            bool ownedStageCleanupIndeterminate                    = false;
+            FileOperations::VerificationState verification         = FileOperations::VerificationState::NotRequested;
+            bool verificationNotApplicableForSelectedRoot          = false;
             std::optional<FileOperations::PublicationState> bridgePublication;
             QualifiedItemFailurePhase failurePhase      = QualifiedItemFailurePhase::None;
             HRESULT failureStatus                       = S_OK;
@@ -23886,6 +24019,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                 {
                     if (useCrossFileSystemBridge)
                     {
+                        result.hostBridgeAttempt = true;
                         CrossFileSystemBridge bridge(*this,
                                                      *_fileSystem,
                                                      *effectiveDestinationFileSystem,
@@ -23913,6 +24047,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                      transferPlan->destinationEndpoint.verificationWriterDigestProof);
                         executionPhase                            = FileOperationItemResultReducer::ExecutionPhase::MutationPossible;
                         const HRESULT bridgeHr                    = bridge.TraverseAndPublishPath(sourceText, destinationItemText);
+                        result.bridgeTerminalSkip                 = bridge.terminalSkip;
                         result.bridgeSkippedDirectoryReparseCount = bridge.skippedDirectoryReparseCount + bridge.skippedFileReparseCount;
                         result.bridgeRootDirectoryReparseSkipped  = bridge.rootDirectoryReparseSkipped;
                         result.bridgeUnsupportedReparse           = bridge.unsupportedReparseEncountered;
@@ -24322,6 +24457,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
                         for (;;)
                         {
+#ifdef ENABLE_TESTS
+                            auto& convergenceGate = FolderWindowFileOperationsStateInternal::g_fileOpsConflictConvergenceItemPausePoint;
+                            if (convergenceGate.enabled.load(std::memory_order_acquire))
+                                convergenceGate.PauseForSource(sourceText, task._taskId, 120'000ull, [&]() noexcept {
+                                    return _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
+                                });
+#endif
                             task.WaitWhilePaused();
                             if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
                             {
@@ -24543,6 +24685,29 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                             callTotalItems                                 = finishedCall.totalItems;
                             callDiscoveredBytes                            = cookie.lastDiscoveredBytes;
 
+                            // A bridge carries publication and owned-stage truth directly, not via
+                            // a native provider receipt. Never replay an uncertain or committed
+                            // primary, nor leave retained stage debt behind for a new attempt.
+                            const bool bridgeStageDebt = mutationResult.ownedStageDisposition == OwnedStageDisposition::Retained ||
+                                                         OwnedStageDispositionIsIndeterminate(mutationResult.ownedStageDisposition);
+                            const bool bridgeUnknown   = mutationResult.bridgePublication == FileOperations::PublicationState::Unknown;
+                            const bool bridgePublished = mutationResult.bridgePublication == FileOperations::PublicationState::Published;
+                            // Only a terminal traversal witness establishes Skip-only partial work.
+                            // Independent unknown publication or stage debt wins.
+                            const bool bridgeSkipOnly       = mutationResult.bridgeTerminalSkip != CrossFileSystemBridge::TerminalSkip::None;
+                            const bool bridgeUnsafeToReplay = mutationResult.hostBridgeAttempt && FAILED(itemHr) && ! task.IsCancellationOutcome(itemHr) &&
+                                                              (bridgeUnknown || bridgeStageDebt || (bridgePublished && ! bridgeSkipOnly));
+                            if (bridgeUnsafeToReplay)
+                            {
+                                if (continueOnError)
+                                {
+                                    itemPartiallyFailed = true;
+                                    hadPartialFailure.store(true, std::memory_order_release);
+                                    break;
+                                }
+                                return itemHr;
+                            }
+
                             if (FAILED(mutationResult.hr) && mutationResult.providerMutationAttempted)
                             {
                                 const HRESULT receiptStatus = mutationResult.hr;
@@ -24689,12 +24854,16 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
                             const bool traversalLimitReached = traversalLimitReachedForCall(
                                 itemHr, traversalLimitGenerationBefore, _bridgeTraversalLimitHitCount.load(std::memory_order_acquire));
+                            const bool skipObserved =
+                                mutationResult.hostBridgeAttempt ? bridgeSkipOnly : cookie.explicitSkipObserved.load(std::memory_order_acquire);
                             const QualifiedItemTerminalDisposition terminal =
-                                classifyQualifiedItemTerminal(itemHr,
-                                                              traversalLimitReached,
-                                                              mutationResult.managedCleanupIndeterminate || mutationResult.ownedStageCleanupIndeterminate,
-                                                              mutationResult.verification,
-                                                              cookie.explicitSkipObserved.load(std::memory_order_acquire));
+                                mutationResult.hostBridgeAttempt && mutationResult.bridgeTerminalSkip == CrossFileSystemBridge::TerminalSkip::Root
+                                    ? QualifiedItemTerminalDisposition::Skipped
+                                    : classifyQualifiedItemTerminal(itemHr,
+                                                                    traversalLimitReached,
+                                                                    mutationResult.managedCleanupIndeterminate || mutationResult.ownedStageCleanupIndeterminate,
+                                                                    mutationResult.verification,
+                                                                    skipObserved);
                             if (terminal == QualifiedItemTerminalDisposition::Canceled)
                             {
                                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);

@@ -11,6 +11,10 @@
         if (! state.Require(blocker.Start(), L"Could not install the no-activation negative control."))
             return false;
         state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true), L"Foreground admission must respect the no-activation guard.");
+        DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics blockedAdmission{};
+        state.Require(! DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, false, &blockedAdmission) &&
+                          ! blockedAdmission.postReleaseAttempt.observed && ! blockedAdmission.foregroundRequestAttempted,
+                      L"Ordinary admission must refuse before either foreground request under the no-activation guard.");
         state.Require(blocker.BlockedActivationCount() == 0u && blocker.BlockedFocusCount() == 0u,
                       L"No-activation admission must refuse before attempting a focus or activation change.");
     }
@@ -112,7 +116,8 @@
         witness.retired                   = false;
         witness.keyDownAtDispatch         = false;
         witness.altDownAtDispatch         = false;
-        const bool activated              = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true);
+        DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics admission{};
+        const bool activated      = DirectedSelfTestInputWarning::TryActivateOwnedWindow(mainWindow, true, &admission);
         const bool retiredWitness = witness.retired && witness.window == nullptr && GetPropW(warningWindow, HotkeyDispatchWitness::StateProp()) == nullptr &&
                                     RedSalamander::Win32Callback::GetStoredWndProc(warningWindow, HotkeyDispatchWitness::OriginalProcProp()) == nullptr &&
                                     reinterpret_cast<WNDPROC>(GetWindowLongPtrW(warningWindow, GWLP_WNDPROC)) == warningProcedure;
@@ -127,6 +132,7 @@
                           retiredWitness));
         state.Require(witness.keyDownAtDispatch && witness.altDownAtDispatch,
                       L"Both registered chord keys must remain depressed until the foreground handoff completes.");
+        state.Require(! admission.postReleaseAttempt.observed, L"Strict hotkey admission must never use the post-release foreground request.");
         const auto released = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
             return (GetAsyncKeyState(VK_F24) & 0x8000) == 0 && (GetAsyncKeyState(VK_MENU) & 0x8000) == 0;
         }, {.timeout = std::chrono::milliseconds{500}, .operationName = L"owned foreground hotkey release"});
@@ -1791,7 +1797,33 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
 
         return false;
     };
-    state.Require(waitForStableBaseline(), L"Failed to capture the baseline navigation-view state before select-next shell-stability validation.");
+    const bool baselineReady = waitForStableBaseline();
+    if (! baselineReady)
+    {
+        NavigationViewDebugSnapshot observed{};
+        const bool snapshotReady = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, observed);
+        const auto currentPath   = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        Trace(std::format(L"Select-next baseline: snapshot={} pathMatches={} navPathMatches={} focusTarget={} edit={} history={} suggest={} fullPath={} "
+                          L"fullPathEdit={} visibleChildren={} paneFocus={} itemFocus={} items={} expectedItems={} selected={} enumerations={} refreshes={}.",
+                          snapshotReady,
+                          currentPath.has_value() && OrdinalString::EqualsNoCasePath(currentPath.value(), root),
+                          observed.currentPathText == root.wstring(),
+                          static_cast<unsigned int>(observed.focusTarget),
+                          observed.editMode,
+                          observed.historyDropdownVisible,
+                          observed.editSuggestPopupVisible,
+                          observed.fullPathPopupVisible,
+                          observed.fullPathPopupEditMode,
+                          observed.visibleChildWindowCount,
+                          g_folderWindow.GetFocusedFolderViewHwnd() == folderView,
+                          g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"a.txt",
+                          g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                          baselineItemCount,
+                          g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                          enumCount.load(std::memory_order_acquire),
+                          g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left)));
+    }
+    state.Require(baselineReady, L"Failed to capture the baseline navigation-view state before select-next shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;

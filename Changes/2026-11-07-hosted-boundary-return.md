@@ -1,0 +1,1 @@
+- Keep the hosted test boundary eligible for automatic foreground return after verified acquisition and service its message queue during bounded restoration.

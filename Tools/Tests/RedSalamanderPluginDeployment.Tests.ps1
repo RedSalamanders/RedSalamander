@@ -4,6 +4,8 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:selectedPlatform = $null
 $script:selectedConfiguration = $null
+$script:deploymentArtifactOperationLock = $null
+$script:deploymentArtifactOperationScope = $null
 $buildScript = Join-Path $repoRoot 'build.ps1'
 $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
 $script:outputDir = $null
@@ -77,7 +79,8 @@ function Get-RSRedSalamanderDependencyGuids {
 function Invoke-RSTargetedBuildForDeploymentTest {
     param(
         [Parameter(Mandatory = $true)][ValidateSet('x64', 'ARM64')][string]$Platform,
-        [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration
+        [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration,
+        [Parameter(Mandatory = $true)][ValidateRange(1, 65535)][int]$BuildNumber
     )
     $buildLogDir = New-RSTestSandboxScratchDirectory `
         -RepoRoot $repoRoot `
@@ -87,15 +90,18 @@ function Invoke-RSTargetedBuildForDeploymentTest {
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
     $stdoutLog = Join-Path $buildLogDir "pester-targeted-plugin-deployment-$timestamp.out.log"
     $stderrLog = Join-Path $buildLogDir "pester-targeted-plugin-deployment-$timestamp.err.log"
+    $fullBuildArguments = Get-RSBuildScriptArguments -Suite Full -Configuration $Configuration -Platform $Platform
+    # Completed initial hosted Release solution builds took 40-49 minutes. This finite
+    # compiler-operation guard is independent of application scenario/performance budgets.
     try {
         $exitCode = Invoke-RSStreamingProcess `
             -FilePath 'pwsh.exe' `
-            -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $buildScript, '-ProjectName', 'RedSalamander', '-Configuration', $Configuration, '-Platform', $Platform, '-MaxCpuCount', '1') `
+            -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $buildScript, '-ProjectName', 'RedSalamander', '-Configuration', $Configuration, '-Platform', $Platform, '-BuildNumber', [string]$BuildNumber, '-MaxCpuCount', [string]$fullBuildArguments.MaxCpuCount) `
             -WorkingDirectory $repoRoot `
             -LogPath $stdoutLog `
             -ErrorLogPath $stderrLog `
             -AdditionalEnvironment (Get-RSBuildEnvironmentOverrides -Suite Full) `
-            -TimeoutMilliseconds (15 * 60 * 1000) `
+            -TimeoutMilliseconds (60 * 60 * 1000) `
             -OutputDrainTimeoutMilliseconds 5000 `
             -DelegateArtifactOperation `
             -OutputLineCallback {
@@ -120,6 +126,11 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
     BeforeAll {
         $script:selectedPlatform = [Environment]::GetEnvironmentVariable('RS_VALIDATION_PLATFORM', 'Process')
         $script:selectedConfiguration = [Environment]::GetEnvironmentVariable('RS_VALIDATION_CONFIGURATION', 'Process')
+        $script:selectedBuildNumber = 0
+        if (-not [int]::TryParse([Environment]::GetEnvironmentVariable('RS_VALIDATION_BUILD_NUMBER', 'Process'), [ref]$script:selectedBuildNumber) -or
+            $script:selectedBuildNumber -lt 1 -or $script:selectedBuildNumber -gt 65535) {
+            throw 'RS_VALIDATION_BUILD_NUMBER must be the validated pre-mutation receipt build number.'
+        }
         if ($selectedPlatform -notin @('x64', 'ARM64')) {
             throw 'RS_VALIDATION_PLATFORM must explicitly select x64 or ARM64 for artifact-mutating deployment coverage.'
         }
@@ -172,7 +183,9 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
     }
 
     AfterAll {
-        Exit-RSArtifactOperationLock -Lock $script:deploymentArtifactOperationLock
+        if ($null -ne $script:deploymentArtifactOperationLock) {
+            Exit-RSArtifactOperationLock -Lock $script:deploymentArtifactOperationLock
+        }
         $script:deploymentArtifactOperationLock = $null
         $script:deploymentArtifactOperationScope = $null
     }
@@ -190,12 +203,13 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
 
         New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
 
-        Invoke-RSTargetedBuildForDeploymentTest -Platform $selectedPlatform -Configuration $selectedConfiguration
+        Invoke-RSTargetedBuildForDeploymentTest -Platform $selectedPlatform -Configuration $selectedConfiguration -BuildNumber $selectedBuildNumber
 
         # Prove the nested writer retained Full's receipt-bound compiler policy,
         # rather than silently switching the profile back to compiler PDBs.
         $targetedReceipt = Get-Content -LiteralPath (Join-Path $outputDir 'build-receipt.json') -Raw | ConvertFrom-Json
         ($targetedReceipt.build_arguments -contains 'compiler-debug-information=embedded') | Should Be $true
+        ($targetedReceipt.build_arguments -contains "build-number=$selectedBuildNumber") | Should Be $true
         $targetedReceipt.tests_enabled | Should Be $true
 
         foreach ($path in @($monitorClientLicense, $searchServiceExe)) {

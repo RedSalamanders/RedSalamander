@@ -27,6 +27,15 @@ policy, so receipts produced before the change cannot authorize exact reuse afte
 The process owns that directory for its complete lifetime; caller environment and
 journal files are not modified.
 
+Every contained native self-test launch retains its raw signed process exit separately from
+the normalized suite outcome in a create-only `artifacts/native-process-exits/<guid>.json`.
+Its PID, executable path and UTC observation identify the launched process without copying
+its command line or environment. This record is written after the process wait and before
+case parsing, coverage checks or archival, including classification retries. A missing or
+stale case artifact may fail the normalized verdict independently of the native exit code.
+Writing the record must succeed; archive refusal retains it in the original run. The raw
+exit is diagnostic evidence and never overrides failed coverage or establishes a pass.
+
 `Get-RSWorkspaceSnapshot` is the canonical local source identity. It resolves only
 local Git objects, uses the merge base of an explicit impact base without fetching,
 and records separate committed-base, index, and worktree byte identities for changed,
@@ -335,6 +344,12 @@ The v1 `exit_code` is the final runner exit derived from the repository verdict 
 exit 2 for filtered `NOT_EVALUATED` coverage); zero case counts never imply a passed run.
 The same scope rule applies when a focused legacy invocation produces only v1: a successful
 family or filtered run ends with exit 2. The absence of a v2 evidence record cannot widen coverage.
+
+The legacy runner summary can be written after completed-run relocation and therefore be absent
+from the pre-relocation archive intent inventory. Keep native results, traces and metrics bound
+to that closed inventory. Separately retain and hash the observed runner-summary bytes and check
+their run ID, executable, invocation times, profile, counts and outcome against the exact launch.
+Do not describe a post-archive summary as inventory-sealed or infer success from archive closure.
 
 Aggregate state labels are never sufficient evidence. One verified loader recomputes
 promotion, evidence, and terminal-result digests; requires digest/filename equality;

@@ -1,0 +1,9 @@
+{
+  "run_id": "20261108T211318Z-108584-b7955b796b4a4907a5347f21bf7b7298",
+  "raw_metric_sha256": "33de8cdb9b6ed2f52b3dfb5fa76009a48a036e584d24f0e5cb4581bf05c0b8d3",
+  "raw_bytes": 8604925,
+  "raw_rows": 22015,
+  "selected_metric": "FileOps.Popup.Render.TotalUs",
+  "selected_rows": 465,
+  "selection": "all matching lines in original order, byte preserved"
+}

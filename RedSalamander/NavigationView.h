@@ -103,6 +103,8 @@ struct NavigationViewDebugSnapshot
     size_t editSuggestItemCount                   = 0u;
     int historyDropdownSelectedIndex              = -1;
     int editSuggestSelectedIndex                  = -1;
+    int editSuggestHoveredIndex                   = -1;
+    HWND editSuggestPopupHwnd                     = nullptr;
     SIZE editSuggestPopupClientSize               = {};
     SIZE fullPathPopupClientSize                  = {};
     RECT menuRegionRect                           = {};

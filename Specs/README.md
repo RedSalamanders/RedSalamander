@@ -134,7 +134,7 @@ opening's info tail MUST contain no backticks; an invalid opener continues throu
 masking and MUST NOT hide following prose. Tilde fence info may contain backticks. A closing
 fence MUST use the opening character with at least the opening run length and a whitespace-only
 tail. A fence-like line with trailing nonwhitespace stays inside its current fence.
-These checks do not expand the parser to general Markdown lists or indented code blocks.
+These checks do not expand the parser to general Markdown lists or indented code blocks. The separate bounded provenance comment-delimiter mask accepts at most 2,048 UTF-16 units, masks every raw comment-shaped span even in code-looking text, preserves offsets and line endings, and masks an unclosed span to end. It is a conservative validation policy, not a Markdown renderer; existing heading and link parsing stays unchanged.
 
 The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and folding on the default branch after merge; a change keeps its fragment and never edits `CHANGELOG.md`.
 

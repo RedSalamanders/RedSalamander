@@ -56,6 +56,9 @@ struct FileSystemPathIdentity final
 // ancestor before every descendant. This keeps each component subtree contiguous even when
 // punctuation in a sibling sorts before the separator.
 [[nodiscard]] int CompareFileSystemPathsByComponents(const FileSystemPathIdentity& identity, std::wstring_view lhs, std::wstring_view rhs) noexcept;
+// For a backslash-accepting identity, absolute drive and structurally supported volume-GUID
+// filesystem roots retain their identity-accepted root separator and have no parent.
+// This lexical boundary does not establish Local authority or equate a volume device.
 [[nodiscard]] bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& parentOut) noexcept;
 [[nodiscard]] bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& leafOut) noexcept;
 [[nodiscard]] std::wstring JoinFileSystemPath(const FileSystemPathIdentity& identity, std::wstring_view folder, std::wstring_view leaf);
