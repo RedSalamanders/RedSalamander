@@ -1,0 +1,32 @@
+{
+  "schema": "red-salamander.curated-fileops-result.v1",
+  "sourceRunId": "20261101T203540Z-23512-e606d1ee0e104babbcb15c5407115b86",
+  "run_started_utc": "2026-11-01T20:36:13.641Z",
+  "suite": "FileOperations",
+  "duration_ms": 2906,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "failureMessage": null,
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1203,
+      "repeat_index": 1
+    },
+    {
+      "name": "Phase10_PermanentDelete",
+      "status": "passed",
+      "duration_ms": 1625,
+      "repeat_index": 1
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 78,
+      "repeat_index": 1
+    }
+  ],
+  "timeout_scale": 1.0
+}

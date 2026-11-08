@@ -7,6 +7,82 @@
 namespace FolderWindowFileOperationsStateInternal
 {
 #ifdef ENABLE_TESTS
+// Test-only checkpoint after a positive bridge write. The default requires a
+// partial identity-owned stage; the popup fixture may opt into any positive
+// write. Task IDs name current waiters, not earlier arrivals.
+struct SelfTestProgressIoGate final
+{
+    SelfTestProgressIoGate() noexcept                                = default;
+    SelfTestProgressIoGate(const SelfTestProgressIoGate&)            = delete;
+    SelfTestProgressIoGate(SelfTestProgressIoGate&&)                 = delete;
+    SelfTestProgressIoGate& operator=(const SelfTestProgressIoGate&) = delete;
+    SelfTestProgressIoGate& operator=(SelfTestProgressIoGate&&)      = delete;
+
+    bool Arm(bool anyPositiveBridgeWrite = false) noexcept
+    {
+        std::scoped_lock lock(mutex);
+        if (! waiters.empty())
+            return false;
+        timedOut = false;
+        allowAnyPositiveWrite.store(anyPositiveBridgeWrite, std::memory_order_release);
+        armed.store(true, std::memory_order_release);
+        return true;
+    }
+    void Release() noexcept
+    {
+        {
+            std::scoped_lock lock(mutex);
+            armed.store(false, std::memory_order_release);
+        }
+        cv.notify_all();
+    }
+    [[nodiscard]] bool HasEntered(uint64_t taskId) noexcept
+    {
+        std::scoped_lock lock(mutex);
+        return std::ranges::find(waiters, taskId) != waiters.end();
+    }
+    [[nodiscard]] bool TimedOut() noexcept
+    {
+        std::scoped_lock lock(mutex);
+        return timedOut;
+    }
+    [[nodiscard]] bool AllowsAnyPositiveWrite() const noexcept
+    {
+        return armed.load(std::memory_order_acquire) && allowAnyPositiveWrite.load(std::memory_order_acquire);
+    }
+    template <typename CancelPredicate> void Pause(uint64_t taskId, CancelPredicate&& cancelled) noexcept
+    {
+        if (! armed.load(std::memory_order_acquire))
+            return;
+        std::unique_lock lock(mutex);
+        if (! armed.load(std::memory_order_relaxed) || cancelled())
+            return;
+        waiters.push_back(taskId);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (armed.load(std::memory_order_relaxed) && ! cancelled())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+            {
+                timedOut = true;
+                break;
+            }
+            cv.wait_for(lock, std::chrono::milliseconds(100));
+        }
+        const auto found = std::ranges::find(waiters, taskId);
+        if (found != waiters.end())
+            waiters.erase(found);
+    }
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::vector<uint64_t> waiters;
+    std::atomic<bool> armed{false};
+    std::atomic<bool> allowAnyPositiveWrite{false};
+    bool timedOut = false;
+};
+
+extern SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
+
 struct SelfTestPausePoint final
 {
     SelfTestPausePoint()                                     = default;

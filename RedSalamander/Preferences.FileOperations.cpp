@@ -15,6 +15,7 @@
 #include "UiMetrics.h"
 #include "resource.h"
 #include <DxUi/DxUi.h>
+#include <DxUi/NativeMenuInterop.h>
 
 namespace
 {
@@ -94,6 +95,7 @@ struct FileOperationsDxPage
     FileOperationsToggleCardDx autoDismissSuccess{};
     FileOperationsToggleCardDx showInformationalNotes{};
     FileOperationsToggleCardDx mirrorDecisionsInPane{};
+    FileOperationsComboCardDx parallelTransfers{};
     FileOperationsEditCardDx bridgeBuffer{};
     FileOperationsNoteCardDx pluginHint{};
 
@@ -108,6 +110,7 @@ struct FileOperationsDxPage
         autoDismissSuccess     = {};
         showInformationalNotes = {};
         mirrorDecisionsInPane  = {};
+        parallelTransfers      = {};
         bridgeBuffer           = {};
         pluginHint             = {};
     }
@@ -522,6 +525,35 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
         Refresh(host, *dialogState);
     });
 
+    auto& parallel = dxState->page.parallelTransfers;
+    parallel.card  = root->AddChild<CardPanel>();
+    parallel.title = root->AddChild<Label>();
+    parallel.title->SetFontRole(FontRole::Body);
+    parallel.description = root->AddChild<Label>();
+    parallel.description->SetFontRole(FontRole::Small);
+    parallel.description->SetMultiline(true);
+    parallel.combo = root->AddChild<ComboBox>();
+    parallel.title->SetMnemonicTarget(parallel.combo);
+    parallel.combo->SetVariant(ComboBoxVariant::Window);
+    std::vector<ComboBox::Item> parallelItems;
+    for (uint32_t limit = 1u; limit <= 16u; ++limit)
+        parallelItems.push_back({std::to_wstring(limit), std::to_wstring(limit)});
+    parallel.combo->SetItems(std::move(parallelItems));
+    parallel.combo->SetOnSelectionChanged([this, host = parent](size_t index) noexcept
+    {
+        if (_syncingDxParallelTransfersCombo || ! host || IsWindow(host) == FALSE || ! _state || index >= 16u)
+            return;
+        auto* fileOperations = EnsureWorkingFileOperationsSettings(_state->workingSettings);
+        const auto limit     = static_cast<uint32_t>(index + 1u);
+        if (fileOperations && fileOperations->maxParallelTransfers != limit)
+        {
+            fileOperations->maxParallelTransfers = limit;
+            MaybeResetWorkingFileOperationsSettingsIfEmpty(_state->workingSettings);
+            SetDirty(GetParent(host), *_state);
+        }
+        Refresh(host, *_state);
+    });
+
     dxState->page.bridgeBuffer.card  = root->AddChild<CardPanel>();
     dxState->page.bridgeBuffer.title = root->AddChild<Label>();
     dxState->page.bridgeBuffer.title->SetFontRole(FontRole::Body);
@@ -655,6 +687,16 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     page.mirrorDecisionsInPane.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_MIRROR_DECISIONS_DESC));
     page.mirrorDecisionsInPane.toggle->SetChecked(fileOperations.mirrorDecisionsInPane);
     page.mirrorDecisionsInPane.toggle->SetEnabled(true);
+
+    page.parallelTransfers.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE));
+    page.parallelTransfers.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC));
+    page.parallelTransfers.combo->SetAccessibleName(
+        DxUi::StripNativeMenuMnemonicMarkers(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE)));
+    page.parallelTransfers.combo->SetAccessibleHelpText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC));
+    _syncingDxParallelTransfersCombo = true;
+    page.parallelTransfers.combo->SetSelectedIndex(static_cast<size_t>(std::clamp(fileOperations.maxParallelTransfers, 1u, 16u) - 1u));
+    _syncingDxParallelTransfersCombo = false;
+    page.parallelTransfers.combo->SetEnabled(true);
 
     page.bridgeBuffer.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BRIDGE_BUFFER_TITLE));
     page.bridgeBuffer.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BRIDGE_BUFFER_DESC));
@@ -839,6 +881,7 @@ void FileOperationsPane::LayoutDxPage(
 
     hideToggleCard(page.verifyAfterCopy);
     hideComboCard(page.bandwidthPreset);
+    hideComboCard(page.parallelTransfers);
     hideEditCard(page.customBandwidth);
     hideToggleCard(page.autoDismissSuccess);
     hideToggleCard(page.showInformationalNotes);
@@ -978,6 +1021,7 @@ void FileOperationsPane::LayoutDxPage(
     layoutToggleCard(page.autoDismissSuccess);
     layoutToggleCard(page.showInformationalNotes);
     layoutToggleCard(page.mirrorDecisionsInPane);
+    layoutComboCard(page.parallelTransfers);
     layoutEditCard(page.bridgeBuffer);
     layoutNoteCard(page.pluginHint);
 
@@ -1072,6 +1116,8 @@ PreferencesFileOperationsDebugFocusTarget FileOperationsPane::DebugGetFocusTarge
     {
         return PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit;
     }
+    if (page.parallelTransfers.combo == focused)
+        return PreferencesFileOperationsDebugFocusTarget::ParallelTransfersCombo;
 
     return PreferencesFileOperationsDebugFocusTarget::None;
 }

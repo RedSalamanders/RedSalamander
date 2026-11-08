@@ -1,0 +1,21 @@
+{
+  "baseline_receipt": "738f8e46f4748381c188770b3d5fe86069f9e6cab4f888b31f2f166cc5b3aedd",
+  "candidate_receipt": "073b24253987538b8a13561df4a8a00b4570c538bce3e39c6e9bcf8cb0c3bb61",
+  "baseline_snapshot": "516a8dc9fa7c1b51dc21525dd065293d90d59b8efbc83fab52bfc70a9598c1ca",
+  "candidate_snapshot": "78f132798a23e2d4df514355879d7b26e5120be234cfd41d19fbb14afc76d78c",
+  "git_head_equal": true,
+  "compared_changed_input_count": 52,
+  "differing_inputs": [
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Throughput.cpp",
+      "before_worktree_sha256": "e46592c64de176fe7be3c820f17e61272a7a4b9aac6f8111c96bcabc634a023f",
+      "after_worktree_sha256": "490e788d051a84642cadda897a9564907ac760d52a9196644a35d4e90a44e021"
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "before_worktree_sha256": "656a651465a01cf1c98e0956c58433aeced9cfb0e21fa3e8bb540417341d9c43",
+      "after_worktree_sha256": "c9a29cb49b78a891dec02efda6fb6148fdf7224a8ba8434a2d65ec7e56be59c1"
+    }
+  ],
+  "interpretation": "Supporting conflict/publication/small-file results retain their original receipt. This source comparison is explanatory evidence, not exact-artifact promotion or a Full/PrePush pass."
+}

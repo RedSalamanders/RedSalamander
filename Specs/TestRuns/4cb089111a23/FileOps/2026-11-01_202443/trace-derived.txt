@@ -1,0 +1,6 @@
+Derived trace summary; not a byte-preserving original trace.
+Configuration restoration local witnesses: passed.
+Loopback: entries 2466; card 92 ms; run 690 ms; completed; HRESULT 0x00000000; deleted true.
+Chunks: entries 2466; card 52 ms; run 1857 ms; completed; HRESULT 0x00000000; deleted true.
+NAS: entries 2466; card 975 ms; run 60013 ms; completion unavailable; scenario HRESULT 0x800705B4; deleted false.
+NAS child cleanup: canceled 0x800704C7; 1353 legacy dispositions reported.

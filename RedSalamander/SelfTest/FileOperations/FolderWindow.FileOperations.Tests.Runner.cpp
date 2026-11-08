@@ -707,6 +707,7 @@ struct SelfTestState
         FileOps_SafetyRemediationContracts,
         FileOps_ConflictMessageText,
         FileOps_ReviewRemediationContracts,
+        FileOps_IdentityInterlockWaiting,
         FileOps_RepeatDecisionContracts,
         FileOps_SkipCountingPresentation,
         FileOps_PermanentDeleteCompletionProgress,
@@ -1088,6 +1089,8 @@ struct SelfTestState
     // C0_LocalKnownNoCommitReceipts holds the moved file open (no FILE_SHARE_DELETE) until the task ends.
     wil::unique_hfile c0LocalLockedHandle;
 
+    // The process-wide limit override spans asynchronous ticks and is restored after workers drain.
+    std::optional<uint32_t> sharedTransferLimitOriginal;
     bool fileOperationsBackedUp = false;
     std::optional<Common::Settings::FileOperationsSettings> fileOperationsOriginal;
     bool appThemeBackedUp = false;
@@ -1151,7 +1154,7 @@ struct SelfTestState
     wil::com_ptr_nothrow<IInvokeProvider> discoverySkipAction;
     std::optional<std::uint64_t> taskB;
     std::optional<std::uint64_t> taskC;
-    bool r4a02ConcurrentAdmissionObserved = false;
+    bool r4a02SerializedAdmissionObserved = false;
     uint32_t r4a02LiveOutputScenario      = 0u;
     bool r4a02LiveOutputQueueObserved     = false;
     bool inlineF2QueueModeOriginal        = true;
@@ -1338,6 +1341,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_SafetyRemediationContracts: return L"FileOps_SafetyRemediationContracts";
         case SelfTestState::Step::FileOps_ConflictMessageText: return L"FileOps_ConflictMessageText";
         case SelfTestState::Step::FileOps_ReviewRemediationContracts: return L"FileOps_ReviewRemediationContracts";
+        case SelfTestState::Step::FileOps_IdentityInterlockWaiting: return L"FileOps_IdentityInterlockWaiting";
         case SelfTestState::Step::FileOps_RepeatDecisionContracts: return L"FileOps_RepeatDecisionContracts";
         case SelfTestState::Step::FileOps_SkipCountingPresentation: return L"FileOps_SkipCountingPresentation";
         case SelfTestState::Step::FileOps_PermanentDeleteCompletionProgress: return L"FileOps_PermanentDeleteCompletionProgress";
@@ -1675,6 +1679,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_SafetyRemediationContracts,
     SelfTestState::Step::FileOps_ConflictMessageText,
     SelfTestState::Step::FileOps_ReviewRemediationContracts,
+    SelfTestState::Step::FileOps_IdentityInterlockWaiting,
     SelfTestState::Step::FileOps_RepeatDecisionContracts,
     SelfTestState::Step::FileOps_SkipCountingPresentation,
     SelfTestState::Step::FileOps_PermanentDeleteCompletionProgress,
@@ -1896,7 +1901,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation,        // R4-A02-1 - Don't start ends the overlapping task before any mutation
     SelfTestState::Step::R4A02_ReadReadDoesNotWarn,                   // R4-A02-1 - two Copies reading one source warn nothing
     SelfTestState::Step::R4A02_SameDestinationWarns,                  // R4-A02-1 - simultaneous Copies publishing the same leaf warn before mutation
-    SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe, // R4-A02-2 - Run admits only the disclosed overlap and both result sets stay truthful
+    SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe, // Historical exact ID: conflicting transfers now queue, preserving both result sets.
     SelfTestState::Step::R4A02_LiveOutputGuardChoices,                // R4-A02-2 - uncovered live output parks; Skip/Queue/destructive and overflow stay safe
     SelfTestState::Step::R4A02_DisjointWritesDoNotWarn,               // R4-A02-1 - disjoint source and destination roots warn nothing
     SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise, // Step 3 (2026-09-06) - a rename publication is indexed under its parent scope, no host-wide
@@ -2361,10 +2366,11 @@ struct FileOpsFamilyDefinition
 constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyQueuedAdmissionContracts{{
     SelfTestState::Step::FileOps_QueuedAdmissionContracts,
 }};
-constexpr std::array<SelfTestState::Step, 6> kFileOpsFamilySafetyRemediationContracts{{
+constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilySafetyRemediationContracts{{
     SelfTestState::Step::FileOps_SafetyRemediationContracts,
     SelfTestState::Step::FileOps_ConflictMessageText,
     SelfTestState::Step::FileOps_ReviewRemediationContracts,
+    SelfTestState::Step::FileOps_IdentityInterlockWaiting,
     SelfTestState::Step::FileOps_RepeatDecisionContracts,
     SelfTestState::Step::FileOps_SkipCountingPresentation,
     SelfTestState::Step::FileOps_PermanentDeleteCompletionProgress,
@@ -2848,6 +2854,33 @@ void RestoreIndependentVolumeQueueMode(SelfTestState& state) noexcept
         state.fileOps->SetQueueNewTasks(original);
 }
 
+// This tick-spanning fixture publishes through the runtime owner without changing persisted settings.
+// A local scope guard cannot span presentation ticks; cleanup drains workers before restoration.
+void SetSelfTestSharedTransferLimit(uint32_t limit) noexcept
+{
+    Common::Settings::Settings settings{};
+    settings.fileOperations.emplace().maxParallelTransfers = limit;
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    owner.ApplyFileOperationSettings();
+}
+
+void BeginSelfTestSharedTransferLimit(SelfTestState& state, uint32_t limit) noexcept
+{
+    if (! state.sharedTransferLimitOriginal.has_value())
+        state.sharedTransferLimitOriginal = FileOperations::GetSharedParallelTransferLimit();
+    SetSelfTestSharedTransferLimit(limit);
+}
+
+void RestoreSelfTestSharedTransferLimit(SelfTestState& state) noexcept
+{
+    if (! state.sharedTransferLimitOriginal.has_value())
+        return;
+    const uint32_t original = state.sharedTransferLimitOriginal.value();
+    state.sharedTransferLimitOriginal.reset();
+    SetSelfTestSharedTransferLimit(original);
+}
+
 void BeginPhase(SelfTestState& state, SelfTestState::Step step) noexcept
 {
     RestoreIndependentVolumeQueueMode(state);
@@ -3167,6 +3200,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     SetFileOpsBridgeInjectRootDirectoryReparseForSelfTest(0);
     SetFileOpsBridgeReparsePolicyOverrideForSelfTest(FileOpsBridgeReparsePolicyOverride::None);
     SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN);
+    FolderWindowFileOperationsStateInternal::g_fileOpsProgressIoGateForSelfTest.Release();
     FolderWindowFileOperationsStateInternal::g_fileOpsBridgeOpenListingPausePoint.Release();
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
     SetFileOpsPostFinishedCompletionPauseForSelfTest(false);
@@ -3221,6 +3255,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
         }
         return false;
     }
+    RestoreSelfTestSharedTransferLimit(state);
     if (state.batchRenameExactAutoAcceptBefore.has_value())
     {
         HostResetPromptShutdown();
@@ -15343,6 +15378,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(contracts.failure);
                 return true;
             }
+            if (! contracts.skipped.empty())
+            {
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::skipped, contracts.skipped);
+                NextStep(state, SelfTestState::Step::FileOps_SafetyRemediationContracts);
+                return false;
+            }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
             NextStep(state, SelfTestState::Step::FileOps_SafetyRemediationContracts);
             return false;
@@ -15538,6 +15579,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(admissionContracts.failure);
                 return true;
             }
+            if (! admissionContracts.skipped.empty())
+            {
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::skipped, admissionContracts.skipped);
+                NextStep(state, SelfTestState::Step::FileOps_IdentityInterlockWaiting);
+                return false;
+            }
             if (! RunFileOpsSameHostOverlapClassifierCostChecks(state) || ! RunFileOpsDeleteParentPinChecks(state) ||
                 ! RunFileOpsCrossRootSkipContractChecks(state) ||
                 ! RunFileOperationQueuedMissingSourceTaskSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
@@ -15567,6 +15614,26 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! CaptureFileOpsCardHierarchy(state))
             {
                 Fail(L"Card hierarchy failed; see CardHierarchy subject, geometry and disclosure witnesses in the trace.");
+                return true;
+            }
+            RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+            NextStep(state, SelfTestState::Step::FileOps_IdentityInterlockWaiting);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_IdentityInterlockWaiting:
+        {
+            static bool inProgress = false;
+            if (inProgress || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            inProgress       = true;
+            const auto reset = wil::scope_exit([]() noexcept { inProgress = false; });
+            std::wstring failure;
+            if (! FolderWindow::FileOperationState::DebugValidateInterlockWaitingPresentationForSelfTest(failure) ||
+                ! FolderWindow::FileOperationState::DebugValidateSharedTransferBudgetForSelfTest(failure) ||
+                ! FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForSelfTest(failure) ||
+                ! RunFileOperationSharedTransferSelfTests(state, failure) || ! CaptureFileOpsWaitingCards(state, true))
+            {
+                Fail(failure.empty() ? L"Identity-interlock waiting card failed; see WaitingCard witnesses in the trace." : failure);
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);

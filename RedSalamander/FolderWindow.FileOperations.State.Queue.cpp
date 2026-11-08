@@ -9,6 +9,10 @@
 #include <thread>
 #include <utility>
 
+#ifdef ENABLE_TESTS
+#include <semaphore>
+#endif
+
 using namespace FolderWindowFileOperationsStateInternal;
 
 #ifdef ENABLE_TESTS
@@ -893,6 +897,40 @@ namespace
     return false;
 }
 
+[[nodiscard]] bool IndependentNewFileScopes(const FileOperations::MutationInterlockScope& left,
+                                            const FileOperations::MutationInterlockScope& right,
+                                            std::wstring_view leftPath  = {},
+                                            std::wstring_view rightPath = {}) noexcept
+{
+    using Access = FileOperations::MutationInterlockAccess;
+    if (! left.independentNewFileTransfer || ! right.independentNewFileTransfer ||
+        (left.access != Access::PublishDestination && right.access != Access::PublishDestination))
+        return false;
+    const bool sameRoot = FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint);
+    if (leftPath.empty())
+        leftPath = left.providerPath;
+    if (rightPath.empty())
+        rightPath = right.providerPath;
+    if (sameRoot)
+    {
+        if (! FileOperations::QualifiedEndpointsHaveSamePathContract(left.endpoint, right.endpoint))
+            return false;
+        const auto& identity = left.endpoint.pathIdentity.value();
+        if (EquivalentPath(identity, leftPath, rightPath) || IsStrictDescendantPath(identity, leftPath, rightPath) ||
+            IsStrictDescendantPath(identity, rightPath, leftPath))
+            return false;
+        if (left.access == Access::PublishDestination && right.access == Access::PublishDestination)
+        {
+            return left.independentParentKey.has_value() && right.independentParentKey.has_value() &&
+                   left.independentParentKey.value() == right.independentParentKey.value();
+        }
+    }
+    // Both destinations must use the same spelling of the same parent. Cross-root
+    // aliases are never treated as independent publishers. A qualified regular source
+    // exists and is bound; the destination was Missing and still publishes exclusively.
+    return left.access != Access::PublishDestination || right.access != Access::PublishDestination;
+}
+
 [[nodiscard]] bool MutationScopesOverlap(const FileOperations::MutationInterlockScope& left, const FileOperations::MutationInterlockScope& right) noexcept
 {
     if (! FileOperations::MutationInterlockAccessesConflict(left.access, right.access))
@@ -906,7 +944,7 @@ namespace
 
     if (left.conservativeIdentityDomain || right.conservativeIdentityDomain)
     {
-        return true;
+        return ! IndependentNewFileScopes(left, right);
     }
 
     if (FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint))
@@ -947,7 +985,7 @@ namespace
     }
     if (left.conservativeIdentityDomain || right.conservativeIdentityDomain)
     {
-        return true;
+        return ! IndependentNewFileScopes(left, right, leftPath, rightPath);
     }
     if (FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint))
     {
@@ -1028,7 +1066,8 @@ struct IndexedInterlockAuthorityGroup
 [[nodiscard]] bool TryTaskScopesOverlapIndexed(const std::vector<FileOperations::MutationInterlockScope>& left,
                                                const std::vector<FileOperations::MutationInterlockScope>& right,
                                                uint64_t& comparisons,
-                                               bool& overlap) noexcept
+                                               bool& overlap,
+                                               bool omitIndependentUnboundDestinations = false) noexcept
 {
     overlap = false;
     std::vector<IndexedInterlockAuthorityGroup> groups;
@@ -1038,6 +1077,9 @@ struct IndexedInterlockAuthorityGroup
     {
         for (const FileOperations::MutationInterlockScope& scope : scopes)
         {
+            if (omitIndependentUnboundDestinations && scope.independentNewFileTransfer && scope.conservativeIdentityDomain &&
+                scope.access == FileOperations::MutationInterlockAccess::PublishDestination)
+                continue;
             if (scope.conservativeIdentityDomain || scope.anchors.empty() || ! scope.endpoint.pathIdentity.has_value())
             {
                 return false;
@@ -1164,11 +1206,126 @@ struct IndexedInterlockAuthorityGroup
     return true;
 }
 
+// Missing-name namespace keys qualify only automatic no-replace admission. They never
+// become object authority. Retained objects still use the canonical physical-identity index.
+[[nodiscard]] bool TryIndependentTransfersOverlapIndexed(const std::vector<FileOperations::MutationInterlockScope>& left,
+                                                         const std::vector<FileOperations::MutationInterlockScope>& right,
+                                                         uint64_t& comparisons,
+                                                         bool& overlap,
+                                                         bool& identityUnavailable) noexcept
+{
+    using Scope             = FileOperations::MutationInterlockScope;
+    using Access            = FileOperations::MutationInterlockAccess;
+    const auto conservative = [](const Scope& scope) noexcept { return scope.conservativeIdentityDomain; };
+    if (! std::ranges::any_of(left, conservative) && ! std::ranges::any_of(right, conservative))
+        return false;
+    struct Destinations
+    {
+        const Scope* first       = nullptr;
+        const Scope* unbound     = nullptr;
+        bool mixedParents        = false;
+        bool mixedUnboundParents = false;
+        std::vector<std::wstring_view> keys;
+        std::vector<std::wstring_view> unboundKeys;
+    };
+    const auto collect = [&](const auto& scopes, Destinations& result) noexcept
+    {
+        for (const Scope& scope : scopes)
+        {
+            ++comparisons;
+            if (! scope.independentNewFileTransfer || ! scope.independentPathKey.has_value() || ! scope.endpoint.pathIdentity.has_value())
+                return false;
+            if (scope.access != Access::PublishDestination)
+                continue;
+            if (! scope.independentParentKey.has_value() ||
+                (result.first && ! FileOperations::QualifiedEndpointsHaveSamePathContract(result.first->endpoint, scope.endpoint)))
+                return false;
+            if (! result.first)
+                result.first = &scope;
+            result.mixedParents = result.mixedParents || result.first->independentParentKey != scope.independentParentKey;
+            result.keys.push_back(scope.independentPathKey.value());
+            if (scope.conservativeIdentityDomain)
+            {
+                if (! result.unbound)
+                    result.unbound = &scope;
+                result.mixedUnboundParents = result.mixedUnboundParents || result.unbound->independentParentKey != scope.independentParentKey;
+                result.unboundKeys.push_back(scope.independentPathKey.value());
+            }
+        }
+        std::ranges::sort(result.keys);
+        std::ranges::sort(result.unboundKeys);
+        return result.first != nullptr;
+    };
+    Destinations a;
+    Destinations b;
+    if (! collect(left, a) || ! collect(right, b) || (! a.unbound && ! b.unbound))
+        return false;
+    if (! TryTaskScopesOverlapIndexed(left, right, comparisons, overlap, true))
+        return false;
+    if (overlap)
+        return true;
+    const auto namespaceConflict = [&](const Destinations& missing, const Destinations& other) noexcept
+    {
+        if (! missing.unbound || ! FileOperations::QualifiedEndpointsShareObjectIdentityDomain(missing.unbound->endpoint, other.first->endpoint))
+            return false;
+        if (! FileOperations::QualifiedEndpointsHaveSamePathContract(missing.unbound->endpoint, other.first->endpoint) || missing.mixedUnboundParents ||
+            other.mixedParents || missing.unbound->independentParentKey != other.first->independentParentKey)
+            return true;
+        for (const auto key : missing.unboundKeys)
+        {
+            ++comparisons;
+            if (std::ranges::binary_search(other.keys, key))
+                return true;
+        }
+        return false;
+    };
+    const auto sourceConflict = [&](const auto& sources, const Destinations& missing) noexcept
+    {
+        if (! missing.unbound)
+            return false;
+        for (const Scope& source : sources)
+        {
+            if (source.access == Access::PublishDestination || ! FileOperations::QualifiedEndpointsReferToSameRoot(source.endpoint, missing.unbound->endpoint))
+                continue;
+            if (! FileOperations::QualifiedEndpointsHaveSamePathContract(source.endpoint, missing.unbound->endpoint))
+                return true;
+            ++comparisons;
+            const std::wstring_view key = source.independentPathKey.value();
+            const wchar_t separator     = source.endpoint.pathIdentity.value().preferredSeparator;
+            const auto next             = std::ranges::lower_bound(missing.unboundKeys, key);
+            if (next != missing.unboundKeys.end() && (*next == key || IndexedPathIsStrictAncestor(key, *next, separator)))
+                return true;
+            std::wstring_view parent = key;
+            for (size_t cut = parent.find_last_of(separator); cut != std::wstring_view::npos && cut > 0u; cut = parent.find_last_of(separator))
+            {
+                parent = parent.substr(0u, cut);
+                ++comparisons;
+                if (std::ranges::binary_search(missing.unboundKeys, parent))
+                    return true;
+            }
+        }
+        return false;
+    };
+    overlap             = namespaceConflict(a, b) || namespaceConflict(b, a) || sourceConflict(left, b) || sourceConflict(right, a);
+    identityUnavailable = overlap;
+    return true;
+}
+
 [[nodiscard]] bool TaskScopesOverlap(const std::vector<FileOperations::MutationInterlockScope>& left,
                                      const std::vector<FileOperations::MutationInterlockScope>& right,
-                                     uint64_t& comparisons) noexcept
+                                     uint64_t& comparisons,
+                                     bool* identityUnavailable = nullptr) noexcept
 {
-    bool indexedOverlap = false;
+    if (identityUnavailable)
+        *identityUnavailable = false;
+    bool indexedOverlap             = false;
+    bool indexedIdentityUnavailable = false;
+    if (TryIndependentTransfersOverlapIndexed(left, right, comparisons, indexedOverlap, indexedIdentityUnavailable))
+    {
+        if (identityUnavailable)
+            *identityUnavailable = indexedIdentityUnavailable;
+        return indexedOverlap;
+    }
     if (TryTaskScopesOverlapIndexed(left, right, comparisons, indexedOverlap))
     {
         return indexedOverlap;
@@ -1180,9 +1337,32 @@ struct IndexedInterlockAuthorityGroup
                                    [&](const FileOperations::MutationInterlockScope& rightScope) noexcept
         {
             ++comparisons;
-            return MutationScopesOverlap(leftScope, rightScope);
+            const bool overlap = MutationScopesOverlap(leftScope, rightScope);
+            if (overlap && identityUnavailable)
+                *identityUnavailable = leftScope.conservativeIdentityDomain || rightScope.conservativeIdentityDomain;
+            return overlap;
         });
     });
+}
+[[nodiscard]] bool DeferredDirectoryDeleteConflicts(const std::vector<FileOperations::MutationInterlockScope>& left,
+                                                    const std::vector<FileOperations::MutationInterlockScope>& right,
+                                                    uint64_t* comparisons) noexcept
+{
+    const auto deferredAgainst = [comparisons](const auto& directories, const auto& others) noexcept
+    {
+        return std::ranges::any_of(directories,
+                                   [&](const auto& directory) noexcept
+        {
+            return directory.deferredDirectoryDelete && std::ranges::any_of(others,
+                                                                            [&](const auto& other) noexcept
+            {
+                if (comparisons != nullptr)
+                    ++*comparisons;
+                return MutationScopesOverlap(directory, other);
+            });
+        });
+    };
+    return deferredAgainst(left, right) || deferredAgainst(right, left);
 }
 } // namespace
 
@@ -1413,8 +1593,11 @@ bool FolderWindow::FileOperationState::HasPublishedOverlapPredecessor(const Muta
 bool FolderWindow::FileOperationState::MutationInterlocksPermit(const uint64_t taskId,
                                                                 const MutationInterlockAdmission& candidate,
                                                                 std::span<const ActiveMutationInterlock> active,
-                                                                uint64_t& comparisons) noexcept
+                                                                uint64_t& comparisons,
+                                                                bool* identityUnavailable) noexcept
 {
+    if (identityUnavailable)
+        *identityUnavailable = false;
     if (! candidate.scopes)
         return false;
     return std::ranges::none_of(active,
@@ -1424,7 +1607,12 @@ bool FolderWindow::FileOperationState::MutationInterlocksPermit(const uint64_t t
             return false;
         if (! published.admission || ! published.admission->scopes)
             return true;
-        return ! candidate.relations.Allows(published.admission->key) && TaskScopesOverlap(*candidate.scopes, *published.admission->scopes, comparisons);
+        // Transfer conflicts remain serialized even if an older caller supplies concurrent
+        // consent. The advisory no longer offers that action for two transfers.
+        return ((candidate.hasDeferredDirectoryDeletes || published.admission->hasDeferredDirectoryDeletes) &&
+                DeferredDirectoryDeleteConflicts(*candidate.scopes, *published.admission->scopes, &comparisons)) ||
+               (((candidate.isTransfer && published.admission->isTransfer) || ! candidate.relations.Allows(published.admission->key)) &&
+                TaskScopesOverlap(*candidate.scopes, *published.admission->scopes, comparisons, identityUnavailable));
     });
 }
 
@@ -1563,6 +1751,9 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         const uint64_t classifierStartedUs = captureOverlapCosts ? PerfNowUs() : 0u;
         const FileOperations::SameHostOverlapProblem problem =
             ClassifySameHostOverlap(*admission->scopes, *other.admission->scopes, byNameDelete, captureOverlapCosts ? &pairComparisons : nullptr);
+        const bool serializedDirectoryDelete =
+            (admission->hasDeferredDirectoryDeletes || other.admission->hasDeferredDirectoryDeletes) &&
+            DeferredDirectoryDeleteConflicts(*admission->scopes, *other.admission->scopes, captureOverlapCosts ? &pairComparisons : nullptr);
         if (captureOverlapCosts)
         {
             classifierElapsedUs += PerfElapsedUs(classifierStartedUs);
@@ -1573,6 +1764,7 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
         {
             return;
         }
+        advice.serializedDirectoryDelete = advice.serializedDirectoryDelete || serializedDirectoryDelete;
         // I35 R7.3: the question names a delete by name first (it says what that delete does to this
         // task), whichever overlapping task was found first.
         const auto namesByNameDelete = [](const FileOperations::SameHostOverlapProblem value) noexcept
@@ -1582,7 +1774,8 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
             advice.problem     = problem;
             advice.firstTaskId = other.taskId;
         }
-        advice.byNameDelete = advice.byNameDelete || byNameDelete;
+        advice.byNameDelete        = advice.byNameDelete || byNameDelete;
+        advice.serializedTransfers = advice.serializedTransfers || (admission->isTransfer && other.admission->isTransfer);
         // A registration without a task (none in production) falls back to its admission key.
         const uint64_t queueOrderKey  = other.task != nullptr ? other.task->_queueOrderKey.load(std::memory_order_acquire) : other.admission->key;
         advice.latestQueueOrderKey    = (std::max)(advice.latestQueueOrderKey, queueOrderKey);
@@ -2071,12 +2264,63 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
     };
     const auto interlockAvailable = [&]() noexcept
     {
+        task._waitingForParallelTransferSlot.store(false, std::memory_order_release);
+        task._waitingForExclusiveTransfer.store(false, std::memory_order_release);
         const uint64_t checkStartedUs   = PerfNowUs();
         uint64_t comparisons            = 0u;
         const uint64_t activeCandidates = static_cast<uint64_t>(_activeMutationInterlocks.size());
         if (HasPublishedOverlapPredecessor(*admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+        {
+            task._waitingForIdentityInterlock.store(false, std::memory_order_release);
             return false;
-        const bool available = MutationInterlocksPermit(task._taskId, *admission, _activeMutationInterlocks, comparisons);
+        }
+        bool identityUnavailable = false;
+        const bool available     = MutationInterlocksPermit(task._taskId, *admission, _activeMutationInterlocks, comparisons, &identityUnavailable);
+        task._waitingForIdentityInterlock.store(! available && identityUnavailable, std::memory_order_release);
+        const auto activeTransfers = static_cast<uint64_t>(
+            std::ranges::count_if(_activeMutationInterlocks, [](const auto& entry) noexcept { return entry.admission && entry.admission->hasDataTransfers; }));
+        const bool activeExclusive = std::ranges::any_of(_activeMutationInterlocks, [](const auto& entry) noexcept {
+            return entry.admission && entry.admission->hasDataTransfers && ! entry.admission->parallelNewFiles;
+        });
+        // An exclusive job waiting for active transfers must get a chance to drain the
+        // admission set. Otherwise later independent jobs can continually refill it.
+        // Only reserve for a decided, runnable waiter: a queued, paused, cancelled or
+        // predecessor-blocked task must not prevent the work it depends on from entering.
+        const bool olderExclusiveWaiting = available && admission->hasDataTransfers &&
+                                           std::ranges::any_of(_preparedMutationInterlocks,
+                                                               [&](const ActiveMutationInterlock& other) noexcept
+        {
+            if (! other.task || ! other.admission || other.taskId == task._taskId || ! other.admission->hasDataTransfers || other.admission->parallelNewFiles ||
+                ! other.admission->relations.advisoryDecided || ! other.task->_waitingForExclusiveTransfer.load(std::memory_order_acquire) ||
+                other.task->_waitForOthers.load(std::memory_order_acquire) || other.task->_cancelled.load(std::memory_order_acquire) ||
+                other.task->_stopToken.stop_requested() || other.task->IsPaused() || other.task->IsQueuePaused())
+                return false;
+            const auto selected = other.task->LoadSelectedAdmission();
+            if (selected->interlock != other.admission ||
+                std::pair{other.task->GetQueueOrderKey(), other.admission->key} >= std::pair{task.GetQueueOrderKey(), admission->key} ||
+                HasPublishedOverlapPredecessor(*other.admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+                return false;
+            uint64_t otherComparisons = 0u;
+            return MutationInterlocksPermit(other.taskId, *other.admission, _activeMutationInterlocks, otherComparisons);
+        });
+        if (olderExclusiveWaiting)
+        {
+            task._waitingForExclusiveTransfer.store(true, std::memory_order_release);
+            return false;
+        }
+        if (available && admission->hasDataTransfers && (activeExclusive || (! admission->parallelNewFiles && activeTransfers != 0u)))
+        {
+            task._waitingForExclusiveTransfer.store(true, std::memory_order_release);
+            return false;
+        }
+        if (available && admission->hasDataTransfers && admission->parallelNewFiles &&
+            static_cast<uint64_t>(std::ranges::count_if(_activeMutationInterlocks, [](const auto& entry) noexcept {
+            return entry.admission && entry.admission->hasDataTransfers && entry.admission->parallelNewFiles;
+        })) >= FileOperations::GetSharedParallelTransferLimit())
+        {
+            task._waitingForParallelTransferSlot.store(true, std::memory_order_release);
+            return false;
+        }
         if (Debug::Perf::IsCaptureEnabled())
         {
             Debug::Perf::Emit(L"FileOps.Interlock.CheckUs", L"", PerfElapsedUs(checkStartedUs), comparisons, activeCandidates, S_OK);
@@ -2138,11 +2382,16 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
         if (ready)
         {
             RemoveFromQueue(task._taskId);
+            EraseMutationInterlockAdmission(_preparedMutationInterlocks, admissionKey);
+            _activeMutationInterlocks.push_back(ActiveMutationInterlock{.taskId = task._taskId, .task = &task, .admission = admission});
+            task._reservedOperation.store(true, std::memory_order_release);
+            // Publish the monotonic preparation phase before withdrawing queue presentation;
+            // strict acquisition and confirmation must never appear as transfer execution.
+            if (admission->hasDeferredDirectoryDeletes)
+                task.PublishLifecyclePhase(FileOperations::TaskLifecyclePhase::PreparingExecution);
             if (waitForOthers)
                 task._waitForOthers.store(false, std::memory_order_release);
             task.SetWaitingInQueue(false);
-            EraseMutationInterlockAdmission(_preparedMutationInterlocks, admissionKey);
-            _activeMutationInterlocks.push_back(ActiveMutationInterlock{.taskId = task._taskId, .task = &task, .admission = admission});
             ++_activeOperations;
             task._perf.queueActiveOperations = _activeOperations;
             const uint64_t waitUs            = waited ? PerfElapsedUs(queueWaitStartUs) : 0u;
@@ -2166,14 +2415,25 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
             notedInterlockWait = true;
             ++task._perf.interlockWaitCount;
         }
+        if (waitForOthers)
+        {
+            task._waitingForIdentityInterlock.store(false, std::memory_order_release);
+            task._waitingForParallelTransferSlot.store(false, std::memory_order_release);
+            task._waitingForExclusiveTransfer.store(false, std::memory_order_release);
+        }
         task.SetWaitingInQueue(true);
-        _queueCv.wait(lock,
-                      [&]() noexcept
+        const auto readyToRetry = [&]() noexcept
         {
             return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) ||
                    task._waitForOthers.load(std::memory_order_acquire) != waitForOthers ||
                    (waitForOthers ? _activeOperations == 0u && firstUnblockedQueuedTaskId() == task._taskId && interlockAvailable() : interlockAvailable());
-        });
+        };
+        // A global Preferences change can come from another owned workspace. Capacity
+        // waits observe it without a process-wide HWND registry or new cross-thread posts.
+        if (task._waitingForParallelTransferSlot.load(std::memory_order_acquire) || task._waitingForExclusiveTransfer.load(std::memory_order_acquire))
+            _queueCv.wait_for(lock, std::chrono::milliseconds(100), readyToRetry);
+        else
+            _queueCv.wait(lock, readyToRetry);
     }
 }
 void FolderWindow::FileOperationState::LeaveOperation(Task& task, const std::shared_ptr<const SelectedAdmissionView>& accepted) noexcept
@@ -2205,9 +2465,672 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task, const std::sha
         {
             --_activeOperations;
         }
+        task._reservedOperation.store(false, std::memory_order_release);
     }
     NotifyQueueChanged();
 }
+
+#ifdef ENABLE_TESTS
+bool FolderWindow::FileOperationState::DebugAreBothAdmissionsActiveForSelfTest(uint64_t firstTaskId, uint64_t secondTaskId) noexcept
+{
+    // Activation and removal both hold this lock, so the two membership reads
+    // describe one instant rather than opposite sides of a serialized handoff.
+    std::scoped_lock lock(_queueMutex);
+    const auto isActive = [&](uint64_t taskId) noexcept
+    { return std::ranges::any_of(_activeMutationInterlocks, [taskId](const ActiveMutationInterlock& active) noexcept { return active.taskId == taskId; }); };
+    return isActive(firstTaskId) && isActive(secondTaskId);
+}
+
+bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForSelfTest(std::wstring& failure) noexcept
+{
+    using namespace std::chrono_literals;
+    using Access          = FileOperations::MutationInterlockAccess;
+    const auto makeScopes = [](uint64_t index) noexcept
+    {
+        FileOperations::MutationInterlockScope source{};
+        source.endpoint.pluginId                        = L"builtin/file-system";
+        source.endpoint.instanceId                      = L"host/default";
+        source.endpoint.profileId                       = L"local-win32-smb";
+        source.endpoint.rootId                          = L"fixture-volume";
+        source.endpoint.pathIdentity                    = FileSystemPathIdentity{.pathTextStableIdentity = true,
+                                                                                 .componentComparison    = FileSystemPathComponentComparison::OrdinalIgnoreCase,
+                                                                                 .preferredSeparator     = L'\\',
+                                                                                 .acceptedSeparators     = L"\\/"};
+        source.providerPath                             = std::format(L"C:\\fixture\\sources\\file-{}.bin", index);
+        source.access                                   = Access::WriteSource;
+        source.independentNewFileTransfer               = true;
+        source.independentPathKey                       = TryMakePathKey(source.endpoint.pathIdentity.value(), source.providerPath);
+        auto node                                       = std::make_shared<FileOperations::MutationInterlockAuthorityNode>();
+        node->endpoint                                  = source.endpoint;
+        node->retained.providerPath                     = source.providerPath;
+        node->retained.authority.kind                   = FILESYSTEM_BOUND_REGULAR_FILE;
+        node->retained.authority.identity.pathProfileId = source.endpoint.profileId;
+        for (unsigned int byte = 0u; byte < sizeof(index); ++byte)
+            node->retained.authority.identity.objectId.push_back(static_cast<std::byte>((index >> (byte * 8u)) & 0xffu));
+        source.root = node;
+        source.anchors.push_back({.authority = node, .relativePathKey = std::wstring{}});
+        auto destination                       = source;
+        destination.providerPath               = std::format(L"C:\\fixture\\destination\\file-{}.bin", index);
+        destination.access                     = Access::PublishDestination;
+        destination.conservativeIdentityDomain = true;
+        destination.root.reset();
+        destination.anchors.clear();
+        destination.independentParentKey = TryMakePathKey(destination.endpoint.pathIdentity.value(), L"C:\\fixture\\destination");
+        destination.independentPathKey   = TryMakePathKey(destination.endpoint.pathIdentity.value(), destination.providerPath);
+        return MutationInterlockScopes{std::move(source), std::move(destination)};
+    };
+    for (unsigned int variant = 0u; variant < 10u; ++variant)
+    {
+        auto left  = makeScopes(1u);
+        auto right = makeScopes(2u);
+        switch (variant)
+        {
+            case 1u: right[1] = left[1]; break;
+            case 2u:
+                right[1].providerPath         = L"C:\\fixture\\other\\file-2.bin";
+                right[1].independentParentKey = TryMakePathKey(right[1].endpoint.pathIdentity.value(), L"C:\\fixture\\other");
+                right[1].independentPathKey   = TryMakePathKey(right[1].endpoint.pathIdentity.value(), right[1].providerPath);
+                break;
+            case 3u: right[1].endpoint.rootId = L"fixture-alias-spelling"; break;
+            case 4u:
+                right[0].root    = left[0].root;
+                right[0].anchors = left[0].anchors;
+                break;
+            case 5u:
+                right[1]        = left[0];
+                right[1].access = Access::PublishDestination;
+                break;
+            case 6u: right[1].independentNewFileTransfer = false; break;
+            case 7u: right[0].independentNewFileTransfer = false; break;
+            case 8u: right[1].endpoint.pathIdentity->componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive; break;
+            case 9u:
+                left[0].access   = Access::ReadSource;
+                right[0].root    = left[0].root;
+                right[0].anchors = left[0].anchors;
+                right[0].access  = Access::ReadSource;
+                break;
+            default: break;
+        }
+        uint64_t comparisons = 0u;
+        const bool indexed   = TaskScopesOverlap(left, right, comparisons);
+        const bool pairwise  = std::ranges::any_of(
+            left, [&](const auto& a) noexcept { return std::ranges::any_of(right, [&](const auto& b) noexcept { return MutationScopesOverlap(a, b); }); });
+        if (indexed != pairwise || indexed != (variant != 0u && variant != 9u))
+        {
+            failure = std::format(L"New-file admission must preserve exact conflicts and match its pairwise policy (variant {}).", variant);
+            return false;
+        }
+    }
+    for (const size_t count : {64u, 4096u})
+    {
+        MutationInterlockScopes left;
+        MutationInterlockScopes right;
+        for (size_t index = 0u; index < count; ++index)
+        {
+            for (auto& scope : makeScopes(index + 1u))
+                left.push_back(std::move(scope));
+            for (auto& scope : makeScopes(index + count + 1u))
+                right.push_back(std::move(scope));
+        }
+        uint64_t comparisons     = 0u;
+        const uint64_t startedUs = PerfNowUs();
+        const bool overlap       = TaskScopesOverlap(left, right, comparisons);
+        Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.SharedTransfers.IndexUs", L"distinct-new-files", PerfElapsedUs(startedUs), comparisons, count, S_OK);
+        if (overlap || comparisons > count * 100u)
+        {
+            failure = L"Large new-file selections must use the bounded identity/namespace index without Cartesian comparison.";
+            return false;
+        }
+        if (count == 64u && std::ranges::any_of(left, [&](const auto& a) noexcept {
+            return std::ranges::any_of(right, [&](const auto& b) noexcept { return MutationScopesOverlap(a, b); });
+        }))
+        {
+            failure = L"The indexed new-file result must match a complete pairwise negative control.";
+            return false;
+        }
+    }
+    const uint32_t originalLimit = FileOperations::GetSharedParallelTransferLimit();
+    Common::Settings::Settings settings{};
+    settings.fileOperations.emplace();
+    FolderWindow owner;
+    const auto restore                            = wil::scope_exit([&]() noexcept
+    {
+        settings.fileOperations->maxParallelTransfers = originalLimit;
+        owner.SetSettings(&settings);
+        owner.ApplyFileOperationSettings();
+    });
+    settings.fileOperations->maxParallelTransfers = 7u;
+    owner.SetSettings(&settings);
+    owner.ApplyFileOperationSettings();
+    {
+        Common::Settings::Settings privateSettings{};
+        privateSettings.fileOperations.emplace();
+        FolderWindow privateOwner;
+        privateOwner.SetSettings(&privateSettings);
+        privateOwner.SetSettings(nullptr);
+        if (FileOperations::GetSharedParallelTransferLimit() != 7u)
+        {
+            failure = L"Attaching or detaching a private FolderWindow must not change the process-wide transfer limit.";
+            return false;
+        }
+    }
+    {
+        FileOperationState state(owner);
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.push_back({.taskId = 1u});
+        }
+        const bool firstOnly = state.DebugAreBothAdmissionsActiveForSelfTest(1u, 2u);
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.push_back({.taskId = 2u});
+        }
+        const bool both = state.DebugAreBothAdmissionsActiveForSelfTest(1u, 2u);
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.erase(state._activeMutationInterlocks.begin());
+        }
+        const bool secondOnly = state.DebugAreBothAdmissionsActiveForSelfTest(1u, 2u);
+        if (firstOnly || ! both || secondOnly)
+        {
+            failure = L"The admission snapshot must distinguish overlap from either side of a handoff.";
+            return false;
+        }
+    }
+    {
+        FileOperationState state(owner);
+        auto publisher                                  = std::make_shared<MutationInterlockAdmission>();
+        publisher->key                                  = 1u;
+        auto knownParentScopes                          = makeScopes(1u);
+        knownParentScopes[1].conservativeIdentityDomain = false;
+        publisher->scopes                               = std::make_shared<const MutationInterlockScopes>(std::move(knownParentScopes));
+        publisher->isTransfer = publisher->parallelNewFiles = true;
+        publisher->hasDataTransfers                         = true;
+        publisher->relations.advisoryDecided                = true;
+        state._activeMutationInterlocks.push_back({.taskId = 1u, .admission = publisher});
+        auto scopes = makeScopes(2u);
+        scopes[1]   = publisher->scopes->back();
+        MutationInterlockAdmission candidate{};
+        candidate.key        = 2u;
+        candidate.scopes     = std::make_shared<const MutationInterlockScopes>(std::move(scopes));
+        candidate.isTransfer = candidate.parallelNewFiles = true;
+        candidate.hasDataTransfers                        = true;
+        candidate.relations.advisoryDecided               = true;
+        candidate.relations.concurrentKeys[0]             = 1u;
+        candidate.relations.concurrentCount               = 1u;
+        const auto advice                                 = state.FindSameHostOverlap(2u, candidate);
+        uint64_t comparisons                              = 0u;
+        const bool permitted                              = MutationInterlocksPermit(2u, candidate, state._activeMutationInterlocks, comparisons);
+        state._activeMutationInterlocks.clear();
+        if (permitted || advice.taskCount != 1u || advice.CanRunConcurrently())
+        {
+            failure = L"Conflicting transfers must withhold Run concurrently and reject stale concurrent consent at admission.";
+            return false;
+        }
+    }
+    {
+        settings.fileOperations->maxParallelTransfers = 4u;
+        owner.SetSettings(&settings);
+        owner.ApplyFileOperationSettings();
+        FileOperationState state(owner);
+        for (uint64_t index = 1u; index <= 4u; ++index)
+        {
+            auto scopes                          = makeScopes(index);
+            scopes[1].conservativeIdentityDomain = false;
+            auto active                          = std::make_shared<MutationInterlockAdmission>();
+            active->key                          = index;
+            active->scopes                       = std::make_shared<const MutationInterlockScopes>(std::move(scopes));
+            active->relations.advisoryDecided    = true;
+            active->isTransfer = active->hasDataTransfers = active->parallelNewFiles = true;
+            state._activeMutationInterlocks.push_back({.taskId = index, .admission = std::move(active)});
+        }
+        state._activeOperations = 4u;
+        auto nativeScopes       = makeScopes(100u);
+        for (auto& scope : nativeScopes)
+        {
+            scope.conservativeIdentityDomain = false;
+            scope.independentNewFileTransfer = false;
+        }
+        FileOperations::TransferPlan native{};
+        native.intent   = FileOperations::TransferIntent::Move;
+        native.strategy = FileOperations::OperationStrategy::Native;
+        auto task       = std::make_unique<Task>(state);
+        task->_taskId   = 100u;
+        task->_admissionKey.store(100u, std::memory_order_release);
+        task->_operation = FILESYSTEM_MOVE;
+        task->StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(native)}}));
+        task->InstallPreparedMutationInterlockScopes(std::move(nativeScopes), false);
+        MutationInterlockRelations decided{};
+        decided.advisoryDecided = true;
+        state.PublishMutationInterlockDecision(*task, decided);
+        state.PublishPreparedMutationInterlock(*task);
+        std::atomic<bool> entered{false};
+        std::binary_semaphore done{0};
+        std::jthread waiter([&](std::stop_token stopToken) noexcept
+        {
+            const auto result = state.EnterOperation(*task, stopToken);
+            entered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+            if (result.outcome == OperationEntryOutcome::Entered)
+                state.LeaveOperation(*task, result.accepted);
+            done.release();
+        });
+        const auto cleanup = wil::scope_exit([&]() noexcept
+        {
+            {
+                std::scoped_lock lock(state._queueMutex);
+                waiter.request_stop();
+            }
+            state._queueCv.notify_all();
+            waiter.join();
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._activeOperations = 0u;
+        });
+        if (! done.try_acquire_for(3s) || ! entered.load(std::memory_order_acquire) || task->LoadMutationInterlockAdmission()->hasDataTransfers)
+        {
+            failure = L"An unrelated native-only rename must remain admitted while all four data-transfer slots are occupied.";
+            return false;
+        }
+        task->_perItemMaxConcurrencyBudget = 8u;
+        FileSystemOptions options{};
+        task->InitializeFileSystemOptions(options, nullptr);
+        if (options.copyMoveMaxConcurrency != 8u)
+        {
+            failure = L"A native-only rename must keep its metadata budget independently of the four-slot data limit.";
+            return false;
+        }
+        Debug::Perf::EmitValue(L"FileOps.SelfTest.SharedTransfers.NativeRenameAdmitted", 1u, S_OK);
+    }
+    for (const uint32_t limit : {1u, 2u, 4u, 16u})
+        for (const bool cancel : {false, true})
+        {
+            settings.fileOperations->maxParallelTransfers = limit;
+            owner.SetSettings(&settings);
+            owner.ApplyFileOperationSettings();
+            FileOperationState state(owner);
+            for (uint32_t index = 0u; index < limit; ++index)
+            {
+                auto active                       = std::make_shared<MutationInterlockAdmission>();
+                active->key                       = index + 1u;
+                active->scopes                    = std::make_shared<const MutationInterlockScopes>(makeScopes(index + 1u));
+                active->relations.advisoryDecided = true;
+                active->parallelNewFiles = active->isTransfer = true;
+                active->hasDataTransfers                      = true;
+                state._activeMutationInterlocks.push_back({.taskId = index + 1u, .admission = std::move(active)});
+            }
+            state._activeOperations = limit;
+            auto candidate          = std::make_unique<Task>(state);
+            Task* const task        = candidate.get();
+            task->_taskId           = limit + 1u;
+            task->_admissionKey.store(task->_taskId, std::memory_order_release);
+            task->_operation = FILESYSTEM_MOVE;
+            task->InstallPreparedMutationInterlockScopes(makeScopes(task->_taskId), false);
+            MutationInterlockRelations decided{};
+            decided.advisoryDecided = true;
+            state.PublishMutationInterlockDecision(*task, decided);
+            state._tasks.push_back(std::move(candidate));
+            state.PublishPreparedMutationInterlock(*task);
+            std::binary_semaphore done{0};
+            std::atomic<bool> entered{false};
+            std::jthread waiter([&](std::stop_token stopToken) noexcept
+            {
+                const auto result = state.EnterOperation(*task, stopToken);
+                entered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+                if (result.outcome == OperationEntryOutcome::Entered)
+                    state.LeaveOperation(*task, result.accepted);
+                done.release();
+            });
+            const auto cleanup  = wil::scope_exit([&]() noexcept
+            {
+                {
+                    std::scoped_lock lock(state._queueMutex);
+                    waiter.request_stop();
+                }
+                state._queueCv.notify_all();
+                waiter.join();
+                state._activeMutationInterlocks.clear();
+                state._preparedMutationInterlocks.clear();
+                state._activeOperations = 0u;
+                state._tasks.clear();
+            });
+            const auto deadline = std::chrono::steady_clock::now() + 3s;
+            while (! task->IsWaitingInQueue() && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(1ms);
+            if (! task->IsWaitingInQueue() || ! task->_waitingForParallelTransferSlot.load(std::memory_order_acquire) ||
+                task->_waitingForIdentityInterlock.load(std::memory_order_acquire))
+            {
+                failure = L"Transfer N+1 must show a real capacity wait, including default four, without entering Counting.";
+                return false;
+            }
+            for (unsigned int attempt = 0u; attempt < 16u; ++attempt)
+                if (! state.RunQueuedTaskNow(task->_taskId) || ! task->IsWaitingInQueue() || entered.load(std::memory_order_acquire))
+                {
+                    failure = L"Start now must not bypass the shared transfer limit.";
+                    return false;
+                }
+            if (cancel)
+                task->RequestCancel();
+            else if (limit == 2u)
+            {
+                settings.fileOperations->maxParallelTransfers = 3u;
+                owner.ApplyFileOperationSettings();
+            }
+            else
+            {
+                std::scoped_lock lock(state._queueMutex);
+                state._activeMutationInterlocks.pop_back();
+                --state._activeOperations;
+            }
+            state._queueCv.notify_all();
+            if (! done.try_acquire_for(3s) || entered.load(std::memory_order_acquire) == cancel || task->IsWaitingInQueue() ||
+                task->_waitingForParallelTransferSlot.load(std::memory_order_acquire))
+            {
+                failure = L"Capacity release, a live increase, and cancellation must settle a waiting admission and clear its reason.";
+                return false;
+            }
+        }
+    for (const bool cancelExclusive : {false, true})
+    {
+        settings.fileOperations->maxParallelTransfers = 4u;
+        owner.ApplyFileOperationSettings();
+        FileOperationState state(owner);
+        auto activeScopes                          = makeScopes(1u);
+        activeScopes[1].conservativeIdentityDomain = false;
+        auto active                                = std::make_shared<MutationInterlockAdmission>();
+        active->key                                = 1u;
+        active->scopes                             = std::make_shared<const MutationInterlockScopes>(std::move(activeScopes));
+        active->relations.advisoryDecided          = true;
+        active->isTransfer = active->hasDataTransfers = active->parallelNewFiles = true;
+        state._activeMutationInterlocks.push_back({.taskId = 1u, .admission = std::move(active)});
+        state._activeOperations = 1u;
+        const auto makeTask     = [&](uint64_t id, bool exclusive) noexcept -> Task*
+        {
+            auto candidate   = std::make_unique<Task>(state);
+            Task* const task = candidate.get();
+            task->_taskId    = id;
+            task->_admissionKey.store(id, std::memory_order_release);
+            task->_queueOrderKey.store(id, std::memory_order_release);
+            task->_operation                     = FILESYSTEM_COPY;
+            auto scopes                          = makeScopes(id);
+            scopes[1].conservativeIdentityDomain = false;
+            if (exclusive)
+                for (auto& scope : scopes)
+                    scope.independentNewFileTransfer = false;
+            task->InstallPreparedMutationInterlockScopes(std::move(scopes), false);
+            MutationInterlockRelations decided{};
+            decided.advisoryDecided = true;
+            state.PublishMutationInterlockDecision(*task, decided);
+            state._tasks.push_back(std::move(candidate));
+            state.PublishPreparedMutationInterlock(*task);
+            return task;
+        };
+        Task* const exclusive = makeTask(2u, true);
+        Task* const later     = makeTask(3u, false);
+        std::binary_semaphore exclusiveEntered{0}, laterDone{0};
+        std::counting_semaphore<2> exclusiveRelease{0};
+        std::atomic<bool> laterEntered{false};
+        std::jthread first([&](std::stop_token token) noexcept
+        {
+            const auto result = state.EnterOperation(*exclusive, token);
+            if (result.outcome == OperationEntryOutcome::Entered)
+            {
+                exclusiveEntered.release();
+                exclusiveRelease.acquire();
+                state.LeaveOperation(*exclusive, result.accepted);
+            }
+        });
+        std::jthread second;
+        const auto cleanup  = wil::scope_exit([&]() noexcept
+        {
+            {
+                // Synchronize stop with the predicate-to-wait transition, including
+                // failure paths that can be waiting on an identity predecessor.
+                std::scoped_lock lock(state._queueMutex);
+                first.request_stop();
+                second.request_stop();
+            }
+            exclusiveRelease.release();
+            state._queueCv.notify_all();
+            first.join();
+            if (second.joinable())
+                second.join();
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._activeOperations = 0u;
+            state._tasks.clear();
+        });
+        const auto deadline = std::chrono::steady_clock::now() + 3s;
+        while (! exclusive->_waitingForExclusiveTransfer.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        if (! exclusive->_waitingForExclusiveTransfer.load(std::memory_order_acquire))
+        {
+            failure = L"Exclusive admission must wait for the active transfer before the fairness check.";
+            return false;
+        }
+        second                  = std::jthread([&](std::stop_token token) noexcept
+        {
+            const auto result = state.EnterOperation(*later, token);
+            laterEntered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+            if (result.outcome == OperationEntryOutcome::Entered)
+                state.LeaveOperation(*later, result.accepted);
+            laterDone.release();
+        });
+        const auto waitDeadline = std::chrono::steady_clock::now() + 3s;
+        while (! later->IsWaitingInQueue() && ! laterEntered.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < waitDeadline)
+            std::this_thread::sleep_for(1ms);
+        if (! later->IsWaitingInQueue() || laterEntered.load(std::memory_order_acquire))
+        {
+            failure = L"A later independent transfer must not refill capacity ahead of an eligible exclusive waiter.";
+            return false;
+        }
+        if (cancelExclusive)
+            exclusive->RequestCancel();
+        else
+        {
+            {
+                std::scoped_lock lock(state._queueMutex);
+                state._activeMutationInterlocks.clear();
+                state._activeOperations = 0u;
+            }
+            state._queueCv.notify_all();
+            if (! exclusiveEntered.try_acquire_for(3s) || laterEntered.load(std::memory_order_acquire))
+            {
+                failure = L"The reserved exclusive admission must enter before the later transfer when capacity drains.";
+                return false;
+            }
+            exclusiveRelease.release();
+        }
+        if (! laterDone.try_acquire_for(3s) || ! laterEntered.load(std::memory_order_acquire))
+        {
+            failure = L"The later transfer must enter after the exclusive admission completes or is cancelled.";
+            return false;
+        }
+    }
+    for (const bool predecessorBlocked : {false, true})
+    {
+        settings.fileOperations->maxParallelTransfers = 4u;
+        owner.ApplyFileOperationSettings();
+        FileOperationState state(owner);
+        auto activeScopes                          = makeScopes(1u);
+        activeScopes[1].conservativeIdentityDomain = false;
+        auto active                                = std::make_shared<MutationInterlockAdmission>();
+        active->key                                = 1u;
+        active->scopes                             = std::make_shared<const MutationInterlockScopes>(std::move(activeScopes));
+        active->relations.advisoryDecided          = true;
+        active->isTransfer = active->hasDataTransfers = active->parallelNewFiles = true;
+        state._activeMutationInterlocks.push_back({.taskId = 1u, .admission = std::move(active)});
+        state._activeOperations = 1u;
+        const auto prepare      = [&](uint64_t id, bool exclusive) noexcept -> Task*
+        {
+            auto candidate   = std::make_unique<Task>(state);
+            Task* const task = candidate.get();
+            task->_taskId    = id;
+            task->_admissionKey.store(id, std::memory_order_release);
+            task->_queueOrderKey.store(id, std::memory_order_release);
+            task->_operation                     = FILESYSTEM_COPY;
+            auto scopes                          = makeScopes(id);
+            scopes[1].conservativeIdentityDomain = false;
+            if (exclusive)
+                for (auto& scope : scopes)
+                    scope.independentNewFileTransfer = false;
+            task->InstallPreparedMutationInterlockScopes(std::move(scopes), false);
+            MutationInterlockRelations decided{};
+            decided.advisoryDecided = true;
+            if (exclusive && predecessorBlocked)
+            {
+                decided.predecessorKeys[0] = 3u;
+                decided.predecessorCount   = 1u;
+            }
+            state.PublishMutationInterlockDecision(*task, decided);
+            state._tasks.push_back(std::move(candidate));
+            state.PublishPreparedMutationInterlock(*task);
+            return task;
+        };
+        // Prepare the predecessor first so its published key is visible when the
+        // exclusive decision is frozen. The waiting flag models a prior capacity
+        // wait; pause or a newly published predecessor must make it ineligible.
+        Task* const later     = prepare(3u, false);
+        Task* const exclusive = prepare(2u, true);
+        exclusive->_waitingForExclusiveTransfer.store(true, std::memory_order_release);
+        if (! predecessorBlocked)
+            exclusive->SetPaused(true);
+        std::binary_semaphore done{0};
+        std::atomic<bool> entered{false};
+        std::jthread waiter([&](std::stop_token token) noexcept
+        {
+            const auto result = state.EnterOperation(*later, token);
+            entered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+            if (result.outcome == OperationEntryOutcome::Entered)
+                state.LeaveOperation(*later, result.accepted);
+            done.release();
+        });
+        const auto cleanup = wil::scope_exit([&]() noexcept
+        {
+            {
+                std::scoped_lock lock(state._queueMutex);
+                waiter.request_stop();
+            }
+            state._queueCv.notify_all();
+            waiter.join();
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._activeOperations = 0u;
+            state._tasks.clear();
+        });
+        if (! done.try_acquire_for(3s) || ! entered.load(std::memory_order_acquire))
+        {
+            failure = predecessorBlocked ? L"A published predecessor must enter despite the exclusive waiter's stale capacity flag."
+                                         : L"A paused exclusive waiter must not reserve transfer admission.";
+            return false;
+        }
+    }
+    Debug::Perf::EmitValue(L"FileOps.SelfTest.SharedTransfers.AdmissionContracts", 1u, S_OK);
+    return true;
+}
+
+bool FolderWindow::FileOperationState::DebugValidateInterlockWaitingPresentationForSelfTest(std::wstring& failure) noexcept
+{
+    using namespace std::chrono_literals;
+    for (const bool cancel : {false, true})
+    {
+        Common::Settings::Settings settings{};
+        settings.fileOperations.emplace().maxParallelTransfers = FileOperations::GetSharedParallelTransferLimit();
+        FolderWindow owner;
+        owner.SetSettings(&settings);
+        FileOperationState state(owner);
+        FileOperations::MutationInterlockScope scope{};
+        scope.endpoint.pluginId              = L"builtin/file-system";
+        scope.endpoint.instanceId            = L"host/default";
+        scope.endpoint.profileId             = L"local-win32-smb";
+        scope.endpoint.rootId                = L"fixture-network-root";
+        scope.providerPath                   = L"\\\\studio-nas\\Media\\first.mkv";
+        scope.access                         = FileOperations::MutationInterlockAccess::PublishDestination;
+        scope.conservativeIdentityDomain     = true;
+        auto publisher                       = std::make_shared<MutationInterlockAdmission>();
+        publisher->key                       = 1u;
+        publisher->scopes                    = std::make_shared<const MutationInterlockScopes>(MutationInterlockScopes{scope});
+        publisher->relations.advisoryDecided = true;
+
+        auto candidate   = std::make_unique<Task>(state);
+        Task* const task = candidate.get();
+        task->_taskId    = 2u;
+        task->_admissionKey.store(2u, std::memory_order_release);
+        task->_operation   = FILESYSTEM_MOVE;
+        scope.providerPath = L"\\\\studio-nas\\Media\\second.mkv";
+        task->InstallPreparedMutationInterlockScopes({scope}, false);
+        MutationInterlockRelations decided{};
+        decided.advisoryDecided = true;
+        state.PublishMutationInterlockDecision(*task, decided);
+        state._tasks.emplace_back(std::move(candidate));
+        state.PublishPreparedMutationInterlock(*task);
+        state._activeMutationInterlocks.push_back({.taskId = 1u, .admission = publisher});
+        state._activeOperations = 1u;
+
+        std::binary_semaphore done{0};
+        std::atomic<bool> entered{false};
+        std::jthread waiter([&](std::stop_token stopToken) noexcept
+        {
+            auto result = state.EnterOperation(*task, stopToken);
+            entered.store(result.outcome == OperationEntryOutcome::Entered, std::memory_order_release);
+            if (result.outcome == OperationEntryOutcome::Entered)
+                state.LeaveOperation(*task, result.accepted);
+            done.release();
+        });
+        const auto cleanup  = wil::scope_exit([&]() noexcept
+        {
+            // Pair stop with the predicate mutex, including any failure before the first wait.
+            {
+                std::scoped_lock lock(state._queueMutex);
+                waiter.request_stop();
+            }
+            state._queueCv.notify_all();
+            waiter.join();
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._activeOperations = 0u;
+            state._tasks.clear();
+        });
+        const auto deadline = std::chrono::steady_clock::now() + 2s;
+        while (! task->IsWaitingInQueue() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        if (! task->IsWaitingInQueue() || ! task->_waitingForIdentityInterlock.load(std::memory_order_acquire))
+        {
+            failure = L"Distinct identity-less destination files must wait at the real admission interlock with its presentation reason.";
+            return false;
+        }
+        const uint64_t startedUs = PerfNowUs();
+        for (unsigned attempt = 0u; attempt < 32u; ++attempt)
+        {
+            if (! state.RunQueuedTaskNow(2u) || ! task->IsWaitingInQueue() || ! task->_waitingForIdentityInterlock.load(std::memory_order_acquire) ||
+                entered.load(std::memory_order_acquire) || task->HasStarted() || task->_discoveryAheadActive.load(std::memory_order_acquire))
+            {
+                failure = L"Start now must preserve the safety wait and its reason without starting counting or mutation.";
+                return false;
+            }
+        }
+        Debug::Perf::Emit(L"FileOps.SelfTest.IdentityInterlock.StartNowUs", cancel ? L"cancel" : L"release", PerfElapsedUs(startedUs), 32u, 0u, S_OK);
+        if (cancel)
+            task->RequestCancel();
+        {
+            std::scoped_lock lock(state._queueMutex);
+            if (! cancel)
+            {
+                state._activeMutationInterlocks.clear();
+                state._activeOperations = 0u;
+            }
+        }
+        state._queueCv.notify_all();
+        if (! done.try_acquire_for(2s) || entered.load(std::memory_order_acquire) == cancel || task->IsWaitingInQueue() ||
+            task->_waitingForIdentityInterlock.load(std::memory_order_acquire))
+        {
+            failure = L"Interlock release must admit the waiting task; cancellation must retire it, and both must clear the waiting reason.";
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
 void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
 {

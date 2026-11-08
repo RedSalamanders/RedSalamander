@@ -6,6 +6,8 @@ wait before holding the prompt for 250 ms. It retains four conflicting files, on
 at least 100,000 microseconds of measured checkpoint convergence, and the scaled 120-second case
 deadline. The test snapshots Local configuration, selects four workers, and restores configuration;
 cleanup releases the cancellation-aware, 120-second worker gate before cancelling and draining tasks.
+The fixture also scopes the shared transfer limit to four and restores its prior value after the
+case, or after worker drain on failure, so a serial user preference cannot prevent the peer witness.
 
 The explicit hosted CommandsHandoff and FileOpsVolumes diagnostic scopes each select one fixed
 case and retain filtered NOT_EVALUATED repository coverage. The adapter verifies the selected
@@ -13,6 +15,35 @@ case and every setup/cleanup result, quarantine state and source-bound build rec
 accepting filtered runner exit 2; these diagnostics never stand in for Full qualification.
 
 ## Hosted qualification prerequisites
+
+Shared-transfer admission controls preserve a nondefault process-wide limit across private
+`FolderWindow` settings attachment and detachment. Intentional scheduler fixtures apply their
+limit explicitly and restore the original. Conflicting-task overlap observations read both active
+admissions under the scheduler's queue lock, rather than combining separate worker-state reads
+across a serialized handoff. Exclusive-fairness controls exercise the real admission boundary with
+spare shared capacity, an older exclusive waiter and a later independent transfer, retaining drain,
+cancellation and ineligible-waiter controls. These focused checks do not establish Full qualification.
+
+`R4A02_LiveOutputGuardChoices` uses a provider-native directory publisher whose child handles have
+closed before its top-level completion pause, so Skip, Queue, destructive consent and publication-index
+overflow still reach the actual warning and mutation gates. Its directory copy explicitly enables
+recursion and an unexpected pre-publication prompt fails immediately. Conflicting Copy jobs retain
+the peer identity, Queue and Cancel assertions while rejecting Run concurrently. A separate qualified single-file bridge
+control retains its publication authority, requires Local Delete preparation to fail with
+`ERROR_SHARING_VIOLATION` before either gate, proves both files remain byte-equal, and releases the
+publisher to successful completion. The sharing failure does not replace warning coverage.
+
+No-activation path-detail fixtures check pending initial text focus before UIA Invoke, because Invoke
+may focus its button. Escape coverage distinguishes fully virtualized cards from retained cards with
+clipped actions. The latter proves card/viewport intersection and actual retained action bounds
+outside the DPI-converted viewport independently of the binding under test. The scalar test-only
+decision-action bounds getter observes the hosted buttons without rendering, activating or dispatching.
+The two-pending-conflict witness establishes its visible Cancel setup with a new hosted render,
+the exact live task and prompt generation, and fully visible measured bounds within the existing bounded
+wait. A paint request alone is not proof that a retained frame was prepared. Setup records focus, scroll
+and geometry before and after focus, then reacquires the exact provider; the subsequent Options baseline
+and synchronous decision-binding assertions still permit no intervening hosted render. Setup must fail
+if clipping persists after rendered frames rather than weakening visibility or repairing it by explicit scrolling.
 
 The unified CI adapter runs the normal CI suite after a test-enabled Release build on both native
 architectures; Full and ASan remain explicit manual qualifications. See
@@ -582,6 +613,9 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Raw synchronous SearchService protocol fixtures share `ConnectSearchServiceFixturePipe`. Within the caller's scaled deadline it retries only missing-instance, busy-instance and semaphore-timeout connection failures. `WaitNamedPipe` does not wait for an absent instance or reserve an available one; a normal listener replacement after a status/query response is therefore not fixture failure. `search_service_fixture_connect_retries_missing_instance` independently proves bounded missing-listener refusal using more than one actual open attempt, so scheduler delay cannot make a one-shot helper pass, and proves connection to a delayed fixture-owned instance. The helper's optional attempt count is diagnostic; the busy-pipe case still holds a real accepted connection, proves queued-query blocking/cancellation and retains the existing short status/shutdown budgets.
 - A failed decision-mirror step must place its specific reason in the per-case failure summary as well as the suite trace. Short-viewport conflict navigation failures must report whether the window, task and layout still exist, plus task completion/conflict state. Collect side-effectful witnesses before constructing failure text, so unspecified function-argument evaluation order cannot report their initial values. These diagnostics never replace the exact focus, visibility, action identity or engine-result assertions.
 - Retained-host keyboard fixtures must deliver balanced modifier key messages to the owned host; `SetKeyboardState` alone does not update its cached modifier mask. The short-viewport witness checks the actual retained mask, one Tab delivery and cleared routed Shift while preserving the Win32 thread keyboard table. Scope cleanup also releases a routed modifier after early failure; this protocol does not inject global keyboard input.
+- Whole-queue ordering probes own an isolated window thread and message-only windows. Prove the exact queue head before removing the owned witness, including independent child-input and intervening-message controls; unrelated work on the main UI thread must not decide the probe.
+- Output-transaction fault fixtures must reach the injected operation, verify the one-shot was consumed, and clear every armed seam before fixture teardown on all exits. An existing-target collision is a separate negative control; it cannot establish write, flush or publication fault handling. Preserve exact prior bytes and absence of transaction siblings for each control.
+- Multi-task File Operations UI fixtures obey the real admission policy. An existing-destination Copy stays exclusive when Queue changes to Parallel; prove its successor remains unstarted and publishes only after that conflict resolves. Seed retained successful transfers before the exclusive conflict. Two simultaneous inspection decisions may use a disjoint qualified native-only Move, with its immutable strategy and absence of data-transfer capacity proved before inspection; preserve both tasks' exact contexts and source/destination bytes.
 - Standalone compiler-backed harness checks must archive their generated source, compiler diagnostics, success/failure-control receipts and exact validation scope beneath the marked root's `evidence/` before their live run owner exits. A `runs/<runId>/scratch/` directory is disposable and can be removed by the dead-PID sweep; it is not durable acceptance storage. Hash-verify copied evidence while the owner is still live, and distinguish a fresh rerun from any original receipts already lost.
 - Before child tests launch, `Tools\Run-AllTests.ps1` must sweep parseable sibling run directories whose names match `runs\<timestamp>-<pid>-<guid>` and whose owner PID is no longer live. The current run id, explicitly allowed run ids, live-PID sibling runs, and unparseable/manual directories must not be removed by this dead-PID sweeper. Removal failures must warn and return failed cleanup rows; they remain visible evidence and must not silently turn into a green disk proof. Every sandbox run removal (this sweep and the exact-run `Remove-RSTestSandboxExactRunDirectory` used by `Tools\Clean-TestSandbox.ps1`) must first walk the whole run tree without following reparse points: a reparse-point directory is never enumerated. Junctions and directory symbolic links are then removed as links only (non-recursive delete of the link itself), so a link can never extend a deletion outside the run. A volume mount point (a mount-point reparse target naming `Volume{...}`) or any other directory reparse point without a link-only removal refuses the whole tree before anything is deleted: the stale sweep warns and returns a `Retained` row whose error names each such path, and exact-run removal throws. An orphaned volume mount needs `DeleteVolumeMountPointW` (or `mountvol /D`) by an administrator; test tooling performs that only for a disk it created and recorded. Before walking any run tree, both removals read that run's test-owned VHDX receipts. Elevated, each recorded disk is torn down in reverse order and the walk proceeds; a `detached` receipt's VHDX and receipt are deleted with or without elevation. Without elevation (for any other stage), or when a receipt is malformed, names a path outside its own run layout, or its mount directory names another volume, the whole run is retained (a `Retained` stale row, an exact-run throw, or `Failed` from `Tools\Clean-TestSandbox.ps1`) and the reason names the receipt path and the exact elevated recovery commands. `Clean-TestSandbox.ps1` dry runs warn about such receipts.
 - Test tooling never performs legacy cleanup outside `X:\RedSalamander.Perf`; `-ApplyLegacySandboxCleanup` is rejected. `Tools\Clean-TestSandbox.ps1` is dry-run/`ShouldProcess` protected and may resolve and remove only one explicitly named direct-child `runs\<runId>` directory beneath the selected marked root. Historical outside-root artifacts are never enumerated or mutated by test tooling.
@@ -605,6 +639,7 @@ Environment variables may select alternate test inputs such as profile names, bu
 - `Phase6_LocalBandwidthThrottle` must measure whole-copy duration from the worker's published operation start, not the first UI observation. Its fixture deliberately defers the first observation by at least 500 ms while continuing to pump messages, so delayed polling cannot shorten the measured runtime. Preserve the 250 ms duration-lead allowance, sampled throughput checks and 250 ms cancellation limit; report observation delay separately from duration.
 - Its cancellation clock starts immediately before `RequestCancel`, includes the call itself, and ends at the actual UI completion callback. Retain ordered handler-entry, request, call-return and callback ticks; emit their diagnostics only after delivery. Handler setup and a worker-only cancellation measurement must not replace that unchanged 250 ms callback gate.
 - The R4A02 queue-after and don't-start fixtures hold the predecessor Copy at the existing test-only publication pause until the Delete is observed waiting in the overlap queue or completing explicit cancellation. Provider latency alone must not establish that state. Preserve the final nonzero wait-count, ordering, source-preservation and cancellation assertions; release and disable the pause on failure and after the decision witness.
+- FileOps fixtures that temporarily change the shared transfer limit across UI ticks use the runner's saved-value helper and runtime settings owner; cleanup releases any real progress gate and drains workers before restoring the original limit. The test-only progress gate observes current task identities after actual positive bridge writes and before presentation throttling, remains cancellation-aware and bounded, and never supplies product admission authority. Source contracts protect these ownership boundaries; runtime assertions still prove the behavior.
 - The R4A02 same-destination fixture must witness the first Copy at its bounded pre-consumption gate after prepared-scope publication and advisory before admitting the second Copy. The second prepared Copy must name that held predecessor in its overlap warning; canceling it must leave its destination members absent while the first Copy completes. Release the gate before worker cleanup on every exit, and retain the original workload and timeout.
 - The NavigationView edit-suggest keyboard fixture parks the cursor on its owned edit host outside the suggestion popup, samples for pointer interference across its keyboard and DPI checks, and keeps the unselected-row, focus, and stale-result assertions. It retires the owned edit and popup before restoring the cursor and preserves the cursor on observed movement or failed teardown. Sampling cannot detect movement between observations or eliminate the final check-to-restore race.
 - A test-enabled Release selftest that asserts an info-level File Operations diagnostic must explicitly enable that diagnostic level for the case and restore the captured settings afterward. It must not wait for an info record while relying on Release's intentionally disabled default.
@@ -763,6 +798,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   positive control, then require the empty action to be unhandled and preserve the exact system
   clipboard text, fallback text and sequence; clearing the clipboard or reporting a handled
   empty copy cannot satisfy this control.
+- Find Files' queue-order probe services window-creation notifications only on its private
+  message-only-window thread before posting its ordering witnesses. No messages are pumped
+  during the assertions. Child input, unrelated application work and a DWM nonclient-rendering
+  notification must each block result draining until that exact preceding message is removed;
+  the production guard still observes the unfiltered thread-queue head.
 - Batch Rename's normal test snapshot/mode-switch helpers may settle owned current work within
   the existing bound. Their explicit immediate mode performs no such wait. The existing blocked
   provider fixture uses immediate observation and dispatch to require disabled mode switching,
@@ -919,15 +959,14 @@ Environment variables may select alternate test inputs such as profile names, bu
   and UIA witnesses share foreground invariants. The only reviewed lease
   exceptions are `-Suite FileOps` with the exact, case-sensitive
   `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`
-  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`,
+  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
-  `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, or `Delete_IdentityLessPinnedTreeChangedEntry`
-  case filter and no flaky/order proof injection.
+  `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, or `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
   the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
-  the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
+  the added storage/route witnesses use owned sandbox data and the same activation blocker;
   they require no foreground assertion, UIA, clipboard or pointer input. Casing
   near-misses, wildcards, multiple-case filters and unknown names fail closed to
   the existing lease. This does not grant activation. Keep
@@ -1160,8 +1199,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   proves mutation-before-close with exact discovered bytes/files; `Phase5_DiscoveryCancelLatencyLocal`
   proves bounded cancellation; `Phase5_DiscoverySkipContinues` proves the one-way mode switch on a
   Local traversal that is still producing (a provider that holds its whole plan, such as Dummy, closes
-  before its first byte and leaves nothing to skip); and
-  `Phase5_SwitchParallelToWaitDuringDiscovery` proves Skip does not bypass global Queue waiting.
+  before its first byte and leaves nothing to skip), including the <= 50 ms reservation-release
+  witness and the unchanged queued neighbor. The historical
+  `Phase5_SwitchParallelToWaitDuringDiscovery` case holds two qualified independent Local file
+  transfers inside real I/O, then proves one is quiet for 500 ms under Queue mode; its paired
+  `Phase5_SwitchWaitToParallelResume` case proves progress resumes after Parallel is restored.
   Popup/source-contract coverage must keep task, aggregate, compact-row, and taskbar progress plus ETA
   indeterminate while discovery is open and expose `Counting while working` after Skip. Tests must not
   restore retired pre-calculation threads, settings, callbacks, or `Calculating` task state.
@@ -1169,12 +1211,17 @@ Environment variables may select alternate test inputs such as profile names, bu
   independent-volume fixtures. The independent-volume control explicitly selects Parallel admission
   before starting either operation and restores the exact previous Queue/Parallel mode on normal,
   failed and cancelled phase exit. It changes only future-task admission, reschedules no live task
-  and persists no preference. Overlapping progress, exact byte/tree checks, the 1.35-times-isolated
+  and persists no preference. Each volume task selects four regular files with missing destination
+  leaves and must have a qualified new-file data admission; both admissions must be active during
+  the observed overlap. The fixture temporarily ensures at least eight shared file permits and restores
+  the previous limit after worker quiet. Alternate-volume cleanup preserves the approved sandbox root
+  and its ownership marker and prunes only empty, reparse-free run parents; the case verifies the
+  root and marker remain valid after cleanup. It does not claim recursive directory discovery, which the
+  separate wide-tree and multiple-folder cases cover. Overlapping progress, exact byte/file checks, the 1.35-times-isolated
   throughput gate and the 30-second ceiling remain required. On failure or timeout, a once-per-case scalar
   admission witness reports wait and overlap classifications
   without retaining paths or object authority; the witness reports its own capture cost within the timed interval.
-  Its Local Copy and permanent-Delete phases must recreate bounded
-  unique children beneath the acquired File Operations sandbox, set and restore the Local provider
+  Its Local Copy and permanent-Delete phases must recreate bounded unique children beneath the acquired File Operations sandbox, set and restore the Local provider
   configuration, wait for typed task completion, verify exact bytes/files and destination/source
   state, and require the discovery service facts described in the performance specification. The
   Delete phase must also prove exactly one selected-root open-discovery mutation and zero provider
@@ -1259,6 +1306,25 @@ Environment variables may select alternate test inputs such as profile names, bu
   Recycle failure for item completion, while retaining the original Recycle HRESULT only as historical
   prompt context. A Local recursive permanent-delete partial child failure must retain the selected
   root as a known non-commit even when already-admitted children were removed.
+- Queued Local directory Delete coverage must prove that its metadata identity witness does not
+  block predecessor publication, that a queued root replacement refuses before walking either tree,
+  and that partial strict acquisition releases earlier leases. After readiness is frozen, deferred
+  confirmation must publish its exact task consent receipt without changing the active interlock.
+  Confirmed directories and regular files retain strict pathname pins; releasing the directory lease
+  must precede successor admission. Both directions of overlapping directory Delete admission must
+  reject stale concurrent consent, including read-source overlaps, without serializing disjoint scopes.
+  The optional pin handoff must reject an outstanding metadata read without retiring the witness,
+  preserve immutable identity after successful retirement, reject unrelated objects and mixed grants,
+  and permit legacy directory disposition/name recreation while this task's old snapshot remains alive.
+  A reserved directory remains in monotonic `PreparingExecution` before entering mutation; the popup
+  shows Preparing outside the question and Waiting for decision while the confirmation is active.
+  Combining an identity-Unsupported metadata observation with a denied strict Delete open must
+  fail preparation with the source intact and no by-name authority or consent route.
+- Synthetic File Operations producer fixtures clean up every exact task ID they create, on success
+  and failure, so the following idle-state witness never inherits their completion summaries.
+  Waiting-card captures use `ScopedNonActivatingDesktopObserver` to reject process-owned activation
+  while allowing unrelated desktop activity; capacity and identity waits retain eligible queue-order
+  controls while suppressing unsafe Start now actions.
 - The copy-merge popup fixture must inspect the live actionable conflict card before accepting its
   decision: `Waiting for your decision` and question/context are visible and unclipped, semantic
   prompt regions precede actions, loading is false, discovery/transfer indicators are absent, and
@@ -1412,6 +1478,13 @@ Environment variables may select alternate test inputs such as profile names, bu
   the Local `DeleteItems` with a folder and two items below it twenty times, each with a bounded wait: the
   parallel delete parks when a worker finds nothing ready, and the step that makes the parent ready must wake
   it.
+- `Phase7_SharedPerItemScheduler` uses two nonqualified copies of twelve selected files and two selected
+  directories. It observes the second task waiting for exclusive admission while the first has concurrent
+  per-item work and completed progress, then cancels the first. A bounded, cancellation-aware test checkpoint
+  holds the second immediately after discovery starts so the test can stop discovery before dispatch; it then
+  requires concurrent per-item work and completed progress in that task before cancelling it. Both completed
+  receipts must retain the partial and cancelled-item outcomes, and cleanup releases the checkpoint before
+  waiting for workers. Qualified shared admission and exclusive fairness have separate admission controls.
 - I35 NAS nested Copy. `R0fSmb_NestedTreeCopyToShare` (R0f-SMB family) copies, through the host and the
   Local provider's own walker (Verify Off), a tree of four folder levels with files at every level, an
   empty folder and a folder of 300 small files to a unique child of `path.smb.primary`
@@ -2170,6 +2243,13 @@ ephemeral provider cache. Warm-requested retains prime age and actual per-call c
 a recent single entry is not an all-hit cache, and a prime older than the two-second TTL is
 labelled expired. Inventory readback occurs after cold cancellation and after prime+warm
 cancellation, so the readback itself does not age the intended warm ingress.
+The preconsumption gate keeps its 60-second deadline. Success requires both the wait's
+in-deadline condition result and the actual entered flag; a later gate entry does not repair a
+timeout. A matching owner-thread completion or synchronized terminal task state before the
+gate is a failure, reported immediately with its actual status. Failure diagnostics include
+the exact task ID, lifecycle/readiness, queue and interlock waits, immutable preparation and
+admission identity, and queue-locked active membership. These independently sampled facts
+must not be presented as one coherent lifecycle snapshot or as proof of a timeout's cause.
 Capture the foreground HWND and its owning PID/thread before the matrix. Every
 sample and final cleanup require that same identity; a reused HWND with a different
 owner is not preservation. Failure diagnostics retain the captured owner and the
@@ -2251,6 +2331,37 @@ until reviewed. Partial result artifacts, skipped capabilities and a green compi
 establish broad runtime, architecture, sanitizer, performance or Full qualification.
 
 ## File Operations queued admission and Safety contracts
+
+The exact no-activation `FileOps_IdentityInterlockWaiting` case holds two distinct invented destination filenames in one
+identity-unavailable domain at the real `EnterOperation` boundary. Thirty-two Start now requests
+must retain Waiting and its identity-limit reason, without starting discovery or mutation. Separate
+release/cancel controls require prompt retirement and clear the reason. The fixture records
+`FileOps.SelfTest.IdentityInterlock.StartNowUs`. Its English/French waiting-card matrix covers the
+wrapped explanatory text, accessibility, absent Start now and Skip counting, suppressed counters,
+and removal of the reason and restoration of counting controls when the same card becomes running;
+existing frame measurements remain in force.
+The same exact case validates the shared file budget at 1, 2, 4 and 16, live increase/decrease,
+pending-exclusive fairness, cancellation and permit teardown. Indexed new-file scope controls
+also admit an unrelated native-only rename while all four data slots are occupied. They
+retain equal-name, alias, existing-target and folder conflicts, and compare indexed/pairwise
+results with a 4,096-file scaling witness. Real owned local copies and managed moves simulate
+unsupported destination-parent IDs, exercise multiple jobs and multiple files per job, require
+a peak no greater than the shared target, and check exact content and source cleanup. A fifth
+one-file job must wait without counting and cannot bypass the limit through Start now. The
+waiting-card gallery also covers capacity and exclusive reasons in English/French. All paths
+are invented sandbox fixtures; no desktop input is required. These controlled setting-one/four
+witnesses measure scheduling, not network/NAS throughput.
+The local test provider's `REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH`
+control isolates unavailable directory IDs from regular-file authority. Managed Move positive
+controls require full publication and exact source removal in that mode. The all-path-binding
+unsupported control also succeeds when the provider still supplies operation-owned publication
+authority. Binding support and publication proof are separate capabilities. `R3_3_PublicationFaultMatrix`
+owns the refusal controls that retain sources when actual publication/verification proof fails.
+The historical `R4A02_RunConcurrentSameDestinationStaysSafe` filter now verifies that conflicting
+transfers queue and preserve both complete result sets, with no concurrent-transfer bypass action.
+The direct admission witness also rejects stale concurrent consent for this pair.
+It requires neither desktop input nor a desktop lease when selected exactly in the FileOps-only
+runner without proof injections. Broad selections and proof injections retain the normal lease.
 
 `FileOps_QueuedAdmissionContracts` runs without foreground input. It exercises canonical private
 admission with captured provider context, options and clipboard provenance; rejection of an explicit
@@ -2662,7 +2773,9 @@ Every Commands junction fixture removes its own link without following it and ch
 
 The provider matrix must agree with FileSystem7z's existing dual-separator route/name contract, while retaining preferred slash, case sensitivity and single-child-name rejection checks. Every gallery capture and its final event drain must retain the no-activation predicate and report the last attempted observation, availability and error on failure. Splitter diagnostics distinguish logical and physical pointer coordinates and hit-window identities. The deferred-consent matrix reports the risk and each observed typed fact/action/scope field without changing the expected policy. Local independent-volume qualification requires the declared, marked alternate root and the runner's explicit opt-in; never convert an environment-blocked mandatory case into success.
 
-The synthetic deferred-consent matrix establishes Move context when it requests source retention. A separate EFS Copy control must withhold and reject that Move-only action, retain the pending prompt after rejection, and accept its published Continue action. The fake-MTP discovery fixture binds a unique marked-sandbox profile before loading its backend, retains that environment lease through copy/cancellation, and verifies exact restoration; it must not replay the caller's journal. Alternate-volume cleanup preserves the approved sandbox root and ownership marker, pruning only empty reparse-free run parents; R4-A19 checks that the root and marker remain valid after cleanup.
+The connection-override popup fixture may hold accepted bridge writer work through the normal reveal delay; elapsed-time metrics that include this checkpoint declare `candidateCheckpoint=heldForPopup` and cannot support an unperturbed throughput comparison.
+
+The synthetic deferred-consent matrix establishes Move context when it requests source retention. Its per-item controls select Apply-to-all false even when that option is offered, so every item must publish its own prompt; separate scoped-cache controls retain their Apply-to-all coverage. A separate EFS Copy control must withhold and reject that Move-only action, retain the pending prompt after rejection, and accept its published Continue action. The fake-MTP discovery and new-file bridge fixtures bind a unique marked-sandbox profile before loading their backend, retain that environment lease through copy/cancellation and provider teardown, and verify exact restoration; they must not replay the caller's journal. The bridge's changed-PUID control requires a second prompt generation and preserves the newer occupant, source and exact identified temporary-object contents. Its recovery metrics observe branches; the separate Compare MTP journal controls establish the journal-file quarantine contract.
 
 Viewer child-process waits must service the parent's bounded message queue so an owned warning stays responsive while the child runs. The existing contained-timeout fixture also uses a hidden message-only timer to prove queue servicing without acquiring focus or changing its 100 ms child timeout. Artifact rotation must unlink disposable prior links without following them, remove read-only disposable entries, and preserve the current last run when cleanup or rename fails. A guarded fixture entrypoint rejects unmarked/drive/active roots; native controls retain exact outside-target bytes and a locked-file failure canary. A regression's expected failing receipt does not qualify the implementation.
 

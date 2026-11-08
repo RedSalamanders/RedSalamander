@@ -1,0 +1,17 @@
+Run: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\Specs\TestRuns\Local-x64\FileOps\2026-11-01_SharedParallelTransfers\small-files
+
+┌──────────────────┐
+│ Detailed Table │
+└──────────────────┘
+◆ FileOps.SelfTest  (1 metrics)
+
+Metric                         Count Build P95Quality P99Quality Unit        P50        P95        P99        Max
+------                         ----- ----- ---------- ---------- ----        ---        ---        ---        ---
+FileOps.SelfTest.SmallFileCopy     2 Debug fail       fail       us   1160584,00 1366525,00 1366525,00 1366525,00
+
+
+┌──────────────────┐
+│ Visual Heatmap │
+└──────────────────┘
+◆ FileOps.SelfTest  (1 metrics)
+◆ ██████████████████████ FileOps.SelfTest.SmallFileCopy         p95=1,37M us     p50=1,16M us     count=    2 build=Debug    p95q=fail

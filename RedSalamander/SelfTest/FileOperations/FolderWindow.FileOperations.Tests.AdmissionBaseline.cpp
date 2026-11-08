@@ -905,11 +905,13 @@ using MetadataProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
                             const auto selected    = current ? current->LoadSelectedAdmission() : nullptr;
                             const auto preparation = selected ? selected->preparation : nullptr;
                             const auto interlock   = selected ? selected->interlock : nullptr;
+                            const bool active      = operations->DebugAreBothAdmissionsActiveForSelfTest(taskId, taskId);
                             AppendLog(std::format(
                                 L"F7 GATE FAILURE {} task={} gateEntered={} completed={} completionHr=0x{:08X} "
-                                L"taskPresent={} finished={} resultHr=0x{:08X} lifecycle={} started={} entered={} "
-                                L"waiting={} waitingOthers={} overlapQueued={} queuePaused={} readiness={} readinessHr=0x{:08X} "
-                                L"preparation={} preparationHr=0x{:08X} interlock={} interlockKey={} scopeCount={}",
+                                L"taskPresent={} finished={} resultHr=0x{:08X} lifecycle={} started={} reserved={} entered={} "
+                                L"waiting={} waitingOthers={} overlapQueued={} queuePaused={} identityWait={} parallelWait={} exclusiveWait={} "
+                                L"readinessComplete={} readinessHr=0x{:08X} preparation={} preparationHr=0x{:08X} "
+                                L"interlock={} interlockKey={} scopeCount={} activeAdmission={}",
                                 tag,
                                 taskId,
                                 gateEntered,
@@ -920,18 +922,23 @@ using MetadataProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
                                 static_cast<unsigned long>(finished ? current->GetResult() : E_PENDING),
                                 current ? static_cast<unsigned int>(current->GetLifecyclePhase()) : 0u,
                                 current && current->HasStarted(),
+                                current && current->HasReservedOperation(),
                                 current && current->HasEnteredOperation(),
                                 current && current->IsWaitingInQueue(),
                                 current && current->IsWaitingForOthers(),
                                 current && current->IsOverlapQueued(),
                                 current && current->IsQueuePaused(),
+                                current && current->_waitingForIdentityInterlock.load(std::memory_order_acquire),
+                                current && current->_waitingForParallelTransferSlot.load(std::memory_order_acquire),
+                                current && current->_waitingForExclusiveTransfer.load(std::memory_order_acquire),
                                 current && current->_selectedRootReadinessComplete.load(std::memory_order_acquire),
                                 static_cast<unsigned long>(current ? current->_selectedRootReadinessStatus.load(std::memory_order_acquire) : E_PENDING),
                                 preparation != nullptr,
                                 static_cast<unsigned long>(preparation ? preparation->status : E_PENDING),
                                 interlock != nullptr,
                                 interlock ? interlock->key : 0u,
-                                interlock && interlock->scopes ? interlock->scopes->size() : 0u));
+                                interlock && interlock->scopes ? interlock->scopes->size() : 0u,
+                                active));
                             if (! gateEntered && (completed != 0u || finished))
                                 return reject(L"F7 task terminated before the required preconsumption gate; see task witness above.");
                             return reject(entered.timeoutDiagnostic);

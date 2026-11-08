@@ -198,6 +198,23 @@ Describe 'Visible native audit contracts' {
         $visibleFixture.Error.Exception.Message | Should Match 'Visible-native audit is out of date'
         $typographyFixture = @(& (Join-Path $repoRoot 'Tools\Get-VisibleTypographyAudit.ps1') -RepoRoot $fixture)
         @($typographyFixture | Where-Object { $_.Category -eq 'CreateFontW' -and $_.Path -match 'Unclassified\.cpp$' }).Count | Should Be 1
+        # The message-only Search parent is an exact exception, not an allowance
+        # for a visible Static window in the same test source.
+        [IO.File]::Delete($fixtureSource)
+        $searchFixture = Join-Path $fixture 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        [void][IO.Directory]::CreateDirectory((Split-Path $searchFixture))
+        [IO.File]::WriteAllText($searchFixture, 'CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);')
+        $messageOnlyAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings
+        }
+        $messageOnlyAudit.Succeeded | Should Be $true
+        @($messageOnlyAudit.Output | Where-Object { $_.Allowed -and $_.Visibility -eq 'test-only message-only parent' }).Count | Should Be 1
+        [IO.File]::WriteAllText($searchFixture, 'CreateWindowExW(0, L"STATIC", L"", WS_VISIBLE, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);')
+        $visibleVariantAudit = Invoke-RSTestBlock {
+            & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -RepoRoot $fixture -FailOnFindings | Out-Null
+        }
+        $visibleVariantAudit.Succeeded | Should Be $false
+        $visibleVariantAudit.Error.Exception.Message | Should Match '1 unallowed finding'
     }
 }
 Describe 'Keyboard shortcut documentation drift contracts' {

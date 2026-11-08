@@ -152,10 +152,13 @@ integrity, and absence of the ENABLE_TESTS marker or reserved test exports. The
 shared PE test-surface policy also checks native artifacts before release receipt
 publication.
 
-The exact FileOps-only `FileOps_ReviewRemediationContracts`, `FileOps_CrossRootLocalCopy`,
+The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemediationContracts`, `FileOps_CrossRootLocalCopy`,
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal` and `FileOps_SelectionShapeSmb` storage/route regressions run without activation or a desktop
 lease, alongside `FileOps_RepeatDecisionContracts` and the two reviewed folder-progress
 witnesses. Broad filters, other suites and proof injections retain normal desktop requirements.
+`FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
+files and simulated unsupported destination IDs, plus capacity/exclusive waiting-card captures.
+The source-contract guard retains the host bridge route for these qualified new-file jobs.
 
 PR delegation uses `Get-ScopedPrWorkflowDigest` over reusable workflows, local action
 contents, tooling, scripts and build/test policy inputs. Changing a delegated test runner
@@ -418,7 +421,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Run-AllTests.ps1` | Public canonical test command | CI/Full execution with profile-scoped build inputs and all test-generated local data beneath exact `X:\RedSalamander.Perf` on a selected fixed local drive. PR delegation may leave only late interactive standalone work. First initialization and alternate-volume FileOps roots require explicit opt-in; `path.local.alternate` can pin cross-volume coverage to one exact second-drive root. Optional per-machine resources come from `config\machine-resources.json` beneath the primary root. |
 | `Run-MtpLiveCloseout.ps1` | Public opt-in device command | Runs MTP/PTP live-device closeout smoke and archives all local evidence beneath the selected `X:\RedSalamander.Perf` run. |
 | `SanitizedEnvironment.ps1` | Internal compatibility loader | Preserves the frozen Terminal tooling path; current callers import `Modules/Build/SanitizedEnvironment.psm1`. |
-| `Show-PerfRuns.ps1` | Public performance report command | Lists, compares, and trends archived performance evidence; the FolderView preset separates `folder.sort_product_paint_us`, legacy `folder.sort_toggle_us` and inclusive writer attribution `folder.sort_jsonl_write_us`. |
+| `Show-PerfRuns.ps1` | Public performance report command | Lists, compares, and trends archived performance evidence; mixed units for one metric fail closed. The FolderView preset separates `folder.sort_product_paint_us`, legacy `folder.sort_toggle_us` and inclusive writer attribution `folder.sort_jsonl_write_us`. |
 | `Submit-ChangelogFold.ps1` | Public changelog command | Folds the default branch's fragments in a temporary worktree outside the caller's checkout, verifies an exact fold and opens the fold pull request; -PushOnly leaves the pull request to the caller and -WhatIf pushes nothing. |
 | `TerminalEngineEvaluator.psm1` | Historical Gate-0 module | Sealed candidate collection/finalization implementation. |
 | `TerminalEvidence.psm1` | Historical evidence module | Authenticates sealed terminal evaluation records. |
@@ -475,7 +478,7 @@ and focused tests.
 | `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface. |
 | `Modules/Testing/TestRunSummary.psm1` | Legacy v1 plus verified composite v2 summaries, verdict axes, the canonical 0..5 terminal-state mapping, case history, dashboard, JSONL, and step-summary rendering. |
 | `Modules/Testing/TestSandbox.psm1` | Fail-closed exact `X:\RedSalamander.Perf` authorization, ownership markers, fresh uncached reparse-component checks, `New-RSTestSandboxLink` (the only governed creator of test junctions, symbolic links and hard links, refusing any link that would live or point outside one marked sandbox), run contexts, cleanup planning, stale-run removal that never follows reparse points (links are unlinked; a run with a volume mount point is retained whole), the per-run test-owned VHDX fixture (elevated provisioning that proves the attached disk is the blank file-backed VHDX before formatting and the volume is its own before mounting, a durable receipt before mounting, reverse-order teardown that can keep a detached VHDX as evidence, and receipt-aware cleanup that retains a run when not elevated unless its disk is already detached), and live-owner-consistent disk audits. |
-| `Modules/Testing/TestSuitePlan.psm1` | Declarative stable-ID suite construction, governed Commands families, the two exact no-activation folder-progress witnesses, and selected-profile artifact-mutating Pester coverage. |
+| `Modules/Testing/TestSuitePlan.psm1` | Declarative stable-ID suite construction, governed Commands families, exact reviewed no-activation owned witnesses including identity-interlock waiting, and selected-profile artifact-mutating Pester coverage. |
 | `Modules/Testing/ValidationFingerprint.psm1` | Exact canonical JSON/digests, streaming read bounds, atomic replace or create-only record I/O, timed base/index/worktree snapshots, one-time receipt-closure binding, and versioned component-aware entry fingerprints. |
 | `Modules/Testing/ValidationEvidence.psm1` | Schema-validated normalized terminal results, atomic hashed/quota-bound result artifacts, immutable content-addressed decisions/evidence/promotions, one exact direct-child run resolver and semantic promotion loader shared by Resume/summary/history/prune provenance, crash-safe artifact epochs/read barriers, interruption repair, and identity-bound pruning. |
 | `Modules/Testing/ValidationImpact.psm1` | Governed impact-manifest/build-graph validation and deterministic shadow or enforced Affected decisions. |

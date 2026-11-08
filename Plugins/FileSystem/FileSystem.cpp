@@ -97,10 +97,12 @@ constexpr std::wstring_view kStageIdentityUnsupportedPathEnvVar  = L"REDSALAMAND
 constexpr std::wstring_view kStageIdentityUnsupportedFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_FIRED";
 // I35: emulates a redirector without FileIdInfo (the NAS probe of 2026-10-11) for every path at or
 // below the configured root. Unlike the one-shot injections it stays set until the test clears it.
-constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
+constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar          = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
+constexpr std::wstring_view kBindDirectoryIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH";
 // I35 R7.1: the no-follow open of exactly this path fails with ERROR_NOT_SUPPORTED (a redirector that
 // refuses the open itself); it stays set until the test clears it.
-constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
+constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar   = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
+constexpr std::wstring_view kBindDeleteAccessDeniedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DELETE_ACCESS_DENIED_PATH";
 // I35 R7.3: a smaller entry bound for the listing of a folder deleted by name (a number of entries).
 constexpr std::wstring_view kDeleteByNameEntryBudgetEnvVar = L"REDSALAMANDER_FILEOPS_BYNAME_ENTRY_BUDGET";
 // I35 R7.3: the listing of a folder deleted by name reports no file index (a redirector without id listings).
@@ -165,58 +167,65 @@ constexpr std::wstring_view kDeleteCommittedRetainedFiredEnvVar = L"REDSALAMANDE
     return path != nullptr && path[0] != L'\0' && ShouldFailOwnedPublicationForSelfTest(path, pathEnvironmentVariable, firedEnvironmentVariable, counterName);
 }
 
-// True while the persistent identity-unsupported injection names `path` or one of its ancestors.
+// The directory-only control models NAS parent directories whose IDs are unavailable while
+// regular-file publication can still return exact object authority.
 [[nodiscard]] bool IsBindIdentityUnsupportedForSelfTest(const wchar_t* path) noexcept
 {
     if (path == nullptr || path[0] == L'\0')
     {
         return false;
     }
-    const DWORD required = GetEnvironmentVariableW(kBindIdentityUnsupportedRootEnvVar.data(), nullptr, 0u);
-    if (required == 0u)
+    for (const auto name : {kBindIdentityUnsupportedRootEnvVar, kBindDirectoryIdentityUnsupportedRootEnvVar})
     {
-        return false;
+        const DWORD required = GetEnvironmentVariableW(name.data(), nullptr, 0u);
+        if (required == 0u)
+            continue;
+        std::wstring configured(static_cast<size_t>(required), L'\0');
+        const DWORD written = GetEnvironmentVariableW(name.data(), configured.data(), required);
+        if (written == 0u || written >= required)
+            continue;
+        configured.resize(written);
+        while (! configured.empty() && (configured.back() == L'\\' || configured.back() == L'/'))
+            configured.pop_back();
+        const std::wstring root   = FileSystemInternal::ToExtendedPath(configured);
+        const std::wstring actual = FileSystemInternal::ToExtendedPath(path);
+        if (root.empty() || actual.size() < root.size() || ! OrdinalString::EqualsNoCase(std::wstring_view(actual).substr(0u, root.size()), root) ||
+            (actual.size() != root.size() && actual[root.size()] != L'\\'))
+            continue;
+        if (name == kBindIdentityUnsupportedRootEnvVar)
+            return true;
+        const DWORD attributes = GetFileAttributesW(actual.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+            return true;
     }
-    std::wstring configured(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(kBindIdentityUnsupportedRootEnvVar.data(), configured.data(), required);
-    if (written == 0u || written >= required)
-    {
-        return false;
-    }
-    configured.resize(written);
-    while (! configured.empty() && (configured.back() == L'\\' || configured.back() == L'/'))
-    {
-        configured.pop_back();
-    }
-    const std::wstring root   = FileSystemInternal::ToExtendedPath(configured);
-    const std::wstring actual = FileSystemInternal::ToExtendedPath(path);
-    if (root.empty() || actual.size() < root.size() || ! OrdinalString::EqualsNoCase(std::wstring_view(actual).substr(0u, root.size()), root))
-    {
-        return false;
-    }
-    return actual.size() == root.size() || actual[root.size()] == L'\\';
+    return false;
 }
 
 // True while the persistent open-failure injection names exactly `path`.
-[[nodiscard]] bool IsBindOpenNotSupportedForSelfTest(const wchar_t* path) noexcept
+[[nodiscard]] bool IsBindOpenFailureForSelfTest(const wchar_t* path, std::wstring_view variable) noexcept
 {
     if (path == nullptr || path[0] == L'\0')
     {
         return false;
     }
-    const DWORD required = GetEnvironmentVariableW(kBindOpenNotSupportedPathEnvVar.data(), nullptr, 0u);
+    const DWORD required = GetEnvironmentVariableW(variable.data(), nullptr, 0u);
     if (required == 0u)
     {
         return false;
     }
     std::wstring configured(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(kBindOpenNotSupportedPathEnvVar.data(), configured.data(), required);
+    const DWORD written = GetEnvironmentVariableW(variable.data(), configured.data(), required);
     if (written == 0u || written >= required)
     {
         return false;
     }
     configured.resize(written);
     return OrdinalString::EqualsNoCase(FileSystemInternal::ToExtendedPath(configured), FileSystemInternal::ToExtendedPath(path));
+}
+
+[[nodiscard]] bool IsBindOpenNotSupportedForSelfTest(const wchar_t* path) noexcept
+{
+    return IsBindOpenFailureForSelfTest(path, kBindOpenNotSupportedPathEnvVar);
 }
 #endif
 
@@ -3056,6 +3065,7 @@ interface __declspec(uuid("c1884e97-02e5-4c89-99b0-a619e8f78625")) __declspec(no
         const wchar_t* destinationPath, BOOL replaceIfExists, FileSystemConditionalMutationResult* result) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult * result) noexcept            = 0;
     virtual HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE * duplicated) noexcept                            = 0;
+    virtual HRESULT STDMETHODCALLTYPE RetireDirectoryReadPin(const LocalObjectIdentityPayload* expected) noexcept   = 0;
 };
 
 constexpr size_t kBackupStreamHeaderBytes         = offsetof(WIN32_STREAM_ID, cStreamName);
@@ -3486,6 +3496,7 @@ constexpr std::wstring_view kStageCleanupDelayFiredEnvVar = L"REDSALAMANDER_FILE
 class LocalBoundObject final : public IFileSystemBoundObject,
                                public IFileSystemBoundMetadata,
                                public IFileSystemBoundContentProof,
+                               public IFileSystemBoundObjectPinHandoff,
                                public ILocalBoundObjectControl
 {
 public:
@@ -3502,6 +3513,8 @@ public:
           _committedSizeBytes(committedSizeBytes),
           _grantedFlags(grantedFlags),
           _ownedStage(ownedStage),
+          _consumableReadWitness(! ownedStage && kind == FILESYSTEM_BOUND_DIRECTORY &&
+                                 grantedFlags == static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA)),
           _path(std::move(path))
     {
     }
@@ -3539,6 +3552,12 @@ public:
         if (riid == __uuidof(ILocalBoundObjectControl))
         {
             *ppvObject = static_cast<ILocalBoundObjectControl*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemBoundObjectPinHandoff))
+        {
+            *ppvObject = static_cast<IFileSystemBoundObjectPinHandoff*>(this);
             AddRef();
             return S_OK;
         }
@@ -3767,6 +3786,9 @@ public:
         {
             return E_ACCESSDENIED;
         }
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
 
         FILE_BASIC_INFO basic{};
         if (GetFileInformationByHandleEx(_file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
@@ -3819,10 +3841,15 @@ public:
         {
             return E_INVALIDARG;
         }
-        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u)
         {
             return E_ACCESSDENIED;
         }
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
+        if (! _consumableReadWitness && ! _file)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         const HRESULT controlHr = FileSystemCheckOperationControl(options);
         if (FAILED(controlHr))
         {
@@ -3932,10 +3959,15 @@ public:
                                    const FileSystemOptions* options,
                                    FileSystemMetadataTransferResult* result) noexcept
     {
-        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u)
         {
             return E_ACCESSDENIED;
         }
+        if (! BeginWitnessRead())
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        const auto endRead = wil::scope_exit([&]() noexcept { EndWitnessRead(); });
+        if (! _consumableReadWitness && ! _file)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         const HRESULT controlHr = FileSystemCheckOperationControl(options);
         if (FAILED(controlHr))
         {
@@ -4352,6 +4384,8 @@ public:
         {
             return E_INVALIDARG;
         }
+        if (_consumableReadWitness)
+            return E_ACCESSDENIED;
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -4445,6 +4479,8 @@ public:
         {
             return resultHr;
         }
+        if (_consumableReadWitness)
+            return E_ACCESSDENIED;
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -4498,6 +4534,8 @@ public:
             return E_POINTER;
         }
         *duplicated = INVALID_HANDLE_VALUE;
+        if (_consumableReadWitness)
+            return E_ACCESSDENIED;
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -4513,8 +4551,71 @@ public:
         return S_OK;
     }
 
+    HRESULT STDMETHODCALLTYPE RetireDirectoryReadPin(const LocalObjectIdentityPayload* expected) noexcept override
+    {
+        if (! _consumableReadWitness || expected == nullptr || IsRetainedHandleIdentity(_identity) || std::memcmp(expected, &_identity, sizeof(_identity)) != 0)
+            return E_ACCESSDENIED;
+        std::scoped_lock lock(_witnessMutex);
+        if (! _file)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        if (_witnessReaders != 0u)
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        _file.reset();
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE TakeDirectoryReadPinFrom(IFileSystemBoundObject* witness) noexcept override
+    {
+        constexpr FileSystemBindFlags strictDirectoryDeleteFlags =
+            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE);
+        if (! witness || _consumableReadWitness || _ownedStage || _kind != FILESYSTEM_BOUND_DIRECTORY || _grantedFlags != strictDirectoryDeleteFlags ||
+            ! _file || IsRetainedHandleIdentity(_identity))
+            return E_ACCESSDENIED;
+        FileSystemBasicInformation basic{};
+        basic.sizeBytes       = sizeof(basic);
+        const HRESULT basicHr = GetBasicInformation(&basic);
+        if (FAILED(basicHr))
+            return basicHr;
+        if ((basic.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (basic.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        BOOL same            = FALSE;
+        const HRESULT sameHr = IsSameObject(witness, &same);
+        if (FAILED(sameHr))
+            return sameHr;
+        if (same == FALSE)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        wil::com_ptr<ILocalBoundObjectControl> control;
+        const HRESULT queryHr = witness->QueryInterface(__uuidof(ILocalBoundObjectControl), control.put_void());
+        if (FAILED(queryHr) || ! control)
+            return FAILED(queryHr) ? queryHr : E_UNEXPECTED;
+        return control->RetireDirectoryReadPin(&_identity);
+    }
+
 private:
     ~LocalBoundObject() = default;
+
+    // Only directory metadata witnesses can surrender their kernel pin. Track their
+    // synchronous reads separately from immutable COM snapshots; a busy handoff fails
+    // rather than waiting while a reader might call another bound object.
+    [[nodiscard]] bool BeginWitnessRead() noexcept
+    {
+        if (! _consumableReadWitness)
+            return true;
+        std::scoped_lock lock(_witnessMutex);
+        if (! _file)
+            return false;
+        ++_witnessReaders;
+        return true;
+    }
+
+    void EndWitnessRead() noexcept
+    {
+        if (_consumableReadWitness)
+        {
+            std::scoped_lock lock(_witnessMutex);
+            --_witnessReaders;
+        }
+    }
 
     [[nodiscard]] static HRESULT InitializeMutationResult(FileSystemConditionalMutationResult* result) noexcept
     {
@@ -4878,6 +4979,9 @@ private:
     uint64_t _committedSizeBytes      = std::numeric_limits<uint64_t>::max();
     FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;
     bool _ownedStage                  = false;
+    const bool _consumableReadWitness = false;
+    std::mutex _witnessMutex;
+    size_t _witnessReaders = 0u;
     std::wstring _path;
 };
 
@@ -6012,6 +6116,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemCooperativeCopy))
+    {
+        *ppvObject = static_cast<IFileSystemCooperativeCopy*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemObjectBinding))
     {
         *ppvObject = static_cast<IFileSystemObjectBinding*>(this);
@@ -6796,7 +6907,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
     wil::unique_handle file;
 #if defined(ENABLE_TESTS)
-    if (IsBindOpenNotSupportedForSelfTest(path))
+    if ((requestedFlags & FILESYSTEM_BIND_DELETE) != 0u && IsBindOpenFailureForSelfTest(path, kBindDeleteAccessDeniedPathEnvVar))
+    {
+        Debug::Perf::EmitCounter(L"FileOps.Local.BindDeleteAccessDeniedInjected");
+        SetLastError(ERROR_ACCESS_DENIED);
+    }
+    else if (IsBindOpenNotSupportedForSelfTest(path))
     {
         Debug::Perf::EmitCounter(L"FileOps.Local.BindOpenNotSupportedInjected");
         SetLastError(ERROR_NOT_SUPPORTED);

@@ -330,13 +330,17 @@ noninteractive and interactive entries must preserve one shared runtime-artifact
 identity and explicit coverage-group arguments.
 
 FileOperations retains its conservative desktop lease classification except for
-`-Suite FileOps` with the two exact, case-sensitive folder-progress cases
-`DiscoveryScope_FolderLiveProgress` and `DiscoveryScope_MultipleFoldersLiveProgress`,
-without flaky/order proof injection. These reviewed witnesses keep
+`-Suite FileOps` with the exact, case-sensitive owned witnesses documented in
+`Testing_SelfTests.md` and explicitly admitted by `TestSuitePlan.psm1`, including
+`FileOps_IdentityInterlockWaiting`, without flaky/order proof injection. These reviewed witnesses keep
 `--selftest-no-activate` and use only owned-window hooks/WGC capture. Broad suites,
 families, prefixes, wildcards, multiple-case filters, unknown filters and casing
 near-misses keep the lease. The matched marker still propagates to quarantine
 repair; the runner's process, artifact and session-mutex contracts are unchanged.
+The identity-waiting witness includes owned local Copy/managed-Move I/O and simulated
+unsupported destination IDs for the shared-transfer limit. This remains exact-case admission;
+it grants no activation permission to a broader selection. Bridge-routing source guards must
+include the qualified new-file route without removing the original managed/verification routes.
 
 ### Operation Startrail process impact
 

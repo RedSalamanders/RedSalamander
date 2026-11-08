@@ -569,6 +569,10 @@ Run the real application renderer with named synthetic scenarios, without taking
 ```
 
 Use an already marked test root; the usual explicit first-initialization rule applies otherwise.
+The exact `FileOps_IdentityInterlockWaiting` case runs the safety-wait/Start now/cancellation
+regressions and English/French message captures without desktop activation or a lease:
+`Test-Changes.ps1 -Suite FileOps -CaseFilter FileOps_IdentityInterlockWaiting -TestRoot Z:\RedSalamander.Perf`.
+Its invented-path PNGs and `scenarios.tsv` are under `fileops/identity-interlock-waiting/` in the run artifacts.
 The runner prints the run ID. PNGs and `scenarios.tsv` are in
 `<test-root>/evidence/completed-runs/<run-id>/artifacts/selftest/last_run/fileops/visual-gallery/`
 after the runner exits (under `runs` while active).

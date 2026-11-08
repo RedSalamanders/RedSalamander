@@ -16785,18 +16785,20 @@ struct FileOperationsPopupTestFixture final
     },
                             wait)
                                   .conditionMet;
-    // Verify the immutable admitted route before accepting the intended concurrent
-    // scenario. Native Move cannot fall back to copying; its interlocks remain in force.
+    // Verify the immutable admitted route and frozen capacity classification before
+    // accepting the intended concurrent scenario. Native Move cannot fall back to
+    // copying; its object/path interlocks remain in force.
     const auto* bTask         = fileOps->FindTask(bId.value());
     const auto bAdmission     = bTask ? bTask->LoadSelectedAdmission() : nullptr;
     const bool nativeOnlyMove = bAdmission && bAdmission->plans && ! bAdmission->plans->empty() && bAdmission->interlock &&
+                                ! bAdmission->interlock->hasDataTransfers &&
                                 std::ranges::all_of(*bAdmission->plans,
                                                     [](const auto& plan) noexcept
     {
         const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
         return transfer && transfer->intent == FileOperations::TransferIntent::Move && transfer->strategy == FileOperations::OperationStrategy::Native;
     });
-    if (! state.Require(nativeOnlyMove, L"B must retain an immutable native-only Move admission."))
+    if (! state.Require(nativeOnlyMove, L"B must retain an immutable native-only Move admission with no data-transfer capacity."))
         return false;
     if (! state.Require(bReady && fileOps->IsPendingConflictInspectionCurrent(aId, CurrentConflictPromptGenerationForSelfTest(fileOps, aId), aContext) &&
                             fileOps->IsPendingConflictInspectionCurrent(
@@ -19320,8 +19322,8 @@ namespace
 }
 
 // Exercise the hosted footer buttons and their actual DxUI menu-item callbacks.
-// The fixture holds a real Copy at an actionable conflict, so a second Copy can
-// prove that Queue/Parallel changes admission and release, not just footer text.
+// The real conflict holds exclusive admission: changing Queue to Parallel must
+// preserve that guard, then the same queued Copy runs after the conflict resolves.
 [[nodiscard]] bool TestFileOperationsPopupFooterMenuActionRoutes(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -19454,9 +19456,20 @@ namespace
                   L"Queue selected through the menu must hold the second Copy behind the active conflict without writing its destination.");
     state.Require(choose(openMenu(Hit::FooterQueueMode, queueLabel()), IDS_FILEOPS_BTN_MODE_PARALLEL) && ! fileOps->GetQueueNewTasks(),
                   L"The Parallel UIA menu item must apply Parallel mode through its callback.");
-    state.Require(waitFor([&]() noexcept { return TextFileEqualsForFileOpsPrompt(queuedDestination, "queue route payload"); }) &&
-                      waitFor([&]() noexcept { return layoutMatches(false, false, false); }),
-                  L"Parallel selected through the menu must release the queued Copy and update the rendered selector.");
+    state.Require(queuedId.has_value() &&
+                      waitFor(
+                          [&]() noexcept
+    {
+        auto* task = fileOps->FindTask(queuedId.value());
+        std::error_code ec;
+        return task && ! task->HasEnteredOperation() && task->_waitingForExclusiveTransfer.load(std::memory_order_acquire) &&
+               ! std::filesystem::exists(queuedDestination, ec) && ! ec;
+    }) && waitFor([&]() noexcept { return layoutMatches(false, false, false); }),
+                  L"Parallel must update the selector while the second Copy remains behind the exclusive conflict without publishing bytes.");
+    if (! state.failure.empty() || ! ResolveInitialFileOperationsPopupConflict(fixture))
+        return false;
+    state.Require(waitFor([&]() noexcept { return TextFileEqualsForFileOpsPrompt(queuedDestination, "queue route payload"); }),
+                  L"The same queued Copy must publish its exact bytes after the exclusive conflict resolves.");
     const auto retainedSecondCopy = [&]() noexcept
     {
         if (! queuedId.has_value())
@@ -19466,6 +19479,39 @@ namespace
         return std::ranges::find(completed, queuedId.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId) != completed.end();
     };
     state.Require(waitFor(retainedSecondCopy), L"The second Copy must reach a retained successful completion while auto-dismiss is off.");
+    if (! state.failure.empty())
+        return false;
+    // Re-establish a real unresolved conflict after the queued success. The
+    // remaining Options checks still run against that exact live card and the
+    // retained completed neighbor; no two transfers overlap.
+    uint64_t replacementTaskId  = 0u;
+    const HRESULT replacementHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                          FolderWindow::Pane::Left,
+                                                          FolderWindow::Pane::Right,
+                                                          fixture.leftFileSystem,
+                                                          {fixture.source},
+                                                          fixture.destDir,
+                                                          FILESYSTEM_FLAG_NONE,
+                                                          false,
+                                                          0,
+                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                          false,
+                                                          fixture.rightFileSystem,
+                                                          &replacementTaskId);
+    if (! state.Require(SUCCEEDED(replacementHr) && replacementTaskId != 0u && replacementTaskId != queuedId.value(),
+                        L"Admit a fresh exact conflict beside the already-retained success."))
+        return false;
+    FileOperationsPopupInternal::TaskSnapshot replacement{};
+    const bool replacementReady = waitFor([&]() noexcept
+    {
+        return DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, replacementTaskId, replacement) && replacement.conflict.active &&
+               replacement.conflict.inspection && replacement.conflict.buttonsPublishable;
+    });
+    if (! state.Require(replacementReady && TextFileEqualsForFileOpsPrompt(fixture.dest, "existing payload"),
+                        L"The replacement conflict must be actionable and preserve the original destination."))
+        return false;
+    fixture.taskId       = replacementTaskId;
+    fixture.taskSnapshot = replacement;
     if (! state.failure.empty())
     {
         state.Require(fixture.Cleanup(), L"Footer menu route fixture did not clean after scheduling failure.");
@@ -19626,7 +19672,7 @@ namespace
 {
     using namespace std::chrono_literals;
     FileOperationsPopupTestFixture fixture(state);
-    if (! InitializeFileOperationsPopupTestFixture(mainWindow, fixture))
+    if (! InitializeFileOperationsPopupTestFixture(mainWindow, fixture, false, false, false, true))
         return false;
     auto* const fileOps                  = fixture.fileOps;
     const uint64_t taskId                = fixture.taskId.value();
@@ -19646,33 +19692,19 @@ namespace
                    fixture.popup, FileOperationsPopupInternal::PopupHitTest::Kind::FooterCancelAll, 0u, 0u, IDS_FILEOPS_BTN_CANCEL_ALL);
     };
     RedSalamander::TestSupport::MessagePumpWaitOptions wait{};
-    wait.timeout                 = SelfTest::Scale(5000ms);
-    wait.maxMessagesPerPump      = 16u;
-    const bool originalQueueMode = fileOps->GetQueueNewTasks();
-    const auto restoreQueueMode  = wil::scope_exit([&]() noexcept
+    wait.timeout                  = SelfTest::Scale(5000ms);
+    wait.maxMessagesPerPump       = 16u;
+    const bool originalQueueMode  = fileOps->GetQueueNewTasks();
+    const auto restoreQueueMode   = wil::scope_exit([&]() noexcept
     {
         // Drain the owned cohort before restoring Parallel can release a queued
         // task on an early failure. Report cleanup failures even on that path.
         state.Require(fixture.Cleanup(), L"Mixed Cancel-all fixture did not clean its owned cohort.");
         fileOps->ApplyQueueMode(originalQueueMode);
     });
-    const auto completedSource   = fixture.sourceDir / L"cancel-all-finished.txt";
-    const auto completedDest     = fixture.destDir / completedSource.filename();
-    state.Require(SelfTest::WriteTextFile(completedSource, "finished payload"), L"Could not seed the finished Cancel-all cohort item.");
-    uint64_t completedId          = 0u;
-    const HRESULT completeHr      = fileOps->AdmitOperation(FILESYSTEM_COPY,
-                                                            FolderWindow::Pane::Left,
-                                                            FolderWindow::Pane::Right,
-                                                            fixture.leftFileSystem,
-                                                            {completedSource},
-                                                            fixture.destDir,
-                                                            FILESYSTEM_FLAG_NONE,
-                                                            false,
-                                                            0,
-                                                            FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                            false,
-                                                            fixture.rightFileSystem,
-                                                            &completedId);
+    const auto completedSource    = fixture.sourceDir / L"cancel-all-finished.txt";
+    const auto completedDest      = fixture.destDir / completedSource.filename();
+    const uint64_t completedId    = fixture.completedBeforeConflictId;
     const auto completedUnchanged = [&]() noexcept
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
@@ -19681,7 +19713,7 @@ namespace
         return found != completed.end() && found->resultHr == S_OK && found->completedBytes > 0u &&
                TextFileEqualsForFileOpsPrompt(completedDest, "finished payload");
     };
-    state.Require(SUCCEEDED(completeHr) && completedId != 0u && RedSalamander::TestSupport::PumpMessagesUntil(completedUnchanged, wait).conditionMet,
+    state.Require(completedId != 0u && RedSalamander::TestSupport::PumpMessagesUntil(completedUnchanged, wait).conditionMet,
                   L"Cancel-all cohort requires a real retained successful Copy.");
     if (! state.failure.empty())
         return false;

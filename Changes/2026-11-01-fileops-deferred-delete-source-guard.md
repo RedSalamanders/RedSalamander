@@ -1,0 +1,1 @@
+- Update File Operations source-contract coverage for deferred directory Delete authority and preserve exact-object and confirmation checks.

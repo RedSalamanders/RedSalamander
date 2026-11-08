@@ -1,0 +1,13 @@
+{
+  "machine_hash": "4cb089111a23",
+  "os_version": "10.0.26300",
+  "os_build": "26300",
+  "os_architecture": "64-bit",
+  "processor_name": "AMD Ryzen 9 9950X3D 16-Core Processor          ",
+  "processor_cores": 16,
+  "logical_processors": 32,
+  "installed_memory_bytes": 66155405312,
+  "configuration": "Debug",
+  "compiler_debug_information": "Embedded (/Z7)",
+  "platform": "x64"
+}

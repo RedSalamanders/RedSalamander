@@ -357,6 +357,7 @@ struct FileOperationsSettings
     bool popupCompactDensity                     = false;
     bool popupThroughputExpanded                 = true;
     bool verifyAfterCopy                         = false;
+    uint32_t maxParallelTransfers                = 4;
     uint32_t crossFsBridgeBufferSizeKB           = 4096;
     uint64_t defaultBandwidthLimitBytesPerSecond = 0;
     uint32_t maxDiagnosticsLogFiles              = 14;

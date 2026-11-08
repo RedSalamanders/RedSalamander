@@ -1,0 +1,13 @@
+{
+  "original_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T003713Z-84020-b01c15409d8445cdb759dd106fedf425\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "original_sha256": "1d762842ae1a7cff3511f4792792f7e33b69c2ac115a8a84019c435748d194d9",
+  "original_bytes": 8750682,
+  "original_rows": 22087,
+  "selection_rule": "metric == FileOps.SelfTest.SmallFileCopy",
+  "selected_rows": 2,
+  "original_line_numbers": [
+    12783,
+    22067
+  ],
+  "preserves_original_line_bytes_and_order": true
+}

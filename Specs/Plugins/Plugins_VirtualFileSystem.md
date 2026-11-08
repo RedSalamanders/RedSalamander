@@ -1373,6 +1373,16 @@ handle that performs the delete, and deletes only the entries of the pinned tree
 its own facts (a stop after a deletion reports the partial-tree receipt). The Local provider does this
 for identity-less locations (I35 R7.3, D-7.3).
 
+The pinned-tree scale selftest temporarily sets the actual Local provider to manual Delete concurrency 8,
+verifies the typed route, and restores and verifies the original provider configuration after its workers
+are quiet. It uses the canonical selftest setter so the host configuration mirror and dirty tracking follow
+the mutation. Restoration compares the provider's normalized configuration and original effective budget,
+then restores the exact prior host-map entry or absence and dirty flag. An unavailable canonical baseline
+permits only a best-effort recovery attempt, never a verified restoration. Local witnesses cover normalized
+defaults, nondefault settings and early-exit restoration. Its 2,466-entry whole, chunked and configured NAS
+scenarios retain their existing identity checks. A failed worker drain or configuration
+restoration fails the case.
+
 The configured NAS branch of the identity-less 2,466-entry scale selftest has one
 180-second total post-consent completion budget, multiplied once by the runner timeout
 scale. Repeated question and completion waits share its monotonic deadline. Local and

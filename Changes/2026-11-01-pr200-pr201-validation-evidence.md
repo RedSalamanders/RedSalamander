@@ -1,0 +1,1 @@
+- Archive source-bound Release evidence for queue admission, identity waiting, Permanent Delete and pin-handoff contracts, together with the failed configured NAS scale run. Curated metric rows retain their original bytes and ordered raw-input digest bindings. The NAS deadline and human review remain open; this evidence does not establish Full or native ARM64 qualification.

@@ -1,0 +1,1 @@
+- Keep blocked file operations in Waiting after Start now, and explain when a location's unavailable file identifiers force operations to run one at a time. Hide Start now for that safety wait and suppress Counting and zero-byte transfer activity until admission. Add deterministic admission/cancel and English/French waiting-card regression coverage.

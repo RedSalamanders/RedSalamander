@@ -607,14 +607,15 @@ Describe 'Run-AllTests plan helper' {
     It 'serializes FileOps foreground and UIA checks while activation stays exact opt-in' {
         foreach ($case in @('', 'FileOps_VisualGallery', 'FileOps_AdmissionBaseline', 'FileOpsFamily_SafetyRemediationContracts',
                 'Phase6_', 'FileOps_VisualGalleryInteraction', 'fileops_visualgalleryinteraction', 'FileOps_VisualGalleryInteraction*',
-                'FileOpsFamily_DiscoveryScope', 'DiscoveryScope_', 'DiscoveryScope_LocalDirectApi*', 'discoveryscope_localdirectapi', 'DiscoveryScope_LocalDirectApi,DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_FolderLiveProgress*',
+                'FileOpsFamily_DiscoveryScope', 'DiscoveryScope_', 'DiscoveryScope_LocalDirectApi*', 'discoveryscope_localdirectapi',
+                'DiscoveryScope_LocalDirectApi ', 'DiscoveryScope_LocalDirectApi,DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_FolderLiveProgress*',
                 'DiscoveryScope_MultipleFoldersLiveProgress*', 'discoveryscope_folderliveprogress',
                 'discoveryscope_multiplefoldersliveprogress', 'DiscoveryScope_FolderLiveProgress ',
                 ' DiscoveryScope_MultipleFoldersLiveProgress', 'DiscoveryScope_FolderLiveProgressUnknown',
                 'DiscoveryScope_FolderLiveProgress,DiscoveryScope_MultipleFoldersLiveProgress',
                 'fileops_repeatdecisioncontracts', 'FileOps_RepeatDecisionContracts*', 'FileOps_RepeatDecisionContracts ',
                 'FileOps_RepeatDecisionContracts,DiscoveryScope_FolderLiveProgress',
-                'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb',
+                'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'fileops_identityinterlockwaiting', 'FileOps_IdentityInterlockWaiting*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb',
                 'delete_identitylesspinnedtreechangedentry', 'Delete_IdentityLessPinnedTreeChangedEntry*', 'Delete_IdentityLessPinnedTreeChangedEntry ',
                 'Delete_IdentityLessPinnedTreeChangedEntry,DiscoveryScope_LocalDirectApi')) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
@@ -629,7 +630,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                 -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
             $plan.Count | Should Be 1
@@ -642,7 +643,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'retains the FileOps desktop lease for broad suites and proof injections using an exact owned-witness name' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('All', 'CI', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -665,7 +666,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'preserves exact owned-witness activation and desktop markers in quarantine repair' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('FileOps', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)

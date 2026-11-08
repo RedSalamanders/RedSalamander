@@ -1,0 +1,33 @@
+{
+  "schema": "red-salamander.curated-metric-selection.v1",
+  "selection_rule": "exact metric_names; retain every matching original row in order",
+  "runs": [
+    {
+      "label": "a360-mtp-failed",
+      "run_id": "20261102T082930Z-96372-48666c1a05e74b759d526e9b133b805d",
+      "original_sha256": "3e3c6b03e35e29ea91c8346c4d20218a61818873c27abb4571574237481cea32",
+      "original_bytes": 618821,
+      "original_rows": 1700,
+      "selected_file": "a360-followup-metrics.jsonl",
+      "selected_sha256": "cf50d407230f052bc18cf401bd6fca61eeb17fe261cf5fb78d00b5e19a8cb00e",
+      "selected_rows": 8,
+      "original_line_numbers": [
+        354,
+        1054,
+        1289,
+        1303,
+        1537,
+        1538,
+        1544,
+        1545
+      ],
+      "metric_names": [
+        "FileOps.SelfTest.BridgeDirectoryAccounting",
+        "mtp.overwrite.journal_temp_identity_recorded",
+        "mtp.overwrite.delete_original_failed",
+        "mtp.overwrite.journal_replay_destination_identity_rejected",
+        "mtp.overwrite.journal_replay_stale_quarantined"
+      ]
+    }
+  ]
+}

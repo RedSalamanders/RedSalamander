@@ -1,0 +1,115 @@
+{
+  "schema": "red-salamander.curated-commands-result.v1",
+  "sourceRunId": "20261101T210749Z-30956-df01357452034ed687006662c3e662d8",
+  "run_started_utc": "2026-11-01T21:08:26.339Z",
+  "suite": "Commands",
+  "duration_ms": 84038,
+  "passed": 13,
+  "failed": 1,
+  "skipped": 2,
+  "failureMessage": "TwoPending settled B task=6 setup failed at visible Cancel after setup paint: boundsDip=(318.66666,352) scale=1.5 viewport=(0,522).",
+  "cases": [
+    {
+      "name": "file_operations_phase0_typed_contract_source_guard",
+      "status": "passed",
+      "duration_ms": 619,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_find_dialog_result_drains_respect_child_input_queue_order",
+      "status": "passed",
+      "duration_ms": 3,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_popup_throughput_disclosure",
+      "status": "skipped",
+      "duration_ms": 6573,
+      "repeat_index": 1,
+      "skip_class": "declared-capability",
+      "reason": "Clipboard fixture skipped before mutation: cfFormat=49163 tymed=0x00000008 targetDevice=false aspect=1 lindex=-1 is not preserved exactly."
+    },
+    {
+      "name": "cmd_pane_fileops_popup_throughput_restart",
+      "status": "passed",
+      "duration_ms": 13897,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "status": "passed",
+      "duration_ms": 7361,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+      "status": "failed",
+      "duration_ms": 2272,
+      "repeat_index": 1,
+      "reason": "TwoPending settled B task=6 setup failed at visible Cancel after setup paint: boundsDip=(318.66666,352) scale=1.5 viewport=(0,522)."
+    },
+    {
+      "name": "cmd_pane_fileops_completed_export_action_route",
+      "status": "passed",
+      "duration_ms": 1399,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_hosted_cancel_all_confirmation",
+      "status": "passed",
+      "duration_ms": 380,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_popup_footer_menu_action_routes",
+      "status": "passed",
+      "duration_ms": 1586,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_retained_source_and_mixed_journeys",
+      "status": "skipped",
+      "duration_ms": 588,
+      "repeat_index": 1,
+      "skip_class": "declared-capability",
+      "reason": "Clipboard fixture skipped before mutation: cfFormat=49163 tymed=0x00000008 targetDevice=false aspect=1 lindex=-1 is not preserved exactly."
+    },
+    {
+      "name": "cmd_pane_changeCase",
+      "status": "passed",
+      "duration_ms": 2990,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_makeFileList_options_dialog_uses_dxui_not_win32_template",
+      "status": "passed",
+      "duration_ms": 237,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_unpack_prompt_uses_dxui_destination_unpacker_and_mask",
+      "status": "passed",
+      "duration_ms": 384,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_viewer_space_cache_restore_is_sliced",
+      "status": "passed",
+      "duration_ms": 2731,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_viewer_space_memory_settles_after_close",
+      "status": "passed",
+      "duration_ms": 38176,
+      "repeat_index": 1
+    },
+    {
+      "name": "folderView_perf_jsonl_writer_contracts",
+      "status": "passed",
+      "duration_ms": 16,
+      "repeat_index": 1
+    }
+  ],
+  "timeout_scale": 1.0
+}

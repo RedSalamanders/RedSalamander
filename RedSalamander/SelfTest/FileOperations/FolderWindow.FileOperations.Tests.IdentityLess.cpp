@@ -2909,7 +2909,7 @@ struct QueuedByNameDelete final
 // and, where path.smb.primary is configured, on a per-run child of the registered share. The log and the perf record keep
 // the time from the start to the card (the pin listing) and from the answer to the end (the re-check listing,
 // the execution listing and the deletions); the case asserts only that the whole tree is deleted.
-[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecks(SelfTestState& state) noexcept
+[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecksImpl(SelfTestState& state) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
     {
@@ -2996,22 +2996,54 @@ struct QueuedByNameDelete final
         const auto cardMs            = std::chrono::duration_cast<std::chrono::milliseconds>(answered - started).count();
         const auto runMs             = std::chrono::duration_cast<std::chrono::milliseconds>(ended - answered).count();
         const bool deleted           = ! std::filesystem::exists(tree);
-        AppendLog(std::format(L"Pinned tree, scale ({}): entries={} card={} ms run={} ms hr=0x{:08X} deleted={}",
+        const HRESULT completionHr   = end != nullptr ? end->hr : E_PENDING;
+        const HRESULT scenarioHr =
+            end == nullptr ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : (end->hr == S_OK && deleted ? S_OK : (FAILED(end->hr) ? end->hr : E_FAIL));
+        AppendLog(std::format(L"Pinned tree, scale ({}): entries={} card={} ms run={} ms completionAvailable={} completionHr=0x{:08X} "
+                              L"scenarioHr=0x{:08X} deleted={}",
                               where,
                               kEntries,
                               cardMs,
                               runMs,
-                              end != nullptr ? static_cast<unsigned long>(end->hr) : 0ul,
+                              end != nullptr,
+                              static_cast<unsigned long>(completionHr),
+                              static_cast<unsigned long>(scenarioHr),
                               deleted));
-        Debug::Perf::Emit(L"FileOps.SelfTest.PinnedTreeScale",
-                          where,
-                          static_cast<uint64_t>(runMs) * 1000u,
-                          kEntries,
-                          static_cast<uint64_t>(cardMs),
-                          end != nullptr ? end->hr : E_FAIL);
+        if (end == nullptr)
+        {
+            // Owner-thread delivery and atomic task observations are independent witnesses,
+            // not a coherent snapshot. Never read the worker result before its release flag.
+            const auto* current = operations->FindTask(deletion.value());
+            const bool finished = current && current->_taskFinished.load(std::memory_order_acquire);
+            const bool active   = operations->DebugAreBothAdmissionsActiveForSelfTest(deletion.value(), deletion.value());
+            AppendLog(std::format(L"Pinned tree, scale WAIT FAILURE {} task={} taskPresent={} finished={} workerHr=0x{:08X} "
+                                  L"lifecycle={} started={} reserved={} entered={} waiting={} waitingOthers={} "
+                                  L"readinessComplete={} readinessHr=0x{:08X} activeAdmission={}",
+                                  where,
+                                  deletion.value(),
+                                  current != nullptr,
+                                  finished,
+                                  static_cast<unsigned long>(finished ? current->GetResult() : E_PENDING),
+                                  current ? static_cast<unsigned int>(current->GetLifecyclePhase()) : 0u,
+                                  current && current->HasStarted(),
+                                  current && current->HasReservedOperation(),
+                                  current && current->HasEnteredOperation(),
+                                  current && current->IsWaitingInQueue(),
+                                  current && current->IsWaitingForOthers(),
+                                  current && current->_selectedRootReadinessComplete.load(std::memory_order_acquire),
+                                  static_cast<unsigned long>(current ? current->_selectedRootReadinessStatus.load(std::memory_order_acquire) : E_PENDING),
+                                  active));
+        }
+        Debug::Perf::EmitDurationUs(
+            L"FileOps.SelfTest.PinnedTreeScale", where, static_cast<uint64_t>(runMs) * 1000u, kEntries, static_cast<uint64_t>(cardMs), scenarioHr);
         if (end == nullptr || end->hr != S_OK || ! deleted)
-            return reject(std::format(
-                L"{}: the tree was not deleted by name (hr=0x{:08X} deleted={})", where, end != nullptr ? static_cast<unsigned long>(end->hr) : 0ul, deleted));
+            return reject(std::format(L"{}: the tree was not deleted by name (completionAvailable={} completionHr=0x{:08X} "
+                                      L"scenarioHr=0x{:08X} deleted={})",
+                                      where,
+                                      end != nullptr,
+                                      static_cast<unsigned long>(completionHr),
+                                      static_cast<unsigned long>(scenarioHr),
+                                      deleted));
         return true;
     };
 
@@ -3048,6 +3080,132 @@ struct QueuedByNameDelete final
     if (! buildTree(child / L"tree"))
         return reject(std::format(L"NAS tree under '{}' unavailable", child.native()));
     return measure(L"nas", child / L"tree", child / L"tree");
+}
+
+// Own the live Local instance's temporary setting through the final worker quiet point, without
+// changing the user's persisted plugin configuration. Success includes a verified restoration.
+[[nodiscard]] bool RunDeleteIdentityLessPinnedTreeScaleChecks(SelfTestState& state) noexcept
+{
+    auto* operations = TryGetFileOps(TryGetFolderWindow(state.mainWindow));
+    if (! operations || ! state.fsLocal || ! state.infoLocal || ! CancelOutstandingSelfTestOperations(operations))
+        return false;
+    // This local transaction is specific to the live selftest provider and its
+    // host settings mirror. The common setter owns mutation and dirty tracking.
+    std::function<bool(const std::function<bool()>&)> withTemporaryBudget;
+    withTemporaryBudget = [&](const std::function<bool()>& body) noexcept -> bool
+    {
+        std::string original;
+        if (! BackupPluginConfiguration(state.infoLocal.get(), original))
+            return false;
+        const auto originalRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (originalRoute.state != FileSystemRouteContract::QueryState::Available)
+            return false;
+        const uint32_t originalBudget = originalRoute.snapshot.deleteMaxConcurrency;
+        const bool originalDirty      = state.localConfigDirty;
+        const std::wstring pluginId(kPluginIdLocal);
+        const auto entry = g_settings.plugins.configurationByPluginId.find(pluginId);
+        std::optional<Common::Settings::JsonValue> originalHost;
+        if (entry != g_settings.plugins.configurationByPluginId.end())
+            originalHost = entry->second;
+        bool restored       = false;
+        bool canonicalReady = false;
+        std::string canonical;
+        const auto restore = [&]() noexcept
+        {
+            if (restored)
+                return true;
+            state.localConfigDirty = true;
+            if (! CancelOutstandingSelfTestOperations(operations))
+            {
+                AppendLog(L"Pinned tree, scale: Local configuration restoration failed to reach worker quiet.");
+                return false;
+            }
+            const bool set = SetPluginConfiguration(state.infoLocal.get(), canonicalReady ? canonical : original);
+            if (! set)
+            {
+                AppendLog(std::format(L"Pinned tree, scale: Local configuration restoration setter failed: canonicalReady={}.", canonicalReady));
+                return false;
+            }
+            std::string actual;
+            const auto route  = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+            const bool read   = BackupPluginConfiguration(state.infoLocal.get(), actual);
+            const bool same   = canonicalReady && read && actual == canonical;
+            const bool budget = route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.deleteMaxConcurrency == originalBudget;
+            if (! canonicalReady || ! same || ! budget)
+            {
+                AppendLog(std::format(L"Pinned tree, scale: Local restore verification failed: canonicalReady={} read={} same={} actualLength={} "
+                                      L"expectedLength={} budget={}",
+                                      canonicalReady,
+                                      read,
+                                      same,
+                                      actual.size(),
+                                      canonical.size(),
+                                      budget));
+                return false;
+            }
+            if (originalHost.has_value())
+                g_settings.plugins.configurationByPluginId[pluginId] = originalHost.value();
+            else
+                g_settings.plugins.configurationByPluginId.erase(pluginId);
+            state.localConfigDirty = originalDirty;
+            restored               = true;
+            return true;
+        };
+        const auto restoreOnExit = wil::scope_exit([&]() noexcept { static_cast<void>(restore()); });
+        // A fresh getter may return {}, whereas the setter adds canonical policy.
+        // Keep the guard active across this first mutation as well.
+        if (! SetPluginConfiguration(state.infoLocal.get(), original) || ! BackupPluginConfiguration(state.infoLocal.get(), canonical))
+            return false;
+        canonicalReady             = true;
+        const auto normalizedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (normalizedRoute.state != FileSystemRouteContract::QueryState::Available || normalizedRoute.snapshot.deleteMaxConcurrency != originalBudget)
+            return false;
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"))
+            return false;
+        const auto requestedRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        AppendLog(std::format(L"Pinned tree, scale: Local Delete budget original={} requested=8 effective={}",
+                              originalBudget,
+                              requestedRoute.state == FileSystemRouteContract::QueryState::Available ? requestedRoute.snapshot.deleteMaxConcurrency : 0u));
+        if (requestedRoute.state != FileSystemRouteContract::QueryState::Available || requestedRoute.snapshot.deleteMaxConcurrency != 8u)
+            return false;
+        if (! body())
+            return false;
+        return restore();
+    };
+    // The outer transaction protects the caller while the inner transactions
+    // exercise both map lineages without requiring the optional NAS fixture.
+    return withTemporaryBudget([&]() noexcept
+    {
+        const std::wstring pluginId(kPluginIdLocal);
+        // The setter canonicalizes {}; this checks its normalized default semantics.
+        if (! SetPluginConfiguration(state.infoLocal.get(), "{}"))
+            return false;
+        g_settings.plugins.configurationByPluginId.erase(pluginId);
+        state.localConfigDirty     = false;
+        const bool defaultRestored = withTemporaryBudget([]() noexcept { return true; });
+        if (! defaultRestored || state.localConfigDirty || g_settings.plugins.configurationByPluginId.contains(pluginId))
+            return false;
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":2})json"))
+            return false;
+        state.localConfigDirty = true;
+        const auto savedHost   = g_settings.plugins.configurationByPluginId.at(pluginId);
+        std::string savedProvider;
+        if (! BackupPluginConfiguration(state.infoLocal.get(), savedProvider))
+            return false;
+        // A failed body takes the same scope-guard path as an early fixture exit.
+        if (withTemporaryBudget([]() noexcept { return false; }) || ! state.localConfigDirty ||
+            ! g_settings.plugins.configurationByPluginId.contains(pluginId) || g_settings.plugins.configurationByPluginId.at(pluginId).value != savedHost.value)
+            return false;
+        std::string afterProvider;
+        const auto afterRoute = FileSystemRouteContract::Query(state.fsLocal.get(), L"/", FILESYSTEM_DELETE, kPluginIdLocal);
+        if (! BackupPluginConfiguration(state.infoLocal.get(), afterProvider) || afterProvider != savedProvider ||
+            afterRoute.state != FileSystemRouteContract::QueryState::Available || afterRoute.snapshot.deleteMaxConcurrency != 2u)
+            return false;
+        AppendLog(L"Pinned tree, scale: normalized default, nondefault and early-exit configuration restoration witnesses passed.");
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"))
+            return false;
+        return RunDeleteIdentityLessPinnedTreeScaleChecksImpl(state);
+    });
 }
 
 // I35 S4 (red-team HIGH c and b, round 2): a folder deleted by name carries its last-write time in its

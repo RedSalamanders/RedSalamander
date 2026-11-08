@@ -1,0 +1,647 @@
+
+  RedSalamander-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedSalamander-fr-FR.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  Terminal-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\Terminal-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\Terminal-ja-JP.dll
+  Terminal-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerText-fr-FR.dll
+  compilation header save succeeded; see Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\dependencies\DxUi\b34b20f6743ffa96\Intermediate\x64\Debug\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\dependencies\DxUi\b34b20f6743ffa96\Intermediate\x64\Debug\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\dependencies\DxUi\b34b20f6743ffa96\Intermediate\x64\Debug\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\dependencies\DxUi\b34b20f6743ffa96\Intermediate\x64\Debug\DxUi\DxUiCompositePS.cso
+  DxUi.RichDocument.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Main.cpp
+  DxUi.RichMarkdownProjection.cpp
+  DxUi.RichSemantic.cpp
+  RedLauncher.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\RedLauncher.exe
+  DxUi.RichTextCommands.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  DxUi.RichSemanticDocument.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Common.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Common.exp
+  Common.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Common.dll
+  DxUi.RichSemanticGeometry.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystem7z.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  LocalSearchIndexCore.cpp
+  DxUi.MarkdownSyntax.cpp
+  Generating Code...
+  SearchServiceBroker.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SearchTextHelpers.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  DxUi.NativeFlowchart.cpp
+  DxUi.NativeMath.cpp
+  DxUi.NativeFlowchartLayout.cpp
+  DxUi.PreparedFlowchart.cpp
+  SqliteIndexStore.cpp
+  DxUi.RichTextLayout.cpp
+  RedSalamanderSearchService.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\RedSalamanderSearchService.exe
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystem7z.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystem7z.exp
+  FileSystem7z.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystem7z.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  DxUi.RichDocumentLayout.cpp
+  SearchTextHelpers.cpp
+  DxUi.RichTextEditor.cpp
+  FileSystemCurl.CopyMove.cpp
+  dllmain.cpp
+  Factory.cpp
+  DxUi.RichImage.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  FileSystem.cpp
+  ControlCatalog.cpp
+  FileSystemCurl.Imap.cpp
+  FileSystem.DirectoryOps.cpp
+  NativeMenuInterop.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystem.FileOps.cpp
+  Embedded.cpp
+  FileSystemCurl.Shared.cpp
+  FrameRuntime.cpp
+  DxUi.Accessibility.cpp
+  FileSystem.Menu.cpp
+  FileSystemCurl.Tests.Ftp.cpp
+  FileSystem.Path.cpp
+  Generating Code...
+  FileSystem.Search.cpp
+  Compiling...
+  DxUi.ComboBox.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemCurl.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemCurl.exp
+  DxUi.Controls.cpp
+  FileSystem.Watch.cpp
+  FileSystemCurl.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemCurl.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  FileSystemDummy.cpp
+  DxUi.Layout.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystem.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystem.exp
+  FileSystem.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystem.dll
+  DxUi.Forms.cpp
+  Generating Code...
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemDummy.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemDummy.exp
+  FileSystemDummy.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemDummy.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls4.cpp
+  FilesInformationGoogleDrive.cpp
+  DxUi.EditorControls.cpp
+  ls4.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ls4.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  FileSystemGoogleDrive.cpp
+  DxUi.cpp
+  FilesInformationMicrosoftDrive.cpp
+  DxUi.Grid.cpp
+  FileSystemMicrosoftDrive.cpp
+  FileSystemGoogleDrive.Tests.FakeDrive.cpp
+  DxUi.Menu.cpp
+  FileSystemMicrosoftDrive.Tests.FakeGraph.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemGoogleDrive.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemGoogleDrive.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemGoogleDrive.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  Factory.cpp
+  DxUi.NativeTextInput.cpp
+  Generating Code...
+  FilesInformationMtp.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.exp
+  FileSystemMicrosoftDrive.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  dllmain.cpp
+  DxUi.PointerInput.cpp
+  DxUi.Scrollbar.cpp
+  FileSystemMtp.Core.cpp
+  Factory.cpp
+  DxUi.SingleLineTextEditing.cpp
+  FileSystemMtp.Device.cpp
+  DxUi.TextInput.cpp
+  FilesInformationS3.cpp
+  FileSystemMtp.Tests.FakeBackend.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystemMtp.Shared.cpp
+  FileSystemS3.Configuration.cpp
+  TextInputServices.cpp
+  Generating Code...
+  TextClipboard.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemMtp.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemMtp.exp
+  FileSystemMtp.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemMtp.dll
+  FileSystem-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem-fr-FR.dll
+  FileSystemS3.Core.cpp
+  FileSystem7z-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem7z-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMtp-fr-FR.dll
+  DxUi.Theme.cpp
+  FileSystemS3-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSqlite-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem-ja-JP.dll
+  DxUi.Tree.cpp
+  FileSystemS3.Directory.cpp
+  FileSystemCurl-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSqlite-ja-JP.dll
+  DxUi.Typeahead.cpp
+  ViewerText-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerText-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerWeb-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMtp-sk-SK.dll
+  RedConfigure-ja-JP.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedConfigure-ja-JP.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls1.cpp
+  ls1.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ls1.exe
+  DxUi.WindowHost.cpp
+  FileSystemS3.DirectoryOps.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls2.cpp
+  ls2.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ls2.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ls3.cpp
+  ls3.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ls3.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FlipSequentialDiscard.cpp
+  Generating Code...
+  FileSystemS3.DriveInfo.cpp
+  FlipSequentialDiscard.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\FlipSequentialDiscard.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerSqlite.Engine.cpp
+  Compiling...
+  DxUi.TextElements.cpp
+  Generating Code...
+  DxUi.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\dependencies\DxUi\b34b20f6743ffa96\x64\Debug\DxUi.lib
+  ViewerSqlite.Tests.Runner.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  FileSystemS3.IO.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Generating Code...
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Factory.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+  FileSystemS3.Menu.cpp
+  ViewerWeb.cpp
+  ViewerImgRaw.Decode.cpp
+  FileSystemS3.S3.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerWeb.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerWeb.exp
+  ViewerWeb.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerWeb.dll
+  dllmain.cpp
+  ViewerImgRaw.Export.cpp
+  Factory.cpp
+  FileSystemS3.S3Table.cpp
+  ViewerSqlite.Engine.cpp
+  ViewerImgRaw.cpp
+  FileSystemS3.Shared.cpp
+  ViewerSqlite.cpp
+  Generating Code...
+  Factory.cpp
+  Generating Code...
+  FileSystemS3.Tests.FakeS3.cpp
+  ViewerPE.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerSqlite.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerSqlite.exp
+  ViewerSqlite.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerSqlite.dll
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerImgRaw.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerImgRaw.exp
+  ViewerImgRaw.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerImgRaw.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+  dllmain.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerPE.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerPE.exp
+  ViewerPE.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerPE.dll
+  Generating Code...
+  ViewerSpace.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemS3.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemS3.exp
+  ViewerVLC.cpp
+  FileSystemS3.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\FileSystemS3.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  ViewerSpace.Layout.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerVLC.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerVLC.exp
+  ViewerVLC.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerVLC.dll
+  ViewerSqliteTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ViewerSqliteTests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerSpace.Analysis.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  AppTheme.cpp
+  RedConfigure.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\RedConfigure.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  dllmain.cpp
+  Factory.cpp
+  UiMetrics.cpp
+  ViewerSpace.Workspace.cpp
+  ViewerText.Encoding.cpp
+  ProductUi.Tests.Runner.cpp
+  FileSystemPathIdentity.cpp
+  ViewerText.MenuTheme.cpp
+  FileSystemRouteContract.cpp
+  ProductUi.Scope.Tests.DirectoryRecords.cpp
+  ViewerSpace.Model.cpp
+  Generating Code...
+  ProductUiTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ProductUiTests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerText.cpp
+  ViewerPE.Tests.Runner.cpp
+  ViewerSpace.AnalysisHost.cpp
+  ViewerText.Text.cpp
+  ViewerSpace.NavigationHost.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
+  ViewerText.Hex.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+  ViewerSpace.Hosts.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  Generating Code...
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerText.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerText.exp
+  ViewerText.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerText.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  Generating Code...
+  LocalizationTests-fr-FR.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\LocalizationTests-fr-FR.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  Localization.Tests.Runner.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  PluginContract.Tests.Runner.cpp
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerSpace.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerSpace.exp
+  ViewerSpace.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\ViewerSpace.dll
+  ViewerPETests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\ViewerPETests.exe
+  [GhosttyRuntime] waiting for repository lease: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] acquired repository lease: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  [GhosttyRuntime] starting: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] started pid=51764: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] exited pid=51764 code=0; draining output: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] completed elapsedSeconds=0: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Toolchains\zig-x86_64-windows-0.17.0\zig.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  SettingsSchema.Tests.Runner.cpp
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=82616: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=82616 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=63292: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=63292 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=22024: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=22024 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] restoring locked dependency: aro
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] started pid=74060: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] exited pid=74060 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] restoring locked dependency: pixels
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] started pid=59140: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] exited pid=59140 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] restoring locked dependency: translate-c
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] started pid=74624: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] exited pid=74624 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] restoring locked dependency: uucode
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] started pid=63568: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] exited pid=63568 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] restoring locked dependency: wuffs
+  [GhosttyRuntime] starting: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] started pid=63624: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] exited pid=63624 code=0; draining output: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\WINDOWS\system32\tar.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=78696: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=78696 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=61624: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  FileSystemPathIdentity.cpp
+  [GhosttyRuntime] exited pid=61624 code=1; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] starting: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] started pid=65096: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] exited pid=65096 code=0; draining output: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  [GhosttyRuntime] completed elapsedSeconds=0: C:\Program Files\Git\cmd\git.exe cwd=Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\TerminalEngine\Sources\ghostty-83fb95624b0439ee660c2679b43b38c8b63769cd
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=8299405198f67e19015c0d9ebc806517a277904b5dc834b1211ca27001baa10f normalizedDiagnostic=90cf32b0d3c3bd02dca61c3eb43831bdf08599a27cfd5a8802f023624dfcdcef
+  dllmain.cpp
+  Factory.cpp
+  FileSystemRouteContract.cpp
+  Generating Code...
+  LocalizationTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\LocalizationTests.exe
+  SettingsSchemaParser.cpp
+  PluginContractTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\PluginContractTests.exe
+  Terminal.cpp
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  CrashHandling.Tests.Runner.cpp
+  CrashQuarantine.cpp
+  Generating Code...
+  SettingsSchemaTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\SettingsSchemaTests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  TerminalAccessibility.cpp
+  Performance.Tests.pch.cpp
+  CrashHandler.cpp
+  TraceProvider.cpp
+  TerminalInternal.cpp
+  CrashHandling.Tests.CrashQuarantine.Stubs.cpp
+  Common.Tests.LatencyHooks.cpp
+  FileSystemPluginManager.cpp
+  Generating Code...
+  TerminalKittyImagePipeline.cpp
+  CrashHandlingTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\CrashHandlingTests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystemCurl.ImapHelpers.cpp
+  PluginModuleLifecycle.cpp
+  TerminalCommandSurfaceModel.cpp
+  FileSystemCurl.Tests.Runner.cpp
+  Generating Code...
+  TerminalRuntimeLoader.cpp
+  FileSystemCurlTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\FileSystemCurlTests.exe
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  ViewerPluginManager.cpp
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  TerminalSecurity.cpp
+  RcWriter.cpp
+  RedConfigureApp.cpp
+  Generating Code...
+  Performance.Tests.FolderView.Enumeration.Access.cpp
+  RedConfigurePagePresenters.cpp
+  TerminalSession.cpp
+  RedConfigureRoot.cpp
+  IconCache.cpp
+  TerminalVt.cpp
+  RedConfigureSession.cpp
+  Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp
+  Performance.Tests.FolderIconEnumerationPerfTest.cpp
+  Terminal.Tests.VtUpgrade.cpp
+  Performance.Tests.FolderViewColumnLayout.cpp
+  Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp
+  RedConfigureWorkflow.cpp
+  Performance.Tests.Runner.cpp
+  Generating Code...
+  Performance.Tests.PluginManager.Stubs.cpp
+  RedConfigureTraceProvider.cpp
+  Generating Code...
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\PerformanceTests2.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\PerformanceTests2.exp
+  PerformanceTests2.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\PerformanceTests2.dll
+     Creating library Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\Terminal.lib and object Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\Terminal.exp
+  FileSystem-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem-cs-CZ.dll
+  Terminal.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Plugins\Terminal.dll
+  FileSystem-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemDummy-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  RedConfigureUiHelpers.cpp
+  FileSystemGoogleDrive-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  Verified local RedMonitor client 9ebea6577fe9a5ced7647283c918f51f67d666fd; no viewer dependency.
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  DxUi pin verified: 4cdf1ce52c7785446698e346b8aec058ed6a9283
+  ViewerImgRaw-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerPE-cs-CZ.dll
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.Tests.Runner.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  ViewerPE-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerPE-sk-SK.dll
+  FolderView.Interaction.cpp
+  ViewerSpace-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSpace-cs-CZ.dll
+  FolderView.Layout.cpp
+  ThemeCatalog.cpp
+  ViewerSpace-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSpace-sk-SK.dll
+  FolderView.Menus.cpp
+  ViewerSqlite-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSqlite-cs-CZ.dll
+  FolderView.Rendering.cpp
+  ViewerSqlite-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerSqlite-sk-SK.dll
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  ViewerText-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerText-cs-CZ.dll
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.Popup.PathDetail.cpp
+  FolderWindow.FileOperations.State.Conflict.cpp
+  FolderWindow.FileOperations.DecisionMirror.cpp
+  ThemePreviewModel.cpp
+  FolderWindow.FileOperations.PromptText.cpp
+  FileOperationsConflictBroker.cpp
+  FolderWindow.FileOperations.IssuesProjection.cpp
+  FolderWindow.FileOperations.Tests.Runner.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.FileOperations.Tests.OwnedShutdown.cpp
+  ViewerText-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerText-sk-SK.dll
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.LeftoverCleanup.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  ViewerVLC-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerVLC-cs-CZ.dll
+  ConnectionManagerWindow.cpp
+  WorkspaceDiscovery.cpp
+  ConnectionCredentialPromptDialog.cpp
+  ViewerVLC-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerVLC-sk-SK.dll
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  RedConfigure.Tests.Runner.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.Tests.Runner.cpp
+  CompareDirectoriesEngine.cpp
+  ViewerWeb-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerWeb-cs-CZ.dll
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  ViewerWeb-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\ViewerWeb-sk-SK.dll
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  RedSalamander-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedSalamander-cs-CZ.dll
+  Preferences.Dialog.cpp
+  RedSalamander-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedSalamander-sk-SK.dll
+  Preferences.Internal.cpp
+  LocalizationTests-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\LocalizationTests-cs-CZ.dll
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Generating Code...
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  LocalizationTests-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\LocalizationTests-sk-SK.dll
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  Common.Tests.Runner.cpp
+  Common.Tests.LatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  RedConfigure-cs-CZ.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedConfigure-cs-CZ.dll
+  RedConfigureTests.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\RedConfigureTests.exe
+  RedConfigure-sk-SK.vcxproj -> Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\.build\x64\Debug\Lang\RedConfigure-sk-SK.dll
+Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp(746,1): error C1001: Internal compiler error. [Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\RedSalamander.vcxproj]
+Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp(746,1): error C1001: (compiler file 'F:\1\s\src\vctools\Compiler\CxxFE\sl\p1\c\mre.cpp', line 508) [Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\RedSalamander.vcxproj]
+Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp(746,1): error C1001:  To work around this problem, try simplifying or changing the program near the locations listed above. [Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\RedSalamander.vcxproj]
+Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp(746,1): error C1001: If possible please provide a repro here: https://developercommunity.visualstudio.com  [Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\RedSalamander.vcxproj]
+Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp(746,1): error C1001: Please choose the Technical Support command on the Visual C++  [Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\RedSalamander.vcxproj]
+Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp(746,1): error C1001:  Help menu, or open the Technical Support help file for more information [Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\RedSalamander\RedSalamander.vcxproj]

@@ -1,0 +1,151 @@
+{
+  "run_id": "20261101T005544Z-81876-1556b6111196498d9231df9f38ac3b09",
+  "counts": {
+    "passed": 1083,
+    "failed": 9,
+    "skipped": 2
+  },
+  "entries": [
+    {
+      "suite": "CrashHandlingTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "VcpkgMergeSynthetic",
+      "kind": "PowerShellScript",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "ProductUiTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "SettingsSchemaTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "RedConfigureTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "LocalizationTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "ViewerSqliteTests.Noninteractive",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "ViewerPETests.Noninteractive",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "PluginContractTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "ToolsPesterTests",
+      "kind": "Pester",
+      "exit_code": 1,
+      "passed": 1072,
+      "failed": 9,
+      "skipped": 2
+    },
+    {
+      "suite": "FileSystemCurlTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "PerformanceTests2",
+      "kind": "CppUnitTest",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "original_tooling_failures": [
+    {
+      "name": "keeps native ARM64 regression behind main admission and PRs compiler-free",
+      "status": "failed"
+    },
+    {
+      "name": "keeps manual ASan on both native architectures with seeded detector proof",
+      "status": "failed"
+    },
+    {
+      "name": "records that the legacy root plans queue was archived to Done and deleted",
+      "status": "failed"
+    },
+    {
+      "name": "keeps the vcpkg Dependabot group limited to direct manifest dependencies",
+      "status": "failed"
+    },
+    {
+      "name": "excludes only the exact sealed Gate0 workflow from Dependabot action updates",
+      "status": "failed"
+    },
+    {
+      "name": "Error occurred in Describe block",
+      "status": "failed"
+    },
+    {
+      "name": "defines Suite CI as the GitHub Actions gate through the unified runner",
+      "status": "failed"
+    },
+    {
+      "name": "keeps the nightly shuffle repeat lane separate from the PR gate",
+      "status": "failed"
+    },
+    {
+      "name": "Error occurred in Describe block",
+      "status": "failed"
+    }
+  ],
+  "sandbox_audit_issues": 34,
+  "newly_observed_audit_paths": [
+    "Z:\\RedSalamander.Perf\\runs\\console-1493938d7a9046f8bfcc4a704ad26080",
+    "Z:\\RedSalamander.Perf\\runs\\console-e2f54d7e93c74f96a161824c0bfc4ad7"
+  ],
+  "audit_note": "All unrelated or unattributed directories were preserved. No clean whole-sandbox qualification is claimed.",
+  "post_dependency_rechecks": "ci-source-recheck.json and winget-source-recheck.json retain additional source-contract results; they do not rewrite the original Fresh PR verdict."
+}

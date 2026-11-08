@@ -1,0 +1,17 @@
+Run: Z:\src\RedSalamander-worktrees\fileops-waiting-state-20261031\Specs\TestRuns\Local-x64\FileOps\2026-10-31_IdentityInterlockWaiting
+
+┌──────────────────┐
+│ Detailed Table │
+└──────────────────┘
+◆ FileOps.SelfTest  (1 metrics)
+
+Metric                                        Count Build P95Quality P99Quality Unit     P50     P95     P99     Max
+------                                        ----- ----- ---------- ---------- ----     ---     ---     ---     ---
+FileOps.SelfTest.IdentityInterlock.StartNowUs     2 Debug fail       fail       us   1334,00 1388,00 1388,00 1388,00
+
+
+┌──────────────────┐
+│ Visual Heatmap │
+└──────────────────┘
+◆ FileOps.SelfTest  (1 metrics)
+◆ ██████████████████████ FileOps.SelfTest.IdentityInterlock.StartNowUs p95=1,39K us     p50=1,33K us     count=    2 build=Debug    p95q=fail

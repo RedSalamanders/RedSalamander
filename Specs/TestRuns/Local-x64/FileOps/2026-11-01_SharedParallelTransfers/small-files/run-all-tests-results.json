@@ -1,0 +1,253 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-11-01T00:38:14.7545398Z",
+  "run_ended_utc": "2026-11-01T00:38:43.7239092Z",
+  "duration_ms": 28969,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander-worktrees\\fileops-waiting-state-20261031\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261101T003713Z-84020-b01c15409d8445cdb759dd106fedf425\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\RedSalamander.Perf",
+  "run_id": "20261101T003713Z-84020-b01c15409d8445cdb759dd106fedf425",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "FileOps_SmallFileCopyCost",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "total": 3,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 32,
+    "test_root": "Z:\\RedSalamander.Perf",
+    "run_id": "20261101T003713Z-84020-b01c15409d8445cdb759dd106fedf425",
+    "allowed_run_ids": [
+      "20261101T003713Z-84020-b01c15409d8445cdb759dd106fedf425"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\dxui-sdk-9a8263a0a42543a681d9f2e9e83949e9",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\unified-ci",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\arm64-compiler-scope.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.xml",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\redmonitor-header-explain.log",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\ar31-14a0af16",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\audit31-ca2fe848",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\ck31-00ec6a71",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\ck31-6258a474",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\ck31-ee447f66",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-05ed77f9b5a34469a10b33ce115c39f8",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-38f4248c31e94b41b98f72c85563af7d",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-3d09abcb11b241028e914e7e5ba2cb84",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-70cb4bb829474302b6731a00f83241c7",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-a1c963a69fcf44328a98f9ee7169a062",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-a6c2db912eae444e9b92394faf31c390",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-d8a4336b7d3f4c35a13b73efa303012f",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\console-de3a7053754c45b5b10625c748d80e06",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\ia31-47156475",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083308",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083544",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083656",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\pathmap31-63848",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-extraction-20261021T213312",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-probes-b00db1bb2b6948ed891c1f3a7ae31bb3",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\review-tooling-739d6d32b82746fe8aae96d392b6d33c",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\review-tooling-ff1d4a1b7df04bf282015fa1f9cd5cce",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 6014,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1203,
+          "attempt": 1
+        },
+        {
+          "name": "FileOps_SmallFileCopyCost",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4047,
+          "attempt": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 32,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

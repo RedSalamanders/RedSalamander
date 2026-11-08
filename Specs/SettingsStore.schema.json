@@ -1228,6 +1228,18 @@
           "title": "Verify Copied Files",
           "description": "Verify destination content against the source after copied regular files are published."
         },
+        "maxParallelTransfers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 4,
+          "title": "Parallel Transfers",
+          "description": "Shared limit for host-managed regular-file transfers across jobs. Distinct source files with new sibling destination names may run together when destination file IDs are unavailable; conflicting operations remain serialized.",
+          "x-ui-pane": "File Operations",
+          "x-ui-section": "Advanced",
+          "x-ui-order": 35,
+          "x-ui-control": "custom"
+        },
         "crossFsBridgeBufferSizeKB": {
           "type": "integer",
           "minimum": 512,

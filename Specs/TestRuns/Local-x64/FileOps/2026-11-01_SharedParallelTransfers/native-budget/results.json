@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-11-01T00:49:54.425Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261101T004910Z-81876-89c2e4c695194046a45471d72738fd26\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1609,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1171,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_SmbNativeRouteConcurrencyBudget",
+            "status": "passed",
+            "duration_ms": 391,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

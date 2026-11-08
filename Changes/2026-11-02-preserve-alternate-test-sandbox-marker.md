@@ -1,1 +1,1 @@
-- Preserve an authorized alternate test sandbox and its ownership marker after pruning empty run-owned directories.
+- Preserve the approved alternate-volume test-sandbox root and ownership marker during run cleanup, including when retained evidence keeps the root nonempty. Add a post-cleanup marker guard.

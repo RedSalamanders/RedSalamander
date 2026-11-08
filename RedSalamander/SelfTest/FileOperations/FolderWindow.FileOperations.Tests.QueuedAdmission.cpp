@@ -181,11 +181,370 @@
                          L"Replaying an accepted clipboard sequence must remain rejected after its owned result is dismissed.");
 }
 
+// This raw operation-control gate is specific to holding a provider metadata borrow;
+// the shared test helpers do not expose a synchronous IFileSystemOperationControl gate.
+struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
+{
+    wil::unique_event_nothrow entered;
+    wil::unique_event_nothrow release;
+
+    HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+    {
+        if (! abort)
+            return E_POINTER;
+        *abort = FALSE;
+        entered.SetEvent();
+        if (WaitForSingleObject(release.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(10000u))) != WAIT_OBJECT_0)
+            return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        // The held read exists only to exercise pin ownership. Cancel after release
+        // so this witness does not depend on backup-stream inspection permissions.
+        *abort = TRUE;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void*) noexcept override
+    {
+        if (! mode)
+            return E_POINTER;
+        *mode = FILESYSTEM_DISCOVERY_AHEAD;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+    {
+        return S_OK;
+    }
+};
+
+[[nodiscard]] bool ValidateLocalDirectoryPinHandoff(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                    const std::filesystem::path& root,
+                                                    SelfTest::CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    constexpr auto readFlags   = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    constexpr auto strictFlags = static_cast<FileSystemBindFlags>(readFlags | FILESYSTEM_BIND_DELETE);
+    constexpr auto mixedFlags  = static_cast<FileSystemBindFlags>(strictFlags | FILESYSTEM_BIND_RENAME);
+    const auto directory       = root / L"handoff-directory";
+    const auto otherDirectory  = root / L"handoff-other-directory";
+    const auto regular         = root / L"handoff-file.bin";
+    if (! state.Require(fileSystem && RecreateEmptyDirectory(directory) && RecreateEmptyDirectory(otherDirectory) &&
+                            SelfTest::WriteTextFile(regular, "handoff"),
+                        L"Directory pin handoff requires its own synthetic files."))
+        return false;
+    FileOperations::QualifiedEndpoint endpoint;
+    if (! state.Require(
+            FileOperations::TryQualifyEndpointForSelfTest(fileSystem, directory.native(), FILESYSTEM_DELETE, kPluginIdLocal, L"host/default", endpoint),
+            L"Directory handoff must use the acquired sandbox's qualified Local path profile."))
+        return false;
+    const auto bind = [&](const std::filesystem::path& path, FileSystemBindFlags flags) noexcept
+    { return FileOperations::BindObjectAuthority(fileSystem.get(), path.native(), endpoint.profileId, flags); };
+    auto witness = bind(directory, readFlags);
+    if (! state.Require(witness.state == FileOperations::ObjectBindingState::Bound && witness.authority.boundObject,
+                        L"Directory handoff requires a metadata-only witness."))
+        return false;
+    wil::com_ptr<IFileSystemBoundMetadata> metadata;
+    if (! state.Require(SUCCEEDED(witness.authority.boundObject->QueryInterface(IID_PPV_ARGS(metadata.addressof()))) && metadata,
+                        L"The metadata witness must expose bound metadata."))
+        return false;
+    const auto stillReadable = [&]() noexcept
+    {
+        FileSystemBasicInformation basic{};
+        basic.sizeBytes = sizeof(basic);
+        return witness.authority.boundObject->GetBasicInformation(&basic) == S_OK;
+    };
+    const auto rejectReceiver = [&](const std::filesystem::path& path, FileSystemBindFlags flags, HRESULT expected) noexcept
+    {
+        auto receiver = bind(path, flags);
+        wil::com_ptr<IFileSystemBoundObjectPinHandoff> handoff;
+        return receiver.state == FileOperations::ObjectBindingState::Bound && receiver.authority.boundObject &&
+               SUCCEEDED(receiver.authority.boundObject->QueryInterface(IID_PPV_ARGS(handoff.addressof()))) && handoff &&
+               handoff->TakeDirectoryReadPinFrom(witness.authority.boundObject.get()) == expected && stillReadable();
+    };
+    if (! state.Require(rejectReceiver(otherDirectory, strictFlags, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)) &&
+                            rejectReceiver(regular, strictFlags, E_ACCESSDENIED) && rejectReceiver(directory, mixedFlags, E_ACCESSDENIED),
+                        L"Mismatched, regular-file, and mixed-grant receivers must reject without retiring the witness."))
+        return false;
+
+    auto strict = bind(directory, strictFlags);
+    wil::com_ptr<IFileSystemBoundObjectPinHandoff> handoff;
+    if (! state.Require(strict.state == FileOperations::ObjectBindingState::Bound && strict.authority.boundObject &&
+                            SUCCEEDED(strict.authority.boundObject->QueryInterface(IID_PPV_ARGS(handoff.addressof()))) && handoff,
+                        L"The exact strict directory receiver must expose the handoff capability."))
+        return false;
+    FileSystemBoundObjectSnapshot before{};
+    before.sizeBytes = sizeof(before);
+    BOOL same        = FALSE;
+    if (! state.Require(witness.authority.boundObject->GetSnapshot(&before) == S_OK && before.objectId && before.objectIdBytes > 0u &&
+                            strict.authority.boundObject->IsSameObject(witness.authority.boundObject.get(), &same) == S_OK && same,
+                        L"The witness and strict receiver must initially name the same exact directory."))
+        return false;
+    const std::vector<std::byte> identity(static_cast<const std::byte*>(before.objectId),
+                                          static_cast<const std::byte*>(before.objectId) + before.objectIdBytes);
+
+    DirectoryWitnessBorrowControl control;
+    if (! state.Require(SUCCEEDED(control.entered.create(wil::EventOptions::ManualReset)) && SUCCEEDED(control.release.create(wil::EventOptions::ManualReset)),
+                        L"Directory witness read gate events could not be created."))
+        return false;
+    FileSystemOptions options{};
+    options.sizeBytes        = sizeof(options);
+    options.operationControl = &control;
+    std::atomic<HRESULT> readHr{E_PENDING};
+    std::jthread reader;
+    try
+    {
+        reader = std::jthread([&]() noexcept
+        {
+            FileSystemMetadataSnapshot snapshot{};
+            snapshot.sizeBytes = sizeof(snapshot);
+            readHr.store(metadata->GetMetadataSnapshot(&options, &snapshot), std::memory_order_release);
+        });
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::system_error& error)
+    {
+        // Thread creation is the throwing boundary; no borrow exists on failure.
+        Debug::Error(L"Directory witness reader could not start: {}", error.code().value());
+        return state.Require(false, L"The directory witness reader could not start.");
+    }
+    auto joinReader = wil::scope_exit([&]() noexcept
+    {
+        control.release.SetEvent();
+        if (reader.joinable())
+            reader.join();
+    });
+    if (! state.Require(WaitForSingleObject(control.entered.get(), static_cast<DWORD>(SelfTest::Scale(5s).count())) == WAIT_OBJECT_0 &&
+                            handoff->TakeDirectoryReadPinFrom(witness.authority.boundObject.get()) == HRESULT_FROM_WIN32(ERROR_BUSY) && stillReadable(),
+                        L"An active metadata borrow must refuse handoff without retiring the witness."))
+        return false;
+    control.release.SetEvent();
+    reader.join();
+    joinReader.release();
+    if (! state.Require(readHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED) &&
+                            handoff->TakeDirectoryReadPinFrom(witness.authority.boundObject.get()) == S_OK,
+                        L"Handoff must succeed after the metadata borrow quiesces."))
+        return false;
+    FileSystemBoundObjectSnapshot after{};
+    after.sizeBytes = sizeof(after);
+    FileSystemBasicInformation retiredBasic{};
+    retiredBasic.sizeBytes = sizeof(retiredBasic);
+    FileSystemMetadataSnapshot retiredMetadata{};
+    retiredMetadata.sizeBytes = sizeof(retiredMetadata);
+    same                      = FALSE;
+    if (! state.Require(witness.authority.boundObject->GetSnapshot(&after) == S_OK && after.objectId && after.objectIdBytes == identity.size() &&
+                            std::memcmp(after.objectId, identity.data(), identity.size()) == 0 &&
+                            strict.authority.boundObject->IsSameObject(witness.authority.boundObject.get(), &same) == S_OK && same &&
+                            witness.authority.boundObject->GetBasicInformation(&retiredBasic) == HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE) &&
+                            metadata->GetMetadataSnapshot(nullptr, &retiredMetadata) == HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE),
+                        L"Retired witnesses preserve immutable identity but reject further live metadata reads."))
+        return false;
+
+    // Exercise legacy disposition while the retired witness COM objects stay alive.
+    handoff.reset();
+    strict.authority.boundObject.reset();
+    wil::unique_handle deletion(
+        CreateFileW(directory.c_str(), DELETE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    FILE_DISPOSITION_INFO disposition{};
+    disposition.DeleteFile = TRUE;
+    if (! state.Require(deletion && SetFileInformationByHandle(deletion.get(), FileDispositionInfo, &disposition, sizeof(disposition)) != FALSE,
+                        L"The retired metadata COM witness must not block legacy directory disposition."))
+        return false;
+    deletion.reset();
+    return state.Require(CreateDirectoryW(directory.c_str(), nullptr) != FALSE,
+                         L"The exact directory name must be reusable while retired witness COM references remain alive.");
+}
+
+[[nodiscard]] bool ValidateDeferredDirectoryDeleteIdentity(FolderWindow::FileOperationState& operations,
+                                                           const wil::com_ptr<IFileSystem>& fileSystem,
+                                                           const std::filesystem::path& root,
+                                                           const FolderWindow::FileOperationState::MutationInterlockScopes& independentScopes,
+                                                           SelfTest::CaseState& state) noexcept
+{
+    using State           = FolderWindow::FileOperationState;
+    const auto selected   = root / L"queued-directory-delete";
+    const auto moved      = root / L"queued-directory-delete-original";
+    const auto peer       = root / L"queued-directory-delete-peer";
+    const auto peerMoved  = root / L"queued-directory-delete-peer-moved";
+    const auto leaseMoved = root / L"confirmed-directory-delete-moved";
+    if (! state.Require(SelfTest::RemoveAll(moved) && SelfTest::RemoveAll(peerMoved) && SelfTest::RemoveAll(leaseMoved) && RecreateEmptyDirectory(selected) &&
+                            RecreateEmptyDirectory(peer) && SelfTest::WriteTextFile(selected / L"original.txt", "original-directory-content") &&
+                            SelfTest::WriteTextFile(peer / L"peer.txt", "unchanged-peer-content"),
+                        L"Deferred directory Delete requires its own synthetic root."))
+        return false;
+    const auto makeTask = [&](uint64_t id, bool includePeer, bool prepare = true) -> std::unique_ptr<State::Task>
+    {
+        State::OperationConstruction construction{};
+        construction.operation           = FILESYSTEM_DELETE;
+        construction.fileSystem          = fileSystem;
+        construction.sourcePaths         = includePeer ? std::vector<std::filesystem::path>{peer, selected} : std::vector<std::filesystem::path>{selected};
+        construction.flags               = FILESYSTEM_FLAG_RECURSIVE;
+        construction.sourcePluginId      = kPluginIdLocal;
+        construction.sourcePluginShortId = L"file";
+        State::OperationAdmission admission;
+        if (! state.Require(State::BuildOperationAdmission(std::move(construction), admission) == S_OK,
+                            L"Directory Delete must use canonical Local admission construction."))
+            return {};
+        auto task     = std::make_unique<State::Task>(operations);
+        task->_taskId = id;
+        task->_admissionKey.store(id, std::memory_order_release);
+        task->_operation      = FILESYSTEM_DELETE;
+        task->_fileSystem     = fileSystem;
+        task->_sourcePaths    = includePeer ? std::vector<std::filesystem::path>{peer, selected} : std::vector<std::filesystem::path>{selected};
+        task->_sourcePluginId = kPluginIdLocal;
+        task->_flags          = FILESYSTEM_FLAG_RECURSIVE;
+        task->_permanentDeleteConfirmationPending = true;
+        task->_permanentDeleteTestOverride        = 1;
+        task->InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(admission.plans)), {});
+        if (prepare && ! state.Require(task->PrepareMutationInterlockScopes() == S_OK && task->LoadMutationInterlockAdmission()->hasDeferredDirectoryDeletes,
+                                       L"Queued Local directory deletion retains metadata identity without a strict mutation lease."))
+            return {};
+        return task;
+    };
+
+    {
+        auto refused = makeTask(0xD1EA202611010004ull, false, false);
+        if (! refused)
+            return false;
+        try
+        {
+            const RedSalamander::TestSupport::ScopedEnvironmentVariable unsupported(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH", selected.native());
+            const RedSalamander::TestSupport::ScopedEnvironmentVariable deleteDenied(L"REDSALAMANDER_FILEOPS_BIND_DELETE_ACCESS_DENIED_PATH",
+                                                                                     selected.native());
+            const HRESULT refusedHr = refused->PrepareMutationInterlockScopes();
+            const auto scopes       = refused->LoadMutationInterlockScopes();
+            std::error_code ec;
+            if (! state.Require(refusedHr == E_ACCESSDENIED &&
+                                    (! scopes || std::ranges::none_of(*scopes, [](const auto& scope) noexcept { return scope.byNameCorroborated; })) &&
+                                    std::filesystem::exists(selected / L"original.txt", ec) && ! ec,
+                                L"Identity-less metadata must not grant a by-name route when the strict Delete open is denied."))
+                return false;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::system_error& error)
+        {
+            // The shared environment guard reports setup failure by exception in this noexcept witness.
+            Debug::Error(L"Directory Delete denial fixture could not set its scoped injection: {}", error.code().value());
+            return state.Require(false, L"The scoped directory Delete denial injection could not be installed.");
+        }
+    }
+
+    auto changed = makeTask(0xD1EA202611010001ull, true);
+    if (! changed)
+        return false;
+    if (! state.Require(MoveFileExW(selected.c_str(), moved.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE && RecreateEmptyDirectory(selected) &&
+                            SelfTest::WriteTextFile(selected / L"replacement.txt", "replacement-directory-content"),
+                        L"An unconfirmed queued directory keeps a nonblocking identity witness while names can change."))
+        return false;
+    const HRESULT changedHr = changed->AcquireDeferredDirectoryDeleteAuthoritiesForExecution();
+    std::error_code ec;
+    if (! state.Require(changedHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && changed->_deferredDirectoryDeleteBindings.empty() &&
+                            std::filesystem::exists(moved / L"original.txt", ec) && ! ec && std::filesystem::exists(selected / L"replacement.txt", ec) &&
+                            ! ec && MoveFileExW(peer.c_str(), peerMoved.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE &&
+                            std::filesystem::exists(peerMoved / L"peer.txt", ec) && ! ec,
+                        L"A queued directory replacement must be refused before touching either tree and release partial strict leases."))
+        return false;
+    changed.reset();
+
+    auto confirmed = makeTask(0xD1EA202611010002ull, false);
+    if (! confirmed)
+        return false;
+    State::MutationInterlockRelations relations{};
+    relations.advisoryDecided = true;
+    operations.PublishMutationInterlockDecision(*confirmed, relations);
+    operations.PublishPreparedMutationInterlock(*confirmed);
+    const auto key = confirmed->LoadMutationInterlockAdmission()->key;
+    std::shared_ptr<const State::SelectedAdmissionView> accepted;
+    const auto releaseReservation = wil::scope_exit([&]() noexcept
+    {
+        confirmed->_deferredDirectoryDeleteBindings.clear();
+        if (accepted)
+            operations.LeaveOperation(*confirmed, accepted);
+        operations.WithdrawPreparedMutationInterlock(key);
+    });
+    auto entered                  = operations.EnterOperation(*confirmed, {});
+    accepted                      = std::move(entered.accepted);
+    if (! state.Require(entered.outcome == State::OperationEntryOutcome::Entered && confirmed->HasReservedOperation() && ! confirmed->HasEnteredOperation() &&
+                            confirmed->GetLifecyclePhase() == FileOperations::TaskLifecyclePhase::PreparingExecution &&
+                            confirmed->AcquireDeferredDirectoryDeleteAuthoritiesForExecution() == S_OK,
+                        L"Directory confirmation reserves overlapping admission and acquires the checked strict lease before execution."))
+        return false;
+    auto readScope                    = accepted->interlock->scopes->front();
+    readScope.access                  = FileOperations::MutationInterlockAccess::ReadSource;
+    readScope.exactDeleteAuthority    = false;
+    readScope.deferredDirectoryDelete = false;
+    State::MutationInterlockAdmission reader{};
+    reader.key                            = 0xD1EA202611010003ull;
+    reader.scopes                         = std::make_shared<const State::MutationInterlockScopes>(State::MutationInterlockScopes{std::move(readScope)});
+    reader.isTransfer                     = true;
+    reader.relations.advisoryDecided      = true;
+    reader.relations.concurrentKeys[0]    = accepted->interlock->key;
+    reader.relations.concurrentCount      = 1u;
+    auto directory                        = *accepted->interlock;
+    directory.relations.concurrentKeys[0] = reader.key;
+    directory.relations.concurrentCount   = 1u;
+    std::array<State::ActiveMutationInterlock, 1> directoryActive{{{.taskId = confirmed->_taskId, .admission = accepted->interlock}}};
+    std::array<State::ActiveMutationInterlock, 1> readerActive{
+        {{.taskId = reader.key, .admission = std::make_shared<const State::MutationInterlockAdmission>(reader)}}};
+    uint64_t comparisons = 0u;
+    const auto advice    = operations.FindSameHostOverlap(reader.key, reader);
+    if (! state.Require(! State::MutationInterlocksPermit(reader.key, reader, directoryActive, comparisons) &&
+                            ! State::MutationInterlocksPermit(confirmed->_taskId, directory, readerActive, comparisons) && ! advice.CanRunConcurrently(),
+                        L"Directory Delete and overlapping reads serialize in both directions despite stale concurrent grants and offer no Run bypass."))
+        return false;
+    reader.scopes = std::make_shared<const State::MutationInterlockScopes>(independentScopes);
+    if (! state.Require(State::MutationInterlocksPermit(reader.key, reader, directoryActive, comparisons),
+                        L"A directory reservation must not block unrelated scopes in the same Local identity domain."))
+        return false;
+    // Readiness is frozen before the queued task obtains its reservation. The receipt-only
+    // update must still publish consent without reopening general plan mutation.
+    confirmed->_selectedRootReadinessStatus.store(S_OK, std::memory_order_release);
+    confirmed->_selectedRootReadinessComplete.store(true, std::memory_order_release);
+    if (! state.Require(confirmed->RunPermanentDeleteConfirmation() == S_OK, L"Deferred directory confirmation must succeed behind its strict lease."))
+        return false;
+    const auto consented = confirmed->LoadSelectedAdmission();
+    const auto* deletion = consented->plans->size() == 1u ? std::get_if<FileOperations::DeletePlan>(&consented->plans->front()) : nullptr;
+    if (! state.Require(consented->interlock == accepted->interlock && deletion && deletion->initialConsent.has_value() &&
+                            deletion->initialConsent.value().taskNonce == confirmed->_taskId &&
+                            deletion->initialConsent.value().kind == FileOperations::ConsentKind::PermanentDelete,
+                        L"A reserved directory confirmation publishes its exact task receipt while preserving the active immutable interlock."))
+        return false;
+    const BOOL movedWhileConfirmed = MoveFileExW(selected.c_str(), leaseMoved.c_str(), MOVEFILE_WRITE_THROUGH);
+    const DWORD moveError          = GetLastError();
+    if (! state.Require(movedWhileConfirmed == FALSE && moveError == ERROR_SHARING_VIOLATION,
+                        L"The confirmed directory keeps its strict pathname pin until deletion or cancellation."))
+        return false;
+    confirmed->_deferredDirectoryDeleteBindings.clear();
+    if (! state.Require(MoveFileExW(selected.c_str(), leaseMoved.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE,
+                        L"Releasing the owned strict lease allows the directory to move before a successor is admitted."))
+        return false;
+    Debug::Perf::EmitCounter(L"FileOps.SelfTest.DeferredDirectoryDeleteIdentity");
+    return true;
+}
+
 [[nodiscard]] bool ValidateQueuedAdmissionContracts(SelfTestState& fixture, SelfTest::CaseState& state) noexcept
 {
     using State                         = FolderWindow::FileOperationState;
     const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::FileOperations, L"queued-admission-contracts");
     if (! state.Require(sandbox.IsValid() && fixture.fileOps && fixture.fsDummy, L"Queued admission contracts require the governed sandbox and Dummy fixture."))
+        return false;
+    FileOperations::QualifiedEndpoint sandboxEndpoint;
+    if (! state.Require(fixture.fsLocal && FileOperations::TryQualifyEndpointForSelfTest(
+                                               fixture.fsLocal, sandbox.root.native(), FILESYSTEM_DELETE, kPluginIdLocal, L"host/default", sandboxEndpoint),
+                        L"Queued admission must inspect the acquired sandbox's Local identity support."))
+        return false;
+    const auto sandboxIdentity =
+        FileOperations::BindObjectAuthority(fixture.fsLocal.get(),
+                                            sandbox.root.native(),
+                                            sandboxEndpoint.profileId,
+                                            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA));
+    if (sandboxIdentity.state == FileOperations::ObjectBindingState::Unsupported)
+        return state.Skip(
+            L"The acquired test sandbox cannot supply the persistent no-follow identities required by Local admission and pin-handoff witnesses.");
+    if (! state.Require(sandboxIdentity.state == FileOperations::ObjectBindingState::Bound,
+                        L"The acquired sandbox must open successfully before Local identity admission can be tested."))
         return false;
     // Predicate probes can publish diagnostics and presentation refreshes. Give them
     // a separate engine/owner so the subsequent real clipboard witness starts idle.
@@ -293,8 +652,12 @@
         return false;
     // Exercise the actual scheduler and live-output consent predicates with immutable private
     // registrations. Public task identity stays fixed while the proposed admission changes.
-    auto candidate             = std::make_unique<State::Task>(*privateOperations);
-    auto peer                  = std::make_unique<State::Task>(*privateOperations);
+    auto candidate = std::make_unique<State::Task>(*privateOperations);
+    auto peer      = std::make_unique<State::Task>(*privateOperations);
+    // General consent-key ownership remains applicable to Rename. Two Copy/Move
+    // admissions now serialize regardless of consent; the shared-transfer controls
+    // cover that policy independently of these registration-replacement checks.
+    candidate->_operation      = FILESYSTEM_RENAME;
     const auto artifactReceipt = [](std::wstring_view name)
     {
         FileOperationArtifacts::TouchGuardReceipt receipt;
@@ -440,8 +803,8 @@
     const auto* movedStorage = movableScopes.data();
     candidate->InstallPreparedMutationInterlockScopes(std::move(movableScopes), false);
     const auto originalCandidateOwner = candidate->LoadMutationInterlockAdmission();
-    state.Require(originalCandidateOwner && originalCandidateOwner->scopes->data() == movedStorage,
-                  L"Freezing preparation must move the authority vector without copying its storage.");
+    state.Require(originalCandidateOwner && ! originalCandidateOwner->isTransfer && originalCandidateOwner->scopes->data() == movedStorage,
+                  L"Freezing the Rename consent fixture must move the authority vector without copying its storage.");
     State::MutationInterlockAdmission candidateAdmission = *originalCandidateOwner;
     peer->_taskId                                        = 41u;
     peer->_admissionKey.store(41u, std::memory_order_release);
@@ -636,6 +999,10 @@
         state.Require(admissionD && admissionD->relations.advisoryDecided && ! keptCycle,
                       L"A decision naming a peer that waits on this task through another is published without that edge.");
     }
+    if (! ValidateDeferredDirectoryDeleteIdentity(*privateOperations, fixture.fsLocal, root, ownedScopes, state))
+        return false;
+    if (! ValidateLocalDirectoryPinHandoff(fixture.fsLocal, root, state))
+        return false;
     if (! ValidateClipboardReadyStaleToken(fixture, state, sourcePath, destinationFolder))
         return false;
 
