@@ -215,6 +215,7 @@ extern SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 extern SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
+extern SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts;
 extern std::atomic<DWORD> g_fileOpsInlineRenameAdmissionThreadId;
