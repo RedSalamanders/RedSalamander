@@ -741,7 +741,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   The adapter clears and restores its opt-in; local, x64, self-hosted, other-repository and
   R0ePaired roles never perform the stock-surface actions. Fingerprints include this opt-in.
   This preparation does not waive native foreground, input, capture or qualification assertions.
-  If direct foreground acquisition is refused, the same opted-in native ARM64 runner may
+  If direct foreground acquisition is refused, the native x64 hosted runner selected by the
+  `default` desktop request or the ARM64 runner with its stock-preparation opt-in may
   use one registered Alt+F24 handoff to its existing neutral window within 500 ms. This
   earlier runner prelude is an explicit inline .NET fixture contract: it precedes the
   child suite's warning and injects only the registered nontext chord. Product input
@@ -750,8 +751,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   and owned target identity before activation. Held modifiers or F24 reject admission;
   cleanup releases only acknowledged inserted keys in reverse order, retires registration
   and subclass, and keeps the delegate alive through window-thread drain. Actual foreground
-  and focus must still be proved after key release; errors remain failures. Local, x64,
-  emulated, self-hosted, other-repository and paired roles never use this keyboard prelude.
+  and focus must still be proved after key release; errors remain failures. Local, emulated,
+  self-hosted, other-repository and paired roles never use this keyboard prelude.
   Their evidence uploads retain `artifacts/native-process-exits` from unarchived runs as well
   as completed evidence. Sealed historical Terminal evaluation/closeout lanes retain their
   reviewed historical desktop context and cannot qualify the current product.

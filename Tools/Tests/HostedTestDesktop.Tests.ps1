@@ -458,7 +458,7 @@ Describe 'Hosted foreground chord managed contracts' {
 }
 
 Describe 'Hosted foreground chord role policy' {
-    It 'permits only the opted-in project hosted native ARM64 role' {
+    It 'permits only selected project-hosted native x64 or opted-in ARM64 roles' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
         $assembly = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly
         $boundary = $assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
@@ -468,15 +468,24 @@ Describe 'Hosted foreground chord role policy' {
         $arm = [Runtime.InteropServices.Architecture]::Arm64
         $x64 = [Runtime.InteropServices.Architecture]::X64
         foreach ($sample in @(
-            @{request='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$true},
-            @{request=''; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
-            @{request='1'; actions='false'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
-            @{request='1'; actions='true'; runner='self-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
-            @{request='1'; actions='true'; runner='github-hosted'; repository='other/repo'; os=$arm; process=$arm; expected=$false},
-            @{request='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$arm; expected=$false},
-            @{request='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$x64; expected=$false}
+            @{request='default'; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$true},
+            @{request='default'; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$true},
+            @{request='default'; stock=''; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$true},
+            @{request=''; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$true},
+            @{request=''; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$false},
+            @{request='default'; stock='1'; actions='false'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$false},
+            @{request='default'; stock='1'; actions='true'; runner='self-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$false},
+            @{request='default'; stock='1'; actions='true'; runner='github-hosted'; repository='other/repo'; os=$x64; process=$x64; expected=$false},
+            @{request='default'; stock=''; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
+            @{request='original'; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$false},
+            @{request='1'; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$x64; expected=$false},
+            @{request='default'; stock='1'; actions='false'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
+            @{request='default'; stock='1'; actions='true'; runner='self-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$arm; expected=$false},
+            @{request='default'; stock='1'; actions='true'; runner='github-hosted'; repository='other/repo'; os=$arm; process=$arm; expected=$false},
+            @{request='default'; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$x64; process=$arm; expected=$false},
+            @{request='default'; stock='1'; actions='true'; runner='github-hosted'; repository='RedSalamanders/RedSalamander'; os=$arm; process=$x64; expected=$false}
         )) {
-            $actual = $policy.Invoke($null, [object[]]@($sample.request, $sample.actions, $sample.runner, $sample.repository, $sample.os, $sample.process))
+            $actual = $policy.Invoke($null, [object[]]@($sample.request, $sample.stock, $sample.actions, $sample.runner, $sample.repository, $sample.os, $sample.process))
             $actual | Should Be $sample.expected
         }
     }

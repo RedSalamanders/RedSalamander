@@ -184,9 +184,11 @@ namespace RedSalamander.Testing {
             if (downs == 1 || ups == 1) return new ushort[] { 0x12 };
             return new ushort[] { 0x87, 0x12 };
         }
-        internal static bool AllowsOwnedBoundaryChord(string request, string actions, string runner, string repository, Architecture os, Architecture process) {
-            return request == "1" && actions == "true" && runner == "github-hosted" && repository == "RedSalamanders/RedSalamander" &&
-                os == Architecture.Arm64 && process == Architecture.Arm64;
+        internal static bool AllowsOwnedBoundaryChord(string request, string stockRequest, string actions, string runner, string repository, Architecture os, Architecture process) {
+            // Keyboard recovery owns only this boundary; ARM64 stock-window permission stays separate.
+            return actions == "true" && runner == "github-hosted" && repository == "RedSalamanders/RedSalamander" &&
+                ((request == "default" && os == Architecture.X64 && process == Architecture.X64) ||
+                 (stockRequest == "1" && os == Architecture.Arm64 && process == Architecture.Arm64));
         }
         private IntPtr BoundarySubclassCallback(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr subclass, UIntPtr data) {
             if (message == 0x0312 && subclass == BoundarySubclassId && wParam.ToUInt64() == BoundaryHotkeyId && hotkeyArmed) {
@@ -218,10 +220,11 @@ namespace RedSalamander.Testing {
             return DefSubclassProc(window, message, wParam, lParam);
         }
         private void AcquireWithOwnedHotkey(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
-            if (!AllowsOwnedBoundaryChord(Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION"),
+            if (!AllowsOwnedBoundaryChord(Environment.GetEnvironmentVariable("REDSALAMANDER_HOSTED_TEST_DESKTOP"),
+                Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION"),
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT"),
                 Environment.GetEnvironmentVariable("GITHUB_REPOSITORY"), RuntimeInformation.OSArchitecture, RuntimeInformation.ProcessArchitecture))
-                throw new InvalidOperationException("The hosted boundary did not acquire real foreground ownership; keyboard admission is limited to the selected native ARM64 role.");
+                throw new InvalidOperationException("The hosted boundary did not acquire real foreground ownership; keyboard admission is limited to selected project-hosted native x64 or ARM64 roles.");
             // ABI/layer exception: the compiler-free inline .NET host cannot include
             // TestSupport.Tests.DirectedSelfTestInputWarning.h. Mirror its owned
             // ALT+F24 acknowledgement/release protocol for this existing neutral
@@ -1111,7 +1114,7 @@ function Invoke-RSWithHostedDefaultDesktop {
         closes its retained desktop handle. No input desktop is created or switched.
          A transient null foreground is tolerated only after an accepted return request,
          within the existing bounded wait; another window still fails restoration.
-        After direct foreground refusal, the opted-in project-hosted native ARM64 role may
+        After direct foreground refusal, the selected project-hosted native x64 or opted-in ARM64 role may
         use one guarded registered Alt+F24 handoff to the owned neutral window in 500 ms.
         This runner prelude precedes the child warning; product input retains the shared
         native warning. Held input, partial-release, focus and retirement failures reject it.
