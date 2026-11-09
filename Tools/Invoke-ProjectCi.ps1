@@ -121,7 +121,6 @@ foreach ($entry in $environment.GetEnumerator()) { [Environment]::SetEnvironment
 $env:VCPKG_REGISTRY_ROOT = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-registry'
 $number = [string]$context.batch.buildNumber
 $profile = @('-Platform',$Platform,'-Configuration',$Configuration)
-$started = [DateTime]::UtcNow
 Import-Module (Join-Path $root 'Tools/Modules/Testing/TestSandbox.psm1') -Force
 $env:REDSALAMANDER_TEST_ROOT = Join-Path ([IO.Path]::GetPathRoot($root)) 'RedSalamander.Perf'
 $null = Initialize-RSTestSandboxRoot -TestRoot $env:REDSALAMANDER_TEST_ROOT -RepoRoot $root -AllowExternalInitialization
@@ -129,6 +128,8 @@ $env:TEMP = New-RSTestSandboxScratchDirectory -RepoRoot $root -Harness UnifiedCI
 $env:TMP = $env:TEMP
 $receiptDirectory = Join-Path $env:REDSALAMANDER_TEST_ROOT "evidence/unified-ci/$($env:GITHUB_RUN_ID)/$Platform"
 $evidenceDirectory = Join-Path $env:REDSALAMANDER_TEST_ROOT 'evidence'
+$runResultReferencePath = Join-Path $receiptDirectory ('runner-' + [guid]::NewGuid().ToString('N') + '.json')
+[void][IO.Directory]::CreateDirectory($receiptDirectory)
 if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('evidence_directory=' + $evidenceDirectory) }
 if ($Phase -eq 'Production') {
     $env:RSBuildEnableTests = 'false'
@@ -244,7 +245,7 @@ Invoke-RSWithHostedTestDesktop -Action {
         return
     }
     $suite = if ($Phase -eq 'Qualification' -and $QualificationScope -eq 'Full') { 'Full' } else { 'CI' }
-    Run 'Tools/Run-AllTests.ps1' ($profile + @('-Suite',$suite,'-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot'))
+    Run 'Tools/Run-AllTests.ps1' ($profile + @('-Suite',$suite,'-ValidationMode','Fresh','-SkipBuild','-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-AllowAlternateVolumeTestRoot','-ResultReferencePath',$runResultReferencePath))
 }
 } finally {
     [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $priorStockPreparationRequest, 'Process')
@@ -253,14 +254,15 @@ Invoke-RSWithHostedTestDesktop -Action {
 if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished; it does not authorize production or publication.'; return }
-$summaries = @(Get-ChildItem (Join-Path $env:REDSALAMANDER_TEST_ROOT 'evidence/completed-runs') -Recurse -Filter 'run-all-tests-results.json' -File | Where-Object LastWriteTimeUtc -ge $started)
-if ($summaries.Count -ne 1) { throw 'Expected exactly one fresh completed CI-suite summary.' }
-$summary = Get-Content $summaries[0].FullName -Raw | ConvertFrom-Json -AsHashtable
+Import-Module (Join-Path $root 'Tools/Modules/Testing/TestRunSummary.psm1') -ErrorAction Stop
+$runResult = Read-RSRunResultReference -Path $runResultReferencePath -RepoRoot $root `
+    -TestRoot $env:REDSALAMANDER_TEST_ROOT -Platform $Platform -Configuration $Configuration -RequestedGate CI
+$summary = $runResult.Summary
 if ($summary.schema -cne 'red-salamander.run-all-tests.v2' -or $summary.repository_verdict -cne 'PASSED' -or
     $summary.case_counts.total -le 0 -or $summary.case_counts.failed -ne 0 -or
     $summary.counts.incomplete -ne 0 -or $summary.counts.invalidated -ne 0) { throw 'CI regression case evidence is incomplete.' }
 $evidence = @{ countUnit='required-case';registered=[int]$summary.case_counts.total;expectedSkipped=[int]$summary.case_counts.skipped;
-    discovered = [int]$summary.case_counts.total-[int]$summary.case_counts.skipped; executed = [int]$summary.case_counts.passed; evidence = (Get-CiEvidenceReference @($summaries[0].FullName)) }
+    discovered = [int]$summary.case_counts.total-[int]$summary.case_counts.skipped; executed = [int]$summary.case_counts.passed; evidence = (Get-CiEvidenceReference @($runResult.Path,$runResultReferencePath)) }
 $binaries = Get-CiProfileArtifacts -Context $context
 if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('smoke_harness=' + (Join-Path $root ".build/$Platform/Release/PluginContractTests.exe")) }
 

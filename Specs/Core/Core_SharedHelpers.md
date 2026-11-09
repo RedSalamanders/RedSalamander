@@ -300,6 +300,12 @@ deletes the current last run as a fallback for a failed rename.
 
 ## Build tooling helpers
 
+Exact native runner-to-CI result handoff uses `Write-RSRunResultReference` and
+`Read-RSRunResultReference` in `Tools/Modules/Testing/TestRunSummary.psm1`.
+The create-only sandbox record binds a final canonical summary's run ID/profile and
+SHA-256; consumers retain schema, gate and complete-execution checks. See the
+[validation evidence contract](../Testing/Testing_ValidationEvidence.md).
+
 | Behavior | Canonical owner | Contract |
 | --- | --- | --- |
 | Ghostty locked package directory | Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1, Expand-RSGhosttyRuntimeLockedPackages | Assembles Zig 0.17 hash-named packages from a validated Ghostty lock beneath a dedicated guarded .build child. Reuses Resolve-RSGuardedRepositoryPath and bounded canonical archive extraction; refuses nonempty destinations, escaped package names, changed archives and reparse output chains. Runtime builds and native qualification share this policy. See the Terminal runtime contract. |

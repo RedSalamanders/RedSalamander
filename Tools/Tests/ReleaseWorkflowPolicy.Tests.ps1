@@ -916,7 +916,7 @@ Describe 'Release workflow source contracts' {
         $admission | Should Match 'force = \$false'
     }
 
-    It 'preserves manual Terminal cache identity and conservatively keys automatic dependency binaries' {
+    It 'preserves Terminal cache identity and restricts ABI-package fallback to its bounded dependency bag' {
         $buildWorkflow = Get-Content (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
         $buildWorkflow | Should Match 'visualstudio2026buildtools -PackageVersion 118\.8\.1'
         $buildWorkflow | Should Match 'visualstudio2026-workload-vctools -PackageVersion 1\.0\.0'
@@ -936,7 +936,23 @@ Describe 'Release workflow source contracts' {
         $native | Should Match 'actions/cache/restore@[a-f0-9]{40}'
         $native | Should Match 'actions/cache/save@[a-f0-9]{40}'
         $native | Should Match "'Tools/\*\*'"
-        $native | Should Not Match 'restore-keys:'
+        foreach ($workflow in @(
+            @{text=$native; expected=2},
+            @{text=(Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/qualification.yml') -Raw); expected=1}
+        )) {
+            $fallbackSteps = @([regex]::Matches($workflow.text, '(?ms)^      - .*?(?=^      - |\z)') |
+                Where-Object { $_.Value -match '(?m)^          restore-keys:' })
+            $fallbackSteps.Count | Should Be $workflow.expected
+            foreach ($step in $fallbackSteps) {
+                $step.Value | Should Match '(?m)^(?:      - |        )uses: actions/cache/restore@[a-f0-9]{40}'
+                $step.Value | Should Match '(?m)^          path: \.build/ci/vcpkg-cache\r?$'
+                $prefix = [regex]::Match($step.Value, '(?m)^          restore-keys: \|\r?\n(?<keys>(?: {12}[^\r\n]*\r?\n)+)')
+                $prefix.Success | Should Be $true
+                $prefix.Groups['keys'].Value.Trim() | Should Be 'ci-deps-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform }}-'
+                $step.Value | Should Not Match 'path: \.build/(TerminalEngine|dependencies|x64|ARM64)'
+            }
+            $workflow.text | Should Match 'VCPKG_BINARY_SOURCES: clear;files,'
+        }
     }
 
     It 'executes the CI matrix gate through the verified short source from a foreign directory' {

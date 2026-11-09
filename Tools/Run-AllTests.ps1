@@ -138,6 +138,10 @@
     Optional output path for -ExplainPlan. It must remain beneath
     X:\RedSalamander.Perf\evidence.
 
+.PARAMETER ResultReferencePath
+    Create-only exact summary reference beneath the marked sandbox, for an unfiltered
+    Fresh CI or Full run. Parent must exist. Existing destinations are refused before
+    build/test launch. The reference binds final summary bytes and run/profile identity.
 .PARAMETER BuildNumber
     Optional explicit build number forwarded to build.ps1. Use this for reproducible
     closeout or when local persisted version state is intentionally unavailable.
@@ -241,6 +245,8 @@ param(
 
     [string]$ExplainPlanPath = '',
 
+    [string]$ResultReferencePath = '',
+
     [ValidateRange(0, [int]::MaxValue)]
     [int]$BuildNumber = 0,
 
@@ -314,6 +320,24 @@ $selectedTestRoot = Get-RSTestSandboxRoot `
         -RepoRoot $repoRoot `
         -AllowExternalInitialization:$AllowExternalTestRoot)
 $validationEvidenceRoot = Join-Path $selectedTestRoot 'evidence'
+if ($ResultReferencePath) {
+    if ($ExplainPlan -or $ValidationMode -ne 'Fresh' -or $Suite -notin @('CI','Full') -or $CaseFilter -or $CommandsFamily) {
+        Exit-RSInvalidRunnerInvocation 'ResultReferencePath requires an unfiltered Fresh CI or Full run.'
+    }
+    $ResultReferencePath = Assert-RSTestSandboxContainedPath -TestRoot $selectedTestRoot -Path $ResultReferencePath -RequireDescendant
+    if (Test-Path -LiteralPath $ResultReferencePath) { Exit-RSInvalidRunnerInvocation 'ResultReferencePath already exists; choose a fresh invocation path.' }
+    if (-not (Test-Path -LiteralPath (Split-Path $ResultReferencePath) -PathType Container)) {
+        Exit-RSInvalidRunnerInvocation 'ResultReferencePath parent must already exist in the marked sandbox.'
+    }
+    $referenceProbe = @{
+        schema='red-salamander.run-result-reference.v1'; run_id=('20000101T000000Z-1-' + ('0' * 32))
+        summary_path='evidence/contract-probe.json'; summary_sha256=('0' * 64)
+        platform=$Platform; configuration=$Configuration
+    } | ConvertTo-Json -Compress
+    if (-not (Test-Json -Json $referenceProbe -SchemaFile (Join-Path $repoRoot 'Specs/Testing/RunResultReference.schema.json') -ErrorAction SilentlyContinue)) {
+        Exit-RSInvalidRunnerInvocation 'The exact runner result-reference schema is missing or incompatible.'
+    }
+}
 $testMachineResources = Read-RSTestMachineResources `
     -TestRoot $selectedTestRoot `
     -SchemaPath (Join-Path $repoRoot 'Specs\Testing\TestMachineResources.schema.json')
@@ -358,6 +382,7 @@ Import-Module $validationImpactModule -Force -ErrorAction Stop
 
 $validationEvidenceModule = Join-Path $repoRoot 'Tools\Modules\Testing\ValidationEvidence.psm1'
 Import-Module $validationEvidenceModule -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunSummary.psm1') -ErrorAction Stop
 
 function Import-RSRunnerValidationModules {
     # build.ps1 and in-process Pester entries import modules in nested script
@@ -2426,6 +2451,10 @@ if ($summaryForConsumers.schema -eq 'red-salamander.run-all-tests.v2') {
     $runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $runSummaryPath -Encoding UTF8
 }
 $caseHistoryRows = @(Convert-RSTestRunSummaryToCaseHistoryRows -Summary $runSummary)
+if ($ResultReferencePath) {
+    Write-RSRunResultReference -Path $ResultReferencePath -SummaryPath $runSummaryPath -RepoRoot $repoRoot `
+        -TestRoot $selectedTestRoot -Platform $Platform -Configuration $Configuration
+}
 $caseHistoryPath = Join-Path $artifactRoot 'run-all-tests-case-history.jsonl'
 Convert-RSTestCaseHistoryRowsToJsonl -Rows $caseHistoryRows | Set-Content -LiteralPath $caseHistoryPath -Encoding UTF8
 $caseDashboardPath = Join-Path $artifactRoot 'run-all-tests-dashboard.md'

@@ -85,6 +85,12 @@ surface. Every tracked solution/project/import/runtime input must be a member of
 derived graph or an exact reviewed standalone rule; adding an ungoverned project input
 is a planning error rather than a silent fallback.
 
+The planner may retain at most 1,024 immutable pattern matchers per module instance,
+using ordinal pattern keys and the existing invariant case rules. Every path is still
+matched afresh; this cache contains no workspace, artifact, selection or test result.
+Eviction and concurrent readers cannot change decisions. Literal metacharacters,
+Unicode, single/double wildcards and separators retain the reviewed glob semantics.
+
 After shared-library adoption, current product UI test sources map to the live
 `Tests/ProductUiTests/ProductUiTests.vcxproj` consumer and the existing standalone
 validation surface. Retired `Common/DxUi` and `Tests/DxUiTests` projects must not remain
@@ -97,6 +103,12 @@ settings schemas, theme runtime data, performance budgets, terminal corpora/evid
 and normative consistency maps have explicit dependent build/test surfaces. An unknown
 `Specs/**/*.json` or `Specs/**/*.json5` input widens conservatively to Full. Only reviewed
 Markdown documentation may use the documentation-only/no-validation mapping.
+
+Changelog Markdown directly under `Changes/` has a reviewed no-native-build mapping.
+`Test-Changes.ps1` validates fragments before every non-explanation execution, including
+Affected and Full; PrePush additionally checks the base-bound exact-fold contract.
+Malformed fragments fail validation even when no native entry is affected. Executable,
+unknown-format and nested inputs in `Changes/` retain conservative fallback.
 
 `Run-AllTests.ps1 -ExplainPlan [-ImpactBase <local-commit-ish>]` publishes a deterministic
 schema-valid shadow decision before any artifact lock, build, or validation-entry launch.
@@ -115,6 +127,14 @@ success, 1 selected-test failure, 2 repository not evaluated, 3 invalid CLI/plan
 blocked/missing attestation, and 5 corrupt evidence.
 
 ## Trust domains
+
+An unfiltered Fresh CI/Full runner can publish a create-only `RunResultReference.schema.json`
+record through `-ResultReferencePath`. Its destination must be fresh and its existing parent
+inside the marked sandbox. It binds the exact final v2 summary run ID, relative path,
+SHA-256 and native profile. CI consumes this reference instead of searching archives by
+mtime or directory layout. The reader revalidates containment, schema, profile, gate,
+complete positive execution and summary bytes. The Release failure probe and ordinary
+regression/promotion checks remain required; transport alone never qualifies a build.
 
 Local receipts bind one physical checkout and output profile. Portable build
 attestations bind a producer job to a declared consumer in the same workflow run and are

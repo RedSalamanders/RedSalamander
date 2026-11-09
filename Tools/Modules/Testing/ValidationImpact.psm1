@@ -3,30 +3,47 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'ValidationFingerprint.psm1') -Scope Local -ErrorAction Stop
 
+# Cache only immutable pattern translations. Paths, source bytes and validation outcomes
+# are always evaluated again. Miss insertion is serialized; hits and matches are thread-safe.
+$script:RSImpactCache = [Collections.Concurrent.ConcurrentDictionary[string, regex]]::new([StringComparer]::Ordinal)
+$script:RSImpactGate = [object]::new()
 function Test-RSValidationImpactPattern {
     param([Parameter(Mandatory = $true)][string]$Pattern, [Parameter(Mandatory = $true)][string]$Path)
-    $builder = [Text.StringBuilder]::new('^')
-    for ($index = 0; $index -lt $Pattern.Length; $index++) {
-        $character = $Pattern[$index]
-        if ($character -eq '*' -and $index + 1 -lt $Pattern.Length -and $Pattern[$index + 1] -eq '*') {
-            $index++
-            if ($index + 1 -lt $Pattern.Length -and $Pattern[$index + 1] -eq '/') {
-                $index++
-                [void]$builder.Append('(?:.*/)?')
-            } else {
-                [void]$builder.Append('.*')
+    $key = $Pattern
+    $matcher = $null
+    if (-not $script:RSImpactCache.TryGetValue($key, [ref]$matcher)) {
+        [Threading.Monitor]::Enter($script:RSImpactGate)
+        try {
+            if (-not $script:RSImpactCache.TryGetValue($key, [ref]$matcher)) {
+                $builder = [Text.StringBuilder]::new('^')
+                for ($index = 0; $index -lt $Pattern.Length; $index++) {
+                    $character = $Pattern[$index]
+                    if ($character -eq '*' -and $index + 1 -lt $Pattern.Length -and $Pattern[$index + 1] -eq '*') {
+                        $index++
+                        if ($index + 1 -lt $Pattern.Length -and $Pattern[$index + 1] -eq '/') {
+                            $index++
+                            [void]$builder.Append('(?:.*/)?')
+                        } else {
+                            [void]$builder.Append('.*')
+                        }
+                    } elseif ($character -eq '*') {
+                        [void]$builder.Append('[^/]*')
+                    } elseif ($character -eq '?') {
+                        [void]$builder.Append('[^/]')
+                    } else {
+                        [void]$builder.Append([regex]::Escape([string]$character))
+                    }
+                }
+                [void]$builder.Append('$')
+                $expression = $builder.ToString()
+                $matcher = [regex]::new($expression, ([Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::CultureInvariant))
+                # Eviction changes cost only. Captured regex instances remain valid for active readers.
+                if ($script:RSImpactCache.Count -ge 1024) { $script:RSImpactCache.Clear() }
+                [void]$script:RSImpactCache.TryAdd($key, $matcher)
             }
-        } elseif ($character -eq '*') {
-            [void]$builder.Append('[^/]*')
-        } elseif ($character -eq '?') {
-            [void]$builder.Append('[^/]')
-        } else {
-            [void]$builder.Append([regex]::Escape([string]$character))
-        }
+        } finally { [Threading.Monitor]::Exit($script:RSImpactGate) }
     }
-    [void]$builder.Append('$')
-    return [regex]::IsMatch($Path, $builder.ToString(),
-        [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+    return $matcher.IsMatch($Path)
 }
 
 function Read-RSValidationImpactManifest {

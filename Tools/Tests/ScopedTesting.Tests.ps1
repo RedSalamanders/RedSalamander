@@ -3,6 +3,40 @@ Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.psm1') -Fo
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
 Describe 'Scoped testing and PR coverage contracts' {
+    It 'validates real fragments before affected execution and keeps explanation non-executing' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('fragment-admission-'+[guid]::NewGuid().ToString('N'))
+        $moduleDirectory=Join-Path $fixture 'Tools/Modules/Testing'
+        $documentationDirectory=Join-Path $fixture 'Tools/Modules/Documentation'
+        [void](New-Item -ItemType Directory -Path $moduleDirectory,$documentationDirectory,(Join-Path $fixture 'Changes') -Force)
+        foreach($relative in @('Test-Changes.ps1','Tools/Test-Changelog.ps1','Tools/Modules/Documentation/Changelog.psm1')) {
+            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination (Join-Path $fixture $relative)
+        }
+        'function Assert-ScopedTestNames { param($Root) return 1 }; Export-ModuleMember -Function Assert-ScopedTestNames' |
+            Set-Content -LiteralPath (Join-Path $moduleDirectory 'ScopedTesting.psm1')
+        @'
+param([switch]$ExplainPlan)
+'selected' | Set-Content -LiteralPath (Join-Path $PSScriptRoot '../launched.txt')
+$global:LASTEXITCODE=2
+'@ | Set-Content -LiteralPath (Join-Path $fixture 'Tools/Run-AllTests.ps1')
+        'Fragment instructions' | Set-Content -LiteralPath (Join-Path $fixture 'Changes/README.md')
+        "# Changelog`n`n## Unreleased`n" | Set-Content -LiteralPath (Join-Path $fixture 'CHANGELOG.md')
+        $fragment=Join-Path $fixture 'Changes/2026-11-09-example.md'
+        '- Valid fixture change.' | Set-Content -LiteralPath $fragment
+        $child=Join-Path $PSHOME 'pwsh.exe'
+        & $child -NoProfile -File (Join-Path $fixture 'Test-Changes.ps1') *> (Join-Path $fixture 'valid.log')
+        $LASTEXITCODE | Should Be 2
+        $launched=Join-Path $fixture 'launched.txt'
+        (Test-Path -LiteralPath $launched) | Should Be $true
+        Remove-Item -LiteralPath $launched
+        'Malformed fixture with no bullet.' | Set-Content -LiteralPath $fragment
+        & $child -NoProfile -File (Join-Path $fixture 'Test-Changes.ps1') *> (Join-Path $fixture 'invalid.log')
+        ($LASTEXITCODE -ne 0) | Should Be $true
+        (Test-Path -LiteralPath $launched) | Should Be $false
+        & $child -NoProfile -File (Join-Path $fixture 'Test-Changes.ps1') -Explain *> (Join-Path $fixture 'explain.log')
+        $LASTEXITCODE | Should Be 2
+        (Test-Path -LiteralPath $launched) | Should Be $true
+        $global:LASTEXITCODE=0
+    }
     It 'forwards explicit alternate-volume opt-in through Full and focused FileOps without enabling it by default' {
         $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('alternate-forwarding-'+[guid]::NewGuid().ToString('N'))
         $succeeded=$false
@@ -10,6 +44,7 @@ Describe 'Scoped testing and PR coverage contracts' {
             $moduleDirectory=Join-Path $fixture 'Tools/Modules/Testing'
             [void](New-Item -ItemType Directory -Path $moduleDirectory -Force)
             Copy-Item -LiteralPath (Join-Path $repoRoot 'Test-Changes.ps1') -Destination (Join-Path $fixture 'Test-Changes.ps1')
+            'param($Base)' | Set-Content -LiteralPath (Join-Path $fixture 'Tools/Test-Changelog.ps1')
             @'
 function Assert-ScopedTestNames { param($Root) return 1 }
 Export-ModuleMember -Function Assert-ScopedTestNames

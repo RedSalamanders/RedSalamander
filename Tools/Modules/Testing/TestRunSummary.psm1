@@ -4,6 +4,56 @@ Import-Module (Join-Path $PSScriptRoot 'ValidationFingerprint.psm1') -Scope Loca
 Import-Module (Join-Path $PSScriptRoot 'ValidationEvidence.psm1') -Scope Local -ErrorAction Stop
 
 Import-Module (Join-Path $PSScriptRoot 'TestInvocation.psm1') -Force -Scope Local
+Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1') -Scope Local -ErrorAction Stop
+
+function Write-RSRunResultReference {
+    [CmdletBinding()]
+    param([string]$Path, [string]$SummaryPath, [string]$RepoRoot, [string]$TestRoot,
+          [string]$Platform, [string]$Configuration)
+    $destination = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path $Path -RequireDescendant
+    $source = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path $SummaryPath -RequireDescendant
+    $summary = Read-RSValidationJsonFile -LiteralPath $source -AllowedRoot $TestRoot `
+        -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+    $record = [ordered]@{
+        schema='red-salamander.run-result-reference.v1'; run_id=$summary.run_id
+        summary_path=([IO.Path]::GetRelativePath($TestRoot,$source).Replace('\','/'))
+        summary_sha256=(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+        platform=$Platform; configuration=$Configuration
+    }
+    Write-RSAtomicCanonicalJsonFile -LiteralPath $destination -InputObject $record -AllowedRoot $TestRoot `
+        -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/RunResultReference.schema.json') -CreateNew
+}
+
+function Read-RSRunResultReference {
+    [CmdletBinding()]
+    param([string]$Path, [string]$RepoRoot, [string]$TestRoot, [string]$Platform,
+          [string]$Configuration, [ValidateSet('CI','Full')][string]$RequestedGate='CI')
+    $referencePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path $Path -RequireDescendant
+    $record = Read-RSValidationJsonFile -LiteralPath $referencePath -AllowedRoot $TestRoot `
+        -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/RunResultReference.schema.json')
+    if ($record.platform -cne $Platform -or $record.configuration -cne $Configuration) {
+        throw 'Runner result reference profile mismatch.'
+    }
+    Assert-RSValidationPathSet -Path @($record.summary_path)
+    $summaryPath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot `
+        -Path (Join-Path $TestRoot $record.summary_path) -RequireDescendant
+    $digest = (Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($digest -cne $record.summary_sha256) { throw 'Runner result summary digest mismatch.' }
+    $summary = Read-RSValidationJsonFile -LiteralPath $summaryPath -AllowedRoot $TestRoot `
+        -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+    if ($summary.run_id -cne $record.run_id -or $summary.requested_gate -cne $RequestedGate -or
+        $summary.validation_mode -cne 'Fresh' -or $summary.coverage_scope -cne 'complete' -or
+        $summary.repository_verdict -cne 'PASSED' -or $summary.case_counts.passed -le 0 -or
+        $summary.counts.executed -le 0 -or $summary.counts.reused -ne 0 -or
+        $summary.case_counts.total -ne ($summary.case_counts.passed + $summary.case_counts.failed + $summary.case_counts.skipped) -or
+        $summary.case_counts.failed -ne 0 -or $summary.counts.incomplete -ne 0 -or $summary.counts.invalidated -ne 0) {
+        throw 'Runner result summary is not complete matching regression evidence.'
+    }
+    if ((Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $digest) {
+        throw 'Runner result summary changed during verification.'
+    }
+    return [pscustomobject]@{ Path=$summaryPath; Summary=$summary }
+}
 
 function Get-RSValidationExitCode {
     [CmdletBinding()]
@@ -695,6 +745,8 @@ function Convert-RSTestRunSummaryToGitHubStepSummary {
 }
 
 Export-ModuleMember -Function @(
+    'Write-RSRunResultReference',
+    'Read-RSRunResultReference',
     'Get-RSValidationExitCode',
     'Set-RSTestRunSummaryFinalExitCode',
     'Convert-RSTestCaseForRunSummary',
