@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Exact canonical runner result reference",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "run_id", "summary_path", "summary_sha256", "platform", "configuration"],
+  "properties": {
+    "schema": {"const": "red-salamander.run-result-reference.v1"},
+    "run_id": {"type": "string", "maxLength": 128, "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$"},
+    "summary_path": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "summary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "platform": {"enum": ["x64", "ARM64"]},
+    "configuration": {"enum": ["Debug", "Release", "ASan Debug"]}
+  }
+}

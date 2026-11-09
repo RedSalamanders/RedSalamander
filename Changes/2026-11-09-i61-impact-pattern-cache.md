@@ -1,0 +1,1 @@
+- Reuse bounded immutable impact-pattern matchers during planning while reevaluating every path; preserve wildcard, literal, Unicode and invariant case behavior across cache hits and eviction.

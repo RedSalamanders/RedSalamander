@@ -1571,7 +1571,8 @@
         "Typed PASSED/FAILED/NOT_EVALUATED/invalid/blocked/corrupt process exit",
         "Markdown dashboard",
         "Case history",
-        "Whole-run evidence trees and create-only SHA-256 relocation receipts"
+        "Whole-run evidence trees and create-only SHA-256 relocation receipts",
+        "Optional create-only exact summary reference under the marked sandbox"
       ],
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
@@ -2558,7 +2559,8 @@
         "Tools/Tests/ValidationEvidence.Tests.ps1",
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
         "Tools/Tests/ValidationImpact.Tests.ps1",
-        "Tools/Tests/VcpkgInstallSafety.Tests.ps1"
+        "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
+        "Tools/Tests/RunResultReference.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer for Startrail evidence operations",
@@ -2627,7 +2629,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate the governed impact manifest and build graph, accumulate ordered path mappings including executable Specs inputs, widen unknown inputs, and emit deterministic Fresh/Resume/Affected plan decisions with scheduling-only cost estimates.",
+      "purpose": "Validate the governed impact manifest and build graph, accumulate ordered path mappings including executable Specs inputs, widen unknown inputs, and emit deterministic Fresh/Resume/Affected plan decisions with scheduling-only cost estimates. Reuses at most 1024 immutable invariant pattern matchers; paths and decisions remain fresh.",
       "usage": "Import from Run-AllTests.ps1 and focused Startrail impact tests; reviewed executable schemas/data select their explicit consumers, unknown Specs JSON/JSON5 widens to Full, Affected decisions always report incomplete repository coverage, and estimates never affect trust or reuse.",
       "usedBy": [
         "Tools/Run-AllTests.ps1",
@@ -2734,22 +2736,29 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance.",
+      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance. Publish and validate create-only exact CI summary references without timestamp discovery.",
       "usage": "Loaded through the TestRunPlan facade; summary consumers must prefer v2, treat BLOCKED as corrupt evidence, and retain explicit v1 compatibility handling during migration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Run-AllTests.ps1",
-        "Tools/Run-MtpLiveCloseout.ps1"
+        "Tools/Run-MtpLiveCloseout.ps1",
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Tests/RunResultReference.Tests.ps1"
       ],
       "prerequisites": [
         "Specs/Testing/RunAllTestsSummary.schema.json",
-        "Tools/Modules/Testing/ValidationEvidence.psm1"
+        "Tools/Modules/Testing/ValidationEvidence.psm1",
+        "Specs/Testing/RunResultReference.schema.json",
+        "Tools/Modules/Testing/TestSandbox.psm1"
       ],
-      "sideEffects": [],
+      "sideEffects": [
+        "Create-only result reference publication beneath the marked sandbox."
+      ],
       "outputs": [
         "Aggregate-v2 and compatibility-v1 run-summary objects",
         "Typed validation exit codes",
-        "Case-history rows, JSONL text, dashboard Markdown, and GitHub step-summary Markdown"
+        "Case-history rows, JSONL text, dashboard Markdown, and GitHub step-summary Markdown",
+        "Exact run-result reference JSON"
       ],
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
@@ -2757,7 +2766,8 @@
         "Tools/Tests/ValidationEvidence.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/MtpLiveCloseout.Tests.ps1",
-        "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"
+        "Tools/Tests/TestRunEvidenceArchive.Tests.ps1",
+        "Tools/Tests/RunResultReference.Tests.ps1"
       ],
       "replacement": null
     },
@@ -4805,7 +4815,7 @@
       "kind": "data",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Govern repository path classifications, accumulated validation impact tags, executable Specs schema/data consumers, expected build scope, documentation exclusions, and broad fail-closed fallback. Current product UI tests map to ProductUiTests.vcxproj; retired DxUi source/test projects have no live rules.",
+      "purpose": "Govern repository path classifications, accumulated validation impact tags, executable Specs schema/data consumers, expected build scope, documentation exclusions, and broad fail-closed fallback. Current product UI tests map to ProductUiTests.vcxproj; retired DxUi source/test projects have no live rules. Direct Changes Markdown stays native-inert behind mandatory fragment validation.",
       "usage": "Consumed only through ValidationImpact.psm1; every new project/import/runtime input and every executable Specs schema/data class must enter the reviewed graph or an exact reviewed standalone rule; unknown Specs JSON/JSON5 remains Full until reviewed.",
       "usedBy": [
         "Tools/Modules/Testing/ValidationImpact.psm1",
@@ -5139,6 +5149,33 @@
         "GitHub job output paths",
         "Pinned tool/registry and platform-private installed dependencies beneath .build"
       ]
+    },
+    {
+      "path": "Tools/Tests/RunResultReference.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Exercise exact runner summary transport, create-only publication, profile/gate binding, missing/corrupt/failed/filtered evidence and path escape refusal.",
+      "usage": "Run as the Startrail impact/Affected contract and through the current Tools Pester profile.",
+      "usedBy": [
+        "Tools/Run-AllTests.ps1"
+      ],
+      "prerequisites": [
+        "Tools/Modules/Testing/TestRunSummary.psm1",
+        "Specs/Testing/RunResultReference.schema.json",
+        "Specs/Testing/RunAllTestsSummary.schema.json"
+      ],
+      "sideEffects": [
+        "Creates retained synthetic summary/reference fixtures beneath the marked test sandbox."
+      ],
+      "outputs": [
+        "Focused Pester results and retained fixture evidence"
+      ],
+      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "tests": [
+        "self"
+      ],
+      "replacement": null
     }
   ],
   "rules": [

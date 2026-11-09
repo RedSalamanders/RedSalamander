@@ -12,6 +12,11 @@ on:
         type: choice
         options: [Normal, Full]
         default: Normal
+      platform:
+        description: Native execution architecture; All keeps the complete diagnostic matrix
+        type: choice
+        options: [All, x64, ARM64]
+        default: All
 permissions:
   contents: read
 concurrency:
@@ -20,8 +25,9 @@ concurrency:
 jobs:
   qualification:
     if: github.ref == 'refs/heads/main'
-    uses: RedSalamanders/.github/.github/workflows/qualification.yml@e32cf9f9b29f4e817decb09e1be44be7fc1a94de
+    uses: RedSalamanders/.github/.github/workflows/qualification.yml@fbe6a707eb5d11847ac1a982d1c3851ea32b2baf
     with:
-      engine_ref: e32cf9f9b29f4e817decb09e1be44be7fc1a94de
+      engine_ref: fbe6a707eb5d11847ac1a982d1c3851ea32b2baf
       configuration: ${{ inputs.configuration }}
       scope: ${{ inputs.scope }}
+      platform: ${{ inputs.platform }}

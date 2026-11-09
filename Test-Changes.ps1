@@ -72,7 +72,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 # Pending fragments are expected: they are folded on the default branch after merge. CHANGELOG.md may change only by such a fold.
 # BaseRef defaults to origin/HEAD for the impact comparison; the changelog is compared with origin/main unless a BaseRef is supplied.
-if (-not $Explain -and $Mode -eq 'PrePush') { & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') -Base $(if ($PSBoundParameters.ContainsKey('BaseRef') -and $BaseRef) { $BaseRef } else { 'origin/main' }) }
+if (-not $Explain) {
+    $changelogArguments = @{}
+    if ($Mode -eq 'PrePush') {
+        $changelogArguments.Base = if ($PSBoundParameters.ContainsKey('BaseRef') -and $BaseRef) { $BaseRef } else { 'origin/main' }
+    }
+    & (Join-Path $PSScriptRoot 'Tools/Test-Changelog.ps1') @changelogArguments
+}
 Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
 Write-Host "Native test naming: $(Assert-ScopedTestNames $PSScriptRoot) files checked."
 if ($Suite -and $Mode -ne 'Affected') {throw 'Focused Suite is valid only for Affected iteration.'}

@@ -26,6 +26,36 @@ Describe 'Operation Startrail governed impact graph' {
         $script:plan = New-RSImpactPlan
     }
 
+    It 'preserves literal, wildcard, Unicode and invariant case decisions across cache hits and eviction' {
+        $module = Get-Module -Name ValidationImpact -All | Where-Object Path -eq (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationImpact.psm1') | Select-Object -First 1
+        $matchPattern = & $module { (Get-Command Test-RSValidationImpactPattern).ScriptBlock }
+        $cases = @(
+            @('**/*.cpp','case.cpp',$true), @('**/*.cpp','Tests/case.cpp',$true),
+            @('Tests/*.cpp','Tests/nested/case.cpp',$false), @('Tests/?.cpp','Tests/a.cpp',$true),
+            @('Tests/?.cpp','Tests/ab.cpp',$false), @('**/a+[1](x).cpp','Tests/a+[1](x).cpp',$true),
+            @('**/a+[1](x).cpp','Tests/aaaa1x.cpp',$false), @('**/日本語?.md','docs/日本語1.md',$true),
+            @('I/**','i/file.cpp',$true), @('I/**','ı/file.cpp',$false),
+            @('Tests/*.cpp','Tests\case.cpp',$false)
+        )
+        $culture = [Globalization.CultureInfo]::CurrentCulture
+        try {
+            foreach ($name in @('en-US','tr-TR')) {
+                [Globalization.CultureInfo]::CurrentCulture = [Globalization.CultureInfo]::GetCultureInfo($name)
+                foreach ($round in 1..2) {
+                    foreach ($case in $cases) {
+                        (& $matchPattern -Pattern $case[0] -Path $case[1]) | Should Be $case[2]
+                    }
+                }
+                foreach ($index in 1..1100) {
+                    (& $matchPattern -Pattern "eviction/$index/*.cpp" -Path "eviction/$index/case.cpp") | Should Be $true
+                }
+                foreach ($case in $cases) {
+                    (& $matchPattern -Pattern $case[0] -Path $case[1]) | Should Be $case[2]
+                }
+            }
+        } finally { [Globalization.CultureInfo]::CurrentCulture = $culture }
+    }
+
     It 'maps native formatter acquisition inputs to tooling coverage' {
         foreach ($path in @('Build/clang-format.json', 'Tools/Install-ClangFormat.ps1')) {
             $decision = Get-RSValidationImpactDecision -Manifest $manifest `
@@ -100,6 +130,23 @@ Describe 'Operation Startrail governed impact graph' {
             -ValidationPlan $plan
         $decision.advisory_build_action | Should Be 'none'
         @($decision.entries | Where-Object affected).Count | Should Be 0
+    }
+
+    It 'keeps fragment and plan Markdown native-inert while unknown Changes input still widens' {
+        $paths = @('Changes/2026-11-09-example.md', 'Specs/Plans/WIP/README.md', 'Specs/Plans/WIP/example.md')
+        $decision = Get-RSValidationImpactDecision -Manifest $manifest `
+            -WorkspaceSnapshot (New-RSImpactSnapshot @($paths | ForEach-Object { [pscustomobject]@{path=$_;old_path=$null} })) `
+            -ValidationPlan $plan
+        $decision.advisory_build_action | Should Be 'none'
+        @($decision.entries | Where-Object affected).Count | Should Be 0
+        ($decision.matched_impact_rules -contains 'documentation.changes') | Should Be $true
+        foreach ($path in @('Changes/generator.ps1', 'Changes/data.json', 'Changes/nested/runtime.md')) {
+            $unknown = Get-RSValidationImpactDecision -Manifest $manifest `
+                -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{path=$path;old_path=$null})) `
+                -ValidationPlan $plan
+            $unknown.advisory_build_action | Should Be 'full'
+            @($unknown.entries | Where-Object affected).Count | Should Be $plan.entries.Count
+        }
     }
 
     It 'selects executable Specs inputs and keeps only Markdown prose inert' {
