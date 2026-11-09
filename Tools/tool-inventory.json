@@ -886,7 +886,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Invoke the lock-driven Ghostty product or isolated candidate runtime lifecycle, sharing one disposable compiler cache across authenticated dependency fetches while preserving every hash check and success/failure cleanup.",
+      "purpose": "Invoke the lock-driven Ghostty product or isolated candidate runtime lifecycle, sharing one disposable compiler cache across authenticated dependency fetches, with bounded transient archive-download retries and every hash/offline check and success/failure cleanup.",
       "usage": "Invoked without candidate arguments by product builds; reviewed upgrades supply both candidate paths below .build/TerminalEngineUpgrade.",
       "usedBy": [
         "Directory.Build.targets",
@@ -3247,7 +3247,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, the lock's Zig archive for the machine's OS architecture, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Bounded guarded cleanup preserves primary fetch failures; command/lease progress and output-drain heartbeats preserve separate native stream capture, and every contained child is bounded with a process-tree snapshot before termination.",
+      "purpose": "Validate Ghostty locks and execute contained Product/candidate lifecycles with complete dependencies/notices, the lock's Zig archive for the machine's OS architecture, repository-local Zig caches, and shared guarded closed-package staging for Zig 0.17 builds and native qualification. Archive downloads use bounded transient HTTP/transport retries with unchanged exact hashes/offline refusal. Bounded guarded cleanup preserves primary fetch failures; command/lease progress and output-drain heartbeats preserve separate native stream capture, and every contained child is bounded with a process-tree snapshot before termination.",
       "usage": "Import through Build-GhosttyTerminalRuntime.ps1; Product mode selects the canonical lock, while candidate mode requires explicit contained lock and output paths with no fallback.",
       "usedBy": [
         ".github/workflows/ghostty-runtime-native-qualification.yml",
@@ -4128,7 +4128,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation. Reject cross-generation download filename collisions against the retained pre-upgrade lock. Verify transient/open-file cleanup, bounded permanent-lock failure and original-error preservation.",
+      "purpose": "Verify Ghostty lock identity, candidate/Product isolation, thin wrapper delegation, loader export closure, and field-specific fail-closed validation. Reject cross-generation download filename collisions against the retained pre-upgrade lock. Verify transient/open-file cleanup, bounded permanent-lock failure, original-error preservation and actual curl transient/permanent HTTP behavior with fixed download bounds.",
       "usage": "Run after any Ghostty product lock, schema, lifecycle, builder, overlay, notice, or loader-export change.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",

@@ -33,6 +33,97 @@ function New-RSGhosttyLockedPackageFixture {
     }
 }
 
+Describe 'Ghostty archive download retries' {
+    It 'bounds both actual archive callers without broad permanent-error retries' {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile($modulePath,[ref]$tokens,[ref]$errors)
+        @($errors).Count | Should Be 0
+        $calls=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and
+            $node.GetCommandName() -ceq 'Invoke-CheckedProcess' -and $node.Extent.Text.Contains('Get-RSGhosttyRuntimeDownloadArguments')},$true))
+        $calls.Count | Should Be 2
+        foreach($call in $calls){$call.Extent.Text | Should Match '-TimeoutSeconds 540'}
+        $arguments=& (Get-Module GhosttyRuntimeLifecycle) {Get-RSGhosttyRuntimeDownloadArguments -Uri 'https://example.invalid/pinned.zip' -Destination 'fixture.partial'}
+        foreach($pair in @(@('--retry','3'),@('--retry-delay','2'),@('--retry-max-time','360'),@('--connect-timeout','20'),@('--max-time','120'))){
+            $arguments[[Array]::IndexOf($arguments,$pair[0])+1] | Should Be $pair[1]
+        }
+        ($arguments -contains '--retry-all-errors') | Should Be $false
+    }
+
+    It 'executes real curl against owned loopback responses: <Name>' -TestCases @(
+        @{Name='504 then exact success';Codes=@(504,200);ExpectedRequests=2;ExpectedExit=0},
+        @{Name='404 is permanent';Codes=@(404);ExpectedRequests=1;ExpectedExit=22},
+        @{Name='504 retry count is bounded';Codes=@(504,504,504,504);ExpectedRequests=4;ExpectedExit=22}
+    ) {
+        param($Name,$Codes,$ExpectedRequests,$ExpectedExit)
+        if(-not ('RSGhosttyDownloadHttpV1' -as [type])){
+            Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
+public sealed class RSGhosttyDownloadHttpV1 : IDisposable {
+    readonly TcpListener listener;
+    readonly int[] codes;
+    public readonly Task Worker;
+    public int Port { get; private set; }
+    public int Requests { get; private set; }
+    public RSGhosttyDownloadHttpV1(int[] responses) {
+        codes=responses;
+        listener=new TcpListener(IPAddress.Loopback,0);
+        listener.Start(); Port=((IPEndPoint)listener.LocalEndpoint).Port;
+        Worker=Task.Run((Action)Serve);
+    }
+    void Serve() {
+        foreach(int code in codes) {
+            var accept=listener.AcceptTcpClientAsync();
+            if(!accept.Wait(10000)) throw new TimeoutException("Owned HTTP fixture saw no request.");
+            using(var client=accept.GetAwaiter().GetResult())
+            using(var stream=client.GetStream()) {
+                stream.ReadTimeout=10000;
+                var request=new StringBuilder();
+                while(request.Length<16384 && !request.ToString().EndsWith("\r\n\r\n",StringComparison.Ordinal)) {
+                    int next=stream.ReadByte(); if(next<0) throw new IOException("Incomplete fixture HTTP request.");
+                    request.Append((char)next);
+                }
+                if(request.Length>=16384) throw new IOException("Unbounded fixture request.");
+                Requests++;
+                byte[] body=Encoding.ASCII.GetBytes(code==200 ? "synthetic-archive-input" : "controlled HTTP failure");
+                byte[] header=Encoding.ASCII.GetBytes("HTTP/1.1 "+code+" Controlled\r\nContent-Length: "+body.Length+"\r\nConnection: close\r\n\r\n");
+                stream.Write(header,0,header.Length);stream.Write(body,0,body.Length);stream.Flush();
+            }
+        }
+    }
+    public void Dispose() { listener.Stop(); }
+}
+'@
+        }
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')
+        $server=[RSGhosttyDownloadHttpV1]::new([int[]]$Codes)
+        $child=$null
+        try {
+            $destination=Join-Path $TestDrive ($Name.Replace(' ','-')+'.partial')
+            $uri="http://127.0.0.1:$($server.Port)/synthetic-archive"
+            $arguments=& (Get-Module GhosttyRuntimeLifecycle) {param($u,$p) Get-RSGhosttyRuntimeDownloadArguments -Uri $u -Destination $p} $uri $destination
+            $info=New-RSProcessStartInfo -FilePath (Get-Command curl.exe -ErrorAction Stop).Source -Arguments $arguments -WorkingDirectory ([string]$TestDrive)
+            $info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+            $child=Start-RSContainedProcess -ProcessStartInfo $info
+            $stdout=$child.StandardOutput.ReadToEndAsync();$stderr=$child.StandardError.ReadToEndAsync()
+            $child.WaitForExit(15000) | Should Be $true
+            $child.WaitForExit();$child.ExitCode | Should Be $ExpectedExit
+            $null=$stdout.GetAwaiter().GetResult();$null=$stderr.GetAwaiter().GetResult()
+            $server.Worker.Wait(15000) | Should Be $true
+            $server.Worker.GetAwaiter().GetResult()
+            $server.Requests | Should Be $ExpectedRequests
+            if($ExpectedExit -eq 0){[IO.File]::ReadAllText($destination) | Should BeExactly 'synthetic-archive-input'}
+        } finally {
+            Close-RSContainedProcess -Process $child
+            $server.Dispose()
+        }
+    }
+}
+
 Describe 'Ghostty runtime rollback notice contract' {
     It 'keeps all eight locked notices in the documented atomic rollback unit' {
         $lock = Read-RSGhosttyRuntimeLock -LiteralPath $lockPath -SchemaPath $schemaPath -RepoRoot $repoRoot

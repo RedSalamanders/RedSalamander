@@ -1,0 +1,1 @@
+- Retry transient Ghostty/Zig archive download failures within explicit connection, transfer and process bounds while preserving every locked hash and offline check.

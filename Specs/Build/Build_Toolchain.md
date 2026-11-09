@@ -704,6 +704,15 @@ and unmaps `R:`. An existing mapping is never removed automatically: the builder
 reports the mapping and the exact manual inspection/removal commands. Every native
 child is launched through the kill-on-close containment helper.
 
+Locked Ghostty/Zig source archive downloads retry only curl's documented transient transport/HTTP failures,
+including HTTP 504, up to three retries with a two-second delay. Connection establishment is bounded to 20s
+and each transfer attempt to 120s; the retry-start window is 360s and the contained download process has a
+separate 540s failure bound. The existing output-drain bound still applies. A permanent HTTP failure remains
+fatal and successful transport never waives exact archive/content/executable/license hashes or layout checks.
+Offline runs never download. Partial files are never accepted as a qualified archive. See the
+[curl retry contract](https://curl.se/docs/manpage.html#--retry); this policy retries the dependency operation,
+without retrying or relabeling an entire native build/test campaign.
+
 Packaging has a separate repository-wide coordination scope because x64 and
 ARM64 packaging can both publish beneath `.build\AppPackages`. The lock is acquired
 only after compilation succeeds and is held through portable ZIP and Winget manifest
