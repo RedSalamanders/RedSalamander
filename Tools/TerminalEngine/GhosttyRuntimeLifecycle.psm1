@@ -7,6 +7,14 @@ Import-Module $textIdentityModule -Scope Local -ErrorAction Stop
 Import-Module $exportIdentityModule -Scope Local -ErrorAction Stop
 Import-Module $canonicalJsonModule -Scope Local -ErrorAction Stop
 
+function Get-RSGhosttyRuntimeDownloadArguments {
+    param([Parameter(Mandatory)][string]$Uri,[Parameter(Mandatory)][string]$Destination)
+    # curl retries only its documented transient transport/HTTP failures. Permanent HTTP errors and
+    # successful-but-wrong bytes still fail through the existing exit, archive and exact SHA-256 gates.
+    return @('--fail', '--location', '--silent', '--show-error', '--retry', '3', '--retry-delay', '2',
+        '--retry-max-time', '360', '--connect-timeout', '20', '--max-time', '120', '--output', $Destination, $Uri)
+}
+
 function Assert-RSGhosttyRuntimeLockHash {
     param(
         [Parameter(Mandatory = $true)][string]$Field,
@@ -885,7 +893,8 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
         $curlCommand = Get-Command curl.exe -ErrorAction Stop
         [void](Invoke-CheckedProcess `
                 -FilePath $curlCommand.Source `
-                -ArgumentList @('--fail', '--location', '--silent', '--show-error', '--output', $temporaryArchive, $zigArchiveUri) `
+                -ArgumentList (Get-RSGhosttyRuntimeDownloadArguments -Uri $zigArchiveUri -Destination $temporaryArchive) `
+                -TimeoutSeconds 540 `
                 -WorkingDirectory $downloadsRoot)
         Move-Item -LiteralPath $temporaryArchive -Destination $zigArchive
     }
@@ -1002,7 +1011,8 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
                 $curlCommand = Get-Command curl.exe -ErrorAction Stop
                 [void](Invoke-CheckedProcess `
                         -FilePath $curlCommand.Source `
-                        -ArgumentList @('--fail', '--location', '--silent', '--show-error', '--output', $temporarySourceArchive, [string]$dependency.sourceArchive.url) `
+                        -ArgumentList (Get-RSGhosttyRuntimeDownloadArguments -Uri ([string]$dependency.sourceArchive.url) -Destination $temporarySourceArchive) `
+                        -TimeoutSeconds 540 `
                         -WorkingDirectory $downloadsRoot)
                 Move-Item -LiteralPath $temporarySourceArchive -Destination $sourceArchive
             }

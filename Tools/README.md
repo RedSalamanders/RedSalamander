@@ -1,5 +1,9 @@
 # Repository tooling
 
+Locked Ghostty/Zig archive downloads use bounded transient HTTP/transport retries before failing the
+build. Permanent failures, wrong hashes and invalid archive layouts remain fatal; offline builds do not
+download. See `Build-GhosttyTerminalRuntime.ps1` help and `Specs/Build/Build_Toolchain.md` for the bounds.
+
 The manual native suite defaults to Full. Its explicit CommandsHandoff, FileOpsVolumes and
 ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
 after checking exact archived native results, quarantine state and source-bound receipt.

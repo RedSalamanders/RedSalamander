@@ -34,6 +34,7 @@ The delegated lifecycle preserves runtime identity schemaVersion = 5 and pairing
 Zig bootstrap, build, and fetch caches use explicit per-child repository-local environment paths, preserving caller variables.
 The lock's Zig archive for this machine's OS architecture is used: native aarch64 Zig on ARM64 hosts, never the x86-64 build under emulation.
 Each native child must exit within 30 minutes and close its output within 120 seconds after exit. Otherwise the builder logs a snapshot of the contained process tree, terminates only that tree, and fails.
+Archive downloads use curl's transient-error retries: at most three retries, two-second delay, 20-second connect and 120-second transfer bounds, and a 360-second retry-start window. Their contained process has a separate 540-second bound. Offline behavior and all archive/toolchain hash checks remain required.
 
 Owned temporary-cache cleanup retries I/O/access failures up to 20 attempts with 250 ms delays. A failed fetch retains its original error when cleanup also fails; independently owned processes are never terminated.
 Native-command and lease progress goes to the information stream, including periodic waits and post-exit output drainage. Captured native stdout/stderr stay separate and unchanged; progress does not print arbitrary URI arguments.
