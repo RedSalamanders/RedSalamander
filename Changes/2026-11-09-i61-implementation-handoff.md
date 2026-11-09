@@ -1,0 +1,1 @@
+- Rewrite and relocate I61's organization-wide testing and integration acceleration handoff to the shared .github project's Specs/Plans/WIP, replacing the product-owned copy with an ownership link and adding the WIP-to-Done completion rule and indexes there; implementation and native qualification remain pending.
