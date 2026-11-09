@@ -1,0 +1,2 @@
+- Record the I61 cross-repository testing and integration acceleration option catalog (`Specs/Plans/WIP/TestingAndIntegrationAcceleration_2026-11-09.md`) and index it in `Specs/Plans/WIP/README.md` for owner review across `RedSalamander`, `DxUi`, `RedPrism`, `RedTilde`, and `RedXe`.
+  Validation: `Get-SpecInventory.ps1 -FailOnFindings` and `Test-Changelog.ps1` pass; no normative contract or runtime behavior is changed until selected options are approved.
