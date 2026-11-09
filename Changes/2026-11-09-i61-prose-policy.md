@@ -1,0 +1,1 @@
+- Adopt explicit owned-prose exclusions and the shared CI guard so new runtime Markdown and notice files retain native qualification; preserve existing native gates and historical artifact identity.
