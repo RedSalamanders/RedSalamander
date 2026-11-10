@@ -706,6 +706,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   completes. Desktop handles and synchronization objects retire only after the join.
   Retirement preserves simultaneous action, restoration, join and
   handle-release errors; a timeout is never reported as successful restoration.
+  The entry wrapper logs the complete retirement exception chain before propagating failure,
+  so hosted logs preserve the boundary cause hidden by PowerShell's outer invocation message.
   The child uses the existing native warning and original focus/input assertions. Its containment job
   must drain before the process-desktop scope retires, the original foreground and native focus
   are restored, the desktop handle closes and the interactive mutex releases. A foreign desktop or

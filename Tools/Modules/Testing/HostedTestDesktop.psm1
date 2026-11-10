@@ -1128,7 +1128,8 @@ function Invoke-RSWithHostedDefaultDesktop {
     .PARAMETER Action
         Synchronous entry operation that closes its containment job before returning.
     .OUTPUTS
-        Action output and boundary/readiness/restoration diagnostics.
+        Action output and boundary/readiness/restoration diagnostics, including the
+        complete exception chain when retirement fails. Failure remains fatal.
     .NOTES
         Owns only a neutral foreground window on the ephemeral hosted runner's Default desktop.
         With the project adapter's approved ARM64 opt-in, prepares only the three identified
@@ -1161,7 +1162,11 @@ function Invoke-RSWithHostedDefaultDesktop {
                 Write-Host ('Hosted Default desktop retired: ' + $desktop.Name + '; restored=' + $desktop.Restored)
                 if ($desktop.Restored -ne $true) { throw 'The hosted Default desktop did not restore its original foreground and focus.' }
             }
-        } catch { $restoreError = $_ }
+        } catch {
+            $restoreError = $_
+            # PowerShell's outer method-invocation message hides the native boundary cause.
+            Write-Host ('Hosted Default desktop retirement exception: ' + $_.Exception.ToString())
+        }
     }
     if ($null -ne $actionError -and $null -ne $restoreError) {
         throw [AggregateException]::new('Native entry and hosted desktop restoration both failed.', [Exception[]]@($actionError.Exception, $restoreError.Exception))

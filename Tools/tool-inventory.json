@@ -2697,7 +2697,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request.",
+      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure.",
       "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest and Get-RSHostedStockPreparationRequest for pure policy selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. The project adapter opts eligible hosted native ARM64 entries into the wrapper's private stock preparation; paired studies retain the original fixture. Local preparation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
@@ -5001,7 +5001,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard build/runtime/package identity and real effective compiler metadata across all six profiles.",
+      "purpose": "Guard build/runtime/package identity and real effective compiler metadata across all six profiles; execute the manual native platform selector for all supported inputs and runner labels.",
       "usage": "Current tooling profile; RequiresBuildToolchain additionally evaluates real MSBuild items without compilation.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"

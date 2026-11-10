@@ -263,7 +263,7 @@ Describe 'Lighter DxUi source restore' {
 
 Describe 'DxUi consumer profile evaluation' {
     It 'uses the first-party host during restore and restores the caller environment after success or failure' {
-        $root = Join-Path $TestDrive 'host-restore'
+        $root = Join-Path $TestDrive ('host-restore-' + [guid]::NewGuid().ToString('N'))
         # Exercise a genuinely long Git metadata path in both focused and deeper Full sandboxes.
         # Size the padding from the shortened source locator rather than the old 40-character folder.
         $metadataSuffix = '.build/dependencies/DxUi/source/' + ('0' * 16) + '/.git/hooks/fsmonitor-watchman.sample'
@@ -304,9 +304,15 @@ function Get-DxUiConsumerBuildIdentity {
 }
 Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
 '@ | Set-Content -LiteralPath (Join-Path $origin 'Tools/ConsumerBuild.psm1')
-        & git init --quiet $origin
-        & git -C $origin add .
-        & git -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        # The fixture intentionally exceeds MAX_PATH, including Git's own object database.
+        # Configure each bootstrap command before it can read a repository-local setting.
+        & git -c core.longpaths=true init --quiet $origin
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize long-path compiler-host fixture.' }
+        & git -c core.longpaths=true -C $origin config core.longpaths true
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot configure long-path compiler-host fixture.' }
+        & git -c core.longpaths=true -C $origin add .
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot stage long-path compiler-host fixture.' }
+        & git -c core.longpaths=true -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize compiler-host fixture.' }
         $head = (& git -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |

@@ -777,8 +777,33 @@ Describe 'Pinned build-tool and CI identity' {
         $asan | Should Match 'workflow_dispatch:'
         $asan | Should Not Match 'schedule:|pull_request:|push:'
         $asan | Should Match 'configuration: ASan Debug'
-        $qualification | Should Match 'platform: x64'
-        $qualification | Should Match 'platform: ARM64'
+        $qualification | Should Match 'default: All'
+        $qualification | Should Match 'matrix: \$\{\{ fromJSON\(needs.select-platforms.outputs.matrix\) \}\}'
+        # Execute the actual pinned selector; static matrix spelling is not the architecture contract.
+        $body=[regex]::Match($qualification,'(?m)^      - name: Select the requested qualification architectures\r?\n[\s\S]*?^        run: \|\r?\n(?<body>(?:          [^\r\n]*\r?\n)+)').Groups['body'].Value
+        $body.Length | Should BeGreaterThan 0
+        $selector=($body -split '\r?\n'|ForEach-Object{$_ -replace '^          ',''}) -join "`n"
+        $oldPlatform=$env:CI_QUALIFICATION_PLATFORM; $oldOutput=$env:GITHUB_OUTPUT
+        try {
+            foreach($selection in @('All','x64','ARM64')) {
+                $env:CI_QUALIFICATION_PLATFORM=$selection
+                $env:GITHUB_OUTPUT=Join-Path $TestDrive ('qualification-'+[guid]::NewGuid().ToString('N')+'.txt')
+                & ([scriptblock]::Create($selector))
+                $lines=@(Get-Content -LiteralPath $env:GITHUB_OUTPUT)
+                $lines.Count | Should Be 1
+                $matrix=($lines[0] -replace '^matrix=','')|ConvertFrom-Json
+                $expected=if($selection -ceq 'All'){@('x64','ARM64')}else{@($selection)}
+                (@($matrix.include.platform) -join ',') | Should Be ($expected -join ',')
+                foreach($entry in $matrix.include) {
+                    $entry.runner | Should Be $(if($entry.platform -ceq 'x64'){'windows-2025-vs2026'}else{'windows-11-vs2026-arm'})
+                }
+            }
+            $env:CI_QUALIFICATION_PLATFORM='arm64'
+            { & ([scriptblock]::Create($selector)) } | Should Throw 'Qualification platform must be All, x64 or ARM64.'
+        } finally {
+            [Environment]::SetEnvironmentVariable('CI_QUALIFICATION_PLATFORM',$oldPlatform,'Process')
+            [Environment]::SetEnvironmentVariable('GITHUB_OUTPUT',$oldOutput,'Process')
+        }
         $adapter | Should Match '--asan-seed-heap-overflow'
         $adapter | Should Match 'seed.exitCode -eq 0'
         $adapter | Should Match 'not rejected with an AddressSanitizer diagnostic'

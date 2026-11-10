@@ -121,10 +121,13 @@ Describe 'Hosted Default desktop entry lifetime' {
             $script:priorDefaultDesktopEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
-        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; ReportRestored=$true }
+        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; NestedRestoreFailure=$false; ReportRestored=$true }
         $lease = [pscustomobject]@{ Name='Default'; Restored=$false; ForegroundBoundaryReady=$true }
         $lease | Add-Member -MemberType ScriptMethod -Name Dispose -Value {
             $global:rsDefaultDesktopTest.Events.Add('restore')
+            if ($global:rsDefaultDesktopTest.NestedRestoreFailure) {
+                throw [InvalidOperationException]::new('Hosted boundary retirement failed.', [TimeoutException]::new('seeded boundary join threshold exceeded'))
+            }
             if ($global:rsDefaultDesktopTest.FailRestore) { throw 'seeded restore failure' }
             $this.Restored=$global:rsDefaultDesktopTest.ReportRestored
         }
@@ -236,6 +239,17 @@ Describe 'Hosted Default desktop entry lifetime' {
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 0 } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'did not restore its original foreground and focus'
+    }
+    It 'logs the inner retirement cause while retaining failure of a successful native entry' {
+        Mock Write-Host {} -ModuleName HostedTestDesktop
+        $global:rsDefaultDesktopTest.NestedRestoreFailure=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'Hosted boundary retirement failed'
+        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly -ParameterFilter {
+            "$Object" -match 'Hosted Default desktop retirement exception:' -and
+            "$Object" -match 'System.TimeoutException: seeded boundary join threshold exceeded'
+        }
     }
     It 'refuses local invocation before any desktop or native action' {
         $env:GITHUB_ACTIONS='false'

@@ -20,7 +20,8 @@ After an accepted return request it tolerates a transient null foreground within
 while still rejecting another window and requiring the original foreground and focus.
 Each interactive entry holds its existing mutex, explicitly directs contained children to Default,
 and uses the existing native warning and assertions. No input desktop is created or switched.
-Boundary setup and restoration errors remain failures. A filtered diagnostic remains
+Boundary setup and restoration errors remain failures; retirement logs include the complete
+exception chain before the error propagates. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 
 The project adapter selects approved stock-surface preparation only for its hosted native ARM64
