@@ -5953,7 +5953,19 @@ private:
         },
             5000ms);
         Check(reservationObserved, L"Stale-generation test observes an in-flight speculative reservation", success);
+        if (reservationObserved)
+        {
+            // Exercise a delayed observer beyond the old 250 ms worker sleep. The
+            // reservation must remain held until this harness explicitly releases it.
+            const ULONGLONG observeAfter = GetTickCount64() + 350ull;
+            static_cast<void>(PumpUntil([&]() noexcept { return GetTickCount64() >= observeAfter; }, 1000ms));
+            snapshot                 = {};
+            const bool stillReserved = SendMessageW(window, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&snapshot)) != FALSE &&
+                                       snapshot.speculativeBytes > 0u && snapshot.inflightDecodeCount > 0u;
+            Check(stillReserved, L"Speculative reservation survives delayed observation until the harness releases it", success);
+        }
         static_cast<void>(SendMessageW(window, WndMsg::kViewerImgRawDebugClearImageCache, 0u, 0));
+        static_cast<void>(SetEnvironmentVariableW(kPausePrefetchEnv, nullptr));
         const bool staleReleased = PumpUntil(
             [&]() noexcept
         {

@@ -288,6 +288,12 @@ without named cases, or any other skipped Pester case, is `UNALLOWED_SKIP`. Fail
 flaky, crashed, timed-out, partial, source-mutating, and interrupted entries do not
 promote. A dead `running`/`provisional-passed` checkpoint repairs to `interrupted`.
 
+When normalization rejects an entry, the runner appends a `validation_acceptance`
+failure containing the terminal reason codes and, for `UNALLOWED_SKIP`, the named
+skipped cases. It preserves the executed case statuses and earlier failure details.
+The forced nonzero entry result records acceptance failure separately from an
+assertion failure; a successful assertion aggregate cannot conceal a rejected contract.
+
 Pruning retains the newest bounded set, caller-kept IDs, active runs, and referenced
 origins. Targets must be direct validated children of the runs root, and every existing
 component from the trusted evidence root through the target must be non-reparse. Planning

@@ -77,6 +77,43 @@ $durationEstimates = $Durations
     }
 }
 
+Describe 'Runner validation rejection diagnostics' {
+    BeforeAll {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestInvocation.psm1')
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationEvidence.psm1')
+        $tokens=$null;$parseErrors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$parseErrors)
+        if($parseErrors.Count){throw 'Actual runner does not parse.'}
+        $function=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Publish-RSRunnerEntryEvidence'},$false))
+        if($function.Count -ne 1){throw 'Expected one actual evidence publication boundary.'}
+        $script:acceptanceStage=[scriptblock]::Create(@'
+[CmdletBinding()]
+param($Result)
+$entry=[pscustomobject]@{Id='tooling.fixture'}
+$validationPlan=@{entries=@([pscustomobject]@{id='tooling.fixture';kind='Pester';outcome_contract=@{static_skip_cases=@()}})}
+$validationEvidenceRun=$null
+'@ + "`n" + $function[0].Extent.Text + "`n" + 'Publish-RSRunnerEntryEvidence -Entry $entry -Result $Result -StartedUtc ([datetime]::UtcNow) -PostSnapshot @{}')
+    }
+    It 'retains the rejected contract and skipped names for dictionary and object results without losing an earlier failure' {
+        foreach($asObject in @($false,$true)){
+            $result=@{ExitCode=0;Passed=1;Failed=0;Skipped=1;Total=2;ResultParsed=$true;CoverageValid=$true;
+                Cases=@(@{name='executed';status='passed'},@{name='missing pinned baseline';status='skipped'});
+                Failures=@([pscustomobject]@{name='earlier';status='failed';reason='preserve earlier diagnostic';durationMs=0})}
+            if($asObject){$result=[pscustomobject]$result}
+            $warnings=@()
+            $actual=& $script:acceptanceStage $result -WarningVariable warnings
+            ('UNALLOWED_SKIP' -in $actual.TerminalResult.reason_codes) | Should Be $true
+            $result.ExitCode | Should Be 1
+            $result.Failed | Should Be 1
+            $result.Failures.Count | Should Be 2
+            $result.Failures[0].reason | Should Be 'preserve earlier diagnostic'
+            $result.Failures[1].reason | Should Match 'UNALLOWED_SKIP.*missing pinned baseline'
+            ($warnings -join ' ') | Should Match 'UNALLOWED_SKIP.*missing pinned baseline'
+            @($result.Cases|Where-Object status -eq 'passed').Count | Should Be 1
+        }
+    }
+}
+
 Describe 'Run-AllTests inventory desktop admission' {
     It 'keeps native execution leased and lists inventory without desktop admission' {
         Import-Module $helperModule -ErrorAction Stop

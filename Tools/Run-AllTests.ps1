@@ -14,6 +14,8 @@
          3 invalid CLI/plan, 4 blocked attestation, or 5 corrupt evidence.
     PR delegation may leave only interactive standalone entries; an empty
     early scheduling set remains a valid plan.
+    A rejected validation contract is retained in Failures with its reason codes;
+    unallowed skips also name the skipped cases, even when assertions passed.
 
     Self-test artifacts are written under:
       REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\
@@ -1853,14 +1855,24 @@ function Publish-RSRunnerEntryEvidence {
         -ResultParsed $resultParsed -CoverageValid $coverageValid `
         -RequiredArtifactsPresent $requiredArtifactsPresent
     if ($terminalResult.status -ne 'PASSED') {
+        $reason = "Validation acceptance rejected '$($Entry.Id)': $($terminalResult.reason_codes -join ', ')."
+        $skipped = @((Get-RSObjectValue -Object $Result -Names @('Cases','cases') -DefaultValue @()) | Where-Object status -eq 'skipped')
+        if('UNALLOWED_SKIP' -in $terminalResult.reason_codes -and $skipped.Count){
+            $reason += ' Skipped cases: ' + (($skipped | ForEach-Object name) -join '; ') + '.'
+        }
+        $failures = @(Get-RSObjectValue -Object $Result -Names @('Failures','failures') -DefaultValue @()) + @(
+            [pscustomobject]@{name='validation_acceptance';status='failed';reason=$reason;durationMs=0})
         if ($Result -is [Collections.IDictionary]) {
             $Result['ExitCode'] = 1
             $Result['Failed'] = [Math]::Max(1, [int](Get-RSObjectValue -Object $Result -Names @('Failed', 'failed') -DefaultValue 0))
+            $Result['Failures'] = $failures
         } else {
             $Result | Add-Member -NotePropertyName ExitCode -NotePropertyValue 1 -Force
             $Result | Add-Member -NotePropertyName Failed `
                 -NotePropertyValue ([Math]::Max(1, [int](Get-RSObjectValue -Object $Result -Names @('Failed', 'failed') -DefaultValue 0))) -Force
+            $Result | Add-Member -NotePropertyName Failures -NotePropertyValue $failures -Force
         }
+        Write-Warning $reason
     }
     if ($null -eq $validationEvidenceRun) {
         return [pscustomobject]@{ TerminalResult = $terminalResult; PublishedEvidence = $null }

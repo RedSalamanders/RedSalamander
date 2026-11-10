@@ -890,6 +890,12 @@ Environment variables may select alternate test inputs such as profile names, bu
 
 ## Command-Line Safety
 
+Plugin debug self-test checks, including Terminal input-routing and lifecycle
+contracts, use `Common::DebugSelfTest::Check` so failures reach the inherited stderr
+as well as the debugger provider. Its `wstring_view` overload preserves a
+non-terminated slice or formatted label by copying only on failure, then invokes
+the same synchronous reporter and counter path as the pointer overload.
+
 - `--selftest-timeout-multiplier=N` accepts only finite numeric values.
 - Invalid or non-finite multiplier values are command-line errors.
 - Finite values outside `[0.1, 100.0]` are clamped to that range with a diagnostic.

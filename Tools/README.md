@@ -1,5 +1,9 @@
 # Repository tooling
 
+Validation rejections retain a `validation_acceptance` failure with the rejected
+contract's reason codes. Unallowed skips name the missing cases; successful
+assertions and earlier failure details remain visible in the same result.
+
 Locked Ghostty/Zig archive downloads use bounded transient HTTP/transport retries before failing the
 build. Permanent failures, wrong hashes and invalid archive layouts remain fatal; offline builds do not
 download. See `Build-GhosttyTerminalRuntime.ps1` help and `Specs/Build/Build_Toolchain.md` for the bounds.
