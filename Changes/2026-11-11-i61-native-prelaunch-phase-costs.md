@@ -1,0 +1,1 @@
+- Report monotonic preparation costs for File Operations profile/volume setup, the existing interactive session lease wait and contained native process start. Start/completion console rows expose the phase of a prelaunch delay without changing native assertions, deadlines, ownership or acceptance; native timing evidence and root-cause diagnosis remain separate.

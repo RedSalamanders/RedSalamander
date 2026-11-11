@@ -8,6 +8,15 @@ and return NOT_EVALUATED without a native artifact lease or a reusable test seal
 The owning acceptance rules are in [Testing_ValidationEvidence.md](Testing_ValidationEvidence.md)
 and [Build_Toolchain.md](../Build/Build_Toolchain.md).
 
+Runner console diagnostics announce File Operations profile allocation, test-owned
+volume preparation, interactive session-lease waiting and contained process start
+before the relevant operation, then report its monotonic elapsed milliseconds.
+These phase costs separate preparation/waiting from native case execution; they do
+not alter deadlines, lease ownership, focus restoration, assertions or acceptance.
+Preserve the parent console log when investigating a prelaunch gap. A start without
+a matching completion line identifies an unfinished phase, not a diagnosed cause
+or a successful test. These observations alone are not a controlled speed comparison.
+
 The File Operations apply-to-all convergence fixture holds one named per-item worker before its
 checkpoint until another worker publishes the conflict prompt, then witnesses the real non-owner
 wait before holding the prompt for 250 ms. It retains four conflicting files, one cached prompt,

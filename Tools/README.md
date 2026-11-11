@@ -1,5 +1,10 @@
 # Repository tooling
 
+Native startup diagnostics print the start and elapsed time of File Operations
+profile/volume setup, the existing interactive lease wait, and contained process
+launch. Keep the parent console log when investigating a delay. The rows do not
+change native deadlines or qualify performance/coverage.
+
 Build several native projects once with `build.ps1 -ProjectNames ViewerText,ProductUiTests`.
 This evaluates their solution and deployed runtime union and publishes a selected
 receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
