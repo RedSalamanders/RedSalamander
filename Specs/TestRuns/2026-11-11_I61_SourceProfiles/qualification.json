@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "role": "CurrentSourceSixProfileBuildQualification",
+  "testedCommit": "c45f3deba2b9edf555bc294b8775d9f56fdb2565",
+  "engine": "5233b5271f268cbe7aa420c18250347c297da63a",
+  "buildNumber": 6106,
+  "testsEnabled": true,
+  "dependencyMode": "Source",
+  "profiles": [
+    {
+      "platform": "x64",
+      "configuration": "Debug",
+      "buildPassed": true,
+      "receiptId": "b94baaeff12b8dad5d4e4cae64ec25d943c2eec3fcde8ef30816b5f753f39b7a",
+      "nativeRuntimeExecuted": false,
+      "logSha256": "34b22ebedac49d2f4455098f03f13ffd5983b0f83bdd8411ef1e1f86440a6aae"
+    },
+    {
+      "platform": "x64",
+      "configuration": "Release",
+      "buildPassed": true,
+      "receiptId": "c92aba1c904c0a7f52242590fae88d355be655d76a609326e7e5ef5a2311f63d",
+      "nativeRuntimeExecuted": false,
+      "logSha256": "99243c9eec6e4b074ebf9f14b46ae5856ed33ccaddc4e49059f0db68eddc3df7"
+    },
+    {
+      "platform": "x64",
+      "configuration": "ASan Debug",
+      "buildPassed": true,
+      "receiptId": "473bccdd3c1dddd03940007c1276cb59e2fd34dd82e44ec912dbce3e82e5c018",
+      "nativeRuntimeExecuted": false,
+      "logSha256": "bdefceb949c104d7e5e4401a34c196bdf450b39b1d28c73e9e67e698c448dd5e"
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Debug",
+      "buildPassed": true,
+      "receiptId": "4234378fab2023b8badfc6224fccaedcd5c75058c82e5e2d7e997bfe1bbbd3b0",
+      "nativeRuntimeExecuted": false,
+      "logSha256": "464cafb6741f165f20f0ea3e96ccfe46fe3f480ca24d1cc2546a47a2c3dbe46e"
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Release",
+      "buildPassed": true,
+      "receiptId": "1b5a123bf2bc80a10fe629a6b08c1044bb97b16a6614f169a6022841582e17a4",
+      "nativeRuntimeExecuted": false,
+      "logSha256": "78e788961624dfb99f4f71d236fee8bffb4cc69b2f2e03134a983726fc2d0161"
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "ASan Debug",
+      "buildPassed": true,
+      "receiptId": "916ccba8211992dcdece9a9918fccda26ce1fd5afe84466bb7803e5cf1dd28fc",
+      "nativeRuntimeExecuted": false,
+      "logSha256": "823851fc047bd65e49daf53319c3fc91c85419950ac4c3e068b6fb29e5f2714f"
+    }
+  ],
+  "buildWarnings": 0,
+  "buildErrors": 0,
+  "nativeRuntimeExecuted": false,
+  "wholeRepositoryQualified": false,
+  "sdkFullQualified": false,
+  "rawReceiptsPreserved": true
+}
