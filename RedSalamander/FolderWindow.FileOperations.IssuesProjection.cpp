@@ -150,7 +150,7 @@ bool Projection::Update(std::span<const Observation> observations, const Text& t
         row.categoryText        = issue.category.empty() ? L"-" : issue.category;
         row.messageText         = original && ! issue.message.empty() ? issue.message : L"-";
         row.problemText         = observation.problemText.empty() ? L"-" : observation.problemText;
-        // I62 B3.3: the two items' facts the decision showed (empty for any other row).
+        // I63 B3.3: the two items' facts the decision showed (empty for any other row).
         row.sourceFactsText      = observation.sourceFactsText;
         row.destinationFactsText = observation.destinationFactsText;
         row.comparisonText       = observation.comparisonText;
@@ -201,7 +201,7 @@ bool Projection::Update(std::span<const Observation> observations, const Text& t
         }
         if (retained.sourceFactsText.empty() && retained.destinationFactsText.empty() && retained.comparisonText.empty())
         {
-            // I62 B3.3: the first record of the row that carries the facts supplies them.
+            // I63 B3.3: the first record of the row that carries the facts supplies them.
             retained.sourceFactsText      = observation.sourceFactsText;
             retained.destinationFactsText = observation.destinationFactsText;
             retained.comparisonText       = observation.comparisonText;

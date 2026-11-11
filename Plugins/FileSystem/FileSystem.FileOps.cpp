@@ -3160,7 +3160,7 @@ BandwidthThrottleWorkerMode GetBandwidthThrottleWorkerModeOverride() noexcept
     return ! directory.empty() && OrdinalString::EqualsNoCase(GetPathDirectory(path.extended), MakePathInfo(directory).extended);
 }
 
-// I62 D-5: stands in for a location without a Recycle Bin. For as long as the variable is set, every Recycle of an item
+// I63 D-5: stands in for a location without a Recycle Bin. For as long as the variable is set, every Recycle of an item
 // directly inside the named directory is refused before any change, as the progress sink refuses an item the Shell would
 // delete permanently.
 [[nodiscard]] bool MatchRecycleUnavailableDirectoryForSelfTest(const PathInfo& path) noexcept

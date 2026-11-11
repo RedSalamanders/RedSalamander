@@ -1124,7 +1124,7 @@ interface __declspec(uuid("c40c2400-9fd0-4f5c-a003-8e679120ad09")) __declspec(no
 // after a deletion reports the partial-tree receipt (outcome known, mutation committed, original still
 // present). An open or listing the location refuses with ERROR_NOT_SUPPORTED is reported as
 // ERROR_OPEN_FAILED, never as the "has an exact identity" answer. The host uses this route for the built-in Local provider only (D-7.3), for Permanent Delete
-// and a refused Recycle's escalation, each behind its own consent, and (I62 B7) for the regular-file
+// and a refused Recycle's escalation, each behind its own consent, and (I63 B7) for the regular-file
 // source of a Managed Move after the destination's publication proof, with the facts resolved before
 // the copy opened the file; never for Rename or an expected-destination replacement, and never for an
 // object whose open failed (sharing violation, access denied, delete pending).
@@ -1404,7 +1404,7 @@ struct FileSystemExpectedOccupant
 //   FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY. A rename the location refuses leaves the occupant and the
 //   stage as they were: there is no fallback to writing over the occupant. The result and the
 //   published object follow PublishAs.
-// - ReadUnidentifiedMetadataFeatures (I62 B7) reports, for a regular file the location opens and cannot
+// - ReadUnidentifiedMetadataFeatures (I63 B7) reports, for a regular file the location opens and cannot
 //   identify, the FILESYSTEM_METADATA_* classes present on it, read no-follow: the answer
 //   IFileSystemBoundMetadata::GetMetadataSnapshot gives for a bound file. It returns ERROR_NOT_SUPPORTED
 //   for an object BindObject can bind, a directory, a link or any other reparse point. A class it failed

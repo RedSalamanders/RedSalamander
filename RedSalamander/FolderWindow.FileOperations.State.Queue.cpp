@@ -2459,7 +2459,7 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
                 task._waitForOthers.store(false, std::memory_order_release);
             task.SetWaitingInQueue(false);
             ++_activeOperations;
-            task.UpdateKeepAwake(); // I62 G7: admitted, so it needs the computer awake unless it is paused or waiting for an answer
+            task.UpdateKeepAwake(); // I63 G7: admitted, so it needs the computer awake unless it is paused or waiting for an answer
             task._perf.queueActiveOperations = _activeOperations;
             const uint64_t waitUs            = waited ? PerfElapsedUs(queueWaitStartUs) : 0u;
             if (queuedWait)
@@ -2534,7 +2534,7 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task, const std::sha
         }
         task._reservedOperation.store(false, std::memory_order_release);
     }
-    task.UpdateKeepAwake(); // I62 G7: the operation slot is given back
+    task.UpdateKeepAwake(); // I63 G7: the operation slot is given back
     NotifyQueueChanged();
 }
 
@@ -3588,7 +3588,7 @@ void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
     // Live snapshots read this flag so a just-finished task renders its final status instead of
     // briefly flashing "Running" until the completed-summary row replaces the live row.
     task._taskFinished.store(true, std::memory_order_release);
-    task.UpdateKeepAwake(); // I62 G7: backstop for every path to the terminal state; the Task destructor releases as well
+    task.UpdateKeepAwake(); // I63 G7: backstop for every path to the terminal state; the Task destructor releases as well
 #ifdef ENABLE_TESTS
     MaybePauseAfterTaskFinishedBeforeSummaryForSelfTest();
     _debugLastCompletionWorkerTid.store(GetCurrentThreadId(), std::memory_order_release);

@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <mutex>
 
-// I62 G7 (D-14): keep the computer awake while a File Operations task runs.
+// I63 G7 (D-14): keep the computer awake while a File Operations task runs.
 //
 // One process-wide Windows power request of type PowerRequestSystemRequired is held while at least one task needs the
 // machine awake. The display is never kept on, and closing the lid or choosing Sleep still sleeps: this only asks

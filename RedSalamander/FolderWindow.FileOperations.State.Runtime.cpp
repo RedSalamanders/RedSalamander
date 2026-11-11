@@ -2221,7 +2221,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareArtifactTouchGuard(const 
     // The user answers on the UI thread: this task's queue place is passed meanwhile.
     SetAwaitingUserDecision(true);
     const auto answered = wil::scope_exit([this]() noexcept { SetAwaitingUserDecision(false); });
-    SetAwaitingAnswerQuiet(true); // I62 G7: Batch Rename has one worker, so this wait is the whole task waiting
+    SetAwaitingAnswerQuiet(true); // I63 G7: Batch Rename has one worker, so this wait is the whole task waiting
     std::unique_lock lock(_batchRenameArtifactPromptMutex);
     _batchRenameArtifactPromptCv.wait(
         lock, [this]() noexcept { return _batchRenameArtifactPromptCompleted || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });

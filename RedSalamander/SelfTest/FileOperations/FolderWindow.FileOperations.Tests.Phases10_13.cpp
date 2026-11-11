@@ -2620,7 +2620,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationTaskScopedGrant:
     const auto countCategory = [](const std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry>& diagnostics, std::wstring_view category) noexcept
     { return std::ranges::count_if(diagnostics, [&](const auto& entry) noexcept { return entry.category == category; }); };
     // A real escalation prompt that offers the scoped choice publishes it as a direct button immediately
-    // before Cancel (I62 D-6: More never holds one command) and keeps Cancel as the default and Escape action.
+    // before Cancel (I63 D-6: More never holds one command) and keeps Cancel as the default and Escape action.
     const auto offersScopedChoice = [](const Task::ConflictPromptState& prompt) noexcept
     {
         const auto primaryEnd = prompt.primaryActions.begin() + static_cast<std::ptrdiff_t>(std::min(prompt.primaryActionCount, prompt.primaryActions.size()));
@@ -3198,7 +3198,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsContinueOnError:
         const bool skip             = state.stepState == 6;
         const ConflictAction action = skip ? ConflictAction::Skip : ConflictAction::PermanentDeleteAll;
         const FileOperations::ConflictActionPlacement placement =
-            FileOperations::ConflictActionPlacement::Primary; // I62 D-6: both are direct buttons
+            FileOperations::ConflictActionPlacement::Primary; // I63 D-6: both are direct buttons
         if (! task->SubmitConflictDecision(prompt->generation, action, std::nullopt, placement))
         {
             task->RequestCancel();

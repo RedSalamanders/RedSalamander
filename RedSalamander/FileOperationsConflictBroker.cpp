@@ -61,7 +61,7 @@ bool TryAcceptLocked(
     // other pair the answer covers this item alone, whatever the Apply to all box says.
     const bool discardSourceMayRepeat = action != Task::ConflictAction::DiscardSource || (prompt.comparison.date == ConflictDateRelation::Same &&
                                                                                           prompt.comparison.size == ConflictSizeRelation::Same);
-    // The bulk policies (I62 B6) are task-wide by their own caption; the Apply to all box never applies to them.
+    // The bulk policies (I63 B6) are task-wide by their own caption; the Apply to all box never applies to them.
     const bool bulkPolicy      = action == Task::ConflictAction::SkipSameSizeAndDate || action == Task::ConflictAction::ReplaceOlder;
     arbiter.decisionApplyToAll = permanentDeleteAll || (skipAll && prompt.skipAllEligible) ||
                                  (prompt.applyToAllEligible && action != Task::ConflictAction::Retry && action != Task::ConflictAction::Cancel &&

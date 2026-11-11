@@ -426,7 +426,7 @@ void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
                                         size_t maxFilesToKeep) noexcept;
 
 // The in-flight row reducers (defined in FolderWindow.FileOperations.State.cpp), declared for the deterministic stream-slot
-// self-test (I62 F1).
+// self-test (I63 F1).
 void UpdateInFlightFileProgress(FolderWindow::FileOperationState::Task& task,
                                 const void* cookieKey,
                                 uint64_t progressStreamId,

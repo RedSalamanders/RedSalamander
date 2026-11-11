@@ -1414,7 +1414,7 @@ whose every post failed is therefore adopted within about a second. Explorer's T
 replays the cached progress model even when the popup is idle. No idle periodic retry is introduced.
 Active telemetry retains its existing 100 ms cadence except during an explicitly armed bounded UI
 motion deadline or a pending or running automatic window resize, which is bounded by its debounce
-and its ease (I62 slice F). Continuously changing progress interpolation alone must not raise that
+and its ease (I63 slice F). Continuously changing progress interpolation alone must not raise that
 sampling cadence. The rate history advances once per telemetry interval however fast the timer
 ticks. Visible idle motion may use the bounded motion cadence until its final frame settles. The
 timer tick that stops the timer still requests one frame: a motion whose deadline passed since the
@@ -1495,7 +1495,7 @@ A menu button is shown only when its menu will contain at least two commands. A 
 shown as its own direct button, with its own caption, the standard variant and the same command
 route. No command means no button. The button and its menu are built from one list, so they cannot
 disagree. This holds for the completed card's `More...`, the conflict prompt's `More...` and the pane
-decision mirror. There is no exception (I62 decision D-6, owner, 2026-11-11): Recycle escalation's
+decision mirror. There is no exception (I63 decision D-6, owner, 2026-11-11): Recycle escalation's
 task-scoped `Delete all remaining permanently` and `Delete all remaining by name` are the only action
 beside the direct ones, so each is a direct button immediately before Cancel. It is never the default
 or the Escape action, and the prompt still opens with focus on Cancel. The cost is stated plainly: one
@@ -1517,7 +1517,7 @@ Card, footer and prompt wording follow these rules (I35, 2026-10-11);
   status separator). The counters count problems, not records: the trailing `task.result` Error is
   not counted when an Error of that task already explains the failure, so one failed item reads
   `Errors: 1`; the record stays in Issues, the log and the export, and it counts when it is the only
-  Error (I62 B5). The card never draws a `Result: 0x…` line, for any status: the result HRESULT stays in
+  Error (I63 B5). The card never draws a `Result: 0x…` line, for any status: the result HRESULT stays in
   the Issues pane's Technical details, the log and the export header. A blocked prompt, such as the
   possible-artifact touch guard, still states the fail-closed reason in plain words and names the item;
   it may quote the technical code beside the item's name.
@@ -1624,7 +1624,7 @@ prevents a blanket claim that every item moved.
 A Move onto an existing file at a destination that cannot provide object identity raises the
 ordinary name-collision decision (Conflict Layout below) with both items' size and date, and the
 actions the location can perform: Replace (or Replace read-only), Keep both, Skip, Skip all and
-Cancel (I62 B1, B2). Replace is absent when the existing item is a link or a folder, or cannot be
+Cancel (I63 B1, B2). Replace is absent when the existing item is a link or a folder, or cannot be
 opened for replacement. The card is then a decision card, not a failed card. When the existing file
 changed between the decision and the replacement, nothing is replaced and the same decision is
 shown again with the current file's facts. Only a route that cannot qualify for that decision
@@ -2155,7 +2155,7 @@ keeps the card list quiet during a transfer is how seldom the content's row coun
 one lifecycle phase of a card (collapsed, finished, decision, waiting, running) the card reserves
 the rows it has needed; a phase change starts the reservations afresh and re-measures at once. The
 rules are state machines in `RedSalamander/FileOperationsLayoutStability.h`, checked at compile time
-there; the popup keeps one set per card and removes it with the card (I62 slice F).
+there; the popup keeps one set per card and removes it with the card (I63 slice F).
 
 - **Stream rows.** Each transfer stream has a row slot for its lifetime, assigned by the engine: a
   new stream takes the lowest slot that no stream holds. A stream holds its slot while it runs and,
@@ -2227,7 +2227,7 @@ enabled:
 
 ## Conflict Layout
 
-### Delete source (I62 B4)
+### Delete source (I63 B4)
 
 On a Move, a collision of two regular files may offer `Delete source` (see
 `FileSystem_FileOperations.md`, product invariant 13a, for when). It is never the default action and
@@ -2254,7 +2254,7 @@ kept after `Permanently delete` is a skipped item with a Warning that names the 
 after the question, it may be the destination file itself under another name, or it could not be
 deleted permanently.
 
-### Bulk policies (I62 B6)
+### Bulk policies (I63 B6)
 
 A collision of two regular files may offer two task-wide choices, `Skip all with the same size and
 date` and `Replace all older` (see `FileSystem_FileOperations.md`, product invariant 13b). Each is
@@ -2275,7 +2275,7 @@ A task may also start with `Skip`, `Replace older` or `Keep both` preset (see
 `FileSystem_FileOperations.md`, product invariant 13c). No control sets it yet, and a preset decides
 its items without a card.
 
-### Item comparison (I62 B3)
+### Item comparison (I63 B3)
 
 For a collision of two regular files the engine publishes, with the decision, how the incoming item
 compares with the existing one: its date relation (newer, older, same) and its size relation (larger,
@@ -2490,7 +2490,7 @@ one-shot for the exact revalidated item. Cancel remains the default action at th
 Delete permanently and Skip, so Enter or initial focus cannot authorize deletion. In a task with
 more than one selected item the row also offers `Delete all remaining permanently`, the explicit
 task-scoped grant described in `FileSystem_FileOperations.md` (Delete and Recycle). It is a direct
-button immediately before Cancel (I62 D-6), never the default or Escape action, and ends with the task.
+button immediately before Cancel (I63 D-6), never the default or Escape action, and ends with the task.
 
 Every other actionable conflict also keeps the engine-published Cancel action directly visible.
 Ordinary name conflicts retain Cancel as initial focus, default and Escape action even though it is

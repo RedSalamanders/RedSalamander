@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// I62 slice F: the layout-stability rules of the File Operations popup ("Layout stability" in
+// I63 slice F: the layout-stability rules of the File Operations popup ("Layout stability" in
 // Specs/UI/UI_FileOperationsPopup.md). Small state machines over a monotonic millisecond tick. The
 // popup owns one set per card, feeds each the value the current frame needs, and lays out with the
 // value it returns. Nothing here measures or paints, so the rules are checked at compile time below.
@@ -107,7 +107,7 @@ private:
     return contentHeight > viewportHeight + pendingResizeDelta || (scrollRequested && contentHeight > viewportHeight);
 }
 
-// I62 F1: stream rows. A transfer stream keeps one row slot for its lifetime, and a new stream takes the lowest slot no
+// I63 F1: stream rows. A transfer stream keeps one row slot for its lifetime, and a new stream takes the lowest slot no
 // other stream holds. A stream holds its slot while it runs and, once it ended, for the linger in which its finished row
 // is still painted. The engine assigns the slots with these two rules; the popup paints each stream in its slot and
 // decides which streams are visible with StreamHoldsRow, so both sides agree on when a row is free.
@@ -135,7 +135,7 @@ inline constexpr size_t kMaxStreamSlots      = 32u; // the width of the occupanc
     return slotCount;
 }
 
-// I62 F4: what FileOps.Popup.CardHeightChanges counts. A card's first measurement is not a change; every new target
+// I63 F4: what FileOps.Popup.CardHeightChanges counts. A card's first measurement is not a change; every new target
 // height after it is one, whether it is then eased or snapped.
 [[nodiscard]] constexpr bool CardHeightChanged(bool measuredBefore, double previousTarget, double nextTarget) noexcept
 {

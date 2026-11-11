@@ -444,7 +444,7 @@ constexpr ULONGLONG kFileOperationsPopupHostReattachRetryMaxMs      = 60000ull;
 constexpr uint32_t kFileOperationsPopupFramePrepareFailureLimit     = 5u;
 constexpr ULONGLONG kFileOperationsPopupAccessibleTextIntervalMs    = 1000ull;
 constexpr ULONGLONG kRateSampleBucketMs                             = 100ull;
-// I62 slice F: UpdateRates runs at most once per telemetry interval, however fast the motion timer ticks. A timer tick is
+// I63 slice F: UpdateRates runs at most once per telemetry interval, however fast the motion timer ticks. A timer tick is
 // rarely exact, so the gap is one motion tick short of the interval.
 constexpr ULONGLONG kRateUpdateMinGapMs = static_cast<ULONGLONG>(kFileOperationsPopupTimerIntervalMs - kFileOperationsPopupUiMotionTimerIntervalMs);
 constexpr UINT kFileOperationsPopupDeferredSpeedLimitPromptMessage  = WM_APP + 0x71;
@@ -579,7 +579,7 @@ constexpr ULONGLONG kTaskbarListRetryDelayMs                   = 1000ull;
 using InFlightStreamRows = std::array<const FileOperationsPopupInternal::TaskSnapshot::InFlightFileSnapshot*,
                                       FileOperationsPopupInternal::TaskSnapshot::kMaxInFlightFiles>;
 
-// I62 slice F (F1): the visible streams placed in their engine slots. Returns how many rows they span (the highest
+// I63 slice F (F1): the visible streams placed in their engine slots. Returns how many rows they span (the highest
 // occupied slot plus one; 0 when no stream is visible). A row below that without a visible stream stays nullptr and is
 // painted blank, so no stream moves up when a lower one ends. Two visible streams report one slot only when the popup's
 // tick trails the engine's while a finished stream lingers in a slot a new stream took; the newer report keeps the row.
@@ -2056,7 +2056,7 @@ struct TerminalAxisBadge final
     if (! task.finished || task.interruptedMoveNotice || TaskCanceledBeforeMutation(task))
         return false;
     const auto counts = VisibleTerminalFactCounts(task);
-    // I62 B6: a Copy whose every item a bulk policy skipped has no other count, and still says how many were there.
+    // I63 B6: a Copy whose every item a bulk policy skipped has no other count, and still says how many were there.
     return std::ranges::any_of(counts, [](unsigned long count) noexcept { return count > 0u; }) || TaskHasTerminalAxisBadges(task) ||
            task.skippedSameSizeAndDateCount > 0u || task.replacedOlderCount > 0u;
 }
@@ -2097,19 +2097,19 @@ struct TerminalAxisBadge final
         }
         if (axis == 0u && task.alreadyThereSourceRemovedCount > 0u)
         {
-            // I62 B4: a Delete source answer is no copy, so it has no slot among the counts above.
+            // I63 B4: a Delete source answer is no copy, so it has no slot among the counts above.
             const std::wstring clause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_ALREADY_THERE, task.alreadyThereSourceRemovedCount);
             clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
         }
         if (axis == 0u && task.skippedSameSizeAndDateCount > 0u)
         {
-            // I62 B6: items Skip all with the same size and date left alone; they are also among the skipped items.
+            // I63 B6: items Skip all with the same size and date left alone; they are also among the skipped items.
             const std::wstring clause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_SKIPPED_SAME, task.skippedSameSizeAndDateCount);
             clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
         }
         if (axis == 0u && task.replacedOlderCount > 0u)
         {
-            // I62 B6: items Replace all older replaced; they are also among the copied items.
+            // I63 B6: items Replace all older replaced; they are also among the copied items.
             const std::wstring clause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_REPLACED_OLDER, task.replacedOlderCount);
             clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
         }
@@ -4933,7 +4933,7 @@ float FileOperationsPopupInternal::FileOperationsPopupState::ResolveAnimatedTask
     constexpr ULONGLONG kDurationMs    = kFileOperationsPopupUiMotionDurationMs;
     TaskHeightAnimation& taskAnimation = _taskHeightAnimations[taskId];
     ScalarAnimation& animation         = taskAnimation.height;
-    // I62 F4: a new target after the card's first measurement is one height change.
+    // I63 F4: a new target after the card's first measurement is one height change.
     if (FileOperationsLayoutStability::CardHeightChanged(animation.initialized, animation.target, static_cast<double>(targetHeight)))
         Debug::Perf::EmitCounter(L"FileOps.Popup.CardHeightChanges");
     // Expanded content changes immediately, including expansion and active stream rows.
@@ -6738,7 +6738,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateScrollBar(HWND
     }
 
     const int viewHeight      = std::max(0, static_cast<int>(std::ceil(viewH)));
-    // I62 slice F: while the bar is withheld (a pending automatic resize will make the content fit) the native range
+    // I63 slice F: while the bar is withheld (a pending automatic resize will make the content fit) the native range
     // says "fits", so SetScrollInfo cannot show the bar ahead of that resize.
     const int contentHeightPx = std::max(0, static_cast<int>(std::ceil(_scrollBarVisible ? contentH : std::min(contentH, viewH))));
 
@@ -7059,7 +7059,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshTelemetryTime
 #endif
     const UINT waitingIntervalMs =
         idleIntervalMs != 0u ? (std::min)(idleIntervalMs, kFileOperationsPopupWaitingTimerIntervalMs) : kFileOperationsPopupWaitingTimerIntervalMs;
-    // I62 slice F: an automatic window resize that is pending or running is bounded motion (debounce plus ease), so it takes the
+    // I63 slice F: an automatic window resize that is pending or running is bounded motion (debounce plus ease), so it takes the
     // motion cadence ahead of the telemetry cadence for its own duration. Continuous progress alone never raises the cadence.
     const bool resizeMotion = (_autoResizePending || _autoResizeAnimating) && recoveryVisible && ! _failureSurface;
     const UINT desired = explicitMotion || resizeMotion      ? kFileOperationsPopupUiMotionTimerIntervalMs
@@ -7376,7 +7376,7 @@ float FileOperationsPopupInternal::FileOperationsPopupState::InPlotGraphLabelRow
 
 namespace
 {
-// I62 F3: the digits of a numeric fact take tabular (equal-width) figures, so a value that changes keeps its width and
+// I63 F3: the digits of a numeric fact take tabular (equal-width) figures, so a value that changes keeps its width and
 // does not move its neighbours. Set on the popup's own text layout; the shared text formats and DxUi are unchanged. A font
 // without the feature ignores it; if the typography cannot be made, the layout keeps its default figures.
 void ApplyTabularFigures(IDWriteFactory* factory, IDWriteTextLayout* layout, UINT32 length) noexcept
@@ -7408,7 +7408,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareFactPair(Grap
         pair = {};
         return;
     }
-    // I62 slice F: with a stack hold the pair stacks as soon as its facts do not fit and returns to one line only with room to
+    // I63 slice F: with a stack hold the pair stacks as soon as its facts do not fit and returns to one line only with room to
     // spare, once the hold has passed. The decision belongs to the card, not to the cached layout, so it is evaluated on every call.
     const auto resolveStacked = [&](const GraphLabelLayout& layout, bool currentlyStacked)
     {
@@ -7577,7 +7577,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                         {},
                         _smallFormat.get(),
                         width);
-        // I62 slice F: a conditional note row keeps its height reserved, blank, for the hold after the note went away.
+        // I63 slice F: a conditional note row keeps its height reserved, blank, for the hold after the note went away.
         const bool waitingReasonPresent = static_cast<bool>(information.waitingReason.rate);
         if (waitingReasonPresent)
             stability.waitingReasonHeight = FactPairHeight(information.waitingReason);
@@ -7615,7 +7615,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                     nullptr, IDS_FMT_FILEOPS_ETA_PROVISIONAL, FormatDurationHms(SaturatingCeilNonNegativeToUint64(history.provisionalEtaSeconds)));
             else
                 eta = LoadStringResource(nullptr, IDS_FILEOPS_ETA_UNAVAILABLE);
-            // I62 slice F: the rate and ETA text change at most twice a second; the throughput graph keeps its own data and cadence.
+            // I63 slice F: the rate and ETA text change at most twice a second; the throughput graph keeps its own data and cadence.
             const auto holdShown = [&](std::wstring& shown, uint64_t& shownSinceTick, std::wstring& fresh)
             {
                 if (fresh != shown && FileOperationsLayoutStability::MayReplaceShownText(
@@ -7982,7 +7982,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureHostedFocusVis
     const int position = std::clamp(_scrollPos + static_cast<int>(std::ceil(delta)), 0, maximum);
     if (position != _scrollPos)
     {
-        // I62 slice F: revealing the focused control is a scroll request; a bar withheld for a pending resize is shown.
+        // I63 slice F: revealing the focused control is a scroll request; a bar withheld for a pending resize is shown.
         _scrollRequestedWhileWithheld = _scrollRequestedWhileWithheld || ! _scrollBarVisible;
         _scrollPos                    = position;
         Invalidate(hwnd); // Reflow through the normal frame; never recurse into painting from focus callbacks.
@@ -9849,7 +9849,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             ? PrepareWrappedText(
                                   information.summaryLayout, _bodyFormat.get(), FormatDiscoveryProgressText(task), conflictActionWidthPx, baseLineH)
                             : FactPairHeight(information.progress) + DipsToPixels(4.0f, _dpi);
-                    // I62 slice F: each stream is drawn in its engine slot (F1), so the rows needed are the highest visible slot
+                    // I63 slice F: each stream is drawn in its engine slot (F1), so the rows needed are the highest visible slot
                     // plus one. The card keeps the rows it needed until they have gone unused for the hold, one row at a time. A
                     // row without a stream (an empty slot below a live one, or a reserved row) stays blank.
                     InFlightStreamRows visibleStreams{};
@@ -9866,7 +9866,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                                      : 0.0f;
                     h = DipsToPixels(8.0f + 18.0f + 8.0f + 24.0f + 10.0f, _dpi) + summaryHeight + countsHeight + progressHeight + pathHeight + plotHeight;
                 }
-                // I62 slice F: both note rows stay reserved, blank, for the hold after their text went away.
+                // I63 slice F: both note rows stay reserved, blank, for the hold after their text went away.
                 if (layoutStability.concurrencyReservedHeight > 0.0f)
                     h += layoutStability.concurrencyReservedHeight + DipsToPixels(6.0f, _dpi);
                 if (layoutStability.waitingReasonReservedHeight > 0.0f)
@@ -9941,7 +9941,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         LayoutChrome(width, height, showPauseResumeAll, showCancelAll, globalSummaryText);
 
         const float viewH = std::max(0.0f, _listViewportRect.bottom - _listViewportRect.top);
-        // I62 slice F: the bar is decided for the viewport the window is about to have, so a pending or running automatic
+        // I63 slice F: the bar is decided for the viewport the window is about to have, so a pending or running automatic
         // resize that will make the content fit does not flash a bar, and one that cannot does not hold the bar back.
         float pendingResizeDelta = 0.0f;
         if (_autoResizePending || _autoResizeAnimating)
@@ -11546,7 +11546,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     WrappedTextCache& summaryCache = _cardInformationLayouts[row.taskIndex].summaryPaint;
                     const float summaryHeight      = PrepareWrappedText(summaryCache, _bodyFormat.get(), summaryText, textMaxW, lineH);
                     const D2D1_RECT_F summaryRc    = D2D1::RectF(textX, textY, textX + textMaxW, textY + summaryHeight);
-                    // I62 S7: the measured layout is drawn as it is; without one (empty text, a failed layout) the uncached path draws.
+                    // I63 S7: the measured layout is drawn as it is; without one (empty text, a failed layout) the uncached path draws.
                     if (summaryCache.layout && _subTextBrush)
                         _target->DrawTextLayout(
                             D2D1::Point2F(summaryRc.left, summaryRc.top), summaryCache.layout.get(), _subTextBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
@@ -11821,7 +11821,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         const bool showInFlightFiles = compactProgressPresentation.showTransferProgress && compactProgressPresentation.transferActive &&
                                                        (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
 
-                        // I62 slice F (F1): each stream is drawn in the row of its engine slot, so a row never shows another file
+                        // I63 slice F (F1): each stream is drawn in the row of its engine slot, so a row never shows another file
                         // while its stream runs. A slot below the highest visible one without a visible stream is a blank row.
                         InFlightStreamRows slotRows{};
                         const size_t streamRowCount = showInFlightFiles ? ResolveVisibleStreamRows(task, nowTick, slotRows) : 0u;
@@ -11907,7 +11907,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             }
 
                             // If nothing is actively copying (e.g., end-of-file or finalization), avoid showing a "stuck at 100%" mini bar.
-                            // I62 slice F: a finished file's row keeps the bar column, drawing nothing in it, so the path column does not
+                            // I63 slice F: a finished file's row keeps the bar column, drawing nothing in it, so the path column does not
                             // widen and re-truncate when the file completes.
                             if (! showInFlightFiles)
                             {
@@ -12022,7 +12022,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             textY += lineH;
                         }
 
-                        // I62 slice F: the rows the card still reserves for streams that ended stay blank.
+                        // I63 slice F: the rows the card still reserves for streams that ended stay blank.
                         if (layoutStability.reservedStreamRows > inFlightCount)
                             textY += static_cast<float>(layoutStability.reservedStreamRows - inFlightCount) * lineH;
 
@@ -14816,7 +14816,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnTimer(HWND hwnd
             return 0;
         }
 
-        // I62 slice F: the rate history advances once per telemetry interval, not on every 16 ms motion tick.
+        // I63 slice F: the rate history advances once per telemetry interval, not on every 16 ms motion tick.
         const ULONGLONG rateTick = GetTickCount64();
         if (rateTick < _lastRateUpdateTick || rateTick - _lastRateUpdateTick >= kRateUpdateMinGapMs)
         {
@@ -14874,7 +14874,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnVScroll(HWND hw
     int maxPos     = std::max(0, si.nMax - page + 1);
     if (! _scrollBarVisible)
     {
-        // I62 slice F: the bar is withheld for a pending automatic resize and the native range says "fits". The request
+        // I63 slice F: the bar is withheld for a pending automatic resize and the native range says "fits". The request
         // is not held back: it uses the content's own range, and the next frame shows the bar.
         maxPos = ModelMaxScrollPosition();
         if (maxPos == 0)
@@ -16689,7 +16689,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnMouseWheel(HWND
         int maxPos     = std::max(0, si.nMax - page + 1);
         if (! _scrollBarVisible && steps != 0)
         {
-            // I62 slice F: as for WM_VSCROLL, a wheel step is not held back by a withheld bar.
+            // I63 slice F: as for WM_VSCROLL, a wheel step is not held back by a withheld bar.
             maxPos                        = ModelMaxScrollPosition();
             _scrollRequestedWhileWithheld = maxPos != 0;
         }

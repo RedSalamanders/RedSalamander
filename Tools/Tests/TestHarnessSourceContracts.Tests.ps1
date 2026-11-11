@@ -4590,7 +4590,7 @@ Specs\TestRuns\local_scratch
         $bridge | Should Match 'ClassifyManagedCleanupMutation[\s\S]{0,7000}action\s*==\s*ConflictAction::Retry[\s\S]{0,240}\+\+cleanupRecord\.retryCount[\s\S]{0,120}continue;'
         $bridge | Should Not Match 'RetryTransientCleanupProbe|DeleteCopiedSourcePathNoRecursive|ReaderMatchesHash|ReadersHaveEqualContent|sourceRead\s*!=\s*destinationRead'
         $bridge | Should Match 'HRESULT\s+PublishOwnedStage\([\s\S]{0,7800}outcomeKnown\s*==\s*FALSE[\s\S]{0,3600}mutationCommitted\s*!=\s*FALSE'
-        # I62 B2: Replace at a destination the location cannot identify goes through the provider's expected-occupant contract.
+        # I63 B2: Replace at a destination the location cannot identify goes through the provider's expected-occupant contract.
         $bridge | Should Match 'expectedOccupantRoute[\s\S]{0,600}expectedOccupantPublication->PublishOverExpectedOccupant\(ownedStage'
         $bridge | Should Match 'replaceRefused\s*=\s*hr\s*==\s*HRESULT_FROM_WIN32\(ERROR_REVISION_MISMATCH\)\s*&&\s*txn\.expectedOccupant\.has_value\(\)'
         $bridge | Should Match 'HRESULT\s+PumpAndPublishFile\([\s\S]{0,6000}PumpAndPublishFileOnce\('
@@ -4719,7 +4719,7 @@ Specs\TestRuns\local_scratch
         # I35 S0 red-team R-5: a backup or rename-hop leftover may hold the only complete copy, so it is never called incomplete.
         $resources | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE\s+"Possibly an original kept by an interrupted copy or move"'
         $registry | Should Match 'bool HasPossibleOriginalArtifactName\(const std::wstring_view leaf\) noexcept[\s\S]{0,120}\.rs-bak'
-        # Owner decision (I62 D-17): only the names the current build writes are recognized.
+        # Owner decision (I63 D-17): only the names the current build writes are recognized.
         $registry | Should Not Match 'rs_tmp_|rs_bak_|rs_ren_|rs_copy_tmp_|rs_case_tmp_|~rs-write-'
         $registry | Should Match 'projection\.mayHoldOriginal\s*=\s*HasPossibleOriginalArtifactName'
         $find | Should Match 'artifactProjection->mayHoldOriginal\s*\?\s*IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE'
@@ -5270,7 +5270,7 @@ Specs\TestRuns\local_scratch
             $interaction,
             '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::OnLButtonDblClk\()').Value
         $leftButtonDown.Length | Should BeGreaterThan 0
-        # I62 slice A: the pane state is read before the press takes the focus, and a press in the pane
+        # I63 slice A: the pane state is read before the press takes the focus, and a press in the pane
         # that was not active keeps its selection (no SelectSingle, no ClearSelection).
         $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*auto\s+hit\s*=\s*HitTest\(pt\)'
         $leftButtonDown | Should Match 'if\s*\(\s*!\s*activating\s*&&\s*!\s*_items\[\*hit\]\.selected\s*\)\s*\{\s*SelectSingle\(\*hit\);'

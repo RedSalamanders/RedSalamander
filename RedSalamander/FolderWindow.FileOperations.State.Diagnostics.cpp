@@ -590,7 +590,7 @@ std::wstring FileOperations::FormatConflictActionLabel(ConflictAction action, Co
         case ConflictAction::SkipSameSizeAndDate: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP_SAME_SIZE_AND_DATE);
         case ConflictAction::ReplaceOlder: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_REPLACE_OLDER);
         case ConflictAction::Skip:
-            // I62 D-5: on a Move, the Recycle-refusal question is about the source; skipping it keeps the source.
+            // I63 D-5: on a Move, the Recycle-refusal question is about the source; skipping it keeps the source.
             return LoadStringResource(nullptr,
                                       bucket == ConflictClass::RecycleFailed && operation == FILESYSTEM_MOVE ? IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE
                                                                                                              : IDS_FILEOPS_CONFLICT_BTN_SKIP);
@@ -1705,7 +1705,7 @@ void FolderWindow::FileOperationState::EnqueueTaskDiagnostic(TaskDiagnosticEntry
         if (entry.severity == DiagnosticSeverity::Warning || entry.severity == DiagnosticSeverity::Error)
         {
             auto& counts = _taskDiagnosticCounts[entry.taskId];
-            // I62 B5: the counters count problems, not records. The trailing task.result Error
+            // I63 B5: the counters count problems, not records. The trailing task.result Error
             // restates a failure that an Error of this task already explains, so it is not counted
             // a second time; when it is the only Error it is the only account of the failure and
             // counts. The record itself is kept either way.
@@ -1871,7 +1871,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.alreadyThereSourceRemovedCount =
         static_cast<unsigned long>(std::min<uint64_t>(task._alreadyThereSourceRemovedCount.load(std::memory_order_acquire),
                                                       std::numeric_limits<unsigned long>::max()));
-    // I62 B6: the items the bulk policies decided. Skipped ones are also ordinary skips in skippedItemCount.
+    // I63 B6: the items the bulk policies decided. Skipped ones are also ordinary skips in skippedItemCount.
     summary.skippedSameSizeAndDateCount =
         static_cast<unsigned long>(std::min<uint64_t>(task._skippedSameSizeAndDateCount.load(std::memory_order_acquire),
                                                       std::numeric_limits<unsigned long>::max()));
@@ -2110,7 +2110,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     else if (summary.operation == FILESYSTEM_MOVE && summary.alreadyThereSourceRemovedCount > 0u && summary.publishedItemCount == 0u &&
              summary.retainedSourceCount == 0u && summary.failedItemCount == 0u && ! anySkipped)
     {
-        // I62 B4: every file was already at the destination and only the sources were removed. Not "Moved":
+        // I63 B4: every file was already at the destination and only the sources were removed. Not "Moved":
         // nothing was moved.
         setResultSummary(IDS_FILEOPS_RESULT_ALREADY_THERE_SOURCE_REMOVED);
     }

@@ -716,7 +716,7 @@ void FileOperationsIssuesPaneState::RefreshRows(bool force) noexcept
         // Q9: the Problem column shows typed localized text; the engine message stays technical.
         if (facts.originalProblem || facts.acceptedDecision)
             observation.problemText = FolderWindow::FileOperationState::FormatIssueProblemText(issue, std::wstring_view(statusSystemText));
-        // I62 B3.3: the two items' facts as the collision decision showed them, in the decision's words.
+        // I63 B3.3: the two items' facts as the collision decision showed them, in the decision's words.
         if (issue.conflictPrompt.has_value() && issue.conflictPrompt->itemFacts.has_value())
         {
             FileOperations::ConflictObservedTexts observedTexts =
@@ -1224,7 +1224,7 @@ void FileOperationsIssuesPaneState::UpdateDetail(bool resetScroll) noexcept
         else
             texts[8] = ! row->sourceName.empty() ? row->sourceName : row->destinationName;
         texts[0] = section(IDS_FILEOPS_ISSUES_PROBLEM, row->problemText);
-        // I62 B3.3: how the two items compared closes the Problem; each item's line follows its path below.
+        // I63 B3.3: how the two items compared closes the Problem; each item's line follows its path below.
         if (row->hasConflictFacts && ! row->comparisonText.empty())
             texts[0] += L"\n" + row->comparisonText;
         texts[1] = section(IDS_FILEOPS_ISSUES_COL_OPERATION, row->operationText);

@@ -653,10 +653,10 @@ enum class ConflictAction : uint8_t
     // Explicit permanent-delete retry for one exact retained selected root/subtree only.
     DeleteReadOnly,
     // A Managed Move that meets an existing regular file: the file at the destination stays untouched,
-    // nothing is copied and the source goes to the Recycle Bin (I62 B4). Offered only by the bridge's
+    // nothing is copied and the source goes to the Recycle Bin (I63 B4). Offered only by the bridge's
     // file pre-flight, and carried back to it through PerItemCallbackCookie::discardSourceRequested.
     DiscardSource,
-    // I62 B6: the two task-wide bulk policies chosen at a regular-file collision. Each is offered only on a
+    // I63 B6: the two task-wide bulk policies chosen at a regular-file collision. Each is offered only on a
     // prompt whose own pair matches it and is never stored in the Apply-to-all cache: WaitForConflictDecision
     // records the grant on the arbiter and hands its caller Skip or Overwrite for the current item, and
     // BeginConflictPrompt applies the grant to every later matching pair before the cache is consulted.
@@ -687,7 +687,7 @@ enum class ConflictRepeatContext : uint8_t
     Descendant,
 };
 
-// I62 B3: how the incoming (source) item compares with the existing (destination) one on a name
+// I63 B3: how the incoming (source) item compares with the existing (destination) one on a name
 // collision of two regular files. The engine computes it once when it publishes the decision; the
 // card and the decision mirror render it and derive nothing themselves. Equal size and date are
 // not a content comparison, and no text built from this says the items are identical.
@@ -753,7 +753,7 @@ struct ConflictItemComparison final
     return comparison;
 }
 
-// I62 B3.3: the facts of one regular file as a collision decision showed them. A last-write time of zero ticks or less
+// I63 B3.3: the facts of one regular file as a collision decision showed them. A last-write time of zero ticks or less
 // is unknown.
 struct ConflictObservedItemFacts final
 {
@@ -762,7 +762,7 @@ struct ConflictObservedItemFacts final
     __int64 lastWriteTime = 0;
 };
 
-// I62 B3.3: both items' facts and the engine's comparison, kept with the prompt observation so the Issues row of an item
+// I63 B3.3: both items' facts and the engine's comparison, kept with the prompt observation so the Issues row of an item
 // that ended at that collision shows them in the decision's words (BuildConflictObservedTexts). Never authority.
 struct ConflictObservedComparison final
 {
@@ -771,7 +771,7 @@ struct ConflictObservedComparison final
     ConflictItemComparison comparison{};
 };
 
-// I62 B6.5 (D-13): what a task does, from its first collision, when a regular file already exists at the destination.
+// I63 B6.5 (D-13): what a task does, from its first collision, when a regular file already exists at the destination.
 // An immutable task option fixed before the task starts; Ask is the default. The control belongs to I18's start surface.
 enum class PresetCollisionPolicy : uint8_t
 {
@@ -825,7 +825,7 @@ struct ConflictPromptObservation final
     std::wstring sourceParentPath{};
     std::wstring destinationName{};
     std::wstring destinationParentPath{};
-    // I62 B3.3: set only for a collision of two regular files whose facts were read when the decision was published.
+    // I63 B3.3: set only for a collision of two regular files whose facts were read when the decision was published.
     std::optional<ConflictObservedComparison> itemFacts{};
 };
 
@@ -1123,7 +1123,7 @@ struct FolderWindow::FileOperationState
         std::wstring permanentDeleteConsentDetail;
         std::wstring permanentDeleteConsentFrom;
         int permanentDeleteTestOverride = 0;
-        // I62 B6.5 (D-13): what the task does when a regular file already exists at the destination. Immutable once the
+        // I63 B6.5 (D-13): what the task does when a regular file already exists at the destination. Immutable once the
         // task is admitted; no start surface sets it yet (I18 owns that control), so production tasks keep Ask.
         FileOperations::PresetCollisionPolicy presetCollisionPolicy = FileOperations::PresetCollisionPolicy::Ask;
         std::wstring sourcePluginShortId;
@@ -1313,8 +1313,8 @@ struct FolderWindow::FileOperationState
         unsigned long unknownSourceCount               = 0;
         unsigned long missingSourceCount               = 0;
         unsigned long alreadyThereSourceRemovedCount   = 0; // Delete source answers: the destination kept its file, the source went to the Recycle Bin
-        unsigned long skippedSameSizeAndDateCount      = 0; // I62 B6: skipped by "Skip all with the same size and date" (also counted as skipped)
-        unsigned long replacedOlderCount               = 0; // I62 B6: replaced by "Replace all older" (also counted as published when the copy succeeded)
+        unsigned long skippedSameSizeAndDateCount      = 0; // I63 B6: skipped by "Skip all with the same size and date" (also counted as skipped)
+        unsigned long replacedOlderCount               = 0; // I63 B6: replaced by "Replace all older" (also counted as published when the copy succeeded)
         unsigned long verifiedItemCount                = 0;
         unsigned long verificationFailedItemCount      = 0;
         unsigned long verificationUnavailableItemCount = 0;
@@ -1544,11 +1544,11 @@ struct FolderWindow::FileOperationState
             std::wstring operationDestinationPath;
             bool keepBothRequested = false;
             // Set by the bridge for one collision prompt: the destination opens the occupant, cannot
-            // identify it, and can publish over the occupant the user is shown (I62 B2). The issue
+            // identify it, and can publish over the occupant the user is shown (I63 B2). The issue
             // callback then offers Replace without a bound destination.
             bool expectedOccupantReplaceOffered = false;
             // Set by the bridge for one file collision prompt of a Managed Move whose source it may
-            // remove (I62 B4). The issue callback then offers Delete source and, when it is chosen, sets
+            // remove (I63 B4). The issue callback then offers Delete source and, when it is chosen, sets
             // discardSourceRequested and answers Skip; the bridge reads and clears both after the call.
             bool discardSourceOffered   = false;
             bool discardSourceRequested = false;
@@ -1613,7 +1613,7 @@ struct FolderWindow::FileOperationState
             std::wstring destinationPath;
             ItemMetadata sourceMetadata;
             ItemMetadata destinationMetadata;
-            // I62 B3: set for a collision of two regular files whose facts were read; Unknown otherwise.
+            // I63 B3: set for a collision of two regular files whose facts were read; Unknown otherwise.
             FileOperations::ConflictItemComparison comparison{};
             ConflictDecisionScope decisionScope{};
             FileOperations::ConflictPathDisplay pathDisplay;
@@ -1671,16 +1671,16 @@ struct FolderWindow::FileOperationState
             // Q10: one entry per originating apply-to-all generation this task applied from its cache.
             std::vector<CachedConflictAggregate> cachedAggregates;
             bool cachedAggregatesFinal = false; // taken by RecordCompletedTask; later folds are ignored
-            // I62 B6: the task-wide bulk policies, each the prompt generation that set it (0 = not set). Read and
+            // I63 B6: the task-wide bulk policies, each the prompt generation that set it (0 = not set). Read and
             // written only under this mutex. BeginConflictPrompt consults them before the Apply-to-all cache.
             uint64_t skipSameSizeAndDateGrantGeneration = 0u;
             uint64_t replaceOlderGrantGeneration        = 0u;
-            // I62 B6.5 (D-13): the task's preset collision policy, written once before the first collision
+            // I63 B6.5 (D-13): the task's preset collision policy, written once before the first collision
             // (SeedPresetCollisionPolicy) and never changed. A preset Replace older is also replaceOlderGrantGeneration
             // set to kPresetPolicyGeneration, a generation no prompt has. Read only under this mutex.
             static constexpr uint64_t kPresetPolicyGeneration = ~uint64_t{0};
             FileOperations::PresetCollisionPolicy presetPolicy = FileOperations::PresetCollisionPolicy::Ask;
-            // I62 D-5: the task's one answer to "This location has no Recycle Bin. Delete the source files
+            // I63 D-5: the task's one answer to "This location has no Recycle Bin. Delete the source files
             // permanently?" (None until answered, then PermanentDelete or Skip). sourceNoRecycleBinQuestionOpen is true
             // while one worker asks it; the others wait on cv. Read and written only under this mutex.
             ConflictAction sourceNoRecycleBinAnswer = ConflictAction::None;
@@ -1705,7 +1705,7 @@ struct FolderWindow::FileOperationState
             bool sizeCounted                         = false;
             bool publicationCounted                  = false;
             bool terminal                            = false;
-            // I62 F1: the popup row this stream keeps for its lifetime (kMaxInFlightFiles: none yet). It moves with the
+            // I63 F1: the popup row this stream keeps for its lifetime (kMaxInFlightFiles: none yet). It moves with the
             // entry when the array is compacted, so a stream never changes row while it lives. AssignStreamSlotLocked.
             size_t streamSlot = kMaxInFlightFiles;
         };
@@ -2015,14 +2015,14 @@ struct FolderWindow::FileOperationState
         [[nodiscard]] bool CancelRequestedDurable() const noexcept;
         // Marks the worker as waiting for (or done waiting for) its user's answer and wakes the queue.
         void SetAwaitingUserDecision(bool awaiting) noexcept;
-        // I62 B6.5 (D-13): seeds this task's conflict arbiter with the preset collision policy fixed at admission. Called
+        // I63 B6.5 (D-13): seeds this task's conflict arbiter with the preset collision policy fixed at admission. Called
         // once, before the task runs; the value does not change afterwards.
         void SeedPresetCollisionPolicy(FileOperations::PresetCollisionPolicy policy) noexcept;
-        // I62 G7 (D-14): re-reads the facts that decide whether this task needs the computer awake and takes or gives back
+        // I63 G7 (D-14): re-reads the facts that decide whether this task needs the computer awake and takes or gives back
         // its share of the process-wide power request when that answer changed. Idempotent; callable from any thread and
         // under any File Operations lock (it takes only its own leaf mutex and the power request's).
         void UpdateKeepAwake() noexcept;
-        // I62 G7: a wait for an answer gives the request back only once the task is quiet. The waiting worker calls
+        // I63 G7: a wait for an answer gives the request back only once the task is quiet. The waiting worker calls
         // RefreshAwaitingAnswerQuiet on each poll with its own two locals (the progress count it last saw and when it
         // changed); a route with a single worker calls SetAwaitingAnswerQuiet(true) at once.
         void SetAwaitingAnswerQuiet(bool quiet) noexcept;
@@ -2347,7 +2347,7 @@ struct FolderWindow::FileOperationState
         // The worker waits for its user's answer on this task's own card. A place holder in that
         // state is passed, and starts next once the answer arrives.
         std::atomic<bool> _awaitingUserDecision{false};
-        // I62 G7: this task's share of the process-wide keep-awake request; released when the task is destroyed.
+        // I63 G7: this task's share of the process-wide keep-awake request; released when the task is destroyed.
         FileOperations::KeepAwakeLease _keepAwakeLease{FileOperations::PowerRequest::Shared()};
         std::atomic<bool> _awaitingAnswerQuiet{false};
         std::atomic<bool> _enteredOperation{false};
@@ -2533,11 +2533,11 @@ struct FolderWindow::FileOperationState
         std::atomic<uint64_t> _conflictExpectedDestinationUnavailableCount{0};
         std::atomic<uint64_t> _conflictExpectedDestinationReturnedCount{0};
         std::atomic<uint64_t> _conflictAtomicReplaceGrantCount{0}; // R3-1: replace decisions carried to an atomic-final writer (no bound authority)
-        // I62 B2.7: the task said once that replaced items were checked by name, size and dates.
+        // I63 B2.7: the task said once that replaced items were checked by name, size and dates.
         std::atomic<bool> _expectedOccupantReplaceNoted{false};
-        // I62 B4: files whose Move ended with "Delete source": the destination kept its own file and the source was removed.
+        // I63 B4: files whose Move ended with "Delete source": the destination kept its own file and the source was removed.
         std::atomic<uint64_t> _alreadyThereSourceRemovedCount{0};
-        // I62 B6: collisions a bulk policy decided, counted when the policy decides the item (the prompt that set it
+        // I63 B6: collisions a bulk policy decided, counted when the policy decides the item (the prompt that set it
         // included): skipped as already there with the same size and date, and replaced because the existing file
         // was older.
         std::atomic<uint64_t> _skippedSameSizeAndDateCount{0};

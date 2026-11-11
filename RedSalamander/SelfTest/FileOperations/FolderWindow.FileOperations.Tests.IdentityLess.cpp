@@ -344,7 +344,7 @@ public:
     }
 
     // Answers as the card does: an action under More is submitted with its overflow placement and no
-    // Apply-to-all state; a direct action (Delete all remaining by name is one, I62 D-6) as published.
+    // Apply-to-all state; a direct action (Delete all remaining by name is one, I63 D-6) as published.
     [[nodiscard]] bool Answer(uint64_t taskId, const IdentityLessPrompt& prompt, IdentityLessAction action) noexcept
     {
         IdentityLessTask* const task = _operations->FindTask(taskId);
@@ -970,7 +970,7 @@ struct QueuedByNameDelete final
         ShapeCase{L".redsalamander-writer-0123456789ABCDEF0123456789ABCDEF", true, false},
         ShapeCase{L".redsalamander-rollback-0123456789abcdef0123456789abcdef", true, true},
         ShapeCase{L".report.docx.rs-mtp-overwrite-0123456789abcdef0123456789abcdef.tmp", true, false},
-        // I62: the Win32 stages end in a real extension after a 32-hex token (a bridge stage also carries its stream id).
+        // I63: the Win32 stages end in a real extension after a 32-hex token (a bridge stage also carries its stream id).
         ShapeCase{L"harbor-timelapse.mp4.60d51a8a47eba25f7f7b699fb5137228_0.rs-tmp", true, false},
         ShapeCase{L"harbor-timelapse.mp4.60D51A8A47EBA25F7F7B699FB5137228_1F.rs-tmp", true, false},
         ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.rs-tmp", true, false},

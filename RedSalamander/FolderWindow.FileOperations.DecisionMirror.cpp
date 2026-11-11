@@ -95,7 +95,7 @@ struct MirrorPrompt final
     uint64_t factItemCount       = 0u;
     bool factBytesKnown          = false;
     uint64_t factBytes           = 0u;
-    // I62 B3: both items' facts and the engine's comparison, as the card shows them.
+    // I63 B3: both items' facts and the engine's comparison, as the card shows them.
     FileOperations::ConflictPromptItemFacts sourceItem;
     FileOperations::ConflictPromptItemFacts destinationItem;
     uint8_t dateRelation    = 0u;

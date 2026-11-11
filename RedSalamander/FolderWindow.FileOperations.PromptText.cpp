@@ -120,7 +120,7 @@ std::wstring BuildConflictPromptQuestion(const ConflictPromptTextFacts& facts)
     else if (bucket == ConflictClass::EfsPlaintext && facts.operation == FILESYSTEM_MOVE)
         question = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_EFS_MOVE_PLAINTEXT);
     else if (bucket == ConflictClass::RecycleFailed && facts.operation == FILESYSTEM_MOVE)
-        // I62 D-5: a Move raises a Recycle refusal only when Delete source meets a source location without a Recycle Bin.
+        // I63 D-5: a Move raises a Recycle refusal only when Delete source meets a source location without a Recycle Bin.
         question = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN);
     else
         question = FormatConflictProblemText(bucket, facts.status);

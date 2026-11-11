@@ -1825,7 +1825,7 @@ private:
                               ! layout.completedRevealDestinationActionVisible && ! layout.completedDirectActionVisible &&
                               layout.completedDiagnosticsMoreVisible && layout.completedDismissVisible && ! layout.taskStartNowVisible &&
                               ! layout.taskPauseVisible && ! layout.taskCancelVisible && ! selectsSources && ! cutsAgain,
-                          // The card opens its source or its destination: two commands, so they share one menu (I62 slice C keeps
+                          // The card opens its source or its destination: two commands, so they share one menu (I63 slice C keeps
                           // a menu for two commands or more and never for one).
                           std::format(L"Interrupted Move actions should offer its two navigation commands in one More menu and exact dismissal without "
                                       L"a lone direct command, Resume, retry, rollback, cleanup, Cut-again, fake diagnostics, or item reveal (layout={} "

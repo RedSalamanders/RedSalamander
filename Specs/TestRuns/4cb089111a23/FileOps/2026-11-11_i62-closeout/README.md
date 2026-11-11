@@ -1,9 +1,15 @@
-# I62 closeout: Fresh Full run on `ded63e43b`
+# I63 closeout (ranked I62 at the time): Fresh Full run on `ded63e43b`
 
-This folder records the verification of the I62 closeout commit. The repository verdict of the run is
+This folder records the verification of the closeout commit of that plan. The repository verdict of the run is
 **FAILED** (5 failed cases of 2,833). The File Operations, Commands and CompareDirectories suites have no
 failure. The five failures are outside the code this branch changes; each is classified below. This run is
 therefore not a passing Full gate, and nothing in this folder claims one.
+
+The plan was ranked I62 when this run was made, and the archived files keep that rank (for example in a
+test name). After the run the plan was renumbered I63, and its follow-up plan I64, because another plan
+had taken I62 on `main`. The renumbering changed rank labels in comments, documents, one test name and
+change-fragment file names. The renumbered tree was built and checked as described in the last section;
+it was not given a second Full run.
 
 ## Run
 
@@ -28,12 +34,12 @@ therefore not a passing Full gate, and nothing in this folder claims one.
 | ViewerPETests.Noninteractive | 0 | 1 | 0 |
 | The other 12 entries (ViewerPETests.Interactive, both ViewerSqliteTests entries, ProductUiTests, LocalizationTests, SettingsSchemaTests, RedConfigureTests, PluginContractTests, CrashHandlingTests, FileSystemCurlTests, PerformanceTests2, VcpkgMergeSynthetic) | 1 each | 0 | 0 |
 
-Two File Operations cases are named because earlier I62 runs reported them:
+Two File Operations cases are named because earlier runs of this plan reported them:
 
 - `R4A19_DiscoveryIndependentVolumes` passed. Its earlier failure was a run started without
   `-AllowAlternateVolumeTestRoot`, not a limit of the machine.
 - `DiscoveryScope_MultipleFoldersLiveProgress` passed. Its one earlier failure is not explained and stays
-  a watch item of I63 (`RW1`).
+  a watch item of the follow-up plan I64 (`RW1`).
 
 ## The five failures
 

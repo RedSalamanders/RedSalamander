@@ -1,17 +1,21 @@
-# I63 File Operations collected collisions and I62 residuals
+# I64 File Operations collected collisions and I63 residuals
 
-Status: **ACTIVE, I63. Plan prepared on 2026-11-11; implementation not started.** This plan takes over
-everything plan I62 did not finish, so that nothing is left only in a closed file. I62's owner decided on
-2026-11-11: "Slice G1–G6: put in another detail plan for after". The history of I62 is in [the closed I62
+Status: **ACTIVE, I64. Plan prepared on 2026-11-11; implementation not started.** This plan takes over
+everything plan I63 did not finish, so that nothing is left only in a closed file. I63's owner decided on
+2026-11-11: "Slice G1–G6: put in another detail plan for after". The history of I63 is in [the closed I63
 plan](../Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md) and is not repeated here.
 
+Rank: this plan was written as `I63` and the closed plan as `I62`. Both were renumbered on 2026-11-11,
+before their pull request, because the explicit state machines plan had taken `I62` on `main`. Commit
+messages of the branch and the test-run archive folder `2026-11-11_i62-closeout` keep the old ranks.
+
 Priority: **P1**. Effort: **L**. Part 1 (slice G, collected collisions) is about 2,000 to 2,400 changed
-lines by the design's estimate, half of them tests, and is a multi-day change. Part 2 (I62 residuals) is
+lines by the design's estimate, half of them tests, and is a multi-day change. Part 2 (I63 residuals) is
 a list of independent items, most of them small. Implementation risk: **High** for slice G (the
 worker-pause rule, preemption of a visible prompt, folder cleanup holds in a Managed Move), **Medium**
 for the residuals of slices B and F, **Low** for the rest.
 
-Planned on 2026-11-11 at the I62 closeout: the commit that adds this file is the planned-at commit (a
+Planned on 2026-11-11 at the I63 closeout: the commit that adds this file is the planned-at commit (a
 commit cannot name its own hash; the drift check below resolves it).
 
 This is a **non-normative implementation plan**. Current contracts stay in force until each item lands
@@ -31,11 +35,11 @@ git status --short
 
 Evidence in this plan has three kinds, and the text says which one applies:
 
-- **Read on 2026-11-11.** A code anchor that a read-only survey of the I62 branch state recorded. Re-read
+- **Read on 2026-11-11.** A code anchor that a read-only survey of the I63 branch state recorded. Re-read
   each one before relying on it. The slice G survey records that `FolderWindow.FileOperations.State.cpp`
   changed while it was being read, so every line number in section 4.9 can be off by tens of lines.
   Re-anchor by function name.
-- **Recorded by I62.** A statement from the implementation log in section 18 of the I62 plan. It says
+- **Recorded by I63.** A statement from the implementation log in section 18 of the I63 plan. It says
   what that log claims was built or run. This plan has not repeated any of those runs.
 - **Not established.** Stated as such.
 
@@ -43,14 +47,14 @@ No build or test was run for this plan.
 
 ## 1. Origin and outcomes
 
-I62 delivered slices A, C, D and E, slices B1 to B8, G7, and most of F (I62 section 18). Its owner closed
+I63 delivered slices A, C, D and E, slices B1 to B8, G7, and most of F (I63 section 18). Its owner closed
 it on 2026-11-11 and asked that slice G1 to G6 move to a new detail plan. The same closeout found
 residuals in several slices. This plan has two parts.
 
 | Part | Content | Section |
 |---|---|---|
 | 1 | Slice G: a name collision does not stop the rest of its task (G1 to G6) | 4 |
-| 2 | I62 residuals: items not built or not tested, grouped by the I62 slice they came from, the P0 baselines, and one watch item | 5 |
+| 2 | I63 residuals: items not built or not tested, grouped by the I63 slice they came from, the P0 baselines, and one watch item | 5 |
 
 Outcomes when this plan is done:
 
@@ -60,26 +64,26 @@ Outcomes when this plan is done:
    in the spec and the user documentation, and the owner has accepted them (G-D5).
 2. Every item of Part 2 is either done with a test, declined by the owner with the reason recorded, or
    routed to a named owner.
-3. No requirement of I62 lives only in the closed I62 file.
+3. No requirement of I63 lives only in the closed I63 file.
 
 ## 2. Ownership and coordination
 
-- **I62** is closed. Its Done record is frozen. This plan does not edit it.
+- **I63** is closed. Its Done record is frozen. This plan does not edit it.
 - **I18** (confirmation preferences and outcomes) owns start confirmation, the `fileOverwrite` and
   `directoryMerge` settings, metadata-outcome policy and the start-surface control for the task collision
-  policy (I62 D-13). This plan adds no setting. I62 B6 exposed the policy value through
+  policy (I63 D-13). This plan adds no setting. I63 B6 exposed the policy value through
   `OperationAdmission::presetCollisionPolicy`; the control that sets it stays with I18.
 - **I60 Wave 5** (`W5.2` queue lifecycle state, `W5.3` pause slot yield) edits the queue region that G5
   touches (section 4.5). Whichever lands second rebases. This plan introduces no second ordering key:
   `_queueOrderKey` is the ticket.
-- **H3** (later features) held "Continue safe work and review conflicts later". I62 slice G took the row
-  over on 2026-11-10. The I62 closeout moved H3's pointer to this plan.
+- **H3** (later features) held "Continue safe work and review conflicts later". I63 slice G took the row
+  over on 2026-11-10. The I63 closeout moved H3's pointer to this plan.
 - **DxUi** is an external pinned dependency. No item here requires a pin bump. If tabular figures on
   hosted graph labels (RF8) or any other item needs a DxUi change, stop and route it to the DxUi
   repository and **I31**.
 - **I3**, **I29** keep their stress and qualification scopes. **I4** keeps the source-shape test
   migration. This plan adds behavior tests and updates only the source contracts its edits invalidate.
-- Undo (I62 D-15) is not in this plan. It consumes the per-item typed results of B and G, so a separate
+- Undo (I63 D-15) is not in this plan. It consumes the per-item typed results of B and G, so a separate
   plan opens after G lands.
 
 ## 3. Owner decisions
@@ -101,7 +105,7 @@ Outcomes when this plan is done:
   provides, add no ceremony on top, and otherwise match Explorer. Every safeguard proposed in this plan
   states its cost next to its benefit. A safeguard with no stated cost is not ready for the owner.
 - **D-6 (owner, 2026-11-11).** An action that would be alone under `More...` is a direct button. This
-  includes `Delete all remaining permanently` and `Delete all remaining by name`. I62 delivered it at its
+  includes `Delete all remaining permanently` and `Delete all remaining by name`. I63 delivered it at its
   closeout: a direct button immediately before Cancel, never the default and never the Escape action,
   with no added confirmation step. Nothing of it remains here.
 
@@ -114,9 +118,9 @@ the STOP conditions in section 9.
 
 | ID | Question | Options | Recommendation and cost |
 |---|---|---|---|
-| G-D1 | Does one answer decide one file or every set-aside file of its class? | (a) A single answer decides only the file it was shown for; the next undecided file is then asked. Apply to all and the B6 policies decide every set-aside file they cover, and later ones as they are found. (b) A single answer is applied to every undecided set-aside file of the same class whose cached-decision eligibility holds, as Explorer does. | **(a).** Cost: more clicks when there are many collisions and the user chose neither Apply to all nor a policy. (b) costs a click that decides files whose own facts were never shown to the user. It is implementable: on a single answer, set the receipt on each undecided record with the same scope. I62's draft contract text said "an answer applies to the set-aside items of its class"; the proposed text in section 4.3 follows (a) and this row says what to change for (b). |
-| G-D2 | What happens when an immediate problem (access denied, disk full, file in use) arises while a collected prompt is on screen? The arbiter holds one actionable prompt per task. | (a) The immediate problem preempts the collected prompt: its generation retires, a click in flight for it is refused, the immediate prompt is shown, and the collected prompt returns when that one is answered. (b) The immediate problem waits behind the collected prompt. (c) The collected question is rendered in a second card region with its own slot. | **(a).** Cost: the buttons on screen change without an action by the user. That is close to the I62 STOP "change the buttons of a prompt the user can already press", so (a) needs the owner's explicit acceptance, and the spec states it. No wrong action can be taken, because the retired generation is refused. (b) breaks D-12's "immediate": the waiting worker holds the bridge's callback mutex, which freezes that whole bridge until the answer. (c) is a large UI change. |
-| G-D3 | Does a running task with only questions left give up its queue place in the first version? | (a) No. It keeps the queue as it does today, and the limit is documented. (b) Yes: the task leaves the active-operation count and its exclusive-transfer weight while keeping its scopes, and re-enters through the queue when answered. | **(a).** Cost: with only questions left, the next queued task does not start, so the I62 sentence "gives up its queue place" is not delivered in the first version. (b) needs `EnterOperation` to wait in the middle of a task and the keep-awake and Waiting presentation to change. That is not a contained change and touches the STOP about queue places left behind. |
+| G-D1 | Does one answer decide one file or every set-aside file of its class? | (a) A single answer decides only the file it was shown for; the next undecided file is then asked. Apply to all and the B6 policies decide every set-aside file they cover, and later ones as they are found. (b) A single answer is applied to every undecided set-aside file of the same class whose cached-decision eligibility holds, as Explorer does. | **(a).** Cost: more clicks when there are many collisions and the user chose neither Apply to all nor a policy. (b) costs a click that decides files whose own facts were never shown to the user. It is implementable: on a single answer, set the receipt on each undecided record with the same scope. I63's draft contract text said "an answer applies to the set-aside items of its class"; the proposed text in section 4.3 follows (a) and this row says what to change for (b). |
+| G-D2 | What happens when an immediate problem (access denied, disk full, file in use) arises while a collected prompt is on screen? The arbiter holds one actionable prompt per task. | (a) The immediate problem preempts the collected prompt: its generation retires, a click in flight for it is refused, the immediate prompt is shown, and the collected prompt returns when that one is answered. (b) The immediate problem waits behind the collected prompt. (c) The collected question is rendered in a second card region with its own slot. | **(a).** Cost: the buttons on screen change without an action by the user. That is close to the I63 STOP "change the buttons of a prompt the user can already press", so (a) needs the owner's explicit acceptance, and the spec states it. No wrong action can be taken, because the retired generation is refused. (b) breaks D-12's "immediate": the waiting worker holds the bridge's callback mutex, which freezes that whole bridge until the answer. (c) is a large UI change. |
+| G-D3 | Does a running task with only questions left give up its queue place in the first version? | (a) No. It keeps the queue as it does today, and the limit is documented. (b) Yes: the task leaves the active-operation count and its exclusive-transfer weight while keeping its scopes, and re-enters through the queue when answered. | **(a).** Cost: with only questions left, the next queued task does not start, so the I63 sentence "gives up its queue place" is not delivered in the first version. (b) needs `EnterOperation` to wait in the middle of a task and the keep-awake and Waiting presentation to change. That is not a contained change and touches the STOP about queue places left behind. |
 | G-D4 | Does the first version include Managed Move, holding the parent folder's authority until the answer? | (a) Yes, for the parallel walker. The folder's cleanup authority stays held until its set-aside descendants are resolved. (b) Copy and Copy-only Move only; a Managed Move keeps immediate prompts, and G4 is not needed. | **(a).** Cost: the hold window is longer than an immediate prompt's, and the user cannot rename or move that source folder meanwhile. Today the same authority is held for the whole length of an immediate prompt, and the set-aside item itself holds nothing. (b) leaves the cross-volume Move, which the owner's scenario 10 names, asking at every collision. |
 | G-D5 | Does the owner accept that a plain Local Copy (a provider-owned walk) and files selected directly (not nested in a selected folder) keep immediate prompts in the first version? | (a) Accept; plan the provider walks as a successor. (b) Do not count G as delivered until provider walks are covered. | **(a).** Cost: the most common case, a plain Local-to-Local Copy, still stops at each collision. That is the opposite of D-12's main case, and the owner should read it as a stated gap, not as completion. (b) needs a proof that the host can tell a provider's Skip for a collision from a Skip after a real failure (both set one failure flag in the Local provider), and a second pass inside the per-item loop before the root's single typed result is stored. |
 
@@ -126,11 +130,11 @@ the STOP conditions in section 9.
 |---|---|---|---|
 | R-D1 | `Delete source` is not offered when the source location cannot identify items (a share without file IDs). Offer it there through the by-facts delete of B7? | (a) Offer it. (b) Leave such a source with the ordinary choices. | **(a)**, because D-4 allows level 2 and B7 already removes a Move's own source that way. Cost: the removal is by name, size and date instead of object identity, with B8's probe before it. (b) costs nothing and leaves a Move run again over such a source unable to finish by one choice. |
 
-### 3.4 Decisions I62 implemented on its recommendation
+### 3.4 Decisions I63 implemented on its recommendation
 
-I62 section 3 lists open decisions D-2, D-3, D-7, D-8, D-9, D-11, D-12, D-13, D-14 and D-15. The I62 log
+I63 section 3 lists open decisions D-2, D-3, D-7, D-8, D-9, D-11, D-12, D-13, D-14 and D-15. The I63 log
 records slices written to those recommendations. It records no confirmation from the owner for any of
-them except D-6 (decided on 2026-11-11 and delivered). The closed I62 plan records each as "implemented
+them except D-6 (decided on 2026-11-11 and delivered). The closed I63 plan records each as "implemented
 as recommended under the owner's order to implement; not confirmed one by one". Item RX1 asks the owner
 for the explicit answer.
 
@@ -164,7 +168,7 @@ Read on 2026-11-11 by the slice G survey; the survey changed no file.
   Move, Verify, or an "independent new files" admission. Exactly when `independentNewFileTransfer` is set
   was not read, so the boundary of what the first version covers is approximate.
 
-I62 section 11 states the intent: the owner promoted H3's "Continue safe work and review conflicts later"
+I63 section 11 states the intent: the owner promoted H3's "Continue safe work and review conflicts later"
 on 2026-11-10, and D-12 recommends collecting name collisions by default, as Explorer does, with other
 problems keeping their immediate prompts.
 
@@ -185,7 +189,7 @@ The first version does **not** cover, and keeps the immediate prompt for:
 
 | Case | Reason |
 |---|---|
-| Plain Local-to-Local Copy (provider-owned walk), and every other provider-owned walk | The provider's Skip sets the same failure flag as a real failure, so the host cannot separate "set aside" from "failed" without a counting protocol that needs proof. The second pass would be a new nested call inside the per-item loop. This is a scope choice, not the I62 STOP: the Local walk can be answered Skip without an interface change (G-D5). |
+| Plain Local-to-Local Copy (provider-owned walk), and every other provider-owned walk | The provider's Skip sets the same failure flag as a real failure, so the host cannot separate "set aside" from "failed" without a counting protocol that needs proof. The second pass would be a new nested call inside the per-item loop. This is a scope choice, not the I63 STOP: the Local walk can be answered Skip without an interface change (G-D5). |
 | Files selected directly (selected roots) | The root's guard is held for the whole call and its typed result is single-shot. |
 | Read-only occupants, links, type mismatches (file onto folder, folder onto file or link) | They hold a permit or the folder's cleanup authority, or are outside the B6 class. |
 | A Managed Move in the sequential walker, a Managed Move with Verify on (it uses the sequential walker), and the rename merge | The sequential frame stack pops before the second pass, so the folder would lose its cleanup record. |
@@ -243,7 +247,7 @@ normative text, written for the recommendations of section 3.2:
 
 If the owner chooses G-D1 (b), replace the second paragraph's third sentence with: "A single answer is
 applied to every undecided set-aside item of the same class for which the answer is offered." If the
-owner chooses G-D3 (b), replace the last limit and add the queue rule of I62 section 9 case (b) for a
+owner chooses G-D3 (b), replace the last limit and add the queue rule of I63 section 9 case (b) for a
 running task.
 
 ### 4.4 Design in brief
@@ -300,7 +304,7 @@ the answer in the slice's closeout.
   pre-existing nested destination file on a bridge route. Each either sets the new test switch
   `g_fileOpsCollectCollisionsForSelfTest` off with a comment or has its expectations updated. Also run
   the Pester source contracts; the distance-bound contracts were not checked function by function.
-- [ ] G0.7 P0.13 as a witness. I62 answered P0.13 by reading. Run one collision at a top-level item, at a
+- [ ] G0.7 P0.13 as a witness. I63 answered P0.13 by reading. Run one collision at a top-level item, at a
   bridge item with sixteen pumps, and inside a provider-owned walk, and record which other items progress
   while the prompt is unanswered.
 
@@ -543,7 +547,7 @@ same run answered at the first collision, and the retained bytes at the bound.
 
 ### 4.9 Code anchors
 
-Read on 2026-11-11 on the I62 branch state; re-read before relying on any of them. The file changed
+Read on 2026-11-11 on the I63 branch state; re-read before relying on any of them. The file changed
 during the read, so numbers can be off by tens of lines. Use the function names. "State.cpp" is
 `RedSalamander/FolderWindow.FileOperations.State.cpp`.
 
@@ -566,31 +570,31 @@ during the read, so numbers can be off by tens of lines. Use the function names.
 | Card status kind | `Popup.cpp:1572-1575`; snapshot copy 5719-5760; decision mirror `DecisionMirror.cpp:297-302` |
 | Test seams | `GetBridgeProducerDelayMsForSelfTest` about 23073; `ConsumeBridgeFailNextFileCopyForSelfTest` about 20992; pause point `g_fileOpsConflictConvergenceItemPausePoint`; family table in the runner at about 2499-2556 |
 
-## 5. Part 2: I62 residuals
+## 5. Part 2: I63 residuals
 
-Each item comes from the I62 plan text and its section 18 log. "The I62 log records" means that log says
-so; this plan has not repeated the run. IDs are `R` plus the I62 slice letter. Where the log is silent on
-a thing the I62 text required, the item says "not confirmed in the I62 log".
+Each item comes from the I63 plan text and its section 18 log. "The I63 log records" means that log says
+so; this plan has not repeated the run. IDs are `R` plus the I63 slice letter. Where the log is silent on
+a thing the I63 text required, the item says "not confirmed in the I63 log".
 
 ### 5.1 Slice A, the activating press
 
-- [ ] RA1 Tests. The I62 log records three `cmd_pane_folderView_activation_press_*` cases and states that
+- [ ] RA1 Tests. The I63 log records three `cmd_pane_folderView_activation_press_*` cases and states that
   the right-click and Quick Search cases of the test list are not written ("neither path reads the pane
   state"). Write both anyway, because they pin that statement: a right-click on an unselected item in the
   other pane makes it the sole target; Quick Search active in the other pane exits as today. Not
-  confirmed in the I62 log: which of the other listed cases the three written cases cover (plain press on
+  confirmed in the I63 log: which of the other listed cases the three written cases cover (plain press on
   an unselected and on a selected item with three selected, background press, the Ctrl, Shift and
   Ctrl+Shift presses, the second plain press, double-click on a folder, middle press, drag from an
   unselected item under D-3, press with the same pane's NavigationView focused, and the Terminal-tab note
   of A5). List the covered ones, then write the missing ones.
-- [ ] RA2 A7 inactive-selection visibility. The I62 log records that the renderer draws the inactive
+- [ ] RA2 A7 inactive-selection visibility. The I63 log records that the renderer draws the inactive
   selection and a thinner current-item border and that this was read, not captured. Capture the pane that
   is not active with three selected items and a current item outside them through the visual gallery
   harness (invented fixture data), and record whether each is visible and distinguishable from the active
   style. If either is not, state the inactive style in `UI_FolderView.md` and fix the renderer; the
   first-click rule is not understandable without it.
 - [ ] RA3 A5 debug assertion. Confirm the test-build assertion that the pane's focused flag equals the
-  focused pane at button-down exists; I62 A5 required it and the log does not mention it.
+  focused pane at button-down exists; I63 A5 required it and the log does not mention it.
 
 ### 5.2 Slice B, collisions as decisions
 
@@ -599,27 +603,27 @@ a thing the I62 text required, the item says "not confirmed in the I62 log".
   `GetFileBasicInformation` to the provider's item-information call that carries size, and name that call
   in the slice's closeout. Cost: one more metadata call on the routes that lack size; none on the Local
   route.
-- [ ] RB2 Facts on the finished card of a one-item task (B3 target contract). The I62 log records the
+- [ ] RB2 Facts on the finished card of a one-item task (B3 target contract). The I63 log records the
   facts on the Issues row (B3.3) but not on the finished card.
 - [ ] RB3 Exact bytes in a tooltip and in the accessible description (B3 target contract), with the full
-  date and time. Not done per the I62 log.
+  date and time. Not done per the I63 log.
 - [ ] RB4 An item decided by a remembered answer (Apply to all) or by a policy carries no facts today.
   Decide with the owner whether the typed result should retain the facts read at that step, bounded by
   the existing reservoirs; B6.3 says a policy skip keeps its facts, so a policy skip that carries none is
-  a gap against I62's own contract. Check the contract text first and either fix the code or amend the
+  a gap against I63's own contract. Check the contract text first and either fix the code or amend the
   text.
 - [ ] RB5 `Delete source` without item identity. Depends on R-D1. If (a): offer it for a source whose
   location cannot identify items, through the by-facts delete of B7 with B8's probe before it, and add
   the variants of the `DiscardSource` tests for an identity-less source. If (b): state the limit in
   `FileSystem_FileOperations.md` and in `docs/FileOperations.md`.
-- [ ] RB6 `Delete source` limits recorded by the I62 log: non-Local sources and the native-rename Move
+- [ ] RB6 `Delete source` limits recorded by the I63 log: non-Local sources and the native-rename Move
   route are not covered. State both in the spec, or cover them. A Move inside one location that is a
   native rename onto an existing name is the B1 decision; confirm what the user is offered there and
   write the test.
 - [ ] RB7 Found, not fixed: the Issues "Problem" text of the no-Recycle-Bin question row reads "Recycle
   Bin delete failed." Give it a sentence that says the source's location has no Recycle Bin and the
   delete would be permanent. Also, if that question's bucket were ever `DestinationLink`, a Skip answer
-  would be remembered for the task. The I62 log calls this an untested edge: add a test that the
+  would be remembered for the task. The I63 log calls this an untested edge: add a test that the
   no-Recycle-Bin question never records a task-wide Skip, or change the bucket.
 - [ ] RB8 B6 counts and policies. The replace counter counts decisions, not files replaced: count
   replaced files, and add the `replaced because older` sentence if missing. The two bulk policies are
@@ -628,7 +632,7 @@ a thing the I62 text required, the item says "not confirmed in the I62 log".
 - [ ] RB9 Translations. The new B-slice strings in cs-CZ, fr-FR, ja-JP and sk-SK are unreviewed (the log
   says so). Ask for a review, or record the owner's decision to ship them as they are. The same holds for
   the strings added by items below.
-- [ ] RB10 B7 and B8 limits recorded by the I62 log:
+- [ ] RB10 B7 and B8 limits recorded by the I63 log:
   - A folder moved into itself under another spelling is not detected for a source without identity,
     because the guard's ancestor checks do not run without a bound source. Design a by-facts detection,
     or state the limit. Cost of detecting: extra opens on every identity-less folder Move; the benefit is
@@ -641,19 +645,19 @@ a thing the I62 text required, the item says "not confirmed in the I62 log".
   - B8.3: the location classes that do not enforce sharing should be a typed capability of the path
     profile instead of the probe's result alone. Collect the classes from the replacing-rename and
     two-spellings runs (RP3) and add the capability.
-- [ ] RB11 B2 items, as the I62 closeout audit found them. B2.6: level 3 (a route with no replacing
+- [ ] RB11 B2 items, as the I63 closeout audit found them. B2.6: level 3 (a route with no replacing
   rename) is not built; the spec states there is no fallback to writing over the occupant, and the search
   for a Local location class without a replacing rename was not run (RP3). B2.7 is delivered (one
   Information note per task, a resource string). B2.8, the review checklist, was not recorded during the
-  slice; the I62 closeout records what is known. Still without a named witness: an ancestor replaced by a
+  slice; the I63 closeout records what is known. Still without a named witness: an ancestor replaced by a
   link during a file replacement, the target turned into a directory or a link between the read and the
   rename, and that a reader never sees the final name missing (RP3). Write those tests, then record the
   checklist result in `FileSystem_FileOperations.md`.
 - [ ] RB12 The performance evidence of slice B: `FileOps.Conflict.ExpectedItemUs`, a 500-collision
   Apply-to-all Replace beside the same run with Keep both, and the 2,000-item second runs under the skip
-  policy and under the Delete source policy. The I62 log does not list them. Run them or record why not.
+  policy and under the Delete source policy. The I63 log does not list them. Run them or record why not.
 
-- [ ] RB13 B1.4 and P0.4, the refusal inventory. I62 turned only the identity-less existing-destination
+- [ ] RB13 B1.4 and P0.4, the refusal inventory. I63 turned only the identity-less existing-destination
   exits of `prepareExactTransferGuard` into decisions. List every exit of the guard and every
   `TransferSafetyState` value, classify each as *has a safe choice* or *has none*, give each of the first
   kind a decision with at least Skip and Cancel, and each of the second kind a specific sentence. Cost:
@@ -665,18 +669,18 @@ a thing the I62 text required, the item says "not confirmed in the I62 log".
 
 ### 5.3 Slice C, menus
 
-Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I62 closeout (section 3.1).
+Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I63 closeout (section 3.1).
 
 ### 5.4 Slice D, staging names
 
-- [ ] RD1 P0.9 baseline. The I62 log records that the staging-name perf baseline was not captured before
+- [ ] RD1 P0.9 baseline. The I63 log records that the staging-name perf baseline was not captured before
   the change. Recognition runs per row during FolderView enumeration, and a regression there is a STOP
-  condition in I62. Capture the baseline from the I62 planned commit
+  condition in I63. Capture the baseline from the I63 planned commit
   `99624c5385c6c0d42f8d1c6f8be54cbe69f506ef` in a separate worktree with
   `DebugMeasureArtifactNameShapeProjectionForTests`, capture the same measurement on the current build,
   and archive both under `Specs/TestRuns/`. If the owner decides the comparison is not worth a worktree
   build, record that decision.
-- [ ] RD2 The I62 log records two departures from the D text: the case-only rename hop uses `<leaf>.<32
+- [ ] RD2 The I63 log records two departures from the D text: the case-only rename hop uses `<leaf>.<32
   hex>.rs-bak` because it carries the original (D2 said the whole-leaf `.rs-tmp` form), and S4 (the
   table-driven recognizer) is replaced by the smaller chain D-17 leaves. Confirm
   `FileSystem_FileOperations.md` and the documents named by D5 describe the shipped forms, and that the
@@ -686,13 +690,13 @@ Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I62 closeout
 ### 5.5 Slice E, queue order
 
 - [ ] RE1 E8: emit `FileOps.Queue.HeadHoldUs` (the time the head of the queue was held while Preparing),
-  as I62 E8 required. The I62 log records `FileOps.Queue.PassedOver` is emitted and `HeadHoldUs` is not.
+  as I63 E8 required. The I63 log records `FileOps.Queue.PassedOver` is emitted and `HeadHoldUs` is not.
 - [ ] RE2 E4 (evaluate `ShouldQueueNewTask` inside the admission lock so two admissions issued together
-  cannot both read "nothing active") is not changed in I62; the log says it was not confirmed as a
+  cannot both read "nothing active") is not changed in I63; the log says it was not confirmed as a
   defect. Write the failing-first case with two admissions issued together, then fix it or record that it
   is not a defect. E7 (the queue-paused ordering) is unchanged by choice and needs no work unless a case
   shows it contradicts the card order.
-- [ ] RE3 Not confirmed in the I62 log: the registered family case `FileOps_QueueStartOrder` listed in
+- [ ] RE3 Not confirmed in the I63 log: the registered family case `FileOps_QueueStartOrder` listed in
   the E tests, and the queue wait metrics for a twenty-task queue before and after (the head hold must
   equal the head's own Preparing time). The log records seven scenarios inside
   `FileOps_IdentityInterlockWaiting`. Compare them with the E test list (reversed Preparing durations,
@@ -717,7 +721,7 @@ Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I62 closeout
   16 ms cadence for its bounded duration only. STOP conditions: body rows painting over the bottom block,
   the 16 ms cadence outside a bounded motion. Tests: reveal frames never paint a row below the bottom
   block's top; tick counts in `FileOps_PopupIdleCadence`.
-- [ ] RF4 F6, viewport. Not done per the I62 log: a stable scrollbar gutter so card width is independent
+- [ ] RF4 F6, viewport. Not done per the I63 log: a stable scrollbar gutter so card width is independent
   of the scrollbar, `AutoResizeWindow`'s `SetWindowPos` moved out of `Render` to a posted step with the
   two-second shrink hold, and the scroll anchor (the first visible card keeps its position by task ID and
   offset when content above changes height). The log also records that the 300 ms scrollbar delay of the
@@ -733,14 +737,14 @@ Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I62 closeout
 - [ ] RF7 Found, not fixed: the height pass and the painter measure a wrapping work summary at different
   widths. Make both use one width, or one measurement, and add a case with a summary that wraps at the
   boundary.
-- [ ] RF8 F3: the I62 log records tabular figures on the three numeric fact rows the popup lays out
+- [ ] RF8 F3: the I63 log records tabular figures on the three numeric fact rows the popup lays out
   itself; the hosted graph's labels are DxUi's and unchanged. If the owner wants tabular figures on the
   graph labels, route it to DxUi and **I31**; this plan does not change DxUi.
 - [ ] RF9 Found, not fixed: `FileSystemReportFileWork` can match a stale entry by leaf after the engine
   compacted its rows. Since F1 gave each stream a slot for its lifetime, match by slot and receipt
   identity instead of by leaf, and add a test with a completed stream followed by a new stream of the
   same leaf name.
-- [ ] RF10 F-slice specification and documents. The I62 log does not say whether
+- [ ] RF10 F-slice specification and documents. The I63 log does not say whether
   `UI_FileOperationsPopup.md` has its "Layout stability" section, `Testing_PerformanceValidation.md` its
   stability scenario, `Testing_SelfTests.md` the sequence capture, or `docs/dev/TestingAndScreenshots.md`
   the capture rules. Confirm each, and amend what the landed behavior changed (the dropped 300 ms, the
@@ -748,7 +752,7 @@ Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I62 closeout
 
 ### 5.7 Slice G7, keep awake
 
-- [ ] RG1 Preparation before admission is not covered by the power request (the I62 log says so). Decide
+- [ ] RG1 Preparation before admission is not covered by the power request (the I63 log says so). Decide
   whether a long Preparing phase (a large discovery) should hold the request. If yes, extend the per-task
   lease to start at card creation; cost: a request held while a task only waits in the queue unless the
   lease follows the same quiet rule. If no, state the limit in the spec.
@@ -760,7 +764,7 @@ Nothing remains. D-6 was decided on 2026-11-11 and delivered at the I62 closeout
   Record the skip where no such machine is available.
 ### 5.8 P0, characterization baselines
 
-The I62 log records that P0.1 to P0.15 were not run as a separate slice, that each slice recorded what it
+The I63 log records that P0.1 to P0.15 were not run as a separate slice, that each slice recorded what it
 read instead of what it witnessed, and that P0.13 was answered by reading. Proposed disposition, for the
 owner to confirm:
 
@@ -787,9 +791,9 @@ owner to confirm:
 - [ ] RP3 P0.12: run `RenameExactTo` with `replaceIfExists` over a regular file, a read-only file, a file
   another handle holds with and without delete sharing, a directory and a link; run a reader loop on the
   final name during 1,000 replacements and record whether it sees a missing name or partial content;
-  record the requests per replaced file from an SMB client trace where one can be taken. The I62 log does
+  record the requests per replaced file from an SMB client trace where one can be taken. The I63 log does
   not record that this was run. If a reader sees a missing name or partial content on the registered
-  share, that is an I62 STOP condition (section 9): keep B1's decision and return level 2 to the owner.
+  share, that is an I63 STOP condition (section 9): keep B1's decision and return level 2 to the owner.
   Record any Local location class without a replacing rename (D-11).
 
 ### 5.9 Watch item
@@ -797,7 +801,7 @@ owner to confirm:
 - [ ] RW1 `DiscoveryScope_MultipleFoldersLiveProgress` failed once in a full FileOps run on 2026-11-11:
   the copied content was correct and one summary number of a plain Local Copy (result code, discovered
   files, discovered bytes or copied files) was not the expected one. It then passed 43 times: 36
-  in-process repeats, three isolated attempts, three family-order attempts and one full run, as the I62
+  in-process repeats, three isolated attempts, three family-order attempts and one full run, as the I63
   log records. The cause is not established, and the case had not failed in the retained history. The
   case now logs `MultipleFolderLiveProgressSummary` with the four numbers when it fails. **First action
   on a recurrence: read that line**, before any change. No edit is planned until a recurrence gives data.
@@ -808,7 +812,7 @@ owner to confirm:
   D-12, D-13, D-14, D-15) as accepted, changed or declined, in this plan's section 3.1 and in the specs
   the decision touches. A declined decision is removed from scope or routed to a named owner. The first
   ones to ask: D-12 (collect by default) and D-14 (always keep awake), because they are already in the
-  code and the spec text for them is not confirmed in the I62 log.
+  code and the spec text for them is not confirmed in the I63 log.
 
 ## 6. Authoritative documents each item updates
 
@@ -817,7 +821,7 @@ owner to confirm:
 | G | `Specs/FileSystem/FileSystem_FileOperations.md` (new "Collected collisions" section after "Conflict model"; amend "Conflict model" for preemption and for collected prompts that do not stop workers; "Publication and managed Move" for folders held by set-aside descendants; the keep-awake section for second-pass waits; the queue rules for the first-version limit), `Specs/UI/UI_FileOperationsPopup.md` (Conflict Layout count line, card states, Issues rows), `Specs/Core/Core_FileSystemBridge.md` ("Conflict and cleanup": set-aside before binding, the second pass, holds), `Specs/Testing/Testing_SelfTests.md` (the family) | `docs/FileOperations.md`, `docs/Troubleshooting.md`, `docs/dev/FileOperationsEngine.md` |
 | RA | `Specs/UI/UI_FolderView.md` if the inactive style changes | `docs/SelectionsAndLists.md` |
 | RB | `FileSystem_FileOperations.md` (conflict model, action table, results), `UI_FileOperationsPopup.md` (conflict layout, finished card, Issues) | `docs/FileOperations.md`, `docs/dev/FileOperationsEngine.md` |
-| RD | the documents D5 of I62 named | the same |
+| RD | the documents D5 of I63 named | the same |
 | RE | `FileSystem_FileOperations.md` (queue rules), `Testing_PerformanceValidation.md` if a counter is documented | none |
 | RF | `UI_FileOperationsPopup.md` (Layout stability, Motion), `Testing_PerformanceValidation.md`, `Testing_SelfTests.md` | `docs/dev/TestingAndScreenshots.md`, `docs/VisualTour.md` captures |
 | RG | the keep-awake section of `FileSystem_FileOperations.md` | `docs/FileOperations.md` |
@@ -865,7 +869,7 @@ Rules that apply to every change:
 - Tests stay in the governed no-activation mode. Any focus-taking witness needs the owner's agreement to
   the time.
 - Test output stays under the approved `X:\RedSalamander.Perf` root. A case that needs a second volume is
-  run with `-AllowAlternateVolumeTestRoot`; the I62 log records that the second-volume case
+  run with `-AllowAlternateVolumeTestRoot`; the I63 log records that the second-volume case
   `R4A19_DiscoveryIndependentVolumes` fails without it, as on earlier runs.
 - A FileOps case must be registered in `kFileOpsFamilyDefinitions`, otherwise a family run skips it
   silently.
@@ -890,9 +894,9 @@ Move this plan to `Specs/Plans/Done/` only when:
   the first collision, the retained bytes at the bound, a Full FileOps and Full Commands run) and for
   RF1, RB12, RD1, RP2 and RP3 is archived under `Specs/TestRuns/` with its build receipt, including
   recorded skips for environments that were not available;
-- a successor plan is named for the provider-owned walks (G-D5) and for undo (I62 D-15), or the owner has
+- a successor plan is named for the provider-owned walks (G-D5) and for undo (I63 D-15), or the owner has
   declined them;
-- no requirement of this plan or of I62 lives only in this file;
+- no requirement of this plan or of I63 lives only in this file;
 - the exact Done path is admitted in the protected-history allowlist with its focused test.
 
 ## 9. STOP
@@ -936,7 +940,7 @@ Provider-owned walks and selected-root files for collected collisions (G-D5 succ
 of a running task with only questions left, unless the owner chooses G-D3 (b); a Managed Move in the
 sequential walker (G4.4); collection of problems other than name collisions (D-12); replacement without a
 decision or a policy the user chose, and the `fileOverwrite` preference (I18); the start-surface control
-for the task collision policy (I18); undo (I62 D-15); persistent history and H3's other rows; replacement
+for the task collision policy (I18); undo (I63 D-15); persistent history and H3's other rows; replacement
 of directories, links or reparse points at identity-less locations; rename-the-existing-item choices;
 content comparison of the two items, in the prompt or for any policy (D-16); conditional bulk policies
 other than B6's two and B4.5's; legacy staging-name recognition (D-17); remote, S3 and MTP staging names;

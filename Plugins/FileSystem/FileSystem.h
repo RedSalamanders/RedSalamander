@@ -258,7 +258,7 @@ public:
                                                           const FileSystemOptions* options,
                                                           FileSystemConditionalMutationResult* result,
                                                           IFileSystemBoundObject** published) noexcept override;
-    // I62 B7: the metadata classes of a file this location opens but cannot identify (a Move source).
+    // I63 B7: the metadata classes of a file this location opens but cannot identify (a Move source).
     HRESULT STDMETHODCALLTYPE ReadUnidentifiedMetadataFeatures(const wchar_t* path,
                                                                const FileSystemOptions* options,
                                                                uint32_t* presentFeatures) noexcept override;

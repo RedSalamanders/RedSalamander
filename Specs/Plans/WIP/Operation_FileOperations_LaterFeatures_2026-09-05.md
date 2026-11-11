@@ -38,8 +38,8 @@ completed reliability execution record.
 | Qualified MTP native Move | I16 BR-2, owner deferral 2026-09-08 | Isolated WPD move route and typed non-commit/uncertain outcomes | Host Move is currently Copy-only/source kept. Neither native Move nor destructive host-managed Move is qualified. |
 
 **Promoted 2026-11-10.** The owner promoted *Continue safe work and review conflicts later*
-to I62, slice G. I62 closed on 2026-11-11 without building it, and the owner moved it to
-[I63](FileOperations_CollectedCollisionsAndResiduals_2026-11-11.md), which owns its scope,
+to I63, slice G. I63 closed on 2026-11-11 without building it, and the owner moved it to
+[I64](FileOperations_CollectedCollisionsAndResiduals_2026-11-11.md), which owns its scope,
 default and tests from now on. The row above and the section "Review conflicts later" below
 are kept as the accepted intent that work starts from, not as a HOLD.
 
@@ -78,7 +78,7 @@ Clear isolation, redacted export, and search/cancellation costs at the retention
 
 ## Review conflicts later
 
-Promoted to I62 slice G on 2026-11-10 (see "Deferred scope"). I62 decision D-12 reopens the
+Promoted to I63 slice G on 2026-11-10 (see "Deferred scope"). I63 decision D-12 reopens the
 default stated in the next sentence.
 
 Default stays **Ask as issues occur**. Offer **Continue safe work and review later**

@@ -783,10 +783,10 @@ $sample = ']('
         }
     }
 
-    It 'admits only the reviewed I62 File Operations UX closeout record' {
+    It 'admits only the reviewed I63 File Operations UX closeout record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md'
-        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# I62 Completed File Operations UX fidelity`nUnfinished work remains in I63.`n"
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# I63 Completed File Operations UX fidelity`nUnfinished work remains in I64.`n"
         $inventory = Get-RSFixtureInventory -Root $root
         (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
         (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true

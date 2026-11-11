@@ -2397,7 +2397,7 @@ void CountDiscoveryCompletionOnceLocked(Task& task, const void* cookieKey, uint6
 
 static_assert(Task::kMaxInFlightFiles <= FileOperationsLayoutStability::kMaxStreamSlots, "one occupancy bit per stream slot");
 
-// I62 F1: the row slots the in-flight entries hold at nowTick, except the entry at exceptIndex (under _inFlightFilesMutex).
+// I63 F1: the row slots the in-flight entries hold at nowTick, except the entry at exceptIndex (under _inFlightFilesMutex).
 // An entry holds its slot while it runs and for the linger in which the popup still paints its finished row.
 [[nodiscard]] uint32_t HeldStreamSlotsLocked(const Task& task, size_t exceptIndex, ULONGLONG nowTick) noexcept
 {
@@ -2414,7 +2414,7 @@ static_assert(Task::kMaxInFlightFiles <= FileOperationsLayoutStability::kMaxStre
     return held;
 }
 
-// I62 F1: gives the entry at index its row slot (under _inFlightFilesMutex). A new stream takes the lowest slot no other
+// I63 F1: gives the entry at index its row slot (under _inFlightFilesMutex). A new stream takes the lowest slot no other
 // entry holds. A continuing stream keeps its slot, unless another stream took it while this one held none (a stream that
 // begins its next file after its last file's linger); then it takes the lowest free slot too. The slots are never
 // compacted: an entry that leaves frees its slot and no other entry moves.
@@ -5545,7 +5545,7 @@ struct ConflictActionPolicy
 
         // A menu needs two commands. A single remaining action is published as a direct action,
         // immediately before Cancel; the default and Escape actions do not change. This includes
-        // Recycle escalation's task-scoped grant (I62 D-6, owner, 2026-11-11): alone, it is a direct
+        // Recycle escalation's task-scoped grant (I63 D-6, owner, 2026-11-11): alone, it is a direct
         // button, never the default and never the Escape action.
         if (overflowActionCount == 1u && primaryActionCount < primaryActions.size())
         {
@@ -5655,7 +5655,7 @@ struct ConflictActionPolicy
             // Q2: an eligible multi-item task also offers the explicit task-scoped "Delete all
             // remaining permanently" choice ("Delete all remaining by name" on the by-name class).
             // It is the only action beside the direct ones, so FinalizePresentation publishes it as
-            // a direct button immediately before Cancel (I62 D-6).
+            // a direct button immediately before Cancel (I63 D-6).
             policy.Add(ConflictAction::PermanentDeleteAll);
         }
         policy.FinalizePresentation(bucket, false);
@@ -5675,7 +5675,7 @@ struct ConflictActionPolicy
             }
             if (allowDiscardSource)
             {
-                // I62 B4: only the bridge's file pre-flight of a Move that may remove its source offers it.
+                // I63 B4: only the bridge's file pre-flight of a Move that may remove its source offers it.
                 policy.Add(ConflictAction::DiscardSource);
             }
             break;
@@ -5780,7 +5780,7 @@ struct ConflictActionPolicy
             policy.Add(ConflictAction::SkipAll);
         }
     }
-    // I62 B6: the two task-wide bulk policies. Each is offered only on a plain regular-file collision whose own pair
+    // I63 B6: the two task-wide bulk policies. Each is offered only on a plain regular-file collision whose own pair
     // matches it, so choosing it never has to say what it does to a pair it does not cover, and only where Apply to
     // all is offered (the task can meet another such collision). Replace all older also needs Replace for this pair.
     // They wait under More beside Skip All; neither is the default or the Escape action.
@@ -5804,7 +5804,7 @@ struct ConflictActionPolicy
 {
     return action != ConflictAction::Retry && action != ConflictAction::Cancel && action != ConflictAction::None && action != ConflictAction::SkipAll &&
            action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes && action != ConflictAction::InvalidateLiveOutput &&
-           // I62 B6: a bulk policy is a grant of its own (ConflictArbiter), never an Apply-to-all answer.
+           // I63 B6: a bulk policy is a grant of its own (ConflictArbiter), never an Apply-to-all answer.
            action != ConflictAction::SkipSameSizeAndDate && action != ConflictAction::ReplaceOlder;
 }
 
@@ -5822,7 +5822,7 @@ struct ConflictActionPolicy
 
     if (action == ConflictAction::DiscardSource)
     {
-        // I62 B4: a remembered Delete source covers only files with the same size and date as the pair it was given for.
+        // I63 B4: a remembered Delete source covers only files with the same size and date as the pair it was given for.
         return sameSizeAndDate;
     }
 
@@ -5993,7 +5993,7 @@ struct ConflictActionPolicy
     *reusable = Task::CachedConflictDecision{scope, action, originatingPromptGeneration};
     if (action == ConflictAction::DiscardSource && scope.bucket == ConflictBucket::RegularFileExists)
     {
-        // I62 B6: a Delete source for all covers the class Skip all with the same size and date covers; the one
+        // I63 B6: a Delete source for all covers the class Skip all with the same size and date covers; the one
         // given last wins.
         arbiter.skipSameSizeAndDateGrantGeneration = 0u;
     }
@@ -6021,7 +6021,7 @@ struct ConflictActionPolicy
     return nullptr;
 }
 
-// I62 B6: the bulk policy, if any, that decides this collision without a prompt. A policy covers only a plain
+// I63 B6: the bulk policy, if any, that decides this collision without a prompt. A policy covers only a plain
 // regular-file collision (not a read-only occupant, a link, a folder or a type mismatch) that could take an
 // Apply-to-all answer and whose facts were read and match: the same size and date for Skip all with the same size
 // and date, an incoming file newer by more than the timestamp tolerance for Replace all older. The one-hour class
@@ -6038,7 +6038,7 @@ struct ConflictActionPolicy
     {
         return ConflictAction::None;
     }
-    // I62 B6.5 (D-13): a preset Skip or Keep both decides every file collision this scope covers, a read-only occupant
+    // I63 B6.5 (D-13): a preset Skip or Keep both decides every file collision this scope covers, a read-only occupant
     // included. A preset Replace older is the Replace all older grant set from the start (below).
     if (arbiter.presetPolicy == FileOperations::PresetCollisionPolicy::Skip || arbiter.presetPolicy == FileOperations::PresetCollisionPolicy::KeepBoth)
     {
@@ -6063,7 +6063,7 @@ struct ConflictActionPolicy
     return ConflictAction::None;
 }
 
-// I62 B6: the answer a bulk policy gives for one item. The policy itself is never executed: its item is skipped or
+// I63 B6: the answer a bulk policy gives for one item. The policy itself is never executed: its item is skipped or
 // replaced exactly as a single Skip or Replace would be.
 [[nodiscard]] constexpr ConflictAction ConflictPolicyItemAction(ConflictAction policy) noexcept
 {
@@ -6072,7 +6072,7 @@ struct ConflictActionPolicy
                                                          : policy;
 }
 
-// I62 B6: records a bulk policy chosen at a prompt. Each policy is set once per task and stays set; returns true only
+// I63 B6: records a bulk policy chosen at a prompt. Each policy is set once per task and stays set; returns true only
 // when this call set it. Skip all with the same size and date and a remembered Delete source for all cover the same
 // class (plain file collisions with the same size and date): the one given last wins, so this clears that answer.
 [[nodiscard]] bool GrantConflictPolicyLocked(Task::ConflictArbiter& arbiter, ConflictAction policy, uint64_t originatingGeneration) noexcept
@@ -6184,7 +6184,7 @@ void SetConflictPromptLocked(Task& task,
     prompt.destinationPath     = std::move(destinationPath);
     prompt.sourceMetadata      = std::move(sourceMetadata);
     prompt.destinationMetadata = std::move(destinationMetadata);
-    // I62 B3: one comparison, made here, for every view of this decision.
+    // I63 B3: one comparison, made here, for every view of this decision.
     if ((bucket == ConflictBucket::RegularFileExists || bucket == ConflictBucket::ReadOnlyRegularFileExists) && prompt.sourceMetadata.available &&
         prompt.destinationMetadata.available && ! prompt.sourceMetadata.isDirectory && ! prompt.destinationMetadata.isDirectory &&
         ! prompt.sourceMetadata.isLink && ! prompt.destinationMetadata.isLink)
@@ -6285,7 +6285,7 @@ void SetConflictPromptMetadataLoadingLocked(Task& task,
     entry.conflictPrompt->sourceParentPath      = prompt.pathDisplay.sourceParentPath;
     entry.conflictPrompt->destinationName       = prompt.pathDisplay.destinationName;
     entry.conflictPrompt->destinationParentPath = prompt.pathDisplay.destinationParentPath;
-    // I62 B3.3: the two items' facts as this decision shows them, kept for the Issues row of an item that ends at this
+    // I63 B3.3: the two items' facts as this decision shows them, kept for the Issues row of an item that ends at this
     // collision. Only a collision of two regular files whose facts were read carries them; they are never authority.
     const bool fileCollision = prompt.bucket == ConflictBucket::RegularFileExists || prompt.bucket == ConflictBucket::ReadOnlyRegularFileExists;
     if (fileCollision && prompt.sourceMetadata.available && prompt.destinationMetadata.available && ! prompt.sourceMetadata.isDirectory &&
@@ -6434,7 +6434,7 @@ struct ConflictPromptBeginResult
     ConflictBucket bucket = ConflictBucket::Unknown;
     Task::ConflictDecisionScope decisionScope{};
     std::optional<FileOperations::ConflictObservationReference> acceptedObservation;
-    bool fromPolicy = false; // I62 B6: decided by a bulk policy the user chose earlier in this task
+    bool fromPolicy = false; // I63 B6: decided by a bulk policy the user chose earlier in this task
 };
 
 [[nodiscard]] ConflictPromptBeginResult BeginConflictPrompt(Task& task,
@@ -6507,7 +6507,7 @@ struct ConflictPromptBeginResult
     }
 
     bucket                                    = RefineTypedConflictBucket(task._operation, bucket, sourceMetadata, destinationMetadata);
-    // I62 B4/B6: a remembered Delete source is reused only for a pair of files with the same size and date, and the
+    // I63 B4/B6: a remembered Delete source is reused only for a pair of files with the same size and date, and the
     // bulk policies are offered and applied by this comparison. It is the engine's, made here with the same guards as
     // the published prompt's (SetConflictPromptLocked).
     FileOperations::ConflictItemComparison itemComparison{};
@@ -6576,7 +6576,7 @@ struct ConflictPromptBeginResult
 
     if (! ignoreCachedDecision)
     {
-        // I62 B6: a bulk policy chosen earlier in this task decides a matching plain file collision before any
+        // I63 B6: a bulk policy chosen earlier in this task decides a matching plain file collision before any
         // remembered Apply-to-all answer, so for such a pair the policy wins. The item is answered through the same
         // route as a single Skip or Replace, with its own facts (a Replace at a destination without identities hands
         // over this item's own occupant, read by its caller before this call). Only the item's answer must still be
@@ -6757,11 +6757,11 @@ struct ConflictPromptBeginResult
     bool repeatStorageFailed       = false;
     uint64_t originatingGeneration = 0u;
     std::optional<FolderWindow::FileOperationState::TaskDiagnosticEntry> accepted;
-    ConflictAction chosenPolicy = ConflictAction::None; // I62 B6
+    ConflictAction chosenPolicy = ConflictAction::None; // I63 B6
     bool chosenPolicyIsNew      = false;
     std::wstring chosenPolicySourcePath;
     std::wstring chosenPolicyDestinationPath;
-    // I62 G7: other streams of this task may still transfer while this worker waits; see RefreshAwaitingAnswerQuiet.
+    // I63 G7: other streams of this task may still transfer while this worker waits; see RefreshAwaitingAnswerQuiet.
     uint64_t keepAwakeWorkSeen      = 0u;
     ULONGLONG keepAwakeLastWorkTick = GetTickCount64();
     for (;;)
@@ -6814,7 +6814,7 @@ struct ConflictPromptBeginResult
             }
             if (action == ConflictAction::SkipSameSizeAndDate || action == ConflictAction::ReplaceOlder)
             {
-                // I62 B6: the bulk policy is recorded on the task, and the current item, which matches it (the
+                // I63 B6: the bulk policy is recorded on the task, and the current item, which matches it (the
                 // policy is offered only then), is answered as a single Skip or Replace.
                 chosenPolicy      = action;
                 chosenPolicyIsNew = GrantConflictPolicyLocked(task._conflictArbiter, action, originatingGeneration);
@@ -6853,7 +6853,7 @@ struct ConflictPromptBeginResult
     }
     if (chosenPolicyIsNew)
     {
-        // I62 B6: one Information note per task when a policy is first set, not one per item.
+        // I63 B6: one Information note per task when a policy is first set, not one per item.
         const bool skipPolicy = chosenPolicy == ConflictAction::SkipSameSizeAndDate;
         task.LogDiagnostic(FolderWindow::FileOperationState::DiagnosticSeverity::Info,
                            S_OK,
@@ -8858,20 +8858,20 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                 ((flags & 16u) == 0u && policy.Contains(ConflictAction::RunConcurrently)) ||
                 ((flags & 32u) == 0u && policy.Contains(ConflictAction::InvalidateLiveOutput)) ||
                 // Q2: the task-scoped Recycle grant exists only on an eligible escalation; the by-name
-                // escalation (I35 R7.3) offers its own "Delete all remaining by name". I62 D-6: it is a
+                // escalation (I35 R7.3) offers its own "Delete all remaining by name". I63 D-6: it is a
                 // direct action, never the default and never the Escape action.
                 policy.Contains(ConflictAction::PermanentDeleteAll) !=
                     ((bucket == ConflictBucket::RecycleFailed || bucket == ConflictBucket::RecycleFailedByName) && (flags & 4u) != 0u) ||
                 std::find(policy.overflowActions.begin(), overflowEnd, ConflictAction::PermanentDeleteAll) != overflowEnd ||
                 policy.defaultAction == ConflictAction::PermanentDeleteAll || policy.escapeAction == ConflictAction::PermanentDeleteAll ||
-                // I62: More never holds a single command.
+                // I63: More never holds a single command.
                 policy.overflowActionCount == 1u)
             {
                 return false;
             }
         }
     }
-    // I62 B4: Delete source exists only on a file collision of a Move, only when the caller offers it, is never the
+    // I63 B4: Delete source exists only on a file collision of a Move, only when the caller offers it, is never the
     // default or Escape action, and sits under More while two or more actions wait there; a single one is published
     // as a direct action immediately before Cancel.
     for (size_t bucketIndex = 0u; bucketIndex < static_cast<size_t>(ConflictBucket::Count); ++bucketIndex)
@@ -8917,7 +8917,7 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
             }
         }
     }
-    // I62 B6: the bulk policies exist only on a plain regular-file collision whose own pair matches, only where Apply to
+    // I63 B6: the bulk policies exist only on a plain regular-file collision whose own pair matches, only where Apply to
     // all is offered, Replace all older only where Replace is offered; they sit under More (which then holds at least
     // two commands) and are never the default or the Escape action. Every class, every switch, both Move forms.
     {
@@ -9080,7 +9080,7 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
         BuildConflictActionPolicy(ConflictBucket::RegularFileExists, false, true, false, true, false, true, false, FILESYSTEM_MOVE, true);
     const ConflictActionPolicy discardReadOnly =
         BuildConflictActionPolicy(ConflictBucket::ReadOnlyRegularFileExists, false, true, true, true, false, true, false, FILESYSTEM_MOVE, true);
-    // I62 B6 pinned layouts: a Copy collision with the same size and date, one whose incoming file is newer, and a Move
+    // I63 B6 pinned layouts: a Copy collision with the same size and date, one whose incoming file is newer, and a Move
     // collision with the same size and date where Delete source also waits under More.
     const ConflictActionPolicy skipSameMore = BuildConflictActionPolicy(ConflictBucket::RegularFileExists,
                                                                         false,
@@ -9243,7 +9243,7 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false,
                          false,
                          ConflictAction::QueueUntilOtherTaskFinishes) &&
-           // I62 B4: Delete source waits under More with Skip All; without Skip All it is the one command More would hold,
+           // I63 B4: Delete source waits under More with Skip All; without Skip All it is the one command More would hold,
            // so it is published directly before Cancel.
            matchesPolicy(discardMore,
                          {ConflictAction::Overwrite,
@@ -9563,7 +9563,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         (progress->phase != FileSystemFileWorkPhase::Terminal && progress->disposition != FileSystemFileWorkDisposition::None))
         return rejectLocked();
     InFlightFileProgress* entry = nullptr;
-    size_t streamIndex          = _inFlightFiles.size(); // I62 F1: the regular row this report binds, if any
+    size_t streamIndex          = _inFlightFiles.size(); // I63 F1: the regular row this report binds, if any
     bool newStream              = false;                 // and whether a stream new to that row begins there
     if (progress->progressStreamId == FILESYSTEM_PRODUCER_PROGRESS_STREAM_ID)
     {
@@ -9635,7 +9635,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         {
             if (entry->explicitLifecycle && ! entry->terminal)
                 _fileWorkCountsUnavailable = true;
-            const size_t keptSlot    = entry->streamSlot; // a stream's next file stays in its row (I62 F1)
+            const size_t keptSlot    = entry->streamSlot; // a stream's next file stays in its row (I63 F1)
             *entry                   = {};
             entry->streamSlot        = keptSlot;
             entry->cookieKey         = cookie;
@@ -10427,7 +10427,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     {
         perItemCookie = static_cast<PerItemCallbackCookie*>(cookie);
     }
-    // I62 B2: the bridge found a destination the location opens and cannot identify, and it can
+    // I63 B2: the bridge found a destination the location opens and cannot identify, and it can
     // publish over the occupant the user is shown. Replace is then offered without a bound object;
     // the decision carries no authority beyond that occupant.
     if (! exactDestination && exactDestinationHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && perItemCookie != nullptr &&
@@ -10471,7 +10471,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     // Replace link stays bound-only: a link needs exact identity. Files on an identity-less route
     // are replaced conditionally through the writer contract instead.
     const bool allowDestructiveReplacement = static_cast<bool>(exactDestination) || (atomicReplaceEligible && bucket != ConflictBucket::DestinationLink);
-    // I62 B4: only the bridge's file pre-flight of a Managed Move sets this flag, for the duration of this call.
+    // I63 B4: only the bridge's file pre-flight of a Managed Move sets this flag, for the duration of this call.
     const bool allowDiscardSource = perItemCookie != nullptr && perItemCookie->discardSourceOffered;
     const ConflictPromptBeginResult promptBegin =
         BeginConflictPrompt(*this,
@@ -10569,7 +10569,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
         case ConflictAction::Skip:
         case ConflictAction::SkipAll:
         {
-            // I62 B6: a skip by Skip all with the same size and date is noted once, when the policy is set; it is
+            // I63 B6: a skip by Skip all with the same size and date is noted once, when the policy is set; it is
             // still the same typed user skip.
             if (! promptBegin.fromPolicy)
             {
@@ -10598,7 +10598,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
         case ConflictAction::QueueUntilOtherTaskFinishes:
         case ConflictAction::InvalidateLiveOutput:
         case ConflictAction::DeleteReadOnly:
-        // I62 B6: a bulk policy reaches its caller only as Skip or Overwrite (WaitForConflictDecision,
+        // I63 B6: a bulk policy reaches its caller only as Skip or Overwrite (WaitForConflictDecision,
         // BeginConflictPrompt); the policy value itself is never an item's answer.
         case ConflictAction::SkipSameSizeAndDate:
         case ConflictAction::ReplaceOlder:
@@ -13328,7 +13328,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         _workerReleased.store(true, std::memory_order_release);
         _workerReleased.notify_all();
         WakePauseWaiters();
-        UpdateKeepAwake(); // I62 G7
+        UpdateKeepAwake(); // I63 G7
         {
             // Take the prompt mutex after the stop state is published so a worker between its
             // predicate check and its wait cannot miss this notification.
@@ -14239,7 +14239,7 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
         std::scoped_lock lock(_pauseMutex);
         _paused.store(false, std::memory_order_release);
     }
-    UpdateKeepAwake(); // I62 G7: a stopping task counts as running until it finishes
+    UpdateKeepAwake(); // I63 G7: a stopping task counts as running until it finishes
     {
         // Take the prompt mutex after _cancelled is published so a worker between its predicate
         // check and its wait cannot miss this notification.
@@ -14284,7 +14284,7 @@ void FolderWindow::FileOperationState::Task::SetPaused(bool paused) noexcept
     }
 
     MarkRateSamplingStateChanged();
-    UpdateKeepAwake(); // I62 G7: a paused task releases the request before it can resume and takes it before the worker wakes
+    UpdateKeepAwake(); // I63 G7: a paused task releases the request before it can resume and takes it before the worker wakes
     if (! paused)
     {
         _pauseCv.notify_all();
@@ -14449,7 +14449,7 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
     }
 
     MarkRateSamplingStateChanged();
-    UpdateKeepAwake(); // I62 G7: the task the queue paused waits behind one that runs; that one holds the request
+    UpdateKeepAwake(); // I63 G7: the task the queue paused waits behind one that runs; that one holds the request
     if (! paused)
     {
         _pauseCv.notify_all();
@@ -14730,7 +14730,7 @@ void FolderWindow::FileOperationState::Task::SetAwaitingUserDecision(const bool 
     {
         return;
     }
-    // I62 G7: every wait starts as not quiet, so the request is kept until the task shows no progress; the answer takes
+    // I63 G7: every wait starts as not quiet, so the request is kept until the task shows no progress; the answer takes
     // the request back at once.
     _awaitingAnswerQuiet.store(false, std::memory_order_release);
     UpdateKeepAwake();
@@ -16222,10 +16222,10 @@ struct CrossFileSystemBridge
     HRESULT sourceBindingQueryHr = E_NOINTERFACE;
     wil::com_ptr<IFileSystemObjectBinding> destinationBinding;
     HRESULT destinationBindingQueryHr                  = E_NOINTERFACE;
-    // I62 B2: Replace at a destination the location opens and cannot identify. Null where the
+    // I63 B2: Replace at a destination the location opens and cannot identify. Null where the
     // provider has no such contract; Replace is then withheld there.
     wil::com_ptr<IFileSystemExpectedOccupantPublication> expectedOccupantPublication;
-    // I62 B7: removal of a Move source its location opens and cannot identify, by the facts the provider read before
+    // I63 B7: removal of a Move source its location opens and cannot identify, by the facts the provider read before
     // the copy opened it. Null where the source provider has no such contract; such a source is then copied and kept.
     wil::com_ptr<IFileSystemIdentityDelete> sourceIdentityDelete;
     wil::com_ptr<IFileSystemExpectedOccupantPublication> sourceUnidentifiedFacts;
@@ -16305,7 +16305,7 @@ struct CrossFileSystemBridge
         FileOperations::BoundObjectAuthority authority{};
         bool armed              = false;
         unsigned int retryCount = 0;
-        // I62 B7: a source its location opens and cannot identify, never together with armed. A regular file keeps
+        // I63 B7: a source its location opens and cannot identify, never together with armed. A regular file keeps
         // the delete identity text the provider resolved before the copy opened it, and is removed by name only while
         // those facts are unchanged; a folder is removed by name only when the Move emptied it.
         std::wstring byNameFacts;
@@ -16985,7 +16985,7 @@ struct CrossFileSystemBridge
             return FAILED(binding.status) ? binding.status : E_UNEXPECTED;
         }
 
-        // I62 B7: the location opens the source but cannot identify it (an open that failed is not Unsupported). Only
+        // I63 B7: the location opens the source but cannot identify it (an open that failed is not Unsupported). Only
         // a provider that also resolves such an object's facts and deletes by them (the Local provider) removes it,
         // by name, after the publication proof (FinalizeByNameSourceCleanup); any other source is copied and kept.
         if (binding.state == FileOperations::ObjectBindingState::Unsupported && sourceIdentityDelete && sourceUnidentifiedFacts)
@@ -17046,7 +17046,7 @@ struct CrossFileSystemBridge
     {
         if (! cleanupRecord.armed)
         {
-            // I62 B7: a source its location cannot identify is removed by name, or there is nothing to remove.
+            // I63 B7: a source its location cannot identify is removed by name, or there is nothing to remove.
             return cleanupRecord.Pending() ? FinalizeByNameSourceCleanup(sourcePath, destinationPath, cleanupRecord) : S_OK;
         }
         if (! cleanupRecord.authority.boundObject)
@@ -17186,7 +17186,7 @@ struct CrossFileSystemBridge
         }
     }
 
-    // I62 B2.7, B7.3: one Information note per task, on the first item replaced or source removed by its facts at a
+    // I63 B2.7, B7.3: one Information note per task, on the first item replaced or source removed by its facts at a
     // location that cannot identify files.
     void NoteCheckedByFactsOnce(std::wstring_view sourcePath, std::wstring_view destinationPath) noexcept
     {
@@ -17201,7 +17201,7 @@ struct CrossFileSystemBridge
         }
     }
 
-    // I62 B7: removes a Move source its location opens and cannot identify, at the point where an exact source would
+    // I63 B7: removes a Move source its location opens and cannot identify, at the point where an exact source would
     // be removed: after the destination's publication proof and every consent. A file is removed through the provider's
     // delete by name, which compares the facts it resolved before the copy opened the file on the handle that deletes
     // it; a folder only when the Move emptied it, through the provider's empty-folder removal. A file that changed, or
@@ -18040,7 +18040,7 @@ struct CrossFileSystemBridge
                                    ownedStageCleanupAllowed);
     }
 
-    // Rename merge on a profile without object binding, and (I62 B7) a source folder its location opens and cannot
+    // Rename merge on a profile without object binding, and (I63 B7) a source folder its location opens and cannot
     // identify: the provider's own delete of the emptied source directory, by name, which fails on a folder that still
     // holds anything; that is the authority its Permanent Delete already has.
     [[nodiscard]] HRESULT RemoveEmptiedSourceDirectoryByName(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
@@ -18071,13 +18071,13 @@ struct CrossFileSystemBridge
         return deleteHr;
     }
 
-    // I62 B4, B8: Delete source is offered only when the existing destination is provably another file than the
+    // I63 B4, B8: Delete source is offered only when the existing destination is provably another file than the
     // source. Two bound objects answer by identity. Where the destination's location opens the file and cannot
     // identify it, the location is asked another way: the destination is held denying all sharing and the
     // source's own name is then opened for reading. A sharing refusal means one file reached by two names;
     // success means two files. Any doubt withholds the action. The cost is two binds, and two opens at a
     // destination without identity, per collision of a Move that may remove its source.
-    // I62 B7: with sourceMayBeUnbound, a source its location opens and cannot identify is asked the same way.
+    // I63 B7: with sourceMayBeUnbound, a source its location opens and cannot identify is asked the same way.
     [[nodiscard]] bool SourceAndDestinationAreDistinctFiles(const std::wstring& sourcePath,
                                                             const std::wstring& destinationPath,
                                                             bool sourceMayBeUnbound = false) noexcept
@@ -18126,11 +18126,11 @@ struct CrossFileSystemBridge
         return sourceByName.is_valid();
     }
 
-    // I62 B4: Delete source on a Move collision. The destination keeps the file it has and nothing is copied; the
+    // I63 B4: Delete source on a Move collision. The destination keeps the file it has and nothing is copied; the
     // source goes to the Recycle Bin by name through the source provider's own Delete, which only the Local provider
     // is asked to do (ValidateDestinationOverwritePolicy). A location without a Recycle Bin is refused by that
     // provider before any change (ERROR_NOT_SUPPORTED); that source is then deleted permanently or kept by the task's
-    // one answer to that question (I62 D-5, RemoveSourceWithoutRecycleBin).
+    // one answer to that question (I63 D-5, RemoveSourceWithoutRecycleBin).
     // Returns S_OK when the source is gone and S_FALSE when it was kept, which the callers treat as a skip.
     [[nodiscard]] HRESULT RemoveSourceAlreadyAtDestination(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
     {
@@ -18154,7 +18154,7 @@ struct CrossFileSystemBridge
         }
         if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
         {
-            // The provider refused before any change: the source's location has no Recycle Bin (I62 D-5).
+            // The provider refused before any change: the source's location has no Recycle Bin (I63 D-5).
             return RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, deleteHr);
         }
         if (deleteHr == COPYENGINE_E_RECYCLE_FORCE_NUKE)
@@ -18179,7 +18179,7 @@ struct CrossFileSystemBridge
         return deleteHr;
     }
 
-    // I62 D-5: the one question a task asks when Delete source meets a source location without a Recycle Bin: "This
+    // I63 D-5: the one question a task asks when Delete source meets a source location without a Recycle Bin: "This
     // location has no Recycle Bin. Delete the source files permanently?", with Permanently delete, Keep source and
     // Cancel. It is the Recycle-refusal consent card (bucket RecycleFailed) of a Move, which no other Move route raises,
     // asked without Apply to all because its answer already covers the task. The answer (PermanentDelete or Skip) is
@@ -18245,7 +18245,7 @@ struct CrossFileSystemBridge
         return S_OK;
     }
 
-    // I62 D-5: Delete source where the source's location has no Recycle Bin (the provider refused the Recycle before any
+    // I63 D-5: Delete source where the source's location has no Recycle Bin (the provider refused the Recycle before any
     // change). The task asks once (AskSourceWithoutRecycleBinOnce). Keep source keeps the source: the item ends as a skip
     // does, with an Information note. Permanently delete removes it with the strongest authority the location gives: the
     // source is bound before the question and again, with delete access, after it; the second object must be the first
@@ -19361,7 +19361,7 @@ struct CrossFileSystemBridge
         {
             CaptureReplaceExpectation(destinationPath, occupantBeforePrompt);
         }
-        // I62 B2: a binding destination that opens this file and cannot identify it. The provider
+        // I63 B2: a binding destination that opens this file and cannot identify it. The provider
         // reads the facts of the occupant the user is about to decide on; they travel with the
         // decision to the publication, where one replacing rename is conditioned on them. Success
         // here is also what offers Replace on the prompt.
@@ -19376,7 +19376,7 @@ struct CrossFileSystemBridge
             }
         }
 
-        // I62 B4: Delete source is offered when this Move may remove its source (Managed Move), the source is on the
+        // I63 B4: Delete source is offered when this Move may remove its source (Managed Move), the source is on the
         // Local file system (the one provider whose Delete is known to use the Recycle Bin or to refuse before any
         // change), and the destination is a regular file that is provably not the source under another name.
         const bool offerDiscardSource = discardSourceRequested != nullptr && sourceCleanupPermitted && task._operation == FILESYSTEM_MOVE && ! linkCollision &&
@@ -19478,7 +19478,7 @@ struct CrossFileSystemBridge
         std::wstring_view sourcePath;
         std::wstring_view destinationPath;
         IFileSystemBoundObject* expectedDestination = nullptr;
-        // Replace without a bound destination: the occupant the user saw (I62 B2), or null.
+        // Replace without a bound destination: the occupant the user saw (I63 B2), or null.
         const FileSystemExpectedOccupant* expectedOccupant = nullptr;
         bool overwriteGranted                               = false;
         bool replaceReadOnlyGranted                         = false;
@@ -19510,7 +19510,7 @@ struct CrossFileSystemBridge
                                            publication.overwriteGranted && expectedOccupantPublication;
         if (expectedOccupantRoute)
         {
-            // I62 B2: the location cannot identify the occupant. The provider reads its facts again
+            // I63 B2: the location cannot identify the occupant. The provider reads its facts again
             // and renames the stage over it only while they equal what the user decided on.
             publishHr = expectedOccupantPublication->PublishOverExpectedOccupant(ownedStage,
                                                                                  destinationPath.c_str(),
@@ -19580,7 +19580,7 @@ struct CrossFileSystemBridge
             RecordOwnedStageDisposition(OwnedStageDisposition::Published);
             if (expectedOccupantRoute)
             {
-                // I62 B2.7: said once per task, shared with a source removed by its facts (B7.3).
+                // I63 B2.7: said once per task, shared with a source removed by its facts (B7.3).
                 NoteCheckedByFactsOnce(publication.sourcePath, publication.destinationPath);
             }
             if (! publishedAuthority)
@@ -19622,7 +19622,7 @@ struct CrossFileSystemBridge
             NoteFailure(QualifiedItemFailurePhase::FinalPublish, E_UNEXPECTED);
             return E_UNEXPECTED;
         }
-        // I62 B2: a changed occupant goes back to the user as a new decision on the current occupant
+        // I63 B2: a changed occupant goes back to the user as a new decision on the current occupant
         // (PumpAndPublishFile), as on the atomic-final writer route; it is not this item's recorded
         // failure while that decision can still be raised.
         if (! (expectedOccupantRoute && publishHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)))
@@ -19803,9 +19803,9 @@ struct CrossFileSystemBridge
         bool replaceLinkGranted     = false;
         wil::com_ptr<IFileSystemBoundObject> expectedDestination;
         std::optional<FileSystemBasicInformation> replaceExpectation;
-        // The occupant the user agreed to replace where the location cannot identify it (I62 B2).
+        // The occupant the user agreed to replace where the location cannot identify it (I63 B2).
         std::optional<FileSystemExpectedOccupant> expectedOccupant;
-        // The user answered Delete source: the destination keeps its file, nothing is bound, staged or copied (I62 B4).
+        // The user answered Delete source: the destination keeps its file, nothing is bound, staged or copied (I63 B4).
         bool discardSourceRequested = false;
 
         // Source authority, metadata, cleanup record, reader, and sizes.
@@ -20182,7 +20182,7 @@ struct CrossFileSystemBridge
         // destination has; without a writer proof the verify phase reports Unavailable for the item.
         txn.useAtomicFinalWriter  = writerRoute.useAtomicFinalWriter && (! managedCleanupRecord.Pending() || txn.writerProofRoute) &&
                                     (! overwriteGranted || txn.identityLessReplace) && (! verificationRequested || txn.writerProofRoute || txn.identityLess);
-        // I62 B7: a source removed by name after publication needs the same exact publication proof as a bound one.
+        // I63 B7: a source removed by name after publication needs the same exact publication proof as a bound one.
         txn.useIdentityOwnedStage = ! txn.identityLess && (managedCleanupRecord.Pending() || ! txn.useAtomicFinalWriter);
         txn.useDirectFinalWriter  = ! txn.useAtomicFinalWriter && txn.identityLess && directFinalCreateSupported == TRUE && ! overwriteGranted &&
                                     ! txn.replaceReadOnlyGranted && ! txn.replaceLinkGranted;
@@ -21210,12 +21210,12 @@ struct CrossFileSystemBridge
     {
         if (! txn.managedCleanupRecord.armed && ! txn.managedCleanupRecord.byNameFacts.empty())
         {
-            // I62 B7: the source is removed by name. Its reader is no longer needed; releasing it keeps the probe and the
+            // I63 B7: the source is removed by name. Its reader is no longer needed; releasing it keeps the probe and the
             // delete from meeting the copy's own handle.
             txn.reader.reset();
             if (txn.overwriteGranted || txn.replaceReadOnlyGranted || txn.replaceLinkGranted)
             {
-                // I62 B8: an existing destination item was replaced. It may have been the source itself under another
+                // I63 B8: an existing destination item was replaced. It may have been the source itself under another
                 // spelling, and the published copy then answers the source's facts. The location is asked (a held
                 // destination and an open of the source's name) after every handle this transaction holds on the
                 // published file is released: the probe holds the destination denying all sharing, so one handle
@@ -21299,7 +21299,7 @@ struct CrossFileSystemBridge
         }
         if (txn.discardSourceRequested)
         {
-            // I62 B4: the destination keeps its file. No source binding, stage, permit or byte is involved; the
+            // I63 B4: the destination keeps its file. No source binding, stage, permit or byte is involved; the
             // source is removed (or kept, where its location has no Recycle Bin) and the file counts as done.
             return RemoveSourceAlreadyAtDestination(txn.sourcePath, txn.destinationPath);
         }
@@ -21402,7 +21402,7 @@ struct CrossFileSystemBridge
         hr = Publish(txn);
         if (FAILED(hr))
         {
-            // I62 B2: nothing was published over an occupant that is no longer the one decided on;
+            // I63 B2: nothing was published over an occupant that is no longer the one decided on;
             // the stage is aborted below and the decision is raised again on the current occupant.
             replaceRefused = hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && txn.expectedOccupant.has_value() && ! txn.promoted;
             return hr;
@@ -22417,7 +22417,7 @@ struct CrossFileSystemBridge
         }
 
         RestoreSequentialDirectoryMetadata(frame);
-        // I62 B7: the record also removes, by name, an emptied folder its location cannot identify.
+        // I63 B7: the record also removes, by name, an emptied folder its location cannot identify.
         const bool recordCleanup = frame.managedDirectoryCleanup.Pending();
         const HRESULT cleanupHr  = recordCleanup ? FinalizeManagedSourceCleanup(sourcePath, destinationPath, frame.managedDirectoryCleanup)
                                                  : (renameMerge ? RemoveEmptiedSourceDirectoryByName(sourcePath, destinationPath) : S_OK);
@@ -25429,7 +25429,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     // attribute or scheduling key becomes destructive authority.
                     return S_FALSE;
                 }
-                // I62 B1: an item already exists at a destination that opens items but cannot
+                // I63 B1: an item already exists at a destination that opens items but cannot
                 // identify them. That is a name collision, not a refusal. The bridge raises the typed
                 // decision before any byte is read (ValidateDestinationOverwritePolicy), with both
                 // items' facts, and offers what the location can perform; the user's decision is the
@@ -25445,7 +25445,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     Debug::Perf::EmitCounter(L"FileOps.Conflict.DestinationIdentityUnavailable");
                     return S_FALSE;
                 }
-                // I62 B1.5: a folder onto an existing item at such a destination. Onto a plain folder the two folders
+                // I63 B1.5: a folder onto an existing item at such a destination. Onto a plain folder the two folders
                 // merge, as at a location that identifies its items (product invariant 7): no decision is asked for the
                 // folder itself, and each child that collides raises its own decision in the bridge's file pre-flight.
                 // Onto a file the bridge raises the type-mismatch decision (Keep both, Skip, Cancel). The source folder
@@ -25464,7 +25464,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     Debug::Perf::EmitCounter(L"FileOps.Conflict.DestinationIdentityUnavailable");
                     return S_FALSE;
                 }
-                // I62 B7: the source's location opens it and cannot identify it: the guard stopped at the source's
+                // I63 B7: the source's location opens it and cannot identify it: the guard stopped at the source's
                 // bind, which is Unsupported (an open that failed is Indeterminate and keeps its refusal). The bridge
                 // copies it and removes it only after the destination's publication proof and only while the facts
                 // read before the copy are unchanged; otherwise the source is kept. The destination is checked by the

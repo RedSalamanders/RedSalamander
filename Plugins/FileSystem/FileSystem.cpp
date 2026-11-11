@@ -7141,7 +7141,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::PublishOverExpectedOccupant(IFileSystemBou
     return control->PublishOwnedOverExpected(finalPath, expected, flags, options, result, published);
 }
 
-// I62 B7: the bound snapshot's metadata classes for a file whose location cannot identify it, so the host can keep a
+// I63 B7: the bound snapshot's metadata classes for a file whose location cannot identify it, so the host can keep a
 // Move source whose streams, extended attributes or encryption its pathname copy does not carry. Read-only, no-follow
 // and fully shared; the backup-stream inspection is the bound snapshot's own and fails rather than report absence.
 HRESULT STDMETHODCALLTYPE FileSystem::ReadUnidentifiedMetadataFeatures(const wchar_t* path,

@@ -163,7 +163,7 @@ struct TaskSnapshot
         bool explicitLifecycle        = false;
         bool sizeKnown                = false;
         bool terminal                 = false;
-        // I62 F1: the engine's row slot for this stream; kMaxInFlightFiles when there is none (synthetic fixtures), and
+        // I63 F1: the engine's row slot for this stream; kMaxInFlightFiles when there is none (synthetic fixtures), and
         // such entries are drawn in snapshot order below the slotted ones.
         size_t streamSlot = kMaxInFlightFiles;
     };
@@ -240,7 +240,7 @@ struct TaskSnapshot
         std::wstring destinationParentPath;
         ItemMetadata sourceMetadata;
         ItemMetadata destinationMetadata;
-        // I62 B3: the engine's comparison of the incoming item with the existing one.
+        // I63 B3: the engine's comparison of the incoming item with the existing one.
         uint8_t dateRelation = 0; // FileOperations::ConflictDateRelation
         uint8_t sizeRelation = 0; // FileOperations::ConflictSizeRelation
         std::array<uint8_t, kMaxConflictActions> actions{};
@@ -312,8 +312,8 @@ struct TaskSnapshot
     unsigned long unknownSourceCount          = 0;
     unsigned long missingSourceCount          = 0;
     unsigned long alreadyThereSourceRemovedCount = 0;
-    unsigned long skippedSameSizeAndDateCount    = 0; // I62 B6
-    unsigned long replacedOlderCount             = 0; // I62 B6
+    unsigned long skippedSameSizeAndDateCount    = 0; // I63 B6
+    unsigned long replacedOlderCount             = 0; // I63 B6
     StatusKind statusKind                     = StatusKind::None;
     // I35 R9.4 (P3): false when the completed task changed nothing (CompletedTaskFacts).
     bool startedMutation = true;
@@ -542,7 +542,7 @@ struct PopupLayoutDebugSnapshot
     bool layoutMotionActive                         = false;
     bool autoResizeMotionActive                     = false;
     bool selectedTaskHeightMotionActive             = false;
-    // I62 slice F: the stream rows the task's card reserves (painted or blank) and the card list's scrollbar decision.
+    // I63 slice F: the stream rows the task's card reserves (painted or blank) and the card list's scrollbar decision.
     size_t taskReservedStreamRows                   = 0u;
     bool scrollBarVisible                           = false;
     bool completedGroupLayoutMotionActive           = false;
@@ -1507,7 +1507,7 @@ private:
         bool stacked      = false;
     };
 
-    // I62 S7 (slice F8): a wrapped text measured once per text, width, fallback line height and format. The cache holds a
+    // I63 S7 (slice F8): a wrapped text measured once per text, width, fallback line height and format. The cache holds a
     // reference to the format, so a recreated format never matches the old entry. The layout is kept with its maximum
     // height set to the measured height, as DrawWrappedText builds it, so the painter can draw it as it is.
     struct WrappedTextCache final
@@ -1567,7 +1567,7 @@ private:
         bool expanded = false;
     };
 
-    // I62 slice F (Specs/UI/UI_FileOperationsPopup.md, "Layout stability"): one card's state for the rules in
+    // I63 slice F (Specs/UI/UI_FileOperationsPopup.md, "Layout stability"): one card's state for the rules in
     // FileOperationsLayoutStability.h. A change of the card's lifecycle phase starts it afresh, so a new phase is
     // measured at once. Erased with the card, like the height animation.
     struct TaskLayoutStability final
@@ -1822,7 +1822,7 @@ private:
     int _maxAutoSizedWindowHeight     = 0; // Sticky max window height (prevents resize "dancing")
     int _scrollPos                    = 0;
     bool _scrollBarVisible            = false;
-    // I62 slice F: something asked to scroll while the bar was withheld for a pending automatic resize. The bar is then
+    // I63 slice F: something asked to scroll while the bar was withheld for a pending automatic resize. The bar is then
     // shown for as long as the content overflows the viewport (FileOperationsLayoutStability::ScrollBarNeeded).
     bool _scrollRequestedWhileWithheld = false;
     // The largest scroll position of the content in the painted viewport, whether or not the bar is shown.
@@ -2030,7 +2030,7 @@ private:
     ULONGLONG _autoResizeAnimationStartTick = 0;
     ULONGLONG _uiMotionTimerDueTick         = 0;
     UINT _telemetryTimerIntervalMs          = 0u;
-    ULONGLONG _lastRateUpdateTick           = 0; // I62 slice F: UpdateRates runs at most once per telemetry interval
+    ULONGLONG _lastRateUpdateTick           = 0; // I63 slice F: UpdateRates runs at most once per telemetry interval
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<ID2D1DeviceContext> _target;

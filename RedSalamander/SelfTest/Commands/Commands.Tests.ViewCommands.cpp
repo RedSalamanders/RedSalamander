@@ -29805,7 +29805,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     return state.failure.empty();
 }
 
-// I62 slice A: the first press in the pane that is not active makes that pane active and moves the
+// I63 slice A: the first press in the pane that is not active makes that pane active and moves the
 // cursor there; it never discards the selection that pane had. Ctrl and Shift keep their meaning.
 struct FolderViewActivationPressFixture final
 {

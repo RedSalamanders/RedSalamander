@@ -146,7 +146,7 @@ The bridge uses the single-pass discovery scheduler from
 - Directory-on-directory merges. Conflicts are raised for colliding children.
 - Recursive Move deletes each proven source file after its own destination contract, then removes
   directories non-recursively and deepest-first. A source the Local location opens but cannot
-  identify (I62 B7) keeps no binding: a file is removed by the provider's delete by name while the
+  identify (I63 B7) keeps no binding: a file is removed by the provider's delete by name while the
   facts read before its copy are unchanged, and a folder by its empty-folder removal; anything else
   keeps the source (File Operations invariant 15).
 - A new/changed, skipped, or retained source descendant blocks parent removal without opening a
@@ -261,7 +261,7 @@ prompt. Folder-on-folder merges recurse and prompt only on colliding children; f
 mismatches never gain Overwrite. An exact final destination link is a typed Replace link / Keep
 Both / Skip conflict, while any linked destination ancestor remains a hard stop. A folder also
 merges onto an existing plain folder at a destination that opens items but cannot identify them
-(I62 B1.5); there a Managed Move onto a destination folder that is a link or another reparse point
+(I63 B1.5); there a Managed Move onto a destination folder that is a link or another reparse point
 is refused before the bridge starts.
 
 Before a destructive collision action is exposed, the host binds the current final destination
@@ -273,7 +273,7 @@ the overwrite flag (R3-1): the bridge reads the occupant no-follow before the pr
 writer with the granted flags, passes that occupant through `IFileWriterExpectedReplacement`
 before the first byte, and the provider replaces only that occupant (`ERROR_REVISION_MISMATCH`
 otherwise, nothing published). A binding provider that opens an occupant it cannot identify may
-offer the same two actions through `IFileSystemExpectedOccupantPublication` (I62 B2): the bridge
+offer the same two actions through `IFileSystemExpectedOccupantPublication` (I63 B2): the bridge
 asks the provider for the occupant's facts before the prompt, keeps them with the decision, copies
 into an identity-owned stage, and the provider renames that stage over the occupant only while
 its facts are unchanged (`ERROR_REVISION_MISMATCH` otherwise, nothing published, and the collision

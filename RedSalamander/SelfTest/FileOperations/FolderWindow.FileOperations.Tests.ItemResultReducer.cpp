@@ -498,7 +498,7 @@ namespace FileOperationItemResultReducerSelfTestInternal
         unsigned long errors   = 0u;
         std::wstring runningNote;
         fileOperations.CollectTaskDiagnosticSnapshot(task._taskId, warnings, errors, runningNote);
-        // I62 B5: the trailing task.result restates the item's own Error and is not counted again.
+        // I63 B5: the trailing task.result restates the item's own Error and is not counted again.
         const bool restatedResultCountedOnce = expectCollision ? errors == 1u : errors <= 1u;
         const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
         Debug::Perf::EmitValue(L"FileOps.SelfTest.UnverifiableDestinationCollisionMs", GetTickCount64() - started, finalHr);
@@ -545,7 +545,7 @@ namespace FileOperationItemResultReducerSelfTestInternal
     return passed;
 }
 
-// I62 B3: the engine's comparison of the incoming item with the existing one, and the words the
+// I63 B3: the engine's comparison of the incoming item with the existing one, and the words the
 // card and the decision mirror share for it.
 namespace ConflictComparisonContract
 {
@@ -648,10 +648,10 @@ static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == Con
     return passed;
 }
 
-// I62 slice B: a Managed Move onto an existing file at a location that opens items but cannot
+// I63 slice B: a Managed Move onto an existing file at a location that opens items but cannot
 // identify them is a name collision the user decides, not a refusal. The decision is raised before
 // any byte is read and shows both items' facts; Skip keeps both byte streams, Keep both publishes
-// beside the existing item and completes the Move, Cancel changes nothing. Replace (I62 B2) publishes
+// beside the existing item and completes the Move, Cancel changes nothing. Replace (I63 B2) publishes
 // over the occupant the user was shown through one replacing rename. When that occupant changed after
 // the decision was shown nothing is replaced and the decision is raised again on the current occupant;
 // when another program keeps the occupant in use the rename is refused and both files stay.
@@ -876,7 +876,7 @@ static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == Con
             shown->sourceMetadata.lastWriteTime != 0 && shown->destinationMetadata.available && shown->destinationMetadata.sizeKnown &&
             shown->destinationMetadata.sizeBytes == destinationBytes.size() && shown->destinationMetadata.lastWriteTime != 0 &&
             shown->comparison.size == FileOperations::ConflictSizeRelation::Smaller && shown->comparison.date != FileOperations::ConflictDateRelation::Unknown;
-        // Delete source (I62 B4) is offered here as well: the location cannot say by identity that the two
+        // Delete source (I63 B4) is offered here as well: the location cannot say by identity that the two
         // files differ, so the same-file probe answers.
         const bool discardOffered = offers(Action::DiscardSource);
         const bool promptActions  = discardOffered &&
@@ -972,7 +972,7 @@ static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == Con
     return passed;
 }
 
-// I62 B4: Delete source. A Managed Move of one file onto an existing file at an ordinary destination (a location
+// I63 B4: Delete source. A Managed Move of one file onto an existing file at an ordinary destination (a location
 // that identifies its items). The user answers Delete source from the prompt's More list: the destination keeps its
 // bytes, nothing is copied or staged, the source goes to the Recycle Bin, and the item is reported as already there
 // with its source removed, not as skipped. Apply to all is remembered only when the two files have the same size and
@@ -1172,7 +1172,7 @@ static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == Con
     return passed;
 }
 
-// I62 G7 (D-14): the power API behind the keep-awake request, replaced by a counting fake so the case depends on nothing
+// I63 G7 (D-14): the power API behind the keep-awake request, replaced by a counting fake so the case depends on nothing
 // about the machine's power policy. The create function hands out a real event handle (the request owns and closes it).
 struct KeepAwakeSelfTestApi final
 {
@@ -1214,7 +1214,7 @@ struct KeepAwakeSelfTestApi final
     }
 };
 
-// I62 slice F (F1): stable stream rows in the engine, on tasks that are never admitted (no worker, no I/O), as in
+// I63 slice F (F1): stable stream rows in the engine, on tasks that are never admitted (no worker, no I/O), as in
 // RunFolderFileWorkReducerControls. The byte-report reducer runs with fixed ticks: a stream keeps its slot while a lower
 // stream ends and its entry is compacted away or removed, the lowest free slot goes to the next stream, a finished stream
 // holds its slot for the 300 ms linger, and a stream that replaced an evicted one takes its slot. The lifecycle reducer:
@@ -1358,7 +1358,7 @@ struct KeepAwakeSelfTestApi final
     return true;
 }
 
-// I62 G7 (D-14): keep the computer awake while a task runs. The pure predicate table first, then the process-wide request
+// I63 G7 (D-14): keep the computer awake while a task runs. The pure predicate table first, then the process-wide request
 // through the fake power API. Real tasks are not driven through these states here: Task::UpdateKeepAwake only reads
 // atomics the task already keeps and hands them to the lease, so the lease is driven with synthetic facts for two tasks.
 // What this does not prove: that each hook in the task code fires (admission, leaving the operation, pause, queue pause,
@@ -1539,7 +1539,7 @@ struct KeepAwakeSelfTestApi final
     return true;
 }
 
-// I62 B6: the bulk policies at a collision. A Copy of several files onto a folder that already holds each of them. The
+// I63 B6: the bulk policies at a collision. A Copy of several files onto a folder that already holds each of them. The
 // first collision whose pair matches a policy is answered with it from the prompt's More list; every later file whose
 // pair matches is then decided without a question, and every other pair still asks. A policy skip leaves the
 // destination's bytes and creates no stage; a policy replacement is an ordinary Replace. Nothing is remembered as an
@@ -1859,7 +1859,7 @@ struct KeepAwakeSelfTestApi final
     return passed;
 }
 
-// I62 D-5: Delete source where the source's location has no Recycle Bin. The Local provider's self-test seam
+// I63 D-5: Delete source where the source's location has no Recycle Bin. The Local provider's self-test seam
 // REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY refuses, before any change, every Recycle of an item directly inside
 // one folder, as a location without a Recycle Bin does. The task then asks one question on the card and keeps the answer
 // for the rest of the task. Four cases: Permanently delete over two files (asked once; both sources gone, both
@@ -2150,7 +2150,7 @@ struct KeepAwakeSelfTestApi final
     return passed;
 }
 
-// I62 B6.5 (D-13): the collision policy a task may carry from its start. A Copy of four files onto a folder that already
+// I63 B6.5 (D-13): the collision policy a task may carry from its start. A Copy of four files onto a folder that already
 // holds each of them: one pair with the same size and date, one whose existing file is older, one whose existing file is
 // newer and one of another size. Ask asks four times (each answered Skip) and keeps both items' facts on the Issues
 // records (B3.3); Skip and Keep both decide every pair without a question; Replace older replaces the one older file and
@@ -2344,7 +2344,7 @@ struct KeepAwakeSelfTestApi final
             if (! original && ReadFileTextFsIo(io, it->path(), bytes) && bytes == sourceBytes)
                 ++keptBothEntries;
         }
-        // I62 B3.3: an asked collision keeps both items' facts on its Issues records (the question and the answer).
+        // I63 B3.3: an asked collision keeps both items' facts on its Issues records (the question and the answer).
         size_t factRecords = 0u;
         for (const auto& entry : summary.issueDiagnostics)
         {
@@ -2391,7 +2391,7 @@ struct KeepAwakeSelfTestApi final
     return passed;
 }
 
-// I62 B3.3: the retained comparison renders the decision's own lines, and the Issues projection keeps them on the row its
+// I63 B3.3: the retained comparison renders the decision's own lines, and the Issues projection keeps them on the row its
 // question and its answer share, in either arrival order.
 [[nodiscard]] bool RunFileOperationConflictObservedFactsSelfTest() noexcept
 {
@@ -2478,7 +2478,7 @@ struct KeepAwakeSelfTestApi final
     return true;
 }
 
-// I62 B1.5: a folder onto an existing folder at a location that opens items but cannot identify them. The two folders
+// I63 B1.5: a folder onto an existing folder at a location that opens items but cannot identify them. The two folders
 // merge, as at a location that identifies its items: the folder itself raises no decision, and each child that
 // collides raises its own (answered Skip here). A Copy merges and copies the new child; a Move merges too, keeps a
 // source folder that still holds a skipped child (not an Error) and removes one the merge emptied. A destination
@@ -2701,7 +2701,7 @@ struct KeepAwakeSelfTestApi final
     return passed;
 }
 
-// I62 B7: a Managed Move whose source is at a location that opens items but cannot identify them. The bridge has the
+// I63 B7: a Managed Move whose source is at a location that opens items but cannot identify them. The bridge has the
 // provider read the source's facts before the copy opens it, and removes the source by name after the destination's
 // publication proof only while those facts are unchanged; otherwise the source is kept and the item reports "Copied;
 // source kept", which is not an Error. A source folder is removed only when the Move emptied it. A source carrying an

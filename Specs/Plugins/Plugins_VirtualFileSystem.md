@@ -1372,7 +1372,7 @@ can bind, so a delete by name never replaces exact authority, compares the facts
 handle that performs the delete, and deletes only the entries of the pinned tree, each after comparing
 its own facts (a stop after a deletion reports the partial-tree receipt). The Local provider does this
 for identity-less locations (I35 R7.3, D-7.3). The host also uses the file form for the source of a
-Managed Move at such a location (I62 B7): it resolves the facts before the copy opens the file and
+Managed Move at such a location (I63 B7): it resolves the facts before the copy opens the file and
 deletes after the destination's publication proof.
 
 The pinned-tree scale selftest temporarily sets the actual Local provider to manual Delete concurrency 8,
@@ -1437,7 +1437,7 @@ only to an advertised exact bound-object host readback; otherwise the item repor
 `Unavailable`.
 
 A provider that implements `IFileSystemObjectBinding` may additionally expose
-`IFileSystemExpectedOccupantPublication` (`7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7`, I62 B2) for an
+`IFileSystemExpectedOccupantPublication` (`7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7`, I63 B2) for an
 existing destination it can open and cannot identify, where `BindObject` returns
 `ERROR_NOT_SUPPORTED` and `PublishAs` therefore has no exact destination to replace.
 `ReadExpectedOccupant` returns a size-validated `FileSystemExpectedOccupant` (attributes, creation
@@ -1455,7 +1455,7 @@ during the transfer, or set a copy of it aside. The result structure and the ret
 object follow `PublishAs`, including `outcomeKnown`; a stage without a persistent identity whose
 rename failed is reported as a known non-commit only when the stage is found again under its own
 name. The interface grants nothing by itself: it is used only after a typed user decision for that
-occupant. `ReadUnidentifiedMetadataFeatures` (I62 B7) reports the `FILESYSTEM_METADATA_*` classes
+occupant. `ReadUnidentifiedMetadataFeatures` (I63 B7) reports the `FILESYSTEM_METADATA_*` classes
 present on a regular file the location opens and cannot identify, read no-follow, as
 `GetMetadataSnapshot` does for a bound file; it returns `ERROR_NOT_SUPPORTED` for an object
 `BindObject` can bind, a directory, a link or any other reparse point, and a class it failed to

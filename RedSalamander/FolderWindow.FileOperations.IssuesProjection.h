@@ -56,7 +56,7 @@ struct Row final
     std::wstring sourceParentPath;
     std::wstring destinationName;
     std::wstring destinationParentPath;
-    // I62 B3.3: the two items' lines and the comparison line the collision decision showed; empty for any other row.
+    // I63 B3.3: the two items' lines and the comparison line the collision decision showed; empty for any other row.
     std::wstring sourceFactsText;
     std::wstring destinationFactsText;
     std::wstring comparisonText;
@@ -78,7 +78,7 @@ struct Observation final
     // Localized text from typed facts for an original problem or an accepted decision; empty for
     // a result alone, which never supplies the problem.
     std::wstring problemText;
-    // I62 B3.3: BuildConflictObservedTexts of the record's retained comparison; empty when it has none.
+    // I63 B3.3: BuildConflictObservedTexts of the record's retained comparison; empty when it has none.
     std::wstring sourceFactsText;
     std::wstring destinationFactsText;
     std::wstring comparisonText;

@@ -1,11 +1,18 @@
-# I62 File Operations UX fidelity and pane activation click
+# I63 File Operations UX fidelity and pane activation click
 
-Status: **DONE, I62 (closed 2026-11-11 by the owner).** Delivered: slices A, C, D and E, slice B (B1 to
+Status: **DONE, I63 (closed 2026-11-11 by the owner).** Delivered: slices A, C, D and E, slice B (B1 to
 B8, with the limits recorded in section 18), keep awake (G7) and the part of slice F named in section 18.
-Not delivered and moved to [I63](../WIP/FileOperations_CollectedCollisionsAndResiduals_2026-11-11.md): collected
+Not delivered and moved to [I64](../WIP/FileOperations_CollectedCollisionsAndResiduals_2026-11-11.md): collected
 collisions (G1 to G6, by the owner's decision of 2026-11-11) and every item whose checkbox below is not
 ticked. A ticked item was delivered; a closeout line under an item says what differs from its text. This
 file is history and is not edited after the move to Done; the authoritative specs carry the contracts.
+
+Rank: this plan was written and implemented as `I62`. It was renumbered `I63` on 2026-11-11, before its
+pull request, because the explicit state machines plan had taken `I62` on `main` and a rank is never
+reused. The follow-up plan moved from `I63` to `I64` at the same time. The renumbering changed rank
+labels in comments, documents, one test name and change-fragment file names, and nothing else. The
+commit messages of this branch and the test-run archive folder `2026-11-11_i62-closeout` keep the old
+rank.
 
 Revision 2, 2026-11-10: the owner set the replacement-authority rule (D-4), made "skip the same size and
 date" required (D-10) and accepted the scenario review in section 1; slice B was rewritten and slice G
@@ -150,7 +157,7 @@ Recorded:
   when the prompt opens. No confirmation step was added: the one the recommendation below relied on is
   the task-start confirmation, which does not exist in the middle of a task. Cost, stated in the spec:
   one press deletes this item and every later item of the task that also cannot be recycled.
-- **Slice G1 to G6 (owner, 2026-11-11).** Moved to another detailed plan, for later: I63.
+- **Slice G1 to G6 (owner, 2026-11-11).** Moved to another detailed plan, for later: I64.
 - **Close (owner, 2026-11-11).** Move this plan to Done and open one pull request for all of it.
 - **Second volume (owner, 2026-11-11).** The computer has several drives and every `X:\RedSalamander.Perf`
   folder is authorized; the second-volume cases run with `-AllowAlternateVolumeTestRoot`.
@@ -174,7 +181,7 @@ keeps the original text; the closeout record follows it.
 | D-15 | Undo for Copy, Move, Rename and Delete. | **Not in this plan.** Open a separate plan after B and G land, because undo consumes the per-item typed results they produce. The spec's "Undo/G2 remains deferred" stays. |
 
 Closeout record of these decisions (2026-11-11). "As recommended" means the recommendation was built
-under the order to implement; the owner did not confirm it one by one, and I63 item RX1 asks for that.
+under the order to implement; the owner did not confirm it one by one, and I64 item RX1 asks for that.
 
 | ID | At closeout |
 |---|---|
@@ -184,8 +191,8 @@ under the order to implement; the owner did not confirm it one by one, and I63 i
 | D-7 | As recommended. |
 | D-8 | As recommended. |
 | D-9 | As recommended, within D-17 (no legacy names). |
-| D-11 | First half as recommended: a refused replacing rename shows its error and never falls back to writing over the file. The second half (a route with no replacing rename) was not built: no Local location is known to need it, and the search (P0.12) was not run; I63 item RP3. |
-| D-12 | Not built: slice G1 to G6 moved to I63, which carries the question. |
+| D-11 | First half as recommended: a refused replacing rename shows its error and never falls back to writing over the file. The second half (a route with no replacing rename) was not built: no Local location is known to need it, and the search (P0.12) was not run; I64 item RP3. |
+| D-12 | Not built: slice G1 to G6 moved to I64, which carries the question. |
 | D-13 | Engine side as recommended (`OperationAdmission::presetCollisionPolicy`, default Ask); no control sets it. The control stays with I18. |
 | D-14 | As recommended. |
 | D-15 | Unchanged: undo is not in this plan. |
@@ -229,7 +236,7 @@ slices compare against. P0 changes tests, test hooks and evidence only.
   object, self-descendant, missing source, unsupported source binding) or *has a safe choice*.
   *Closeout 2026-11-11: Not delivered. No inventory of prepareExactTransferGuard exits or
   TransferSafetyState values is recorded in the plan, specs or tests; only the identity-less
-  existing-destination exits were reclassified. Remainder: I63 item RB13.*
+  existing-destination exits were reclassified. Remainder: I64 item RB13.*
 - [x] **P0.5 Local replace route.** Read how the Local provider publishes a stage at an identity-less
   location (the handle-bound stage with its lifetime nonce, `FileSystem_FileOperations.md:1124-1135` †;
   `RenameExactTo(destination, replaceIfExists)` on the stage's own handle,
@@ -262,12 +269,12 @@ slices compare against. P0 changes tests, test hooks and evidence only.
   Archive the baseline: card height changes, layout shift, scrollbar toggles, window resizes, and the
   existing paint timings.
   *Closeout 2026-11-11: Not delivered. No twelve-second scenario and no archived baseline; only three of
-  the four F4 counters exist and nothing was captured before the change. Remainder: I63 item RP1.*
+  the four F4 counters exist and nothing was captured before the change. Remainder: I64 item RP1.*
 - [ ] **P0.9 Staging-name perf baseline.** Run the existing artifact name-shape projection measurement
   (`DebugMeasureArtifactNameShapeProjectionForTests`) and archive the result; slice D compares to it.
   *Closeout 2026-11-11: Not delivered. The log states the baseline was not captured before the change;
   DebugMeasureArtifactNameShapeProjectionForTests exists but no result was archived for comparison.
-  Remainder: I63 item RD1.*
+  Remainder: I64 item RD1.*
 - [x] **P0.10 Test reliance audit.** List the cases that press an item in a pane without focusing it
   first, the three leftover scanners that search for the literal `.rs_tmp_`, and the cases that pin
   `conflictPromptCount == 0u`, `overflowActionCount == 1u` and the `More...` button; these are the
@@ -295,7 +302,7 @@ slices compare against. P0 changes tests, test hooks and evidence only.
   (D-11).
   *Closeout 2026-11-11: Partly delivered. Local read-only and in-use occupant outcomes are witnessed by
   the identity-less decision self-test; nothing was run on a network root, no 1,000-replacement reader
-  loop, no client trace, and no search for a Local class without a replacing rename. Remainder: I63 item
+  loop, no client trace, and no search for a Local class without a replacing rename. Remainder: I64 item
   RP3.*
 - [x] **P0.13 What continues during a prompt.** For a collision at a top-level item, at a bridge item
   with sixteen pumps, and inside a provider-owned recursive walk, record which other items progress
@@ -309,10 +316,10 @@ slices compare against. P0 changes tests, test hooks and evidence only.
   item are each visible and distinguishable from the active style.
   *Closeout 2026-11-11: Not delivered. Not captured; the log says the renderer was read (inactive
   selection and thinner current-item border in FolderView.Rendering.cpp) but no harness capture was
-  taken. Remainder: I63 item RA2.*
+  taken. Remainder: I64 item RA2.*
 - [ ] **P0.15 Power.** Record that a running synthetic task leaves no entry in `powercfg /requests`.
   *Closeout 2026-11-11: Not delivered. powercfg /requests was not recorded; G7 is covered only by
-  RunFileOperationKeepAwakeSelfTest through a fake power API seam. Remainder: I63 item RG3.*
+  RunFileOperationKeepAwakeSelfTest through a fake power API seam. Remainder: I64 item RG3.*
 
 Verify: the new cases are registered (a FileOps case must be in `kFileOpsFamilyDefinitions`, otherwise a
 family run skips it silently), fail or record as stated on the planned commit, and the evidence is
@@ -373,7 +380,7 @@ and right-click work the same in both panes.*
   `GetFocusedPane() == thisPane` at button-down, and cover the Terminal tab note in
   `FolderWindow.Layout.cpp:987` † (its `WM_SETFOCUS` posts no pane-focus change) with a case.
   *Closeout 2026-11-11: Not delivered. No debug assertion comparing _paneFocused with the focused pane at
-  button-down was added and no Terminal-tab focus case exists. Remainder: I63 item RA3.*
+  button-down was added and no Terminal-tab focus case exists. Remainder: I64 item RA3.*
 - [x] A6. Focus-follows-pointer needs no change: with it enabled the pane is already active when the
   press arrives.
   *Closeout 2026-11-11: Not needed. The item states no change is needed for focus-follows-pointer; no
@@ -512,7 +519,7 @@ covers these steps as well as delete by name.
   still shows only a Windows status text.
   *Closeout 2026-11-11: Partly delivered. Only the identity-less existing-destination exits were turned
   into decisions or kept as refusals with a specific sentence; no P0.4 inventory exists and the other
-  guard exits were not reviewed for a Skip/Cancel decision. Remainder: I63 item RB13.*
+  guard exits were not reviewed for a Skip/Cancel decision. Remainder: I64 item RB13.*
 - [x] B1.5 Folder onto an existing folder. No decision: the folders merge, as they do at an identified
   location (product invariant 7). The guard returns its proceed result for *source is a directory,
   destination exists and is a directory*, and the children collide one by one. A destination that is a
@@ -566,7 +573,7 @@ covers these steps as well as delete by name.
   aborted after every refused rename; a reader of the final name never sees it missing (P0.12).
   *Closeout 2026-11-11: Partly delivered. No review checklist was recorded; the spec states the accepted
   swap-between-read-and-rename limit and tests cover a changed occupant and a refused rename, but
-  ancestor-replaced-by-link and target-became-link-or-directory have no named witness. Remainder: I63
+  ancestor-replaced-by-link and target-became-link-or-directory have no named witness. Remainder: I64
   item RB11.*
 
 ### B3 — decision facts
@@ -590,12 +597,12 @@ Target contract (for "Conflict Layout" in `UI_FileOperationsPopup.md`):
   `GetFileBasicInformation` to the provider's item-information call that carries size (name it in P0.3).
   *Closeout 2026-11-11: Not delivered. ReadConflictItemMetadata still falls back from
   GetFileBasicInformation to GetAttributes with no size on provider routes; the log lists it as not done.
-  Remainder: I63 item RB1.*
+  Remainder: I64 item RB1.*
 - [ ] B3.3 Retain the facts in the typed item result so the Issues pane and the finished card can show
   them; bounded by the existing reservoirs.
   *Closeout 2026-11-11: Partly delivered. The Issues pane retains and shows the comparison and both fact
   lines (IssuesProjection comparisonText); the finished card of a one-item task does not show the facts,
-  and an item decided by policy or a remembered answer carries none. Remainder: I63 items RB2 to RB4.*
+  and an item decided by policy or a remembered answer carries none. Remainder: I64 items RB2 to RB4.*
 - [x] B3.4 New `.rc` strings with positional placeholders, in all four satellites.
 
 ### B4 — Move: keep the existing destination, remove the source (D-5)
@@ -625,7 +632,7 @@ Target contract (for the conflict model and the prompt's scope controls):
   *Closeout 2026-11-11: Partly delivered. Execution removes a bound Local source through its exact
   binding to the Recycle Bin, with one confirmation where there is no Recycle Bin
   (RunFileOperationDiscardSourceWithoutRecycleBinSelfTest); the B7 by-name removal for a source without
-  identity is not used: Delete source is not offered there. Remainder: I63 item RB5 (owner decision
+  identity is not used: Delete source is not offered there. Remainder: I64 item RB5 (owner decision
   R-D1).*
 - [x] B4.3 Typed result `source removed, existing destination kept`, counted on the card as
   `Already there, source removed: N`; the task is not Partial for it. When the two items differ in
@@ -682,7 +689,7 @@ Target contract (for the conflict model and the prompt's scope controls):
   policy-origin receipt, the shape I18 section 5.4 describes, so `fileOverwrite=false` can reuse it.
   *Closeout 2026-11-11: Not delivered. Item-scoped policy-origin receipts for I18 are listed in spec 13b
   as not in this version; each application reads the item's facts at its step but creates no receipt.
-  Remainder: I63 item RB14.*
+  Remainder: I64 item RB14.*
 - [x] B6.3 A policy skip opens no content and creates no stage: its cost is the collision's metadata
   read. This is what makes a second run of an interrupted operation cheap.
 - [x] B6.4 Result counts and sentences for `Already there` and for `replaced because older`; `.rc`
@@ -731,7 +738,7 @@ as they are:
   decision, and Replace is the same rename with the expectation check and no stage.
   *Closeout 2026-11-11: Not delivered. No code or test for a Move inside one identity-less location
   (native rename) onto an existing name was found; the log lists the native-rename Move route as not
-  covered. Remainder: I63 item RB6.*
+  covered. Remainder: I64 item RB6.*
 
 ### B8 — one file reached by two spellings
 
@@ -758,7 +765,7 @@ Target contract (for the conflict model):
 - [ ] B8.3 The location classes that do not enforce sharing come from P0.11 and are a typed capability
   of the path profile, not a host list of server names.
   *Closeout 2026-11-11: Not delivered. The probe is not replaced by a provider capability of the path
-  profile; the log lists it as not done. Remainder: I63 item RB10.*
+  profile; the log lists it as not done. Remainder: I64 item RB10.*
 
 ### Tests (FileOps suite; register every case in `kFileOpsFamilyDefinitions`)
 
@@ -947,7 +954,7 @@ Wakeups are `notify_all`, but the predicate names a single winner, so wake order
 - [ ] E8. Instrumentation: `FileOps.Queue.HeadHoldUs` (time the head held the queue while Preparing) and
   `FileOps.Queue.PassedOver` with its reason.
   *Closeout 2026-11-11: Partly delivered. FileOps.Queue.PassedOver is emitted with a reason (awaiting
-  user decision, decision answered); FileOps.Queue.HeadHoldUs is not emitted. Remainder: I63 item RE1.*
+  user decision, decision answered); FileOps.Queue.HeadHoldUs is not emitted. Remainder: I64 item RE1.*
 
 ### Tests (new family case `FileOps_QueueStartOrder`, registered)
 
@@ -1016,7 +1023,7 @@ There is no scroll anchoring, and card insertion and removal are instantaneous.
   and keeps `stacked` with the stated hysteresis. Conditional notes get the same hold.
   *Closeout 2026-11-11: Partly delivered. Sticky stacking with hysteresis (PairWantsStack, HeldCondition)
   and held note rows are done; a reserved numeric width for the widest form of each number is not.
-  Remainder: I63 item RF2.*
+  Remainder: I64 item RF2.*
 - [x] F3. Tabular figures on the numeric text layouts (`IDWriteTypography`, tabular-figures feature) in
   `EnsureTextFormats`; if the hosted DxUi typography owns the format, stop and route per section 2.
   Display hold for rate, ETA and the file name; `UpdateRates` runs once per 100 ms bucket even on 16 ms
@@ -1030,32 +1037,32 @@ There is no scroll anchoring, and card insertion and removal are instantaneous.
   enforces the budget on the P0.8 scenario.
   *Closeout 2026-11-11: Partly delivered. Counters CardHeightChanges, ScrollBarToggles and WindowResizes
   are emitted; LayoutShiftPx and the FileOps_PopupLayoutStability budget case do not exist. Remainder:
-  I63 item RF1.*
+  I64 item RF1.*
 - [ ] F5. Height reveal. Replace the snap condition in `ResolveAnimatedTaskHeight` † with the reveal:
   layout at target, animated bottom block and following cards, row clip, integer pixels. Keep the snap
   for decision content (`Popup.cpp:9602-9605` †). In `RefreshTelemetryTimer` † an unsettled height motion
   selects the 16 ms cadence ahead of the 100 ms work cadence, for its bounded duration only.
   *Closeout 2026-11-11: Not delivered. ResolveAnimatedTaskHeight still snaps for expanded content; no
   layout-at-target reveal and no 16 ms cadence rule were added. Only the scrollbar withholding during a
-  pending resize is done (see F6). Remainder: I63 item RF3.*
+  pending resize is done (see F6). Remainder: I64 item RF3.*
 - [ ] F6. Viewport. Scrollbar hysteresis and pending-resize awareness in the scroll pass †; a stable
   gutter so card width is independent of the scrollbar; `_scrollPos` is no longer reset when the bar
   hides unless the content fits. Move `AutoResizeWindow`'s `SetWindowPos` out of `Render` to a posted
   step, with the shrink hold. Anchor the first visible card by task ID and offset.
   *Closeout 2026-11-11: Partly delivered. The scrollbar is withheld while an automatic resize is pending
   (ScrollBarNeeded); no stable gutter, no posted resize out of Render, no anchored first visible card.
-  Remainder: I63 item RF4.*
+  Remainder: I64 item RF4.*
 - [ ] F7. Card enter and leave motion, sharing the height animation state; removal keeps the entry until
   its collapse ends.
   *Closeout 2026-11-11: Not delivered. No card enter or leave motion; the log lists it as not done.
-  Remainder: I63 item RF5.*
+  Remainder: I64 item RF5.*
 - [x] F8. Cache `MeasureWrappedTextHeight` for the discovery summary beside the fact-pair cache (S7).
 - [ ] F9. Capture. Extend the visual gallery with a deterministic *sequence* capture (N frames of one
   synthetic scenario at fixed ticks) so the stability scenario can be reviewed frame by frame. This is a
   harness capability and follows the screenshot rules (invented fixture data, provenance, no desktop
   takeover).
   *Closeout 2026-11-11: Not delivered. No sequence capture was added to the visual gallery. Remainder:
-  I63 item RF6.*
+  I64 item RF6.*
 
 ### Tests
 
@@ -1105,25 +1112,25 @@ accepted intent in H3's record is the starting point. No power request is made w
   and the host keeps the same record, to run the item later as a single transfer. If a provider walk
   cannot be answered that way without an interface change, that walk keeps its immediate prompt in the
   first version and the limit is documented; if that walk is the Local provider's, stop.
-  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I63 Part 1.*
+  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I64 Part 1.*
 - [ ] G2. Arbiter. One collected prompt per class through the existing conflict arbiter and policy; no
   second action or default policy. Its action set is published once and stays stable: only the count and
   the listed names change, so a button under the pointer never changes meaning. The existing rule that
   buttons are never added to or removed from an actionable prompt is kept.
-  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I63 Part 1.*
+  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I64 Part 1.*
 - [ ] G3. Second pass. A set-aside item runs through the ordinary per-item route with the decision as
   its receipt, after its facts were read again. Its typed result replaces the pending one. Totals count
   it from discovery, so progress never moves backwards.
-  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I63 Part 1.*
+  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I64 Part 1.*
 - [ ] G4. Managed Move directory cleanup waits for the descendants that are set aside; the result names
   folders kept for that reason.
-  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I63 Part 1.*
+  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I64 Part 1.*
 - [ ] G5. Card and queue. `Needs attention` with the count; Issues rows for unresolved items; the task
   yields its queue place through slice E's case (b) and takes it back when answered.
-  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I63 Part 1.*
+  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I64 Part 1.*
 - [ ] G6. Bounds and instrumentation: the two bounds as named constants with tests at the bound;
   `FileOps.Conflict.SetAside` and `FileOps.Conflict.SetAsideBoundReached`.
-  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I63 Part 1.*
+  *Closeout 2026-11-11: Not delivered. Designed only. Remainder: I64 Part 1.*
 - [x] G7. Keep awake (D-14). One process-wide power request (`PowerCreateRequest` with
   `PowerRequestSystemRequired` and a reason string) is held while at least one task is running or
   stopping, and released when every task is finished, paused by the user, or only waiting for an
@@ -1237,20 +1244,20 @@ Move this plan to `Specs/Plans/Done/` only when:
 **At closeout (2026-11-11).** The owner ordered the move to Done. Against the conditions above:
 
 - Delivered slices have their tests and their contracts in the authoritative specs. Every requirement
-  that was not delivered is an item of I63; none is left only in this file.
-- The decisions are recorded in section 3. D-6 was decided; the others stand as built and I63 item RX1
+  that was not delivered is an item of I64; none is left only in this file.
+- The decisions are recorded in section 3. D-6 was decided; the others stand as built and I64 item RX1
   asks the owner to confirm them one by one.
 - The P0 baselines were never captured, so this condition is **not met as written**. The ones that still
-  have value are I63 items RP1, RD1, RP2 and RP3. The after-evidence (both full suites on the closeout
+  have value are I64 items RP1, RD1, RP2 and RP3. The after-evidence (both full suites on the closeout
   build) is archived; section 18 names the folder.
 - B2.8 was not recorded as a checklist during the slice. What is known: an occupant swapped between the
   last read and the rename is the accepted limit and is stated in the spec; a changed occupant publishes
   nothing and asks again, and a refused rename aborts the stage (both tested); a link or a directory at
   the target is never replaced at this level (tested for the link and the linked ancestor of a folder
-  merge); that a reader never sees the final name missing was not witnessed. The remainder is I63 item
+  merge); that a reader never sees the final name missing was not witnessed. The remainder is I64 item
   RB11.
 - The Done path is admitted in `Tools/Modules/Tooling/SpecInformationArchitecture.psm1` with the focused
-  test `admits only the reviewed I62 File Operations UX closeout record`.
+  test `admits only the reviewed I63 File Operations UX closeout record`.
 
 ## 16. STOP
 
@@ -1304,7 +1311,7 @@ edited), *built* (full Debug x64 build, zero warnings, attested receipt), *execu
 its result). A slice is not done until its interactive cases have run.
 
 Checkbox legend used at closeout: `[x]` delivered (a closeout line says where the delivery differs from
-the item's text, or why the item was not needed); `[ ]` not delivered or partly delivered, with the I63
+the item's text, or why the item was not needed); `[ ]` not delivered or partly delivered, with the I64
 item that owns the remainder. Each state was checked against the working tree by a read-only audit on
 2026-11-11, not by rerunning the item.
 
@@ -1317,10 +1324,10 @@ item that owns the remainder. Each state was checked against the working tree by
 | B | B1 to B8 written, built, executed; see the limits | All self-tests below run inside `FileOps_ReviewRemediationContracts` (3/3 on the final build). **B1**: the refusal at a destination without item identity is a collision decision (`RunFileOperationIdentityLessCollisionDecisionSelfTest`, 14 variants). **B1.5**: a folder onto an existing folder there merges for a Managed Move too (Copy and the native Move already merged); one new guard exit, counter `FileOps.Conflict.DestinationIdentityUnavailable`; a link or a linked ancestor is still refused (`RunFileOperationIdentityLessFolderMergeSelfTest`, four cases). **B2.7**: the once-per-task note that items were checked by name, size and dates is the resource string `IDS_FILEOPS_NOTE_CHECKED_BY_FACTS` (it was an English literal until the closeout). **B2**: Replace there through the optional provider interface `IFileSystemExpectedOccupantPublication` (the bridge keeps its identity-owned stage; the provider renames it over the occupant only while the occupant's facts are the ones the user saw). A changed occupant publishes nothing and the decision is raised again; an occupant swapped between the last read and the rename is the accepted limit and is stated in the spec. **B3**: `CompareConflictItems` (two-second tolerance, one-hour class) published with the decision; the card, the decision mirror and now the Issues detail (B3.3) share one text builder. Not done: B3.2 (the provider issue callback carries no sizes), the facts on the finished card of a one-item task, exact bytes in a tooltip; an item decided by a remembered answer or a policy carries no facts. **B4** `Delete source` (`ConflictAction::DiscardSource`): offered by the bridge's file pre-flight for a Managed Move with a Local source when the existing destination is provably another file; the source goes to the Recycle Bin; Apply to all only for `Same size and date`. **D-5 rest**: where the source's location has no Recycle Bin the task asks once (`Permanently delete` / `Keep source` / Cancel, no Apply to all); the source is bound before the question and again with delete access after it, must be the same object with the same size and date, must still be another file than the destination, and is deleted through that bound object; any doubt keeps it (`RunFileOperationDiscardSourceWithoutRecycleBinSelfTest`, four cases, with the Local test seam `REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY`). Limit: `Delete source` is not offered when the source's location cannot identify items (a share without file IDs), so that source keeps the ordinary choices; non-Local sources and the native-rename Move route are not covered. **B5**: the trailing `task.result` Error is not counted when an Error of the task already explains the failure. **B6**: `Skip all with the same size and date` and `Replace all older` as arbiter grants (`RunFileOperationBulkCollisionPoliciesSelfTest`). **B6.5** (D-13): `OperationAdmission::presetCollisionPolicy` (Ask, Skip, Replace older, Keep both; default Ask) seeds the arbiter at start (`RunFileOperationPresetCollisionPolicySelfTest`); no control sets it (I18 owns the start surface). Limits: the replace counter counts decisions, the policies are offered on a one-file task too, translations are unreviewed. **B7**: a Managed Move whose source location cannot identify items is no longer refused. The provider reads the source's facts before the copy opens it; after the destination's proof the source is deleted by name only while the facts read on the deleting handle are the same (`IFileSystemIdentityDelete::DeleteIfIdentity`); an emptied folder is removed by name; anything else is "Copied; source kept", not an Error. A source carrying a Mark of the Web, another data stream, extended attributes, EFS encryption or a cloud placeholder is kept without a question, because the pathname reader copies none of them (new provider method `ReadUnidentifiedMetadataFeatures`). **B8**: after a replacement, the same-file probe (hold the destination denying all sharing, open the source by name) must answer "two files" before a by-name source is removed (`RunFileOperationIdentityLessSourceMoveSelfTest`, ten cases including one file reached through a junction). A defect found by that test and fixed: the transaction's own handles on the published file refused the probe, so every replaced Move kept its source; they are now released first. Limits of B7 and B8: a folder moved into itself under another spelling is not detected for such a source (the guard's ancestor checks do not run without a bound source); `BackupRead` on a real share is untested, and if it fails every source is kept; three metadata opens per removed source; B8.3 (a provider capability instead of the probe) is not done. |
 | F | part written, built, executed | Rules as constexpr state machines with compile-time contracts in `RedSalamander/FileOperationsLayoutStability.h`, wired into the popup: reserved stream rows, sticky stacking and held note rows (F2), rate and ETA text hold and the kept per-file bar column (F3), `UpdateRates` once per 100 ms on motion ticks (S10), the scrollbar withheld while an automatic resize is pending or running unless the user asks to scroll (F5/F6 part). **F1**: the engine gives every transfer stream a row slot for its lifetime (lowest free slot, never compacted; the row array stays dense and the slot moves with its entry); the popup draws each stream in its slot and leaves an empty slot blank (`RunFileOperationStreamSlotSelfTest`). **F3**: tabular figures on the three numeric fact rows the popup lays out itself; the hosted graph's labels are DxUi's and are unchanged. **F4**: ETW counters `FileOps.Popup.CardHeightChanges`, `ScrollBarToggles`, `WindowResizes`. **F8**: the work summary is measured once per text, width and format. The 300 ms scrollbar delay of the target contract is dropped: it would keep the scroll position at zero for cases that scroll right after the first paint. Not done: the budget case `FileOps_PopupLayoutStability` and `LayoutShiftPx` (they need in-process counters and a fixed-tick clock for `Render`), a reserved width for the widest form of each number, the eased reveal (F5), the scrollbar gutter, posted resize and scroll anchor (F6), F7, F9. Found and not fixed: the height pass and the painter measure a wrapping work summary at different widths; `FileSystemReportFileWork` can match a stale entry by leaf after compaction. |
 | G | G7 written, built, executed; G1 to G6 designed only | **G7** keep awake (D-14): one process-wide `PowerRequestSystemRequired` request while a task is admitted and neither finished, paused nor quietly waiting for an answer (`FileOperationsPowerRequest.h/.cpp`, per-task lease, pure predicate with compile-time contracts, `RunFileOperationKeepAwakeSelfTest` through a fake API seam). A wait for an answer stops counting only after the task reported no progress for two minutes, because other streams of the task may still transfer. Limits: preparation before admission is not covered; no self-test drives real tasks through the hooks; no Modern Standby machine was available, so `powercfg /requests` was not recorded there. **G1 to G6 are not implemented.** A read-only design found that a contained first version could set aside only nested file collisions of the bridge route: a plain Local Copy (a provider-owned walk) and selected-root files would keep their immediate prompts, the rule that stops every worker while a prompt is shown would be relaxed for collected prompts, and an immediate problem would have to take the prompt from a visible collected question. It needs five owner decisions (one answer per file or per class; preemption; deferring the queue yield; holding a parent folder of a Managed Move until the answer; accepting the coverage gap). Recommendation: a separate plan. |
-| Verification before the closeout | executed 2026-11-11 | Debug x64, zero warnings. Full FileOps without the second-volume switch: 294 passed, 1 failed, 28 skipped; the failure was `R4A19_DiscoveryIndependentVolumes` (`alternate-volume-test-root-not-authorized`). That reason was reported as a machine limit and was not one: the run omitted `-AllowAlternateVolumeTestRoot`. Full Commands: 966 passed, 0 failed, 5 skipped. **One unexplained failure**: on the build before that one (identical except for one test log line) the full FileOps suite also failed `DiscoveryScope_MultipleFoldersLiveProgress` once: the copied content was correct and one summary number of the plain Local Copy (result code, discovered files, discovered bytes or copied files) was not the expected one. It did not reproduce in 36 in-process repeats, three isolated attempts, three family-order attempts or the next full run, and the case had never failed in the retained history. The copy route of that case is not changed by I62 except for the row slot of slice F, which does not touch the counts; the cause is not established. The case now logs `MultipleFolderLiveProgressSummary` with the four numbers when it fails (I63 item RW1). |
+| Verification before the closeout | executed 2026-11-11 | Debug x64, zero warnings. Full FileOps without the second-volume switch: 294 passed, 1 failed, 28 skipped; the failure was `R4A19_DiscoveryIndependentVolumes` (`alternate-volume-test-root-not-authorized`). That reason was reported as a machine limit and was not one: the run omitted `-AllowAlternateVolumeTestRoot`. Full Commands: 966 passed, 0 failed, 5 skipped. **One unexplained failure**: on the build before that one (identical except for one test log line) the full FileOps suite also failed `DiscoveryScope_MultipleFoldersLiveProgress` once: the copied content was correct and one summary number of the plain Local Copy (result code, discovered files, discovered bytes or copied files) was not the expected one. It did not reproduce in 36 in-process repeats, three isolated attempts, three family-order attempts or the next full run, and the case had never failed in the retained history. The copy route of that case is not changed by I63 except for the row slot of slice F, which does not touch the counts; the cause is not established. The case now logs `MultipleFolderLiveProgressSummary` with the four numbers when it fails (I64 item RW1). |
 | Verification on the closeout build | recorded in the archive | The closeout build adds the D-6 direct button, the localized by-facts note and this closeout's planning and tooling edits. Its verification is one Fresh Full run with the interactive entries and `-AllowAlternateVolumeTestRoot`, started after this text was written, so its result is not stated here. The reviewed record, with per-case results and every skip reason, is `Specs/TestRuns/4cb089111a23/FileOps/2026-11-11_i62-closeout/README.md`. If that folder is absent from the commit that carries this file, the run was not archived and this plan claims no result for the closeout build. |
 | P0 | folded into the slices | P0.1 to P0.15 were not run as a separate slice. Each slice records what was read instead of witnessed; P0.13 was answered by reading for the slice G design (a shown prompt stops every worker of the task through `Task::WaitWhilePaused` and the callback mutexes). |
 
-Closeout (2026-11-11): the owner decided D-6, moved slice G1 to G6 to I63 and ordered the move to Done.
-`Delete source` from a location without item identity is I63's open decision R-D1. Everything not
-delivered here is listed in I63, Part 2.
+Closeout (2026-11-11): the owner decided D-6, moved slice G1 to G6 to I64 and ordered the move to Done.
+`Delete source` from a location without item identity is I64's open decision R-D1. Everything not
+delivered here is listed in I64, Part 2.

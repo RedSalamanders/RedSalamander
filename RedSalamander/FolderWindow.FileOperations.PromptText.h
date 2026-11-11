@@ -12,7 +12,7 @@
 // policy owns that). Views must outlive the call.
 namespace FileOperations
 {
-// I62 B3: what is known about one role's item on a name collision.
+// I63 B3: what is known about one role's item on a name collision.
 struct ConflictPromptItemFacts final
 {
     bool available        = false;
@@ -47,7 +47,7 @@ struct ConflictPromptTextFacts final
     uint64_t factItemCount  = 0u;
     bool factBytesKnown     = false;
     uint64_t factBytes      = 0u;
-    // I62 B3: both items' facts and the engine's comparison of the incoming item with the existing one.
+    // I63 B3: both items' facts and the engine's comparison of the incoming item with the existing one.
     ConflictPromptItemFacts sourceItem;
     ConflictPromptItemFacts destinationItem;
     uint8_t dateRelation = 0u; // ConflictDateRelation
@@ -56,7 +56,7 @@ struct ConflictPromptTextFacts final
 
 struct ConflictObservedComparison; // FolderWindow.FileOperationsInternal.h
 
-// I62 B3.3: an Issues row's lines for the two items a collision decision showed, in the decision's words.
+// I63 B3.3: an Issues row's lines for the two items a collision decision showed, in the decision's words.
 struct ConflictObservedTexts final
 {
     std::wstring source;
@@ -75,7 +75,7 @@ struct ConflictObservedTexts final
 // with the other item (`Newer`, `Smaller`...). The relation words are left out when the fact text
 // above already speaks for both items. Empty when nothing is known about the item.
 [[nodiscard]] std::wstring BuildConflictPromptItemText(const ConflictPromptTextFacts& facts, bool destinationRole);
-// I62 B3.3: the role lines and the summary line of a retained comparison, built by BuildConflictPromptItemText and
+// I63 B3.3: the role lines and the summary line of a retained comparison, built by BuildConflictPromptItemText and
 // BuildConflictPromptFactText over the same facts; the Issues pane's detail shows them.
 [[nodiscard]] ConflictObservedTexts BuildConflictObservedTexts(FileSystemOperation operation, const ConflictObservedComparison& observed);
 // A file time as the user's short date and time; empty for an unknown time.

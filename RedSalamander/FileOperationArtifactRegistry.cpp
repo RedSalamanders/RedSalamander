@@ -52,7 +52,7 @@ namespace
     return leaf.size() == marker.size() + 32u && leaf.starts_with(marker) && IsAsciiHexRun(leaf.substr(marker.size()));
 }
 
-// I62: a staging artifact created on a Win32 path ends in a real extension, after a 32-hex token:
+// I63: a staging artifact created on a Win32 path ends in a real extension, after a 32-hex token:
 // `<readable prefix>.<32 hex>[_<stream>].rs-tmp` is incomplete content and
 // `<readable prefix>.<32 hex>.rs-bak` may hold an original. The token is required: a name that only
 // ends in the extension is an ordinary file. The extension test comes first and is cheap.
