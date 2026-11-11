@@ -37,6 +37,7 @@
     <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
     <ClInclude Include="FileOperationsConflictBroker.h" />
     <ClInclude Include="FileOperationsPowerRequest.h" />
+    <ClInclude Include="FileOperationsLayoutStability.h" />
     <ClInclude Include="FileOperationItemResultReducer.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesProjection.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />

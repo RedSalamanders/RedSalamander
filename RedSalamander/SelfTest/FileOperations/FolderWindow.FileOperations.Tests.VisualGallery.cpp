@@ -4009,13 +4009,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                         // own button (directCommand) instead of a one-entry More menu.
                         auto& current                  = popupState->debugVisualScenario.value().front();
                         const std::wstring issuesLabel = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
-                        const auto inspectActions      = [&](std::wstring_view stage,
-                                                        bool issues,
-                                                        bool more,
-                                                        size_t count,
-                                                        bool collapsed,
-                                                        bool footerOnly,
-                                                        uint32_t directCommand = 0u)
+                        const auto inspectActions =
+                            [&](std::wstring_view stage, bool issues, bool more, size_t count, bool collapsed, bool footerOnly, uint32_t directCommand = 0u)
                         {
                             for (unsigned frame = 0u; frame < 2u; ++frame)
                                 RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -4035,19 +4030,18 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                               ! observed.completedFailedItemsActionVisible && issueContent;
                             directIssuesTransitionsFit = directIssuesTransitionsFit && fits;
                             ++directIssuesTransitionCount;
-                            AppendLog(
-                                std::format(L"DirectIssuesTransition: dpi={} width={} stage={} issues={} more={} direct={} count={} collapsed={} "
-                                            L"footerOnly={} fit={}",
-                                            dpi,
-                                            widthDip,
-                                            stage,
-                                            observed.completedIssuesVisible,
-                                            observed.completedDiagnosticsMoreVisible,
-                                            observed.completedDirectActionCommand,
-                                            observed.completedVisibleActionCount,
-                                            observed.taskCollapsed,
-                                            observed.footerOnly,
-                                            fits));
+                            AppendLog(std::format(L"DirectIssuesTransition: dpi={} width={} stage={} issues={} more={} direct={} count={} collapsed={} "
+                                                  L"footerOnly={} fit={}",
+                                                  dpi,
+                                                  widthDip,
+                                                  stage,
+                                                  observed.completedIssuesVisible,
+                                                  observed.completedDiagnosticsMoreVisible,
+                                                  observed.completedDirectActionCommand,
+                                                  observed.completedVisibleActionCount,
+                                                  observed.taskCollapsed,
+                                                  observed.footerOnly,
+                                                  fits));
                         };
                         current.hasProjectableIssues = false;
                         inspectActions(L"row-removed-counters-retained", false, true, 2u, false, false);

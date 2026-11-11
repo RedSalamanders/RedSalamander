@@ -408,6 +408,11 @@ void ReleaseFileOpsFallbackWorkerReturnPauseForSelfTest() noexcept
     g_fileOpsFallbackWorkerReturnPausePoint.Release();
 }
 
+void SetFileOpsSameFileProbeSharingUnenforcedForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsSameFileProbeSharingUnenforcedForSelfTest.store(enabled, std::memory_order_release);
+}
+
 void SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(bool enabled, ULONGLONG bailoutMs) noexcept
 {
     if (enabled)

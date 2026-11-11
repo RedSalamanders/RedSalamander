@@ -29810,8 +29810,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 struct FolderViewActivationPressFixture final
 {
     CaseState* state = nullptr;
-    HWND leftView  = nullptr;
-    HWND rightView = nullptr;
+    HWND leftView    = nullptr;
+    HWND rightView   = nullptr;
 
     [[nodiscard]] POINT PointFor(std::wstring_view name) const noexcept
     {
@@ -29844,18 +29844,17 @@ struct FolderViewActivationPressFixture final
         using namespace std::chrono_literals;
 
         state->Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Right, current),
-                      std::format(L"Failed to make '{}' current before {}.", current, context));
+                       std::format(L"Failed to make '{}' current before {}.", current, context));
         Select(selected);
         state->Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(2000ms)),
-                      std::format(L"The left pane did not become active before {}.", context));
+                       std::format(L"The left pane did not become active before {}.", context));
         PumpPendingMessages();
         const FolderView::DebugFocusSelectionStateSnapshot snapshot = Snapshot();
-        state->Require(g_folderWindow.GetActivePane() == FolderWindow::Pane::Left && Selected(selected) && snapshot.currentDisplayName == current &&
-                          snapshot.potentialDragSourceCount == 0u,
-                      std::format(L"The right pane fixture was not ready before {}: selected={}, current='{}'.",
-                                  context,
-                                  snapshot.selectedCount,
-                                  snapshot.currentDisplayName));
+        state->Require(
+            g_folderWindow.GetActivePane() == FolderWindow::Pane::Left && Selected(selected) && snapshot.currentDisplayName == current &&
+                snapshot.potentialDragSourceCount == 0u,
+            std::format(
+                L"The right pane fixture was not ready before {}: selected={}, current='{}'.", context, snapshot.selectedCount, snapshot.currentDisplayName));
         return state->failure.empty();
     }
 
@@ -29990,7 +29989,8 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
             return;
         }
         FolderView::DebugFocusSelectionStateSnapshot snapshot = fixture.Down(L"d.txt");
-        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}) && snapshot.currentDisplayName == L"d.txt" && snapshot.anchorIndex == snapshot.currentIndex,
+        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}) && snapshot.currentDisplayName == L"d.txt" &&
+                          snapshot.anchorIndex == snapshot.currentIndex,
                       std::format(L"A plain press in the pane that was not active changed its selection: selected={}, current='{}'.",
                                   snapshot.selectedCount,
                                   snapshot.currentDisplayName));

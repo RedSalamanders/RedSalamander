@@ -2668,7 +2668,8 @@ case SelfTestState::Step::Phase10_RecycleEscalationTaskScopedGrant:
             ! offersScopedChoice(prompt.value()))
         {
             task->RequestCancel();
-            failGrant(L"A multi-item Recycle escalation must offer Delete all remaining permanently as a direct button before Cancel, with Cancel as the default.");
+            failGrant(
+                L"A multi-item Recycle escalation must offer Delete all remaining permanently as a direct button before Cancel, with Cancel as the default.");
             return true;
         }
         state.markerTick = prompt->generation;
@@ -3194,11 +3195,10 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsContinueOnError:
             failBulk(L"A multi-item BulkItems Recycle escalation must offer Skip and Delete all remaining permanently.");
             return true;
         }
-        state.markerTick            = prompt->generation;
-        const bool skip             = state.stepState == 6;
-        const ConflictAction action = skip ? ConflictAction::Skip : ConflictAction::PermanentDeleteAll;
-        const FileOperations::ConflictActionPlacement placement =
-            FileOperations::ConflictActionPlacement::Primary; // I63 D-6: both are direct buttons
+        state.markerTick                                        = prompt->generation;
+        const bool skip                                         = state.stepState == 6;
+        const ConflictAction action                             = skip ? ConflictAction::Skip : ConflictAction::PermanentDeleteAll;
+        const FileOperations::ConflictActionPlacement placement = FileOperations::ConflictActionPlacement::Primary; // I63 D-6: both are direct buttons
         if (! task->SubmitConflictDecision(prompt->generation, action, std::nullopt, placement))
         {
             task->RequestCancel();

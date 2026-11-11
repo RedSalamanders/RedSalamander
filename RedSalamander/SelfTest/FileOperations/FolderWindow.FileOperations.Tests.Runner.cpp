@@ -15609,14 +15609,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 ! RunFileOperationIdentityLessFolderMergeSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationIdentityLessSourceMoveSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationDiscardSourceSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
-                ! RunFileOperationBulkCollisionPoliciesSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
-                ! RunFileOperationKeepAwakeSelfTest() ||
+                ! RunFileOperationBulkCollisionPoliciesSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) || ! RunFileOperationKeepAwakeSelfTest() ||
                 ! RunFileOperationDiscardSourceWithoutRecycleBinSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationPresetCollisionPolicySelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
-                ! RunFileOperationConflictObservedFactsSelfTest() ||
-                ! RunFileOperationStreamSlotSelfTest(*state.fileOps) ||
-                ! RunFileOperationConflictComparisonTextSelfTest() ||
-                ! RunFileOpsCompletedCardAutoCollapseChecks(state))
+                ! RunFileOperationConflictObservedFactsSelfTest() || ! RunFileOperationStreamSlotSelfTest(*state.fileOps) ||
+                ! RunFileOperationConflictComparisonTextSelfTest() || ! RunFileOpsCompletedCardAutoCollapseChecks(state))
             {
                 Fail(L"File Operations review regression failed; see the trace.");
                 return true;

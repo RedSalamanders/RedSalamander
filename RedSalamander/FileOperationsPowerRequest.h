@@ -68,10 +68,10 @@ class PowerRequest final
 public:
     struct Counters final
     {
-        uint32_t holders            = 0u; // Acquire calls not yet matched by a Release
-        uint32_t acquireTransitions = 0u; // changes from no holder to one holder
-        uint32_t releaseTransitions = 0u; // changes from one holder to no holder
-        uint32_t failures           = 0u; // power API calls that failed
+        uint32_t holders            = 0u;    // Acquire calls not yet matched by a Release
+        uint32_t acquireTransitions = 0u;    // changes from no holder to one holder
+        uint32_t releaseTransitions = 0u;    // changes from one holder to no holder
+        uint32_t failures           = 0u;    // power API calls that failed
         bool held                   = false; // the system-required request is set right now
     };
 

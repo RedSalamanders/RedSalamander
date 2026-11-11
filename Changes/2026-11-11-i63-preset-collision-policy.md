@@ -7,4 +7,4 @@
     answer, a read-only occupant included; Replace older is the existing `Replace all older` grant set
     from the start. Links, folders and type mismatches still ask.
   - New self-test `RunFileOperationPresetCollisionPolicySelfTest` in
-    `FileOps_ReviewRemediationContracts`. Not built or run when written.
+    `FileOps_ReviewRemediationContracts`.

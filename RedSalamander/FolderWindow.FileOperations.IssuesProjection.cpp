@@ -144,18 +144,18 @@ bool Projection::Update(std::span<const Observation> observations, const Text& t
         row.operation             = issue.operation;
         row.operationText         = observation.operationText;
         // I35: an Information note is an original row with the Information caption.
-        row.severityText        = original && issue.severity != Severity::Info ? observation.severityText : text.infoSeverity;
-        row.statusText          = observation.statusText;
-        row.statusTextDetail    = observation.statusTextDetail;
-        row.categoryText        = issue.category.empty() ? L"-" : issue.category;
-        row.messageText         = original && ! issue.message.empty() ? issue.message : L"-";
-        row.problemText         = observation.problemText.empty() ? L"-" : observation.problemText;
+        row.severityText     = original && issue.severity != Severity::Info ? observation.severityText : text.infoSeverity;
+        row.statusText       = observation.statusText;
+        row.statusTextDetail = observation.statusTextDetail;
+        row.categoryText     = issue.category.empty() ? L"-" : issue.category;
+        row.messageText      = original && ! issue.message.empty() ? issue.message : L"-";
+        row.problemText      = observation.problemText.empty() ? L"-" : observation.problemText;
         // I63 B3.3: the two items' facts the decision showed (empty for any other row).
         row.sourceFactsText      = observation.sourceFactsText;
         row.destinationFactsText = observation.destinationFactsText;
         row.comparisonText       = observation.comparisonText;
-        row.sourcePathText      = issue.sourcePath;
-        row.destinationPathText = issue.destinationPath;
+        row.sourcePathText       = issue.sourcePath;
+        row.destinationPathText  = issue.destinationPath;
         if (issue.conflictPrompt.has_value())
         {
             const auto& display = issue.conflictPrompt.value();

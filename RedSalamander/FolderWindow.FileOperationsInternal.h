@@ -1678,11 +1678,12 @@ struct FolderWindow::FileOperationState
             // I63 B6.5 (D-13): the task's preset collision policy, written once before the first collision
             // (SeedPresetCollisionPolicy) and never changed. A preset Replace older is also replaceOlderGrantGeneration
             // set to kPresetPolicyGeneration, a generation no prompt has. Read only under this mutex.
-            static constexpr uint64_t kPresetPolicyGeneration = ~uint64_t{0};
+            static constexpr uint64_t kPresetPolicyGeneration  = ~uint64_t{0};
             FileOperations::PresetCollisionPolicy presetPolicy = FileOperations::PresetCollisionPolicy::Ask;
             // I63 D-5: the task's one answer to "This location has no Recycle Bin. Delete the source files
-            // permanently?" (None until answered, then PermanentDelete or Skip). sourceNoRecycleBinQuestionOpen is true
-            // while one worker asks it; the others wait on cv. Read and written only under this mutex.
+            // permanently?" (None until answered, then PermanentDelete, Skip, or Cancel, which also cancels the task and
+            // ends every worker's wait). sourceNoRecycleBinQuestionOpen is true while one worker asks it; the others
+            // wait on cv. Read and written only under this mutex.
             ConflictAction sourceNoRecycleBinAnswer = ConflictAction::None;
             bool sourceNoRecycleBinQuestionOpen     = false;
         };
@@ -3429,6 +3430,9 @@ void SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(bool enabled, ULONGLONG b
 unsigned int GetFileOpsBridgeMoveSourceCleanupPausedCountForSelfTest() noexcept;
 bool HasFileOpsBridgeMoveSourceCleanupPauseEnteredForSelfTest() noexcept;
 void ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest() noexcept;
+// Makes the same-file probe's control answer as a location that does not enforce sharing would (a second open of the
+// held destination is admitted), so the probe must answer "not provably distinct".
+void SetFileOpsSameFileProbeSharingUnenforcedForSelfTest(bool enabled) noexcept;
 // Holds the bridge just before it restores the basic information of the created destination folder at
 // `destinationPath` (empty: never), once that folder's children have finished.
 void SetFileOpsBridgeDirectoryRestorePauseForSelfTest(std::wstring_view destinationPath) noexcept;

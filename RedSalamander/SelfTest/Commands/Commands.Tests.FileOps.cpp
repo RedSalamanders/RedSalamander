@@ -13894,13 +13894,12 @@ struct FileOperationsPopupTestFixture final
     // The prompt has no More button at all: neither painted nor reachable through UIA under the former overflow-count identity.
     wil::com_ptr_nothrow<IRawElementProviderSimple> moreProbe;
     wil::com_ptr_nothrow<IRawElementProviderSimple> skipAll;
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(scoped.popup, beforeLayout) && ! beforeLayout.conflictMoreVisible &&
-                      beforeLayout.conflictOverflowActionCount == 0u &&
-                      ! FindExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictMore, scopedId, 1u, IDS_FILEOPS_CONFLICT_BTN_MORE, moreProbe) &&
-                      FindExactFileOperationsActionForSelfTest(
-                          scoped.popup, Hit::TaskConflictAction, scopedId, skipAllRaw, IDS_FILEOPS_BTN_SKIP_ALL, skipAll) &&
-                      skipAll,
-                  std::format(L"Conflict Skip all must be the direct button {} and the prompt must expose no More button.", skipAllId));
+    state.Require(
+        DebugGetFileOperationsPopupLayoutSnapshot(scoped.popup, beforeLayout) && ! beforeLayout.conflictMoreVisible &&
+            beforeLayout.conflictOverflowActionCount == 0u &&
+            ! FindExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictMore, scopedId, 1u, IDS_FILEOPS_CONFLICT_BTN_MORE, moreProbe) &&
+            FindExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictAction, scopedId, skipAllRaw, IDS_FILEOPS_BTN_SKIP_ALL, skipAll) && skipAll,
+        std::format(L"Conflict Skip all must be the direct button {} and the prompt must expose no More button.", skipAllId));
     const auto acceptedBefore = [&](const Entry& entry) noexcept { return entry.taskId == scopedId && entry.acceptedDecision.has_value(); };
     state.Require(samePrompt() && DebugGetFileOperationsPopupTaskSnapshot(scoped.popup, scopedId, pending) && pending.conflict.active && ! pending.finished &&
                       std::ranges::none_of(before, acceptedBefore) && TextFileEqualsForFileOpsPrompt(scoped.dest, "existing payload") &&
@@ -14118,8 +14117,8 @@ struct FileOperationsPopupTestFixture final
                                                                                                    true,
                                                                                                    task.conflict.destinationMetadata.sizeBytes,
                                                                                                    task.conflict.destinationMetadata.lastWriteTime);
-    task.conflict.dateRelation = static_cast<uint8_t>(comparison.date);
-    task.conflict.sizeRelation = static_cast<uint8_t>(comparison.size);
+    task.conflict.dateRelation                              = static_cast<uint8_t>(comparison.date);
+    task.conflict.sizeRelation                              = static_cast<uint8_t>(comparison.size);
     state.Require(comparison.size == FileOperations::ConflictSizeRelation::Larger && comparison.date != FileOperations::ConflictDateRelation::OneHourApart,
                   L"The decorated comparison must be an incoming file larger than the existing one.");
     popupState->DebugSetVisualScenario({task}, false, true);
@@ -15911,11 +15910,10 @@ struct FileOperationsPopupTestFixture final
     using HitKind       = FileOperationsPopupInternal::PopupHitTest::Kind;
     const auto actionId = [&](HitKind kind, uint32_t data)
     { return std::format(L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(kind), fixture.taskId.value(), data, shortTask.conflict.generation); };
-    const size_t primaryCount = shortTask.conflict.primaryActionCount;
-    const bool publishesSkipAllDirectly =
-        std::ranges::find(shortTask.conflict.primaryActions, static_cast<uint8_t>(FileOperations::ConflictAction::SkipAll)) -
-            shortTask.conflict.primaryActions.begin() <
-        static_cast<std::ptrdiff_t>(primaryCount);
+    const size_t primaryCount           = shortTask.conflict.primaryActionCount;
+    const bool publishesSkipAllDirectly = std::ranges::find(shortTask.conflict.primaryActions, static_cast<uint8_t>(FileOperations::ConflictAction::SkipAll)) -
+                                              shortTask.conflict.primaryActions.begin() <
+                                          static_cast<std::ptrdiff_t>(primaryCount);
     state.Require(primaryCount > 1u && primaryCount <= shortTask.conflict.primaryActions.size() && shortTask.conflict.overflowActionCount == 0u &&
                       publishesSkipAllDirectly &&
                       shortTask.conflict.primaryActions[primaryCount - 1u] == static_cast<uint8_t>(FileOperations::ConflictAction::Cancel),
@@ -16140,10 +16138,8 @@ struct FileOperationsPopupTestFixture final
                                   failureDetail));
     };
     std::wstring previousId = actionId(HitKind::TaskConflictAction, static_cast<uint32_t>(FileOperations::ConflictAction::Cancel));
-    const auto actionLabel = [&](FileOperations::ConflictAction action)
-    {
-        return FileOperations::FormatConflictActionLabel(action, static_cast<FileOperations::ConflictClass>(shortTask.conflict.bucket), shortTask.operation);
-    };
+    const auto actionLabel  = [&](FileOperations::ConflictAction action)
+    { return FileOperations::FormatConflictActionLabel(action, static_cast<FileOperations::ConflictClass>(shortTask.conflict.bucket), shortTask.operation); };
     // Reverse from Cancel across every earlier primary action, ending on the first one.
     for (size_t remaining = primaryCount; remaining > 1u && state.failure.empty(); --remaining)
     {

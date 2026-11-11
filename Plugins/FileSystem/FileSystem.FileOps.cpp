@@ -11933,8 +11933,8 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
     std::wstring boundedStagePath;
     std::wstring secondStagePath;
     if (! check(SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), kStageExtension, boundedStagePath)) &&
-                    SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), kStageExtension, secondStagePath)) &&
-                    boundedStagePath != secondStagePath && std::filesystem::path(boundedStagePath).parent_path() == root &&
+                    SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), kStageExtension, secondStagePath)) && boundedStagePath != secondStagePath &&
+                    std::filesystem::path(boundedStagePath).parent_path() == root &&
                     std::filesystem::path(boundedStagePath).filename().native().size() == 255u && boundedStagePath.ends_with(kStageExtension),
                 L"255-unit destination leaves need distinct bounded random stage names in the same parent"))
     {

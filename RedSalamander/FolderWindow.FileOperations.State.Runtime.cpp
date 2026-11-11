@@ -2947,21 +2947,20 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
 
     const size_t adjacentIndex = moveUp ? index - 1u : index + 1u;
     Task* const adjacent       = waiting[adjacentIndex];
-    // Never across an overlap edge: the same rule CollectQueuedTaskOrder publishes to the popup.
-    if ((*current)->IsOverlapQueued() || adjacent->IsOverlapQueued())
-    {
-        return false;
-    }
-    const uint64_t currentKey  = (*current)->GetQueueOrderKey();
-    const uint64_t adjacentKey = adjacent->GetQueueOrderKey();
 
     {
         std::scoped_lock lock(_queueMutex);
-        if ((*current)->HasEnteredOperation() || (*current)->HasReservedOperation() || adjacent->HasEnteredOperation() || adjacent->HasReservedOperation() ||
-            (! (*current)->IsWaitingForOthers() && ! (*current)->IsWaitingInQueue()) || (! adjacent->IsWaitingForOthers() && ! adjacent->IsWaitingInQueue()))
+        // Never across an overlap edge: the same rule CollectQueuedTaskOrder publishes to the popup. The edge and both
+        // keys are read under _queueMutex, where a worker's overlap answer takes its late key and sets the edge
+        // (RunSameHostOverlapAdvisory); read before the lock, a swap could overwrite that late key with a stale one.
+        if ((*current)->IsOverlapQueued() || adjacent->IsOverlapQueued() || (*current)->HasEnteredOperation() || (*current)->HasReservedOperation() ||
+            adjacent->HasEnteredOperation() || adjacent->HasReservedOperation() || (! (*current)->IsWaitingForOthers() && ! (*current)->IsWaitingInQueue()) ||
+            (! adjacent->IsWaitingForOthers() && ! adjacent->IsWaitingInQueue()))
         {
             return false;
         }
+        const uint64_t currentKey  = (*current)->GetQueueOrderKey();
+        const uint64_t adjacentKey = adjacent->GetQueueOrderKey();
         (*current)->_queueOrderKey.store(adjacentKey, std::memory_order_release);
         adjacent->_queueOrderKey.store(currentKey, std::memory_order_release);
 

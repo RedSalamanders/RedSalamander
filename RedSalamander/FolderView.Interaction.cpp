@@ -506,9 +506,10 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
     SetFocus(_hWnd.get());
     DisarmPotentialDrag();
 
-    auto hit = HitTest(pt);
-    if (hit)
+    const auto hit = HitTest(pt);
+    if (hit.has_value())
     {
+        const size_t hitIndex        = hit.value();
         const bool ctrl              = (keys & MK_CONTROL) != 0;
         const bool shift             = (keys & MK_SHIFT) != 0;
         const size_t prePressCurrent = _focusedIndex;
@@ -517,46 +518,46 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
         {
             if (_anchorIndex == static_cast<size_t>(-1))
             {
-                _anchorIndex = prePressCurrent < _items.size() ? prePressCurrent : *hit;
+                _anchorIndex = prePressCurrent < _items.size() ? prePressCurrent : hitIndex;
             }
-            RangeSelect(*hit, ctrl);
+            RangeSelect(hitIndex, ctrl);
         }
         else if (ctrl)
         {
-            ToggleSelection(*hit);
-            _anchorIndex = *hit;
+            ToggleSelection(hitIndex);
+            _anchorIndex = hitIndex;
         }
         else
         {
-            if (! activating && ! _items[*hit].selected)
+            if (! activating && ! _items[hitIndex].selected)
             {
-                SelectSingle(*hit);
+                SelectSingle(hitIndex);
             }
             else
             {
-                FocusItem(*hit, false);
+                FocusItem(hitIndex, false);
             }
-            _anchorIndex = *hit;
+            _anchorIndex = hitIndex;
         }
 
         _drag.startPoint                  = pt;
-        _drag.pressedIndex                = *hit;
+        _drag.pressedIndex                = hitIndex;
         _drag.sourcePaths                 = GetSelectedOrFocusedPaths();
         _drag.sourceDisplayNames          = GetSelectedOrFocusedDisplayNames();
-        const bool pressedBelongsToSource = *hit < _items.size() && std::ranges::any_of(_drag.sourceDisplayNames, [&](const std::wstring& name) noexcept {
-            return EquivalentProviderComponent(name, _items[*hit].displayName);
+        const bool pressedBelongsToSource = hitIndex < _items.size() && std::ranges::any_of(_drag.sourceDisplayNames, [&](const std::wstring& name) noexcept {
+            return EquivalentProviderComponent(name, _items[hitIndex].displayName);
         });
         if (pressedBelongsToSource)
         {
             _drag.potential = true;
             SetCapture(_hWnd.get());
         }
-        else if (activating && ! ctrl && ! shift && *hit < _items.size())
+        else if (activating && ! ctrl && ! shift && hitIndex < _items.size())
         {
             // The kept selection does not contain the pressed item. A drag from here drags that
             // item alone; the selection is replaced only if the drag starts.
-            _drag.sourcePaths.assign(1u, GetItemFullPath(_items[*hit]));
-            _drag.sourceDisplayNames.assign(1u, std::wstring(_items[*hit].displayName));
+            _drag.sourcePaths.assign(1u, GetItemFullPath(_items[hitIndex]));
+            _drag.sourceDisplayNames.assign(1u, std::wstring(_items[hitIndex].displayName));
             _drag.selectsPressedItemOnStart = true;
             _drag.potential                 = true;
             SetCapture(_hWnd.get());
@@ -718,7 +719,7 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
                 // BeginDragDrop starts nothing once the gesture is disarmed.
                 const size_t pressed = _drag.pressedIndex;
                 const bool sameItem  = pressed < _items.size() && _drag.sourceDisplayNames.size() == 1u &&
-                                      EquivalentProviderComponent(_drag.sourceDisplayNames.front(), _items[pressed].displayName);
+                                       EquivalentProviderComponent(_drag.sourceDisplayNames.front(), _items[pressed].displayName);
                 if (! sameItem)
                 {
                     DisarmPotentialDrag();

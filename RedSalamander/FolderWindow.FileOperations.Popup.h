@@ -296,25 +296,25 @@ struct TaskSnapshot
     unsigned long skippedItemCount   = 0;
     bool partialExplainedByUserSkips = false;
     std::wstring resultSummary;
-    unsigned long publishedItemCount          = 0;
-    unsigned long unknownPublicationItemCount = 0;
-    unsigned long removedSourceCount          = 0;
-    bool hasIndeterminateResult               = false;
-    bool interruptedMoveNotice                = false;
-    uint64_t interruptedOperationId           = 0u;
-    bool clipboardMoveAdmission               = false;
-    bool clipboardMoveConsumed                = false;
-    bool hasSourceActionPaths                 = false;
-    bool exactRetainedSourceActionAvailable   = false;
-    unsigned long retainedSourceCount         = 0;
-    unsigned long retainedSourceNativeCount   = 0;
-    unsigned long canceledRetainedSourceCount = 0;
-    unsigned long unknownSourceCount          = 0;
-    unsigned long missingSourceCount          = 0;
+    unsigned long publishedItemCount             = 0;
+    unsigned long unknownPublicationItemCount    = 0;
+    unsigned long removedSourceCount             = 0;
+    bool hasIndeterminateResult                  = false;
+    bool interruptedMoveNotice                   = false;
+    uint64_t interruptedOperationId              = 0u;
+    bool clipboardMoveAdmission                  = false;
+    bool clipboardMoveConsumed                   = false;
+    bool hasSourceActionPaths                    = false;
+    bool exactRetainedSourceActionAvailable      = false;
+    unsigned long retainedSourceCount            = 0;
+    unsigned long retainedSourceNativeCount      = 0;
+    unsigned long canceledRetainedSourceCount    = 0;
+    unsigned long unknownSourceCount             = 0;
+    unsigned long missingSourceCount             = 0;
     unsigned long alreadyThereSourceRemovedCount = 0;
     unsigned long skippedSameSizeAndDateCount    = 0; // I63 B6
     unsigned long replacedOlderCount             = 0; // I63 B6
-    StatusKind statusKind                     = StatusKind::None;
+    StatusKind statusKind                        = StatusKind::None;
     // I35 R9.4 (P3): false when the completed task changed nothing (CompletedTaskFacts).
     bool startedMutation = true;
     // The completed summary's final facts are projected, not the finished task's interim counters.
@@ -529,19 +529,19 @@ struct PopupLayoutDebugSnapshot
     bool taskThroughputExpanded                 = true;
     bool taskThroughputSummaryVisible           = false;
     D2D1_RECT_F taskThroughputDisclosureRect{};
-    bool footerAggregateProgressVisible             = false;
-    bool footerAggregateProgressDeterminate         = false;
-    double footerAggregateProgressFraction          = 0.0;
-    uint32_t footerOpenDiscoveryTasks               = 0u;
-    bool footerOnly                                 = false;
-    bool footerDetailsToggleVisible                 = false;
-    bool footerDetailsToggleRightAligned            = false;
-    bool footerDetailsToggleUsesDisclosureChrome    = false;
-    bool highContrastEnabled                        = false;
-    bool reducedMotionEnabled                       = false;
-    bool layoutMotionActive                         = false;
-    bool autoResizeMotionActive                     = false;
-    bool selectedTaskHeightMotionActive             = false;
+    bool footerAggregateProgressVisible          = false;
+    bool footerAggregateProgressDeterminate      = false;
+    double footerAggregateProgressFraction       = 0.0;
+    uint32_t footerOpenDiscoveryTasks            = 0u;
+    bool footerOnly                              = false;
+    bool footerDetailsToggleVisible              = false;
+    bool footerDetailsToggleRightAligned         = false;
+    bool footerDetailsToggleUsesDisclosureChrome = false;
+    bool highContrastEnabled                     = false;
+    bool reducedMotionEnabled                    = false;
+    bool layoutMotionActive                      = false;
+    bool autoResizeMotionActive                  = false;
+    bool selectedTaskHeightMotionActive          = false;
     // I63 slice F: the stream rows the task's card reserves (painted or blank) and the card list's scrollbar decision.
     size_t taskReservedStreamRows                   = 0u;
     bool scrollBarVisible                           = false;
@@ -702,16 +702,16 @@ struct PopupLayoutDebugSnapshot
     uint32_t footerSummaryLineCount     = 0u;
     bool footerSummaryFits              = false;
     D2D1_RECT_F completedDiagnosticsMoreButtonRect{};
-    size_t conflictPrimaryActionCount   = 0u;
-    size_t conflictOverflowActionCount  = 0u;
-    uint8_t conflictDefaultAction       = 0u;
-    uint8_t conflictEscapeAction        = 0u;
-    bool conflictButtonsPublishable     = false;
-    bool conflictPrimaryLabelsFit       = true;
-    bool conflictScopeLabelFits         = false;
-    size_t conflictMeasuredPrimaryCount = 0u;
-    bool conflictSkipAllEligible        = false;
-    size_t completedVisibleActionCount  = 0u;
+    size_t conflictPrimaryActionCount     = 0u;
+    size_t conflictOverflowActionCount    = 0u;
+    uint8_t conflictDefaultAction         = 0u;
+    uint8_t conflictEscapeAction          = 0u;
+    bool conflictButtonsPublishable       = false;
+    bool conflictPrimaryLabelsFit         = true;
+    bool conflictScopeLabelFits           = false;
+    size_t conflictMeasuredPrimaryCount   = 0u;
+    bool conflictSkipAllEligible          = false;
+    size_t completedVisibleActionCount    = 0u;
     uint32_t completedDirectActionCommand = 0u;
     std::array<uint8_t, TaskSnapshot::kMaxConflictActions> conflictPrimaryActions{};
     std::array<uint8_t, TaskSnapshot::kMaxConflictActions> conflictOverflowActions{};
@@ -1545,10 +1545,10 @@ private:
                          std::wstring trailing,
                          IDWriteTextFormat* format,
                          float width,
-                         float leadingSlot                                      = 0.0f,
+                         float leadingSlot                                       = 0.0f,
                          FileOperationsLayoutStability::HeldCondition* stackHold = nullptr,
-                         ULONGLONG tick                                         = 0u,
-                         bool tabularFigures                                    = false);
+                         ULONGLONG tick                                          = 0u,
+                         bool tabularFigures                                     = false);
     [[nodiscard]] float FactPairHeight(const GraphLabelLayout& pair) const noexcept;
     void DrawFactPair(const GraphLabelLayout& pair, const D2D1_RECT_F& bounds, uint64_t taskId, std::wstring_view leadingId, std::wstring_view trailingId);
 
@@ -1589,10 +1589,10 @@ private:
         FileOperationsLayoutStability::HeldCondition throughputStacked;
         FileOperationsLayoutStability::HeldCondition concurrencyRow;
         FileOperationsLayoutStability::HeldCondition waitingReasonRow;
-        float concurrencyHeight               = 0.0f; // the row's height while it was last present
-        float concurrencyReservedHeight       = 0.0f; // what the card reserves now: the height while held, else 0
-        float waitingReasonHeight             = 0.0f;
-        float waitingReasonReservedHeight     = 0.0f;
+        float concurrencyHeight           = 0.0f; // the row's height while it was last present
+        float concurrencyReservedHeight   = 0.0f; // what the card reserves now: the height while held, else 0
+        float waitingReasonHeight         = 0.0f;
+        float waitingReasonReservedHeight = 0.0f;
         std::wstring shownRate;
         uint64_t shownRateTick = 0u;
         std::wstring shownEta;
@@ -2140,9 +2140,9 @@ private:
         unsigned long alreadyThereSourceRemovedCount = 0u;
         unsigned long skippedSameSizeAndDateCount    = 0u;
         unsigned long replacedOlderCount             = 0u;
-        uint64_t languageRevision = 0u;
-        uint8_t verificationState = 0u;
-        bool startedMutation      = true;
+        uint64_t languageRevision                    = 0u;
+        uint8_t verificationState                    = 0u;
+        bool startedMutation                         = true;
     };
     // Numeric facts are bounded by current expanded snapshots. Zero is absence of
     // recorded evidence, never a complement or a claim of complete success.

@@ -70,8 +70,8 @@ namespace
     leaf.remove_suffix(extension.size());
     if (allowStream)
     {
-        if (const size_t stream = leaf.rfind(L'_'); stream != std::wstring_view::npos && IsAsciiHexRun(leaf.substr(stream + 1u)) &&
-                                                    EndsWithDotToken(leaf.substr(0u, stream)))
+        if (const size_t stream = leaf.rfind(L'_');
+            stream != std::wstring_view::npos && IsAsciiHexRun(leaf.substr(stream + 1u)) && EndsWithDotToken(leaf.substr(0u, stream)))
         {
             return true;
         }
@@ -280,8 +280,8 @@ HRESULT DebugMeasureArtifactNameShapeProjectionForTests(const size_t ordinaryRow
     }
     for (size_t item = 0u; item < possibleRowCount; ++item)
     {
-        const std::wstring leaf = item % 2u == 0u ? std::format(L"artifact_{:05}.{:032x}_0.rs-tmp", item, item)
-                                                  : std::format(L"artifact_{:05}.{:032x}.rs-bak", item, item);
+        const std::wstring leaf =
+            item % 2u == 0u ? std::format(L"artifact_{:05}.{:032x}_0.rs-tmp", item, item) : std::format(L"artifact_{:05}.{:032x}.rs-bak", item, item);
         if (HasPossibleArtifactName(leaf))
         {
             ++out.folderPossibleProbeCount;

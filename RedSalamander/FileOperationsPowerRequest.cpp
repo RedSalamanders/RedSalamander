@@ -76,10 +76,12 @@ void PowerRequest::Acquire() noexcept
 {
     std::scoped_lock lock(_mutex);
     ++_holders;
-    if (_holders != 1u)
-        return;
-    ++_acquireTransitions;
-    SetLocked();
+    if (_holders == 1u)
+        ++_acquireTransitions;
+    // A set that failed for the first holder is tried again for each later one: otherwise overlapping tasks would run
+    // without the request until every one of them had finished.
+    if (! _held)
+        SetLocked();
 }
 
 void PowerRequest::Release() noexcept

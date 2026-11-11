@@ -931,10 +931,10 @@ void TestPercentEncodingAndHandleIoPoliciesCoverForwardProgressAndAtomicSiblings
     std::wstring boundedStageName;
     const bool boundedStageBuilt = SUCCEEDED(Common::Paths::BuildUniqueSiblingName<wchar_t>(longStagePrefix, L".", stageExtension, 255u, boundedStageName));
     const size_t stageTokenEnd   = boundedStageName.size() >= stageExtension.size() ? boundedStageName.size() - stageExtension.size() : 0u;
-    const bool stageTokenIsHex =
-        stageTokenEnd >= 33u && boundedStageName[stageTokenEnd - 33u] == L'.' &&
-        std::ranges::all_of(std::wstring_view(boundedStageName).substr(stageTokenEnd - 32u, 32u),
-                            [](wchar_t digit) noexcept { return (digit >= L'0' && digit <= L'9') || (digit >= L'a' && digit <= L'f'); });
+    const bool stageTokenIsHex   = stageTokenEnd >= 33u && boundedStageName[stageTokenEnd - 33u] == L'.' &&
+                                   std::ranges::all_of(std::wstring_view(boundedStageName).substr(stageTokenEnd - 32u, 32u), [](wchar_t digit) noexcept {
+        return (digit >= L'0' && digit <= L'9') || (digit >= L'a' && digit <= L'f');
+    });
     Require(boundedStageBuilt && boundedStageName.size() <= 255u && boundedStageName.starts_with(std::wstring(214u, L'x') + L".") &&
                 boundedStageName.ends_with(stageExtension) && stageTokenIsHex && Common::Strings::TryUtf8FromUtf16Strict(boundedStageName).has_value(),
             "a bounded stage name keeps its 32-hex token and .rs-tmp extension, and valid UTF-16, when the readable prefix cuts an emoji");

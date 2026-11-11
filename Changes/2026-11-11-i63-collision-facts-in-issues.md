@@ -6,4 +6,4 @@
     to the Problem and each item's line under its Source and Destination path.
   - Not done: the finished card of a single-item task (B3.3's second half), sizes on provider routes
     (B3.2; the provider issue callback carries no sizes), and facts for items a remembered answer or a
-    policy decided. Not built or run when written.
+    policy decided.

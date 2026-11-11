@@ -272,6 +272,7 @@ extern SelfTestPausePoint g_fileOpsPostFinishedCompletionPausePoint;
 extern SelfTestPausePoint g_fileOpsFallbackWorkerReturnPausePoint;
 extern SelfTestPausePoint g_fileOpsBridgeMoveSourceCleanupPausePoint;
 extern std::atomic<ULONGLONG> g_fileOpsBridgeMoveSourceCleanupPauseBailoutMs;
+extern std::atomic<bool> g_fileOpsSameFileProbeSharingUnenforcedForSelfTest;
 extern SelfTestPausePoint g_fileOpsBridgeDirectoryRestorePausePoint;
 extern std::mutex g_fileOpsBridgeDirectoryRestorePauseMutex;
 extern std::wstring g_fileOpsBridgeDirectoryRestorePausePath;

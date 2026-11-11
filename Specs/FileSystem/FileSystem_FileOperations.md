@@ -68,13 +68,19 @@ directory object.
     provably another file than the source. That last fact comes from the two bound objects'
     identities, or, where the destination's location opens the file and cannot identify it, from the
     location itself: the destination is held denying all sharing and the source's own name is then
-    opened for reading; a sharing refusal means one file reached by two names, and any doubt
-    withholds the action. The removal is by name through the provider's Recycle route, immediately
+    opened for reading; a sharing refusal means one file reached by two names. The location is
+    first checked for the rule this relies on: a second open of the held destination must be
+    refused, and a location that admits it cannot answer. Both names must be regular files, not
+    links or folders. A destination another reader holds for a moment is tried five times, 25 ms
+    apart. Any doubt withholds the action. One file reached through two different systems (a
+    local disk and a network or virtual path to that same disk) is not detected: no identity and
+    no sharing rule relates the two paths, as in Explorer. The removal is by name through the provider's Recycle route, immediately
     after the answer; a source changed in between is still recycled and can be restored. Where the
     source's location has no Recycle Bin, the provider refuses the Recycle before any change and the
     task asks one question on the card (D-5): `This location has no Recycle Bin. Delete the source
     files permanently?`, with `Permanently delete`, `Keep source` and `Cancel`. Cancel is the default
-    and the Escape action. There is no Apply-to-all box and no task-wide button, because the answer
+    and the Escape action; it cancels the task at once, so no waiting worker asks the question
+    again. There is no Apply-to-all box and no task-wide button, because the answer
     already covers the task. The question is the Recycle-refusal consent class of a Move, which no
     other Move route raises. The task asks it at most once: one worker asks while the others wait,
     and the answer stays on the task's conflict arbiter for every later source of the task whose

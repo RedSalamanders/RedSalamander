@@ -3072,7 +3072,7 @@ interface __declspec(uuid("c1884e97-02e5-4c89-99b0-a619e8f78625")) __declspec(no
                                                                FileSystemFlags flags,
                                                                const FileSystemOptions* options,
                                                                FileSystemConditionalMutationResult* result,
-                                                               IFileSystemBoundObject** published) noexcept         = 0;
+                                                               IFileSystemBoundObject** published) noexcept = 0;
 };
 
 // Reads, without following a link, the facts of an existing item for the expected-occupant
@@ -4512,7 +4512,7 @@ public:
                                                       FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_OFFLINE;
         const std::wstring extendedFinal            = FileSystemInternal::ToExtendedPath(finalPath);
         bool readOnlyCleared                        = false;
-        const auto restoreReadOnly       = wil::scope_exit([&]() noexcept
+        const auto restoreReadOnly                  = wil::scope_exit([&]() noexcept
         {
             if (readOnlyCleared)
             {

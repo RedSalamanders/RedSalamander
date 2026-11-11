@@ -620,9 +620,10 @@ a thing the I63 text required, the item says "not confirmed in the I63 log".
   route are not covered. State both in the spec, or cover them. A Move inside one location that is a
   native rename onto an existing name is the B1 decision; confirm what the user is offered there and
   write the test.
-- [ ] RB7 Found, not fixed: the Issues "Problem" text of the no-Recycle-Bin question row reads "Recycle
-  Bin delete failed." Give it a sentence that says the source's location has no Recycle Bin and the
-  delete would be permanent. Also, if that question's bucket were ever `DestinationLink`, a Skip answer
+- [ ] RB7 *Partly done 2026-11-11: the Issues "Problem" text of the no-Recycle-Bin question row now is
+  the question the card asked (`IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN`), not "Recycle Bin
+  delete failed." The question's Cancel now cancels the task at once and is remembered, so no waiting
+  worker asks again (`cancel-question` case).* Still open: if that question's bucket were ever `DestinationLink`, a Skip answer
   would be remembered for the task. The I63 log calls this an untested edge: add a test that the
   no-Recycle-Bin question never records a task-wide Skip, or change the bucket.
 - [ ] RB8 B6 counts and policies. The replace counter counts decisions, not files replaced: count
@@ -644,7 +645,19 @@ a thing the I63 text required, the item says "not confirmed in the I63 log".
     merge the opens.
   - B8.3: the location classes that do not enforce sharing should be a typed capability of the path
     profile instead of the probe's result alone. Collect the classes from the replacing-rename and
-    two-spellings runs (RP3) and add the capability.
+    two-spellings runs (RP3) and add the capability. *2026-11-11: the probe now measures the rule on
+    each use (a second open of the held destination must be refused), refuses links and folders, and
+    retries a destination held for a moment; a location that does not enforce sharing answers "not
+    provably distinct" (`sharing-unenforced` case). The capability would save that open, not add
+    safety.* Not covered, and stated in the spec: one file reached through two different systems (a
+    local disk and a network or virtual path to it), which defeats object identity as well.
+  - The folder-into-itself case above was confirmed by review on 2026-11-11 and is bounded, not
+    endless: enumeration is interleaved with destination creation, depth has no limit, and the walk
+    stops at the path-length limit, the queued-entry ceilings or a full disk. Nothing unlisted is
+    deleted, but the data is copied again at each level and ends in a deeply nested path. A first,
+    cheap step: resolve a mapped drive to its UNC name before the syntactic descendant check, which
+    covers a drive mapped to a subfolder of the same share. The by-facts detection is still needed for
+    DFS and server-side aliases.
 - [ ] RB11 B2 items, as the I63 closeout audit found them. B2.6: level 3 (a route with no replacing
   rename) is not built; the spec states there is no fallback to writing over the occupant, and the search
   for a Local location class without a replacing rename was not run (RP3). B2.7 is delivered (one
@@ -796,9 +809,53 @@ owner to confirm:
   share, that is an I63 STOP condition (section 9): keep B1's decision and return level 2 to the owner.
   Record any Local location class without a replacing rename (D-11).
 
-### 5.9 Watch item
+### 5.9 Audit of 2026-11-11: items not fixed in I63
 
-- [ ] RW1 `DiscoveryScope_MultipleFoldersLiveProgress` failed once in a full FileOps run on 2026-11-11:
+An external audit of the I63 branch was checked against the code on 2026-11-11. The confirmed defects
+were fixed on that branch. These items were confirmed or partly confirmed and left open.
+
+- [ ] RU1 Pane focus between two Terminals (older than I63). A click from one pane's Terminal directly
+  into the other pane's Terminal posts no `kPaneFocusChanged`, so `_activePane` and both `_paneFocused`
+  values stay stale and the pane in use is drawn as not active. The next press on an item there is then
+  an activating press (the selection is kept), which matches what is drawn. Post the message when the
+  terminal host gains or loses focus, call `UpdatePaneFocusStates()` in `SetPaneContentTab`, and add a
+  Commands case that moves focus Terminal to Terminal.
+- [ ] RU2 `PublishOwnedOverExpected` clears and restores the read-only attribute by name. The clear
+  acts on the name's own entry (a link itself, not its target), and the replacing rename never follows
+  the last component, so no file outside the destination is changed. A restore after a failed rename
+  can still set the attributes on another file that took the name in between. Do it on one no-follow
+  handle (`SetFileInformationByHandle`, as `DeleteExactHandle` does), closed before the rename.
+- [ ] RU3 `ReadUnidentifiedMetadataFeatures`: a failed inspection keeps the source with the text for a
+  file that has streams, extended attributes, encryption or a cloud placeholder. Give a failed
+  inspection its own reason. `FileAttributeTagInfo` could be `GetFileInformationByHandle`; no server
+  that refuses the first was found, so this is a simplification to make with the real-share run (RP2).
+- [ ] RU4 `FileSystemExpectedOccupant` and `IFileSystemExpectedOccupantPublication` have no case in
+  `PluginContractTests`. Add the size and method contract there, as for the neighbouring ABI structs.
+- [ ] RU5 Owner decision: a task paused while Preparing keeps its queue place and holds the queue behind
+  it. The written contract allows it (pause is not among the exceptions). Decide whether a paused
+  Preparing task should be passed over.
+- [ ] RU6 `firstUnblockedQueuedTaskId` allocates a vector on every waiter wakeup under both queue locks.
+  With tens of tasks this is not measurable; replace it with a single pass if `FileOps.Queue.*` timings
+  ever show it.
+- [ ] RU7 The collision prompt's date conversion (`FormatConflictPromptFileTime`) has no upper bound
+  check, unlike `Common::FileMetadata::TryGetLocalWriteTime`. Share one helper that keeps the prompt's
+  time-zone rule (the offset in effect on the file's date).
+- [ ] RU8 Owner decision D-6 again, raised by the audit: `Delete all remaining permanently` is one press
+  away from Cancel. The owner chose the direct button on 2026-11-11 knowing this cost. If it is
+  revisited, the options are a separated or distinctly styled button, or Apply to all on
+  `Permanently delete` in place of the separate action.
+
+### 5.10 Watch item
+
+- [x] RW1 *Closed 2026-11-11 by the audit fixes: cause found and fixed.* When a finished leaf's 300 ms
+  linger ended while another stream was still copying, `UpdateInFlightFileProgress` compacted the
+  in-flight array and left the moved-from entry past the count with its flags set. The next stream that
+  began in that entry was read as a live leaf being replaced, and `_fileWorkCountsUnavailable` (one-way)
+  withdrew the copied-file count for the rest of the task. Vacated entries are now cleared, and a
+  Begin that grows the array resets its entry. `RunFileOperationStreamSlotSelfTest` reproduces the
+  sequence without timing. The failing summary field of the original run was not recorded, so the
+  match with this cause is by mechanism, not by a captured trace. The original text follows.
+  `DiscoveryScope_MultipleFoldersLiveProgress` failed once in a full FileOps run on 2026-11-11:
   the copied content was correct and one summary number of a plain Local Copy (result code, discovered
   files, discovered bytes or copied files) was not the expected one. It then passed 43 times: 36
   in-process repeats, three isolated attempts, three family-order attempts and one full run, as the I63
@@ -806,7 +863,7 @@ owner to confirm:
   case now logs `MultipleFolderLiveProgressSummary` with the four numbers when it fails. **First action
   on a recurrence: read that line**, before any change. No edit is planned until a recurrence gives data.
 
-### 5.10 Decision record
+### 5.11 Decision record
 
 - [ ] RX1 Record the owner's answer for each decision in section 3.4 (D-2, D-3, D-7, D-8, D-9, D-11,
   D-12, D-13, D-14, D-15) as accepted, changed or declined, in this plan's section 3.1 and in the specs

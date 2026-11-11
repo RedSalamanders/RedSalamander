@@ -14,4 +14,4 @@
     `REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY`; new self-test
     `RunFileOperationDiscardSourceWithoutRecycleBinSelfTest` in `FileOps_ReviewRemediationContracts`.
   - Not covered: a source whose location cannot identify files (Delete source is not offered there) and
-    sources on other providers. Not built or run when written.
+    sources on other providers.

@@ -1419,10 +1419,9 @@ interface __declspec(uuid("7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7")) __declspec(no
                                                                   FileSystemFlags flags,
                                                                   const FileSystemOptions* options,
                                                                   FileSystemConditionalMutationResult* result,
-                                                                  IFileSystemBoundObject** published) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE ReadUnidentifiedMetadataFeatures(const wchar_t* path,
-                                                                       const FileSystemOptions* options,
-                                                                       uint32_t* presentFeatures) noexcept = 0;
+                                                                  IFileSystemBoundObject** published) noexcept                 = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadUnidentifiedMetadataFeatures(
+        const wchar_t* path, const FileSystemOptions* options, uint32_t* presentFeatures) noexcept = 0;
 };
 
 // Optional bounded transfer of a directory metadata witness to an already-held

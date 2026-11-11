@@ -2110,9 +2110,9 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
         {
             const std::wstring name = iterator->path().filename().wstring();
             if (name.size() == prefix.size() + stageTokenLength + stageSuffix.size() && name.starts_with(prefix) && name.ends_with(stageSuffix) &&
-                std::ranges::all_of(std::wstring_view(name).substr(prefix.size(), stageTokenLength),
-                                    [](wchar_t digit) noexcept
-                                    { return (digit >= L'0' && digit <= L'9') || (digit >= L'a' && digit <= L'f') || (digit >= L'A' && digit <= L'F'); }))
+                std::ranges::all_of(std::wstring_view(name).substr(prefix.size(), stageTokenLength), [](wchar_t digit) noexcept {
+                return (digit >= L'0' && digit <= L'9') || (digit >= L'a' && digit <= L'f') || (digit >= L'A' && digit <= L'F');
+            }))
             {
                 stages.push_back(iterator->path());
             }

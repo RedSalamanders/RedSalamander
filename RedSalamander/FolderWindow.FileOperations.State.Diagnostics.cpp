@@ -140,10 +140,18 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
     // A prompt observation, and an accepted (also cached apply-to-all) decision without one,
     // name the same problem the card and pane prompt explained, including an unclassified error's
     // actual status rather than labelling a known Windows error as unknown.
+    // I63 D-5: a Move raises a Recycle refusal only when Delete source meets a source location without a Recycle Bin.
+    // The row says what the card asked (FormatConflictPromptText), not that a Recycle Bin delete failed.
+    const auto promptProblem = [&](FileOperations::ConflictClass bucket) noexcept
+    {
+        if (bucket == FileOperations::ConflictClass::RecycleFailed && issue.operation == FILESYSTEM_MOVE)
+            return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN);
+        return FileOperations::FormatConflictProblemText(bucket, issue.status, systemText);
+    };
     if (issue.conflictPrompt.has_value())
-        return FileOperations::FormatConflictProblemText(issue.conflictPrompt.value().bucket, issue.status, systemText);
+        return promptProblem(issue.conflictPrompt.value().bucket);
     if (issue.acceptedDecision.has_value())
-        return FileOperations::FormatConflictProblemText(issue.acceptedDecision.value().scope.bucket, issue.status, systemText);
+        return promptProblem(issue.acceptedDecision.value().scope.bucket);
     // Stable producer codes whose fact is a kept source, a retained cleanup item or a verification
     // outcome. Their status is often S_FALSE or a sentinel whose system message would misstate it.
     static constexpr std::array<std::pair<std::wstring_view, UINT>, 18> kProducerProblems{{
@@ -1709,8 +1717,7 @@ void FolderWindow::FileOperationState::EnqueueTaskDiagnostic(TaskDiagnosticEntry
             // restates a failure that an Error of this task already explains, so it is not counted
             // a second time; when it is the only Error it is the only account of the failure and
             // counts. The record itself is kept either way.
-            const bool restatedResult =
-                entry.severity == DiagnosticSeverity::Error && counts.second != 0u && entry.category == L"task.result";
+            const bool restatedResult = entry.severity == DiagnosticSeverity::Error && counts.second != 0u && entry.category == L"task.result";
             if (entry.severity == DiagnosticSeverity::Warning)
             {
                 ++counts.first;
@@ -1868,13 +1875,11 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.clipboardMoveAdmission                   = task._clipboardMoveAdmission;
     summary.clipboardMoveConsumed                    = task._clipboardMoveConsumed.load(std::memory_order_acquire);
     summary.clipboardMoveConsumptionStatus           = task._clipboardMoveConsumptionStatus.load(std::memory_order_acquire);
-    summary.alreadyThereSourceRemovedCount =
-        static_cast<unsigned long>(std::min<uint64_t>(task._alreadyThereSourceRemovedCount.load(std::memory_order_acquire),
-                                                      std::numeric_limits<unsigned long>::max()));
+    summary.alreadyThereSourceRemovedCount           = static_cast<unsigned long>(
+        std::min<uint64_t>(task._alreadyThereSourceRemovedCount.load(std::memory_order_acquire), std::numeric_limits<unsigned long>::max()));
     // I63 B6: the items the bulk policies decided. Skipped ones are also ordinary skips in skippedItemCount.
-    summary.skippedSameSizeAndDateCount =
-        static_cast<unsigned long>(std::min<uint64_t>(task._skippedSameSizeAndDateCount.load(std::memory_order_acquire),
-                                                      std::numeric_limits<unsigned long>::max()));
+    summary.skippedSameSizeAndDateCount = static_cast<unsigned long>(
+        std::min<uint64_t>(task._skippedSameSizeAndDateCount.load(std::memory_order_acquire), std::numeric_limits<unsigned long>::max()));
     summary.replacedOlderCount =
         static_cast<unsigned long>(std::min<uint64_t>(task._replacedOlderCount.load(std::memory_order_acquire), std::numeric_limits<unsigned long>::max()));
 
