@@ -14,6 +14,10 @@ That Done file is non-normative implementation history. The completed
 records the post-completion `L4-BUILD-01..08` and `L4-STAR-01..16` repairs;
 this specification remains the authoritative behavior contract.
 Build receipts and portable handoff are owned by `Specs/Build/Build_Toolchain.md`.
+Selftest-only All/Compare/Commands/FileOps may consume their exact selected
+RedSalamander project-union receipt under that contract, with the same source,
+profile and complete output-byte checks. Full/PR/CI continue to require a
+full-solution receipt; family/filtered evidence does not widen that acceptance.
 `Fresh`, explicit exact `Resume`, and opt-in `Affected` are active as described below;
 CI, nightly, release, and final closeout remain explicit Fresh.
 

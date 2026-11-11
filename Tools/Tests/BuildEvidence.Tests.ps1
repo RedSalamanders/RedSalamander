@@ -289,6 +289,7 @@ Describe 'Operation Startrail build receipt records' {
         $Platform = 'x64'
         $Configuration = 'Release'
         $ProjectName = ''
+        $unionSelection = $null
         $resolvedProjectPath = ''
         $artifactManifestDir = $artifactManifestDir
         $buildArtifacts = @()
@@ -436,6 +437,33 @@ Describe 'Operation Startrail build receipt records' {
         ($target.relative_path -contains '.build/x64/Debug/Plugins/Plugin.dll') | Should Be $true
         (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
                 -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Missing }) | Should Be $true
+    }
+
+    It 'captures the selected project and shared runtime union without adopting stale unrelated outputs' {
+        $root = Join-Path $TestDrive 'union-output-repo'
+        $output = Join-Path $root '.build/x64/Debug'
+        [void][IO.Directory]::CreateDirectory($output)
+        foreach ($file in @('First.exe', 'Second.exe', 'Shared.dll', 'Stale.exe')) {
+            [IO.File]::WriteAllBytes((Join-Path $output $file), [byte[]](1, 2, 3))
+        }
+        $manifest = New-RSBuildArtifactManifestFixture -Root $root -Output $output `
+            -ProjectTarget @{First='First.exe';Second='Second.exe';Shared='Shared.dll'} `
+            -VcpkgTlog @{First=@((Join-Path $output 'Shared.dll'));Second=@((Join-Path $output 'Shared.dll'))}
+        $union = @(Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
+            -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectNames @('First', 'Second'))
+        $union.Count | Should Be 3
+        @($union | Where-Object role -eq 'launchable').Count | Should Be 2
+        @($union | Where-Object relative_path -like '*Stale.exe').Count | Should Be 0
+        foreach ($application in @($union | Where-Object role -eq 'launchable')) {
+            ($application.runtime_closure -contains '.build/x64/Debug/Shared.dll') | Should Be $true
+        }
+        (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output -ArtifactManifestDir $manifest `
+            -Configuration Debug -Platform x64 -ProjectNames @('First', 'Missing') }) | Should Be $true
+        (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output -ArtifactManifestDir $manifest `
+            -Configuration Debug -Platform x64 }) | Should Be $true
+        Remove-Item -LiteralPath (Join-Path $output 'Shared.dll')
+        (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output -ArtifactManifestDir $manifest `
+            -Configuration Debug -Platform x64 -ProjectNames @('First', 'Second') }) | Should Be $true
     }
 
     It 'rejects undeclared binaries and measures the effective project test surface' {
@@ -591,6 +619,20 @@ Describe 'Operation Startrail build receipt records' {
             -Target common -ProjectSelection @('Common\Common.vcxproj') -BuildArguments @('/t:Build') `
             -TestsEnabled $true -OfficialRelease $false -StartedUtc $started -EndedUtc $started.AddSeconds(1) `
             -Duration ([timespan]::FromSeconds(1)) -Outputs $artifacts
+        $unionReceipt = New-RSBuildReceipt -SourceSnapshot $source -Identity $identity -Platform x64 -Configuration Debug `
+            -Target selected-projects -ProjectSelection @('App/App.vcxproj', 'Library/Library.vcxproj') -BuildArguments @('/t:App;Library') `
+            -TestsEnabled $true -OfficialRelease $false -StartedUtc $started -EndedUtc $started.AddSeconds(1) `
+            -Duration ([timespan]::FromSeconds(1)) -Outputs $artifacts
+        $unionArguments = @{
+            Receipt=$unionReceipt;SourceSnapshot=$source;Platform='x64';Configuration='Debug';RepoRoot=$root
+            RequiredRelativePath=@('.build/x64/Debug/App.exe', '.build/x64/Debug/Library.dll')
+        }
+        (Test-RSBuildReceiptForArtifactUse @unionArguments) | Should Be $false
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('Library/Library.vcxproj', 'App/App.vcxproj')) | Should Be $true
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('App/App.vcxproj')) | Should Be $false
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('App/App.vcxproj', 'Other/Other.vcxproj')) | Should Be $false
+        $withoutArtifacts = $unionArguments.Clone(); $withoutArtifacts.RequiredRelativePath=@()
+        (Test-RSBuildReceiptForArtifactUse @withoutArtifacts -RequiredProjectSelection @('App/App.vcxproj', 'Library/Library.vcxproj')) | Should Be $false
         Publish-RSBuildReceipt -BuildOutputDir $output -Receipt $targetReceipt -SchemaPath $schema | Out-Null
         Test-Path -LiteralPath (Join-Path $output "receipts\$($receipt.receipt_id).json") | Should Be $true
         Test-Path -LiteralPath (Join-Path $output "receipts\$($targetReceipt.receipt_id).json") | Should Be $true
@@ -609,6 +651,7 @@ Describe 'Operation Startrail build receipt records' {
         (Test-RSBuildReceiptForArtifactUse -Receipt $stored -SourceSnapshot $source -Platform x64 `
             -Configuration Debug -RepoRoot $root -RequiredRelativePath @('.build/x64/Debug/App.exe')) | Should Be $true
         [IO.File]::WriteAllBytes($artifactPath, [byte[]](9, 9, 9))
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('App/App.vcxproj', 'Library/Library.vcxproj')) | Should Be $false
         (Test-RSBuildReceiptCompatible -Receipt $stored -SourceSnapshot $source -Identity $identity `
             -Platform x64 -Configuration Debug -Target solution -RepoRoot $root `
             -ProjectSelection @('RedSalamander.sln') -BuildArguments @('/t:Rebuild')) | Should Be $false

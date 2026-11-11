@@ -1304,6 +1304,7 @@ Set-StrictMode -Version Latest
 
         $prBuild = Get-RSBuildScriptArguments -Suite 'PR' -Configuration 'Debug' -Platform 'x64'
         Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite PR builds the solution so standalone tests and CppUnitTest DLLs exist.'
+        Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectNames') -Expected $false -Message 'PR retains the full-solution receipt requirement.'
         Assert-RSEqual -Actual (Get-RSBuildEnvironmentOverrides -Suite 'PR').Count -Expected 0 -Message 'Suite PR uses the default build environment like Suite CI.'
 
         $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
@@ -1883,13 +1884,18 @@ $global:LASTEXITCODE=0
 
         Assert-RSEqual -Actual $allBuild['Configuration'] -Expected 'Debug' -Message 'Suite All should pass the requested configuration.'
         Assert-RSEqual -Actual $allBuild['Platform'] -Expected 'x64' -Message 'Suite All should pass the requested platform.'
-        Assert-RSEqual -Actual $allBuild['ProjectName'] -Expected 'RedSalamander' -Message 'Suite All should build only RedSalamander.'
+        Assert-RSEqual -Actual ($allBuild['ProjectNames'] -join ',') -Expected 'RedSalamander' -Message 'Suite All should build only the RedSalamander project union.'
+        foreach ($focusedSuite in @('Compare', 'Commands', 'FileOps')) {
+            $focusedBuild = Get-RSBuildScriptArguments -Suite $focusedSuite -Configuration Debug -Platform x64
+            Assert-RSEqual -Actual ($focusedBuild.ProjectNames -join ',') -Expected 'RedSalamander' -Message 'Focused suites require the complete application project graph.'
+        }
 
         $fullBuild = Get-RSBuildScriptArguments -Suite 'Full' -Configuration 'Debug' -Platform 'x64'
 
         Assert-RSEqual -Actual $fullBuild['Configuration'] -Expected 'Debug' -Message 'Suite Full should pass the requested configuration.'
         Assert-RSEqual -Actual $fullBuild['Platform'] -Expected 'x64' -Message 'Suite Full should pass the requested platform.'
         Assert-RSEqual -Actual $fullBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite Full should build the solution so standalone tests and CppUnitTest DLLs exist.'
+        Assert-RSEqual -Actual $fullBuild.ContainsKey('ProjectNames') -Expected $false -Message 'Full must not accept a partial project union.'
         Assert-RSEqual -Actual $fullBuild['MaxCpuCount'] -Expected 4 -Message 'Suite Full should bound complete-solution build fan-out.'
 
         $ciBuild = Get-RSBuildScriptArguments -Suite 'CI' -Configuration 'Debug' -Platform 'x64'
@@ -1897,6 +1903,7 @@ $global:LASTEXITCODE=0
         Assert-RSEqual -Actual $ciBuild['Configuration'] -Expected 'Debug' -Message 'Suite CI should pass the requested configuration.'
         Assert-RSEqual -Actual $ciBuild['Platform'] -Expected 'x64' -Message 'Suite CI should pass the requested platform.'
         Assert-RSEqual -Actual $ciBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite CI should build the solution so standalone tests and CppUnitTest DLLs exist.'
+        Assert-RSEqual -Actual $ciBuild.ContainsKey('ProjectNames') -Expected $false -Message 'CI must not accept a partial project union.'
         Assert-RSEqual -Actual $ciBuild.ContainsKey('MaxCpuCount') -Expected $false -Message 'Suite CI should retain the build host worker policy.'
 
         $allEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'All'

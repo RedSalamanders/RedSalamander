@@ -1959,16 +1959,17 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Resolve solution projects, transitive build dependencies and complete MSBuild solution-folder target names.",
-      "usage": "Import from build.ps1 and focused project-selection tests; do not invoke as a command.",
+      "purpose": "Resolve unique native project unions and complete MSBuild solution-folder target names for one operation with explicitly partial receipt scope.",
+      "usage": "Import from build.ps1, Run-AllTests.ps1 and focused project-selection tests; do not invoke as a command.",
       "usedBy": [
         "build.ps1",
+        "Tools/Run-AllTests.ps1",
         "Tools/Tests/BuildProjectSelection.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [],
       "outputs": [
-        "Resolved project paths, dependency selections and normalized solution target names"
+        "Resolved project paths, canonical selected-project receipt scope and normalized Build/Rebuild/Clean solution target unions"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [

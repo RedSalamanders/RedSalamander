@@ -1,5 +1,11 @@
 # Repository tooling
 
+Build several native projects once with `build.ps1 -ProjectNames ViewerText,ProductUiTests`.
+This evaluates their solution and deployed runtime union and publishes a selected
+receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
+union with byte verification; PR/CI/Full and package gates retain full-solution
+receipts. Selection cannot grant contamination repair rights for the full solution.
+
 Local workspace snapshots, build receipts and validation fingerprints bind the actual
 ignored `.ci-engine` through the shared source-input reader. Restore the exact clean
 pin before using those tools. Missing, modified, foreign or mismatched engines refuse

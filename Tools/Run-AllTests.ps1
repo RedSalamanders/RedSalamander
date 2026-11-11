@@ -51,8 +51,9 @@
       Full      - Run all self-tests plus standalone/native and script tests
 
 .PARAMETER SkipBuild
-    When set, skips the build step only when a schema-valid full-solution receipt
-    matches this checkout/profile and every attested output still matches its digest.
+    Requires a schema-valid receipt for this checkout/profile and unchanged output
+    bytes. PR/CI/Full require the full solution. All/Compare/Commands/FileOps may
+    also use the exact RedSalamander selected-project union and its runtime closure.
 
 .PARAMETER ApplyLegacySandboxCleanup
     Retired compatibility switch. The runner rejects it because test tooling never
@@ -1477,6 +1478,13 @@ $quarantineStatus = Read-RSTestQuarantineFile -Path $QuarantinePath
 
 # --- Build step ---
 
+$buildArgs = Get-RSBuildScriptArguments -Suite $Suite -Configuration $Configuration -Platform $Platform
+$requiredBuildSelection = @()
+if ($buildArgs.ContainsKey('ProjectNames')) {
+    Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/BuildProjectSelection.psm1') -ErrorAction Stop
+    $selectedBuild = Get-RSBuildProjectUnion -SolutionPath (Join-Path $repoRoot 'RedSalamander.sln') -ProjectNames $buildArgs.ProjectNames
+    $requiredBuildSelection = @($selectedBuild.ProjectSelection)
+}
 if (-not $SkipBuild) {
     Write-Header "Building $Configuration|$Platform"
     $buildScript = Join-Path $repoRoot 'build.ps1'
@@ -1485,7 +1493,6 @@ if (-not $SkipBuild) {
         exit 1
     }
 
-    $buildArgs = Get-RSBuildScriptArguments -Suite $Suite -Configuration $Configuration -Platform $Platform
     if ($BuildNumber -gt 0) { $buildArgs.BuildNumber = $BuildNumber }
     $buildEnvironmentOverrides = Get-RSBuildEnvironmentOverrides -Suite $Suite
     $previousBuildEnvironment = @{}
@@ -1517,8 +1524,8 @@ if (-not $SkipBuild) {
     $requiredExecutable = [IO.Path]::GetRelativePath($repoRoot, $exeFullPath).Replace('\', '/')
     if (-not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot $sourceSnapshot `
             -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `
-            -RequiredRelativePath @($requiredExecutable))) {
-        Write-Host ("BLOCKED ATTESTATION: -SkipBuild requires a compatible full-solution build receipt and byte-identical artifacts. " +
+            -RequiredRelativePath @($requiredExecutable) -RequiredProjectSelection $requiredBuildSelection)) {
+        Write-Host ("BLOCKED ATTESTATION: -SkipBuild requires a compatible full-solution receipt or the exact selected project union, with byte-identical artifacts. " +
                 "Run build.ps1 for $Configuration|$Platform, or import a verified same-workflow portable attestation.") -ForegroundColor Red
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }

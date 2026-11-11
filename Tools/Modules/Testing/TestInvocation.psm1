@@ -274,7 +274,7 @@ function Get-RSBuildScriptArguments {
     }
 
     if ($Suite -notin @('PR', 'CI', 'Full')) {
-        $arguments.ProjectName = 'RedSalamander'
+        $arguments.ProjectNames = @('RedSalamander')
     }
     elseif ($Suite -eq 'Full') {
         # The complete test-enabled solution launches many compiler, linker,

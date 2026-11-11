@@ -406,6 +406,27 @@ full-solution build rejects an undeclared executable or DLL in the selected outp
 A targeted build may coexist with unrelated pre-existing files, but it MUST NOT attest
 them. This prevents stale or removed binaries from bootstrapping into new authority.
 
+`build.ps1 -ProjectNames ViewerText,ProductUiTests` selects native projects by their
+unique solution names, deduplicates case aliases, and evaluates their union in one
+solution invocation. Resolve folder-qualified and reserved MSBuild targets through
+`BuildProjectSelection.psm1`; caller strings are never concatenated as target syntax.
+Build/Rebuild/Clean retain the same union and the existing profile/dependency locks.
+Partial rebuilds cannot repair contamination that requires a full-solution rebuild.
+ProjectNames cannot accompany ProjectName, ProductionOnly or release/package actions.
+
+The receipt target is `selected-projects`, with the canonical explicit project paths
+in `project_selection`. Artifact capture requires an output declaration for every
+selected project and records the complete observed dependency/runtime union through
+the existing manifests. Missing staged inputs refuse publication; unrelated leftover
+outputs confer no authority. A selected receipt never becomes a solution receipt.
+Artifact readers must explicitly request the exact project selection and consumed
+paths before admitting selected receipts; all recorded bytes and transitive closure
+remain verified. A default reader, Full/PR/CI qualification and packaging retain their
+full-solution requirement. The selftest-only All/Compare/Commands/FileOps routes use
+the exact RedSalamander union, including its evaluated plugins/resources/runtime
+dependencies. Full Affected planning remains conservative until its earlier build
+selection is derived and validated from the actual affected entry plan.
+
 Vcpkg write-tlog entries have two supported forms: legacy `applocal.ps1` destination
 paths already beneath the selected output profile, and built-in `z-applocal` source paths
 beneath the repository's canonical `.build/vcpkg_installed/<platform>/` root. A source

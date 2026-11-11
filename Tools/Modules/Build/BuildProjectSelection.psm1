@@ -140,7 +140,46 @@ function Get-RSBuildSelection {
     }
 }
 
+function Get-RSBuildProjectUnion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$SolutionPath,
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$ProjectNames,
+        [switch]$Rebuild
+    )
+
+    $projects = @(Get-RSSolutionProjects -SolutionPath $SolutionPath)
+    $selected = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in $ProjectNames) {
+        if ([string]::IsNullOrWhiteSpace($name)) { throw 'Selected project names cannot be empty.' }
+        $resolved = @($projects | Where-Object Name -eq $name)
+        if ($resolved.Count -ne 1 -or $resolved[0].RelativePath -notmatch '\.vcxproj$' -or -not $resolved[0].Path) {
+            throw "Selected project '$name' must resolve to exactly one existing native solution project."
+        }
+        $selected[$resolved[0].Name] = $resolved[0]
+    }
+    # One solution invocation evaluates ProjectReferences and deployment targets
+    # together. Selection is explicit; observed dependency manifests remain the
+    # authority for the resulting artifact/runtime union.
+    $ordered = [object[]]@($selected.Values)
+    [Array]::Sort($ordered, [Comparison[object]]{
+        param($left, $right)
+        [StringComparer]::Ordinal.Compare($left.RelativePath, $right.RelativePath)
+    })
+    return [pscustomobject]@{
+        BuildInput = [IO.Path]::GetFullPath($SolutionPath)
+        ProjectNames = @($ordered.Name)
+        ProjectSelection = @($ordered | ForEach-Object { $_.RelativePath.Replace('\', '/') })
+        MSBuildTarget = (@($ordered | ForEach-Object {
+            if ($Rebuild) { $_.SolutionTarget + ':Rebuild' } else { $_.SolutionTarget }
+        }) -join ';')
+        CleanTarget = (@($ordered | ForEach-Object { $_.SolutionTarget + ':Clean' }) -join ';')
+        ReceiptTarget = 'selected-projects'
+    }
+}
+
 Export-ModuleMember -Function @(
     'Get-RSSolutionProjects',
-    'Get-RSBuildSelection'
+    'Get-RSBuildSelection',
+    'Get-RSBuildProjectUnion'
 )
