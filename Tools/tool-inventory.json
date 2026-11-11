@@ -1960,7 +1960,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Resolve unique native project unions and complete MSBuild solution-folder target names for one operation with explicitly partial receipt scope.",
-      "usage": "Import from build.ps1, Run-AllTests.ps1 and focused project-selection tests; do not invoke as a command.",
+      "usage": "Import from build.ps1, Run-AllTests.ps1 and focused project-selection tests; do not invoke as a command. Tests also guard runtime-only viewer and plugin producer references against clean-profile omissions.",
       "usedBy": [
         "build.ps1",
         "Tools/Run-AllTests.ps1",

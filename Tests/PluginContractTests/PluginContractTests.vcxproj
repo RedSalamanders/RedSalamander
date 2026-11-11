@@ -121,6 +121,77 @@
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
   </ItemGroup>
+  <!-- Runtime-loaded test inputs must build on a clean selected profile. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Plugins\FileSystem\FileSystem.vcxproj">
+      <Project>{FF4E36BC-807A-46AF-A37E-1C152D6BDCC3}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystem7z\FileSystem7z.vcxproj">
+      <Project>{F2C0D605-2E0F-4D2A-A8A0-2C0F5E5C1B9D}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystemCurl\FileSystemCurl.vcxproj">
+      <Project>{3B5E6B2C-0D0B-4B0F-9F57-343F9D2B1C6A}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystemS3\FileSystemS3.vcxproj">
+      <Project>{B8E8B457-B7C4-4E7D-BF8D-D18598A0B449}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystemGoogleDrive\FileSystemGoogleDrive.vcxproj">
+      <Project>{A27E0D06-8F24-4CBF-AF65-5D27A2DE16F4}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystemMicrosoftDrive\FileSystemMicrosoftDrive.vcxproj">
+      <Project>{7E7D541E-3F11-4DA0-A0B5-0C5F2D2CA2E6}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystemMtp\FileSystemMtp.vcxproj">
+      <Project>{A2908FBF-9190-4947-B182-92330D99DF6E}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\FileSystemDummy\FileSystemDummy.vcxproj">
+      <Project>{9C48DD1E-7B87-4B7D-AE8E-5875E7147D8D}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\Terminal\Terminal.vcxproj">
+      <Project>{99C8E460-477C-4D1F-9E13-5BC361E37A74}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\Terminal\Lang\ja-JP\Terminal-ja-JP.vcxproj">
+      <Project>{BE8C925A-AB47-5D0E-9E5B-CEB488F2A102}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerPE\ViewerPE.vcxproj">
+      <Project>{0DE8F6B5-FCD1-4BBF-AB29-B987731B9FAA}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerWeb\ViewerWeb.vcxproj">
+      <Project>{BEC3E5BC-7169-4D18-BCE4-BB8457D6FF22}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerImgRaw\ViewerImgRaw.vcxproj">
+      <Project>{A1E63302-8AEF-47F2-8E38-BA12988ED0C9}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerText\ViewerText.vcxproj">
+      <Project>{019B602A-6927-48AC-B2CE-F2630537B1DB}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerSpace\ViewerSpace.vcxproj">
+      <Project>{6B1D68C6-8B63-4D95-94DC-5C686FC9FD67}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerVLC\ViewerVLC.vcxproj">
+      <Project>{58A0DE28-F167-48CA-9CC2-CA6D6313A0F1}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerSqlite\ViewerSqlite.vcxproj">
+      <Project>{6C2E507E-0A72-4D93-9E71-7EE25D9AD36C}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

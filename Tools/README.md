@@ -5,6 +5,9 @@ This evaluates their solution and deployed runtime union and publishes a selecte
 receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
 union with byte verification; PR/CI/Full and package gates retain full-solution
 receipts. Selection cannot grant contamination repair rights for the full solution.
+Runtime-loaded test fixtures are declared by native project references. Viewer
+PE tests require the application/Common PE inputs, so their honest selected
+closure includes those producers; plugin contract tests include their full roster.
 
 Affected validation now plans before compiling. Reviewed native entry producers
 select their solution/runtime union; unknown/shared inputs, artifact writers and

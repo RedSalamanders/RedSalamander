@@ -1,5 +1,12 @@
 # SelfTest Specification
 
+Selected native builds retain runtime fixtures through the test projects' actual
+build dependencies. Viewer PE tests inspect the application/Common PE files as
+well as loading viewer plugins; plugin contract tests load their complete plugin
+roster and the Terminal satellite. These inputs must be built and attested before
+execution, including on a clean profile. Missing fixtures fail the existing test
+assertions; they never become skips or narrower coverage claims.
+
 Canonical native plan entries declare their reviewed build producers. Affected
 selection uses those bindings before compilation and verifies the complete selected
 runtime receipt afterward; Fresh Full and exact Resume retain their full profile.

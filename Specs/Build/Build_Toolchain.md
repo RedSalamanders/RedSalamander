@@ -987,3 +987,14 @@ Artifact use reopens the independently retained original SDK descriptor and rech
 Artifact-mutating tooling must preserve the admitted dependency recipe when the runner re-attests the profile. Before suspending its receipt, capture the SDK build argument through `Get-RSBuildReceiptDependencyBuildArguments`, which independently reopens the original binding and closes its reader. Rebuild with that descriptor and compare the resulting recipe, input key, manifest and descriptor hash before publishing the new receipt to native readers. A missing/changed SDK or compatibility miss cannot silently turn an SDK runtime qualification into Source coverage.
 
 SDK packaging is separate from build-time `-Zip`/winget generation: first seal the native build receipt, then use the canonical installer packaging command. Verify every profile output against that receipt and current source, reopen SDK input once, validate every shipped module's matching dependency recipe, copy the complete SDK `licenses` closure and close the reader after use. Unknown, mixed, missing or stale recipes refuse. Native package extraction/smoke and test-disabled production remain required. The existing Source portable-attestation exporter/importer refuse SDK-backed arguments until an independent portable SDK descriptor contract is implemented.
+
+## Runtime inputs of selected test projects
+
+Native test projects must declare every first-party executable, plugin and satellite
+they load or inspect as a build dependency, including runtime-only inputs with
+`LinkLibraryDependencies=false`. `ViewerPETests` includes the six viewer plugins
+and its Common/application PE fixtures; `PluginContractTests` includes its plugin
+and Terminal satellite producers. A selected build may consequently build the
+application when it is a real test input. Existing warm output is never evidence
+that an undeclared dependency is available on a clean profile. Runtime staging
+continues through `RuntimeDependencies.props` and the shared MSBuild targets.
