@@ -5265,15 +5265,18 @@ Specs\TestRuns\local_scratch
         $fileOps | Should Match 'request\.moveClipboardSequence\s*=\s*clipboardSequenceNumber'
         $fileOps | Should Not Match 'request\.completionCallback[\s\S]{0,420}InvalidateMoveClipboardAfterVerifiedCompletion'
 
-        $interaction | Should Match '!\s*_items\[\*hit\]\.selected[\s\S]{0,100}SelectSingle\(\*hit\)'
+        $interaction | Should Match '!\s*_items\[hitIndex\]\.selected[\s\S]{0,100}SelectSingle\(hitIndex\)'
         $leftButtonDown = [regex]::Match(
             $interaction,
             '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::OnLButtonDblClk\()').Value
         $leftButtonDown.Length | Should BeGreaterThan 0
         # I63 slice A: the pane state is read before the press takes the focus, and a press in the pane
         # that was not active keeps its selection (no SelectSingle, no ClearSelection).
-        $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*auto\s+hit\s*=\s*HitTest\(pt\)'
-        $leftButtonDown | Should Match 'if\s*\(\s*!\s*activating\s*&&\s*!\s*_items\[\*hit\]\.selected\s*\)\s*\{\s*SelectSingle\(\*hit\);'
+        $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*const\s+auto\s+hit\s*=\s*HitTest\(pt\)'
+        # The index is read once through value(); the optional is not dereferenced with '*'.
+        $leftButtonDown | Should Match 'if\s*\(hit\.has_value\(\)\)\s*\{\s*const\s+size_t\s+hitIndex\s*=\s*hit\.value\(\);'
+        $leftButtonDown | Should Not Match '\*hit\b'
+        $leftButtonDown | Should Match 'if\s*\(\s*!\s*activating\s*&&\s*!\s*_items\[hitIndex\]\.selected\s*\)\s*\{\s*SelectSingle\(hitIndex\);'
         $leftButtonDown | Should Match 'else\s+if\s*\(\s*!\s*activating\s*\)\s*\{\s*ClearSelection\(\);\s*_anchorIndex\s*=\s*_focusedIndex\s*<\s*_items\.size\(\)\s*\?\s*_focusedIndex\s*:\s*static_cast<size_t>\(-1\);\s*\}'
         $leftButtonDown | Should Not Match '_focusedIndex\s*=\s*static_cast<size_t>\(-1\)'
         $menus | Should Match 'selectionTargetSnapshot\s*=\s*allowItemTarget\s*\?\s*GetSelectedOrFocusedDisplayNames\(\)\s*:\s*std::vector<std::wstring>\{\}'
