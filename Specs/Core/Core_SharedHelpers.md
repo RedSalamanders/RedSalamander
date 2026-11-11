@@ -301,6 +301,13 @@ deletes the current last run as a fallback for a failed rename.
 
 ## Build tooling helpers
 
+`Read-RSVerifiedValidationPromotionEvidence` in `Tools/Modules/Testing/ValidationEvidence.psm1`
+owns entry-result/digest/byte/provenance verification. Its `RequireClosedRun` policy
+serves explicit exact local Resume and that mode's aggregate/prune references; only
+passed/failed/interrupted origins qualify for individual promoted-entry verification.
+`RequireTerminalGreen` remains the stronger whole-origin contract for other consumers.
+Neither state filter substitutes for verified terminal-PASSED entry evidence or a stable epoch.
+
 `Save-RSTestSandboxStaleRunEvidence` and `Save-RSTestSandboxRunEvidence` in
 `Tools/Modules/Testing/TestSandbox.psm1` share per-run archival/retention records.
 Only automatic stale maintenance honors a prior unsafe-link refusal, after fresh

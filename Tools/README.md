@@ -1,5 +1,11 @@
 # Repository tooling
 
+Explicit exact Full Resume preserves individually verified promoted entries from a
+closed failed/interrupted campaign. Failed entries and incompatible inputs execute;
+running/invalidated origins grant no reuse and corruption remains fatal. Original
+failures stay recorded. This is local continuation under the existing gates, with
+complete artifact/epoch/input checks; it grants no hosted delegation or main adoption.
+
 Automatic runner startup records unsafe-link archival refusals in the existing
 per-run `evidence/run-archive-records/<run-id>/retained.json`. Later startup leaves
 that original tree untouched after fresh path/owner checks, and reports repeated

@@ -364,7 +364,8 @@ function New-RSValidationRunSummaryV2 {
                     -SchemaRoot $SchemaRoot `
                     -ExpectedCoveragePlanDigest $Plan.coverage_plan_digest `
                     -ExpectedEntryFingerprint $stateEntry.expected_fingerprint `
-                    -RequireTerminalGreen:($stateEntry.status -eq 'reused')
+                    -RequireTerminalGreen:($stateEntry.status -eq 'reused' -and $Plan.validation_mode -ne 'Resume') `
+                    -RequireClosedRun:($stateEntry.status -eq 'reused' -and $Plan.validation_mode -eq 'Resume')
                 $promotion = $verified.Promotion
                 $evidence = $verified.Evidence
                 $verifiedRunArtifactBytes += [int64]$verified.ResultArtifactBytes

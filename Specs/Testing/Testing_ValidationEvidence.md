@@ -430,6 +430,19 @@ path naming one non-reparse direct child of `runs`; the directory leaf must equa
 `run-state.run_id`. Nested paths, case/path aliases, copied-renamed directories, and
 junctions are rejected before evidence records are read.
 
+Exact local Resume may reuse an individually promoted, terminal-PASSED entry from a
+closed `failed` or `interrupted` origin as well as a passed one. Requiring the entire
+origin campaign to be green would discard completed obligations after a later failure.
+Failed/non-promoted entries execute; running or invalidated parents supply no reuse.
+The original failure/interruption, immutable entry bytes and provenance are never
+rewritten. Stable artifact epoch, source/profile/coverage/runner/environment identity
+and all existing cross-record/result-byte verification remain mandatory. Changed
+receipts or inputs execute; corrupt evidence still aborts. A resumed aggregate passes
+only after complete current accounting, and pruning retains its verified original
+entry references. This closed-origin policy applies only to explicit local Resume
+and its aggregate/prune references; green-only history/other consumers keep their
+existing contract. It enables no local-to-hosted delegation or main-result adoption.
+
 ### Affected execution
 
 `Run-AllTests.ps1 -Suite Full -ValidationMode Affected [-ImpactBase <commit-ish>]`

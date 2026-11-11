@@ -897,7 +897,10 @@ function Read-RSVerifiedValidationPromotionEvidence {
         [string]$ExpectedSnapshotId = '',
         [int64]$ExpectedArtifactEpoch = -1,
         [AllowNull()][object]$ExpectedBuildReceipt = $null,
-        [switch]$RequireTerminalGreen
+        [switch]$RequireTerminalGreen,
+        # Exact local Resume may reuse a promoted entry from a closed failed/interrupted campaign.
+        # The entry's PASSED result, complete bindings, stable epoch and bytes still verify below.
+        [switch]$RequireClosedRun
     )
 
     Assert-RSValidationIdentifier -Id $EntryId
@@ -910,8 +913,12 @@ function Read-RSVerifiedValidationPromotionEvidence {
         -RunReference $OriginRunDirectory -SchemaRoot $SchemaRoot
     $originRoot = $resolvedOrigin.RunDirectory
     $state = $resolvedOrigin.State
+    if ($RequireTerminalGreen -and $RequireClosedRun) { throw 'Select one validation origin terminal-state contract.' }
     if ($RequireTerminalGreen -and [string]$state.status -ne 'passed') {
         throw "Validation origin run is not terminal green: $($state.run_id)"
+    }
+    if ($RequireClosedRun -and [string]$state.status -notin @('passed', 'failed', 'interrupted')) {
+        throw "Validation origin run is not closed for exact Resume: $($state.run_id)"
     }
     if ([string]$state.mutation_state -ne 'stable') {
         throw "Validation origin artifact epoch is not stable: $($state.mutation_state)"
@@ -1086,7 +1093,8 @@ function Get-RSValidationResumeCandidates {
         $reusable = $false
         if ($entry.cache_policy -ne 'ExactArtifact') {
             $reason = 'NON_CACHEABLE'
-        } elseif ($originEntry.Count -eq 0 -or $originEntry[0].status -ne 'promoted' -or $null -eq $originEntry[0].promotion_digest) {
+        } elseif ([string]$state.status -notin @('passed', 'failed', 'interrupted') -or
+            $originEntry.Count -eq 0 -or $originEntry[0].status -ne 'promoted' -or $null -eq $originEntry[0].promotion_digest) {
             $reason = 'PREVIOUS_NOT_GREEN'
         } elseif ($decisionEntry.Count -ne 1) {
             $reason = 'CORRUPT_EVIDENCE'
@@ -1097,7 +1105,7 @@ function Get-RSValidationResumeCandidates {
                     -EntryId $entry.id `
                     -PromotionDigest $originEntry[0].promotion_digest `
                     -SchemaRoot $SchemaRoot `
-                    -RequireTerminalGreen
+                    -RequireClosedRun
                 if ($CurrentFingerprintComponentsById.ContainsKey([string]$entry.id)) {
                     $currentComponents = $CurrentFingerprintComponentsById[[string]$entry.id]
                     $originComponents = $verified.Evidence.fingerprint_components
@@ -1135,7 +1143,7 @@ function Get-RSValidationResumeCandidates {
                     -ExpectedSnapshotId $CurrentSnapshot.snapshot_id `
                     -ExpectedArtifactEpoch ([int64]$state.artifact_epoch) `
                     -ExpectedBuildReceipt $BuildReceipt `
-                    -RequireTerminalGreen
+                    -RequireClosedRun
                 $promotion = $verified.Promotion
                 $evidence = $verified.Evidence
                 $verifiedRunArtifactBytes += [int64]$verified.ResultArtifactBytes
@@ -1337,7 +1345,8 @@ function Get-RSValidationEvidencePrunePlan {
                         -PromotionDigest ([string]$entry.promotion_digest) `
                         -SchemaRoot $schemaRoot `
                         -ExpectedCoveragePlanDigest ([string]$state.coverage_plan_digest) `
-                        -RequireTerminalGreen)
+                        -RequireTerminalGreen:($state.validation_mode -ne 'Resume') `
+                        -RequireClosedRun:($state.validation_mode -eq 'Resume'))
                 [void]$keep.Add($originRunId)
             }
         }

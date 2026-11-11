@@ -2601,7 +2601,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Normalize terminal results; atomically publish hashed quota-bound result artifacts and immutable decisions/evidence/promotions; resolve exact direct-child runs; verify component-aware promoted evidence; and manage crash-safe artifact epochs, read barriers, interruption repair, and identity-bound pruning.",
+      "purpose": "Normalize terminal results; atomically publish hashed quota-bound result artifacts and immutable decisions/evidence/promotions; resolve exact direct-child runs; verify component-aware promoted evidence, including individually successful entries from closed failed/interrupted origins for explicit local Resume; and manage crash-safe artifact epochs, read barriers, interruption repair, and identity-bound pruning. Other green-only consumers retain their stronger whole-origin contract.",
       "usage": "Import from Run-AllTests.ps1 and verified summary/history consumers; reuse only exact canonical PASSED evidence whose run identity, component projection, result bytes, receipt, and epoch all verify.",
       "usedBy": [
         "Tools/Run-AllTests.ps1",
@@ -2746,7 +2746,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance. Publish and validate create-only exact CI summary references without timestamp discovery.",
+      "purpose": "Build canonical aggregate-v2 summaries from semantically verified promotion evidence, including exact local Resume references to individually promoted entries in closed failed/interrupted origins; retain v1 sidecars with the final typed runner exit code, map terminal states to the documented 0..5 exit taxonomy, and render case history, dashboards, JSONL, and GitHub step summaries. Publish final archived artifact navigation while preserving native provenance. Publish and validate create-only exact CI summary references without timestamp discovery.",
       "usage": "Loaded through the TestRunPlan facade; summary consumers must prefer v2, treat BLOCKED as corrupt evidence, and retain explicit v1 compatibility handling during migration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
