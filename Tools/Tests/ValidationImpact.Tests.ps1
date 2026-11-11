@@ -17,6 +17,73 @@ function New-RSImpactPlan {
     return New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $entries -ValidationMode Affected
 }
 
+Describe 'Affected native build selection before compilation' {
+    BeforeAll {
+        $script:buildEntries = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+            -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'))
+        $script:buildPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $script:buildEntries -ValidationMode Affected
+        $script:buildManifest = Read-RSValidationImpactManifest -Path (Join-Path $repoRoot 'Tools/validation-impact.json') `
+            -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationImpact.schema.json') -RepoRoot $repoRoot
+        $script:solution = Join-Path $repoRoot 'RedSalamander.sln'
+    }
+
+    It 'binds every actual native entry to a resolvable reviewed producer and portable contract' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/BuildProjectSelection.psm1') -ErrorAction Stop
+        foreach ($entry in @($script:buildEntries | Where-Object Kind -in @('SelfTest','Executable','CppUnitTest'))) {
+            @($entry.BuildProjectNames).Count | Should BeGreaterThan 0
+            $union = Get-RSBuildProjectUnion -SolutionPath $script:solution -ProjectNames $entry.BuildProjectNames
+            @($union.ProjectSelection).Count | Should BeGreaterThan 0
+            $portable = @($script:buildPlan.entries | Where-Object id -eq $entry.Id)[0]
+            ($portable.build_project_names -join '|') | Should Be ($entry.BuildProjectNames -join '|')
+        }
+    }
+
+    It 'uses the actual impact graph to select the ProductUiTests union before any native build' {
+        $snapshot = New-RSImpactSnapshot @([pscustomobject]@{path='Tests/ProductUiTests/selected.cpp';old_path=$null})
+        $decision = Get-RSValidationImpactDecision -Manifest $script:buildManifest -WorkspaceSnapshot $snapshot -ValidationPlan $script:buildPlan
+        $selected = Get-RSValidationAffectedBuildSelection -Decision $decision -ExecutionEntries $script:buildEntries -SolutionPath $script:solution
+        $selected.UseSelectedBuild | Should Be $true
+        ($selected.Selection.ProjectNames -join '|') | Should Be 'ProductUiTests'
+        ($selected.EntryIds -join '|') | Should Be 'standalone.product-ui'
+    }
+
+    It 'retains the full build for shared or unknown source and artifact writers' {
+        foreach ($path in @('Common/unknown.h','unknown-executable-input.xyz','Tools/Tests/changed.Tests.ps1')) {
+            $snapshot = New-RSImpactSnapshot @([pscustomobject]@{path=$path;old_path=$null})
+            $decision = Get-RSValidationImpactDecision -Manifest $script:buildManifest -WorkspaceSnapshot $snapshot -ValidationPlan $script:buildPlan
+            $selected = Get-RSValidationAffectedBuildSelection -Decision $decision -ExecutionEntries $script:buildEntries -SolutionPath $script:solution
+            $selected.UseSelectedBuild | Should Be $false
+        }
+        $entry = New-RSTestRunPlanEntry -Id fixture.writer -Name Writer -Kind Executable -Path (Join-Path $repoRoot 'writer.exe') -BuildProjectNames ProductUiTests
+        $entry.ArtifactWriteIds=@('artifact.fixture')
+        $decision=[pscustomobject]@{advisory_build_action='targeted';entries=@([pscustomobject]@{id=$entry.Id;affected=$true})}
+        $selected=Get-RSValidationAffectedBuildSelection -Decision $decision -ExecutionEntries @($entry) -SolutionPath $script:solution
+        $selected.UseSelectedBuild | Should Be $false
+        $selected.Reason | Should Match 'artifact writer'
+    }
+
+    It 'widens an absent or invalid native producer binding and undeclared script artifact reads' {
+        foreach ($names in @(@(),@('MissingProject'),@('ProductUiTests;Build'))) {
+            $entry=New-RSTestRunPlanEntry -Id fixture.native -Name Native -Kind Executable -Path (Join-Path $repoRoot 'native.exe') -BuildProjectNames $names
+            $decision=[pscustomobject]@{advisory_build_action='targeted';entries=@([pscustomobject]@{id=$entry.Id;affected=$true})}
+            (Get-RSValidationAffectedBuildSelection -Decision $decision -ExecutionEntries @($entry) -SolutionPath $script:solution).UseSelectedBuild | Should Be $false
+        }
+        $entry=New-RSTestRunPlanEntry -Id fixture.script -Name Script -Kind PowerShellScript -Path (Join-Path $repoRoot 'script.ps1')
+        $entry.ArtifactReadIds=@('artifact.fixture')
+        $decision=[pscustomobject]@{advisory_build_action='targeted';entries=@([pscustomobject]@{id=$entry.Id;affected=$true})}
+        (Get-RSValidationAffectedBuildSelection -Decision $decision -ExecutionEntries @($entry) -SolutionPath $script:solution).UseSelectedBuild | Should Be $false
+    }
+
+    It 'refuses a decision describing missing, extra or duplicate entries' {
+        $entry=New-RSTestRunPlanEntry -Id fixture.native -Name Native -Kind Executable -Path (Join-Path $repoRoot 'native.exe') -BuildProjectNames ProductUiTests
+        foreach ($decisionEntries in @(@(),@([pscustomobject]@{id='fixture.other';affected=$true}),@([pscustomobject]@{id=$entry.Id;affected=$true},[pscustomobject]@{id=$entry.Id;affected=$true}))) {
+            $decision=[pscustomobject]@{advisory_build_action='targeted';entries=$decisionEntries}
+            $attempt=Invoke-RSTestBlock {Get-RSValidationAffectedBuildSelection -Decision $decision -ExecutionEntries @($entry) -SolutionPath $script:solution}
+            $attempt.Succeeded | Should Be $false
+        }
+    }
+}
+
 Describe 'Operation Startrail governed impact graph' {
     BeforeAll {
         $script:manifest = Read-RSValidationImpactManifest `

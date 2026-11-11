@@ -167,6 +167,7 @@ function Get-RSTestRunPlan {
             -Id $selfTest.Id `
             -Name $selfTest.Name `
             -Kind 'SelfTest' `
+            -BuildProjectNames @('RedSalamander') `
             -Path $RedSalamanderExePath `
             -Arguments (Get-RSSelfTestArguments -Flag $selfTest.Flag -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast -CaseFilter $CaseFilter -CommandsFamily $CommandsFamily -RepeatCount $RepeatCount -ShuffleSeed $ShuffleSeed -PerfBudgetPath $PerfBudgetPath -RequirePerfBudgets:$RequirePerfBudgets -NoActivate:(-not $allowsActivation) -SelfTestFlakyProofCase $SelfTestFlakyProofCase -SelfTestOrderProofCase $SelfTestOrderProofCase) `
             -WorkingDirectory $RepoRoot `
@@ -180,6 +181,7 @@ function Get-RSTestRunPlan {
             -Name 'ProductUiTests' `
             -Kind 'Executable' `
             -Path (Join-Path $buildOutputDir 'ProductUiTests.exe') `
+            -BuildProjectNames @('ProductUiTests') `
             -WorkingDirectory $buildOutputDir
 
         $plan += New-RSTestRunPlanEntry `
@@ -187,6 +189,7 @@ function Get-RSTestRunPlan {
             -Name 'FileSystemCurlTests' `
             -Kind 'Executable' `
             -Path (Join-Path $buildOutputDir 'FileSystemCurlTests.exe') `
+            -BuildProjectNames @('FileSystemCurlTests') `
             -WorkingDirectory $buildOutputDir
 
         foreach ($viewerGroup in @(Get-RSViewerTestGroups)) {
@@ -195,6 +198,7 @@ function Get-RSTestRunPlan {
                 -Name $viewerGroup.Name `
                 -Kind 'Executable' `
                 -Path (Join-Path $buildOutputDir $viewerGroup.Executable) `
+                -BuildProjectNames @([IO.Path]::GetFileNameWithoutExtension($viewerGroup.Executable)) `
                 -Arguments @("--group=$($viewerGroup.Group)") `
                 -WorkingDirectory $buildOutputDir `
                 -RequiresInteractiveDesktop:$viewerGroup.Interactive
@@ -210,6 +214,7 @@ function Get-RSTestRunPlan {
                 -Name "ViewerPETests.$viewerCase" `
                 -Kind 'Executable' `
                 -Path (Join-Path $buildOutputDir 'ViewerPETests.exe') `
+                -BuildProjectNames @('ViewerPETests') `
                 -Arguments @($viewerCase) `
                 -WorkingDirectory $buildOutputDir `
                 -RequiresInteractiveDesktop
@@ -225,6 +230,7 @@ function Get-RSTestRunPlan {
         foreach ($exeName in $ciExecutableIds.Keys) {
             $plan += New-RSTestRunPlanEntry `
                 -Id $ciExecutableIds[$exeName] `
+                -BuildProjectNames @($exeName) `
                 -Name $exeName `
                 -Kind 'Executable' `
                 -Path (Join-Path $buildOutputDir "$exeName.exe") `
@@ -236,6 +242,7 @@ function Get-RSTestRunPlan {
             -Name 'PerformanceTests2' `
             -Kind 'CppUnitTest' `
             -Path (Join-Path $buildOutputDir 'PerformanceTests2.dll') `
+            -BuildProjectNames @('PerformanceTests2') `
             -WorkingDirectory $buildOutputDir
 
         $plan += New-RSTestRunPlanEntry `
@@ -281,6 +288,7 @@ function Get-RSTestRunPlan {
             -Name 'ProductUiTests' `
             -Kind 'Executable' `
             -Path (Join-Path $buildOutputDir 'ProductUiTests.exe') `
+            -BuildProjectNames @('ProductUiTests') `
             -WorkingDirectory $buildOutputDir
 
         foreach ($viewerGroup in @(Get-RSViewerTestGroups)) {
@@ -289,6 +297,7 @@ function Get-RSTestRunPlan {
                 -Name $viewerGroup.Name `
                 -Kind 'Executable' `
                 -Path (Join-Path $buildOutputDir $viewerGroup.Executable) `
+                -BuildProjectNames @([IO.Path]::GetFileNameWithoutExtension($viewerGroup.Executable)) `
                 -Arguments @("--group=$($viewerGroup.Group)") `
                 -WorkingDirectory $buildOutputDir `
                 -RequiresInteractiveDesktop:$viewerGroup.Interactive
@@ -305,6 +314,7 @@ function Get-RSTestRunPlan {
         foreach ($exeName in $fullExecutableIds.Keys) {
             $plan += New-RSTestRunPlanEntry `
                 -Id $fullExecutableIds[$exeName] `
+                -BuildProjectNames @($exeName) `
                 -Name $exeName `
                 -Kind 'Executable' `
                 -Path (Join-Path $buildOutputDir "$exeName.exe") `
@@ -317,6 +327,7 @@ function Get-RSTestRunPlan {
             -Name 'PerformanceTests2' `
             -Kind 'CppUnitTest' `
             -Path (Join-Path $buildOutputDir 'PerformanceTests2.dll') `
+            -BuildProjectNames @('PerformanceTests2') `
             -WorkingDirectory $buildOutputDir
 
         $plan += New-RSTestRunPlanEntry `

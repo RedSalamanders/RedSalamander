@@ -1,5 +1,13 @@
 # SelfTest Specification
 
+Canonical native plan entries declare their reviewed build producers. Affected
+selection uses those bindings before compilation and verifies the complete selected
+runtime receipt afterward; Fresh Full and exact Resume retain their full profile.
+No-build/zero-entry decisions perform only applicable compiler-free ownership checks
+and return NOT_EVALUATED without a native artifact lease or a reusable test seal.
+The owning acceptance rules are in [Testing_ValidationEvidence.md](Testing_ValidationEvidence.md)
+and [Build_Toolchain.md](../Build/Build_Toolchain.md).
+
 The File Operations apply-to-all convergence fixture holds one named per-item worker before its
 checkpoint until another worker publishes the conflict prompt, then witnesses the real non-owner
 wait before holding the prompt for 250 ms. It retains four conflicting files, one cached prompt,

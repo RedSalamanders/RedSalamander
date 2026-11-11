@@ -424,8 +424,15 @@ paths before admitting selected receipts; all recorded bytes and transitive clos
 remain verified. A default reader, Full/PR/CI qualification and packaging retain their
 full-solution requirement. The selftest-only All/Compare/Commands/FileOps routes use
 the exact RedSalamander union, including its evaluated plugins/resources/runtime
-dependencies. Full Affected planning remains conservative until its earlier build
-selection is derived and validated from the actual affected entry plan.
+dependencies. Affected mode may select a union before compilation only when the
+governed impact decision is targeted and every selected native entry has its reviewed
+producer binding. Unknown/shared inputs, artifact writers, script artifact reads
+without an explicit closure, or absent/unresolvable producer bindings retain the
+full build. A fresh workspace barrier after compilation must match the planning
+snapshot before narrowed execution. Fresh Full, exact Resume, PR/CI and final
+qualification retain their full-solution gate. Expected native paths must appear
+in the receipt even when the actual file is missing; missing paths cannot disappear
+from admission through a filesystem-existence filter.
 
 Vcpkg write-tlog entries have two supported forms: legacy `applocal.ps1` destination
 paths already beneath the selected output profile, and built-in `z-applocal` source paths

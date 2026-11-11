@@ -1964,6 +1964,7 @@
       "usedBy": [
         "build.ps1",
         "Tools/Run-AllTests.ps1",
+        "Tools/Modules/Testing/ValidationImpact.psm1",
         "Tools/Tests/BuildProjectSelection.Tests.ps1"
       ],
       "prerequisites": [],
@@ -2511,7 +2512,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide stable metadata-complete test-plan entries, shared viewer-group artifact policy, mode-independent coverage-plan identity plus truthful invocation-plan identity, path normalization, run identifiers, and live-process snapshots. Recognize native adhoc-PID owners for conservative archival and audits.",
+      "purpose": "Provide stable metadata-complete test-plan entries, reviewed native producer bindings in portable contracts, shared viewer-group artifact policy, mode-independent coverage-plan identity plus truthful invocation-plan identity, path normalization, run identifiers, and live-process snapshots. Recognize native adhoc-PID owners for conservative archival and audits.",
       "usage": "Loaded through the TestRunPlan facade and imported by sandbox and suite-plan domain modules; reuse compares coverage_plan_digest while persisted invocation records retain their actual Fresh, Resume, or Affected mode.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -2642,7 +2643,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate the governed impact manifest and build graph, accumulate ordered path mappings including executable Specs inputs, widen unknown inputs, and emit deterministic Fresh/Resume/Affected plan decisions with scheduling-only cost estimates. Reuses at most 1024 immutable invariant pattern matchers; paths and decisions remain fresh.",
+      "purpose": "Validate the governed impact manifest and build graph, accumulate ordered mappings, widen unknown inputs, and emit deterministic decisions. Before compilation, resolve targeted native producers to their solution/runtime union; absent bindings, artifact writers and script artifact reads retain the full build. Reuses only immutable bounded pattern matchers; paths and decisions remain fresh.",
       "usage": "Import from Run-AllTests.ps1 and focused Startrail impact tests; reviewed executable schemas/data select their explicit consumers, unknown Specs JSON/JSON5 widens to Full, Affected decisions always report incomplete repository coverage, and estimates never affect trust or reuse.",
       "usedBy": [
         "Tools/Run-AllTests.ps1",

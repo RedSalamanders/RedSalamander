@@ -6,6 +6,15 @@ receipt. Selftest-only All/Compare/Commands/FileOps accept their exact applicati
 union with byte verification; PR/CI/Full and package gates retain full-solution
 receipts. Selection cannot grant contamination repair rights for the full solution.
 
+Affected validation now plans before compiling. Reviewed native entry producers
+select their solution/runtime union; unknown/shared inputs, artifact writers and
+missing producer bindings retain the full build. Inputs must remain unchanged
+through build selection. Prose/empty changes with no affected entries execute no
+native build or tests, acquire no profile artifact lease, and skip historical-run
+scavenging. Changed prose still runs changelog, tooling and specification ownership
+checks. Diagnostic plans and completed archival grant no Full pass or Resume seal;
+the canonical result remains NOT_EVALUATED (exit 2).
+
 Local workspace snapshots, build receipts and validation fingerprints bind the actual
 ignored `.ci-engine` through the shared source-input reader. Restore the exact clean
 pin before using those tools. Missing, modified, foreign or mismatched engines refuse

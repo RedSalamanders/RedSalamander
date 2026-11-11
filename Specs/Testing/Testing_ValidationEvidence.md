@@ -16,8 +16,9 @@ this specification remains the authoritative behavior contract.
 Build receipts and portable handoff are owned by `Specs/Build/Build_Toolchain.md`.
 Selftest-only All/Compare/Commands/FileOps may consume their exact selected
 RedSalamander project-union receipt under that contract, with the same source,
-profile and complete output-byte checks. Full/PR/CI continue to require a
-full-solution receipt; family/filtered evidence does not widen that acceptance.
+profile and complete output-byte checks. Fresh Full/PR/CI and exact Resume continue
+to require a full-solution receipt; family/filtered evidence does not widen that
+acceptance. Affected selected-build admission follows the producer contract below.
 `Fresh`, explicit exact `Resume`, and opt-in `Affected` are active as described below;
 CI, nightly, release, and final closeout remain explicit Fresh.
 
@@ -464,6 +465,28 @@ constructs the canonical Full shadow decision, then publishes and executes a fil
 Affected plan containing only governed affected entries. Unknown relevant paths widen to
 the Full set. Empty/documentation-only sets are valid selected work but never a repository
 health claim. Affected does not read reusable test evidence and cannot replace final Full.
+
+Affected planning precedes native compilation. Portable entries may carry optional
+`build_project_names`; the current factory supplies reviewed native producers and
+binds them into the plan/entry contract. Existing records without this field remain
+readable but cannot authorize selected builds. A targeted impact decision may build
+the union only when every affected native entry resolves to an explicit producer,
+no selected entry writes artifacts, and no script reads undeclared native artifacts.
+Missing/ambiguous producers and unknown/shared inputs retain the full build.
+The post-build workspace snapshot must equal the prebuild snapshot before filtering
+execution. Exact project-selection and complete consumed-output byte verification
+remain required. This selected path stays filtered and NOT_EVALUATED for repository
+health; it grants no native delegation, Full seal or cross-run adoption.
+
+When the governed decision requires no build and selects zero affected entries,
+changed prose runs the canonical changelog, tool-inventory and specification-ownership
+checks. A genuinely empty change set has no such new obligations. This route acquires
+no native artifact-profile lease and does not scavenge historical runs. A fresh
+workspace barrier must match before schema-valid workspace/plan/decision diagnostics
+are archived with completed disposition. Completed archival describes the controller
+lifecycle, not a test verdict: no build receipt, entry promotion or Resume origin is
+created. Success returns NOT_EVALUATED (exit 2); check/source/archive failures remain
+failures. Unselected native outputs do not need to exist for this route.
 
 ### Commands family boundary
 

@@ -36,6 +36,7 @@
         "impact_tags": { "$ref": "#/definitions/idSet" },
         "input_sets": { "$ref": "#/definitions/idSet" },
         "artifact_ids": { "$ref": "#/definitions/idSet" },
+        "build_project_names": { "$ref": "#/definitions/stringSet" },
         "artifact_read_ids": { "$ref": "#/definitions/idSet" },
         "artifact_write_ids": { "$ref": "#/definitions/idSet" },
         "produces_artifact_ids": { "$ref": "#/definitions/idSet" },
