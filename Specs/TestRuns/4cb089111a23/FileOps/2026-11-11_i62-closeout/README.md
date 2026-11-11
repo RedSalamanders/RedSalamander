@@ -8,8 +8,8 @@ therefore not a passing Full gate, and nothing in this folder claims one.
 The plan was ranked I62 when this run was made, and the archived files keep that rank (for example in a
 test name). After the run the plan was renumbered I63, and its follow-up plan I64, because another plan
 had taken I62 on `main`. The renumbering changed rank labels in comments, documents, one test name and
-change-fragment file names. The renumbered tree was built and checked as described in the last section;
-it was not given a second Full run.
+change-fragment file names. The renumbered tree was built and checked as described in the last section.
+A second Full run was made later, after the audit fixes; it is recorded in `../2026-11-11_i63-audit-fixes`.
 
 ## Run
 
@@ -38,8 +38,8 @@ Two File Operations cases are named because earlier runs of this plan reported t
 
 - `R4A19_DiscoveryIndependentVolumes` passed. Its earlier failure was a run started without
   `-AllowAlternateVolumeTestRoot`, not a limit of the machine.
-- `DiscoveryScope_MultipleFoldersLiveProgress` passed. Its one earlier failure is not explained and stays
-  a watch item of the follow-up plan I64 (`RW1`).
+- `DiscoveryScope_MultipleFoldersLiveProgress` passed. Its one earlier failure was not explained when this
+  run was made. A cause was found and fixed later (I64 `RW1`); see `../2026-11-11_i63-audit-fixes`.
 
 ## The five failures
 
@@ -105,4 +105,5 @@ from `main`. On `b34e002ae`:
   drift, changelog, test harness source contracts, resource localization, tooling governance): 355
   passed, 0 failed.
 
-No Full run was made on the renumbered and merged tree.
+No Full run was made on `b34e002ae`. The next Full run is the one on `dfb4cff5b`, recorded in
+`../2026-11-11_i63-audit-fixes`.
