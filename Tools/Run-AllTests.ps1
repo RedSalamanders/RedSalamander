@@ -22,7 +22,10 @@
     After execution, the complete run is verified and renamed on the same volume to
       REDSALAMANDER_TEST_ROOT\evidence\completed-runs\<runId>\
     Passed, failed, skipped and interrupted evidence is retained without payload copies.
-    Startup archives abandoned parseable runs instead of deleting them. Unsafe links,
+    Startup archives abandoned parseable runs instead of deleting them. A recorded
+    unsafe-link refusal leaves that stale run untouched on subsequent startup; explicit
+    archival always verifies the complete current tree. Such refusal records grant no pass.
+    Unsafe links,
     unresolved disks, live owners or conflicting destinations retain the run for review.
     The runner uses exact X:\RedSalamander.Perf on the repository drive by default.
     X: may be replaced by any fixed local drive through -TestRoot or
@@ -1444,15 +1447,26 @@ $testMachineResourceEnvironmentLease = Set-RSTestMachineResourceEnvironment -Con
 $artifactRoot = $testRunContext.ArtifactRoot
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 
+$staleRunArchiveClock = [Diagnostics.Stopwatch]::StartNew()
 $staleRunCleanupResults = @(Save-RSTestSandboxStaleRunEvidence `
         -TestRoot $testRunContext.TestRoot `
         -RunId $testRunContext.RunId)
+$staleRunArchiveClock.Stop()
+Write-Host "Stale TestSandbox archive preflight: $($staleRunArchiveClock.ElapsedMilliseconds) ms." -ForegroundColor DarkGray
 if (@($staleRunCleanupResults).Count -gt 0) {
     $archivedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Archived' }).Count
     $retainedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Retained' }).Count
     Write-Host "Stale TestSandbox evidence: $archivedStaleRuns archived, $retainedStaleRuns retained for review." -ForegroundColor DarkGray
+    $repeatedRetentions = 0
     foreach ($retainedRun in @($staleRunCleanupResults | Where-Object Status -eq 'Retained')) {
+        if ([bool](Get-RSObjectValue -Object $retainedRun -Names @('RepeatedSafetyRefusal') -DefaultValue $false)) {
+            ++$repeatedRetentions
+            continue
+        }
         Write-Warning "Retained $($retainedRun.RunId): $($retainedRun.Reason)"
+    }
+    if ($repeatedRetentions -gt 0) {
+        Write-Host "$repeatedRetentions previously refused unsafe run(s) remain untouched; explicit archival performs fresh verification." -ForegroundColor DarkGray
     }
 }
 

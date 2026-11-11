@@ -1,5 +1,14 @@
 # Repository tooling
 
+Automatic runner startup records unsafe-link archival refusals in the existing
+per-run `evidence/run-archive-records/<run-id>/retained.json`. Later startup leaves
+that original tree untouched after fresh path/owner checks, and reports repeated
+refusals as a count. This record grants no test pass, cleanup or archive completion.
+After investigating/repairing a retained run, an explicit
+`Save-RSTestSandboxRunEvidence -TestRoot <marked-root> -RunId <id> -Abandoned -Disposition interrupted`
+through the TestSandbox module always rechecks the current complete tree. Other
+transient archive failures continue to retry; current-run closeout never skips verification.
+
 The sanitized child-process factory uses the pinned shared policy to assign a
 private compiler metadata-service endpoint to each child without changing its
 parent. Restore `.ci-engine` at `.ci/project.json`'s exact commit before local

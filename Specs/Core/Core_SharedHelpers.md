@@ -301,6 +301,13 @@ deletes the current last run as a fallback for a failed rename.
 
 ## Build tooling helpers
 
+`Save-RSTestSandboxStaleRunEvidence` and `Save-RSTestSandboxRunEvidence` in
+`Tools/Modules/Testing/TestSandbox.psm1` share per-run archival/retention records.
+Only automatic stale maintenance honors a prior unsafe-link refusal, after fresh
+owner/path/creation-identity checks. It leaves payloads untouched and certifies no
+result; explicit archival always rechecks the complete current inventory. Reuse the
+existing create-only flushed writer, no-follow traversal and per-run exclusive lease.
+
 Exact native runner-to-CI result handoff uses `Write-RSRunResultReference` and
 `Read-RSRunResultReference` in `Tools/Modules/Testing/TestRunSummary.psm1`.
 The create-only sandbox record binds a final canonical summary's run ID/profile and

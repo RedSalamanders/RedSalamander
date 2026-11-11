@@ -1188,7 +1188,9 @@ function Get-RSTestRunArchiveInventory {
                 if ([string]::IsNullOrWhiteSpace($target) -or [IO.Path]::IsPathRooted($target) -or
                     $target.Contains(':') -or -not (Test-RSPathSameOrDescendant `
                         -Path ([IO.Path]::GetFullPath($target, [IO.Path]::GetDirectoryName($entry.FullName))) -Parent $RunRoot)) {
-                    throw "Run archive retains unsafe or mount-like reparse point: $($entry.FullName)"
+                    $refusal = [IO.InvalidDataException]::new("Run archive retains unsafe or mount-like reparse point: $($entry.FullName)")
+                    $refusal.Data['RSArchiveRetentionCode'] = 'UnsafeReparsePoint'
+                    throw $refusal
                 }
             }
             $streams = @()
@@ -1237,12 +1239,25 @@ function Get-RSTestRunArchiveStableInventory {
 }
 
 function Save-RSTestSandboxRunEvidence {
+    <#
+    .SYNOPSIS
+        Preserves a complete owned run through verified same-volume archival.
+    .DESCRIPTION
+        Requires an existing marked sandbox and ordinary contained archive paths. Never deletes payloads.
+        Explicit calls always acquire a fresh complete inventory; a prior safety-refusal record grants no pass.
+    .PARAMETER RespectRetainedRefusal
+        Internal automatic-maintenance mode: a matching recorded unsafe-link refusal retains the original
+        tree without reading its payload again. Real owner liveness and current path checks still apply.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$TestRoot,
         [Parameter(Mandatory = $true)][string]$RunId,
         [ValidateSet('completed', 'interrupted')][string]$Disposition = 'completed',
-        [switch]$Abandoned
+        [switch]$Abandoned,
+        # Automatic stale-run maintenance may retain a previous safety refusal without rescanning.
+        # Explicit archival omits this switch and always verifies the current complete tree.
+        [switch]$RespectRetainedRefusal
     )
 
     $root = Assert-RSTestSandboxRootAuthorized -TestRoot $TestRoot -RequireMarker
@@ -1269,12 +1284,27 @@ function Save-RSTestSandboxRunEvidence {
     try {
         $intentPath = Join-Path $records 'intent.json'
         $completePath = Join-Path $records 'complete.json'
-        foreach ($path in @($source, $destination, $intentPath, $completePath)) {
+        $retentionPath = Join-Path $records 'retained.json'
+        foreach ($path in @($source, $destination, $intentPath, $completePath, $retentionPath)) {
             [void](Assert-RSTestSandboxContainedPath -TestRoot $root -Path $path -RequireDescendant)
         }
         if ([IO.File]::Exists($completePath)) { throw "Run archive already completed; refusing overwrite: $completePath" }
         if ([IO.Directory]::Exists($source) -and (Test-Path -LiteralPath $destination)) {
             throw "Run archive destination already exists; both trees retained: $destination"
+        }
+        if ($RespectRetainedRefusal -and [IO.File]::Exists($retentionPath)) {
+            if ([IO.FileInfo]::new($retentionPath).Length -gt 16384) { throw "Oversized archive retention record; original tree retained: $retentionPath" }
+            $retained = Get-Content -LiteralPath $retentionPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            if ($retained.schema -cne 'red-salamander.run-archive-retained.v1' -or $retained.run_id -cne $id -or
+                $retained.source -cne $source -or $retained.reason_code -cne 'UnsafeReparsePoint' -or
+                $retained.reason -isnot [string] -or [string]::IsNullOrWhiteSpace($retained.reason) -or $retained.reason.Length -gt 8192 -or
+                $retained.source_created_filetime_utc -ne [IO.DirectoryInfo]::new($source).CreationTimeUtc.ToFileTimeUtc()) {
+                throw "Archive retention record does not match the selected original tree; retained for review: $retentionPath"
+            }
+            return [pscustomobject]@{
+                Status = 'Retained'; RunId = $id; Reason = $retained.reason
+                ReasonCode = $retained.reason_code; RecordPath = $retentionPath; RepeatedSafetyRefusal = $true
+            }
         }
         if ([IO.Directory]::Exists($source)) {
             # Repeat on recovery too: a prior detached image may have been attached since the intent.
@@ -1320,13 +1350,33 @@ function Save-RSTestSandboxRunEvidence {
             Status = 'Archived'; RunId = $id; SourceRoot = $source; RunRoot = $destination
             ArtifactRoot = Join-Path $destination 'artifacts\selftest\last_run'; RecordPath = $completePath
         }
+    } catch {
+        $cause = $_.Exception.GetBaseException()
+        if ($cause.Data['RSArchiveRetentionCode'] -ceq 'UnsafeReparsePoint' -and -not [IO.File]::Exists($retentionPath)) {
+            # This records a refusal, never an inventory, pass, deletion permission or archive completion.
+            Write-RSTestRunArchiveRecord -Path $retentionPath -Json (([ordered]@{
+                schema = 'red-salamander.run-archive-retained.v1'; run_id = $id; source = $source
+                source_created_filetime_utc = [IO.DirectoryInfo]::new($source).CreationTimeUtc.ToFileTimeUtc()
+                reason_code = 'UnsafeReparsePoint'; reason = $cause.Message; observed_utc = [DateTime]::UtcNow.ToString('o')
+            }) | ConvertTo-Json -Compress)
+        }
+        throw
     } finally { $lease.Dispose() }
 }
 
 function Save-RSTestSandboxStaleRunEvidence {
-    param([Parameter(Mandatory = $true)][string]$TestRoot, [string]$RunId = '')
+    <#
+    .SYNOPSIS
+        Archives abandoned sibling runs and leaves previously refused unsafe trees untouched.
+    .PARAMETER CandidateRunIds
+        Optional exact run-id subset; empty means no candidates when explicitly supplied. Never broadens
+        real stale-owner classification, authorizes another root or retries a recorded unsafe-link refusal.
+    #>
+    param([Parameter(Mandatory = $true)][string]$TestRoot, [string]$RunId = '', [string[]]$CandidateRunIds)
+    foreach ($candidate in $CandidateRunIds) { [void](Assert-RSTestSandboxPathSegment -Value $candidate -Description 'Archive candidate run id') }
     foreach ($target in @(Resolve-RSTestSandboxStaleRunTargets -TestRoot $TestRoot -RunId $RunId)) {
-        try { Save-RSTestSandboxRunEvidence -TestRoot $TestRoot -RunId $target.RunId -Abandoned -Disposition interrupted }
+        if ($PSBoundParameters.ContainsKey('CandidateRunIds') -and $target.RunId -notin $CandidateRunIds) { continue }
+        try { Save-RSTestSandboxRunEvidence -TestRoot $TestRoot -RunId $target.RunId -Abandoned -Disposition interrupted -RespectRetainedRefusal }
         catch { [pscustomobject]@{ Status = 'Retained'; RunId = $target.RunId; Reason = $_.Exception.Message } }
     }
 }
