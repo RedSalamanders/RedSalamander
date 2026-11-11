@@ -4139,7 +4139,7 @@ Specs\TestRuns\local_scratch
         ([regex]::Matches($source, '\[\[nodiscard\]\]\s+ConflictActionPolicy\s+BuildConflictActionPolicy')).Count | Should Be 1
         $source | Should Match 'SetConflictPromptLocked\([\s\S]{0,1200}const\s+ConflictActionPolicy&\s+actionPolicy'
         $source | Should Match 'const\s+ConflictActionPolicy\s+actionPolicy\s*=[\s\S]{0,500}BuildConflictActionPolicy'
-        $source | Should Match 'LoadEligibleConflictDecisionFromCacheLocked\(task,\s*perItemCookie,\s*decisionScope,\s*promptDestinationPath\);\s*cachedDecision\s*!=\s*nullptr\s*&&\s*IsCachedActionOffered\(actionPolicy,\s*bucket,\s*cachedDecision->action\)'
+        $source | Should Match 'LoadEligibleConflictDecisionFromCacheLocked\(task,\s*perItemCookie,\s*decisionScope,\s*promptDestinationPath,\s*sameSizeAndDate\);\s*cachedDecision\s*!=\s*nullptr\s*&&\s*IsCachedActionOffered\(actionPolicy,\s*bucket,\s*cachedDecision->action\)'
         $offered = [regex]::Match($source, '(?s)bool\s+IsCachedActionOffered\([^{};]*\)\s+noexcept\s*\{(?<body>[^{}]*)\}')
         $offered.Success | Should Be $true
         $offered.Groups['body'].Value | Should Match 'return\s+policy\.Contains\(action\)\s*\|\|\s*\(bucket\s*==\s*ConflictBucket::DiskFull\s*&&\s*action\s*==\s*ConflictAction::Skip\s*&&\s*policy\.skipAllEligible\s*&&\s*policy\.Contains\(ConflictAction::SkipAll\)\);'
@@ -4222,7 +4222,7 @@ Specs\TestRuns\local_scratch
         $lookup = [regex]::Match($source, '(?s)const Task::CachedConflictDecision\*\s+LoadEligibleConflictDecisionFromCacheLocked\([^;]*?\)\s+noexcept\s*\{(?<body>.*?)(?=\r?\n// Q2:)')
         $lookup.Success | Should Be $true
         $lookup.Groups['body'].Value | Should Match 'ConflictCacheEntryMatchesScope\(entry\.value\(\),\s*scope\)'
-        $lookup.Groups['body'].Value | Should Match 'IsCachedConflictDecisionEligible\(task,\s*perItemCookie,\s*scope,\s*conflictDestinationPath,\s*entry->action\)'
+        $lookup.Groups['body'].Value | Should Match 'IsCachedConflictDecisionEligible\(task,\s*perItemCookie,\s*scope,\s*conflictDestinationPath,\s*entry->action,\s*sameSizeAndDate\)'
         $source | Should Not Match '(?<!Eligible)LoadConflictDecisionFromCache'
         # Definition, the prompt lookup, and the Q2 Recycle-grant probe that skips the folder size walk.
         ([regex]::Matches($source, 'LoadEligibleConflictDecisionFromCacheLocked\(')).Count | Should Be 3
@@ -4268,7 +4268,7 @@ Specs\TestRuns\local_scratch
         $queue | Should Match 'MutationScopesOverlap\(leftScope,\s*rightScope\)'
         $runtime | Should Match 'waitForOthers\s*=\s*!\s*inlineRename\s*&&\s*options\.executionMode\s*==\s*FileOperations::ExecutionMode::Queue'
         $bridge | Should Match 'route\.fallbackSiblingFlags\s*=\s*static_cast<FileSystemFlags>\([\s\S]{0,220}effectiveBits\s*&\s*~\([\s\S]{0,180}FILESYSTEM_FLAG_ALLOW_OVERWRITE[\s\S]{0,180}FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY'
-        $bridge | Should Match 'useAtomicFinalWriter\s*=\s*writerRoute\.useAtomicFinalWriter[\s\S]{0,1600}const\s+FileSystemFlags\s+writerFlags\s*=\s*useAtomicFinalWriter\s*\?\s*writerRoute\.effectiveFinalFlags\s*:\s*writerRoute\.fallbackSiblingFlags'
+        $bridge | Should Match 'useAtomicFinalWriter\s*=\s*writerRoute\.useAtomicFinalWriter[\s\S]{0,1900}const\s+FileSystemFlags\s+writerFlags\s*=\s*useAtomicFinalWriter\s*\?\s*writerRoute\.effectiveFinalFlags\s*:\s*writerRoute\.fallbackSiblingFlags'
         $bridge | Should Not Match 'fallbackSiblingFlags\s*=\s*static_cast<FileSystemFlags>\([\s\S]{0,220}\|\s*static_cast<uint32_t>\(FILESYSTEM_FLAG_ALLOW_OVERWRITE\)'
         $storage | Should Match 'else\s+if\s*\(\s*busTypeKnown\s*&&\s*busType\s*==\s*BusTypeNvme\s*\)'
         $popup | Should Match 'if\s*\(\s*weightCount\s*<\s*weights\.size\(\)\s*\)\s*\{[\s\S]{0,160}\+\+weightCount;'
@@ -4372,7 +4372,7 @@ Specs\TestRuns\local_scratch
         $fileSystemContract | Should Match 'IFileWriterCommitSizeProof[\s\S]{0,900}GetCommittedSize'
         $fileSystemContract | Should Match 'MUST answer from writer-local state without[\s\S]{0,80}network or filesystem I/O'
         $bridge | Should Match 'wil::com_ptr<IFileWriterCommitSizeProof>\s+commitSizeProof'
-        $bridge | Should Match 'const\s+bool\s+isMove\s*=\s*managedCleanupRecord\.armed[\s\S]{0,300}bool\s+queryCommitSizeProof\s*=\s*isMove'
+        $bridge | Should Match 'const\s+bool\s+isMove\s*=\s*managedCleanupRecord\.Pending\(\)[\s\S]{0,300}bool\s+queryCommitSizeProof\s*=\s*isMove'
         $bridge | Should Match '#ifdef ENABLE_TESTS[\s\S]{0,220}REDSALAMANDER_FILEOPS_BRIDGE_DISABLE_COMMIT_SIZE_PROOF[\s\S]{0,260}if\s*\(queryCommitSizeProof\)'
         $bridge | Should Match 'GetCommittedSize\(&committedSizeBytes\)[\s\S]{0,500}bridgeCommitSizeProofCount'
         $bridge | Should Match 'if\s*\(isMove\s*&&\s*hasKnownFileTotalBytes\s*&&\s*!\s*committedSizeProven\)[\s\S]{0,220}bridgeCommitSizeProofFallbackCount'
@@ -4589,7 +4589,10 @@ Specs\TestRuns\local_scratch
         $bridge | Should Match 'FinalizeManagedSourceCleanup[\s\S]{0,6200}cleanupRecord\.authority\.boundObject->DeleteIfUnchanged'
         $bridge | Should Match 'ClassifyManagedCleanupMutation[\s\S]{0,7000}action\s*==\s*ConflictAction::Retry[\s\S]{0,240}\+\+cleanupRecord\.retryCount[\s\S]{0,120}continue;'
         $bridge | Should Not Match 'RetryTransientCleanupProbe|DeleteCopiedSourcePathNoRecursive|ReaderMatchesHash|ReadersHaveEqualContent|sourceRead\s*!=\s*destinationRead'
-        $bridge | Should Match 'HRESULT\s+PublishOwnedStage\([\s\S]{0,5400}outcomeKnown\s*==\s*FALSE[\s\S]{0,3600}mutationCommitted\s*!=\s*FALSE'
+        $bridge | Should Match 'HRESULT\s+PublishOwnedStage\([\s\S]{0,7800}outcomeKnown\s*==\s*FALSE[\s\S]{0,3600}mutationCommitted\s*!=\s*FALSE'
+        # I62 B2: Replace at a destination the location cannot identify goes through the provider's expected-occupant contract.
+        $bridge | Should Match 'expectedOccupantRoute[\s\S]{0,600}expectedOccupantPublication->PublishOverExpectedOccupant\(ownedStage'
+        $bridge | Should Match 'replaceRefused\s*=\s*hr\s*==\s*HRESULT_FROM_WIN32\(ERROR_REVISION_MISMATCH\)\s*&&\s*txn\.expectedOccupant\.has_value\(\)'
         $bridge | Should Match 'HRESULT\s+PumpAndPublishFile\([\s\S]{0,6000}PumpAndPublishFileOnce\('
         $bridge | Should Match 'if\s*\(txn\.useIdentityOwnedStage\)[\s\S]{0,1600}PublishOwnedStage\('
         $bridge | Should Match 'else\s*\{\s*txn\.promoted\s*=\s*true;'
@@ -4619,7 +4622,8 @@ Specs\TestRuns\local_scratch
         $phase12 | Should Match 'Legacy FollowTargets migration did not retain the skipped source link'
         $phase12 | Should Match 'Legacy FollowTargets migration touched the skipped junction target file'
 
-        $fileOps | Should Match 'BuildUniqueSiblingName\([\s\S]{0,180}L"\.rs_case_tmp_"'
+        $fileOps | Should Match 'MakeStageSiblingPath\(sourceExtended,\s*kBackupExtension,\s*tempPath\)'
+        $fileOps | Should Not Match 'L"\.rs_case_tmp_"'
         $fileOps | Should Match 'const\s+DWORD\s+exclusiveTempFlags\s*=\s*renameFlags\s*&\s*~MOVEFILE_REPLACE_EXISTING'
         $fileOps | Should Match 'MoveFileExW\(sourceExtended\.c_str\(\),\s*tempPath\.c_str\(\),\s*exclusiveTempFlags\)'
         $fileOps | Should Not Match 'MoveFileExW\(sourceExtended\.c_str\(\),\s*tempPath\.c_str\(\),\s*renameFlags\)'
@@ -4714,7 +4718,9 @@ Specs\TestRuns\local_scratch
         $resources | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE\s+"Possibly incomplete file \(left by an interrupted copy or move\)"'
         # I35 S0 red-team R-5: a backup or rename-hop leftover may hold the only complete copy, so it is never called incomplete.
         $resources | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE\s+"Possibly an original kept by an interrupted copy or move"'
-        $registry | Should Match 'bool HasPossibleOriginalArtifactName\(const std::wstring_view leaf\) noexcept[\s\S]{0,120}\.rs_bak_[\s\S]{0,80}\.rs_ren_'
+        $registry | Should Match 'bool HasPossibleOriginalArtifactName\(const std::wstring_view leaf\) noexcept[\s\S]{0,120}\.rs-bak'
+        # Owner decision (I62 D-17): only the names the current build writes are recognized.
+        $registry | Should Not Match 'rs_tmp_|rs_bak_|rs_ren_|rs_copy_tmp_|rs_case_tmp_|~rs-write-'
         $registry | Should Match 'projection\.mayHoldOriginal\s*=\s*HasPossibleOriginalArtifactName'
         $find | Should Match 'artifactProjection->mayHoldOriginal\s*\?\s*IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE'
         $statusBar | Should Match 'projection->mayHoldOriginal\s*\?\s*IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE'
@@ -5264,8 +5270,11 @@ Specs\TestRuns\local_scratch
             $interaction,
             '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::OnLButtonDblClk\()').Value
         $leftButtonDown.Length | Should BeGreaterThan 0
-        $leftButtonDown | Should Match 'SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*auto\s+hit\s*=\s*HitTest\(pt\)'
-        $leftButtonDown | Should Match 'else\s*\{\s*ClearSelection\(\);\s*_anchorIndex\s*=\s*_focusedIndex\s*<\s*_items\.size\(\)\s*\?\s*_focusedIndex\s*:\s*static_cast<size_t>\(-1\);\s*\}'
+        # I62 slice A: the pane state is read before the press takes the focus, and a press in the pane
+        # that was not active keeps its selection (no SelectSingle, no ClearSelection).
+        $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*auto\s+hit\s*=\s*HitTest\(pt\)'
+        $leftButtonDown | Should Match 'if\s*\(\s*!\s*activating\s*&&\s*!\s*_items\[\*hit\]\.selected\s*\)\s*\{\s*SelectSingle\(\*hit\);'
+        $leftButtonDown | Should Match 'else\s+if\s*\(\s*!\s*activating\s*\)\s*\{\s*ClearSelection\(\);\s*_anchorIndex\s*=\s*_focusedIndex\s*<\s*_items\.size\(\)\s*\?\s*_focusedIndex\s*:\s*static_cast<size_t>\(-1\);\s*\}'
         $leftButtonDown | Should Not Match '_focusedIndex\s*=\s*static_cast<size_t>\(-1\)'
         $menus | Should Match 'selectionTargetSnapshot\s*=\s*allowItemTarget\s*\?\s*GetSelectedOrFocusedDisplayNames\(\)\s*:\s*std::vector<std::wstring>\{\}'
         $menus | Should Match 'currentTargetSnapshot\s*=\s*allowItemTarget\s*&&\s*_focusedIndex\s*<\s*_items\.size\(\)'

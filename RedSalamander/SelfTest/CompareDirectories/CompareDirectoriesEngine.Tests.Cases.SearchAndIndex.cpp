@@ -1647,14 +1647,11 @@ SelfTest::RunCase(options,
     std::filesystem::path caseRoot;
     state.Require(PrepareSearchCaseRoot(root, L"index_fileops_artifacts_visible", caseRoot),
                   L"Failed to prepare the File Operations artifact visibility root.");
-    const std::array<std::wstring, 7u> names{{
-        L"visible.rs_tmp_0123456789abcdef0123456789abcdef_1",
-        L"visible.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}",
-        L"visible.rs_ren_0123456789abcdef0123456789abcdef",
-        L"visible.rs_copy_tmp_01234567_89abcdef_0123456789abcdef",
-        L"visible.rs_copy_tmp_0123456789abcdef0123456789abcdef",
-        L"visible.rs_bak_0123456789abcdef0123456789abcdef",
-        L"visible.~rs-write-{01234567-89AB-CDEF-0123-456789ABCDEF}.tmp",
+    const std::array<std::wstring, 4u> names{{
+        L"visible.0123456789abcdef0123456789abcdef_1.rs-tmp",
+        L"visible.fedcba9876543210fedcba9876543210_1f.rs-tmp",
+        L"visible.0123456789abcdef0123456789abcdef.rs-tmp",
+        L"visible.0123456789abcdef0123456789abcdef.rs-bak",
     }};
     for (const std::wstring& name : names)
     {

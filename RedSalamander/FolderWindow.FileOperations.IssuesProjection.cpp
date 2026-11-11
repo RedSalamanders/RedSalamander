@@ -150,6 +150,10 @@ bool Projection::Update(std::span<const Observation> observations, const Text& t
         row.categoryText        = issue.category.empty() ? L"-" : issue.category;
         row.messageText         = original && ! issue.message.empty() ? issue.message : L"-";
         row.problemText         = observation.problemText.empty() ? L"-" : observation.problemText;
+        // I62 B3.3: the two items' facts the decision showed (empty for any other row).
+        row.sourceFactsText      = observation.sourceFactsText;
+        row.destinationFactsText = observation.destinationFactsText;
+        row.comparisonText       = observation.comparisonText;
         row.sourcePathText      = issue.sourcePath;
         row.destinationPathText = issue.destinationPath;
         if (issue.conflictPrompt.has_value())
@@ -194,6 +198,13 @@ bool Projection::Update(std::span<const Observation> observations, const Text& t
         {
             // A result may arrive first; a later accepted decision still names the prompt's problem.
             retained.problemText = std::move(row.problemText);
+        }
+        if (retained.sourceFactsText.empty() && retained.destinationFactsText.empty() && retained.comparisonText.empty())
+        {
+            // I62 B3.3: the first record of the row that carries the facts supplies them.
+            retained.sourceFactsText      = observation.sourceFactsText;
+            retained.destinationFactsText = observation.destinationFactsText;
+            retained.comparisonText       = observation.comparisonText;
         }
         retained.hasConflictFacts = conflictFacts;
         retained.problemRecord    = problemRecord;

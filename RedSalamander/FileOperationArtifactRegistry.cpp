@@ -22,52 +22,13 @@ namespace
     return ! value.empty() && std::ranges::all_of(value, IsAsciiHex);
 }
 
-[[nodiscard]] bool IsGuidWithBraces(const std::wstring_view value) noexcept
-{
-    if (value.size() != 38u || value.front() != L'{' || value.back() != L'}')
-    {
-        return false;
-    }
-    for (size_t index = 1u; index + 1u < value.size(); ++index)
-    {
-        const bool dash = index == 9u || index == 14u || index == 19u || index == 24u;
-        if ((dash && value[index] != L'-') || (! dash && ! IsAsciiHex(value[index])))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 [[nodiscard]] bool HasTail(const std::wstring_view leaf, const std::wstring_view marker, bool (*matches)(std::wstring_view) noexcept) noexcept
 {
     const size_t offset = leaf.rfind(marker);
     return offset != std::wstring_view::npos && matches(leaf.substr(offset + marker.size()));
 }
 
-[[nodiscard]] bool IsBridgeTail(const std::wstring_view value) noexcept
-{
-    return value.size() > 33u && IsAsciiHexRun(value.substr(0u, 32u)) && value[32u] == L'_' && IsAsciiHexRun(value.substr(33u));
-}
-
-[[nodiscard]] bool IsLegacyCopyTail(const std::wstring_view value) noexcept
-{
-    return value.size() == 34u && IsAsciiHexRun(value.substr(0u, 8u)) && value[8u] == L'_' && IsAsciiHexRun(value.substr(9u, 8u)) && value[17u] == L'_' &&
-           IsAsciiHexRun(value.substr(18u, 16u));
-}
-
-[[nodiscard]] bool IsRenameTail(const std::wstring_view value) noexcept
-{
-    return value.size() == 32u && IsAsciiHexRun(value);
-}
-
-[[nodiscard]] bool IsBackupTail(const std::wstring_view value) noexcept
-{
-    return IsGuidWithBraces(value) || IsRenameTail(value);
-}
-
-// I35 R7.6: `<32 hex>.tmp`, the tail of the MTP writer temps (`.<leaf>.rs-mtp-overwrite-` and
-// `.<leaf>.rs-mtp-create-`).
+// I35 R7.6: `<32 hex>.tmp`, the tail of the MTP writer temp (`.<leaf>.rs-mtp-overwrite-`).
 [[nodiscard]] bool IsHexTmpTail(const std::wstring_view value) noexcept
 {
     return value.size() == 36u && IsAsciiHexRun(value.substr(0u, 32u)) && value.substr(32u) == L".tmp";
@@ -85,20 +46,37 @@ namespace
 }
 
 // I35 R7.6: `<marker><32 hex>` as the whole leaf: a Curl (FTP/SFTP/SCP) or Microsoft Drive sibling
-// (`.redsalamander-<purpose>-`) and the Local case-only rename's temporary name (`.rs_case_tmp_`).
+// (`.redsalamander-<purpose>-`).
 [[nodiscard]] bool IsWholeLeafHexName(const std::wstring_view leaf, const std::wstring_view marker) noexcept
 {
     return leaf.size() == marker.size() + 32u && leaf.starts_with(marker) && IsAsciiHexRun(leaf.substr(marker.size()));
 }
 
-[[nodiscard]] bool IsWriterTail(std::wstring_view value) noexcept
+// I62: a staging artifact created on a Win32 path ends in a real extension, after a 32-hex token:
+// `<readable prefix>.<32 hex>[_<stream>].rs-tmp` is incomplete content and
+// `<readable prefix>.<32 hex>.rs-bak` may hold an original. The token is required: a name that only
+// ends in the extension is an ordinary file. The extension test comes first and is cheap.
+[[nodiscard]] bool EndsWithDotToken(const std::wstring_view value) noexcept
 {
-    if (value.size() <= 4u || value.substr(value.size() - 4u) != L".tmp")
+    return value.size() > 33u && value[value.size() - 33u] == L'.' && IsAsciiHexRun(value.substr(value.size() - 32u));
+}
+
+[[nodiscard]] bool HasTokenBeforeExtension(std::wstring_view leaf, const std::wstring_view extension, const bool allowStream) noexcept
+{
+    if (! leaf.ends_with(extension))
     {
         return false;
     }
-    value.remove_suffix(4u);
-    return IsGuidWithBraces(value) || (value.size() == 25u && IsAsciiHexRun(value.substr(0u, 8u)) && value[8u] == L'.' && IsAsciiHexRun(value.substr(9u, 16u)));
+    leaf.remove_suffix(extension.size());
+    if (allowStream)
+    {
+        if (const size_t stream = leaf.rfind(L'_'); stream != std::wstring_view::npos && IsAsciiHexRun(leaf.substr(stream + 1u)) &&
+                                                    EndsWithDotToken(leaf.substr(0u, stream)))
+        {
+            return true;
+        }
+    }
+    return EndsWithDotToken(leaf);
 }
 
 [[nodiscard]] bool EndpointEquals(const Endpoint& left, const Endpoint& right) noexcept
@@ -127,24 +105,21 @@ bool IsWin32FileSystemEndpoint(const Endpoint& endpoint) noexcept
                                                                  TRUE) == CSTR_EQUAL;
 }
 
-// Each of these may hold the only complete copy of the user's original: a backup kept during an
-// overwrite (`.rs_bak_`, the S3 `.rs-bak-` key, the remote `.redsalamander-rollback-` sibling), a rename
-// hop (`.rs_ren_`), or the Local case-only rename's temporary name (`.rs_case_tmp_<32 hex>` as the whole
-// leaf, as the provider builds it with no readable prefix).
+// Each of these may hold the only complete copy of the user's original: a Local backup kept during an
+// overwrite or the Local case-only rename's hop (`<leaf>.<32 hex>.rs-bak`), the S3 `.rs-bak-` key and
+// the remote `.redsalamander-rollback-` sibling.
 bool HasPossibleOriginalArtifactName(const std::wstring_view leaf) noexcept
 {
-    return HasTail(leaf, L".rs_bak_", IsBackupTail) || HasTail(leaf, L".rs_ren_", IsRenameTail) || IsWholeLeafHexName(leaf, L".rs_case_tmp_") ||
-           IsS3BackupLeaf(leaf) || IsWholeLeafHexName(leaf, L".redsalamander-rollback-");
+    return HasTokenBeforeExtension(leaf, L".rs-bak", false) || IsS3BackupLeaf(leaf) || IsWholeLeafHexName(leaf, L".redsalamander-rollback-");
 }
 
 bool HasPossibleArtifactName(const std::wstring_view leaf) noexcept
 {
-    // I35 R7.6: the provider staging names are leftovers too (Curl upload/writer siblings, the MTP
-    // writer temps), next to the possible originals above.
-    return HasTail(leaf, L".rs_tmp_", IsBridgeTail) || HasTail(leaf, L".rs_copy_tmp_", IsLegacyCopyTail) || HasTail(leaf, L".rs_copy_tmp_", IsRenameTail) ||
-           HasTail(leaf, L".~rs-write-", IsWriterTail) || HasTail(leaf, L".rs-mtp-overwrite-", IsHexTmpTail) ||
-           HasTail(leaf, L".rs-mtp-create-", IsHexTmpTail) || IsWholeLeafHexName(leaf, L".redsalamander-upload-") ||
-           IsWholeLeafHexName(leaf, L".redsalamander-writer-") || HasPossibleOriginalArtifactName(leaf);
+    // Only the names the current generators write: the Win32 stages (`.rs-tmp`), the provider
+    // staging names (I35 R7.6: the Curl upload and writer siblings, the MTP writer temp) and the
+    // possible originals above. A name an earlier version wrote is an ordinary file.
+    return HasTokenBeforeExtension(leaf, L".rs-tmp", true) || HasTail(leaf, L".rs-mtp-overwrite-", IsHexTmpTail) ||
+           IsWholeLeafHexName(leaf, L".redsalamander-upload-") || IsWholeLeafHexName(leaf, L".redsalamander-writer-") || HasPossibleOriginalArtifactName(leaf);
 }
 
 bool IsDeleteHandoffCandidate(const Candidate& candidate) noexcept
@@ -305,7 +280,8 @@ HRESULT DebugMeasureArtifactNameShapeProjectionForTests(const size_t ordinaryRow
     }
     for (size_t item = 0u; item < possibleRowCount; ++item)
     {
-        const std::wstring leaf = std::format(L"artifact_{:05}.rs_ren_{:032X}", item, item);
+        const std::wstring leaf = item % 2u == 0u ? std::format(L"artifact_{:05}.{:032x}_0.rs-tmp", item, item)
+                                                  : std::format(L"artifact_{:05}.{:032x}.rs-bak", item, item);
         if (HasPossibleArtifactName(leaf))
         {
             ++out.folderPossibleProbeCount;
@@ -324,7 +300,8 @@ HRESULT DebugMeasureArtifactNameShapeProjectionForTests(const size_t ordinaryRow
     }
     for (size_t item = 0u; item < possibleRowCount; ++item)
     {
-        const std::wstring path = std::format(L"C:\\search\\artifact_{:05}.rs_ren_{:032X}", item, item);
+        const std::wstring path = item % 2u == 0u ? std::format(L"C:\\search\\artifact_{:05}.{:032x}_0.rs-tmp", item, item)
+                                                  : std::format(L"C:\\search\\artifact_{:05}.{:032x}.rs-bak", item, item);
         if (HasPossibleArtifactName(std::filesystem::path(path).filename().native()))
         {
             ++out.findPossibleProbeCount;

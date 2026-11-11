@@ -3119,6 +3119,7 @@ HRESULT FolderWindow::FileOperationState::AdmitScheduledRename(
     task->_fileSystem            = fileSystem;
     task->_sourcePaths           = std::move(sourcePaths);
     task->_waitForOthers.store(planExecutionMode == FileOperations::ExecutionMode::Queue, std::memory_order_release);
+    task->_holdsQueuePlace.store(true, std::memory_order_release);
     task->_externalProgressCallback   = std::move(progressCallback);
     task->_preConsumptionDecisionGate = std::move(preConsumptionDecisionGate);
     task->_preparationObserver        = std::move(preparationObserver);

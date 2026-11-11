@@ -499,6 +499,10 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
         }
     }
 
+    // An activating press reaches a pane that is drawn as not active. It makes the pane active and
+    // moves the current item, and a plain one keeps the selection the pane had. _paneFocused still
+    // holds the state before this press: the focus change below reaches it through a posted message.
+    const bool activating = ! _paneFocused;
     SetFocus(_hWnd.get());
     DisarmPotentialDrag();
 
@@ -524,7 +528,7 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
         }
         else
         {
-            if (! _items[*hit].selected)
+            if (! activating && ! _items[*hit].selected)
             {
                 SelectSingle(*hit);
             }
@@ -547,15 +551,34 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
             _drag.potential = true;
             SetCapture(_hWnd.get());
         }
+        else if (activating && ! ctrl && ! shift && *hit < _items.size())
+        {
+            // The kept selection does not contain the pressed item. A drag from here drags that
+            // item alone; the selection is replaced only if the drag starts.
+            _drag.sourcePaths.assign(1u, GetItemFullPath(_items[*hit]));
+            _drag.sourceDisplayNames.assign(1u, std::wstring(_items[*hit].displayName));
+            _drag.selectsPressedItemOnStart = true;
+            _drag.potential                 = true;
+            SetCapture(_hWnd.get());
+        }
         else
         {
             DisarmPotentialDrag();
         }
     }
-    else
+    else if (! activating)
     {
         ClearSelection();
         _anchorIndex = _focusedIndex < _items.size() ? _focusedIndex : static_cast<size_t>(-1);
+    }
+}
+
+void FolderView::OnMButtonDown() noexcept
+{
+    // The middle button has no item action: it only makes the pane active.
+    if (_hWnd)
+    {
+        SetFocus(_hWnd.get());
     }
 }
 
@@ -689,6 +712,21 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
         };
         if (PtInRect(&thresholdRectangle, pt) == FALSE)
         {
+            if (_drag.selectsPressedItemOnStart)
+            {
+                // Selecting notifies the host, which may replace the model and disarm this gesture.
+                // BeginDragDrop starts nothing once the gesture is disarmed.
+                const size_t pressed = _drag.pressedIndex;
+                const bool sameItem  = pressed < _items.size() && _drag.sourceDisplayNames.size() == 1u &&
+                                      EquivalentProviderComponent(_drag.sourceDisplayNames.front(), _items[pressed].displayName);
+                if (! sameItem)
+                {
+                    DisarmPotentialDrag();
+                    return;
+                }
+                _drag.selectsPressedItemOnStart = false;
+                SelectSingle(pressed);
+            }
             BeginDragDrop();
             DisarmPotentialDrag();
         }

@@ -29353,7 +29353,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Shift+F10/VK_APPS on an empty pane must show the background menu and omit item-only actions.");
 
     const std::filesystem::path artifactRoot  = root / L"artifact";
-    constexpr std::wstring_view kArtifactName = L"user.rs_tmp_0123456789abcdef0123456789abcdef_1";
+    constexpr std::wstring_view kArtifactName = L"user.0123456789abcdef0123456789abcdef_1.rs-tmp";
     state.Require(SelfTest::EnsureDirectory(artifactRoot), L"Failed to create artifact-menu ordering fixture.");
     state.Require(SelfTest::WriteTextFile(artifactRoot / kArtifactName, "artifact"), L"Failed to create artifact-menu ordering item.");
     std::atomic<uint32_t> artifactEnumerationCount{0u};
@@ -29803,6 +29803,389 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Explicit Restore Selection did not select the now-visible saved identities.");
 
     return state.failure.empty();
+}
+
+// I62 slice A: the first press in the pane that is not active makes that pane active and moves the
+// cursor there; it never discards the selection that pane had. Ctrl and Shift keep their meaning.
+struct FolderViewActivationPressFixture final
+{
+    CaseState* state = nullptr;
+    HWND leftView  = nullptr;
+    HWND rightView = nullptr;
+
+    [[nodiscard]] POINT PointFor(std::wstring_view name) const noexcept
+    {
+        const std::optional<POINT> point = g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Right, name);
+        state->Require(point.has_value(), std::format(L"No activation-press pointer point for '{}'.", name));
+        return point.value_or(POINT{});
+    }
+
+    void Select(std::initializer_list<std::wstring_view> names) const noexcept
+    {
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Right, [names](std::wstring_view candidate) noexcept {
+            return std::ranges::any_of(names, [&](std::wstring_view name) noexcept { return candidate == name; });
+        }, true);
+    }
+
+    [[nodiscard]] FolderView::DebugFocusSelectionStateSnapshot Snapshot() const noexcept
+    {
+        return g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Right);
+    }
+
+    [[nodiscard]] bool Selected(std::initializer_list<std::wstring_view> names) const noexcept
+    {
+        return g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right) == names.size() &&
+               std::ranges::all_of(names, [](std::wstring_view name) noexcept { return g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Right, name); });
+    }
+
+    // Gives the right pane its starting current item and selection, then makes the left pane active.
+    [[nodiscard]] bool Arrange(std::initializer_list<std::wstring_view> selected, std::wstring_view current, std::wstring_view context) const noexcept
+    {
+        using namespace std::chrono_literals;
+
+        state->Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Right, current),
+                      std::format(L"Failed to make '{}' current before {}.", current, context));
+        Select(selected);
+        state->Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(2000ms)),
+                      std::format(L"The left pane did not become active before {}.", context));
+        PumpPendingMessages();
+        const FolderView::DebugFocusSelectionStateSnapshot snapshot = Snapshot();
+        state->Require(g_folderWindow.GetActivePane() == FolderWindow::Pane::Left && Selected(selected) && snapshot.currentDisplayName == current &&
+                          snapshot.potentialDragSourceCount == 0u,
+                      std::format(L"The right pane fixture was not ready before {}: selected={}, current='{}'.",
+                                  context,
+                                  snapshot.selectedCount,
+                                  snapshot.currentDisplayName));
+        return state->failure.empty();
+    }
+
+    [[nodiscard]] FolderView::DebugFocusSelectionStateSnapshot Down(std::wstring_view name, WPARAM modifiers = 0u) const noexcept
+    {
+        const POINT point = PointFor(name);
+        SendMessageW(rightView, WM_LBUTTONDOWN, MK_LBUTTON | modifiers, MAKELPARAM(point.x, point.y));
+        return Snapshot();
+    }
+
+    void Up(std::wstring_view name, WPARAM modifiers = 0u) const noexcept
+    {
+        const POINT point = PointFor(name);
+        SendMessageW(rightView, WM_LBUTTONUP, modifiers, MAKELPARAM(point.x, point.y));
+        PumpPendingMessages();
+    }
+
+    [[nodiscard]] bool RightPaneIsActive() const noexcept
+    {
+        PumpPendingMessages();
+        return g_folderWindow.GetActivePane() == FolderWindow::Pane::Right && g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Right &&
+               GetFocus() == rightView;
+    }
+};
+
+template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWND mainWindow, CaseState& state, std::wstring_view context, Body&& body) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE || ! PrepareMainWindowForIsolatedUiCase(mainWindow, state, context))
+    {
+        state.Require(false, std::format(L"Main window is unavailable for {}.", context));
+        return false;
+    }
+
+    const std::filesystem::path root  = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"folderview_activation_press_" + NewGuidText());
+    const std::filesystem::path left  = root / L"left";
+    const std::filesystem::path right = root / L"right";
+    std::error_code cleanupError;
+    std::filesystem::remove_all(root, cleanupError);
+    state.Require(SelfTest::EnsureDirectory(left) && SelfTest::EnsureDirectory(right) && SelfTest::EnsureDirectory(right / L"sub"),
+                  L"Failed to create the activation-press fixture folders.");
+    state.Require(SelfTest::WriteTextFile(left / L"left.txt", "x"), L"Failed to create 'left.txt'.");
+    for (const std::wstring_view name : {L"a.txt", L"b.txt", L"c.txt", L"d.txt", L"e.txt"})
+    {
+        state.Require(SelfTest::WriteTextFile(right / name, "x"), std::format(L"Failed to create '{}'.", name));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto cleanupRoot = wil::scope_exit([&]() noexcept
+    {
+        std::error_code error;
+        std::filesystem::remove_all(root, error);
+    });
+
+    struct PaneBefore final
+    {
+        FolderWindow::Pane pane;
+        std::wstring plugin;
+        std::optional<std::filesystem::path> path;
+        FolderView::SortBy sortBy;
+        FolderView::SortDirection sortDirection;
+    };
+    const auto capture = [](FolderWindow::Pane pane) noexcept
+    {
+        return PaneBefore{pane,
+                          std::wstring(g_folderWindow.GetFileSystemPluginId(pane)),
+                          g_folderWindow.GetCurrentPath(pane),
+                          g_folderWindow.GetSortBy(pane),
+                          g_folderWindow.GetSortDirection(pane)};
+    };
+    const std::array<PaneBefore, 2u> before{capture(FolderWindow::Pane::Left), capture(FolderWindow::Pane::Right)};
+    const auto restorePanes = wil::scope_exit([&]() noexcept
+    {
+        g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Right, false);
+        for (const PaneBefore& pane : before)
+        {
+            static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane.pane, pane.plugin));
+            g_folderWindow.SetSort(pane.pane, pane.sortBy, pane.sortDirection);
+            if (pane.path.has_value())
+            {
+                g_folderWindow.SetFolderPath(pane.pane, pane.path.value());
+            }
+        }
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+    });
+
+    for (const FolderWindow::Pane pane : {FolderWindow::Pane::Left, FolderWindow::Pane::Right})
+    {
+        g_folderWindow.DebugResetPaneVisibilityState(pane);
+        state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(pane, L"builtin/file-system")),
+                      std::format(L"Failed to switch a pane to the local provider for {}.", context));
+        g_folderWindow.SetSort(pane, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
+    }
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, left);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, right);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, left, SelfTest::Scale(5000ms)) &&
+                      WaitForPanePath(FolderWindow::Pane::Right, right, SelfTest::Scale(5000ms)),
+                  std::format(L"Pane paths did not settle for {}.", context));
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"left.txt"}, SelfTest::Scale(5000ms)) &&
+                      WaitForPaneItems(FolderWindow::Pane::Right, {L"sub", L"a.txt", L"b.txt", L"c.txt", L"d.txt", L"e.txt"}, SelfTest::Scale(5000ms)),
+                  std::format(L"Pane items did not settle for {}.", context));
+
+    const FolderViewActivationPressFixture fixture{
+        .state     = &state,
+        .leftView  = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left),
+        .rightView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right),
+    };
+    state.Require(fixture.leftView && IsWindow(fixture.leftView) != FALSE && fixture.rightView && IsWindow(fixture.rightView) != FALSE,
+                  std::format(L"FolderView handles are unavailable for {}.", context));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    body(fixture, right);
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewActivationPressKeepsSelection(HWND mainWindow, CaseState& state) noexcept
+{
+    return RunFolderViewActivationPressCase(mainWindow,
+                                            state,
+                                            L"FolderView activation press keeps selection",
+                                            [&](const FolderViewActivationPressFixture& fixture, const std::filesystem::path&) noexcept
+    {
+        // An item outside the selection: the pane becomes active, the item becomes current, nothing else changes.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the unselected-item press"))
+        {
+            return;
+        }
+        FolderView::DebugFocusSelectionStateSnapshot snapshot = fixture.Down(L"d.txt");
+        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}) && snapshot.currentDisplayName == L"d.txt" && snapshot.anchorIndex == snapshot.currentIndex,
+                      std::format(L"A plain press in the pane that was not active changed its selection: selected={}, current='{}'.",
+                                  snapshot.selectedCount,
+                                  snapshot.currentDisplayName));
+        fixture.Up(L"d.txt");
+        state.Require(fixture.RightPaneIsActive(), L"A plain press in the pane that was not active did not make it active.");
+        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}), L"Releasing the activating press changed the selection.");
+
+        // The pane is now active: the next plain press follows the ordinary rule.
+        snapshot = fixture.Down(L"e.txt");
+        fixture.Up(L"e.txt");
+        state.Require(fixture.Selected({L"e.txt"}) && snapshot.currentDisplayName == L"e.txt",
+                      L"The second plain press did not replace the selection with the pressed item.");
+
+        // An item inside the selection.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the selected-item press"))
+        {
+            return;
+        }
+        snapshot = fixture.Down(L"b.txt");
+        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}) && snapshot.currentDisplayName == L"b.txt" && snapshot.potentialDragSourceCount == 3u,
+                      L"A plain activating press on a selected item did not keep the selection and arm it as the drag source.");
+        fixture.Up(L"b.txt");
+        state.Require(fixture.RightPaneIsActive(), L"A plain press on a selected item did not make the pane active.");
+
+        // Empty background: selection, current item and range anchor all stay.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the background press"))
+        {
+            return;
+        }
+        const std::optional<POINT> background = g_folderWindow.DebugGetPaneEmptyBackgroundClientPointForSelfTest(FolderWindow::Pane::Right);
+        state.Require(background.has_value(), L"No empty background point in the right pane.");
+        if (! background.has_value())
+        {
+            return;
+        }
+        const FolderView::DebugFocusSelectionStateSnapshot beforeBackground = fixture.Snapshot();
+        SendMessageW(fixture.rightView, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(background->x, background->y));
+        snapshot = fixture.Snapshot();
+        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}) && snapshot.currentDisplayName == L"a.txt" &&
+                          snapshot.anchorIndex == beforeBackground.anchorIndex && snapshot.potentialDragSourceCount == 0u,
+                      L"A plain activating press on empty background changed the selection, the current item or the range anchor.");
+        SendMessageW(fixture.rightView, WM_LBUTTONUP, 0u, MAKELPARAM(background->x, background->y));
+        state.Require(fixture.RightPaneIsActive(), L"A background press did not make the pane active.");
+        SendMessageW(fixture.rightView, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(background->x, background->y));
+        SendMessageW(fixture.rightView, WM_LBUTTONUP, 0u, MAKELPARAM(background->x, background->y));
+        snapshot = fixture.Snapshot();
+        state.Require(snapshot.selectedCount == 0u && snapshot.currentDisplayName == L"a.txt",
+                      L"A background press in the active pane did not clear the selection while keeping the current item.");
+
+        // Middle button: the pane becomes active and nothing else changes.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the middle-button press"))
+        {
+            return;
+        }
+        const POINT middle = fixture.PointFor(L"d.txt");
+        SendMessageW(fixture.rightView, WM_MBUTTONDOWN, MK_MBUTTON, MAKELPARAM(middle.x, middle.y));
+        SendMessageW(fixture.rightView, WM_MBUTTONUP, 0u, MAKELPARAM(middle.x, middle.y));
+        snapshot = fixture.Snapshot();
+        state.Require(fixture.RightPaneIsActive() && fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}) && snapshot.currentDisplayName == L"a.txt",
+                      L"A middle-button press did not activate the pane without changing its selection and current item.");
+
+        // The same pane's navigation bar holds the focus: the pane is already active, so the ordinary rule applies.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the same-pane press"))
+        {
+            return;
+        }
+        const HWND rightNavigation = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Right);
+        state.Require(rightNavigation && IsWindow(rightNavigation) != FALSE, L"The right navigation bar is unavailable.");
+        static_cast<void>(SetFocus(rightNavigation));
+        PumpPendingMessages();
+        state.Require(g_folderWindow.GetActivePane() == FolderWindow::Pane::Right && GetFocus() == rightNavigation,
+                      L"The right navigation bar did not take the focus for the same-pane press.");
+        snapshot = fixture.Down(L"d.txt");
+        fixture.Up(L"d.txt");
+        state.Require(fixture.Selected({L"d.txt"}) && snapshot.currentDisplayName == L"d.txt",
+                      L"A plain press in the active pane, with the focus on its navigation bar, did not replace the selection.");
+        ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane::Right);
+    });
+}
+
+[[nodiscard]] bool TestFolderViewActivationPressModifiers(HWND mainWindow, CaseState& state) noexcept
+{
+    return RunFolderViewActivationPressCase(mainWindow,
+                                            state,
+                                            L"FolderView activation press modifiers",
+                                            [&](const FolderViewActivationPressFixture& fixture, const std::filesystem::path&) noexcept
+    {
+        // Ctrl adds the pressed item.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the Ctrl press"))
+        {
+            return;
+        }
+        FolderView::DebugFocusSelectionStateSnapshot snapshot = fixture.Down(L"d.txt", MK_CONTROL);
+        fixture.Up(L"d.txt", MK_CONTROL);
+        state.Require(fixture.Selected({L"a.txt", L"b.txt", L"c.txt", L"d.txt"}) && snapshot.currentDisplayName == L"d.txt" && fixture.RightPaneIsActive(),
+                      L"Ctrl+press in the pane that was not active did not add the pressed item.");
+
+        // Ctrl removes a selected item and arms no drag from what is left.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the Ctrl deselect press"))
+        {
+            return;
+        }
+        snapshot = fixture.Down(L"b.txt", MK_CONTROL);
+        fixture.Up(L"b.txt", MK_CONTROL);
+        state.Require(fixture.Selected({L"a.txt", L"c.txt"}) && snapshot.potentialDragSourceCount == 0u,
+                      L"Ctrl+press on a selected item in the pane that was not active did not toggle it off.");
+
+        // Shift replaces the selection with the range from the current item.
+        if (! fixture.Arrange({L"e.txt"}, L"b.txt", L"the Shift press"))
+        {
+            return;
+        }
+        g_folderWindow.DebugClearPaneSelectionAnchorForSelfTest(FolderWindow::Pane::Right);
+        snapshot = fixture.Down(L"d.txt", MK_SHIFT);
+        fixture.Up(L"d.txt", MK_SHIFT);
+        state.Require(fixture.Selected({L"b.txt", L"c.txt", L"d.txt"}) && snapshot.currentDisplayName == L"d.txt" && fixture.RightPaneIsActive(),
+                      L"Shift+press in the pane that was not active did not select the range from the current item.");
+
+        // Ctrl+Shift adds that range.
+        if (! fixture.Arrange({L"e.txt"}, L"b.txt", L"the Ctrl+Shift press"))
+        {
+            return;
+        }
+        g_folderWindow.DebugClearPaneSelectionAnchorForSelfTest(FolderWindow::Pane::Right);
+        snapshot = fixture.Down(L"d.txt", MK_CONTROL | MK_SHIFT);
+        fixture.Up(L"d.txt", MK_CONTROL | MK_SHIFT);
+        state.Require(fixture.Selected({L"b.txt", L"c.txt", L"d.txt", L"e.txt"}) && snapshot.currentDisplayName == L"d.txt",
+                      L"Ctrl+Shift+press in the pane that was not active did not add the range from the current item.");
+    });
+}
+
+[[nodiscard]] bool TestFolderViewActivationPressDragAndActivate(HWND mainWindow, CaseState& state) noexcept
+{
+    return RunFolderViewActivationPressCase(mainWindow,
+                                            state,
+                                            L"FolderView activation press drag and double-click",
+                                            [&](const FolderViewActivationPressFixture& fixture, const std::filesystem::path& right) noexcept
+    {
+        using namespace std::chrono_literals;
+
+        g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Right, true);
+        const UINT dragDpi  = GetDpiForWindow(fixture.rightView);
+        const int dragWidth = (std::max)(1, GetSystemMetricsForDpi(SM_CXDRAG, dragDpi));
+        const auto dragFrom = [&](std::wstring_view name) noexcept
+        {
+            const POINT point = fixture.PointFor(name);
+            const POINT outside{point.x + (dragWidth - dragWidth / 2), point.y};
+            SendMessageW(fixture.rightView, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(outside.x, outside.y));
+            SendMessageW(fixture.rightView, WM_LBUTTONUP, 0u, MAKELPARAM(outside.x, outside.y));
+            PumpPendingMessages();
+        };
+
+        // A drag that starts on an item outside the selection drags that item alone and selects it.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the drag from an unselected item"))
+        {
+            return;
+        }
+        uint64_t dragsBefore                                  = g_folderWindow.DebugGetPaneDragStartCountForSelfTest(FolderWindow::Pane::Right);
+        FolderView::DebugFocusSelectionStateSnapshot snapshot = fixture.Down(L"d.txt");
+        state.Require(snapshot.potentialDragSourceCount == 1u && fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}),
+                      L"An activating press on an unselected item did not arm that item alone while keeping the selection.");
+        dragFrom(L"d.txt");
+        std::vector<std::filesystem::path> started = g_folderWindow.DebugGetPaneLastDragStartPathsForSelfTest(FolderWindow::Pane::Right);
+        state.Require(g_folderWindow.DebugGetPaneDragStartCountForSelfTest(FolderWindow::Pane::Right) == dragsBefore + 1u && started.size() == 1u &&
+                          started[0].filename() == L"d.txt" && fixture.Selected({L"d.txt"}),
+                      L"Dragging from an unselected item after an activating press did not drag and select that item alone.");
+
+        // A drag that starts on a selected item drags the whole selection.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the drag from a selected item"))
+        {
+            return;
+        }
+        dragsBefore = g_folderWindow.DebugGetPaneDragStartCountForSelfTest(FolderWindow::Pane::Right);
+        static_cast<void>(fixture.Down(L"b.txt"));
+        dragFrom(L"b.txt");
+        started = g_folderWindow.DebugGetPaneLastDragStartPathsForSelfTest(FolderWindow::Pane::Right);
+        state.Require(g_folderWindow.DebugGetPaneDragStartCountForSelfTest(FolderWindow::Pane::Right) == dragsBefore + 1u && started.size() == 3u &&
+                          fixture.Selected({L"a.txt", L"b.txt", L"c.txt"}),
+                      L"Dragging from a selected item after an activating press did not drag the selection.");
+        g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Right, false);
+
+        // A double-click whose first press is activating opens the item under the pointer.
+        if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the double-click"))
+        {
+            return;
+        }
+        const POINT folder = fixture.PointFor(L"sub");
+        SendMessageW(fixture.rightView, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(folder.x, folder.y));
+        SendMessageW(fixture.rightView, WM_LBUTTONUP, 0u, MAKELPARAM(folder.x, folder.y));
+        SendMessageW(fixture.rightView, WM_LBUTTONDBLCLK, MK_LBUTTON, MAKELPARAM(folder.x, folder.y));
+        SendMessageW(fixture.rightView, WM_LBUTTONUP, 0u, MAKELPARAM(folder.x, folder.y));
+        state.Require(WaitForPanePath(FolderWindow::Pane::Right, right / L"sub", SelfTest::Scale(5000ms)),
+                      L"A double-click in the pane that was not active did not open the folder under the pointer.");
+        state.Require(fixture.RightPaneIsActive(), L"A double-click in the pane that was not active did not make it active.");
+    });
 }
 
 [[nodiscard]] bool TestFolderViewDragSourceTargetContract(HWND mainWindow, CaseState& state) noexcept
@@ -35037,6 +35420,15 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"folder_view_drag_source_target_contract", [=](CaseState& state) noexcept {
         return TestFolderViewDragSourceTargetContract(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_folderView_activation_press_keeps_selection", [=](CaseState& state) noexcept {
+        return TestFolderViewActivationPressKeepsSelection(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_folderView_activation_press_modifiers", [=](CaseState& state) noexcept {
+        return TestFolderViewActivationPressModifiers(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_folderView_activation_press_drag_and_double_click", [=](CaseState& state) noexcept {
+        return TestFolderViewActivationPressDragAndActivate(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"folderView_perf_focus_selection_state", [=](CaseState& state) noexcept {
         return TestFolderViewPerfFocusSelectionState(mainWindow, state);

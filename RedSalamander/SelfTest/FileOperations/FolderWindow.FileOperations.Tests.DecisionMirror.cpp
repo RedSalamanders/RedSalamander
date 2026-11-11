@@ -938,7 +938,7 @@ private:
     // its worker; the prompt covers the pane the command came from, and declined, it changes nothing.
     const auto attributesRoot   = root / L"attributes";
     const auto attributesFolder = attributesRoot / L"folder";
-    const auto leftover         = attributesFolder / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+    const auto leftover         = attributesFolder / L"payload.0123456789abcdef0123456789abcdef.rs-bak";
     if (! RecreateEmptyDirectory(attributesRoot) || ! RecreateEmptyDirectory(attributesFolder) || ! WriteTestFile(leftover, 64u) ||
         ! scope.ShowPane(FolderWindow::Pane::Left, attributesRoot, L"folder"))
         return reject(L"the Change Attributes fixture is unavailable");

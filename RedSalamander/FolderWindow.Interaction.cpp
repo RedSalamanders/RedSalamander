@@ -939,31 +939,6 @@ bool FolderWindow::OnSetCursor(POINT pt)
     return false;
 }
 
-void FolderWindow::OnParentNotify(UINT eventMsg, UINT childId)
-{
-    if (eventMsg != WM_LBUTTONDOWN && eventMsg != WM_RBUTTONDOWN && eventMsg != WM_MBUTTONDOWN)
-    {
-        return;
-    }
-
-    if (childId == kLeftNavigationId || childId == kLeftFolderViewId)
-    {
-        SetActivePane(Pane::Left);
-        if (GetFocusedPane() != Pane::Left)
-        {
-            FocusPaneFolderView(Pane::Left);
-        }
-    }
-    else if (childId == kRightNavigationId || childId == kRightFolderViewId)
-    {
-        SetActivePane(Pane::Right);
-        if (GetFocusedPane() != Pane::Right)
-        {
-            FocusPaneFolderView(Pane::Right);
-        }
-    }
-}
-
 RECT FolderWindow::GetSplitterArrowRect(SplitterArrowZone zone) const noexcept
 {
     if (zone == SplitterArrowZone::None || _splitterRect.right <= _splitterRect.left || _splitterRect.bottom <= _splitterRect.top)

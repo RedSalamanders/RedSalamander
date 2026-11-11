@@ -1529,7 +1529,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         task->_permanentDeleteConsentFrom         = std::move(admission.permanentDeleteConsentFrom);
         task->_permanentDeleteTestOverride        = admission.permanentDeleteTestOverride;
         task->_crossFsBridgeBufferBytes           = GetCrossFsBridgeBufferBytesFromSettings(_owner._settings);
+        task->SeedPresetCollisionPolicy(admission.presetCollisionPolicy);
         task->_waitForOthers.store(waitForOthers, std::memory_order_release);
+        // An inline rename neither occupies the Queue slot nor waits on it.
+        task->_holdsQueuePlace.store(! inlineRename, std::memory_order_release);
         task->_desiredSpeedLimitBytesPerSecond.store(taskDesiredSpeedLimit, std::memory_order_release);
         task->_clipboardMoveAdmission     = groupMoveClipboardSequence.has_value();
         task->_copyOnlyMoveDisclosed      = copyOnlyMoveDisclosed;
@@ -2215,6 +2218,10 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareArtifactTouchGuard(const 
         return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     }
 
+    // The user answers on the UI thread: this task's queue place is passed meanwhile.
+    SetAwaitingUserDecision(true);
+    const auto answered = wil::scope_exit([this]() noexcept { SetAwaitingUserDecision(false); });
+    SetAwaitingAnswerQuiet(true); // I62 G7: Batch Rename has one worker, so this wait is the whole task waiting
     std::unique_lock lock(_batchRenameArtifactPromptMutex);
     _batchRenameArtifactPromptCv.wait(
         lock, [this]() noexcept { return _batchRenameArtifactPromptCompleted || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });
@@ -2866,13 +2873,14 @@ uint64_t FolderWindow::FileOperationState::AllocateLateQueueOrderKey() noexcept
     return _nextTaskId++;
 }
 
-bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool moveUp) noexcept
+namespace
 {
-    const uint64_t startedUs = PerfNowUs();
-    std::vector<Task*> tasks;
-    CollectTasks(tasks);
-
-    std::vector<Task*> waiting;
+// The tasks a reorder may involve, in queue order: not cancelled, not yet admitted, and waiting.
+void CollectWaitingTasksInQueueOrder(const std::vector<FolderWindow::FileOperationState::Task*>& tasks,
+                                     std::vector<FolderWindow::FileOperationState::Task*>& waiting) noexcept
+{
+    using Task = FolderWindow::FileOperationState::Task;
+    waiting.clear();
     waiting.reserve(tasks.size());
     for (Task* task : tasks)
     {
@@ -2882,7 +2890,48 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
             waiting.push_back(task);
         }
     }
-    std::ranges::sort(waiting, {}, &Task::GetQueueOrderKey);
+    std::ranges::sort(waiting, [](const Task* left, const Task* right) noexcept {
+        return std::pair{left->GetQueueOrderKey(), left->GetId()} < std::pair{right->GetQueueOrderKey(), right->GetId()};
+    });
+}
+} // namespace
+
+void FolderWindow::FileOperationState::CollectQueuedTaskOrder(std::vector<QueuedTaskOrder>& out) noexcept
+{
+    out.clear();
+    std::vector<Task*> tasks;
+    CollectTasks(tasks);
+    std::vector<Task*> waiting;
+    CollectWaitingTasksInQueueOrder(tasks, waiting);
+
+    out.reserve(waiting.size());
+    size_t position = 0u;
+    for (size_t index = 0u; index < waiting.size(); ++index)
+    {
+        // An overlap decision fixed this task behind a named task: it has no place of its own to
+        // show, it does not move, and its neighbours do not move across it.
+        const bool movable = ! waiting[index]->IsOverlapQueued();
+        if (movable)
+        {
+            ++position;
+        }
+        out.push_back(QueuedTaskOrder{
+            .taskId      = waiting[index]->GetId(),
+            .position    = movable ? position : 0u,
+            .canMoveUp   = movable && index > 0u && ! waiting[index - 1u]->IsOverlapQueued(),
+            .canMoveDown = movable && index + 1u < waiting.size() && ! waiting[index + 1u]->IsOverlapQueued(),
+        });
+    }
+}
+
+bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool moveUp) noexcept
+{
+    const uint64_t startedUs = PerfNowUs();
+    std::vector<Task*> tasks;
+    CollectTasks(tasks);
+
+    std::vector<Task*> waiting;
+    CollectWaitingTasksInQueueOrder(tasks, waiting);
 
     const auto current = std::ranges::find(waiting, taskId, &Task::GetId);
     if (current == waiting.end())
@@ -2898,6 +2947,11 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
 
     const size_t adjacentIndex = moveUp ? index - 1u : index + 1u;
     Task* const adjacent       = waiting[adjacentIndex];
+    // Never across an overlap edge: the same rule CollectQueuedTaskOrder publishes to the popup.
+    if ((*current)->IsOverlapQueued() || adjacent->IsOverlapQueued())
+    {
+        return false;
+    }
     const uint64_t currentKey  = (*current)->GetQueueOrderKey();
     const uint64_t adjacentKey = adjacent->GetQueueOrderKey();
 

@@ -498,6 +498,8 @@ namespace FileOperationItemResultReducerSelfTestInternal
         unsigned long errors   = 0u;
         std::wstring runningNote;
         fileOperations.CollectTaskDiagnosticSnapshot(task._taskId, warnings, errors, runningNote);
+        // I62 B5: the trailing task.result restates the item's own Error and is not counted again.
+        const bool restatedResultCountedOnce = expectCollision ? errors == 1u : errors <= 1u;
         const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
         Debug::Perf::EmitValue(L"FileOps.SelfTest.UnverifiableDestinationCollisionMs", GetTickCount64() - started, finalHr);
         std::string actualSource;
@@ -509,18 +511,19 @@ namespace FileOperationItemResultReducerSelfTestInternal
             executeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && finalHr == executeHr && ReadFileTextFsIo(io, source, actualSource) &&
             actualSource == sourceBytes && destinationPreserved && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u &&
             summary.retainedSourceCount == 1u && summary.unknownSourceCount == 0u && task._perf.conflictPromptCount == 0u &&
-            task._itemCompletedCallbackCount.load(std::memory_order_acquire) == 0u &&
+            task._itemCompletedCallbackCount.load(std::memory_order_acquire) == 0u && restatedResultCountedOnce &&
             (summary.lastDiagnosticMessage == LoadStringResource(nullptr, IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE)) == expectCollision &&
             (! expectCollision || (runningNote == summary.lastDiagnosticMessage && summary.lastProblem.has_value() &&
                                    summary.lastProblem.value().userText.messageId == IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE));
         AppendLog(std::format(L"Unverifiable destination collision: case={} exists={} sameBytes={} sourceUnsupported={} hr=0x{:08X} preserved={} "
-                              L"passed={} note='{}'",
+                              L"errors={} passed={} note='{}'",
                               variant,
                               destinationExists,
                               sourceBytes == destinationBytes,
                               sourceUnsupported,
                               static_cast<unsigned long>(finalHr),
                               destinationPreserved && actualSource == sourceBytes,
+                              errors,
                               matches,
                               summary.lastDiagnosticMessage));
         passed = matches && passed;
@@ -538,6 +541,2444 @@ namespace FileOperationItemResultReducerSelfTestInternal
                 passed = localized && passed;
             }
         }
+    }
+    return passed;
+}
+
+// I62 B3: the engine's comparison of the incoming item with the existing one, and the words the
+// card and the decision mirror share for it.
+namespace ConflictComparisonContract
+{
+using FileOperations::CompareConflictItems;
+using FileOperations::ConflictDateRelation;
+using FileOperations::ConflictSizeRelation;
+inline constexpr __int64 kSecond = 10'000'000ll;
+inline constexpr __int64 kHour   = 3'600ll * kSecond;
+inline constexpr __int64 kBase   = 134'000'000'000'000'000ll;
+static_assert(CompareConflictItems(true, 5u, kBase, true, 5u, kBase).date == ConflictDateRelation::Same);
+static_assert(CompareConflictItems(true, 5u, kBase, true, 5u, kBase).size == ConflictSizeRelation::Same);
+// Two seconds is the coarsest stored timestamp: inside it the dates are the same, in either direction.
+static_assert(CompareConflictItems(true, 5u, kBase + 2 * kSecond, true, 5u, kBase).date == ConflictDateRelation::Same);
+static_assert(CompareConflictItems(true, 5u, kBase, true, 5u, kBase + 2 * kSecond).date == ConflictDateRelation::Same);
+static_assert(CompareConflictItems(true, 5u, kBase + 3 * kSecond, true, 5u, kBase).date == ConflictDateRelation::Newer);
+static_assert(CompareConflictItems(true, 5u, kBase, true, 5u, kBase + 3 * kSecond).date == ConflictDateRelation::Older);
+// One hour apart is its own class only with equal sizes; otherwise it is an ordinary newer or older.
+static_assert(CompareConflictItems(true, 5u, kBase + kHour + kSecond, true, 5u, kBase).date == ConflictDateRelation::OneHourApart);
+static_assert(CompareConflictItems(true, 5u, kBase, true, 5u, kBase + kHour - kSecond).date == ConflictDateRelation::OneHourApart);
+static_assert(CompareConflictItems(true, 6u, kBase + kHour, true, 5u, kBase).date == ConflictDateRelation::Newer);
+static_assert(CompareConflictItems(false, 0u, kBase + kHour, true, 5u, kBase).date == ConflictDateRelation::Newer);
+static_assert(CompareConflictItems(true, 5u, kBase + 2 * kHour, true, 5u, kBase).date == ConflictDateRelation::Newer);
+// Unknown facts stay unknown; nothing is guessed.
+static_assert(CompareConflictItems(true, 5u, 0, true, 5u, kBase).date == ConflictDateRelation::Unknown);
+static_assert(CompareConflictItems(false, 0u, kBase, true, 5u, kBase).size == ConflictSizeRelation::Unknown);
+static_assert(CompareConflictItems(true, 9u, kBase, true, 5u, kBase).size == ConflictSizeRelation::Larger);
+static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == ConflictSizeRelation::Smaller);
+} // namespace ConflictComparisonContract
+
+[[nodiscard]] bool RunFileOperationConflictComparisonTextSelfTest() noexcept
+{
+    using FileOperations::ConflictDateRelation;
+    using FileOperations::ConflictSizeRelation;
+    const std::wstring newer   = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_NEWER);
+    const std::wstring older   = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_OLDER);
+    const std::wstring larger  = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_LARGER);
+    const std::wstring smaller = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_SMALLER);
+    const std::wstring sameDay = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_SAME_DATE);
+    const std::wstring sameLen = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_SAME_SIZE);
+    const std::wstring sameAll = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_SAME_SIZE_AND_DATE);
+    const std::wstring oneHour = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_ONE_HOUR_APART);
+    if (newer.empty() || older.empty() || larger.empty() || smaller.empty() || sameDay.empty() || sameLen.empty() || sameAll.empty() || oneHour.empty())
+        return false;
+    const auto has = [](const std::wstring& text, const std::wstring& word) noexcept { return text.find(word) != std::wstring::npos; };
+
+    FileOperations::ConflictPromptTextFacts facts{};
+    facts.operation       = FILESYSTEM_MOVE;
+    facts.bucket          = static_cast<uint8_t>(FileOperations::ConflictClass::RegularFileExists);
+    facts.sourceItem      = {.available = true, .sizeKnown = true, .sizeBytes = 4096u, .lastWriteTime = ConflictComparisonContract::kBase};
+    facts.destinationItem = {.available = true, .sizeKnown = true, .sizeBytes = 1024u, .lastWriteTime = ConflictComparisonContract::kBase};
+    const auto relate     = [&](const ConflictDateRelation date, const ConflictSizeRelation size) noexcept
+    {
+        facts.dateRelation = static_cast<uint8_t>(date);
+        facts.sizeRelation = static_cast<uint8_t>(size);
+    };
+    const std::wstring sizeText = FormatBytesCompact(4096u);
+
+    // Each role names its own relation; the existing item's words are the inverse of the incoming item's.
+    relate(ConflictDateRelation::Newer, ConflictSizeRelation::Larger);
+    const std::wstring incoming = FileOperations::BuildConflictPromptItemText(facts, false);
+    const std::wstring existing = FileOperations::BuildConflictPromptItemText(facts, true);
+    const bool roles = has(incoming, sizeText) && has(incoming, newer) && has(incoming, larger) && ! has(incoming, older) && ! has(incoming, smaller) &&
+                       has(existing, older) && has(existing, smaller) && ! has(existing, newer) && ! has(existing, larger) &&
+                       FileOperations::BuildConflictPromptFactText(facts).empty();
+
+    // Same size and date is said once for both items, and never as "identical".
+    relate(ConflictDateRelation::Same, ConflictSizeRelation::Same);
+    const std::wstring sameIncoming = FileOperations::BuildConflictPromptItemText(facts, false);
+    const bool same = FileOperations::BuildConflictPromptFactText(facts) == sameAll && has(sameIncoming, sizeText) && ! has(sameIncoming, sameDay) &&
+                      ! has(sameIncoming, sameLen) && ! has(FileOperations::BuildConflictPromptItemText(facts, true), sameLen);
+
+    relate(ConflictDateRelation::OneHourApart, ConflictSizeRelation::Same);
+    const bool hour = FileOperations::BuildConflictPromptFactText(facts) == oneHour && ! has(FileOperations::BuildConflictPromptItemText(facts, false), sameLen);
+
+    // A partial comparison says only what is known.
+    relate(ConflictDateRelation::Same, ConflictSizeRelation::Smaller);
+    const std::wstring mixed = FileOperations::BuildConflictPromptItemText(facts, false);
+    relate(ConflictDateRelation::Older, ConflictSizeRelation::Unknown);
+    const std::wstring partial = FileOperations::BuildConflictPromptItemText(facts, false);
+    const bool partials = has(mixed, sameDay) && has(mixed, smaller) && has(partial, older) && ! has(partial, larger) && ! has(partial, smaller) &&
+                          ! has(partial, sameLen) && FileOperations::BuildConflictPromptFactText(facts).empty();
+
+    // A consent's own facts keep their line, and an unknown item has no line at all.
+    relate(ConflictDateRelation::Same, ConflictSizeRelation::Same);
+    facts.factItemCountKnown = true;
+    facts.factItemCount      = 3u;
+    const bool consentKept   = FileOperations::BuildConflictPromptFactText(facts) != sameAll;
+    facts.sourceItem         = {};
+    const bool unknownItem   = FileOperations::BuildConflictPromptItemText(facts, false).empty();
+
+    const bool passed = roles && same && hour && partials && consentKept && unknownItem;
+    AppendLog(std::format(L"Conflict comparison text: roles={} same={} hour={} partials={} consentKept={} unknownItem={} passed={}",
+                          roles,
+                          same,
+                          hour,
+                          partials,
+                          consentKept,
+                          unknownItem,
+                          passed));
+    return passed;
+}
+
+// I62 slice B: a Managed Move onto an existing file at a location that opens items but cannot
+// identify them is a name collision the user decides, not a refusal. The decision is raised before
+// any byte is read and shows both items' facts; Skip keeps both byte streams, Keep both publishes
+// beside the existing item and completes the Move, Cancel changes nothing. Replace (I62 B2) publishes
+// over the occupant the user was shown through one replacing rename. When that occupant changed after
+// the decision was shown nothing is replaced and the decision is raised again on the current occupant;
+// when another program keeps the occupant in use the rename is refused and both files stay.
+[[nodiscard]] bool RunFileOperationIdentityLessCollisionDecisionSelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                                         const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                                         const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"identity-less-collision-decision";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    struct Variant final
+    {
+        bool wholeFolder      = false; // the whole destination folder cannot identify items (a share without file IDs), or only the existing item
+        Action decision       = Action::Skip;
+        bool occupantReadOnly = false;
+        bool occupantChanges  = false; // the occupant is rewritten after the decision is shown and before it is answered
+        bool occupantInUse    = false; // after the decision is shown, another program opens the occupant and does not share its deletion
+    };
+    static constexpr std::array kVariants{
+        Variant{false, Action::Skip},
+        Variant{false, Action::KeepBoth},
+        Variant{false, Action::Cancel},
+        Variant{false, Action::Overwrite},
+        Variant{false, Action::ReplaceReadOnly, true},
+        Variant{false, Action::Overwrite, false, true},
+        Variant{false, Action::Overwrite, false, false, true},
+        Variant{true, Action::Skip},
+        Variant{true, Action::KeepBoth},
+        Variant{true, Action::Cancel},
+        Variant{true, Action::Overwrite},
+        Variant{true, Action::ReplaceReadOnly, true},
+        Variant{true, Action::Overwrite, false, true},
+        Variant{true, Action::Overwrite, false, false, true},
+    };
+    for (const Variant& variant : kVariants)
+    {
+        const bool wholeFolder = variant.wholeFolder;
+        const Action decision  = variant.decision;
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto source            = caseRoot / L"source" / L"harbor.bin";
+        const auto destinationFolder = caseRoot / L"destination";
+        const auto destination       = destinationFolder / source.filename();
+        const std::string sourceBytes(97u, 's');
+        const std::string destinationBytes(131u, 'd');
+        const std::string changedBytes(177u, 'x');
+        if (! RecreateEmptyDirectory(source.parent_path()) || ! RecreateEmptyDirectory(destinationFolder) || ! WriteFileTextFsIo(io, source, sourceBytes) ||
+            ! WriteFileTextFsIo(io, destination, destinationBytes))
+            return false;
+        if (variant.occupantReadOnly && SetFileAttributesW(destination.c_str(), FILE_ATTRIBUTE_READONLY) == FALSE)
+            return false;
+        // A refused replacement must not leave a read-only fixture behind for the root cleanup.
+        const auto writableCleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SetFileAttributesW(destination.c_str(), FILE_ATTRIBUTE_NORMAL)); });
+        // Opened by the responder once the decision is shown: an occupant already in use when the
+        // question is built is not offered for replacement at all, as on a location with identity.
+        wil::unique_hfile inUse;
+        const auto injectionPath = wholeFolder ? destinationFolder : destination;
+        RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(kSelfTestEnvBindIdentityUnsupportedPath, injectionPath.native());
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        // The Local destination proves what it published; the decision route requires that proof.
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent                         = FileOperations::TransferIntent::Move;
+        transfer.strategy                       = FileOperations::OperationStrategy::Managed;
+        transfer.sourceEndpoint                 = endpoint;
+        transfer.destinationEndpoint            = endpoint;
+        transfer.selectedItems                  = {{.providerPath = source.native()}};
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation                = FILESYSTEM_MOVE;
+        task._executionMode            = State::ExecutionMode::PerItem;
+        task._fileSystem               = localFileSystem;
+        task._sourcePaths              = {source};
+        task._sourcePluginId           = endpoint.pluginId;
+        task._sourcePluginShortId      = L"file";
+        task._sourceInstanceContext    = endpoint.instanceId;
+        task._sourcePathAttributesHint = {GetFileAttributesW(source.c_str())};
+        task._perItemMaxConcurrency    = 1u;
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        if (FAILED(task.PrepareMutationInterlockScopes()))
+            return false;
+
+        // The executor blocks on its decision: answer it from a second thread. A prompt that does not
+        // offer the planned decision is answered with Cancel so the case cannot hang. A decision raised
+        // again (changed occupant) or a refusal raised to the user (occupant in use) is answered Skip.
+        std::mutex seenMutex;
+        std::optional<State::Task::ConflictPromptState> seenPrompt;
+        std::atomic<unsigned int> answered{0u};
+        std::atomic<bool> decisionOffered{true};
+        std::atomic<bool> followUpAnswerOffered{true};
+        std::atomic<bool> occupantChanged{false};
+        std::atomic<unsigned int> followUpPrompts{0u};
+        std::atomic<uint64_t> followUpDestinationSize{0u};
+        HRESULT executeHr = E_PENDING;
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                uint64_t answeredGeneration = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (const auto prompt = TryGetConflictPromptCopy(&task); prompt.has_value() && prompt->generation != answeredGeneration)
+                    {
+                        const bool followUp   = answered.load(std::memory_order_acquire) != 0u;
+                        const Action wanted   = followUp && (variant.occupantChanges || variant.occupantInUse) ? Action::Skip : decision;
+                        const auto offeredEnd = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                        const bool offered    = std::find(prompt->actions.begin(), offeredEnd, wanted) != offeredEnd;
+                        if (followUp)
+                        {
+                            followUpPrompts.fetch_add(1u, std::memory_order_acq_rel);
+                            followUpDestinationSize.store(prompt->destinationMetadata.sizeKnown ? prompt->destinationMetadata.sizeBytes : 0u,
+                                                          std::memory_order_release);
+                        }
+                        {
+                            const std::scoped_lock lock(seenMutex);
+                            if (! seenPrompt.has_value())
+                                seenPrompt = prompt;
+                        }
+                        if (! offered)
+                            (followUp ? followUpAnswerOffered : decisionOffered).store(false, std::memory_order_release);
+                        if (variant.occupantInUse && ! followUp && ! inUse)
+                        {
+                            inUse.reset(CreateFileW(
+                                destination.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+                        }
+                        if (variant.occupantChanges && ! followUp && ! occupantChanged.load(std::memory_order_acquire))
+                        {
+                            // Another writer replaces the occupant's content while the user reads the question.
+                            const wil::unique_hfile changed(
+                                CreateFileW(destination.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+                            DWORD written = 0u;
+                            occupantChanged.store(changed &&
+                                                      WriteFile(changed.get(), changedBytes.data(), static_cast<DWORD>(changedBytes.size()), &written, nullptr) !=
+                                                          FALSE &&
+                                                      written == changedBytes.size(),
+                                                  std::memory_order_release);
+                        }
+                        if (task.SubmitConflictDecision(prompt->generation, offered ? wanted : Action::Cancel, false))
+                        {
+                            answeredGeneration = prompt->generation;
+                            answered.fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        const bool occupantHeld = inUse.is_valid();
+        inUse.reset();
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+
+        std::string actualSource;
+        std::string actualDestination;
+        std::error_code error;
+        const bool sourceKept           = ReadFileTextFsIo(io, source, actualSource) && actualSource == sourceBytes;
+        const bool sourceGone           = ! std::filesystem::exists(source, error) && ! error;
+        const bool destinationRead      = ReadFileTextFsIo(io, destination, actualDestination);
+        const bool destinationPreserved = destinationRead && actualDestination == destinationBytes;
+        const bool destinationReplaced  = destinationRead && actualDestination == sourceBytes;
+        const bool destinationChanged   = destinationRead && actualDestination == changedBytes;
+        const DWORD destinationAttributes = GetFileAttributesW(destination.c_str());
+        const bool destinationWritable =
+            destinationAttributes != INVALID_FILE_ATTRIBUTES && (destinationAttributes & FILE_ATTRIBUTE_READONLY) == 0u;
+        // Keep both publishes the source's bytes under a new name beside the existing item.
+        size_t destinationEntries = 0u;
+        size_t keptBothEntries    = 0u;
+        size_t leftoverEntries    = 0u;
+        for (std::filesystem::directory_iterator it(destinationFolder, error), end; ! error && it != end; it.increment(error))
+        {
+            ++destinationEntries;
+            const std::wstring leaf = it->path().filename().native();
+            if (FileOperationArtifacts::HasPossibleArtifactName(leaf))
+            {
+                ++leftoverEntries;
+                continue;
+            }
+            std::string bytes;
+            if (leaf != destination.filename().native() && ReadFileTextFsIo(io, it->path(), bytes) && bytes == sourceBytes)
+                ++keptBothEntries;
+        }
+
+        const auto shown  = [&]() noexcept
+        {
+            const std::scoped_lock lock(seenMutex);
+            return seenPrompt;
+        }();
+        const auto offers = [&](const Action action) noexcept
+        {
+            if (! shown.has_value())
+                return false;
+            const auto offeredEnd = shown->actions.begin() + static_cast<std::ptrdiff_t>(shown->actionCount);
+            return std::find(shown->actions.begin(), offeredEnd, action) != offeredEnd;
+        };
+        // Both items' facts are on the decision. Replace is offered because the Local provider can
+        // publish over the occupant the user is shown; a read-only occupant needs its own grant, and a
+        // link is never replaced this way.
+        const bool promptFacts =
+            shown.has_value() && shown->sourceMetadata.available && shown->sourceMetadata.sizeKnown && shown->sourceMetadata.sizeBytes == sourceBytes.size() &&
+            shown->sourceMetadata.lastWriteTime != 0 && shown->destinationMetadata.available && shown->destinationMetadata.sizeKnown &&
+            shown->destinationMetadata.sizeBytes == destinationBytes.size() && shown->destinationMetadata.lastWriteTime != 0 &&
+            shown->comparison.size == FileOperations::ConflictSizeRelation::Smaller && shown->comparison.date != FileOperations::ConflictDateRelation::Unknown;
+        // Delete source (I62 B4) is offered here as well: the location cannot say by identity that the two
+        // files differ, so the same-file probe answers.
+        const bool discardOffered = offers(Action::DiscardSource);
+        const bool promptActions  = discardOffered &&
+                                    (variant.occupantReadOnly
+                                         ? offers(Action::ReplaceReadOnly) && offers(Action::Skip) && offers(Action::Cancel) && ! offers(Action::ReplaceLink)
+                                         : offers(Action::KeepBoth) && offers(Action::Skip) && offers(Action::Cancel) && offers(Action::Overwrite) &&
+                                               ! offers(Action::ReplaceReadOnly) && ! offers(Action::ReplaceLink));
+        // One decision per collision. A changed occupant raises exactly one more, on the occupant that
+        // is there now; a refused rename raises the refusal once, with Skip offered.
+        const unsigned int answeredCount = answered.load(std::memory_order_acquire);
+        const unsigned int followUpCount = followUpPrompts.load(std::memory_order_acquire);
+        const bool onePrompt =
+            decisionOffered.load(std::memory_order_acquire) &&
+            (variant.occupantChanges ? answeredCount == 2u && task._perf.conflictPromptCount == 2u &&
+                                           followUpAnswerOffered.load(std::memory_order_acquire) &&
+                                           followUpDestinationSize.load(std::memory_order_acquire) == changedBytes.size()
+             : variant.occupantInUse ? answeredCount == 2u && occupantHeld && followUpAnswerOffered.load(std::memory_order_acquire)
+                                     : answeredCount == 1u && task._perf.conflictPromptCount == 1u);
+
+        bool outcome = false;
+        if (decision == Action::Skip)
+        {
+            outcome = sourceKept && destinationPreserved && destinationEntries == 1u && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u &&
+                      summary.retainedSourceCount == 1u && summary.unknownSourceCount == 0u && executeHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        else if (decision == Action::KeepBoth)
+        {
+            outcome = sourceGone && destinationPreserved && destinationEntries == 2u && keptBothEntries == 1u && summary.publishedItemCount == 1u &&
+                      summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u && summary.unknownSourceCount == 0u && SUCCEEDED(finalHr);
+        }
+        else if (decision == Action::Cancel)
+        {
+            outcome = sourceKept && destinationPreserved && destinationEntries == 1u && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u &&
+                      executeHr == HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        else if (variant.occupantChanges)
+        {
+            // The occupant is no longer the one the user decided on: nothing is replaced, and the
+            // decision raised again (answered Skip) leaves the other writer's content and the source.
+            outcome = occupantChanged.load(std::memory_order_acquire) && sourceKept && destinationChanged && destinationEntries == 1u &&
+                      summary.publishedItemCount == 0u && summary.removedSourceCount == 0u && summary.retainedSourceCount == 1u &&
+                      summary.unknownSourceCount == 0u;
+        }
+        else if (variant.occupantInUse)
+        {
+            // The replacing rename is refused: the occupant and the source are untouched, the stage is
+            // removed, and nothing is written over the occupant instead.
+            outcome = sourceKept && destinationPreserved && destinationEntries == 1u && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u &&
+                      summary.unknownSourceCount == 0u;
+        }
+        else
+        {
+            // Replace and Replace read-only: the occupant now holds the source's bytes and the Move completed.
+            outcome = sourceGone && destinationReplaced && destinationWritable && destinationEntries == 1u && summary.publishedItemCount == 1u &&
+                      summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u && summary.unknownSourceCount == 0u && SUCCEEDED(finalHr);
+        }
+        const bool matches = onePrompt && promptFacts && promptActions && outcome && leftoverEntries == 0u;
+        AppendLog(std::format(L"Identity-less collision decision: wholeFolder={} decision={} readOnly={} changes={} inUse={} execute=0x{:08X} final=0x{:08X} "
+                              L"prompts={} answered={} followUps={} followUpOffered={} offered={} facts={} actions={} discard={} sourceKept={} sourceGone={} "
+                              L"destinationPreserved={} "
+                              L"replaced={} changed={} "
+                              L"entries={} keptBoth={} leftovers={} published={} removed={} retained={} unknown={} passed={}",
+                              wholeFolder,
+                              static_cast<unsigned int>(decision),
+                              variant.occupantReadOnly,
+                              variant.occupantChanges,
+                              variant.occupantInUse,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              static_cast<uint64_t>(task._perf.conflictPromptCount),
+                              answeredCount,
+                              followUpCount,
+                              followUpAnswerOffered.load(std::memory_order_acquire),
+                              decisionOffered.load(std::memory_order_acquire),
+                              promptFacts,
+                              promptActions,
+                              discardOffered,
+                              sourceKept,
+                              sourceGone,
+                              destinationPreserved,
+                              destinationReplaced,
+                              destinationChanged,
+                              destinationEntries,
+                              keptBothEntries,
+                              leftoverEntries,
+                              summary.publishedItemCount,
+                              summary.removedSourceCount,
+                              summary.retainedSourceCount,
+                              summary.unknownSourceCount,
+                              matches));
+        passed = matches && passed;
+    }
+    return passed;
+}
+
+// I62 B4: Delete source. A Managed Move of one file onto an existing file at an ordinary destination (a location
+// that identifies its items). The user answers Delete source from the prompt's More list: the destination keeps its
+// bytes, nothing is copied or staged, the source goes to the Recycle Bin, and the item is reported as already there
+// with its source removed, not as skipped. Apply to all is remembered only when the two files have the same size and
+// date. The Local provider's Recycle route is the real one; the runner purges the Recycle Bin items it journals for
+// originals inside the marked test sandbox.
+[[nodiscard]] bool RunFileOperationDiscardSourceSelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                         const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                         const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"discard-source-decision";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    struct Variant final
+    {
+        bool sameSizeAndDate = false; // the destination has the source's size and last-write time, or another size
+        bool applyToAll      = false; // the answer ticks Apply to all
+    };
+    static constexpr std::array kVariants{Variant{true, false}, Variant{false, false}, Variant{true, true}, Variant{false, true}};
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    for (const Variant& variant : kVariants)
+    {
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto source            = caseRoot / L"source" / L"harbor.bin";
+        const auto destinationFolder = caseRoot / L"destination";
+        const auto destination       = destinationFolder / source.filename();
+        const std::string sourceBytes(97u, 's');
+        const std::string destinationBytes(variant.sameSizeAndDate ? 97u : 131u, 'd');
+        std::error_code error;
+        if (! RecreateEmptyDirectory(source.parent_path()) || ! RecreateEmptyDirectory(destinationFolder) || ! WriteFileTextFsIo(io, source, sourceBytes) ||
+            ! WriteFileTextFsIo(io, destination, destinationBytes))
+            return false;
+        if (variant.sameSizeAndDate)
+        {
+            // The destination gets the source's last-write time, so the two files are the same size and date.
+            const auto sourceTime = std::filesystem::last_write_time(source, error);
+            if (error)
+                return false;
+            std::filesystem::last_write_time(destination, sourceTime, error);
+            if (error)
+                return false;
+        }
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent                         = FileOperations::TransferIntent::Move;
+        transfer.strategy                       = FileOperations::OperationStrategy::Managed;
+        transfer.sourceEndpoint                 = endpoint;
+        transfer.destinationEndpoint            = endpoint;
+        transfer.selectedItems                  = {{.providerPath = source.native()}};
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation                = FILESYSTEM_MOVE;
+        task._executionMode            = State::ExecutionMode::PerItem;
+        task._fileSystem               = localFileSystem;
+        task._sourcePaths              = {source};
+        task._sourcePluginId           = endpoint.pluginId;
+        task._sourcePluginShortId      = L"file";
+        task._sourceInstanceContext    = endpoint.instanceId;
+        task._sourcePathAttributesHint = {GetFileAttributesW(source.c_str())};
+        task._perItemMaxConcurrency    = 1u;
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        if (FAILED(task.PrepareMutationInterlockScopes()))
+            return false;
+
+        // The executor blocks on its decision: answer it from a second thread. A prompt that does not offer
+        // Delete source is answered Cancel so the case cannot hang.
+        std::mutex seenMutex;
+        std::optional<State::Task::ConflictPromptState> seenPrompt;
+        std::atomic<unsigned int> answered{0u};
+        std::atomic<bool> decisionOffered{true};
+        HRESULT executeHr = E_PENDING;
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                uint64_t answeredGeneration = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (const auto prompt = TryGetConflictPromptCopy(&task); prompt.has_value() && prompt->generation != answeredGeneration)
+                    {
+                        const auto offeredEnd = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                        const bool offered    = std::find(prompt->actions.begin(), offeredEnd, Action::DiscardSource) != offeredEnd;
+                        {
+                            const std::scoped_lock lock(seenMutex);
+                            if (! seenPrompt.has_value())
+                                seenPrompt = prompt;
+                        }
+                        if (! offered)
+                            decisionOffered.store(false, std::memory_order_release);
+                        if (task.SubmitConflictDecision(prompt->generation, offered ? Action::DiscardSource : Action::Cancel, variant.applyToAll))
+                        {
+                            answeredGeneration = prompt->generation;
+                            answered.fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+
+        std::string actualDestination;
+        const bool sourceGone           = ! std::filesystem::exists(source, error) && ! error;
+        const bool destinationPreserved = ReadFileTextFsIo(io, destination, actualDestination) && actualDestination == destinationBytes;
+        size_t destinationEntries       = 0u;
+        for (std::filesystem::directory_iterator it(destinationFolder, error), end; ! error && it != end; it.increment(error))
+            ++destinationEntries;
+
+        const auto shown = [&]() noexcept
+        {
+            const std::scoped_lock lock(seenMutex);
+            return seenPrompt;
+        }();
+        const auto listed = [](const auto& actions, size_t count, const Action action) noexcept
+        {
+            const auto end = actions.begin() + static_cast<std::ptrdiff_t>(std::min(count, actions.size()));
+            return std::find(actions.begin(), end, action) != end;
+        };
+        // Offered once, under More (never a primary button, never the default or the Escape action), and the
+        // published comparison says what the two files are.
+        const bool promptActions = shown.has_value() && listed(shown->actions, shown->actionCount, Action::DiscardSource) &&
+                                   listed(shown->overflowActions, shown->overflowActionCount, Action::DiscardSource) &&
+                                   ! listed(shown->primaryActions, shown->primaryActionCount, Action::DiscardSource) &&
+                                   shown->defaultAction == Action::Cancel && shown->escapeAction == Action::Cancel;
+        const bool promptFacts =
+            shown.has_value() && shown->sourceMetadata.available && shown->sourceMetadata.sizeKnown && shown->sourceMetadata.sizeBytes == sourceBytes.size() &&
+            shown->destinationMetadata.available && shown->destinationMetadata.sizeKnown && shown->destinationMetadata.sizeBytes == destinationBytes.size() &&
+            (variant.sameSizeAndDate ? shown->comparison.date == FileOperations::ConflictDateRelation::Same &&
+                                           shown->comparison.size == FileOperations::ConflictSizeRelation::Same
+                                     : shown->comparison.size == FileOperations::ConflictSizeRelation::Smaller);
+        const bool onePrompt = decisionOffered.load(std::memory_order_acquire) && answered.load(std::memory_order_acquire) == 1u &&
+                               task._perf.conflictPromptCount == 1u;
+        // Apply to all is remembered only for the same size and date.
+        const size_t cachedDecisions = static_cast<size_t>(
+            std::ranges::count_if(task._conflictArbiter.decisionCache, [](const auto& entry) noexcept { return entry.has_value(); }));
+        const bool cachedDiscard = std::ranges::any_of(task._conflictArbiter.decisionCache,
+                                                       [](const auto& entry) noexcept { return entry.has_value() && entry->action == Action::DiscardSource; });
+        const bool rememberExpected = variant.sameSizeAndDate && variant.applyToAll;
+        const bool remembered       = rememberExpected ? cachedDecisions == 1u && cachedDiscard : cachedDecisions == 0u;
+        const bool outcome =
+            sourceGone && destinationPreserved && destinationEntries == 1u && executeHr == S_OK && finalHr == S_OK && summary.publishedItemCount == 0u &&
+            summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u && summary.unknownSourceCount == 0u && summary.skippedItemCount == 0u &&
+            summary.failedItemCount == 0u && summary.alreadyThereSourceRemovedCount == 1u &&
+            summary.resultSummary == LoadStringResource(nullptr, IDS_FILEOPS_RESULT_ALREADY_THERE_SOURCE_REMOVED) &&
+            ! task._observedSkipAction.load(std::memory_order_acquire);
+        const bool matches = onePrompt && promptActions && promptFacts && remembered && outcome;
+        AppendLog(std::format(L"Delete source decision: sameSizeAndDate={} applyToAll={} execute=0x{:08X} final=0x{:08X} prompts={} answered={} offered={} "
+                              L"actions={} facts={} remembered={} cached={} sourceGone={} destinationPreserved={} entries={} published={} removed={} "
+                              L"retained={} unknown={} skipped={} failed={} alreadyThere={} passed={}",
+                              variant.sameSizeAndDate,
+                              variant.applyToAll,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              static_cast<uint64_t>(task._perf.conflictPromptCount),
+                              answered.load(std::memory_order_acquire),
+                              decisionOffered.load(std::memory_order_acquire),
+                              promptActions,
+                              promptFacts,
+                              remembered,
+                              cachedDecisions,
+                              sourceGone,
+                              destinationPreserved,
+                              destinationEntries,
+                              summary.publishedItemCount,
+                              summary.removedSourceCount,
+                              summary.retainedSourceCount,
+                              summary.unknownSourceCount,
+                              summary.skippedItemCount,
+                              summary.failedItemCount,
+                              summary.alreadyThereSourceRemovedCount,
+                              matches));
+        passed = matches && passed;
+    }
+    return passed;
+}
+
+// I62 G7 (D-14): the power API behind the keep-awake request, replaced by a counting fake so the case depends on nothing
+// about the machine's power policy. The create function hands out a real event handle (the request owns and closes it).
+struct KeepAwakeSelfTestApi final
+{
+    uint32_t createCalls = 0u;
+    uint32_t setCalls    = 0u;
+    uint32_t clearCalls  = 0u;
+    bool failCreate      = false;
+    bool failSet         = false;
+    bool failClear       = false;
+
+    [[nodiscard]] static wil::unique_handle Create(void* context, const wchar_t* reason) noexcept
+    {
+        auto* const self = static_cast<KeepAwakeSelfTestApi*>(context);
+        ++self->createCalls;
+        if (self->failCreate || reason == nullptr || *reason == L'\0')
+            return {};
+        return wil::unique_handle(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    }
+    [[nodiscard]] static bool Set(void* context, HANDLE request) noexcept
+    {
+        auto* const self = static_cast<KeepAwakeSelfTestApi*>(context);
+        ++self->setCalls;
+        return ! self->failSet && request != nullptr;
+    }
+    [[nodiscard]] static bool Clear(void* context, HANDLE request) noexcept
+    {
+        auto* const self = static_cast<KeepAwakeSelfTestApi*>(context);
+        ++self->clearCalls;
+        return ! self->failClear && request != nullptr;
+    }
+    [[nodiscard]] FileOperations::PowerRequestApi Api() noexcept
+    {
+        FileOperations::PowerRequestApi api{};
+        api.create  = &Create;
+        api.set     = &Set;
+        api.clear   = &Clear;
+        api.context = this;
+        return api;
+    }
+};
+
+// I62 slice F (F1): stable stream rows in the engine, on tasks that are never admitted (no worker, no I/O), as in
+// RunFolderFileWorkReducerControls. The byte-report reducer runs with fixed ticks: a stream keeps its slot while a lower
+// stream ends and its entry is compacted away or removed, the lowest free slot goes to the next stream, a finished stream
+// holds its slot for the 300 ms linger, and a stream that replaced an evicted one takes its slot. The lifecycle reducer:
+// a new stream that reuses a finished entry takes the lowest free slot, and a stream that begins its next file keeps its
+// slot. What this does not prove: the popup's drawing of the slots (its snapshot copies the field; the rows are drawn
+// from it by ResolveVisibleStreamRows).
+[[nodiscard]] bool RunFileOperationStreamSlotSelfTest(FolderWindow::FileOperationState& owner) noexcept
+{
+    using Task                 = FolderWindow::FileOperationState::Task;
+    constexpr size_t kNoStream = Task::kMaxInFlightFiles + 1u;
+
+    unsigned int step = 0u;
+    const auto fail   = [&step](const wchar_t* what) noexcept
+    {
+        AppendLog(std::format(L"Stream slot self-test failed at step {}: {}", step, what));
+        return false;
+    };
+    const auto slotOf = [](Task& subject, uint64_t stream) noexcept -> size_t
+    {
+        std::scoped_lock lock(subject._inFlightFilesMutex);
+        for (size_t index = 0u; index < subject._inFlightFileCount; ++index)
+            if (subject._inFlightFiles[index].progressStreamId == stream)
+                return subject._inFlightFiles[index].streamSlot;
+        return kNoStream;
+    };
+    const auto slotsDistinct = [](Task& subject) noexcept
+    {
+        std::scoped_lock lock(subject._inFlightFilesMutex);
+        uint32_t seen = 0u;
+        for (size_t index = 0u; index < subject._inFlightFileCount; ++index)
+        {
+            const size_t slot = subject._inFlightFiles[index].streamSlot;
+            if (slot >= Task::kMaxInFlightFiles || (seen & (uint32_t{1u} << slot)) != 0u)
+                return false;
+            seen |= uint32_t{1u} << slot;
+        }
+        return true;
+    };
+
+    // Byte reports (UpdateInFlightFileProgress), every file 100 bytes, at fixed ticks.
+    {
+        Task streams(owner);
+        const int cookieAnchor   = 0;
+        const void* const cookie = &cookieAnchor;
+        const auto report        = [&streams, cookie](uint64_t stream, uint64_t completed, ULONGLONG tick) noexcept
+        {
+            const std::wstring path = std::format(L"take-{:02}.wav", stream);
+            FolderWindowFileOperationsStateInternal::UpdateInFlightFileProgress(streams, cookie, stream, path.c_str(), 100u, completed, tick, false);
+        };
+        ++step;
+        report(1u, 10u, 1'000u);
+        report(2u, 10u, 1'000u);
+        report(3u, 10u, 1'000u);
+        if (slotOf(streams, 1u) != 0u || slotOf(streams, 2u) != 1u || slotOf(streams, 3u) != 2u)
+            return fail(L"the first streams take slots 0, 1 and 2");
+        ++step;
+        report(1u, 100u, 1'100u); // stream 1 completes
+        report(2u, 20u, 1'500u);  // its entry expires 300 ms after completion and the array is compacted
+        if (slotOf(streams, 1u) != kNoStream || slotOf(streams, 2u) != 1u || slotOf(streams, 3u) != 2u)
+            return fail(L"a stream keeps its slot when a lower stream ends");
+        ++step;
+        report(4u, 10u, 1'500u);
+        report(5u, 10u, 1'500u);
+        if (slotOf(streams, 4u) != 0u || slotOf(streams, 5u) != 3u)
+            return fail(L"the lowest free slot goes to the next stream");
+        ++step;
+        report(3u, 100u, 1'600u); // stream 3 completes
+        report(6u, 10u, 1'700u);  // 100 ms later its finished row still holds slot 2
+        if (slotOf(streams, 3u) != 2u || slotOf(streams, 6u) != 4u)
+            return fail(L"a finished stream holds its slot for the linger");
+        ++step;
+        report(7u, 10u, 2'000u); // 400 ms after: stream 3 has expired and slot 2 is free
+        if (slotOf(streams, 3u) != kNoStream || slotOf(streams, 7u) != 2u)
+            return fail(L"a slot is free after the linger");
+        ++step;
+        report(2u, 30u, 2'100u);
+        report(4u, 20u, 2'100u);
+        FolderWindowFileOperationsStateInternal::RemoveInFlightFileBySourcePath(streams, L"take-04.wav");
+        if (slotOf(streams, 4u) != kNoStream || slotOf(streams, 2u) != 1u || slotOf(streams, 5u) != 3u || slotOf(streams, 6u) != 4u ||
+            slotOf(streams, 7u) != 2u || ! slotsDistinct(streams))
+            return fail(L"removing a stream moves no other stream");
+        ++step;
+        for (uint64_t stream = 10u; stream < 22u; ++stream)
+            report(stream, 10u, 2'200u);
+        if (slotOf(streams, 10u) != 0u || slotOf(streams, 11u) != 5u || slotOf(streams, 21u) != 15u || ! slotsDistinct(streams))
+            return fail(L"sixteen streams take sixteen distinct slots");
+        ++step;
+        report(30u, 10u, 2'300u); // the array is full: the stream with the oldest report (5, at 1500) is evicted
+        if (slotOf(streams, 5u) != kNoStream || slotOf(streams, 30u) != 3u || ! slotsDistinct(streams))
+            return fail(L"a stream that replaced an evicted one takes its slot");
+    }
+
+    // Lifecycle reports (FileSystemReportFileWork). These read the real tick, so only rules that do not depend on the
+    // linger are checked: a reused finished entry is excluded from the slots held, and a stream's own slot is never taken.
+    {
+        Task lifecycle(owner);
+        lifecycle._executionMode = FolderWindow::FileOperationState::ExecutionMode::PerItem;
+        lifecycle._fileWorkScopes.resize(1u);
+        Task::PerItemCallbackCookie itemCookie(0u);
+        FileSystemFileWorkProgress work{};
+        work.sizeBytes = sizeof(work);
+        work.phase     = FileSystemFileWorkPhase::ScopeSupported;
+        ++step;
+        if (FAILED(lifecycle.FileSystemReportFileWork(&work, &itemCookie)))
+            return fail(L"the scope report was refused");
+        const auto send = [&lifecycle, &itemCookie, &work](uint64_t leaf, uint64_t stream, FileSystemFileWorkPhase phase) noexcept
+        {
+            const std::wstring path = std::format(L"mix-{:02}.flac", leaf);
+            work                    = {};
+            work.sizeBytes          = sizeof(work);
+            work.phase              = phase;
+            work.kind               = FileSystemFileWorkKind::RegularFile;
+            work.logicalLeafId      = leaf;
+            work.progressStreamId   = stream;
+            work.sourcePath         = path.c_str();
+            work.sizeKnown          = TRUE;
+            work.totalBytes         = 100u;
+            work.completedBytes     = phase == FileSystemFileWorkPhase::Begin ? 0u : 100u;
+            work.disposition = phase == FileSystemFileWorkPhase::Terminal ? FileSystemFileWorkDisposition::Completed : FileSystemFileWorkDisposition::None;
+            work.status      = S_OK;
+            return SUCCEEDED(lifecycle.FileSystemReportFileWork(&work, &itemCookie));
+        };
+        ++step;
+        if (! send(1u, 0u, FileSystemFileWorkPhase::Begin) || ! send(2u, 1u, FileSystemFileWorkPhase::Begin) ||
+            ! send(3u, 2u, FileSystemFileWorkPhase::Begin))
+            return fail(L"a lifecycle Begin was refused");
+        if (slotOf(lifecycle, 0u) != 0u || slotOf(lifecycle, 1u) != 1u || slotOf(lifecycle, 2u) != 2u)
+            return fail(L"lifecycle streams take slots 0, 1 and 2");
+        ++step;
+        if (! send(1u, 0u, FileSystemFileWorkPhase::Terminal) || ! send(4u, 3u, FileSystemFileWorkPhase::Begin))
+            return fail(L"a lifecycle report was refused (reuse)");
+        // Stream 3 reuses stream 0's finished entry and takes the lowest slot no other stream holds.
+        if (slotOf(lifecycle, 0u) != kNoStream || slotOf(lifecycle, 3u) != 0u || slotOf(lifecycle, 1u) != 1u || slotOf(lifecycle, 2u) != 2u)
+            return fail(L"a new stream in a finished entry takes the lowest free slot");
+        ++step;
+        if (! send(2u, 1u, FileSystemFileWorkPhase::Terminal) || ! send(5u, 1u, FileSystemFileWorkPhase::Begin))
+            return fail(L"a lifecycle report was refused (next file)");
+        if (slotOf(lifecycle, 1u) != 1u || ! slotsDistinct(lifecycle))
+            return fail(L"a stream that begins its next file keeps its slot");
+    }
+    return true;
+}
+
+// I62 G7 (D-14): keep the computer awake while a task runs. The pure predicate table first, then the process-wide request
+// through the fake power API. Real tasks are not driven through these states here: Task::UpdateKeepAwake only reads
+// atomics the task already keeps and hands them to the lease, so the lease is driven with synthetic facts for two tasks.
+// What this does not prove: that each hook in the task code fires (admission, leaving the operation, pause, queue pause,
+// the wait for an answer, cancel, finish).
+[[nodiscard]] bool RunFileOperationKeepAwakeSelfTest() noexcept
+{
+    using FileOperations::KeepAwakeFacts;
+    using FileOperations::KeepAwakeLease;
+    using FileOperations::PowerRequest;
+    using FileOperations::TaskNeedsMachineAwake;
+
+    unsigned int step = 0u;
+    const auto fail   = [&step](const wchar_t* what) noexcept
+    {
+        AppendLog(std::format(L"Keep awake self-test failed at step {}: {}", step, what));
+        return false;
+    };
+    const auto facts = [](bool admitted, bool finished, bool stopping, bool userPaused, bool awaitingAnswer) noexcept
+    {
+        KeepAwakeFacts value{};
+        value.admitted       = admitted;
+        value.finished       = finished;
+        value.stopping       = stopping;
+        value.userPaused     = userPaused;
+        value.awaitingAnswer = awaitingAnswer;
+        return value;
+    };
+
+    // The predicate: admitted, finished, stopping, userPaused, awaitingAnswer.
+    struct Row final
+    {
+        KeepAwakeFacts input;
+        bool awake;
+    };
+    const std::array<Row, 12u> rows{{
+        {facts(false, false, false, false, false), false}, // only queued
+        {facts(true, false, false, false, false), true},   // running
+        {facts(true, false, false, true, false), false},   // paused by the user
+        {facts(true, false, false, false, true), false},   // waiting for an answer
+        {facts(true, false, false, true, true), false},
+        {facts(true, false, true, false, false), true}, // stopping
+        {facts(true, false, true, true, false), true},  // stopping although it was paused
+        {facts(true, false, true, false, true), true},  // stopping although it was waiting
+        {facts(true, true, false, false, false), false}, // finished
+        {facts(true, true, true, false, false), false},
+        {facts(false, false, true, false, false), false}, // a stop request on a task that never started working
+        {facts(false, false, false, true, true), false},
+    }};
+    for (const Row& row : rows)
+    {
+        ++step;
+        if (TaskNeedsMachineAwake(row.input) != row.awake)
+            return fail(L"predicate table");
+    }
+    for (unsigned int mask = 0u; mask < 32u; ++mask)
+    {
+        ++step;
+        const KeepAwakeFacts value = facts((mask & 1u) != 0u, (mask & 2u) != 0u, (mask & 4u) != 0u, (mask & 8u) != 0u, (mask & 16u) != 0u);
+        const bool expected        = ! value.admitted || value.finished ? false : value.stopping ? true : ! (value.userPaused || value.awaitingAnswer);
+        if (TaskNeedsMachineAwake(value) != expected)
+            return fail(L"predicate exhaustive");
+    }
+
+    const KeepAwakeFacts queued    = facts(false, false, false, false, false);
+    const KeepAwakeFacts running   = facts(true, false, false, false, false);
+    const KeepAwakeFacts awaiting  = facts(true, false, false, false, true);
+    const KeepAwakeFacts paused    = facts(true, false, false, true, false);
+    const KeepAwakeFacts stopping  = facts(true, false, true, true, false);
+    const KeepAwakeFacts finished  = facts(true, true, false, false, false);
+    const auto apply               = [](KeepAwakeLease& lease, const KeepAwakeFacts& current) noexcept { lease.Update([&current]() noexcept { return current; }); };
+    const auto counters            = [](const PowerRequest& request, uint32_t holders, uint32_t acquires, uint32_t releases, uint32_t failures, bool held) noexcept
+    {
+        const PowerRequest::Counters actual = request.GetCounters();
+        return actual.holders == holders && actual.acquireTransitions == acquires && actual.releaseTransitions == releases && actual.failures == failures &&
+               actual.held == held;
+    };
+
+    // Two tasks and one request.
+    {
+        KeepAwakeSelfTestApi fake;
+        PowerRequest request(fake.Api());
+        KeepAwakeLease first(request);
+        KeepAwakeLease second(request);
+
+        ++step;
+        apply(first, queued);
+        apply(second, queued);
+        if (! counters(request, 0u, 0u, 0u, 0u, false) || fake.createCalls != 0u)
+            return fail(L"queued tasks acquire nothing");
+        ++step;
+        apply(first, running);
+        if (! counters(request, 1u, 1u, 0u, 0u, true) || fake.createCalls != 1u || fake.setCalls != 1u)
+            return fail(L"the first running task acquires once");
+        ++step;
+        apply(second, running);
+        if (! counters(request, 2u, 1u, 0u, 0u, true) || fake.setCalls != 1u)
+            return fail(L"a second running task adds no acquire");
+        ++step;
+        apply(first, finished);
+        apply(first, finished);
+        if (! counters(request, 1u, 1u, 0u, 0u, true) || fake.clearCalls != 0u)
+            return fail(L"one task ending keeps the request, and Update is idempotent");
+        ++step;
+        apply(second, awaiting);
+        if (! counters(request, 0u, 1u, 1u, 0u, false) || fake.clearCalls != 1u)
+            return fail(L"the only task waiting for an answer releases");
+        ++step;
+        apply(second, running);
+        if (! counters(request, 1u, 2u, 1u, 0u, true) || fake.createCalls != 1u || fake.setCalls != 2u)
+            return fail(L"the answer acquires again and reuses the handle");
+        ++step;
+        apply(second, paused);
+        if (! counters(request, 0u, 2u, 2u, 0u, false) || fake.clearCalls != 2u)
+            return fail(L"a user pause releases");
+        ++step;
+        apply(second, running);
+        if (! counters(request, 1u, 3u, 2u, 0u, true))
+            return fail(L"resume acquires");
+        ++step;
+        apply(second, stopping);
+        if (! counters(request, 1u, 3u, 2u, 0u, true))
+            return fail(L"stopping while paused keeps the request");
+        ++step;
+        apply(second, finished);
+        if (! counters(request, 0u, 3u, 3u, 0u, false) || fake.clearCalls != 3u)
+            return fail(L"the last task ending releases");
+        ++step;
+        {
+            KeepAwakeLease scoped(request);
+            apply(scoped, running);
+            if (! counters(request, 1u, 4u, 3u, 0u, true) || ! scoped.Held())
+                return fail(L"a lease acquires");
+        }
+        if (! counters(request, 0u, 4u, 4u, 0u, false))
+            return fail(L"destroying a lease that holds releases");
+        ++step;
+        request.Release();
+        if (! counters(request, 0u, 4u, 4u, 0u, false))
+            return fail(L"a Release without an Acquire is ignored");
+    }
+
+    // The power API refuses: nothing throws, nothing is left half counted, and the next attempt tries again.
+    {
+        KeepAwakeSelfTestApi fake;
+        PowerRequest request(fake.Api());
+        KeepAwakeLease lease(request);
+
+        ++step;
+        fake.failCreate = true;
+        apply(lease, running);
+        if (! counters(request, 1u, 1u, 0u, 1u, false) || fake.setCalls != 0u || ! lease.Held())
+            return fail(L"a refused create is counted and not held");
+        ++step;
+        apply(lease, finished);
+        if (! counters(request, 0u, 1u, 1u, 1u, false) || fake.clearCalls != 0u)
+            return fail(L"release after a refused create clears nothing");
+        ++step;
+        fake.failCreate = false;
+        fake.failSet    = true;
+        apply(lease, running);
+        if (! counters(request, 1u, 2u, 1u, 2u, false) || fake.createCalls != 2u || fake.setCalls != 1u)
+            return fail(L"a refused set is counted and not held");
+        ++step;
+        apply(lease, finished);
+        if (! counters(request, 0u, 2u, 2u, 2u, false) || fake.clearCalls != 0u)
+            return fail(L"release after a refused set clears nothing");
+        ++step;
+        fake.failSet = false;
+        apply(lease, running);
+        if (! counters(request, 1u, 3u, 2u, 2u, true) || fake.createCalls != 2u || fake.setCalls != 2u)
+            return fail(L"the next attempt succeeds with the handle created before");
+        ++step;
+        fake.failClear = true;
+        apply(lease, finished);
+        if (! counters(request, 0u, 3u, 3u, 3u, false) || fake.clearCalls != 1u)
+            return fail(L"a refused clear is counted and the request is no longer claimed");
+    }
+    return true;
+}
+
+// I62 B6: the bulk policies at a collision. A Copy of several files onto a folder that already holds each of them. The
+// first collision whose pair matches a policy is answered with it from the prompt's More list; every later file whose
+// pair matches is then decided without a question, and every other pair still asks. A policy skip leaves the
+// destination's bytes and creates no stage; a policy replacement is an ordinary Replace. Nothing is remembered as an
+// Apply-to-all answer. The three cases: Skip all with the same size and date, Replace all older, and both in one task.
+[[nodiscard]] bool RunFileOperationBulkCollisionPoliciesSelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                                 const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                                 const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"bulk-collision-policies";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+
+    // How the existing file compares with the incoming one. Dates differ by one day, far beyond the two-second
+    // tolerance and the one-hour class.
+    enum class CollisionPair : uint8_t
+    {
+        SameSizeAndDate,
+        OtherSize,        // same date; the existing file is larger
+        DestinationOlder, // same size; the incoming file is newer
+        DestinationNewer, // same size; the incoming file is older
+    };
+    struct Scenario final
+    {
+        const wchar_t* name       = L"";
+        bool chooseSkipSame       = false;        // the first matching prompt is answered Skip all with the same size and date
+        bool chooseReplaceOlder   = false;        // the first matching prompt is answered Replace all older
+        Action laterOtherAnswer   = Action::Skip; // every other prompt after the first one, which is answered Skip
+        std::vector<CollisionPair> pairs;
+    };
+    const std::array<Scenario, 3u> scenarios{{
+        {L"skip-same",
+         true,
+         false,
+         Action::Overwrite,
+         {CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::OtherSize,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::OtherSize,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::SameSizeAndDate}},
+        {L"replace-older",
+         false,
+         true,
+         Action::Skip,
+         {CollisionPair::DestinationOlder,
+          CollisionPair::DestinationNewer,
+          CollisionPair::DestinationOlder,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::DestinationOlder,
+          CollisionPair::DestinationNewer,
+          CollisionPair::DestinationOlder,
+          CollisionPair::SameSizeAndDate}},
+        {L"both",
+         true,
+         true,
+         Action::Skip,
+         {CollisionPair::SameSizeAndDate,
+          CollisionPair::DestinationOlder,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::DestinationOlder,
+          CollisionPair::DestinationNewer,
+          CollisionPair::SameSizeAndDate,
+          CollisionPair::DestinationOlder}},
+    }};
+    constexpr uint64_t kBaseTicks = 133'500'000'000'000'000ull;
+    constexpr uint64_t kDayTicks  = 864'000'000'000ull;
+    const auto setLastWriteTime   = [](const std::filesystem::path& path, uint64_t ticks) noexcept
+    {
+        const wil::unique_hfile file(CreateFileW(
+            path.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        FILETIME time{};
+        time.dwLowDateTime  = static_cast<DWORD>(ticks & 0xFFFF'FFFFull);
+        time.dwHighDateTime = static_cast<DWORD>(ticks >> 32u);
+        return file.is_valid() && SetFileTime(file.get(), nullptr, nullptr, &time) != FALSE;
+    };
+    const std::string sourceBytes(64u, 's');
+    const std::string sameSizeBytes(64u, 'd');
+    const std::string otherSizeBytes(96u, 'd');
+
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    for (const Scenario& scenario : scenarios)
+    {
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto sourceFolder      = caseRoot / L"source";
+        const auto destinationFolder = caseRoot / L"destination";
+        if (! RecreateEmptyDirectory(sourceFolder) || ! RecreateEmptyDirectory(destinationFolder))
+            return false;
+        std::vector<std::filesystem::path> sources;
+        for (size_t index = 0u; index < scenario.pairs.size(); ++index)
+        {
+            const CollisionPair pair        = scenario.pairs[index];
+            const auto source               = sourceFolder / std::format(L"item-{:02}.bin", index);
+            const auto destination          = destinationFolder / source.filename();
+            const uint64_t destinationTicks = pair == CollisionPair::DestinationOlder   ? kBaseTicks - kDayTicks
+                                              : pair == CollisionPair::DestinationNewer ? kBaseTicks + kDayTicks
+                                                                               : kBaseTicks;
+            if (! WriteFileTextFsIo(io, source, sourceBytes) || ! WriteFileTextFsIo(io, destination, pair == CollisionPair::OtherSize ? otherSizeBytes : sameSizeBytes) ||
+                ! setLastWriteTime(source, kBaseTicks) || ! setLastWriteTime(destination, destinationTicks))
+                return false;
+            sources.push_back(source);
+        }
+
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent              = FileOperations::TransferIntent::Copy;
+        transfer.strategy            = FileOperations::OperationStrategy::Copy;
+        transfer.sourceEndpoint      = endpoint;
+        transfer.destinationEndpoint = endpoint;
+        for (const auto& source : sources)
+            transfer.selectedItems.emplace_back().providerPath = source.native();
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation             = FILESYSTEM_COPY;
+        task._executionMode         = State::ExecutionMode::PerItem;
+        task._fileSystem            = localFileSystem;
+        task._sourcePluginId        = endpoint.pluginId;
+        task._sourcePluginShortId   = L"file";
+        task._sourceInstanceContext = endpoint.instanceId;
+        task._perItemMaxConcurrency = 1u;
+        for (const auto& source : sources)
+        {
+            task._sourcePaths.push_back(source);
+            task._sourcePathAttributesHint.push_back(GetFileAttributesW(source.c_str()));
+        }
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        if (FAILED(task.PrepareMutationInterlockScopes()))
+            return false;
+
+        // The executor blocks on each decision: answer from a second thread. Every published prompt is checked: each
+        // policy is offered exactly when the prompt's own pair matches it, under More, never the default or Escape.
+        std::atomic<unsigned int> answered{0u};
+        std::atomic<bool> offersMatchPairs{true};
+        HRESULT executeHr = E_PENDING;
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                const auto listed = [](const auto& actions, size_t count, const Action action) noexcept
+                {
+                    const auto end = actions.begin() + static_cast<std::ptrdiff_t>(std::min(count, actions.size()));
+                    return std::find(actions.begin(), end, action) != end;
+                };
+                uint64_t answeredGeneration = 0u;
+                bool skipSameChosen         = false;
+                bool replaceOlderChosen     = false;
+                unsigned int otherAnswers   = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (const auto prompt = TryGetConflictPromptCopy(&task);
+                        prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                    {
+                        const bool sameSizeAndDate    = prompt->comparison.date == FileOperations::ConflictDateRelation::Same &&
+                                                     prompt->comparison.size == FileOperations::ConflictSizeRelation::Same;
+                        const bool incomingNewer      = prompt->comparison.date == FileOperations::ConflictDateRelation::Newer;
+                        const bool offersSkipSame     = listed(prompt->actions, prompt->actionCount, Action::SkipSameSizeAndDate);
+                        const bool offersReplaceOlder = listed(prompt->actions, prompt->actionCount, Action::ReplaceOlder);
+                        if (offersSkipSame != sameSizeAndDate || offersReplaceOlder != incomingNewer ||
+                            listed(prompt->primaryActions, prompt->primaryActionCount, Action::SkipSameSizeAndDate) ||
+                            listed(prompt->primaryActions, prompt->primaryActionCount, Action::ReplaceOlder) ||
+                            prompt->defaultAction != Action::Cancel || prompt->escapeAction != Action::Cancel)
+                            offersMatchPairs.store(false, std::memory_order_release);
+                        const bool takeSkipSame = offersSkipSame && scenario.chooseSkipSame && ! skipSameChosen;
+                        const bool takeReplace  = ! takeSkipSame && offersReplaceOlder && scenario.chooseReplaceOlder && ! replaceOlderChosen;
+                        const Action answer     = takeSkipSame  ? Action::SkipSameSizeAndDate
+                                                  : takeReplace ? Action::ReplaceOlder
+                                                  : otherAnswers == 0u ? Action::Skip
+                                                                       : scenario.laterOtherAnswer;
+                        // An answer the prompt does not offer is a failure, answered Cancel so the case cannot hang.
+                        const bool answerOffered = listed(prompt->actions, prompt->actionCount, answer);
+                        if (! answerOffered)
+                            offersMatchPairs.store(false, std::memory_order_release);
+                        if (task.SubmitConflictDecision(prompt->generation, answerOffered ? answer : Action::Cancel, false))
+                        {
+                            answeredGeneration = prompt->generation;
+                            answered.fetch_add(1u, std::memory_order_acq_rel);
+                            if (takeSkipSame)
+                                skipSameChosen = true;
+                            else if (takeReplace)
+                                replaceOlderChosen = true;
+                            else
+                                ++otherAnswers;
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+
+        // What each pair must have become, in item order.
+        size_t expectedPrompts      = 0u;
+        size_t expectedSkipSame     = 0u;
+        size_t expectedReplaceOlder = 0u;
+        size_t expectedReplaced     = 0u;
+        size_t expectedSkipped      = 0u;
+        size_t otherPrompts         = 0u;
+        bool skipSameSeen           = false;
+        bool replaceOlderSeen       = false;
+        bool bytesMatch             = true;
+        for (size_t index = 0u; index < scenario.pairs.size(); ++index)
+        {
+            const CollisionPair pair = scenario.pairs[index];
+            bool replaced   = false;
+            if (pair == CollisionPair::SameSizeAndDate && scenario.chooseSkipSame)
+            {
+                ++expectedSkipSame;
+                if (! skipSameSeen)
+                {
+                    skipSameSeen = true;
+                    ++expectedPrompts;
+                }
+            }
+            else if (pair == CollisionPair::DestinationOlder && scenario.chooseReplaceOlder)
+            {
+                ++expectedReplaceOlder;
+                replaced = true;
+                if (! replaceOlderSeen)
+                {
+                    replaceOlderSeen = true;
+                    ++expectedPrompts;
+                }
+            }
+            else
+            {
+                ++expectedPrompts;
+                replaced = otherPrompts != 0u && scenario.laterOtherAnswer == Action::Overwrite;
+                ++otherPrompts;
+            }
+            if (replaced)
+                ++expectedReplaced;
+            else
+                ++expectedSkipped;
+            std::string actualSource;
+            std::string actualDestination;
+            const std::string& destinationBefore = pair == CollisionPair::OtherSize ? otherSizeBytes : sameSizeBytes;
+            bytesMatch = bytesMatch && ReadFileTextFsIo(io, sources[index], actualSource) && actualSource == sourceBytes &&
+                         ReadFileTextFsIo(io, destinationFolder / sources[index].filename(), actualDestination) &&
+                         actualDestination == (replaced ? sourceBytes : destinationBefore);
+        }
+        size_t destinationEntries = 0u;
+        size_t leftoverEntries    = 0u;
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(destinationFolder, error), end; ! error && it != end; it.increment(error))
+        {
+            ++destinationEntries;
+            const std::wstring leaf = it->path().filename().native();
+            if (FileOperationArtifacts::HasPossibleArtifactName(leaf))
+                ++leftoverEntries;
+        }
+        const size_t cachedDecisions = static_cast<size_t>(
+            std::ranges::count_if(task._conflictArbiter.decisionCache, [](const auto& entry) noexcept { return entry.has_value(); }));
+        const bool grants   = (task._conflictArbiter.skipSameSizeAndDateGrantGeneration != 0u) == scenario.chooseSkipSame &&
+                            (task._conflictArbiter.replaceOlderGrantGeneration != 0u) == scenario.chooseReplaceOlder;
+        const bool prompts  = answered.load(std::memory_order_acquire) == expectedPrompts && task._perf.conflictPromptCount == expectedPrompts;
+        const bool counts   = task._skippedSameSizeAndDateCount.load(std::memory_order_acquire) == expectedSkipSame &&
+                            task._replacedOlderCount.load(std::memory_order_acquire) == expectedReplaceOlder &&
+                            summary.skippedSameSizeAndDateCount == expectedSkipSame && summary.replacedOlderCount == expectedReplaceOlder &&
+                            summary.skippedItemCount == expectedSkipped && summary.publishedItemCount == expectedReplaced && summary.failedItemCount == 0u;
+        const bool matches  = prompts && offersMatchPairs.load(std::memory_order_acquire) && counts && grants && cachedDecisions == 0u && bytesMatch &&
+                             destinationEntries == scenario.pairs.size() && leftoverEntries == 0u && executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        AppendLog(std::format(L"Bulk collision policies {}: execute=0x{:08X} final=0x{:08X} prompts={}/{} answered={} offers={} skippedSame={}/{} "
+                              L"replacedOlder={}/{} skipped={}/{} published={}/{} failed={} cached={} grants={} bytes={} entries={} leftovers={} passed={}",
+                              scenario.name,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              static_cast<uint64_t>(task._perf.conflictPromptCount),
+                              expectedPrompts,
+                              answered.load(std::memory_order_acquire),
+                              offersMatchPairs.load(std::memory_order_acquire),
+                              summary.skippedSameSizeAndDateCount,
+                              expectedSkipSame,
+                              summary.replacedOlderCount,
+                              expectedReplaceOlder,
+                              summary.skippedItemCount,
+                              expectedSkipped,
+                              summary.publishedItemCount,
+                              expectedReplaced,
+                              summary.failedItemCount,
+                              cachedDecisions,
+                              grants,
+                              bytesMatch,
+                              destinationEntries,
+                              leftoverEntries,
+                              matches));
+        passed = matches && passed;
+    }
+    return passed;
+}
+
+// I62 D-5: Delete source where the source's location has no Recycle Bin. The Local provider's self-test seam
+// REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY refuses, before any change, every Recycle of an item directly inside
+// one folder, as a location without a Recycle Bin does. The task then asks one question on the card and keeps the answer
+// for the rest of the task. Four cases: Permanently delete over two files (asked once; both sources gone, both
+// destinations untouched); Keep source over two files (asked once; everything stays); a source rewritten while the
+// question is open (kept); a destination replaced, while the question is open, by a second name of the source itself, a
+// hard link (kept: the source is never deleted).
+[[nodiscard]] bool RunFileOperationDiscardSourceWithoutRecycleBinSelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                                          const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                                          const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    constexpr std::wstring_view kRecycleUnavailableDirectory = L"REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY";
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"discard-source-no-recycle-bin";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+
+    // The card and the decision mirror ask it in the same words; Skip reads Keep source only on this Move question.
+    {
+        FileOperations::ConflictPromptTextFacts questionFacts{};
+        questionFacts.operation = FILESYSTEM_MOVE;
+        questionFacts.bucket    = static_cast<uint8_t>(FileOperations::ConflictClass::RecycleFailed);
+        questionFacts.status    = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        const bool words =
+            FileOperations::BuildConflictPromptQuestion(questionFacts) == LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN) &&
+            FileOperations::FormatConflictActionLabel(Action::Skip, FileOperations::ConflictClass::RecycleFailed, FILESYSTEM_MOVE) ==
+                LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE) &&
+            FileOperations::FormatConflictActionLabel(Action::Skip, FileOperations::ConflictClass::RecycleFailed, FILESYSTEM_DELETE) ==
+                LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP);
+        if (! words)
+        {
+            AppendLog(L"Delete source without a Recycle Bin: the question's words or its Keep source button are wrong.");
+            return false;
+        }
+    }
+
+    enum class Shape : uint8_t
+    {
+        DeletePermanently,   // two files, answered Permanently delete
+        KeepSources,         // two files, answered Keep source
+        SourceChanged,       // the source is rewritten while the question is open
+        DestinationIsSource, // the destination becomes a second name of the source while the question is open
+    };
+    struct Scenario final
+    {
+        const wchar_t* name = L"";
+        Shape shape         = Shape::DeletePermanently;
+    };
+    static constexpr std::array kScenarios{
+        Scenario{L"delete-permanently", Shape::DeletePermanently},
+        Scenario{L"keep-source", Shape::KeepSources},
+        Scenario{L"source-changed", Shape::SourceChanged},
+        Scenario{L"destination-is-source", Shape::DestinationIsSource},
+    };
+    constexpr uint64_t kTicks   = 133'500'000'000'000'000ull;
+    const auto setLastWriteTime = [](const std::filesystem::path& path, uint64_t ticks) noexcept
+    {
+        const wil::unique_hfile file(CreateFileW(
+            path.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        FILETIME time{};
+        time.dwLowDateTime  = static_cast<DWORD>(ticks & 0xFFFF'FFFFull);
+        time.dwHighDateTime = static_cast<DWORD>(ticks >> 32u);
+        return file.is_valid() && SetFileTime(file.get(), nullptr, nullptr, &time) != FALSE;
+    };
+    const std::string sourceBytes(64u, 's');
+    const std::string destinationBytes(64u, 'd');
+    const std::string changedBytes(101u, 'x');
+    const auto holds = [&io](const std::filesystem::path& path, const std::string& expected) noexcept
+    {
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    for (const Scenario& scenario : kScenarios)
+    {
+        const bool twoFiles          = scenario.shape == Shape::DeletePermanently || scenario.shape == Shape::KeepSources;
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto sourceFolder      = caseRoot / L"source";
+        const auto destinationFolder = caseRoot / L"destination";
+        if (! RecreateEmptyDirectory(sourceFolder) || ! RecreateEmptyDirectory(destinationFolder))
+            return false;
+        // Same size and same date, so a Delete source given for all also covers the second file.
+        std::vector<std::filesystem::path> sources;
+        const size_t fileCount = twoFiles ? 2u : 1u;
+        for (size_t index = 0u; index < fileCount; ++index)
+        {
+            const auto source      = sourceFolder / std::format(L"reel-{:02}.bin", index);
+            const auto destination = destinationFolder / source.filename();
+            if (! WriteFileTextFsIo(io, source, sourceBytes) || ! WriteFileTextFsIo(io, destination, destinationBytes) || ! setLastWriteTime(source, kTicks) ||
+                ! setLastWriteTime(destination, kTicks))
+                return false;
+            sources.push_back(source);
+        }
+        const auto firstDestination = destinationFolder / sources.front().filename();
+
+        RedSalamander::TestSupport::ScopedEnvironmentVariable recycleUnavailable(kRecycleUnavailableDirectory, sourceFolder.native());
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent              = FileOperations::TransferIntent::Move;
+        transfer.strategy            = FileOperations::OperationStrategy::Managed;
+        transfer.sourceEndpoint      = endpoint;
+        transfer.destinationEndpoint = endpoint;
+        for (const auto& source : sources)
+            transfer.selectedItems.emplace_back().providerPath = source.native();
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation             = FILESYSTEM_MOVE;
+        task._executionMode         = State::ExecutionMode::PerItem;
+        task._fileSystem            = localFileSystem;
+        task._sourcePluginId        = endpoint.pluginId;
+        task._sourcePluginShortId   = L"file";
+        task._sourceInstanceContext = endpoint.instanceId;
+        task._perItemMaxConcurrency = 1u;
+        for (const auto& source : sources)
+        {
+            task._sourcePaths.push_back(source);
+            task._sourcePathAttributesHint.push_back(GetFileAttributesW(source.c_str()));
+        }
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        if (FAILED(task.PrepareMutationInterlockScopes()))
+            return false;
+
+        // The executor blocks on each decision: answer from a second thread. The collision is answered Delete source (for
+        // all when there are two files); the question is answered as the case says, after the case's change, if any. An
+        // answer that is not offered is a failure, answered Cancel so the case cannot hang.
+        std::atomic<unsigned int> collisionAnswers{0u};
+        std::atomic<unsigned int> questionAnswers{0u};
+        std::atomic<bool> answersOffered{true};
+        std::atomic<bool> questionShape{true};
+        std::atomic<bool> intervened{false};
+        HRESULT executeHr = E_PENDING;
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                const auto listed = [](const auto& actions, size_t count, const Action action) noexcept
+                {
+                    const auto end = actions.begin() + static_cast<std::ptrdiff_t>(std::min(count, actions.size()));
+                    return std::find(actions.begin(), end, action) != end;
+                };
+                uint64_t answeredGeneration = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (const auto prompt = TryGetConflictPromptCopy(&task);
+                        prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                    {
+                        const bool question = prompt->deferredConsent && prompt->bucket == FileOperations::ConflictClass::RecycleFailed;
+                        Action answer       = Action::DiscardSource;
+                        bool applyToAll     = twoFiles;
+                        if (question)
+                        {
+                            // Permanently delete, Keep source and Cancel; Cancel is the default and the Escape action, and
+                            // there is no task-wide button and no Apply to all box: the one answer already covers the task.
+                            if (! listed(prompt->actions, prompt->actionCount, Action::PermanentDelete) ||
+                                ! listed(prompt->actions, prompt->actionCount, Action::Skip) ||
+                                ! listed(prompt->actions, prompt->actionCount, Action::Cancel) ||
+                                listed(prompt->actions, prompt->actionCount, Action::PermanentDeleteAll) || prompt->applyToAllEligible ||
+                                prompt->defaultAction != Action::Cancel || prompt->escapeAction != Action::Cancel)
+                                questionShape.store(false, std::memory_order_release);
+                            if (scenario.shape == Shape::SourceChanged && ! intervened.load(std::memory_order_acquire))
+                            {
+                                const wil::unique_hfile rewritten(
+                                    CreateFileW(sources.front().c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+                                DWORD written = 0u;
+                                intervened.store(rewritten &&
+                                                     WriteFile(rewritten.get(), changedBytes.data(), static_cast<DWORD>(changedBytes.size()), &written, nullptr) !=
+                                                         FALSE &&
+                                                     written == changedBytes.size(),
+                                                 std::memory_order_release);
+                            }
+                            else if (scenario.shape == Shape::DestinationIsSource && ! intervened.load(std::memory_order_acquire))
+                            {
+                                // Both names lie inside this case's sandbox folder; the guarded helper checks it.
+                                std::error_code linkError;
+                                intervened.store(DeleteFileW(firstDestination.c_str()) != FALSE &&
+                                                     Common::Testing::CreateSandboxedHardLink(firstDestination, sources.front(), linkError),
+                                                 std::memory_order_release);
+                            }
+                            answer     = scenario.shape == Shape::KeepSources ? Action::Skip : Action::PermanentDelete;
+                            applyToAll = false;
+                        }
+                        if (! listed(prompt->actions, prompt->actionCount, answer))
+                        {
+                            answersOffered.store(false, std::memory_order_release);
+                            answer     = Action::Cancel;
+                            applyToAll = false;
+                        }
+                        if (task.SubmitConflictDecision(prompt->generation, answer, applyToAll))
+                        {
+                            answeredGeneration = prompt->generation;
+                            (question ? questionAnswers : collisionAnswers).fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+        Action remembered  = Action::None;
+        {
+            const std::scoped_lock lock(task._conflictArbiter.mutex);
+            remembered = task._conflictArbiter.sourceNoRecycleBinAnswer;
+        }
+
+        bool outcome = false;
+        switch (scenario.shape)
+        {
+            case Shape::DeletePermanently:
+            {
+                bool all = true;
+                for (const auto& source : sources)
+                {
+                    std::error_code error;
+                    all = all && ! std::filesystem::exists(source, error) && ! error && holds(destinationFolder / source.filename(), destinationBytes);
+                }
+                outcome = all && remembered == Action::PermanentDelete && summary.alreadyThereSourceRemovedCount == 2u && summary.removedSourceCount == 2u &&
+                          summary.publishedItemCount == 0u && summary.failedItemCount == 0u && finalHr == S_OK;
+                break;
+            }
+            case Shape::KeepSources:
+            {
+                bool all = true;
+                for (const auto& source : sources)
+                    all = all && holds(source, sourceBytes) && holds(destinationFolder / source.filename(), destinationBytes);
+                outcome = all && remembered == Action::Skip && summary.alreadyThereSourceRemovedCount == 0u && summary.removedSourceCount == 0u &&
+                          summary.failedItemCount == 0u && executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                break;
+            }
+            case Shape::SourceChanged:
+                outcome = intervened.load(std::memory_order_acquire) && holds(sources.front(), changedBytes) && holds(firstDestination, destinationBytes) &&
+                          remembered == Action::PermanentDelete && summary.alreadyThereSourceRemovedCount == 0u && summary.removedSourceCount == 0u &&
+                          summary.failedItemCount == 0u && executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                break;
+            case Shape::DestinationIsSource:
+                outcome = intervened.load(std::memory_order_acquire) && holds(sources.front(), sourceBytes) && holds(firstDestination, sourceBytes) &&
+                          remembered == Action::PermanentDelete && summary.alreadyThereSourceRemovedCount == 0u && summary.removedSourceCount == 0u &&
+                          summary.failedItemCount == 0u && executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                break;
+        }
+        // One collision decision (the second file takes the remembered Delete source) and one question per task.
+        const bool prompts = answersOffered.load(std::memory_order_acquire) && questionShape.load(std::memory_order_acquire) &&
+                             questionAnswers.load(std::memory_order_acquire) == 1u && collisionAnswers.load(std::memory_order_acquire) == 1u &&
+                             task._perf.consentPromptCount == 1u && task._perf.conflictPromptCount == 1u;
+        const bool matches = prompts && outcome;
+        AppendLog(std::format(L"Delete source without a Recycle Bin {}: execute=0x{:08X} final=0x{:08X} collisions={} questions={} consents={} offered={} "
+                              L"questionShape={} intervened={} remembered={} alreadyThere={} removed={} retained={} skipped={} failed={} passed={}",
+                              scenario.name,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              collisionAnswers.load(std::memory_order_acquire),
+                              questionAnswers.load(std::memory_order_acquire),
+                              static_cast<uint64_t>(task._perf.consentPromptCount),
+                              answersOffered.load(std::memory_order_acquire),
+                              questionShape.load(std::memory_order_acquire),
+                              intervened.load(std::memory_order_acquire),
+                              static_cast<unsigned int>(remembered),
+                              summary.alreadyThereSourceRemovedCount,
+                              summary.removedSourceCount,
+                              summary.retainedSourceCount,
+                              summary.skippedItemCount,
+                              summary.failedItemCount,
+                              matches));
+        passed = matches && passed;
+    }
+    return passed;
+}
+
+// I62 B6.5 (D-13): the collision policy a task may carry from its start. A Copy of four files onto a folder that already
+// holds each of them: one pair with the same size and date, one whose existing file is older, one whose existing file is
+// newer and one of another size. Ask asks four times (each answered Skip) and keeps both items' facts on the Issues
+// records (B3.3); Skip and Keep both decide every pair without a question; Replace older replaces the one older file and
+// asks for the three others. The value is seeded before the task runs, as admission does.
+[[nodiscard]] bool RunFileOperationPresetCollisionPolicySelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                                 const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                                 const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    using Preset = FileOperations::PresetCollisionPolicy;
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"preset-collision-policy";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+
+    enum class CollisionPair : uint8_t
+    {
+        SameSizeAndDate,
+        DestinationOlder, // same size; the incoming file is newer
+        DestinationNewer, // same size; the incoming file is older
+        OtherSize,        // same date; the existing file is larger
+    };
+    static constexpr std::array kPairs{CollisionPair::SameSizeAndDate, CollisionPair::DestinationOlder, CollisionPair::DestinationNewer, CollisionPair::OtherSize};
+    struct Scenario final
+    {
+        const wchar_t* name = L"";
+        Preset preset       = Preset::Ask;
+    };
+    static constexpr std::array kScenarios{
+        Scenario{L"ask", Preset::Ask},
+        Scenario{L"skip", Preset::Skip},
+        Scenario{L"replace-older", Preset::ReplaceOlder},
+        Scenario{L"keep-both", Preset::KeepBoth},
+    };
+    constexpr uint64_t kBaseTicks = 133'500'000'000'000'000ull;
+    constexpr uint64_t kDayTicks  = 864'000'000'000ull;
+    const auto setLastWriteTime   = [](const std::filesystem::path& path, uint64_t ticks) noexcept
+    {
+        const wil::unique_hfile file(CreateFileW(
+            path.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        FILETIME time{};
+        time.dwLowDateTime  = static_cast<DWORD>(ticks & 0xFFFF'FFFFull);
+        time.dwHighDateTime = static_cast<DWORD>(ticks >> 32u);
+        return file.is_valid() && SetFileTime(file.get(), nullptr, nullptr, &time) != FALSE;
+    };
+    const std::string sourceBytes(64u, 's');
+    const std::string sameSizeBytes(64u, 'd');
+    const std::string otherSizeBytes(96u, 'd');
+
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    for (const Scenario& scenario : kScenarios)
+    {
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto sourceFolder      = caseRoot / L"source";
+        const auto destinationFolder = caseRoot / L"destination";
+        if (! RecreateEmptyDirectory(sourceFolder) || ! RecreateEmptyDirectory(destinationFolder))
+            return false;
+        std::vector<std::filesystem::path> sources;
+        for (size_t index = 0u; index < kPairs.size(); ++index)
+        {
+            const CollisionPair pair        = kPairs[index];
+            const auto source               = sourceFolder / std::format(L"track-{:02}.bin", index);
+            const auto destination          = destinationFolder / source.filename();
+            const uint64_t destinationTicks = pair == CollisionPair::DestinationOlder   ? kBaseTicks - kDayTicks
+                                              : pair == CollisionPair::DestinationNewer ? kBaseTicks + kDayTicks
+                                                                                        : kBaseTicks;
+            if (! WriteFileTextFsIo(io, source, sourceBytes) ||
+                ! WriteFileTextFsIo(io, destination, pair == CollisionPair::OtherSize ? otherSizeBytes : sameSizeBytes) ||
+                ! setLastWriteTime(source, kBaseTicks) || ! setLastWriteTime(destination, destinationTicks))
+                return false;
+            sources.push_back(source);
+        }
+
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent              = FileOperations::TransferIntent::Copy;
+        transfer.strategy            = FileOperations::OperationStrategy::Copy;
+        transfer.sourceEndpoint      = endpoint;
+        transfer.destinationEndpoint = endpoint;
+        for (const auto& source : sources)
+            transfer.selectedItems.emplace_back().providerPath = source.native();
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation             = FILESYSTEM_COPY;
+        task._executionMode         = State::ExecutionMode::PerItem;
+        task._fileSystem            = localFileSystem;
+        task._sourcePluginId        = endpoint.pluginId;
+        task._sourcePluginShortId   = L"file";
+        task._sourceInstanceContext = endpoint.instanceId;
+        task._perItemMaxConcurrency = 1u;
+        for (const auto& source : sources)
+        {
+            task._sourcePaths.push_back(source);
+            task._sourcePathAttributesHint.push_back(GetFileAttributesW(source.c_str()));
+        }
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        task.SeedPresetCollisionPolicy(scenario.preset);
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        if (FAILED(task.PrepareMutationInterlockScopes()))
+            return false;
+
+        // Every question that is still asked is answered Skip; a question without Skip is answered Cancel so the case
+        // cannot hang.
+        std::atomic<unsigned int> answered{0u};
+        std::atomic<bool> skipOffered{true};
+        HRESULT executeHr = E_PENDING;
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                uint64_t answeredGeneration = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (const auto prompt = TryGetConflictPromptCopy(&task);
+                        prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                    {
+                        const auto offeredEnd = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                        const bool offered    = std::find(prompt->actions.begin(), offeredEnd, Action::Skip) != offeredEnd;
+                        if (! offered)
+                            skipOffered.store(false, std::memory_order_release);
+                        if (task.SubmitConflictDecision(prompt->generation, offered ? Action::Skip : Action::Cancel, false))
+                        {
+                            answeredGeneration = prompt->generation;
+                            answered.fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+
+        size_t expectedPrompts   = 0u;
+        size_t expectedReplaced  = 0u;
+        size_t expectedSkipped   = 0u;
+        size_t expectedKeptBoth  = 0u;
+        bool bytesMatch          = true;
+        for (size_t index = 0u; index < kPairs.size(); ++index)
+        {
+            const CollisionPair pair = kPairs[index];
+            const bool replaced      = scenario.preset == Preset::ReplaceOlder && pair == CollisionPair::DestinationOlder;
+            const bool keptBoth      = scenario.preset == Preset::KeepBoth;
+            const bool asked         = scenario.preset == Preset::Ask || (scenario.preset == Preset::ReplaceOlder && ! replaced);
+            expectedPrompts += asked ? 1u : 0u;
+            expectedReplaced += replaced ? 1u : 0u;
+            expectedKeptBoth += keptBoth ? 1u : 0u;
+            expectedSkipped += (! replaced && ! keptBoth) ? 1u : 0u;
+            std::string actualSource;
+            std::string actualDestination;
+            const std::string& destinationBefore = pair == CollisionPair::OtherSize ? otherSizeBytes : sameSizeBytes;
+            bytesMatch = bytesMatch && ReadFileTextFsIo(io, sources[index], actualSource) && actualSource == sourceBytes &&
+                         ReadFileTextFsIo(io, destinationFolder / sources[index].filename(), actualDestination) &&
+                         actualDestination == (replaced ? sourceBytes : destinationBefore);
+        }
+        size_t destinationEntries = 0u;
+        size_t keptBothEntries    = 0u;
+        size_t leftoverEntries    = 0u;
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(destinationFolder, error), end; ! error && it != end; it.increment(error))
+        {
+            ++destinationEntries;
+            const std::wstring leaf = it->path().filename().native();
+            if (FileOperationArtifacts::HasPossibleArtifactName(leaf))
+            {
+                ++leftoverEntries;
+                continue;
+            }
+            const bool original = std::ranges::any_of(sources, [&leaf](const std::filesystem::path& source) noexcept { return source.filename().native() == leaf; });
+            std::string bytes;
+            if (! original && ReadFileTextFsIo(io, it->path(), bytes) && bytes == sourceBytes)
+                ++keptBothEntries;
+        }
+        // I62 B3.3: an asked collision keeps both items' facts on its Issues records (the question and the answer).
+        size_t factRecords = 0u;
+        for (const auto& entry : summary.issueDiagnostics)
+        {
+            if (! entry.conflictPrompt.has_value() || ! entry.conflictPrompt->itemFacts.has_value())
+                continue;
+            const auto& observed = entry.conflictPrompt->itemFacts.value();
+            if (observed.source.sizeKnown && observed.source.sizeBytes == sourceBytes.size() && observed.destination.sizeKnown &&
+                observed.source.lastWriteTime == static_cast<__int64>(kBaseTicks))
+                ++factRecords;
+        }
+        const bool seeded  = task._conflictArbiter.presetPolicy == scenario.preset &&
+                            (task._conflictArbiter.replaceOlderGrantGeneration == State::Task::ConflictArbiter::kPresetPolicyGeneration) ==
+                                (scenario.preset == Preset::ReplaceOlder);
+        const bool prompts = skipOffered.load(std::memory_order_acquire) && answered.load(std::memory_order_acquire) == expectedPrompts &&
+                             task._perf.conflictPromptCount == expectedPrompts;
+        const bool counts  = summary.skippedItemCount == expectedSkipped && summary.publishedItemCount == expectedReplaced + expectedKeptBoth &&
+                            summary.failedItemCount == 0u && summary.skippedSameSizeAndDateCount == 0u && summary.replacedOlderCount == expectedReplaced;
+        const bool entries = destinationEntries == kPairs.size() + expectedKeptBoth && keptBothEntries == expectedKeptBoth && leftoverEntries == 0u;
+        const bool facts   = scenario.preset != Preset::Ask || factRecords >= kPairs.size();
+        const bool matches = seeded && prompts && counts && entries && facts && bytesMatch && executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        AppendLog(std::format(L"Preset collision policy {}: execute=0x{:08X} final=0x{:08X} prompts={}/{} skipOffered={} skipped={}/{} published={}/{} "
+                              L"replacedOlder={} failed={} entries={} keptBoth={} leftovers={} factRecords={} seeded={} bytes={} passed={}",
+                              scenario.name,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              answered.load(std::memory_order_acquire),
+                              expectedPrompts,
+                              skipOffered.load(std::memory_order_acquire),
+                              summary.skippedItemCount,
+                              expectedSkipped,
+                              summary.publishedItemCount,
+                              expectedReplaced + expectedKeptBoth,
+                              summary.replacedOlderCount,
+                              summary.failedItemCount,
+                              destinationEntries,
+                              keptBothEntries,
+                              leftoverEntries,
+                              factRecords,
+                              seeded,
+                              bytesMatch,
+                              matches));
+        passed = matches && passed;
+    }
+    return passed;
+}
+
+// I62 B3.3: the retained comparison renders the decision's own lines, and the Issues projection keeps them on the row its
+// question and its answer share, in either arrival order.
+[[nodiscard]] bool RunFileOperationConflictObservedFactsSelfTest() noexcept
+{
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"Collision facts on the Issues row: {}", reason));
+        return false;
+    };
+    constexpr __int64 kNewer = 133'500'000'000'000'000ll;
+    constexpr __int64 kOlder = 133'400'000'000'000'000ll;
+    FileOperations::ConflictObservedComparison observed{};
+    observed.source      = {.sizeKnown = true, .sizeBytes = 2'048u, .lastWriteTime = kNewer};
+    observed.destination = {.sizeKnown = true, .sizeBytes = 1'024u, .lastWriteTime = kOlder};
+    observed.comparison  = FileOperations::CompareConflictItems(true, 2'048u, kNewer, true, 1'024u, kOlder);
+    FileOperations::ConflictPromptTextFacts facts{};
+    facts.operation       = FILESYSTEM_COPY;
+    facts.bucket          = static_cast<uint8_t>(FileOperations::ConflictClass::RegularFileExists);
+    facts.sourceItem      = {.available = true, .isDirectory = false, .sizeKnown = true, .sizeBytes = 2'048u, .lastWriteTime = kNewer};
+    facts.destinationItem = {.available = true, .isDirectory = false, .sizeKnown = true, .sizeBytes = 1'024u, .lastWriteTime = kOlder};
+    facts.dateRelation    = static_cast<uint8_t>(observed.comparison.date);
+    facts.sizeRelation    = static_cast<uint8_t>(observed.comparison.size);
+    const FileOperations::ConflictObservedTexts differ = FileOperations::BuildConflictObservedTexts(FILESYSTEM_COPY, observed);
+    if (differ.source.empty() || differ.destination.empty() || differ.source != FileOperations::BuildConflictPromptItemText(facts, false) ||
+        differ.destination != FileOperations::BuildConflictPromptItemText(facts, true) || ! differ.summary.empty())
+        return reject(L"the role lines differ from the decision's");
+    observed.destination = observed.source;
+    observed.comparison  = FileOperations::CompareConflictItems(true, 2'048u, kNewer, true, 2'048u, kNewer);
+    const FileOperations::ConflictObservedTexts same = FileOperations::BuildConflictObservedTexts(FILESYSTEM_COPY, observed);
+    if (same.summary != LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_CMP_SAME_SIZE_AND_DATE))
+        return reject(L"equal size and date did not read as one summary line");
+
+    using Diagnostic = FolderWindow::FileOperationState::TaskDiagnosticEntry;
+    Diagnostic question{};
+    question.localTime      = SYSTEMTIME{2026, 11, 3, 11, 9, 30, 0, 0};
+    question.taskId         = 31u;
+    question.operation      = FILESYSTEM_COPY;
+    question.severity       = FolderWindow::FileOperationState::DiagnosticSeverity::Info;
+    question.status         = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+    question.category       = L"item.conflict.prompt";
+    question.message        = L"Conflict prompt shown for item.";
+    question.conflictPrompt = FileOperations::ConflictPromptObservation{9u, FileOperations::ConflictClass::RegularFileExists, 0u};
+    question.conflictPrompt->itemFacts = observed;
+    Diagnostic answer       = question;
+    answer.category         = L"item.conflict.accepted";
+    answer.acceptedDecision = FileOperations::AcceptedConflictDecision{.taskId           = question.taskId,
+                                                                       .promptGeneration = 9u,
+                                                                       .sourceItemIndex  = 0u,
+                                                                       .action           = FileOperations::ConflictAction::Skip,
+                                                                       .scope            = {.bucket = FileOperations::ConflictClass::RegularFileExists}};
+    FileOperationsIssues::Text labels{};
+    labels.infoSeverity      = L"Information";
+    labels.unknownDecision   = L"Unknown decision";
+    labels.automaticDecision = L"Automatic";
+    labels.unknownResult     = L"Unknown result";
+    labels.completedResult   = L"Completed";
+    labels.skippedResult     = L"Skipped";
+    labels.canceledResult    = L"Canceled";
+    labels.failedResult      = L"Failed";
+    for (const bool answerFirst : {false, true})
+    {
+        std::array<FileOperationsIssues::Observation, 2u> observations{};
+        for (auto& observation : observations)
+        {
+            observation.timeText      = L"2026-11-11 09:30:00.000";
+            observation.operationText = L"Copy";
+            observation.statusText    = L"0x80070050";
+        }
+        auto& questionObservation                = observations[answerFirst ? 1u : 0u];
+        auto& answerObservation                  = observations[answerFirst ? 0u : 1u];
+        questionObservation.issue                = &question;
+        questionObservation.sourceFactsText      = same.source;
+        questionObservation.destinationFactsText = same.destination;
+        questionObservation.comparisonText       = same.summary;
+        answerObservation.issue                  = &answer;
+        answerObservation.formattedDecisionText  = L"Skip";
+        FileOperationsIssues::Projection projection;
+        if (! projection.Update(observations, labels, 1u) || projection.Rows().size() != 1u)
+            return reject(L"the question and its answer did not join one row");
+        const auto& row = projection.Rows().front();
+        if (row.sourceFactsText != same.source || row.destinationFactsText != same.destination || row.comparisonText != same.summary ||
+            ! row.hasConflictFacts)
+            return reject(answerFirst ? L"the row lost the facts when the answer arrived first" : L"the row lost the facts when the answer joined it");
+    }
+    return true;
+}
+
+// I62 B1.5: a folder onto an existing folder at a location that opens items but cannot identify them. The two folders
+// merge, as at a location that identifies its items: the folder itself raises no decision, and each child that
+// collides raises its own (answered Skip here). A Copy merges and copies the new child; a Move merges too, keeps a
+// source folder that still holds a skipped child (not an Error) and removes one the merge emptied. A destination
+// folder that is a link stays refused before anything is touched.
+[[nodiscard]] bool RunFileOperationIdentityLessFolderMergeSelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                                   const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                                   const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"identity-less-folder-merge";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    enum class Shape : uint8_t
+    {
+        CopyMergeSkip, // Copy: one child collides and is skipped, the other child is new
+        MoveMergeSkip, // the same as a Move: the source folder keeps the skipped child
+        MoveMergeNew,  // Move: no child collides, so the merge empties the source folder
+        MoveOntoLink,  // Move: the existing destination folder is a link
+    };
+    struct Scenario final
+    {
+        const wchar_t* name = L"";
+        Shape shape         = Shape::CopyMergeSkip;
+    };
+    static constexpr std::array kScenarios{
+        Scenario{L"copy-merge-skip", Shape::CopyMergeSkip},
+        Scenario{L"move-merge-skip", Shape::MoveMergeSkip},
+        Scenario{L"move-merge-new", Shape::MoveMergeNew},
+        Scenario{L"move-onto-link", Shape::MoveOntoLink},
+    };
+    const std::string sourceBytes(73u, 's');
+    const std::string existingBytes(149u, 'd');
+    const std::filesystem::path firstTrack(L"track-01.bin");
+    const std::filesystem::path secondTrack(L"track-02.bin");
+    const std::filesystem::path cover(L"cover.bin");
+    const auto holds = [&io](const std::filesystem::path& path, const std::string& expected) noexcept
+    {
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+    const auto absent = [](const std::filesystem::path& path) noexcept
+    {
+        std::error_code existsError;
+        return ! std::filesystem::exists(path, existsError) && ! existsError;
+    };
+    const auto countEntries = [](const std::filesystem::path& folder, size_t& artifactEntries) noexcept
+    {
+        size_t listed   = 0u;
+        artifactEntries = 0u;
+        std::error_code listError;
+        for (std::filesystem::directory_iterator it(folder, listError), end; ! listError && it != end; it.increment(listError))
+        {
+            ++listed;
+            if (FileOperationArtifacts::HasPossibleArtifactName(it->path().filename().native()))
+                ++artifactEntries;
+        }
+        return listed;
+    };
+
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    for (const Scenario& scenario : kScenarios)
+    {
+        const bool move              = scenario.shape != Shape::CopyMergeSkip;
+        const bool collides          = scenario.shape == Shape::CopyMergeSkip || scenario.shape == Shape::MoveMergeSkip;
+        const bool ontoLink          = scenario.shape == Shape::MoveOntoLink;
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto sourceFolder      = caseRoot / L"source" / L"album";
+        const auto destinationFolder = caseRoot / L"destination";
+        const auto mergedFolder      = destinationFolder / sourceFolder.filename();
+        const auto linkTarget        = caseRoot / L"elsewhere";
+        if (! RecreateEmptyDirectory(sourceFolder) || ! RecreateEmptyDirectory(destinationFolder) ||
+            ! WriteFileTextFsIo(io, sourceFolder / firstTrack, sourceBytes) || ! WriteFileTextFsIo(io, sourceFolder / secondTrack, sourceBytes))
+            return false;
+        if (ontoLink)
+        {
+            // The junction and its target both lie inside this case's sandbox folder.
+            if (! RecreateEmptyDirectory(linkTarget) || ! TryCreateJunction(mergedFolder, linkTarget))
+                return false;
+        }
+        else if (! RecreateEmptyDirectory(mergedFolder) || ! WriteFileTextFsIo(io, mergedFolder / (collides ? firstTrack : cover), existingBytes))
+        {
+            return false;
+        }
+        // The whole destination folder cannot identify its items (a share without file IDs); the source can.
+        RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(kSelfTestEnvBindIdentityUnsupportedPath, destinationFolder.native());
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        // The Local destination proves what it publishes; the merge route requires that proof.
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent                         = move ? FileOperations::TransferIntent::Move : FileOperations::TransferIntent::Copy;
+        transfer.strategy                       = move ? FileOperations::OperationStrategy::Managed : FileOperations::OperationStrategy::Copy;
+        transfer.sourceEndpoint                 = endpoint;
+        transfer.destinationEndpoint            = endpoint;
+        transfer.selectedItems                  = {{.providerPath = sourceFolder.native()}};
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation                = move ? FILESYSTEM_MOVE : FILESYSTEM_COPY;
+        task._executionMode            = State::ExecutionMode::PerItem;
+        task._fileSystem               = localFileSystem;
+        task._sourcePaths              = {sourceFolder};
+        task._sourcePluginId           = endpoint.pluginId;
+        task._sourcePluginShortId      = L"file";
+        task._sourceInstanceContext    = endpoint.instanceId;
+        task._sourcePathAttributesHint = {GetFileAttributesW(sourceFolder.c_str())};
+        task._perItemMaxConcurrency    = 1u;
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        if (FAILED(task.PrepareMutationInterlockScopes()))
+            return false;
+
+        // The executor blocks on each decision: answer from a second thread. Every decision is a colliding child's and
+        // is answered Skip; a decision that does not offer Skip is answered Cancel so the case cannot hang.
+        std::atomic<unsigned int> answered{0u};
+        std::atomic<bool> skipOffered{true};
+        HRESULT executeHr = E_PENDING;
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                uint64_t answeredGeneration = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (const auto prompt = TryGetConflictPromptCopy(&task);
+                        prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                    {
+                        const auto offeredEnd = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                        const bool offered    = std::find(prompt->actions.begin(), offeredEnd, Action::Skip) != offeredEnd;
+                        if (! offered)
+                            skipOffered.store(false, std::memory_order_release);
+                        if (task.SubmitConflictDecision(prompt->generation, offered ? Action::Skip : Action::Cancel, false))
+                        {
+                            answeredGeneration = prompt->generation;
+                            answered.fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+        const auto& item   = task._sourceItemResultBuilders.front().terminal;
+
+        size_t mergedArtifacts      = 0u;
+        const size_t mergedEntries  = countEntries(ontoLink ? linkTarget : mergedFolder, mergedArtifacts);
+        const unsigned int prompts  = answered.load(std::memory_order_acquire);
+        const bool sourceFirstKept  = holds(sourceFolder / firstTrack, sourceBytes);
+        const bool sourceSecondKept = holds(sourceFolder / secondTrack, sourceBytes);
+        bool outcome                = false;
+        switch (scenario.shape)
+        {
+            case Shape::CopyMergeSkip:
+                // Merged: the existing child keeps its bytes, the new child is copied, the source is untouched.
+                outcome = prompts == 1u && sourceFirstKept && sourceSecondKept && holds(mergedFolder / firstTrack, existingBytes) &&
+                          holds(mergedFolder / secondTrack, sourceBytes) && mergedEntries == 2u && summary.failedItemCount == 0u;
+                break;
+            case Shape::MoveMergeSkip:
+                // Merged: the new child moved; the skipped child and its source folder stay, and the item is no Error.
+                outcome = prompts == 1u && sourceFirstKept && absent(sourceFolder / secondTrack) && holds(mergedFolder / firstTrack, existingBytes) &&
+                          holds(mergedFolder / secondTrack, sourceBytes) && mergedEntries == 2u && summary.failedItemCount == 0u && item.has_value() &&
+                          item->completion != FileOperations::ItemCompletion::Failed &&
+                          item->sourceDisposition == FileOperations::SourceDisposition::Retained;
+                break;
+            case Shape::MoveMergeNew:
+                // Merged without a question: both children moved and the emptied source folder is gone.
+                outcome = prompts == 0u && absent(sourceFolder) && holds(mergedFolder / cover, existingBytes) &&
+                          holds(mergedFolder / firstTrack, sourceBytes) && holds(mergedFolder / secondTrack, sourceBytes) && mergedEntries == 3u &&
+                          summary.failedItemCount == 0u && summary.removedSourceCount == 1u && SUCCEEDED(finalHr);
+                break;
+            case Shape::MoveOntoLink:
+            {
+                // Refused before anything is touched: the link and its empty target stay, the source keeps both children.
+                const DWORD linkAttributes = GetFileAttributesW(mergedFolder.c_str());
+                outcome = prompts == 0u && executeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && sourceFirstKept && sourceSecondKept &&
+                          mergedEntries == 0u && linkAttributes != INVALID_FILE_ATTRIBUTES && (linkAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
+                          summary.publishedItemCount == 0u && summary.removedSourceCount == 0u;
+                break;
+            }
+        }
+        const bool matches = outcome && skipOffered.load(std::memory_order_acquire) && mergedArtifacts == 0u &&
+                             executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        AppendLog(std::format(L"Identity-less folder merge {}: execute=0x{:08X} final=0x{:08X} prompts={} skipOffered={} sourceFirstKept={} "
+                              L"sourceSecondKept={} entries={} artifacts={} published={} removed={} retained={} failed={} passed={}",
+                              scenario.name,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              prompts,
+                              skipOffered.load(std::memory_order_acquire),
+                              sourceFirstKept,
+                              sourceSecondKept,
+                              mergedEntries,
+                              mergedArtifacts,
+                              summary.publishedItemCount,
+                              summary.removedSourceCount,
+                              summary.retainedSourceCount,
+                              summary.failedItemCount,
+                              matches));
+        passed = matches && passed;
+    }
+    return passed;
+}
+
+// I62 B7: a Managed Move whose source is at a location that opens items but cannot identify them. The bridge has the
+// provider read the source's facts before the copy opens it, and removes the source by name after the destination's
+// publication proof only while those facts are unchanged; otherwise the source is kept and the item reports "Copied;
+// source kept", which is not an Error. A source folder is removed only when the Move emptied it. A source carrying an
+// alternate data stream is kept, because this route does not copy streams. A source whose open fails keeps its
+// refusal. Where an existing destination file is replaced, at an ordinary destination or at one that cannot identify
+// items either, the same-file probe answers before the source is removed. A collision answered Skip keeps both files.
+// A source that is the destination file itself under another name (a junction) is never removed.
+[[nodiscard]] bool RunFileOperationIdentityLessSourceMoveSelfTest(FolderWindow::FileOperationState& fileOperations,
+                                                                  const wil::com_ptr<IFileSystem>& localFileSystem,
+                                                                  const std::filesystem::path& testRoot) noexcept
+{
+    using State  = FolderWindow::FileOperationState;
+    using Action = State::Task::ConflictAction;
+    wil::com_ptr<IFileSystemIO> io;
+    const auto root = testRoot / L"identity-less-source-move";
+    if (! localFileSystem || ! localFileSystem.try_query_to(io.put()) || ! RecreateEmptyDirectory(root))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    // The cleanup pause is process-wide: it never stays armed after this test.
+    const auto disarmPause = wil::scope_exit([]() noexcept
+    {
+        ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
+        SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
+    });
+    enum class Shape : uint8_t
+    {
+        FileUnchanged,     // removed after the publication proof
+        FileChanged,       // grows between the copy and its removal: kept
+        FileWithStream,    // carries an alternate data stream this route does not copy: kept
+        FileOpenFails,     // the location refuses the open: the refusal stays
+        FolderEmptied,     // a folder the Move empties: removed
+        FolderGainsItem,   // a folder that gains an item before its removal: kept with that item
+        ReplaceWithoutIds, // the destination cannot identify items either and holds another file: Replace, probe, removed
+        ReplaceWithIds,    // an ordinary destination holds another file: Replace, probe, removed
+        SkipExisting,      // the same collision answered Skip: both files stay
+        SameFileTwoNames,  // the source folder is a junction to the destination folder: one file, two names; never removed
+    };
+    struct Scenario final
+    {
+        const wchar_t* name = L"";
+        Shape shape         = Shape::FileUnchanged;
+    };
+    static constexpr std::array kScenarios{
+        Scenario{L"file-unchanged", Shape::FileUnchanged},
+        Scenario{L"file-changed", Shape::FileChanged},
+        Scenario{L"file-with-stream", Shape::FileWithStream},
+        Scenario{L"file-open-fails", Shape::FileOpenFails},
+        Scenario{L"folder-emptied", Shape::FolderEmptied},
+        Scenario{L"folder-gains-item", Shape::FolderGainsItem},
+        Scenario{L"replace-without-ids", Shape::ReplaceWithoutIds},
+        Scenario{L"replace-with-ids", Shape::ReplaceWithIds},
+        Scenario{L"skip-existing", Shape::SkipExisting},
+        Scenario{L"same-file-two-names", Shape::SameFileTwoNames},
+    };
+    const std::string sourceBytes(97u, 's');
+    const std::string occupantBytes(131u, 'd');
+    const std::string appendedBytes(29u, 'a');
+    const auto holds = [&io](const std::filesystem::path& path, const std::string& expected) noexcept
+    {
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+    const auto absent = [](const std::filesystem::path& path) noexcept
+    {
+        std::error_code existsError;
+        return ! std::filesystem::exists(path, existsError) && ! existsError;
+    };
+    // Another writer appends to the file: its size and last-write time change.
+    const auto append = [](const std::filesystem::path& path, const std::string& bytes) noexcept
+    {
+        const wil::unique_hfile file(
+            CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        DWORD written = 0u;
+        return file.is_valid() && WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != FALSE && written == bytes.size();
+    };
+    // A named stream on the file, as a downloaded file's Mark of the Web would be.
+    const auto addStream = [](const std::filesystem::path& path) noexcept
+    {
+        const std::wstring streamPath = path.native() + L":note";
+        const wil::unique_hfile stream(CreateFileW(streamPath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        constexpr std::string_view kNote = "note";
+        DWORD written                    = 0u;
+        return stream.is_valid() && WriteFile(stream.get(), kNote.data(), static_cast<DWORD>(kNote.size()), &written, nullptr) != FALSE &&
+               written == kNote.size();
+    };
+
+    bool passed            = true;
+    unsigned int caseIndex = 0u;
+    for (const Scenario& scenario : kScenarios)
+    {
+        const bool folder            = scenario.shape == Shape::FolderEmptied || scenario.shape == Shape::FolderGainsItem;
+        const bool replace           = scenario.shape == Shape::ReplaceWithoutIds || scenario.shape == Shape::ReplaceWithIds;
+        const bool sameFile          = scenario.shape == Shape::SameFileTwoNames;
+        const bool collides          = replace || sameFile || scenario.shape == Shape::SkipExisting;
+        const bool pauseAtCleanup    = scenario.shape == Shape::FileChanged || scenario.shape == Shape::FolderGainsItem;
+        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
+        const auto sourceFolder      = caseRoot / L"source";
+        const auto destinationFolder = caseRoot / L"destination";
+        const auto selected          = folder ? sourceFolder / L"album" : sourceFolder / L"harbor.bin";
+        const auto sourceFile        = folder ? selected / L"track-01.bin" : selected;
+        const auto publishedFile     = folder ? destinationFolder / selected.filename() / sourceFile.filename() : destinationFolder / selected.filename();
+        const auto addedFile         = selected / L"added.bin";
+        if (sameFile)
+        {
+            // One file in the destination folder; the source folder is a junction to that folder, inside this case's
+            // sandbox. The source name and the destination name then reach the same file.
+            if (! RecreateEmptyDirectory(caseRoot) || ! RecreateEmptyDirectory(destinationFolder) || ! WriteFileTextFsIo(io, publishedFile, sourceBytes) ||
+                ! TryCreateJunction(sourceFolder, destinationFolder))
+                return false;
+        }
+        else if (! RecreateEmptyDirectory(folder ? selected : sourceFolder) || ! RecreateEmptyDirectory(destinationFolder) ||
+                 ! WriteFileTextFsIo(io, sourceFile, sourceBytes) || (collides && ! WriteFileTextFsIo(io, publishedFile, occupantBytes)) ||
+                 (scenario.shape == Shape::FileWithStream && ! addStream(sourceFile)))
+            return false;
+        // Only the source's location cannot identify items; for one Replace case neither location can.
+        RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(
+            kSelfTestEnvBindIdentityUnsupportedPath, (scenario.shape == Shape::ReplaceWithoutIds ? caseRoot : sourceFolder).native());
+        RedSalamander::TestSupport::ScopedEnvironmentVariable openRefused(
+            L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH",
+            scenario.shape == Shape::FileOpenFails ? std::optional<std::wstring_view>(selected.native()) : std::nullopt);
+        FileOperations::QualifiedEndpoint endpoint{
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local",
+            .rootId                 = L"local-test-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
+        };
+        // The Local destination proves what it publishes; the source-side route requires that proof.
+        endpoint.verificationHostReadback = true;
+        FileOperations::TransferPlan transfer{};
+        transfer.intent                         = FileOperations::TransferIntent::Move;
+        transfer.strategy                       = FileOperations::OperationStrategy::Managed;
+        transfer.sourceEndpoint                 = endpoint;
+        transfer.destinationEndpoint            = endpoint;
+        transfer.selectedItems                  = {{.providerPath = selected.native()}};
+        transfer.destination.providerFolderPath = destinationFolder.native();
+        const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
+            FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
+        State::Task task(fileOperations);
+        task._operation                = FILESYSTEM_MOVE;
+        task._executionMode            = State::ExecutionMode::PerItem;
+        task._fileSystem               = localFileSystem;
+        task._sourcePaths              = {selected};
+        task._sourcePluginId           = endpoint.pluginId;
+        task._sourcePluginShortId      = L"file";
+        task._sourceInstanceContext    = endpoint.instanceId;
+        task._sourcePathAttributesHint = {GetFileAttributesW(selected.c_str())};
+        task._perItemMaxConcurrency    = 1u;
+        task.InitializeAdmissionInputs(plans,
+                                       {.fileSystem      = localFileSystem,
+                                        .folder          = destinationFolder,
+                                        .pluginId        = endpoint.pluginId,
+                                        .pluginShortId   = L"file",
+                                        .instanceContext = endpoint.instanceId});
+        task.InitializeSourceItemResultBuilders();
+        const auto diagnosticsCleanup = wil::scope_exit([&]() noexcept { fileOperations.DebugRemoveDiagnosticsForTask(task._taskId); });
+        // A source whose open fails may already be refused while the task prepares; that is the same refusal.
+        const HRESULT prepareHr = task.PrepareMutationInterlockScopes();
+        if (FAILED(prepareHr) && scenario.shape != Shape::FileOpenFails && ! sameFile)
+            return false;
+
+        // The deterministic "changed in between" seam: the bridge stops just before it removes the first source by name.
+        if (pauseAtCleanup)
+            SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(true, 30'000ull);
+        // A second thread answers decisions (Replace or Skip for the collision cases, Cancel for any other, which is
+        // unexpected) and, at the pause, changes the source and releases the bridge.
+        const Action wantedAnswer = replace || sameFile ? Action::Overwrite : Action::Skip;
+        std::atomic<unsigned int> answered{0u};
+        std::atomic<bool> answerOffered{true};
+        std::atomic<bool> pauseEntered{false};
+        std::atomic<bool> changedInPause{false};
+        HRESULT executeHr = prepareHr;
+        if (SUCCEEDED(prepareHr))
+        {
+            const std::jthread responder([&](const std::stop_token stop) noexcept
+            {
+                uint64_t answeredGeneration = 0u;
+                while (! stop.stop_requested())
+                {
+                    if (pauseAtCleanup && ! pauseEntered.load(std::memory_order_acquire) && HasFileOpsBridgeMoveSourceCleanupPauseEnteredForSelfTest())
+                    {
+                        const bool changed =
+                            scenario.shape == Shape::FileChanged ? append(sourceFile, appendedBytes) : WriteFileTextFsIo(io, addedFile, sourceBytes);
+                        changedInPause.store(changed, std::memory_order_release);
+                        pauseEntered.store(true, std::memory_order_release);
+                        ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
+                    }
+                    if (const auto prompt = TryGetConflictPromptCopy(&task);
+                        prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                    {
+                        const auto offeredEnd = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                        const bool offered    = std::find(prompt->actions.begin(), offeredEnd, wantedAnswer) != offeredEnd;
+                        if (collides && ! offered)
+                            answerOffered.store(false, std::memory_order_release);
+                        if (task.SubmitConflictDecision(prompt->generation, collides && offered ? wantedAnswer : Action::Cancel, false))
+                        {
+                            answeredGeneration = prompt->generation;
+                            answered.fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                    }
+                    Sleep(2);
+                }
+            });
+            executeHr = task.ExecuteOperation();
+        }
+        if (pauseAtCleanup)
+        {
+            ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
+            SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
+        }
+        const HRESULT finalHr = task.FinalizeTypedItemResults(executeHr);
+        task._resultHr.store(finalHr, std::memory_order_release);
+        const auto summary = fileOperations.DebugRecordCompletedTaskForSelfTest(task);
+
+        const unsigned int prompts = answered.load(std::memory_order_acquire);
+        const bool paused          = pauseEntered.load(std::memory_order_acquire) && changedInPause.load(std::memory_order_acquire);
+        bool outcome               = false;
+        switch (scenario.shape)
+        {
+            case Shape::FileUnchanged:
+                outcome = prompts == 0u && absent(sourceFile) && holds(publishedFile, sourceBytes) && summary.publishedItemCount == 1u &&
+                          summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u && summary.failedItemCount == 0u && SUCCEEDED(finalHr);
+                break;
+            case Shape::FileChanged:
+                outcome = prompts == 0u && paused && holds(sourceFile, sourceBytes + appendedBytes) && holds(publishedFile, sourceBytes) &&
+                          summary.publishedItemCount == 1u && summary.removedSourceCount == 0u && summary.retainedSourceCount == 1u &&
+                          summary.failedItemCount == 0u;
+                break;
+            case Shape::FileWithStream:
+                outcome = prompts == 0u && holds(sourceFile, sourceBytes) && holds(publishedFile, sourceBytes) && summary.publishedItemCount == 1u &&
+                          summary.removedSourceCount == 0u && summary.retainedSourceCount == 1u && summary.failedItemCount == 0u;
+                break;
+            case Shape::FileOpenFails:
+                outcome = prompts == 0u && FAILED(executeHr) && executeHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && holds(sourceFile, sourceBytes) &&
+                          absent(publishedFile) && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u;
+                break;
+            case Shape::FolderEmptied:
+                outcome = prompts == 0u && absent(selected) && holds(publishedFile, sourceBytes) && summary.removedSourceCount == 1u &&
+                          summary.retainedSourceCount == 0u && summary.failedItemCount == 0u && SUCCEEDED(finalHr);
+                break;
+            case Shape::FolderGainsItem:
+                outcome = prompts == 0u && paused && absent(sourceFile) && holds(addedFile, sourceBytes) && holds(publishedFile, sourceBytes) &&
+                          absent(destinationFolder / selected.filename() / addedFile.filename()) && summary.removedSourceCount == 0u &&
+                          summary.retainedSourceCount == 1u && summary.failedItemCount == 0u;
+                break;
+            case Shape::ReplaceWithoutIds:
+            case Shape::ReplaceWithIds:
+                outcome = prompts == 1u && answerOffered.load(std::memory_order_acquire) && absent(sourceFile) && holds(publishedFile, sourceBytes) &&
+                          summary.publishedItemCount == 1u && summary.removedSourceCount == 1u && summary.failedItemCount == 0u && SUCCEEDED(finalHr);
+                break;
+            case Shape::SkipExisting:
+                // Both files stay as they were: nothing is published and no source is removed.
+                outcome = prompts == 1u && answerOffered.load(std::memory_order_acquire) && holds(sourceFile, sourceBytes) &&
+                          holds(publishedFile, occupantBytes) && summary.publishedItemCount == 0u && summary.removedSourceCount == 0u &&
+                          summary.failedItemCount == 0u;
+                break;
+            case Shape::SameFileTwoNames:
+                // The one file is still there under both names with its bytes, whichever way the task ended (a refused
+                // replacement or a replacement followed by the same-file answer): no source is ever removed.
+                outcome = holds(publishedFile, sourceBytes) && holds(sourceFile, sourceBytes) && summary.removedSourceCount == 0u;
+                break;
+        }
+        const bool matches = outcome && (pauseAtCleanup ? paused : true);
+        AppendLog(std::format(L"Identity-less source Move {}: execute=0x{:08X} final=0x{:08X} prompts={} paused={} published={} removed={} retained={} "
+                              L"failed={} passed={}",
+                              scenario.name,
+                              static_cast<unsigned long>(executeHr),
+                              static_cast<unsigned long>(finalHr),
+                              prompts,
+                              paused,
+                              summary.publishedItemCount,
+                              summary.removedSourceCount,
+                              summary.retainedSourceCount,
+                              summary.failedItemCount,
+                              matches));
+        passed = matches && passed;
     }
     return passed;
 }

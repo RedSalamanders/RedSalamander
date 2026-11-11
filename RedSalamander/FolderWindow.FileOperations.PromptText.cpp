@@ -6,6 +6,51 @@
 
 namespace FileOperations
 {
+namespace
+{
+// Same size and date, or one hour apart: said once for both items, never on each role line.
+[[nodiscard]] UINT ComparisonSummaryStringId(const ConflictPromptTextFacts& facts) noexcept
+{
+    const auto date = static_cast<ConflictDateRelation>(facts.dateRelation);
+    const auto size = static_cast<ConflictSizeRelation>(facts.sizeRelation);
+    if (date == ConflictDateRelation::OneHourApart)
+    {
+        return static_cast<UINT>(IDS_FILEOPS_CONFLICT_CMP_ONE_HOUR_APART);
+    }
+    if (date == ConflictDateRelation::Same && size == ConflictSizeRelation::Same)
+    {
+        return static_cast<UINT>(IDS_FILEOPS_CONFLICT_CMP_SAME_SIZE_AND_DATE);
+    }
+    return 0u;
+}
+
+// The relations are those of the incoming item; the existing item's words are the inverse.
+[[nodiscard]] UINT DateRelationStringId(ConflictDateRelation relation, bool destinationRole) noexcept
+{
+    switch (relation)
+    {
+        case ConflictDateRelation::Newer: return static_cast<UINT>(destinationRole ? IDS_FILEOPS_CONFLICT_CMP_OLDER : IDS_FILEOPS_CONFLICT_CMP_NEWER);
+        case ConflictDateRelation::Older: return static_cast<UINT>(destinationRole ? IDS_FILEOPS_CONFLICT_CMP_NEWER : IDS_FILEOPS_CONFLICT_CMP_OLDER);
+        case ConflictDateRelation::Same: return static_cast<UINT>(IDS_FILEOPS_CONFLICT_CMP_SAME_DATE);
+        case ConflictDateRelation::Unknown:
+        case ConflictDateRelation::OneHourApart: break;
+    }
+    return 0u;
+}
+
+[[nodiscard]] UINT SizeRelationStringId(ConflictSizeRelation relation, bool destinationRole) noexcept
+{
+    switch (relation)
+    {
+        case ConflictSizeRelation::Larger: return static_cast<UINT>(destinationRole ? IDS_FILEOPS_CONFLICT_CMP_SMALLER : IDS_FILEOPS_CONFLICT_CMP_LARGER);
+        case ConflictSizeRelation::Smaller: return static_cast<UINT>(destinationRole ? IDS_FILEOPS_CONFLICT_CMP_LARGER : IDS_FILEOPS_CONFLICT_CMP_SMALLER);
+        case ConflictSizeRelation::Same: return static_cast<UINT>(IDS_FILEOPS_CONFLICT_CMP_SAME_SIZE);
+        case ConflictSizeRelation::Unknown: break;
+    }
+    return 0u;
+}
+} // namespace
+
 // Only identical, admitted display leaves can share a heading. Never infer a
 // filename from separators here: provider namespaces own that interpretation.
 std::wstring_view CommonConflictPromptName(const ConflictPromptTextFacts& facts) noexcept
@@ -74,6 +119,9 @@ std::wstring BuildConflictPromptQuestion(const ConflictPromptTextFacts& facts)
             LoadStringResource(nullptr, facts.sourceIsDirectory ? IDS_FILEOPS_CONFLICT_READONLY_DELETE_FOLDER : IDS_FILEOPS_CONFLICT_READONLY_DELETE_FILE);
     else if (bucket == ConflictClass::EfsPlaintext && facts.operation == FILESYSTEM_MOVE)
         question = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_EFS_MOVE_PLAINTEXT);
+    else if (bucket == ConflictClass::RecycleFailed && facts.operation == FILESYSTEM_MOVE)
+        // I62 D-5: a Move raises a Recycle refusal only when Delete source meets a source location without a Recycle Bin.
+        question = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN);
     else
         question = FormatConflictProblemText(bucket, facts.status);
     if (bucket == ConflictClass::RecycleFailedByName)
@@ -109,7 +157,95 @@ std::wstring BuildConflictPromptFactText(const ConflictPromptTextFacts& facts)
     {
         return FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONSENT_FACTS_BYTES, FormatBytesCompact(facts.factBytes));
     }
+    if (const UINT summaryId = ComparisonSummaryStringId(facts); summaryId != 0u)
+    {
+        return LoadStringResource(nullptr, summaryId);
+    }
     return {};
+}
+
+std::wstring BuildConflictPromptItemText(const ConflictPromptTextFacts& facts, bool destinationRole)
+{
+    const ConflictPromptItemFacts& item = destinationRole ? facts.destinationItem : facts.sourceItem;
+    if (! item.available)
+    {
+        return {};
+    }
+
+    std::wstring result;
+    const auto append = [&](std::wstring_view part)
+    {
+        if (part.empty())
+        {
+            return;
+        }
+        if (! result.empty())
+        {
+            result.append(L" \u2022 ");
+        }
+        result.append(part);
+    };
+    if (item.isDirectory)
+    {
+        append(LoadStringResource(nullptr, IDS_FOLDERVIEW_TYPE_FOLDER));
+    }
+    else if (item.sizeKnown)
+    {
+        append(FormatBytesCompact(item.sizeBytes));
+    }
+    append(FormatConflictPromptFileTime(item.lastWriteTime));
+    if (ComparisonSummaryStringId(facts) == 0u)
+    {
+        if (const UINT dateId = DateRelationStringId(static_cast<ConflictDateRelation>(facts.dateRelation), destinationRole); dateId != 0u)
+        {
+            append(LoadStringResource(nullptr, dateId));
+        }
+        if (const UINT sizeId = SizeRelationStringId(static_cast<ConflictSizeRelation>(facts.sizeRelation), destinationRole); sizeId != 0u)
+        {
+            append(LoadStringResource(nullptr, sizeId));
+        }
+    }
+    return result;
+}
+
+std::wstring FormatConflictPromptFileTime(__int64 fileTime) noexcept
+{
+    if (fileTime <= 0)
+    {
+        return {};
+    }
+
+    ULARGE_INTEGER uli{};
+    uli.QuadPart = static_cast<ULONGLONG>(fileTime);
+
+    FILETIME ft{};
+    ft.dwLowDateTime  = uli.LowPart;
+    ft.dwHighDateTime = uli.HighPart;
+
+    SYSTEMTIME utc{};
+    SYSTEMTIME local{};
+    if (FileTimeToSystemTime(&ft, &utc) == FALSE || SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) == FALSE)
+    {
+        return {};
+    }
+
+    const int dateLength = GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, nullptr, 0, nullptr);
+    const int timeLength = GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, nullptr, 0);
+    if (dateLength <= 1 || timeLength <= 1)
+    {
+        return {};
+    }
+
+    std::wstring dateText(static_cast<size_t>(dateLength), L'\0');
+    std::wstring timeText(static_cast<size_t>(timeLength), L'\0');
+    if (GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, dateText.data(), dateLength, nullptr) == 0 ||
+        GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, timeText.data(), timeLength) == 0)
+    {
+        return {};
+    }
+    dateText.resize(static_cast<size_t>(dateLength - 1));
+    timeText.resize(static_cast<size_t>(timeLength - 1));
+    return FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_DATE_TIME, dateText, timeText);
 }
 
 std::wstring BuildConflictPromptAnnouncement(const ConflictPromptTextFacts& facts)
@@ -121,6 +257,30 @@ std::wstring BuildConflictPromptAnnouncement(const ConflictPromptTextFacts& fact
     if (! question.empty())
         announcement = std::format(L"{0}. {1}", announcement, question);
     return announcement;
+}
+
+ConflictObservedTexts BuildConflictObservedTexts(FileSystemOperation operation, const ConflictObservedComparison& observed)
+{
+    ConflictPromptTextFacts facts{};
+    facts.operation       = operation;
+    facts.bucket          = static_cast<uint8_t>(ConflictClass::RegularFileExists);
+    facts.sourceItem      = {.available     = true,
+                             .isDirectory   = false,
+                             .sizeKnown     = observed.source.sizeKnown,
+                             .sizeBytes     = observed.source.sizeBytes,
+                             .lastWriteTime = observed.source.lastWriteTime};
+    facts.destinationItem = {.available     = true,
+                             .isDirectory   = false,
+                             .sizeKnown     = observed.destination.sizeKnown,
+                             .sizeBytes     = observed.destination.sizeBytes,
+                             .lastWriteTime = observed.destination.lastWriteTime};
+    facts.dateRelation    = static_cast<uint8_t>(observed.comparison.date);
+    facts.sizeRelation    = static_cast<uint8_t>(observed.comparison.size);
+    ConflictObservedTexts texts;
+    texts.source      = BuildConflictPromptItemText(facts, false);
+    texts.destination = BuildConflictPromptItemText(facts, true);
+    texts.summary     = BuildConflictPromptFactText(facts);
+    return texts;
 }
 
 UINT ConflictPromptTitleStringId(FileSystemOperation operation) noexcept

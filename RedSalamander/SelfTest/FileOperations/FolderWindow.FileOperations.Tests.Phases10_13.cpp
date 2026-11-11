@@ -384,9 +384,13 @@ case SelfTestState::Step::FileOps_NativeMoveRacedDestinationNotReplaced:
     const bool caseRaceFired   = GetEnvVarTrimmed(kSelfTestEnvMoveDestinationRaceFired) == L"1";
     size_t strandedSourceCount = 0u;
     std::error_code caseEnumEc;
+    // The stranded hop is `<source leaf>.<32 hex>.rs-bak`.
+    const std::wstring caseHopPrefix = caseSource.filename().native() + L".";
     for (std::filesystem::directory_iterator it(caseRoot, caseEnumEc), end; ! caseEnumEc && it != end; it.increment(caseEnumEc))
     {
-        if (it->path().filename().native().starts_with(L".rs_case_tmp_") && FileSizeEquals(it->path(), kSourceBytes))
+        const std::wstring caseHopLeaf = it->path().filename().native();
+        if (caseHopLeaf.starts_with(caseHopPrefix) && FileOperationArtifacts::HasPossibleOriginalArtifactName(caseHopLeaf) &&
+            FileSizeEquals(it->path(), kSourceBytes))
         {
             ++strandedSourceCount;
         }
@@ -2554,7 +2558,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationDirectoryTree:
 case SelfTestState::Step::Phase10_RecycleEscalationTaskScopedGrant:
 {
     // Q2: a multi-item Recycle whose items all fail with a known non-commit asks once. The explicit
-    // task-scoped "Delete all remaining permanently" choice (under More) then deletes every later
+    // task-scoped "Delete all remaining permanently" choice (a direct button) then deletes every later
     // failing item of the same task, file or folder, through its own exact identity and without
     // another prompt (steps 0-2). A new task asks again, and Skip still covers one item (steps 3-6).
     // An item whose Recycle outcome is unknown is never covered by the grant (steps 7-9).
@@ -2615,15 +2619,15 @@ case SelfTestState::Step::Phase10_RecycleEscalationTaskScopedGrant:
     };
     const auto countCategory = [](const std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry>& diagnostics, std::wstring_view category) noexcept
     { return std::ranges::count_if(diagnostics, [&](const auto& entry) noexcept { return entry.category == category; }); };
-    // A real escalation prompt that offers the scoped choice keeps it under More, never as a direct
-    // button, and keeps Cancel as the default.
+    // A real escalation prompt that offers the scoped choice publishes it as a direct button immediately
+    // before Cancel (I62 D-6: More never holds one command) and keeps Cancel as the default and Escape action.
     const auto offersScopedChoice = [](const Task::ConflictPromptState& prompt) noexcept
     {
         const auto primaryEnd = prompt.primaryActions.begin() + static_cast<std::ptrdiff_t>(std::min(prompt.primaryActionCount, prompt.primaryActions.size()));
-        return prompt.overflowActionCount == 1u && prompt.overflowActions[0] == ConflictAction::PermanentDeleteAll &&
-               std::find(prompt.primaryActions.begin(), primaryEnd, ConflictAction::PermanentDeleteAll) == primaryEnd &&
-               PromptHasAction(prompt, ConflictAction::PermanentDelete) && PromptHasAction(prompt, ConflictAction::Skip) &&
-               prompt.defaultAction == ConflictAction::Cancel && ! prompt.applyToAllEligible;
+        const auto scoped     = std::find(prompt.primaryActions.begin(), primaryEnd, ConflictAction::PermanentDeleteAll);
+        return prompt.overflowActionCount == 0u && scoped != primaryEnd && scoped + 1 != primaryEnd && *(scoped + 1) == ConflictAction::Cancel &&
+               scoped + 2 == primaryEnd && PromptHasAction(prompt, ConflictAction::PermanentDelete) && PromptHasAction(prompt, ConflictAction::Skip) &&
+               prompt.defaultAction == ConflictAction::Cancel && prompt.escapeAction == ConflictAction::Cancel && ! prompt.applyToAllEligible;
     };
     auto* task           = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
     const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
@@ -2664,12 +2668,12 @@ case SelfTestState::Step::Phase10_RecycleEscalationTaskScopedGrant:
             ! offersScopedChoice(prompt.value()))
         {
             task->RequestCancel();
-            failGrant(L"A multi-item Recycle escalation must offer Delete all remaining permanently under More, with Cancel as the default.");
+            failGrant(L"A multi-item Recycle escalation must offer Delete all remaining permanently as a direct button before Cancel, with Cancel as the default.");
             return true;
         }
         state.markerTick = prompt->generation;
         if (! task->SubmitConflictDecision(
-                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Overflow))
+                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Primary))
         {
             task->RequestCancel();
             failGrant(L"The task-scoped Recycle choice was not accepted from its More placement.");
@@ -2869,7 +2873,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationTaskScopedGrant:
         }
         state.markerTick = prompt->generation;
         if (! task->SubmitConflictDecision(
-                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Overflow))
+                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Primary))
         {
             task->RequestCancel();
             failGrant(L"The unknown-outcome task did not accept the task-scoped choice.");
@@ -3194,7 +3198,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsContinueOnError:
         const bool skip             = state.stepState == 6;
         const ConflictAction action = skip ? ConflictAction::Skip : ConflictAction::PermanentDeleteAll;
         const FileOperations::ConflictActionPlacement placement =
-            skip ? FileOperations::ConflictActionPlacement::Primary : FileOperations::ConflictActionPlacement::Overflow;
+            FileOperations::ConflictActionPlacement::Primary; // I62 D-6: both are direct buttons
         if (! task->SubmitConflictDecision(prompt->generation, action, std::nullopt, placement))
         {
             task->RequestCancel();
@@ -3407,7 +3411,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsResumeBounded:
         }
         state.markerTick = prompt->generation;
         if (! task->SubmitConflictDecision(
-                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Overflow))
+                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Primary))
         {
             task->RequestCancel();
             failResume(L"The BulkItems Recycle scale task did not accept Delete all remaining permanently.");
@@ -3513,7 +3517,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsResumeBounded:
         }
         state.markerTick = prompt->generation;
         if (! task->SubmitConflictDecision(
-                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Overflow))
+                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Primary))
         {
             task->RequestCancel();
             failResume(L"The BulkItems unknown-outcome task did not accept Delete all remaining permanently.");
@@ -3565,7 +3569,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsResumeBounded:
         }
         state.markerTick = prompt->generation;
         if (! task->SubmitConflictDecision(
-                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Overflow))
+                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Primary))
         {
             task->RequestCancel();
             failResume(std::format(L"The BulkItems {} task did not accept Delete all remaining permanently.", label));
@@ -3868,7 +3872,7 @@ case SelfTestState::Step::Phase10_RecycleEscalationBulkItemsResumeBounded:
         }
         state.markerTick = prompt->generation;
         if (! task->SubmitConflictDecision(
-                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Overflow))
+                prompt->generation, ConflictAction::PermanentDeleteAll, std::nullopt, FileOperations::ConflictActionPlacement::Primary))
         {
             task->RequestCancel();
             failResume(L"The BulkItems escalation-stop task did not accept Delete all remaining permanently.");
@@ -4965,6 +4969,8 @@ case SelfTestState::Step::Phase10_ContentVerification:
     const std::filesystem::path directoryDestination       = root / L"directory-destination";
     const std::filesystem::path nativeSource               = root / L"native-source.bin";
     const std::filesystem::path nativeDestination          = root / L"native-destination";
+    // A 251-unit leaf: its bridge stage `<leaf>.<32 hex>_<stream>.rs-tmp` would be 293 units, so only the readable prefix may be shortened.
+    const std::wstring longLeafName = std::wstring(247u, L'l') + L".bin";
 
     const auto completedInfo = [&](const std::optional<uint64_t>& taskId) noexcept -> const CompletedTaskInfo*
     {
@@ -5061,7 +5067,8 @@ case SelfTestState::Step::Phase10_ContentVerification:
             ! WriteTestFile(mismatchSource / L"payload.bin", 256u * 1024u) || ! WriteTestFile(unavailableSource / L"payload.bin", 256u * 1024u) ||
             ! WriteTestFile(unavailableCopySource, 128u * 1024u) || ! WriteTestFile(cancelSource / L"payload.bin", 32u * 1024u * 1024u) ||
             ! WriteTestFile(serializedSourceA, 8u * 1024u * 1024u) || ! WriteTestFile(serializedSourceB, 8u * 1024u * 1024u) ||
-            ! WriteTestFile(directorySource / L"payload.bin", 256u * 1024u) || ! WriteTestFile(nativeSource, 64u * 1024u))
+            ! WriteTestFile(directorySource / L"payload.bin", 256u * 1024u) || ! WriteTestFile(directorySource / longLeafName, 4u * 1024u) ||
+            ! WriteTestFile(nativeSource, 64u * 1024u))
         {
             restoreVerificationSetting();
             Fail(L"P4.6 content-verification fixtures could not be created.");
@@ -5458,6 +5465,15 @@ case SelfTestState::Step::Phase10_ContentVerification:
                              directoryCompleted->verificationHostReadbackCount));
             return true;
         }
+        // The copied tree holds the 251-unit leaf with its exact bytes and no stage or other artifact.
+        if (const std::wstring treeDifference = DescribeTreeDifferenceForSelfTest(directorySource, directoryDestination / directorySource.filename());
+            ! treeDifference.empty())
+        {
+            resetVerificationHooks();
+            restoreVerificationSetting();
+            Fail(std::format(L"P4.6 the verified Copy of a tree with a 251-unit leaf did not publish it exactly or left a stage: {}", treeDifference));
+            return true;
+        }
 
         state.taskA = startLocalTransfer(FILESYSTEM_MOVE, nativeSource, nativeDestination, FILESYSTEM_FLAG_NONE);
         if (! state.taskA.has_value())
@@ -5520,7 +5536,7 @@ case SelfTestState::Step::Phase10_ArtifactTouchGuard:
 {
     const std::filesystem::path root     = state.tempRoot / L"p5-artifact-touch";
     const std::filesystem::path ordinary = root / L"ordinary.bin";
-    const std::filesystem::path possible = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::filesystem::path possible = root / L"payload.0123456789abcdef0123456789abcdef.rs-bak";
     if (! RecreateEmptyDirectory(root) || ! WriteTestFile(ordinary, 64u) || ! WriteTestFile(possible, 64u))
     {
         Fail(L"P5.4 external artifact-touch fixture setup failed.");
@@ -5592,7 +5608,7 @@ case SelfTestState::Step::Phase10_ArtifactTouchGuard:
     // is refused with a prompt that names the item, the plain reason and the identity HRESULT, offers
     // Open location in File Explorer and Close (default), and never touches the item.
     const std::filesystem::path blockedRoot     = root / L"identity-less";
-    const std::wstring blockedLeaf              = L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0";
+    const std::wstring blockedLeaf              = L"movie.mkv.9d380e53676eab4315ae57f418f5049d_0.rs-tmp";
     const std::filesystem::path blockedPossible = blockedRoot / blockedLeaf;
     std::error_code blockedRootError;
     std::filesystem::create_directories(blockedRoot, blockedRootError);
@@ -5742,7 +5758,7 @@ case SelfTestState::Step::Phase10_ArtifactTouchGuard:
 
     // An item that cannot be opened (delete pending here) is refused with the open failure and offers
     // Retry: Retry captures the candidates again and asks again; it never becomes a by-name action.
-    const std::wstring pendingLeaf              = L"pending.bin.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::wstring pendingLeaf              = L"pending.bin.0123456789abcdef0123456789abcdef.rs-bak";
     const std::filesystem::path pendingPossible = root / pendingLeaf;
     if (! WriteTestFile(pendingPossible, 64u))
     {

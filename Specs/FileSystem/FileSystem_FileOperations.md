@@ -29,7 +29,9 @@ directory object.
 2. Every authoritative bind is no-follow. A link is an object; the engine never follows its target
    to copy, overwrite, rename, delete, verify, or clean up the target.
 3. A hash proves content only. No hash, size, timestamp, filename, or pathname authorizes Skip,
-   overwrite, artifact cleanup, or source deletion.
+   overwrite, artifact cleanup, or source deletion. A decision or a policy the user chose, or the
+   confirmed Move itself, authorizes; sizes and timestamps may only stop a step because the item
+   changed, and select the items a user's bulk policy applies to (I62 D-4; invariants 13b, 14, 15).
 4. Move is native Move (one provider rename per selected object, or a per-child rename merge when a
    directory meets an existing directory on the same endpoint), managed copy-then-delete across
    endpoints, or Copy-only with the source retained.
@@ -38,7 +40,8 @@ directory object.
    revalidation/mutation boundary. The host never reopens the source pathname as destructive
    revalidation or deletion authority. A rename merge removes an emptied source directory only
    through that same exact cleanup boundary or, on a profile without object binding, through the
-   provider's own empty-directory removal, which fails source-kept on `ERROR_DIR_NOT_EMPTY`.
+   provider's own empty-directory removal, which fails source-kept on `ERROR_DIR_NOT_EMPTY`. A
+   source whose location opens it but cannot identify it follows invariant 15 instead.
 6. Any uncertain destructive outcome fails closed. Copy-only is a valid result and is displayed as
    `Copied; source kept`.
 7. Folder-on-folder is merge. It is never folder overwrite.
@@ -54,15 +57,152 @@ directory object.
 13. A Move never applies the link policy. `Preserve links` / `Skip links` is a Copy option; every
     Move relocates every link object literally, by native rename on one endpoint or by literal
     publication across endpoints.
-14. A Move refused before mutation at an existing destination whose object binding is Unsupported
-    reports that collision and the unavailable safe replacement authority, rather than only the
-    generic `ERROR_NOT_SUPPORTED` system text. A separate successful existence read establishes
-    this diagnostic fact only; it authorizes no overwrite, source cleanup, or identity/equality
-    claim. Missing destinations, failed probes, and unsupported source/ancestor bindings retain
-    their original failure classification. The original status and both objects are preserved.
-    The extra read runs only on this failure path, on the operation worker. Existing
+13a. **Delete source** (I62 B4). A Managed Move that meets an existing regular file may be answered
+    `Delete source`: the existing destination is kept untouched, nothing is bound, staged or copied,
+    and the source goes to the Recycle Bin. The item's result is *already there, source removed*; it
+    is not a skip, and the task is not Partial for it. The action is host-executed and the provider
+    issue ABI is unchanged. It is offered only by the bridge's file pre-flight, and only when all of
+    these hold: the task is a Move whose source the bridge may remove (Managed); the source is on the
+    Local provider, the one provider whose Delete either uses the Recycle Bin or refuses before any
+    change; the destination is a regular file, not a link or a folder; and the destination is
+    provably another file than the source. That last fact comes from the two bound objects'
+    identities, or, where the destination's location opens the file and cannot identify it, from the
+    location itself: the destination is held denying all sharing and the source's own name is then
+    opened for reading; a sharing refusal means one file reached by two names, and any doubt
+    withholds the action. The removal is by name through the provider's Recycle route, immediately
+    after the answer; a source changed in between is still recycled and can be restored. Where the
+    source's location has no Recycle Bin, the provider refuses the Recycle before any change and the
+    task asks one question on the card (D-5): `This location has no Recycle Bin. Delete the source
+    files permanently?`, with `Permanently delete`, `Keep source` and `Cancel`. Cancel is the default
+    and the Escape action. There is no Apply-to-all box and no task-wide button, because the answer
+    already covers the task. The question is the Recycle-refusal consent class of a Move, which no
+    other Move route raises. The task asks it at most once: one worker asks while the others wait,
+    and the answer stays on the task's conflict arbiter for every later source of the task whose
+    Recycle is refused this way. `Keep source` keeps the source; the item ends as a skip does, with
+    an Information note. `Permanently delete` uses the strongest authority the source's location
+    gives. The source is bound before the question and bound again, with delete access, after it.
+    The second object must have the first one's identity, size and last-write time. The destination
+    must still be provably another file than the source, by the proof above, made again because
+    time has passed. The delete consumes that bound object, whose handle refuses writers, renames and
+    other deletes from the second bind on. A source that changed, that may be the destination itself
+    under another name, that is read-only, or that the provider does not delete is kept: the item
+    ends as a skip with a Warning that says why, never as an Error that ends the task. A delete whose
+    outcome is unknown is an Error and is not retried. A source the location cannot bind is kept
+    without the question. Cost of the safeguard: two binds and two metadata reads per such source,
+    plus the proof's binds (or its two opens at a destination without identity). Benefit: a
+    permanent delete removes only the object the user agreed to remove. Apply to
+    all covers this action only for a collision whose two files have the same size and date by the
+    engine's comparison; for any other pair the answer covers that item alone, and a remembered
+    answer is reused only for later pairs with the same size and date. Equal size and date are not a
+    content comparison, and no result says the files are identical. A remembered `Delete source`
+    shares its repeat key with the other answers of that collision class: the latest answer given
+    for all replaces the earlier one.
+13b. **Bulk policies** (I62 B6). A regular-file collision prompt may offer two task-wide policies,
+    `Skip all with the same size and date` and `Replace all older`. Each is offered only when the
+    prompt's own pair matches it (the engine's comparison says the same size and date, or the
+    incoming file is newer by more than the two-second timestamp tolerance) and only where the
+    prompt offers Apply to all; `Replace all older` also needs `Replace` to be offered for that pair.
+    Choosing one answers the current item and records the policy on the task under its conflict
+    lock, next to the Apply-to-all answers. A policy is never cleared during its task, with one
+    exception: `Skip all with the same size and date` and a remembered `Delete source` for all (13a)
+    cover the same pairs, and the one given last replaces the other. At every later collision the
+    engine reads both items' facts, as it does for any collision, and a policy decides the item
+    without asking only when the collision is a plain regular-file collision (not a read-only
+    occupant, a link, a folder, a type mismatch, the one-hour class or a pair whose facts are
+    unknown) and its pair matches. Policies are consulted before the remembered Apply-to-all
+    answers: for a matching pair the policy wins, and an Apply-to-all answer given later covers only
+    the pairs no policy matches. The two policies cover disjoint pairs and both may be active in one
+    task. A policy skip is the typed user skip of the `Skip` button: both files stay, a Move keeps
+    its source, no content is opened and no stage is created. A policy replacement takes exactly the
+    route of a single `Replace`, including, where the destination cannot identify files, the
+    occupant facts read for that item. Both collision routes, the bridge's file pre-flight and an
+    issue raised by a provider, reach the one decision point where policies are applied. The task
+    records one Information note when each policy is first set and counts the items each policy
+    decided; the card's Result line says `N already there` and `N replaced because older`, and the
+    skipped items are also ordinary skips in every other count. Equal size and date are not a
+    content comparison. A policy set before the task starts is 13c. Not in this version: a
+    task-wide `Delete source` beyond 13a and item-scoped policy receipts for I18.
+13c. **Preset collision policy** (I62 B6.5, D-13). A task may carry one immutable value, fixed at
+    admission (`OperationAdmission::presetCollisionPolicy`), for what it does when a regular file
+    already exists at the destination: `Ask` (the default), `Skip`, `Replace older` or `Keep both`.
+    `Task::SeedPresetCollisionPolicy` writes it on the task's conflict arbiter before the first
+    collision, and it never changes during the task. `Skip` and `Keep both` decide, without a
+    question, every collision of two regular files whose scope could take an Apply-to-all answer, a
+    read-only occupant included. `Replace older` is the `Replace all older` policy of 13b, set from
+    the start. A preset decides an item only where its item action is offered for that pair; every
+    other collision asks, and a link, a folder, a type mismatch and a pair whose kinds are unknown
+    always ask. The preset is consulted where the 13b policies are, before the remembered
+    Apply-to-all answers. A preset skip is the typed user skip of `Skip` and is not counted as
+    `already there`; a preset replacement is counted as `replaced because older`. The Issues pane
+    shows the preset's applications as one row with a count; the preset records no Information note
+    of its own. No start surface sets the value yet: the control belongs to I18, and a self-test
+    sets it.
+14. A Move that meets an existing item at a destination whose object binding is Unsupported (the
+    location opens items but cannot identify them) is a name collision the user decides (I62 B1),
+    when the route qualifies: the source is an exactly bound regular file, both endpoints are Local,
+    the destination proves what it publishes, and every folder above the destination is a plain
+    directory. The bridge then raises the typed decision before any byte is read, with both items'
+    size and date, and offers Keep both, Skip, Skip all and Cancel. Replace and Replace read-only
+    are offered when the destination provider can publish over the occupant the user is shown
+    (I62 B2, `IFileSystemExpectedOccupantPublication`; the Local provider implements it for a
+    regular file it opens and cannot identify, never for a link or a folder, and not while the
+    occupant cannot be opened for replacement because it is in use). The provider reads the
+    occupant's facts before the decision (kind and protection attributes, size, creation and
+    last-write time, and the file index where the location reports one); the completed stage is
+    published over it by one replacing rename only while a fresh read of those facts is equal.
+    A difference publishes nothing (`ERROR_REVISION_MISMATCH`), the stage is removed, and the
+    decision is raised again on the current occupant, at most two more times for the item. A
+    rename the location refuses leaves the occupant and the source as they were; there is no
+    fallback to writing over the occupant, and no copy of the occupant is set aside. This is the
+    second level of the authority ladder: the facts are not an identity, a change between the
+    last read and the rename is the accepted limit of such a location, and the task says once,
+    as an Information note, that replaced items were checked by name, size and dates.
+    The user's decision is the authority: the existence read and the
+    compared facts authorize nothing by themselves, and no result claims that two items are
+    identical. The source stays exactly bound and is removed only after the publication proof.
+    A route that does not qualify keeps the refusal before mutation, and reports that collision and
+    the unavailable authority rather than only the generic `ERROR_NOT_SUPPORTED` system text; the
+    original status and both objects are preserved. Missing destinations, failed probes, and
+    unsupported source bindings on a route that invariant 15 does not admit retain their original
+    failure classification. Existing
     `fileops.identity.guard_us` instrumentation is retained, and
-    `FileOps.Conflict.DestinationIdentityUnavailable` counts the specialized diagnostic.
+    `FileOps.Conflict.DestinationIdentityUnavailable` counts both the decision and the refusal.
+    A folder Move onto an existing item there (I62 B1.5) qualifies the same way when the source is
+    an exactly bound folder and the existing item is a plain folder or a file, not a link or any
+    other reparse point. Onto a folder the two folders merge (invariant 7): no decision is asked for
+    the folder itself, and each child that collides raises its own decision through the bridge's
+    file pre-flight, with the actions above. Onto a file the bridge raises the type-mismatch
+    decision (Keep both, Skip, Cancel). A source folder that still holds a skipped child is kept and
+    the item ends partly skipped, not as an Error; a source folder the merge emptied is removed
+    through its exact binding. A destination folder that is a link or another reparse point, and a
+    linked folder above it, keep the refusal. A Copy was not refused there and already merged.
+15. **A Move source without identity** (I62 B7). A Managed Move whose source is at a Local location
+    that opens it but cannot identify it (its bind is `Unsupported`) is admitted when both
+    endpoints are Local, the destination proves what it publishes, and every folder above the
+    destination is a plain directory. A source whose open failed (`Indeterminate`) keeps its
+    refusal. Before the copy opens a regular file, the provider reads, by name and no-follow, its
+    facts (the delete identity of `IFileSystemIdentityDelete`: kind, compared attributes, size,
+    last-write and creation time, and the file index when the location reports a nonzero one) and
+    the metadata classes it carries (`ReadUnidentifiedMetadataFeatures`). The bridge copies it
+    through the pathname reader, which carries no alternate data stream, extended attribute or
+    encryption. After the destination's identity-owned publication, every required consent and any
+    requested verification, the provider's `DeleteIfIdentity` removes the source while the facts are
+    unchanged, comparing them on the handle that deletes it. The source is kept, and the item reports
+    `Copied; source kept` with the reason (a Warning, not an Error), when the facts differ, the
+    location refuses the delete (for example, the file is in use), the facts cannot be read, or the
+    file carries a Mark of the Web, an alternate data stream, extended attributes, encryption or a
+    cloud placeholder. When an existing destination item was replaced, the location is first asked
+    whether the source and the published file are two files (the same-file probe of 13a, here
+    without a source binding), because a copy published over the source itself under another
+    spelling has the source's facts; unless they are distinct, the source is kept. A source folder
+    is removed only when the Move emptied it, through the provider's empty-folder removal by name,
+    which fails on a folder that still holds anything; a link source is copied and kept. Nothing is
+    asked beyond the Move itself; this is not Permanent Delete by name, whose confirmation is
+    unchanged. The task records one Information note that items were checked by name, size and
+    dates, shared with invariant 14. Limits: a change that keeps a file's facts is not noticed, nor a
+    file swapped in and back under the name between the facts read and the copy's open; and, as
+    for a Copy from such a location, a file's streams and extended attributes are not copied, which
+    is why such a file keeps its source.
 
 ## Identity vocabulary
 
@@ -1140,13 +1280,21 @@ Move use the same immutable verification option: byte-count and committed-size v
 mandatory, while the optional BLAKE3 content pass runs only when requested by the plan. Verification
 never changes Copy-only source retention into source-delete authority.
 
-The Local provider bounds both copy-stage and backup leaves to 255 UTF-16 code units by truncating
-only the readable filename prefix without splitting a valid surrogate pair, retaining the purpose
-marker and 128-bit random hex token. The public writer's private overwrite stage uses the same
-bounded-name primitive; a long final leaf does not make its temporary component exceed the cap.
-It propagates entropy failure before creating a stage or renaming an original; exclusive-create
-and conditional-rename checks still own collision handling. Leftover discovery recognizes both
-these names and the legacy counter/GUID forms; backups remain potentially original data.
+A staging artifact created on a Win32 path is named `<final name>.<32 hex>[_<stream>].rs-tmp` when it
+is incomplete content, and `<final name>.<32 hex>.rs-bak` when it may hold the only copy of an
+original. Example: `harbor-timelapse.mp4.60d51a8a47eba25f7f7b699fb5137228_0.rs-tmp`. The real
+extension lets Windows and its tools group, filter and recognize these files. The token is 128 bits
+from the system generator; a failure of the generator fails the operation before a stage is created
+or an original is renamed, and there is no predictable-name fallback. The leaf never exceeds 255
+UTF-16 code units: only the readable prefix is shortened, without splitting a valid surrogate pair,
+never the token or the extension. The names are: the host bridge stage (`_<stream>.rs-tmp`, the
+stream being a diagnostic correlation number), the Local provider's copy, link and directory stages
+and the public writer's private overwrite stage (`.rs-tmp`), and the Local provider's overwrite
+backup and the case-only rename hop (`.rs-bak`, because each carries the original item itself).
+Exclusive-create and conditional-rename checks still own collision handling. Leftover discovery
+recognizes exactly the shapes the current build writes; a name that merely ends in `.rs-tmp` or
+`.rs-bak` without the token, and a name an earlier version wrote, is an ordinary file (owner decision
+I62 D-17). Names on remote, S3 and MTP locations keep their own dot-hidden forms.
 Publication clears the writer's Temporary hint but preserves Hidden from finalized source metadata.
 Literal link Preserve uses the effective SubstituteName and relative flag, never advisory PrintName;
 extended drive/UNC and NT prefixes must retain their original target meaning.
@@ -1322,11 +1470,13 @@ left under its temporary sibling.
 | In-tree link target cannot be mapped/published | Retain the source link and dependent source ancestry; report target conflict | Source retained | Never infer another mutation grant |
 | Name infeasible | Keep Both if a valid name exists; otherwise Skip / Cancel | Cancel | Same feasibility class |
 | Sharing/access/transient provider error | Retry / Skip / Cancel | Cancel | Exact error class |
-| Recycle failed | Delete permanently / Skip / Cancel; under **More…** in a multi-item task, Delete all remaining permanently | Cancel | Never the checkbox; only the explicit task-scoped choice (see Delete and Recycle) |
+| Recycle failed | Delete permanently / Skip / Cancel; in a multi-item task also the direct action Delete all remaining permanently, immediately before Cancel | Cancel | Never the checkbox; only the explicit task-scoped choice (see Delete and Recycle) |
 
 Decisions are one-shot unless the user explicitly selects an eligible scope. **Skip All** is Skip
-plus explicit Apply-to-all for that row and is normally exposed through **More…**; Disk full exposes
-it directly beside Retry and Cancel when its destination scope is qualified. It is never available
+plus explicit Apply-to-all for that row. It is a direct action before Cancel; it moves under
+**More…** only when a second additional action shares that menu, because a menu is never published
+for a single command. Disk full exposes it beside Retry and Cancel when its destination scope is
+qualified. It is never available
 for Recycle escalation. A digest match never auto-Skips. Keep Both preview names are advisory until
 create-exclusive publication succeeds. The task cache key is the complete typed scope: conflict
 class, source kind, destination kind, source path profile, destination path profile, and—when the
@@ -1399,8 +1549,13 @@ name conflicts. The I26 placement approved on 2026-09-19 publishes eligible acti
 order Keep Both, Overwrite (displayed as Replace / French Remplacer), Skip, Cancel; it removes the
 three-primary-button cap for these collisions. Read-only/link variants retain their specific action
 identity, label and authority gates in the replacement slot. Width never moves these choices into
-More; the consumer wraps them. Skip All remains a distinct scoped More action. Other conflict classes
-retain their published order and safe defaults, including Queue after for same-host overlap.
+More; the consumer wraps them. Skip All remains a distinct scoped action, published directly before
+Cancel (I62 slice C): the policy publishes overflow only when two or more actions remain outside the
+primary group, and a single remaining action becomes a direct action without changing the default or
+Escape action. Recycle escalation's task-scoped grant follows the same rule (I62 decision D-6): alone
+outside the primary group, it is a direct action immediately before Cancel, never the default and never
+the Escape action. Other conflict classes retain their published order and safe defaults, including Queue after
+for same-host overlap.
 This engine placement is implemented with focused x64 Debug policy/native integration evidence in
 [I26's policy slice](../TestRuns/4cb089111a23/FileOps/2026-09-19_105819-i26-policy-candidate/README.md).
 The consumer implements measured whole-action wrapping; V65 x64 qualification and its limits are
@@ -1753,8 +1908,9 @@ outcome keeps the source and never retries permanent deletion. Default is Cancel
 behavior of clearing the Recycle flag and retrying provider pathname deletion is prohibited.
 
 On a volume without a Recycle Bin every item of a large Delete fails the same way, so a task with
-more than one selected item also offers, under **More…** of a real escalation prompt, the explicit
-task-scoped choice **Delete all remaining permanently** (owner decision Q2). Accepting it deletes
+more than one selected item also offers, as a direct action of a real escalation prompt, the explicit
+task-scoped choice **Delete all remaining permanently** (owner decision Q2; a direct action since I62
+decision D-6, because it would be the only entry of a menu). Accepting it deletes
 the prompted item exactly as **Delete permanently** does and records one task-scoped grant in that
 task's decision cache, keyed by the Recycle-failed class, the provider profile, and the delete
 endpoint's root (the route/volume). A later item of the same task consumes the grant instead of
@@ -1876,7 +2032,7 @@ cannot prove which object a name refers to.").
 
 A Recycle the location refuses on such a root escalates through the same route behind its own consent
 class (`RecycleFailedByName`: **Delete by name**, Skip, Cancel the default; for a multi-item task the
-explicit **Delete all remaining by name** under More, whose task-scoped grant is keyed by that class and
+explicit **Delete all remaining by name** as a direct action, whose task-scoped grant is keyed by that class and
 never covers an exact-identity escalation, nor the reverse). Preparing pins a Recycle root's facts best
 effort for this (a folder's pinned tree included); a root whose pin failed keeps the reason with its
 scope (`byNamePinStatus`), so its refused Recycle offers no delete by name and says why: over the
@@ -1886,9 +2042,9 @@ result. The facts and a
 folder's tree are re-checked before the question and after the answer, the provider deletes only the
 pinned tree as above, another live task holding the path refuses it (checked right before its delete), a
 refusal names its step as above (`delete.recycle.byName`, never "kept" once the check passed; a partial
-stop carries the same note), and a removal records the Information note `delete.recycle.byName`. Move, Rename and expected-destination replacement proofs never
-use this route, and only the Local provider offers it for a binding provider (D-7.3); providers without
-binding keep C10.
+stop carries the same note), and a removal records the Information note `delete.recycle.byName`. Rename and expected-destination replacement proofs never
+use this route; a Managed Move uses its file delete only for its own source, as invariant 15 states (I62 B7). Only the
+Local provider offers it for a binding provider (D-7.3); providers without binding keep C10.
 
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
 contract succeeds; on an identity-less location they keep the refusal and never delete by name. No
@@ -2012,7 +2168,7 @@ in the published layout is coerced to Cancel.
 | Sparse allocation inflation | Continue | Same task/risk/destination root when explicitly selected |
 | Placeholder hydration/recall | Download and continue | Same task/risk/destination root when explicitly selected |
 | Security-significant metadata loss | Move anyway / Copy and keep source | Same task/risk/destination root when explicitly selected |
-| Recycle escalation | Delete permanently / Skip; More: Delete all remaining permanently (multi-item task) | Exact item, or the explicit task-scoped choice for later known non-commits on the same profile/root; never the Apply-to-all checkbox |
+| Recycle escalation | Delete permanently / Skip; Delete all remaining permanently (multi-item task, a direct action) | Exact item, or the explicit task-scoped choice for later known non-commits on the same profile/root; never the Apply-to-all checkbox |
 
 An accepted per-item choice is returned directly to the waiting executor together with its accepted
 prompt observation; validation remains bound to that task, prompt generation, item and destination
@@ -2119,7 +2275,15 @@ Parallel regular-file transfers share one process-wide file budget, default four
 not four independently for every job. A fifth eligible one-file job waits before execution, with
 its capacity reason, until another job leaves. A live increase wakes waiters; a decrease lets
 existing transactions finish and admits no new holder above the new target. Queue mode still
-honors its existing serial job order.
+honors its existing serial job order. That order is the order of the waiting cards
+(I62 slice E): a task takes its queue place when it is admitted and keeps it through Preparing, so a
+task that is still Preparing holds the queue and no task behind it starts, however fast the later
+task prepared. A later task MAY start before an earlier one only when the earlier task (a) was
+cancelled, withdrawn or failed before it could start; (b) is waiting for the user's answer on its own
+card; (c) is queued behind a named task by an overlap decision; or (d) was passed by the user's own
+Start now or reorder. In cases (b) and (c) the earlier card states its reason, and it starts next once
+the reason clears. Every exit that ends a task before it starts gives its place up and wakes the
+waiters in the same step, and every transition into and out of waiting for the user wakes them.
 
 Automatic independent admission requires built-in local-filesystem endpoints, a non-Native
 transfer strategy, positively bound regular source files, and destination leaves that were
@@ -2283,7 +2447,8 @@ conflict again is a contract failure, not a reason to reprompt indefinitely. The
 that receipt in one conditional `RenameIfUnchanged` attempt, obtains a fresh receipt after a proven
 replacement race, or terminates without mutating either object.
 
-Case-only Local rename uses an exclusive cryptographically unpredictable temporary sibling. Entropy
+Case-only Local rename uses an exclusive cryptographically unpredictable temporary sibling
+(`<leaf>.<32 hex>.rs-bak`). Entropy
 failure or a raced existing temporary name stops before the source is moved; the temporary hop never
 uses replacement semantics against an unowned object.
 
@@ -2477,7 +2642,7 @@ their own handle). The deadline lives in one per-thread slot exported by Common.
 (`Common::SynchronousIoCancelWatch::CurrentThreadCleanupDeadline`), so the host and the Local plugin,
 each with its own watch registry, read the same window (an accepted S4 departure from a plan that
 named no shared slot). (Before I35 the 500 ms grace also applied to cleanup, so a slow SMB removal of a
-canceled Copy's stage could be cut short and leave a `.rs_tmp_` leftover.) A call
+canceled Copy's stage could be cut short and leave a stage leftover.) A call
 still wedged after the grace (a dead share holding an open, enumerate,
 write, rename, delete, flush, or close) fails with `ERROR_OPERATION_ABORTED`, which a canceled task
 reports as the cancellation itself and never as a provider fault: the durable cancel request, not the
@@ -2852,6 +3017,37 @@ The existing More menu, Pause/Resume, Cancel, Start now/reorder, Issues pane, co
 filters, auto-dismiss, speed controls, graph history, and task diagnostics survive. UI details are
 owned by `Specs/UI/UI_FileOperationsPopup.md`.
 
+### Keep awake (I62 G7, D-14)
+
+While at least one task is running or stopping, the application holds one process-wide Windows power request
+of type `PowerRequestSystemRequired`. It is created with `PowerCreateRequest` and the simple reason string
+`IDS_FILEOPS_KEEP_AWAKE_REASON`, set with `PowerSetRequest` and cleared with `PowerClearRequest`. There is no
+preference: the request is always made.
+
+- A task counts when it is admitted (it holds its operation slot), is not finished, and is either stopping
+  (Cancel, Stop or shutdown was requested, so rollback and cleanup still run) or is neither paused nor waiting
+  for the user's answer. A queued task that waits only for another task is not admitted and does not count;
+  the task it waits for holds the request. A task the user paused, a task the queue paused behind a running
+  one, and a task whose worker waits for the user's answer to a conflict or another decision do not count.
+- A wait for an answer stops counting only once the task has reported no progress for two minutes
+  (`FileOperations::kAwaitingAnswerQuietMs`). Other streams of the same task may still transfer while one item
+  waits for its answer, and releasing the request then would let the computer sleep in the middle of a transfer.
+  The cost: a task that waits for an answer keeps the computer awake for up to two minutes after its last
+  progress. Batch Rename has one worker, so its wait stops counting at once.
+- The request is released when no task counts. That includes the moment the last task ends and the destruction
+  of the task or its owner, so no path to the terminal state keeps it.
+- The request asks only for the system to stay awake. The display is not kept on
+  (`PowerRequestDisplayRequired` is not used) and may turn off. Closing the lid and choosing Sleep still sleep
+  the computer; the application does not try to block either. On a Modern Standby computer running on battery,
+  Windows may still enter standby while the request is held. This limit has not been measured.
+- A failure of any power call never fails a task. The first failure of the process-wide request is written once
+  as an Information line to the debug output, and the task continues.
+- Each task re-evaluates its share through `Task::UpdateKeepAwake` when one of the facts changes: admission,
+  leaving the operation, user pause and resume, queue pause and resume, the start and end of a wait for an
+  answer, a cancel or stop request, and the terminal state. The predicate is the pure function
+  `FileOperations::TaskNeedsMachineAwake`; `FileOperations::PowerRequest` counts holders. Both are covered
+  with a fake power API in `FileOps_ReviewRemediationContracts`.
+
 ## Artifact warnings and retained state
 
 `FileOperationDurableStore` is the app-local mechanics boundary for retained File Operations state,
@@ -2880,11 +3076,11 @@ pane, Find, Search, Compare, enumeration, or an ordinary user-selected query/fil
 
 Artifact classification is deliberately non-authoritative. The registry creates one empty in-memory
 generation and never opens or enumerates the retired Batch Rename journal root. Only the recognized
-generated-name shapes `.rs_tmp_`, `.rs_copy_tmp_`, `.~rs-write-`, `.rs_bak_`, `.rs_ren_` and
-`.rs_case_tmp_<32 hex>` (the Local case-only rename's temporary name), and the provider staging names
+generated-name shapes produce `Possible`: the Win32 shapes `<name>.<32 hex>[_<stream>].rs-tmp`
+and `<name>.<32 hex>.rs-bak`, and the provider staging names
 (I35 R7.6) `.rs-bak-<32 hex>[-<leaf>]` (an S3 backup key), `.redsalamander-upload-`, `-writer-` and
-`-rollback-<32 hex>` (Curl; `rollback` also Microsoft Drive) and `.<leaf>.rs-mtp-overwrite-` /
-`.rs-mtp-create-<32 hex>.tmp` (MTP writer temps) produce `Possible`; all other names are Ordinary. Neither a name shape, pane row, search-index field, badge,
+`-rollback-<32 hex>` (Curl; `rollback` also Microsoft Drive) and `.<leaf>.rs-mtp-overwrite-<32 hex>.tmp`
+(the MTP writer temp). All other names are Ordinary, including the names earlier versions wrote. Neither a name shape, pane row, search-index field, badge,
 nor an in-memory task object proves app ownership or grants cleanup/recovery authority.
 
 Folder enumeration and Find load one empty classifier snapshot per request. After Batch Rename
@@ -2904,8 +3100,8 @@ Possible and Ordinary items participate in ordinary enumeration, sort, user filt
 content search, and Compare decisions. Possible classification adds a warning overlay/badge and the
 reason `name shape only`. The badge reads "Possibly incomplete file (left by an interrupted copy or
 move)", except for the shapes that may hold the only complete copy of the user's data, which read
-"Possibly an original kept by an interrupted copy or move" (`Projection::mayHoldOriginal`): the backup
-(`.rs_bak_`), the rename hop (`.rs_ren_`), the case-only rename's temporary name (`.rs_case_tmp_`),
+"Possibly an original kept by an interrupted copy or move" (`Projection::mayHoldOriginal`): the
+`.rs-bak` shape (the Local backup and the case-only rename hop),
 the S3 backup key (`.rs-bak-`) and the remote rollback sibling (`.redsalamander-rollback-`); it is never an artifact-specific suppression rule and carries no task,
 phase, intended-name, durable-record, cleanup, or recovery metadata. Properties, selection,
 read/open/edit/preview, Copy/export, Inspect, Reveal/Open location, configured viewer/editor and user-menu
@@ -3480,7 +3676,7 @@ The File Operations selftest and provider-contract matrix cover:
   and a small folder (its pinned tree compared entry by entry on the share) by name
   (`Delete_NasFileIdInfoUnsupportedByName`);
 - a multi-item Recycle whose items (files and a folder) all fail with a known non-commit asks once;
-  the task-scoped Delete all remaining permanently choice, offered only under More, deletes every
+  the task-scoped Delete all remaining permanently choice, a direct action before Cancel, deletes every
   item, each Completed with its accepted decision and escalation recorded; a new task asks again,
   Skip covers one item and Cancel ends the task; an item whose Recycle outcome is unknown is never
   covered by the grant (`Phase10_RecycleEscalationTaskScopedGrant`);
@@ -3546,6 +3742,15 @@ public Bulk scope. Lost retry identity withdraws certainty permanently. Aggregat
 the existing row mutex using bounded active receipts and incremental scope/count/size totals;
 regular rows remain bounded to sixteen, with separate bounded producer receipts. Late events
 are guarded by scope, logical leaf ID and source identity and cannot retire a newer row.
+
+Each regular row carries a display slot (I62 slice F), under the same mutex. A new stream takes the
+lowest slot that no other row holds; a row holds its slot while its stream runs and, after it ended,
+for the 300 ms the popup still paints it (`FileOperationsLayoutStability::StreamHoldsRow`, shared
+with the popup). A stream that begins its next file keeps its slot unless another stream took it
+after that linger. A stream that replaces an evicted row, or reuses a finished row, takes the lowest
+free slot. The row array itself stays dense: removing or expiring a row moves the later rows down,
+and their slots move with them, so no stream changes slot while it lives. The popup snapshot copies
+the slot with the row.
 
 Discovery still uses one bounded traversal and closes at listing completion, independently of
 transfer drain. A complete byte total requires a provider's independent enumeration certificate

@@ -1270,7 +1270,9 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/AdvisorSurvey_002-warpdrive-tailwind-executable-surface_2026-08-25.md',
             'Specs/Plans/Done/AdvisorSurvey_003-closeout-gate-hygiene_2026-08-25.md',
             'Specs/Plans/Done/AdvisorSurvey_004-refresh-stale-active-owners_2026-08-25.md',
-            'Specs/Plans/Done/AdvisorSurvey_005-decision-hold-scratch-routing_2026-08-25.md'
+            'Specs/Plans/Done/AdvisorSurvey_005-decision-hold-scratch-routing_2026-08-25.md',
+            # Exact I62 File Operations UX closeout record (closed 2026-11-11); I63 owns the unfinished work.
+            'Specs/Plans/Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md'
         )
     )
 

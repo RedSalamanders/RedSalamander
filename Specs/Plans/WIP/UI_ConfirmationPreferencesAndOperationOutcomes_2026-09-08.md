@@ -8,6 +8,8 @@ Planned at: `3dcf7ab167211451882f2c50e202aec68a5a4318`, 2026-09-08.
 
 Owner: this plan owns the Confirmation page, confirmation-policy integration, and metadata-outcome changes described here. The authoring request is for a WIP specification only; no application behavior has changed.
 
+Incoming from [I62](../Done/FileOperations_UxFidelityAndPaneActivation_2026-11-10.md), closed 2026-11-11: its decision D-13 proposed a start option "If a file already exists: Ask / Skip / Replace older / Keep both". I62 delivered the engine side as `OperationAdmission::presetCollisionPolicy` (default Ask) and no control sets it; the owner has not confirmed D-13 itself (I63 item RX1 asks). If accepted, the control belongs on this plan's start surface. Section 5.4's "reduced safe action set" must be re-read against I62's owner decision D-4, which lets a location without object identity replace through an expected item and an atomic rename.
+
 This is a **non-normative implementation proposal**. Defaults below are the recommended product design. Current contracts remain in force until the corresponding implementation, tests, and authoritative-spec updates land together. The supplied Open Salamander screenshot is a reference for the two-section organization, not a requirement to reproduce its controls, exemptions, or unsupported features.
 
 ## 1. Purpose and decisions

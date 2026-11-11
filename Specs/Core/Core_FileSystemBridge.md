@@ -145,7 +145,10 @@ The bridge uses the single-pass discovery scheduler from
   remains mandatory.
 - Directory-on-directory merges. Conflicts are raised for colliding children.
 - Recursive Move deletes each proven source file after its own destination contract, then removes
-  directories non-recursively and deepest-first.
+  directories non-recursively and deepest-first. A source the Local location opens but cannot
+  identify (I62 B7) keeps no binding: a file is removed by the provider's delete by name while the
+  facts read before its copy are unchanged, and a folder by its empty-folder removal; anything else
+  keeps the source (File Operations invariant 15).
 - A new/changed, skipped, or retained source descendant blocks parent removal without opening a
   second cleanup prompt. That retention propagates through only the affected ancestor chain.
 - Directory metadata retains O(depth + directories with in-flight children) state. Metadata is
@@ -256,7 +259,10 @@ publication and never authorizes a stage pathname. Keep Both is finalized by cre
 publication. Collision classification reads source and destination metadata no-follow before the
 prompt. Folder-on-folder merges recurse and prompt only on colliding children; file/directory kind
 mismatches never gain Overwrite. An exact final destination link is a typed Replace link / Keep
-Both / Skip conflict, while any linked destination ancestor remains a hard stop.
+Both / Skip conflict, while any linked destination ancestor remains a hard stop. A folder also
+merges onto an existing plain folder at a destination that opens items but cannot identify them
+(I62 B1.5); there a Managed Move onto a destination folder that is a link or another reparse point
+is refused before the bridge starts.
 
 Before a destructive collision action is exposed, the host binds the current final destination
 no-follow and retains that exact authority across the prompt. Overwrite, Replace read-only, and
@@ -266,7 +272,13 @@ Overwrite/Replace read-only are offered only when the destination's atomic-final
 the overwrite flag (R3-1): the bridge reads the occupant no-follow before the prompt, creates the
 writer with the granted flags, passes that occupant through `IFileWriterExpectedReplacement`
 before the first byte, and the provider replaces only that occupant (`ERROR_REVISION_MISMATCH`
-otherwise, nothing published). A route that can do neither withholds every destructive action.
+otherwise, nothing published). A binding provider that opens an occupant it cannot identify may
+offer the same two actions through `IFileSystemExpectedOccupantPublication` (I62 B2): the bridge
+asks the provider for the occupant's facts before the prompt, keeps them with the decision, copies
+into an identity-owned stage, and the provider renames that stage over the occupant only while
+its facts are unchanged (`ERROR_REVISION_MISMATCH` otherwise, nothing published, and the collision
+is raised again on the current occupant). A route that can do none of these withholds every
+destructive action.
 Replacing a directory link uses an atomically created, identity-owned directory stage;
 the resulting receipt never becomes a recursive overwrite grant. Its metadata is restored like any
 created directory's: through the path bound again and accepted only with the identity recorded at
@@ -287,7 +299,8 @@ Skip All; unchecked Skip is one-shot. Skip All is unavailable for Recycle or unr
 target retention.
 
 Cleanup may call `AbortOwnedObject` only for the exact stage token returned by exclusive creation.
-A name pattern such as `.rs_tmp_` is never cleanup authority. Publication failure, cancellation,
+The stage is named `<final name>.<32 hex>_<stream>.rs-tmp`. A name pattern such as `.rs-tmp` is never
+cleanup authority. Publication failure, cancellation,
 or provider uncertainty preserves any object whose ownership/outcome cannot be proven and reports
 an artifact/result axis.
 

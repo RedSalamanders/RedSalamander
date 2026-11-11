@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FileOperationsCompletedGroupLayout.h"
+#include "FileOperationsLayoutStability.h"
 #include "FolderWindow.h"
 #include <DxUi/DxUi.h>
 
@@ -59,6 +60,9 @@ struct PopupHitTest
         TaskConflictInspectSource,
         TaskConflictInspectDestination,
         TaskIssues,
+        // The completed card's single recovery or diagnostic command, shown as its own button; data
+        // is the command. Two or more commands use TaskCompletedMore and its menu.
+        TaskCompletedAction,
     };
 
     Kind kind                 = Kind::None;
@@ -159,6 +163,9 @@ struct TaskSnapshot
         bool explicitLifecycle        = false;
         bool sizeKnown                = false;
         bool terminal                 = false;
+        // I62 F1: the engine's row slot for this stream; kMaxInFlightFiles when there is none (synthetic fixtures), and
+        // such entries are drawn in snapshot order below the slotted ones.
+        size_t streamSlot = kMaxInFlightFiles;
     };
 
     uint64_t taskId               = 0;
@@ -233,6 +240,9 @@ struct TaskSnapshot
         std::wstring destinationParentPath;
         ItemMetadata sourceMetadata;
         ItemMetadata destinationMetadata;
+        // I62 B3: the engine's comparison of the incoming item with the existing one.
+        uint8_t dateRelation = 0; // FileOperations::ConflictDateRelation
+        uint8_t sizeRelation = 0; // FileOperations::ConflictSizeRelation
         std::array<uint8_t, kMaxConflictActions> actions{};
         size_t actionCount = 0;
         std::array<uint8_t, kMaxConflictActions> primaryActions{};
@@ -301,6 +311,9 @@ struct TaskSnapshot
     unsigned long canceledRetainedSourceCount = 0;
     unsigned long unknownSourceCount          = 0;
     unsigned long missingSourceCount          = 0;
+    unsigned long alreadyThereSourceRemovedCount = 0;
+    unsigned long skippedSameSizeAndDateCount    = 0; // I62 B6
+    unsigned long replacedOlderCount             = 0; // I62 B6
     StatusKind statusKind                     = StatusKind::None;
     // I35 R9.4 (P3): false when the completed task changed nothing (CompletedTaskFacts).
     bool startedMutation = true;
@@ -324,6 +337,7 @@ struct TaskSnapshot
     uint64_t queueOrderKey               = 0;
     bool canMoveQueueUp                  = false;
     bool canMoveQueueDown                = false;
+    size_t queuePosition                 = 0u; // 1-based start order of a waiting card; 0 when it has none
 
     // Single-pass discovery knowledge state.
     bool discoveryAheadActive               = false;
@@ -432,6 +446,7 @@ struct PopupLayoutDebugSnapshot
     bool conflictMoreVisible                       = false;
     bool completedDiagnosticsMoreVisible           = false;
     bool completedDiagnosticsMoreButtonRectVisible = false;
+    bool completedDirectActionVisible              = false;
     bool completedIssuesVisible                    = false;
     bool completedIssuesHitTargetActive            = false;
     bool completedIssuesLabelFits                  = false;
@@ -527,6 +542,9 @@ struct PopupLayoutDebugSnapshot
     bool layoutMotionActive                         = false;
     bool autoResizeMotionActive                     = false;
     bool selectedTaskHeightMotionActive             = false;
+    // I62 slice F: the stream rows the task's card reserves (painted or blank) and the card list's scrollbar decision.
+    size_t taskReservedStreamRows                   = 0u;
+    bool scrollBarVisible                           = false;
     bool completedGroupLayoutMotionActive           = false;
     bool autoResizeAnimationEnabled                 = false;
     bool footerQueueModeAnimationEnabled            = false;
@@ -694,6 +712,7 @@ struct PopupLayoutDebugSnapshot
     size_t conflictMeasuredPrimaryCount = 0u;
     bool conflictSkipAllEligible        = false;
     size_t completedVisibleActionCount  = 0u;
+    uint32_t completedDirectActionCommand = 0u;
     std::array<uint8_t, TaskSnapshot::kMaxConflictActions> conflictPrimaryActions{};
     std::array<uint8_t, TaskSnapshot::kMaxConflictActions> conflictOverflowActions{};
     TaskSnapshot::StatusKind taskStatusKind = TaskSnapshot::StatusKind::None;
@@ -1488,6 +1507,19 @@ private:
         bool stacked      = false;
     };
 
+    // I62 S7 (slice F8): a wrapped text measured once per text, width, fallback line height and format. The cache holds a
+    // reference to the format, so a recreated format never matches the old entry. The layout is kept with its maximum
+    // height set to the measured height, as DrawWrappedText builds it, so the painter can draw it as it is.
+    struct WrappedTextCache final
+    {
+        std::wstring text;
+        wil::com_ptr<IDWriteTextFormat> format;
+        wil::com_ptr<IDWriteTextLayout> layout; // null when the text is empty or the layout failed
+        float width      = 0.0f;
+        float lineHeight = 0.0f;
+        float height     = 0.0f;
+    };
+
     // Bounded by snapshot rows, with text/layout work only when the inputs change.
     struct CardInformationLayout final
     {
@@ -1501,9 +1533,22 @@ private:
         std::wstring paintedHeader;
         float headerWidth = 0.0f;
         wil::com_ptr<IDWriteTextFormat> headerFormat;
+        WrappedTextCache summaryLayout; // the skipped-counting work summary, as the height pass measures it
+        WrappedTextCache summaryPaint;  // and as the painter draws it, at its own width
     };
-    void PrepareCardInformation(const std::vector<TaskSnapshot>& snapshot, float width);
-    void PrepareFactPair(GraphLabelLayout& pair, std::wstring leading, std::wstring trailing, IDWriteTextFormat* format, float width, float leadingSlot = 0.0f);
+    [[nodiscard]] float PrepareWrappedText(WrappedTextCache& cache, IDWriteTextFormat* format, std::wstring_view text, float width, float lineHeight) noexcept;
+    void PrepareCardInformation(const std::vector<TaskSnapshot>& snapshot, float width, ULONGLONG tick);
+    // stackHold, when given, makes the stacked decision sticky (FileOperationsLayoutStability::PairWantsStack through a HeldCondition
+    // owned by the card), evaluated on every call because it changes with time and not with the cached layout.
+    void PrepareFactPair(GraphLabelLayout& pair,
+                         std::wstring leading,
+                         std::wstring trailing,
+                         IDWriteTextFormat* format,
+                         float width,
+                         float leadingSlot                                      = 0.0f,
+                         FileOperationsLayoutStability::HeldCondition* stackHold = nullptr,
+                         ULONGLONG tick                                         = 0u,
+                         bool tabularFigures                                    = false);
     [[nodiscard]] float FactPairHeight(const GraphLabelLayout& pair) const noexcept;
     void DrawFactPair(const GraphLabelLayout& pair, const D2D1_RECT_F& bounds, uint64_t taskId, std::wstring_view leadingId, std::wstring_view trailingId);
 
@@ -1521,6 +1566,40 @@ private:
         ScalarAnimation height;
         bool expanded = false;
     };
+
+    // I62 slice F (Specs/UI/UI_FileOperationsPopup.md, "Layout stability"): one card's state for the rules in
+    // FileOperationsLayoutStability.h. A change of the card's lifecycle phase starts it afresh, so a new phase is
+    // measured at once. Erased with the card, like the height animation.
+    struct TaskLayoutStability final
+    {
+        enum class Phase : uint8_t
+        {
+            Unknown,
+            Collapsed,
+            Finished,
+            Decision,
+            Waiting,
+            Running,
+        };
+        Phase phase = Phase::Unknown;
+        FileOperationsLayoutStability::ReservedRows streamRows;
+        size_t reservedStreamRows = 0u; // what the last height pass reserved; the painter leaves the unused rows blank
+        FileOperationsLayoutStability::HeldCondition progressStacked;
+        FileOperationsLayoutStability::HeldCondition countsStacked;
+        FileOperationsLayoutStability::HeldCondition throughputStacked;
+        FileOperationsLayoutStability::HeldCondition concurrencyRow;
+        FileOperationsLayoutStability::HeldCondition waitingReasonRow;
+        float concurrencyHeight               = 0.0f; // the row's height while it was last present
+        float concurrencyReservedHeight       = 0.0f; // what the card reserves now: the height while held, else 0
+        float waitingReasonHeight             = 0.0f;
+        float waitingReasonReservedHeight     = 0.0f;
+        std::wstring shownRate;
+        uint64_t shownRateTick = 0u;
+        std::wstring shownEta;
+        uint64_t shownEtaTick = 0u;
+    };
+    // The card's state for this frame, started afresh when its phase (collapsed, finished, decision, waiting, running) changed.
+    [[nodiscard]] TaskLayoutStability& ResolveTaskLayoutStability(const TaskSnapshot& task, bool collapsed);
 
     enum class CaptionStatus : uint8_t
     {
@@ -1743,6 +1822,11 @@ private:
     int _maxAutoSizedWindowHeight     = 0; // Sticky max window height (prevents resize "dancing")
     int _scrollPos                    = 0;
     bool _scrollBarVisible            = false;
+    // I62 slice F: something asked to scroll while the bar was withheld for a pending automatic resize. The bar is then
+    // shown for as long as the content overflows the viewport (FileOperationsLayoutStability::ScrollBarNeeded).
+    bool _scrollRequestedWhileWithheld = false;
+    // The largest scroll position of the content in the painted viewport, whether or not the bar is shown.
+    [[nodiscard]] int ModelMaxScrollPosition() const noexcept;
 
     D2D1_RECT_F _footerCancelAllRect{};
     D2D1_RECT_F _footerPauseResumeAllRect{};
@@ -1900,6 +1984,7 @@ private:
     bool _preserveWindowSizeForThroughputChange = false;
     std::unordered_set<uint64_t> _compactExpandedTasks;
     std::unordered_map<uint64_t, TaskHeightAnimation> _taskHeightAnimations;
+    std::unordered_map<uint64_t, TaskLayoutStability> _taskLayoutStability;
     std::unordered_map<uint64_t, ScalarAnimation> _taskDisclosureAnimations;
     ScalarAnimation _completedGroupVisibilityAnimation;
     ScalarAnimation _footerDisclosureAnimation;
@@ -1945,6 +2030,7 @@ private:
     ULONGLONG _autoResizeAnimationStartTick = 0;
     ULONGLONG _uiMotionTimerDueTick         = 0;
     UINT _telemetryTimerIntervalMs          = 0u;
+    ULONGLONG _lastRateUpdateTick           = 0; // I62 slice F: UpdateRates runs at most once per telemetry interval
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<ID2D1DeviceContext> _target;
@@ -2051,6 +2137,9 @@ private:
     {
         TerminalSummaryLayout prepared;
         std::array<unsigned long, 10> counts{};
+        unsigned long alreadyThereSourceRemovedCount = 0u;
+        unsigned long skippedSameSizeAndDateCount    = 0u;
+        unsigned long replacedOlderCount             = 0u;
         uint64_t languageRevision = 0u;
         uint8_t verificationState = 0u;
         bool startedMutation      = true;
@@ -2064,6 +2153,8 @@ private:
     {
         std::array<std::wstring, 3> labels;
         std::array<D2D1_RECT_F, 3> bounds{};
+        // The command of the third action when it is a direct button; 0 when it is absent or the menu.
+        uint32_t directCommand = 0u;
         wil::com_ptr<IDWriteTextFormat> format;
         float widthDip   = 0.0f;
         float heightDip  = 0.0f;

@@ -18,6 +18,13 @@ Some actions explicitly use both panes:
 - **Copy to other pane** (`F5`): copies the focused pane selection into the other pane’s current folder.
 - **Move to other pane** (`F6`): moves the focused pane selection into the other pane’s current folder.
 
+Clicking in the pane that does not have the focus:
+
+- The first click takes you to that pane and moves the cursor to the item you clicked. It never throws away the selection that pane had, so you can prepare a selection, work in the other pane and come back with one click.
+- **Ctrl**, **Shift** and right-click work the same in both panes: **Ctrl+click** adds or removes the item, **Shift+click** selects a range.
+- The next plain click selects as usual. A click on the empty area of the list that brought you to the pane changes nothing; the next one clears the selection.
+- Dragging an item that is not part of that pane’s selection drags that item alone.
+
 Pane management:
 
 - **Swap panes** (`Ctrl+U`): swaps the left/right locations.

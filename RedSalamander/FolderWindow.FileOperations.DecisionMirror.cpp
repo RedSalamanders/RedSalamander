@@ -95,7 +95,12 @@ struct MirrorPrompt final
     uint64_t factItemCount       = 0u;
     bool factBytesKnown          = false;
     uint64_t factBytes           = 0u;
-    FolderWindow::Pane pane      = FolderWindow::Pane::Left;
+    // I62 B3: both items' facts and the engine's comparison, as the card shows them.
+    FileOperations::ConflictPromptItemFacts sourceItem;
+    FileOperations::ConflictPromptItemFacts destinationItem;
+    uint8_t dateRelation    = 0u;
+    uint8_t sizeRelation    = 0u;
+    FolderWindow::Pane pane = FolderWindow::Pane::Left;
 };
 
 [[nodiscard]] FileOperations::ConflictPromptTextFacts PromptTextFacts(const MirrorPrompt& prompt) noexcept
@@ -123,6 +128,10 @@ struct MirrorPrompt final
     facts.factItemCount           = prompt.factItemCount;
     facts.factBytesKnown          = prompt.factBytesKnown;
     facts.factBytes               = prompt.factBytes;
+    facts.sourceItem              = prompt.sourceItem;
+    facts.destinationItem         = prompt.destinationItem;
+    facts.dateRelation            = prompt.dateRelation;
+    facts.sizeRelation            = prompt.sizeRelation;
     return facts;
 }
 
@@ -325,6 +334,20 @@ struct FolderWindow::FileOperationState::DecisionMirror final
         out.factItemCount      = prompt.factItemCount;
         out.factBytesKnown     = prompt.factBytesKnown;
         out.factBytes          = prompt.factBytes;
+        const auto itemFacts   = [](const Task::ConflictPromptState::ItemMetadata& metadata) noexcept
+        {
+            return FileOperations::ConflictPromptItemFacts{
+                .available     = metadata.available,
+                .isDirectory   = metadata.isDirectory,
+                .sizeKnown     = metadata.sizeKnown,
+                .sizeBytes     = metadata.sizeBytes,
+                .lastWriteTime = metadata.lastWriteTime,
+            };
+        };
+        out.sourceItem      = itemFacts(prompt.sourceMetadata);
+        out.destinationItem = itemFacts(prompt.destinationMetadata);
+        out.dateRelation    = static_cast<uint8_t>(prompt.comparison.date);
+        out.sizeRelation    = static_cast<uint8_t>(prompt.comparison.size);
         return true;
     }
 
@@ -621,11 +644,21 @@ struct FolderWindow::FileOperationState::DecisionMirror final
             message.append(std::format(L"{0} {1}",
                                        LoadStringResource(nullptr, prompt.operation == FILESYSTEM_DELETE ? IDS_FILEOPS_LABEL_DELETING : IDS_FILEOPS_LABEL_FROM),
                                        prompt.sourcePath));
+            if (const std::wstring itemText = FileOperations::BuildConflictPromptItemText(facts, false); ! itemText.empty())
+            {
+                message.append(L"\n");
+                message.append(itemText);
+            }
         }
         if (prompt.operation != FILESYSTEM_DELETE && ! prompt.destinationPath.empty())
         {
             message.append(prompt.sourcePath.empty() ? L"\n\n" : L"\n");
             message.append(std::format(L"{0} {1}", LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO), prompt.destinationPath));
+            if (const std::wstring itemText = FileOperations::BuildConflictPromptItemText(facts, true); ! itemText.empty())
+            {
+                message.append(L"\n");
+                message.append(itemText);
+            }
         }
         model.message  = std::move(message);
         model.closable = true;
@@ -960,6 +993,9 @@ struct FolderWindow::FileOperationState::DecisionMirror final
             point                   = {GET_X_LPARAM(messagePos), GET_Y_LPARAM(messagePos)};
         }
         const PromptKey key = shown;
+#ifdef ENABLE_TESTS
+        NoteFileOpsFlyoutOpeningForSelfTest(items.size());
+#endif
         static_cast<void>(DxUi::ContextMenu::ShowAsync(overlay->GetHwnd(),
                                                        point,
                                                        items,

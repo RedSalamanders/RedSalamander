@@ -44,9 +44,15 @@ std::wstring_view GetPathLeaf(std::wstring_view path) noexcept;
 std::wstring GetPathDirectory(std::wstring_view path);
 [[nodiscard]] bool ContainsPathSeparator(std::wstring_view text) noexcept;
 
-// Candidate only: callers retain exclusive-create/conditional-rename authority for files,
-// directories and links. Unlike CreateUniqueSiblingFile this must not create a regular file.
-[[nodiscard]] HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view marker, std::wstring& path) noexcept;
+// A staging artifact ends in a real extension, so Windows and its tools group and recognize it:
+// incomplete content, or a name that may hold the only copy of an original.
+inline constexpr std::wstring_view kStageExtension  = L".rs-tmp";
+inline constexpr std::wstring_view kBackupExtension = L".rs-bak";
+
+// Builds `<final leaf>.<32 hex><extension>` beside finalPath. Candidate only: callers retain
+// exclusive-create/conditional-rename authority for files, directories and links. Unlike
+// CreateUniqueSiblingFile this must not create a regular file.
+[[nodiscard]] HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view extension, std::wstring& path) noexcept;
 
 PathInfo MakePathInfo(const std::wstring& path);
 PathInfo MakePathInfo(const wchar_t* path);

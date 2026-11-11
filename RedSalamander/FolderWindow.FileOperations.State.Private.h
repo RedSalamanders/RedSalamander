@@ -291,6 +291,7 @@ extern SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 extern SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 extern SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
+extern SelfTestPausePoint g_fileOpsPreparingBeforePublishPausePoint;
 extern SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount;
 extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts;
@@ -423,4 +424,16 @@ void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
                                         std::wstring_view filePrefix,
                                         std::wstring_view fileExtension,
                                         size_t maxFilesToKeep) noexcept;
+
+// The in-flight row reducers (defined in FolderWindow.FileOperations.State.cpp), declared for the deterministic stream-slot
+// self-test (I62 F1).
+void UpdateInFlightFileProgress(FolderWindow::FileOperationState::Task& task,
+                                const void* cookieKey,
+                                uint64_t progressStreamId,
+                                const wchar_t* currentSourcePath,
+                                uint64_t currentItemTotalBytes,
+                                uint64_t currentItemCompletedBytes,
+                                ULONGLONG nowTick,
+                                bool discoveryOpenAtCallback) noexcept;
+void RemoveInFlightFileBySourcePath(FolderWindow::FileOperationState::Task& task, const wchar_t* sourcePath) noexcept;
 } // namespace FolderWindowFileOperationsStateInternal
