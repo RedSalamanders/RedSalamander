@@ -1,5 +1,11 @@
 # Repository tooling
 
+Local workspace snapshots, build receipts and validation fingerprints bind the actual
+ignored `.ci-engine` through the shared source-input reader. Restore the exact clean
+pin before using those tools. Missing, modified, foreign or mismatched engines refuse
+reuse; generated engine output does not alter source identity. Existing local and main
+gates remain required.
+
 Explicit exact Full Resume preserves individually verified promoted entries from a
 closed failed/interrupted campaign. Failed entries and incompatible inputs execute;
 running/invalidated origins grant no reuse and corruption remains fatal. Original

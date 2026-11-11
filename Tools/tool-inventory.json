@@ -1993,6 +1993,7 @@
         "Tools/Invoke-ProjectCi.ps1",
         "Tools/Invoke-R0ePairedValidation.ps1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
+        "Tools/Tests/ValidationFingerprint.Tests.ps1",
         "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
         "Tools/Modules/Build/DxUiDependency.psm1"
@@ -2542,7 +2543,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Define exact Startrail canonical JSON, streaming-bounded record IO, stable base/index/worktree snapshots, canonical Git-blob SHA-256 with measured-size blob batches for large immutable inventories, versioned component fingerprints, derived runner dependency closure, build-receipt binding digests, identifier/path semantics, and provenance guards.",
+      "purpose": "Define exact Startrail canonical JSON, streaming-bounded record IO, stable base/index/worktree snapshots with actual pinned-engine input identity, canonical Git-blob SHA-256 with measured-size blob batches for large immutable inventories, versioned component fingerprints, derived runner dependency closure, build-receipt binding digests, identifier/path semantics, and provenance guards.",
       "usage": "Import through its declared repository consumers; use canonical Git-blob digests for cross-platform immutable-byte identity, create-only publication for immutable content-addressed records, and the derived dependency closure for runner fingerprints.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -2575,6 +2576,7 @@
       "prerequisites": [
         "PowerShell 7.4 or newer for Startrail evidence operations",
         "Git checkout",
+        "Exact clean .ci-engine and its Ci.SourceInputs.psm1 when .ci/project.json is present",
         "Checked-in Startrail JSON schemas"
       ],
       "sideEffects": [

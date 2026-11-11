@@ -37,6 +37,16 @@ Writing the record must succeed; archive refusal retains it in the original run.
 exit is diagnostic evidence and never overrides failed coverage or establishes a pass.
 
 `Get-RSWorkspaceSnapshot` is the canonical local source identity. It resolves only
+local inputs. New snapshots additionally include `engine_inputs_identity`, a nullable
+digest in the snapshot projection, separate from product file/iteration inventory.
+When `.ci/project.json` exists, the shared `Get-CiPinnedEngineInputsIdentity` binds the
+actual ignored engine's fresh raw bytes and exact clean pin. Missing, foreign, dirty
+or wrong-pin engines refuse before build/test reuse. Generated engine `.build` output
+is excluded. Historical v1 records without this optional field remain readable; their
+old snapshot identities cannot equal the new projection and grant no current reuse.
+This is input identity only, with no hosted delegation or main-result adoption.
+
+Workspace acquisition resolves only
 local Git objects, uses the merge base of an explicit impact base without fetching,
 and records separate committed-base, index, and worktree byte identities for changed,
 staged, untracked, deleted, renamed, and type-changed paths. `.git/`, `.build/`,

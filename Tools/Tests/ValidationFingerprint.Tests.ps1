@@ -185,6 +185,39 @@ Describe 'Operation Startrail dependency closure' {
 }
 
 Describe 'Operation Startrail workspace snapshots' {
+    It 'binds the actual ignored engine without inventing product file rows or changing repository identity' {
+        $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'pinned engine inputs')
+        [IO.File]::WriteAllText((Join-Path $fixture.Root '.gitignore'), ".build/`n.ci-engine/`n", [Text.UTF8Encoding]::new($false))
+        [void][IO.Directory]::CreateDirectory((Join-Path $fixture.Root '.ci'))
+        [IO.File]::Copy((Join-Path $repoRoot '.ci/project.json'), (Join-Path $fixture.Root '.ci/project.json'))
+        $engine = Join-Path $fixture.Root '.ci-engine'
+        $clone = & git clone --quiet --no-hardlinks (Join-Path $repoRoot '.ci-engine') $engine 2>&1
+        if ($LASTEXITCODE) { throw "Owned engine fixture clone failed: $clone" }
+        $before = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
+        $before.engine_inputs_identity | Should Match '^[0-9a-f]{64}$'
+        (Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root.ToUpperInvariant()).snapshot_id | Should Be $before.snapshot_id
+        ($before | ConvertTo-Json -Depth 20 | Test-Json -SchemaFile (Join-Path $repoRoot 'Specs/Testing/WorkspaceSnapshot.schema.json')) | Should Be $true
+        @($before.files | Where-Object path -Like '.ci-engine/*').Count | Should Be 0
+        [void][IO.Directory]::CreateDirectory((Join-Path $engine '.build'))
+        [IO.File]::WriteAllText((Join-Path $engine '.build/synthetic.json'), '{"generated":true}')
+        (Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root).snapshot_id | Should Be $before.snapshot_id
+        $policy = Join-Path $engine 'Tools/Modules/Ci.Policy.psm1'
+        $original = [IO.File]::ReadAllBytes($policy)
+        try {
+            [IO.File]::AppendAllText($policy, "`n# Synthetic engine implementation edit.`n")
+            $reason = ''
+            try { $null = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root } catch { $reason = $_.Exception.Message }
+            $reason | Should Match 'Local engine checkout must be clean'
+        } finally { [IO.File]::WriteAllBytes($policy, $original) }
+        $restored = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
+        $restored.snapshot_id | Should Be $before.snapshot_id
+        $restored.repo_identity | Should Be $before.repo_identity
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/BuildEvidence.psm1') -ErrorAction Stop
+        $build = Get-RSBuildSourceSnapshot -RepoRoot $fixture.Root
+        $build.SnapshotId | Should Be $restored.snapshot_id
+        $build.WorkspaceSnapshot.snapshot_id | Should Be $build.SnapshotId
+    }
+
     It 'hashes canonical Git blob bytes independently of checkout line endings' {
         $scratch = New-RSTestSandboxScratchDirectory `
             -RepoRoot $repoRoot -Harness 'tools-pester' -Case "git-blob-sha256-$([guid]::NewGuid().ToString('N'))"
