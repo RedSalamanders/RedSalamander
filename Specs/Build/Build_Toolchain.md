@@ -1,5 +1,21 @@
 # Official Build Toolchain Identity
 
+## Owned compiler metadata services
+
+`New-RSProcessStartInfo` delegates private Windows MSVC metadata endpoints to the
+exact pinned shared `Ci.Policy` helper after applying the child environment.
+Every factory-created child receives a fresh endpoint, including both direct
+and streaming MSBuild routes. The parent environment is preserved; inherited or
+caller-supplied shared endpoint aliases cannot couple independent owned jobs.
+The existing contained-process environment block transports that endpoint without
+changing native arguments, flags, process identity or ownership/cleanup rules.
+Low-level controlled service-lifetime probes retain their explicit fixture PSI.
+
+Local tools require `.ci-engine` restored at the exact `.ci/project.json` commit,
+including Source builds. CI restores this pinned dependency automatically. Shared
+component controls and focused local process tests remain distinct from native
+product, ARM64 and sanitizer qualification.
+
 Organization CI routing and artifact promotion are owned by [Build_UnifiedCI.md](Build_UnifiedCI.md). The project-local reusable builder below remains available to explicit domain qualification workflows. Native PR matrices, scheduled native builds and release-time rebuilds are retired.
 
 ## External RedMonitor build boundary
@@ -29,6 +45,14 @@ Portable package generation remains an explicit operation rather than an automat
 `build.ps1 -ProductionOnly` excludes the package smoke-test host, so it cannot be
 combined with `-Zip`. Use a full tests-disabled Release build with `-Zip`, or the
 governed production CI adapter that separately verifies its matching smoke-host receipt.
+
+Production project selection uses the canonical `Get-RSSolutionProjects` inventory's
+`SolutionTarget`, including the complete solution-folder hierarchy, MSBuild character
+normalization and reserved-entrypoint disambiguation. A short project display name is
+not an interchangeable solution target. Unknown/duplicate parents, non-folder nesting,
+cycles and colliding normalized targets fail before compilation. Resource satellites
+and plugins remain selected; do not remove them to avoid a missing-target failure.
+The naming contract follows [MSBuild's solution target rules](https://learn.microsoft.com/en-us/visualstudio/msbuild/how-to-build-specific-targets-in-solutions-by-using-msbuild-exe).
 
 The reusable hosted build limits initial MSBuild fan-out to two workers following an ARM64 Release compiler heap-exhaustion failure. Native compilation remains a required gate; a worker bound does not establish that the previous failure is resolved until the complete profile builds successfully.
 
@@ -919,3 +943,19 @@ Workflow-selected MSBuild paths may use a custom or hosted temporary installatio
 The [native policy, console and dependency-path contract](Build_ConsoleAndPaths.md) owns /Wall without /WX, zero-warning acceptance, Debug/ASan symbols, Release-only ICF, common terminal results and verified short dependency folders.
 
 The native build-policy candidate uses DxUi API4 at the exact commit recorded in `Dependencies/DxUi.lock.json`. It preserves this consumer's existing API adoption while repairing native warning diagnostics and stable payload type identity under Release COMDAT folding. Restore and compile matching headers/archive from this exact lock. The indexed NativeBuildPolicyCoherence plan records outstanding product and desktop-focus qualification; this pin selection alone is not a green product receipt.
+
+## Qualified pinned DxUi SDK inputs
+
+The application retains its existing per-translation-unit Windows macro policy when importing SDK integration. Remove only the SDK sample defaults for `WIN32_LEAN_AND_MEAN` and `NOMINMAX`; imposing them globally changes Windows header availability and conflicts with existing source definitions. Keep Unicode, Release, CRT, compiler and every shared ABI/lease guard active. SDK admission does not suppress compiler diagnostics.
+
+`build.ps1 -Configuration Release -DxUiSdkInputDescriptor <owned .build descriptor>` may reuse only the exact unchanged source/API lock through the shared qualified ABI contract. Missing compatible inputs and verified legacy v1 input availability retain Source. Invalid, corrupt or unsafe inputs refuse. Source metadata/header identity remains available to canonical validators; SDK mode skips producer dependency restore/compilation. The actual native MSBuild/profile and every translation unit retain the shared live-reader compiler/ABI guards before use. Mixed source/SDK properties refuse.
+
+Build arguments bind the recipe, original input key/manifest and independent descriptor hash. `DxUi.sdk-input.json`, validated by `Build_DxUiSdkInput.schema.json`, is a captured artifact of the same sealed native receipt. It binds source/API/profile, original descriptor/archive/library/tool-reference identities and the actual selected MSBuild bytes. Module provenance binds each actual linker command and library/module bytes. Source builds revoke stale profile SDK records; changing recipes invalidates compatible build reuse.
+
+The SDK reader remains open through all compilation/linking/provenance use. Closing reauthenticates the original held archive/payload and current source/tool inputs before a successful native receipt is published. Failure retains its primary diagnostics and releases ownership. A dependency cache supplies bytes, never a product test verdict.
+
+Artifact use reopens the independently retained original SDK descriptor and rechecks the complete binding. MSBuild comes from the canonical selected registered VS instance's native host location, not a JSON-supplied executable. The reopened library/reference/input must equal the compiled record. A changed or unavailable proof refuses reuse and requires a governed build.
+
+Artifact-mutating tooling must preserve the admitted dependency recipe when the runner re-attests the profile. Before suspending its receipt, capture the SDK build argument through `Get-RSBuildReceiptDependencyBuildArguments`, which independently reopens the original binding and closes its reader. Rebuild with that descriptor and compare the resulting recipe, input key, manifest and descriptor hash before publishing the new receipt to native readers. A missing/changed SDK or compatibility miss cannot silently turn an SDK runtime qualification into Source coverage.
+
+SDK packaging is separate from build-time `-Zip`/winget generation: first seal the native build receipt, then use the canonical installer packaging command. Verify every profile output against that receipt and current source, reopen SDK input once, validate every shipped module's matching dependency recipe, copy the complete SDK `licenses` closure and close the reader after use. Unknown, mixed, missing or stale recipes refuse. Native package extraction/smoke and test-disabled production remain required. The existing Source portable-attestation exporter/importer refuse SDK-backed arguments until an independent portable SDK descriptor contract is implemented.

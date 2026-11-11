@@ -439,7 +439,12 @@ or receipt-mismatched state. After the writer completes, the runner MUST rebuild
 the same full-solution profile, byte-verify that receipt, publish a create-only
 content-addressed epoch decision, atomically switch run state back to `stable`, and
 recompute the impact decision and every downstream entry fingerprint before any artifact
-reader starts. A crash after suspension remains receipt-less and repairs to interrupted;
+reader starts. Re-attestation MUST preserve the originally verified dependency recipe.
+Before suspension, reopen any original SDK descriptor and close its reader; pass that
+descriptor to the rebuild and require unchanged recipe/key/manifest/descriptor hash
+before downstream native execution. Refuse lost or changed SDK input rather than
+silently switching an SDK runtime qualification to Source.
+A crash after suspension remains receipt-less and repairs to interrupted;
 it cannot expose earlier evidence as current. Rebuilt MSVC binaries and PDBs are not
 required to reproduce the pre-entry byte
 identity. Re-attestation MUST apply the same suite-owned build environment as the initial
@@ -2832,3 +2837,11 @@ required to qualify this behavior.
 
 
 Selected-root non-name-surrogate directory-reparse controls may inject the observed reparse attribute of an owned ordinary directory, but must retain its real no-follow bound DIRECTORY authority. Require exactly one injected root observation and one selected-root bound-directory classification, then assert descendant file and directory conflict Skip outcomes, copied sibling bytes, unchanged source/blocker inventories, worker quiet and hook disarming. This seam does not create or validate an operating-system cloud reparse tag.
+
+Physical alternate-volume self-test acquisition requires an already initialized,
+reparse-free exact X:\RedSalamander.Perf with a valid ownership marker. The
+AllowAlternateVolumeTestRoot switch permits its use, never first creation or marker
+initialization. Automatic drive discovery must reject unmarked/missing roots without
+writing to them. First initialization is a separate exact-path-authorized action.
+An explicitly configured unauthorized alternate root fails visibly; it does not
+silently choose another drive. This does not change the separate owned-VHDX contract.

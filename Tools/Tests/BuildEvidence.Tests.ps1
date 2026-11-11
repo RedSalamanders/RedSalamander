@@ -1,6 +1,44 @@
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\BuildEvidence.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+
+Describe 'Dependency-preserving profile re-attestation arguments' {
+    BeforeEach {
+        Mock Open-RSDxUiSdkArtifactInput {return $null} -ModuleName BuildEvidence
+        Mock Close-RSDxUiSdkArtifactInput {} -ModuleName BuildEvidence
+    }
+    It 'keeps Source arguments empty without manufacturing SDK input' {
+        $arguments=Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})
+        $arguments.Count | Should Be 0
+        Assert-MockCalled Open-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It
+        Assert-MockCalled Close-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 0 -Exactly -Scope It
+    }
+    It 'forwards only the original independently opened descriptor and closes its reader' {
+        Mock Open-RSDxUiSdkArtifactInput {
+            param($RepoRoot,$Receipt)
+            return [pscustomobject]@{Reader=[pscustomobject]@{Descriptor=[pscustomobject]@{Path=(Join-Path $RepoRoot '.build/original descriptor.json')}}}
+        } -ModuleName BuildEvidence
+        $arguments=Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})
+        $arguments.Count | Should Be 1
+        $arguments.DxUiSdkInputDescriptor | Should Be (Join-Path $repoRoot '.build/original descriptor.json')
+        Assert-MockCalled Close-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It
+    }
+    It 'refuses unavailable or changed SDK input and does not convert it to Source' {
+        Mock Open-RSDxUiSdkArtifactInput {throw 'Original SDK input changed'} -ModuleName BuildEvidence
+        {Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})} | Should Throw 'Original SDK input changed'
+    }
+    It 'refuses an empty descriptor and always closes the opened reader' {
+        Mock Open-RSDxUiSdkArtifactInput {return [pscustomobject]@{Reader=[pscustomobject]@{Descriptor=[pscustomobject]@{Path=''}}}} -ModuleName BuildEvidence
+        {Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})} | Should Throw 'Re-attestation requires the original independently verified SDK descriptor'
+        Assert-MockCalled Close-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It
+    }
+    It 'does not publish arguments when reauthentication at close fails' {
+        Mock Open-RSDxUiSdkArtifactInput {return [pscustomobject]@{Reader=[pscustomobject]@{Descriptor=[pscustomobject]@{Path='owned-descriptor'}}}} -ModuleName BuildEvidence
+        Mock Close-RSDxUiSdkArtifactInput {throw 'SDK changed during close'} -ModuleName BuildEvidence
+        {Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})} | Should Throw 'SDK changed during close'
+    }
+}
 
 function Test-RSActionThrows {
     param([Parameter(Mandatory = $true)][scriptblock]$Action)
@@ -255,6 +293,9 @@ Describe 'Operation Startrail build receipt records' {
         $artifactManifestDir = $artifactManifestDir
         $buildArtifacts = @()
         $receiptTestsEnabled = $false
+        # This extracted Source capture starts after build.ps1's SDK setup.
+        $sdkInput = $null
+        $sdkRecordPath = $null
         $production = (@($statements | Sort-Object { $_.Extent.StartOffset } | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine)
         . ([scriptblock]::Create($production))
 
@@ -630,6 +671,18 @@ Describe 'Operation Startrail build receipt records' {
             -ProducerRunAttempt 2 -ProducerJob 'build' -CreatedUtc $created
         $portableSchema = Join-Path $repoRoot 'Specs\Build\PortableBuildAttestation.schema.json'
         $receiptSchema = Join-Path $repoRoot 'Specs\Build\BuildReceipt.schema.json'
+        foreach($recipe in @('Unknown','PinnedReleaseSdkV1','PinnedQualifiedReleaseSdkV2')){
+            $sdkReceipt=New-RSBuildReceipt -SourceSnapshot $source -Identity $identity -Platform x64 -Configuration Debug `
+                -Target solution -ProjectSelection @('RedSalamander.sln') -BuildArguments @('ci=true',"dxui-recipe=$recipe") `
+                -TestsEnabled $true -OfficialRelease $false -StartedUtc $created -EndedUtc $created -Duration ([timespan]::Zero) -Outputs $artifacts
+            $message=''
+            try{
+                New-RSPortableBuildAttestation -Receipt $sdkReceipt -RepoRoot $root -BuildOutputDir $output `
+                    -ToolchainSchemaPath $toolchain.Schema -ProducerRepository 'owner/repo' -ProducerWorkflow CI `
+                    -ProducerRunId 1234 -ProducerRunAttempt 2 -ProducerJob build -CreatedUtc $created | Out-Null
+            }catch{$message=$_.Exception.Message}
+            $message | Should Match 'independent portable descriptor contract'
+        }
         $unreviewedProducerFile = Join-Path $output 'unreviewed.txt'
         [IO.File]::WriteAllText($unreviewedProducerFile, 'not in receipt', [Text.UTF8Encoding]::new($false))
         $payload = Publish-RSPortableBuildPayload -RepoRoot $root -BuildOutputDir $output `
@@ -646,6 +699,21 @@ Describe 'Operation Startrail build receipt records' {
                 Publish-RSPortableBuildAttestation -BuildOutputDir $output -Attestation $invalidPortable -SchemaPath $portableSchema
             }) | Should Be $true
         Publish-RSPortableBuildAttestation -BuildOutputDir $output -Attestation $portable -SchemaPath $portableSchema | Out-Null
+        $portablePath=Join-Path $output 'portable-build-attestation.json'
+        $originalPortableBytes=[IO.File]::ReadAllBytes($portablePath)
+        foreach($recipe in @('Unknown','PinnedReleaseSdkV1','PinnedQualifiedReleaseSdkV2')){
+            $sdkPortable=$portable|ConvertTo-Json -Depth 20|ConvertFrom-Json -DateKind String
+            $sdkPortable.build_arguments+= "dxui-recipe=$recipe"
+            Publish-RSPortableBuildAttestation -BuildOutputDir $output -Attestation $sdkPortable -SchemaPath $portableSchema | Out-Null
+            $message=''
+            try{
+                Import-RSPortableBuildAttestation -RepoRoot $root -BuildOutputDir $output -PortableSchemaPath $portableSchema -BuildReceiptSchemaPath $receiptSchema -ToolchainSchemaPath $toolchain.Schema -ExpectedRepository 'owner/repo' `
+                    -ExpectedWorkflow CI -ExpectedRunId 1234 -ExpectedRunAttempt 2 -ExpectedProducerJob build -ExpectedAttestationId $portable.attestation_id `
+                    -ExpectedToolchainIdentityDigest $toolchain.Digest -ExpectedSourceCommit $source.GitHead -ExpectedPlatform x64 -ExpectedConfiguration Debug | Out-Null
+            }catch{$message=$_.Exception.Message}
+            $message|Should Match 'Source portable importer cannot authenticate SDK-backed'
+        }
+        [IO.File]::WriteAllBytes($portablePath,$originalPortableBytes)
 
         $import = {
             param($job, $workflow, $sourceCommit, $attestationId, $toolchainDigest)

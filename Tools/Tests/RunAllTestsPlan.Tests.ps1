@@ -6,6 +6,72 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $testSupport = Join-Path $PSScriptRoot 'TestSupport.psm1'
 Import-Module $testSupport -Force
 
+Describe 'Dependency-preserving artifact re-attestation flow' {
+    BeforeAll {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$errors)
+        if($errors.Count){throw 'Cannot parse actual re-attestation flow.'}
+        $loops=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Variable.VariablePath.UserPath -ceq 'artifactMutator'},$true))
+        if($loops.Count -ne 1){throw 'Expected one actual artifact mutation flow.'}
+        $statements=@($loops[0].Body.Statements)
+        $capture=@($statements|Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$reattestDependencyBuildArguments'})
+        $before=@($statements|Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$preMutationDependencyIdentity'})
+        $after=@($statements|Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$restoredDependencyIdentity'})
+        $build=@($statements|Where-Object {$_ -is [Management.Automation.Language.TryStatementAst] -and $_.Extent.Text -match '@reattestDependencyBuildArguments'})
+        $guard=@($statements|Where-Object {$_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if \(\(\$restoredDependencyIdentity'})
+        if($capture.Count -ne 1 -or $before.Count -ne 1 -or $after.Count -ne 1 -or $build.Count -ne 1 -or $guard.Count -ne 1){throw 'Actual dependency-preservation statements are missing or ambiguous.'}
+        $captureText=$capture[0].Extent.Text;$buildText=$build[0].Extent.Text
+        $guardText=$before[0].Extent.Text+"`n"+$after[0].Extent.Text+"`n"+$guard[0].Extent.Text.Replace('exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)',"throw 'dependency changed'")
+        $suspend=@($statements|Where-Object {$_.Extent.Text -match '^Suspend-RSBuildReceipt'})
+        $publish=@($statements|Where-Object {$_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -ceq '$receipt' -and $_.Right.Extent.Text -ceq '$restoredReceipt'})
+        if($suspend.Count -ne 1 -or $publish.Count -ne 1 -or $capture[0].Extent.StartOffset -ge $suspend[0].Extent.StartOffset -or $guard[0].Extent.StartOffset -ge $publish[0].Extent.StartOffset){throw 'Dependency capture/verification occurs outside its safe boundary.'}
+    }
+    It 'forwards the captured SDK descriptor through the actual build call and keeps Source unchanged' {
+        $recordingRoot=Join-Path $TestDrive 'recording-build'
+        [void][IO.Directory]::CreateDirectory($recordingRoot)
+        @'
+param($Configuration,$Platform,$BuildNumber,$MaxCpuCount,[string]$DxUiSdkInputDescriptor='')
+[pscustomobject]@{configuration=$Configuration;platform=$Platform;number=$BuildNumber;workers=$MaxCpuCount;hasSdk=$PSBoundParameters.ContainsKey('DxUiSdkInputDescriptor');descriptor=$DxUiSdkInputDescriptor}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PSScriptRoot 'recorded.json')
+$global:LASTEXITCODE=0
+'@ | Set-Content -LiteralPath (Join-Path $recordingRoot 'build.ps1')
+        foreach($platformFixture in @('x64','ARM64')){foreach($sdkFixture in @($false,$true)){
+            & {
+                param($Root,$Capture,$Build,$Target,$Sdk)
+                $repoRoot=$Root;$Configuration='Release';$Platform=$Target;$reattestBuildNumber=533
+                $preMutationReceipt=[pscustomobject]@{sdk=$Sdk}
+                function Get-RSBuildReceiptDependencyBuildArguments {param($RepoRoot,$Receipt) if($Receipt.sdk){return @{DxUiSdkInputDescriptor=(Join-Path $RepoRoot '.build/original SDK descriptor.json')}};return @{}}
+                $reattestEnvironmentOverrides=@{};$previousReattestEnvironment=@{}
+                . ([scriptblock]::Create($Capture))
+                . ([scriptblock]::Create($Build))
+                $reattestExitCode | Should Be 0
+                $record=Get-Content (Join-Path $Root 'recorded.json') -Raw|ConvertFrom-Json
+                $record.hasSdk | Should Be $Sdk
+                $record.number | Should Be 533
+                $record.workers | Should Be 4
+                $record.platform | Should Be $Target
+                if($Sdk){$record.descriptor | Should Be (Join-Path $Root '.build/original SDK descriptor.json')}
+                else{$record.descriptor | Should Be ''}
+            } $recordingRoot $captureText $buildText $platformFixture $sdkFixture
+        }}
+    }
+    It 'refuses Source downgrade, SDK substitution and changed binding before publishing the new receipt' {
+        $sdk=@('dxui-recipe=PinnedQualifiedReleaseSdkV2','dxui-sdk-input-key=key','dxui-sdk-manifest=manifest','dxui-sdk-descriptor-sha256=descriptor')
+        foreach($case in @(
+            @{before=@();after=@();refuse=$false},@{before=$sdk;after=$sdk;refuse=$false},
+            @{before=$sdk;after=@();refuse=$true},@{before=@();after=$sdk;refuse=$true},
+            @{before=$sdk;after=@($sdk[0],'dxui-sdk-input-key=other',$sdk[2],$sdk[3]);refuse=$true},
+            @{before=$sdk;after=@($sdk[0],$sdk[1],'dxui-sdk-manifest=other',$sdk[3]);refuse=$true},
+            @{before=$sdk;after=@($sdk[0],$sdk[1],$sdk[2],'dxui-sdk-descriptor-sha256=other');refuse=$true}
+        )){
+            $preMutationReceipt=[pscustomobject]@{build_arguments=$case.before}
+            $restoredReceipt=[pscustomobject]@{build_arguments=$case.after}
+            $threw=$false
+            try{. ([scriptblock]::Create($guardText))}catch{$threw=$true;$_.Exception.Message | Should Be 'dependency changed'}
+            $threw | Should Be $case.refuse
+        }
+    }
+}
+
 Describe 'Run-AllTests standalone scheduling selections' {
     BeforeAll {
         Import-Module $helperModule -ErrorAction Stop

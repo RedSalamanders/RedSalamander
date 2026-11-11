@@ -1,0 +1,43 @@
+name: Verify and report candidate native evidence
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Exact ready same-repository native PR
+        type: string
+        required: true
+      identity:
+        description: Independently acquired canonical candidate identity
+        type: string
+        required: true
+      producer_run:
+        description: Original isolated native execution run
+        type: string
+        required: true
+      producer_attempt:
+        description: Original execution attempt
+        type: string
+        required: true
+      nonce:
+        description: Original isolated admission nonce
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  checks: write
+concurrency:
+  group: candidate-report-${{ inputs.pull_request }}
+  cancel-in-progress: false
+  queue: max
+jobs:
+  report:
+    uses: RedSalamanders/.github/.github/workflows/integration-report.yml@5233b5271f268cbe7aa420c18250347c297da63a
+    with:
+      engine_ref: 5233b5271f268cbe7aa420c18250347c297da63a
+      pull_request: ${{ inputs.pull_request }}
+      identity: ${{ inputs.identity }}
+      producer_run: ${{ inputs.producer_run }}
+      producer_attempt: ${{ inputs.producer_attempt }}
+      nonce: ${{ inputs.nonce }}

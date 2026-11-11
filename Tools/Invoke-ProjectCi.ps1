@@ -6,6 +6,8 @@ Runs the reviewed compiler-free PR subset or the admitted native build/test/pack
 role. Native build roles restore pinned dependencies beneath .build and apply
 process-local integration before invoking canonical project commands. Test scratch
 and evidence use the governed sandbox. No product publication is performed here.
+SDK roles use canonical vcpkg MSBuild paths without synthesizing a CL override;
+inherited compiler overrides remain visible to the independent ABI refusal guard.
 .PARAMETER Phase
 Compiler-free PR checks, Release test build, regression execution, production ZIP, or explicit qualification.
 .PARAMETER EngineRoot
@@ -117,10 +119,25 @@ if ($Phase -in @('ReleaseTestBuild','Production','Qualification')) {
 # The test step must retain the build's environment identity without reinstalling.
 $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-tool'
 $environment = Get-RSVcpkgBuildEnvironment -RepoRoot $root -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration
-foreach ($entry in $environment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key,$entry.Value,'Process') }
 $env:VCPKG_REGISTRY_ROOT = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-registry'
 $number = [string]$context.batch.buildNumber
 $profile = @('-Platform',$Platform,'-Configuration',$Configuration)
+$sdkBuildArguments=@()
+if($Configuration -ceq 'Release' -and $Phase -cin @('ReleaseTestBuild','Production')){
+    Import-Module (Join-Path $EngineRoot 'Tools/Modules/Ci.SdkPreparation.psm1')
+    Import-Module (Join-Path $root 'Tools/Modules/Build/DxUiDependency.psm1')
+    $lock=Get-RSDxUiPin -RepoRoot $root
+    $sdkDescriptor=Initialize-CiPinnedSdkInput -Context $context -SourceCommit $lock.commit -ApiRevision $lock.apiRevision
+    if($sdkDescriptor){$sdkBuildArguments=@('-DxUiSdkInputDescriptor',$sdkDescriptor)}
+}
+# SDK ABI evaluation must see the actual compiler defaults. Canonical vcpkg
+# MSBuild imports supply package paths without adding a CL override. Preserve any
+# pre-existing caller override so the SDK reader can refuse it independently.
+if($sdkBuildArguments.Count -gt 0 -or ($Phase -ceq 'ReleaseTest' -and
+    (Test-Path -LiteralPath (Join-Path $root ".build/$Platform/$Configuration/DxUi.sdk-input.json") -PathType Leaf))){
+    $environment.Remove('CL')
+}
+foreach ($entry in $environment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key,$entry.Value,'Process') }
 Import-Module (Join-Path $root 'Tools/Modules/Testing/TestSandbox.psm1') -Force
 $env:REDSALAMANDER_TEST_ROOT = Join-Path ([IO.Path]::GetPathRoot($root)) 'RedSalamander.Perf'
 $null = Initialize-RSTestSandboxRoot -TestRoot $env:REDSALAMANDER_TEST_ROOT -RepoRoot $root -AllowExternalInitialization
@@ -133,7 +150,7 @@ $runResultReferencePath = Join-Path $receiptDirectory ('runner-' + [guid]::NewGu
 if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('evidence_directory=' + $evidenceDirectory) }
 if ($Phase -eq 'Production') {
     $env:RSBuildEnableTests = 'false'
-    Run 'build.ps1' ($profile + @('-BuildNumber',$number,'-OfficialRelease','-ProductionOnly'))
+    Run 'build.ps1' ($profile + @('-BuildNumber',$number,'-OfficialRelease','-ProductionOnly') + $sdkBuildArguments)
     Test-PinnedDxUiMatrix
     # Reuse the test-stage smoke harness without recompiling it in production.
     $testReceipt = Get-Content (Join-Path $root ('.build/ci/test-tools/regression-' + $Platform + '.json')) -Raw | ConvertFrom-Json -AsHashtable
@@ -150,7 +167,7 @@ if ($Phase -eq 'Production') {
 $env:RSBuildEnableTests = 'true'
 if ($QualificationScope -ceq 'R0ePaired') { $env:RSBuildCompilerDebugInformation = 'Embedded' }
 if ($Phase -in @('ReleaseTestBuild','Qualification')) {
-    Run 'build.ps1' ($profile + @('-BuildNumber',$number))
+    Run 'build.ps1' ($profile + @('-BuildNumber',$number) + $sdkBuildArguments)
     Test-PinnedDxUiMatrix
     if ($Phase -eq 'ReleaseTestBuild') { return }
 }

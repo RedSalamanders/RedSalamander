@@ -8,7 +8,7 @@ function Get-RSSolutionProjects {
     )
 
     $solutionText = Get-Content -Path $SolutionPath -Raw
-    $projectPattern = 'Project\("\{[0-9A-Fa-f-]+\}"\)\s*=\s*"(?<name>[^"]+)",\s*"(?<path>[^"]+)",\s*"\{(?<guid>[0-9A-Fa-f-]+)\}"(?<body>.*?)(?:\r?\n)EndProject'
+    $projectPattern = 'Project\("\{(?<type>[0-9A-Fa-f-]+)\}"\)\s*=\s*"(?<name>[^"]+)",\s*"(?<path>[^"]+)",\s*"\{(?<guid>[0-9A-Fa-f-]+)\}"(?<body>.*?)(?:\r?\n)EndProject'
     $matches = [Regex]::Matches($solutionText, $projectPattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
 
     $projects = @()
@@ -26,9 +26,55 @@ function Get-RSSolutionProjects {
             RelativePath = $relativePath
             Path = $resolvedPath
             Body = $match.Groups['body'].Value
+            ProjectType = $match.Groups['type'].Value.ToUpperInvariant()
+            SolutionTarget = $null
         }
     }
 
+    $byGuid = @{}
+    foreach ($project in $projects) {
+        if ($byGuid.ContainsKey($project.Guid)) { throw "Duplicate solution project GUID: $($project.Guid)" }
+        $byGuid.Add($project.Guid, $project)
+    }
+    $folderType = '2150E333-8FDC-42A3-9474-1A3956D46DE8'
+    $parents = @{}
+    $sections = [regex]::Matches($solutionText, '(?s)GlobalSection\(NestedProjects\)\s*=\s*preSolution\s*\r?\n(?<body>.*?)EndGlobalSection')
+    if ($sections.Count -gt 1) { throw 'Duplicate NestedProjects solution sections.' }
+    if ($sections.Count) {
+        foreach ($line in ($sections[0].Groups['body'].Value -split '\r?\n')) {
+            if (-not $line.Trim()) { continue }
+            if ($line -notmatch '^\s*\{(?<child>[0-9A-Fa-f-]+)\}\s*=\s*\{(?<parent>[0-9A-Fa-f-]+)\}\s*$') {
+                throw 'Malformed NestedProjects solution entry.'
+            }
+            $child = $Matches.child.ToUpperInvariant(); $parent = $Matches.parent.ToUpperInvariant()
+            if (-not $byGuid.ContainsKey($child) -or -not $byGuid.ContainsKey($parent) -or
+                $byGuid[$parent].ProjectType -cne $folderType -or $parents.ContainsKey($child)) {
+                throw "Unknown, non-folder or duplicate solution nesting: $child -> $parent"
+            }
+            $parents.Add($child, $parent)
+        }
+    }
+    $targets = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($project in $projects) {
+        $names = [Collections.Generic.List[string]]::new()
+        $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $current = $project
+        while ($true) {
+            if (-not $seen.Add($current.Guid)) { throw "Cyclic solution nesting for $($project.Name)." }
+            $names.Insert(0, $current.Name)
+            if (-not $parents.ContainsKey($current.Guid)) { break }
+            $current = $byGuid[$parents[$current.Guid]]
+        }
+        $target = $names -join '\'
+        # Match MSBuild ProjectInSolution's unique target naming, including folder
+        # prefixes and reserved entrypoints; filesystem paths are not target names.
+        foreach ($character in @('%', '$', '@', ';', '.', '(', ')', "'")) { $target = $target.Replace($character, '_') }
+        if ($target -in @('Build', 'Rebuild', 'Clean', 'Publish')) { $target = 'Solution:' + $target }
+        if ($project.ProjectType -cne $folderType -and -not $targets.Add($target)) {
+            throw "Colliding MSBuild solution target: $target"
+        }
+        $project.SolutionTarget = $target
+    }
     return $projects
 }
 

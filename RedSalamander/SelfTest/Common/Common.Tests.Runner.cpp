@@ -370,71 +370,6 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     return root / std::wstring(kRunsDirName) / runId / std::wstring(kScratchDirName);
 }
 
-[[nodiscard]] bool InitializeAlternateVolumeTestSandboxRoot(const std::filesystem::path& alternateBase) noexcept
-{
-    try
-    {
-        if (Common::Testing::HasValidTestSandboxMarker(alternateBase))
-        {
-            return true;
-        }
-
-        std::error_code ec;
-        if (std::filesystem::exists(alternateBase, ec))
-        {
-            if (ec || ! std::filesystem::is_directory(alternateBase, ec) || ec || ! std::filesystem::is_empty(alternateBase, ec) || ec)
-            {
-                return false;
-            }
-        }
-        else
-        {
-            ec.clear();
-            if (! std::filesystem::create_directory(alternateBase, ec) || ec)
-            {
-                return false;
-            }
-        }
-
-        if (! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) || ec)
-        {
-            return false;
-        }
-
-        const std::filesystem::path markerPath = alternateBase / std::wstring(Common::Testing::kTestSandboxMarkerFileName);
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile is intentionally non-copyable.
-        wil::unique_hfile markerFile(
-            CreateFileW(markerPath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_WRITE_THROUGH, nullptr));
-#pragma warning(pop)
-        if (! markerFile)
-        {
-            return Common::Testing::HasValidTestSandboxMarker(alternateBase);
-        }
-
-        const std::string_view markerContents = Common::Testing::kTestSandboxMarkerContents;
-        DWORD bytesWritten                    = 0u;
-        const bool written = WriteFile(markerFile.get(), markerContents.data(), static_cast<DWORD>(markerContents.size()), &bytesWritten, nullptr) != FALSE &&
-                             bytesWritten == static_cast<DWORD>(markerContents.size());
-        markerFile.reset();
-        if (! written)
-        {
-            static_cast<void>(DeleteFileW(markerPath.c_str()));
-            return false;
-        }
-        return Common::Testing::HasValidTestSandboxMarker(alternateBase);
-    }
-    catch (const std::bad_alloc&)
-    {
-        std::terminate();
-    }
-    catch (const std::exception&)
-    {
-        // Mandatory: alternate-volume authorization is called from noexcept self-test setup; reject the volume on path failures.
-        return false;
-    }
-}
-
 [[nodiscard]] std::filesystem::path GetUnifiedTestRunScratchRootForVolume(const std::filesystem::path& volumeRoot) noexcept
 {
     if (GetEnvironmentString(kAllowAlternateVolumeTestRootEnvVar) != L"1")
@@ -458,8 +393,10 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     const std::optional<std::filesystem::path> authorizedBase =
         Common::Testing::GetDedicatedExternalTestSandboxBase(alternateBase, Common::Testing::kTestSandboxDirectoryName);
     std::error_code ec;
+    // The alternate-volume opt-in permits use, never first creation or marking of
+    // a drive-root sandbox. Initialization requires separate exact-path consent.
     if (! authorizedBase.has_value() || ! Common::Testing::TestSandboxPathEquals(alternateBase, authorizedBase.value()) ||
-        ! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) || ! InitializeAlternateVolumeTestSandboxRoot(alternateBase))
+        ! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) || ! Common::Testing::HasValidTestSandboxMarker(alternateBase))
     {
         return {};
     }
@@ -2178,6 +2115,8 @@ constexpr std::wstring_view kRecycleBinDirectoryName{L"$Recycle.Bin"};
     constexpr size_t kMaxInfoRecordSize = kPathOffsetV2 + kMaxPathCharsV2 * sizeof(wchar_t);
 
     failure.clear();
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_hfile is intentionally non-copyable.
     wil::unique_hfile file(::CreateFileW(ExtendSelfTestPathForIo(infoPath).c_str(),
                                          GENERIC_READ,
                                          FILE_SHARE_READ,
@@ -2185,6 +2124,7 @@ constexpr std::wstring_view kRecycleBinDirectoryName{L"$Recycle.Bin"};
                                          OPEN_EXISTING,
                                          FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
                                          nullptr));
+#pragma warning(pop)
     if (! file)
     {
         failure = std::format(L"its $I record could not be opened (error {})", ::GetLastError());

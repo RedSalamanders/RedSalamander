@@ -340,7 +340,12 @@ otherwise the receipt can faithfully attest artifacts
 that are incapable of executing the declared Full plan. The writer is `ExactArtifact`: exact Resume may
 reuse its promoted post-entry receipt/epoch evidence; when it executes, pre-existing
 reuse decisions are reset conservatively to current-epoch execution. Failure to produce
-or verify the compatible post-entry receipt is blocking.
+or verify the compatible post-entry receipt is blocking. Before suspension, independently
+capture any SDK descriptor from the accepted dependency binding, close that reader,
+and pass the original descriptor to re-attestation. Verify the recipe, SDK input key,
+manifest and descriptor hash remain equal before publishing the restored receipt.
+An SDK compatibility miss or unavailable/changed input blocks that SDK continuation;
+Source execution must never be reported as SDK runtime qualification.
 
 Run-state records that predate the required `mutation_state` and `decision_digest`
 bindings are legacy evidence and cannot be reused as current Startrail authority.

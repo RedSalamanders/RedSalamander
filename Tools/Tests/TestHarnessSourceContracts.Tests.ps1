@@ -918,8 +918,10 @@ Describe 'Test harness source contracts' {
         $header | Should Match 'AcquireTestSandboxOnVolume'
         $common | Should Match 'kTestSandboxDirectoryName'
         $common | Should Match 'REDSALAMANDER_TEST_ALLOW_ALTERNATE_VOLUME'
-        $common | Should Match 'InitializeAlternateVolumeTestSandboxRoot'
-        $common | Should Match 'kTestSandboxMarkerFileName'
+        $common | Should Not Match 'InitializeAlternateVolumeTestSandboxRoot'
+        $alternate = [regex]::Match($common, '(?s)GetUnifiedTestRunScratchRootForVolume\(.*?(?=\[\[nodiscard\]\] std::filesystem::path GetSelfTestRootOverrideFromEnvironment)').Value
+        $alternate | Should Match 'HasValidTestSandboxMarker\(alternateBase\)'
+        $alternate | Should Not Match 'create_directory|create_directories|CreateDirectory|CreateFile|WriteFile'
         $common | Should Match 'AcquireTestSandboxOnVolume'
         $common | Should Match 'alternateBase\s*/\s*std::wstring\(kRunsDirName\)\s*/\s*runId'
         $common | Should Match 'std::wstring\(kScratchDirName\)'

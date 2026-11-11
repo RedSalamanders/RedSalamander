@@ -523,7 +523,20 @@ Write-Output "delegated=$hasDelegation"
         $previousCiRunNumber = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
         [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', '64', 'Process')
         $script:capturedBuildArguments = @()
+        $script:capturedBuildEnvironment = $null
         Invoke-Expression $wrapperAst.Extent.Text
+        # This fixture executes the real deployment wrapper with explicit policy
+        # data, independent of modules or SDK state loaded by an outer Full run.
+        function Get-RSBuildScriptArguments {
+            param([string]$Suite,[string]$Configuration,[string]$Platform)
+            if($Suite -cne 'Full' -or $Configuration -cne 'Debug' -or $Platform -cne 'x64'){throw 'Fixture build policy received a different request.'}
+            return @{MaxCpuCount=2}
+        }
+        function Get-RSBuildEnvironmentOverrides {
+            param([string]$Suite)
+            if($Suite -cne 'Full'){throw 'Fixture environment policy received a different suite.'}
+            return @{RS_DEPLOYMENT_POLICY_FIXTURE='preserved'}
+        }
         function Invoke-RSStreamingProcess {
             param(
                 [string]$FilePath,
@@ -539,6 +552,7 @@ Write-Output "delegated=$hasDelegation"
             )
 
             $script:capturedBuildArguments = @($Arguments)
+            $script:capturedBuildEnvironment = $AdditionalEnvironment
             throw [System.TimeoutException]::new('simulated streaming timeout')
         }
 
@@ -554,18 +568,24 @@ Write-Output "delegated=$hasDelegation"
             Remove-Item Function:\Invoke-RSTargetedBuildForDeploymentTest -ErrorAction SilentlyContinue
             Remove-Item Function:\Invoke-RSStreamingProcess -ErrorAction SilentlyContinue
             Remove-Item Function:\New-RSTestSandboxScratchDirectory -ErrorAction SilentlyContinue
+            Remove-Item Function:\Get-RSBuildScriptArguments -ErrorAction SilentlyContinue
+            Remove-Item Function:\Get-RSBuildEnvironmentOverrides -ErrorAction SilentlyContinue
         }
 
         $null -eq $capturedException | Should Be $false
+        $capturedException.Message | Should Match 'simulated streaming timeout'
         $numberIndex = [array]::IndexOf($script:capturedBuildArguments, '-BuildNumber')
         $numberIndex | Should BeGreaterThan -1
         $script:capturedBuildArguments[$numberIndex + 1] | Should Be '533'
+        $cpuIndex=[array]::IndexOf($script:capturedBuildArguments,'-MaxCpuCount')
+        $cpuIndex | Should BeGreaterThan -1
+        $script:capturedBuildArguments[$cpuIndex+1] | Should Be '2'
+        $script:capturedBuildEnvironment.RS_DEPLOYMENT_POLICY_FIXTURE | Should Be 'preserved'
         [System.IO.Path]::GetFullPath([string]$script:scratchAllocation.RepoRoot) |
             Should Be ([System.IO.Path]::GetFullPath([string]$TestDrive))
         $script:scratchAllocation.Harness | Should Be 'pester-targeted-plugin-deployment'
         $script:scratchAllocation.Case | Should Be 'build-capture'
         $captureRoot = [System.IO.Path]::GetFullPath($sandboxCase).TrimEnd('\') + '\'
-        $capturedException.Message | Should Match 'simulated streaming timeout'
         foreach ($capturePath in @(
                 [regex]::Match($capturedException.Message, 'stdout: (?<path>.+?\.out\.log)').Groups['path'].Value,
                 [regex]::Match($capturedException.Message, 'stderr: (?<path>.+?\.err\.log)').Groups['path'].Value)) {

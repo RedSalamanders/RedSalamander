@@ -15,6 +15,7 @@
     Examples: "RedSalamander", "Common"
 .PARAMETER ProductionOnly
     Build production projects without Tests or PoC (Release only); cannot be combined with Zip.
+    Resolve every selected project through its full MSBuild solution-folder target name.
 .PARAMETER Clean
     Perform a clean build
 .PARAMETER Rebuild
@@ -34,6 +35,9 @@
     test-disabled build: -Configuration Release without RSBuildEnableTests=true.
 .PARAMETER MonitorDiagnostics
     Deprecated. Diagnostics are enabled at runtime with --etw and perf JSONL with --perf.
+.PARAMETER DxUiSdkInputDescriptor
+    Optional independently retained pinned qualified SDK input descriptor below repository .build.
+    Release only; keeps actual compiler/ABI, source/API, linker and reader-lifetime checks.
 .EXAMPLE
     .\build.ps1
     Builds entire solution in Debug configuration
@@ -93,10 +97,14 @@ param(
     [switch]$OfficialRelease,
 
     [Parameter(HelpMessage = "Deprecated; use the runtime --etw flag instead")]
-    [switch]$MonitorDiagnostics
+    [switch]$MonitorDiagnostics,
+
+    [string]$DxUiSdkInputDescriptor = ''
 )
 
 $ErrorActionPreference = "Stop"
+if ($DxUiSdkInputDescriptor -and ($Configuration -cne 'Release' -or $Clean)) {throw 'Qualified SDK inputs require a Release build without Clean.'}
+if ($DxUiSdkInputDescriptor -and ($Zip -or $GenerateWingetManifest)) {throw 'Build SDK-backed native outputs first; package them separately after their build receipt is sealed.'}
 if ($env:CI_NATIVE_BUILDS_DISABLED -eq 'true') { throw 'Native builds are forbidden in compiler-free PR checks.' }
 if ($ProductionOnly -and ($Configuration -ne 'Release' -or $ProjectName -or $Clean)) {
     throw 'ProductionOnly requires Release and cannot be combined with ProjectName or Clean.'
@@ -288,6 +296,10 @@ $SolutionFullPath = (Resolve-Path $SolutionFile).Path
 $SolutionDir = (Split-Path -Parent $SolutionFullPath)
 $SolutionDirWithSlash = $SolutionDir.TrimEnd('\') + '\'
 $artifactOperationLock = $null
+$sdkInput = $null
+$sdkModule = $null
+$sdkBuildFailure = $null
+$sdkProperties = @()
 $stopwatch = [System.Diagnostics.Stopwatch]::new()
 $contaminationRepairAuthorized = $false
 $script:sharedDependencyRepairAuthorized = $false
@@ -814,7 +826,26 @@ $receiptTestsEnabled = $effectiveTestsEnabled
 $receiptBuildArguments += "tests-enabled=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
 Write-Host 'Computing build evidence identity...' -ForegroundColor Gray
 Import-Module (Join-Path $SolutionDir 'Tools/Modules/Build/DxUiDependency.psm1') -Force -ErrorAction Stop
-Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates -Rebuild:$Rebuild -ProjectName $ProjectName
+if ($DxUiSdkInputDescriptor) {
+    $engine = Join-Path $SolutionDir '.ci-engine'
+    $sdkModule = Import-Module (Join-Path $engine 'Tools/Modules/Ci.SdkConsumer.psm1') -PassThru
+    $sdkInput = & $sdkModule {param($r,$d,$p,$c,$m) Open-CiApplicationSdkInput -ProjectRoot $r -Descriptor $d -Platform $p -Configuration $c -MSBuildPath $m} $SolutionDir $DxUiSdkInputDescriptor $Platform $Configuration $msbuildPath
+    if ($null -ne $sdkInput -and $sdkInput.Evidence.recipe -cne 'PinnedQualifiedReleaseSdkV2') {
+        & $sdkModule {param($r) Close-CiPinnedSdkInput $r} $sdkInput
+        $sdkInput=$null
+        Write-Host 'The optional SDK does not provide the qualified ABI contract; retaining pinned Source.'
+    }
+    if ($null -ne $sdkInput) {
+        foreach ($path in @($sdkInput.SdkRoot,$sdkInput.LeasePath,$engine,$SolutionDir)) {if ($path -match '[%;"\r\n]') {throw 'SDK paths contain unsupported MSBuild delimiters.'}}
+        $sdkProperties=@("/p:RSDxUiSdkRoot=$($sdkInput.SdkRoot)","/p:CiSdkRoot=$($sdkInput.SdkRoot)","/p:CiSdkProjectRoot=$SolutionDir","/p:CiSdkLeasePath=$($sdkInput.LeasePath)","/p:RSCiEngineRoot=$engine",'/p:CiSdkContract=QualifiedAbiV2')
+        $receiptBuildArguments+=@('dxui-recipe=PinnedQualifiedReleaseSdkV2',"dxui-sdk-input-key=$($sdkInput.Evidence.inputKey)","dxui-sdk-manifest=$($sdkInput.Evidence.manifestSha256)","dxui-sdk-descriptor-sha256=$($sdkInput.Descriptor.Hash.ToLowerInvariant())")
+    }
+}
+Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates -Rebuild:$Rebuild -ProjectName $ProjectName -SdkInput $sdkInput
+if($null -eq $sdkInput){
+    $oldSdkRecord=Resolve-RSGuardedRepositoryPath -RepoRoot $SolutionDir -GuardedRelativeRoot ".build/$Platform/$Configuration" -Path (Join-Path $buildOutputDir 'DxUi.sdk-input.json')
+    if(Test-Path -LiteralPath $oldSdkRecord){Remove-Item -LiteralPath $oldSdkRecord}
+}
 $buildSourceSnapshotBefore = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
 $buildIdentity = Get-RSBuildIdentityBundle -RepoRoot $SolutionDir -MSBuildPath $msbuildPath `
     -Platform $Platform -Configuration $Configuration
@@ -862,7 +893,7 @@ $msbuildTarget = if ($ProjectName) {
 }
 if ($ProductionOnly) {
     $msbuildTarget = (@($productionProjects | ForEach-Object {
-        if ($Rebuild) { $_.Name + ':Rebuild' } else { $_.Name }
+        if ($Rebuild) { $_.SolutionTarget + ':Rebuild' } else { $_.SolutionTarget }
     }) -join ';')
 }
 
@@ -882,6 +913,11 @@ $buildParams += "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
 $buildParams += "/p:RSBuildEnableTests=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
 $buildParams += "/p:RSBuildCompilerDebugInformation=$effectiveCompilerDebugInformation"
 $buildParams += "/p:RSBuildArtifactManifestRoot=$($artifactManifestDir.TrimEnd('\'))\"
+$buildParams += $sdkProperties
+if ($null -ne $sdkInput) {
+    & $msbuildPath (Join-Path $SolutionDir 'RedSalamander/RedSalamander.vcxproj') /nologo /v:minimal '/t:CiValidateSdkConsumer' "/p:Platform=$Platform" "/p:Configuration=$Configuration" "/p:SolutionDir=$SolutionDirWithSlash" @sdkProperties
+    if ($LASTEXITCODE) {throw 'The actual application profile refused the qualified SDK before compilation.'}
+}
 if ($OfficialRelease) {
     $buildParams += "/p:RSVersionOfficialRelease=true"
 }
@@ -1062,7 +1098,8 @@ function Assert-BuildOutputProcessNotRunning {
 
     try {
         # Capture native bytes and module provenance before staging the portable package.
-        Write-RSDxUiModuleProvenance -RepoRoot $SolutionDir -ArtifactManifestDir $artifactManifestDir -Platform $Platform -Configuration $Configuration
+        Write-RSDxUiModuleProvenance -RepoRoot $SolutionDir -ArtifactManifestDir $artifactManifestDir -Platform $Platform -Configuration $Configuration -SdkInput $sdkInput
+        $sdkRecordPath=if($null -ne $sdkInput){Write-RSDxUiSdkBuildRecord -RepoRoot $SolutionDir -BuildOutputDir $buildOutputDir -SdkInput $sdkInput -MSBuildPath $msbuildPath -Platform $Platform}else{$null}
         $buildArtifacts = @(Get-RSBuildArtifactRecords `
                 -RepoRoot $SolutionDir `
                 -BuildOutputDir $buildOutputDir `
@@ -1074,6 +1111,7 @@ function Assert-BuildOutputProcessNotRunning {
         $buildArtifacts += New-RSBuildArtifactRecord `
             -RepoRoot $SolutionDir `
             -LiteralPath $toolchainIdentityPath
+        $buildArtifacts += @(if($sdkRecordPath){New-RSBuildArtifactRecord -RepoRoot $SolutionDir -LiteralPath $sdkRecordPath})
         $buildArtifacts = @($buildArtifacts | Sort-Object relative_path)
         $receiptTestsEnabled = Test-RSBuildArtifactManifestTestsEnabled -ArtifactManifestDir $artifactManifestDir -RequireUniform
         if (($Zip -or $GenerateWingetManifest -or $OfficialRelease) -and $receiptTestsEnabled) {
@@ -1205,6 +1243,7 @@ function Assert-BuildOutputProcessNotRunning {
         throw 'Build artifact test surface changed during packaging; no success receipt will be published.'
     }
     $receiptArtifacts = @(@($buildArtifacts) + @($packageArtifacts) | Sort-Object relative_path)
+    if ($null -ne $sdkInput) {& $sdkModule {param($r) Close-CiPinnedSdkInput $r} $sdkInput}
     $buildReceipt = New-RSBuildReceipt `
         -SourceSnapshot $buildSourceSnapshotFinal `
         -Identity $buildIdentity `
@@ -1237,6 +1276,7 @@ function Assert-BuildOutputProcessNotRunning {
     exit 0
 }
 catch {
+    $sdkBuildFailure=$_
     $stopwatch.Stop()
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Red
@@ -1247,5 +1287,8 @@ catch {
     exit 1
 }
 finally {
-    Exit-RSArtifactOperationLock -Lock $artifactOperationLock
+    try {
+        if ($null -ne $sdkInput -and -not $sdkInput.Closed) {& $sdkModule {param($r) Close-CiPinnedSdkInput $r} $sdkInput}
+    } catch {if ($null -eq $sdkBuildFailure) {throw} else {Write-Warning ('SDK close also failed: '+$_.Exception.Message)}}
+    finally {Exit-RSArtifactOperationLock -Lock $artifactOperationLock}
 }

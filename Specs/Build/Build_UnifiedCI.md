@@ -157,3 +157,12 @@ single explicit directory only when emitted, and retain workspace diagnostics in
 The pinned shared engine restores vcpkg's ABI-indexed package cache for normal and manual native qualification. Exact engine/input keys are preferred; fallback lookup stays within the same runner OS, host architecture and target platform, and the pinned vcpkg restore still selects each package by its computed ABI. A miss rebuilds the package. This supplies dependency inputs only: product objects, DxUi SDK outputs and build/test receipts are not restored by this cache. Dependency pins, native execution, failure detectors and production/publication gates remain required. The owning behavior is the shared engine's Specs/CI.md.
 
 The pinned shared conformance rejects extension-wide Markdown exclusions. Pin maintenance migrates only the original global default to owned prose locations and known guides. Runtime/test include exceptions retain precedence; historical artifacts keep their original source identity.
+
+Eligible Main ReleaseTestBuild and Production adapters may prepare the exact pinned qualified SDK input through the shared engine, then pass its independent descriptor to build.ps1. Static, ReleaseTest and manual Debug/ASan/Qualification do not prepare it. The build receipt and SDK reader still independently govern artifact reuse and production packaging; dependency availability never grants regression success or publication. No native/local obligation is removed.
+
+Prepare SDK inputs before applying the returned vcpkg build environment. SDK
+builds and their subsequent ReleaseTest reuse retain canonical vcpkg MSBuild
+imports and installed paths but omit the helper's synthetic `CL` include override.
+Source and manual qualification keep their existing environment. Never clear an
+inherited caller compiler override: the SDK ABI reader must independently reject
+unsupported overrides rather than accepting a different compiler environment.

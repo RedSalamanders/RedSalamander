@@ -1,5 +1,11 @@
 # Repository tooling
 
+The sanitized child-process factory uses the pinned shared policy to assign a
+private compiler metadata-service endpoint to each child without changing its
+parent. Restore `.ci-engine` at `.ci/project.json`'s exact commit before local
+process/build tooling. Both direct and streaming routes keep their existing
+contained ownership and environment transport.
+
 Validation rejections retain a `validation_acceptance` failure with the rejected
 contract's reason codes. Unallowed skips name the missing cases; successful
 assertions and earlier failure details remain visible in the same result.
@@ -178,6 +184,8 @@ after execution-policy changes; missing or unresolved local dependencies retain 
 the canonical runner, including focused FileOps runs. The default stays disabled. The primary sandbox's enabled
 `path.local.alternate` resource restricts selection to its exact marked root; new drive-root initialization still
 requires separate authorization.
+Discovery never creates or marks a missing physical alternate root. Initialize the
+exact path separately with authorization before opting in to its use.
 
 The standalone scheduler accepts empty cheap-work selections, including the real deferred
 Full remainder consisting of interactive viewer entries. It retains every later entry in
@@ -304,6 +312,10 @@ After a Full artifact writer, the runner byte-verifies the rebuilt profile and
 refreshes its cached receipt binding before it computes downstream fingerprints.
 The receipt ID and build-artifact component therefore describe the same verified
 receipt; exact Resume can reconstruct that terminal artifact epoch.
+Re-attestation also preserves the accepted dependency recipe. The shared build-evidence
+helper captures the independently reopened SDK descriptor before receipt suspension,
+closes its reader, and forwards that original input to the rebuild. Changed SDK binding
+or Source fallback blocks the continuation before native readers.
 
 | Location | Contents | How it is used |
 |---|---|---|
@@ -616,3 +628,10 @@ tracked files. Hosted native checkout keeps complete public history so this inve
 Changed evidence uses public origin/main before the legacy origin/master fallback.
 
 Unified native CI calls the canonical VcpkgInstallSafety pinned bootstrap, then vcpkg-install.ps1 for its selected platform, before applying process-local MSBuild integration. Incomplete restored tool directories are preserved; dependency installation retains its platform lock and pins. See Specs/Build/Build_Toolchain.md and Tools/Tests/VcpkgBootstrap.Tests.ps1.
+
+Qualified Release SDK inputs use the optional build descriptor and the sealed native receipt. Artifact reuse and separate installer packaging reopen the original authenticated dependency input; Source portable attestations refuse SDK recipes. See [the build contract](../Specs/Build/Build_Toolchain.md#qualified-pinned-dxui-sdk-inputs).
+
+Production-only builds consume BuildProjectSelection.psm1's complete SolutionTarget
+names, retaining nested localization/resource and plugin targets. The helper rejects
+invalid nesting and target collisions before compilation. Focused tests include an
+actual MSBuild solution traversal with nested and reserved-name fixture projects.

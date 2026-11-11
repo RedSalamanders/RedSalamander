@@ -1107,6 +1107,13 @@ function New-RSProcessStartInfo {
         Set-RSProcessEnvironmentValue -EnvironmentDictionary $environmentDictionary -Name $name -Value ([string]$entry.Value)
     }
 
+    # The namespace belongs to this child, including when a later owned job closes.
+    # Keep the endpoint out of the calling process and replace inherited/override
+    # aliases through the shared policy instead of duplicating its generation.
+    # Load only for child creation so read-only environment helpers retain their
+    # compatibility surface without requiring a restored native CI dependency.
+    Import-Module (Join-Path $PSScriptRoot '../../../.ci-engine/Tools/Modules/Ci.Policy.psm1') -Scope Local -ErrorAction Stop
+    $null = Set-CiNativeProcessEnvironment -ProcessStartInfo $psi
     return $psi
 }
 

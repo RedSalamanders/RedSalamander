@@ -71,8 +71,9 @@
     should omit it so the runner creates a unique identifier.
 
 .PARAMETER AllowAlternateVolumeTestRoot
-    Allows File Operations selftests to create their marked
-    X:\RedSalamander.Perf root on one alternate fixed local volume. An enabled
+    Allows File Operations selftests to use an existing explicitly initialized,
+    marked X:\RedSalamander.Perf root on one alternate fixed local volume. This
+    switch never authorizes first creation or marking of a drive-root folder. An enabled
     path.local.alternate machine resource restricts selection to that exact root.
 
 .PARAMETER FailFast
@@ -2035,6 +2036,8 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
     }
     # Fail closed before the writer can delete or replace any selected-profile byte.
     # A crash after this point leaves no usable receipt and a durable mutating epoch.
+    $reattestDependencyBuildArguments = Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt $preMutationReceipt
+    $preMutationDependencyIdentity = @($preMutationReceipt.build_arguments | Where-Object {$_ -clike 'dxui-recipe=*' -or $_ -clike 'dxui-sdk-*'} | Sort-Object)
     Suspend-RSBuildReceipt -BuildOutputDir $buildOutputDir
     $receipt = $null
     $artifactEpoch = Start-RSValidationArtifactMutation -Run $validationEvidenceRun `
@@ -2053,7 +2056,7 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
     $reattestExitCode = 1
     try {
         & (Join-Path $repoRoot 'build.ps1') -Configuration $Configuration -Platform $Platform `
-            -BuildNumber $reattestBuildNumber -MaxCpuCount 4
+            -BuildNumber $reattestBuildNumber -MaxCpuCount 4 @reattestDependencyBuildArguments
         $reattestExitCode = $LASTEXITCODE
     } finally {
         foreach ($key in @($reattestEnvironmentOverrides.Keys)) {
@@ -2072,6 +2075,11 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
             -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `
             -RequiredRelativePath $requiredPlanArtifactPaths)) {
         Write-Host "BLOCKED ATTESTATION: the re-attested profile failed byte-for-byte receipt verification after '$($artifactMutator.Id)'." -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
+    $restoredDependencyIdentity = @($restoredReceipt.build_arguments | Where-Object {$_ -clike 'dxui-recipe=*' -or $_ -clike 'dxui-sdk-*'} | Sort-Object)
+    if (($restoredDependencyIdentity -join "`n") -cne ($preMutationDependencyIdentity -join "`n")) {
+        Write-Host 'BLOCKED ATTESTATION: profile re-attestation changed the selected dependency recipe or original SDK binding.' -ForegroundColor Red
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }
     $receipt = $restoredReceipt
