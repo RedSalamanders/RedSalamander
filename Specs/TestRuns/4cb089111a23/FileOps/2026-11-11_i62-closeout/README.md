@@ -88,3 +88,21 @@ from October 2026 and six old run folders). They were left in place.
 
 Traces and the performance metric stream stay in local evidence storage under the run id; they exceed the
 archive size limits.
+
+## The renumbered and merged tree
+
+After the run above, the plan ranks were renumbered (commit `a39fbc8c4`) and `origin/main` (`67f987ca5`) was
+merged (commit `b34e002ae`). The merge brings one plan document, one index row and one change fragment
+from `main`. On `b34e002ae`:
+
+- Debug x64 build: 0 warnings, 0 errors.
+- File Operations cases with the prefix `Phase10_` (the Recycle escalation prompts that D-6 changed):
+  14 passed, 0 failed, 0 skipped, run id `20261111T153649Z-92248-b464a79e6c5d48dbbfa43845e198ee00`. This
+  is a focused run and gives no repository verdict.
+- `Tools\Get-SpecInventory.ps1 -FailOnFindings`: 0 blocking findings. `Tools\Test-Changelog.ps1 -Base
+  origin/main`: valid. `Tools\Test-TestRunArchive.ps1` and `-Inventory`: passed.
+- Six tooling test files with `Invoke-Pester` (specification information architecture, documentation
+  drift, changelog, test harness source contracts, resource localization, tooling governance): 355
+  passed, 0 failed.
+
+No Full run was made on the renumbered and merged tree.
