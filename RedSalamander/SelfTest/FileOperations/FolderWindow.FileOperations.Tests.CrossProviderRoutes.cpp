@@ -326,7 +326,7 @@ private:
                                   ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), child, expectedChild);
     const auto destinationNames = ListCrossProviderChildNames(mtp.get(), kMtpDestination);
     const bool leftover         = std::ranges::any_of(destinationNames, [](const std::wstring& name) noexcept {
-        return name.find(L".rs-mtp-") != std::wstring::npos || name.find(L".rs_tmp_") != std::wstring::npos;
+        return name.find(L".rs-mtp-") != std::wstring::npos || FileOperationArtifacts::HasPossibleArtifactName(name);
     });
     if (summary->resultHr != S_OK || summary->errorCount != 0u || ! read || fileBytes != expectedFile || childBytes != expectedChild || leftover ||
         std::ranges::any_of(summary->issueDiagnostics, [](const auto& issue) noexcept { return issue.category == L"bridge.stage.authorityUnavailable"; }))

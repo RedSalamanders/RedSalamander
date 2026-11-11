@@ -2787,6 +2787,7 @@ constexpr DWORD kBandwidthThrottleCancelPollMs        = 10u;
 constexpr std::wstring_view kBandwidthThrottleWorkerModeEnvVar    = L"REDSALAMANDER_FILEOPS_BW_WORKER_MODE";
 constexpr std::wstring_view kRecycleFailurePathEnvVar             = L"REDSALAMANDER_FILEOPS_RECYCLE_FAIL_PATH";
 constexpr std::wstring_view kRecycleFailureDirectoryEnvVar        = L"REDSALAMANDER_FILEOPS_RECYCLE_FAIL_DIRECTORY";
+constexpr std::wstring_view kRecycleUnavailableDirectoryEnvVar    = L"REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY";
 constexpr std::wstring_view kRecycleBatchUnknownPathEnvVar        = L"REDSALAMANDER_FILEOPS_RECYCLE_BATCH_UNKNOWN_PATH";
 constexpr std::wstring_view kRecycleBatchCommitPathEnvVar         = L"REDSALAMANDER_FILEOPS_RECYCLE_BATCH_COMMIT_PATH";
 constexpr std::wstring_view kRecycleSiblingHoldPathEnvVar         = L"REDSALAMANDER_FILEOPS_RECYCLE_SIBLING_HOLD_PATH";
@@ -3156,6 +3157,15 @@ BandwidthThrottleWorkerMode GetBandwidthThrottleWorkerModeOverride() noexcept
 [[nodiscard]] bool MatchRecycleFailureDirectoryForSelfTest(const PathInfo& path) noexcept
 {
     const std::wstring directory = GetSelfTestEnvironmentString(kRecycleFailureDirectoryEnvVar);
+    return ! directory.empty() && OrdinalString::EqualsNoCase(GetPathDirectory(path.extended), MakePathInfo(directory).extended);
+}
+
+// I63 D-5: stands in for a location without a Recycle Bin. For as long as the variable is set, every Recycle of an item
+// directly inside the named directory is refused before any change, as the progress sink refuses an item the Shell would
+// delete permanently.
+[[nodiscard]] bool MatchRecycleUnavailableDirectoryForSelfTest(const PathInfo& path) noexcept
+{
+    const std::wstring directory = GetSelfTestEnvironmentString(kRecycleUnavailableDirectoryEnvVar);
     return ! directory.empty() && OrdinalString::EqualsNoCase(GetPathDirectory(path.extended), MakePathInfo(directory).extended);
 }
 
@@ -4530,7 +4540,7 @@ void MaybeReserveDestinationAllocation(const OperationContext& context,
     constexpr unsigned int kMaxStageAttempts = 32u;
     for (unsigned int attempt = 0u; attempt < kMaxStageAttempts; ++attempt)
     {
-        hr = MakeStageSiblingPath(destination.display, L".rs_copy_tmp_", stagePath);
+        hr = MakeStageSiblingPath(destination.display, kStageExtension, stagePath);
         if (FAILED(hr))
         {
             return hr;
@@ -5846,7 +5856,7 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
     constexpr unsigned int kMaxStageAttempts = 32u;
     for (unsigned int attempt = 0u; attempt < kMaxStageAttempts; ++attempt)
     {
-        hr = MakeStageSiblingPath(destination.display, L".rs_copy_tmp_", stagePath);
+        hr = MakeStageSiblingPath(destination.display, kStageExtension, stagePath);
         if (FAILED(hr))
         {
             return hr;
@@ -6341,7 +6351,7 @@ struct LocalCreatedDirectory final
     HRESULT hr                                   = E_UNEXPECTED;
     for (unsigned int attempt = 0u; attempt < kMaximumStageAttempts; ++attempt)
     {
-        hr = MakeStageSiblingPath(destination.display, L".rs_copy_tmp_", stagePath);
+        hr = MakeStageSiblingPath(destination.display, kStageExtension, stagePath);
         if (FAILED(hr))
         {
             return hr;
@@ -8580,7 +8590,6 @@ void MaybeInjectMoveDestinationRaceForSelfTest(const std::wstring& destinationEx
             return hr;
         }
 
-        std::wstring leaf;
 #ifdef ENABLE_TESTS
         const std::wstring entropyFailurePath = GetSelfTestEnvironmentString(kCaseRenameEntropyFailurePathEnvVar);
         if (! entropyFailurePath.empty() && OrdinalString::EqualsNoCase(sourceExtended, MakePathInfo(entropyFailurePath).extended))
@@ -8590,18 +8599,15 @@ void MaybeInjectMoveDestinationRaceForSelfTest(const std::wstring& destinationEx
             return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
         }
 #endif
-        hr = Common::Paths::BuildUniqueSiblingName(std::wstring_view{}, std::wstring_view{L".rs_case_tmp_"}, std::wstring_view{}, 255u, leaf);
+        // The hop carries the item itself, so it takes the name of something that may hold an
+        // original: `<leaf>.<32 hex>.rs-bak`.
+        std::wstring tempPath;
+        hr = MakeStageSiblingPath(sourceExtended, kBackupExtension, tempPath);
         if (FAILED(hr))
         {
             Debug::Error(L"FileSystem: cryptographic case-only rename staging name generation failed (hr=0x{0:08X}).", static_cast<unsigned long>(hr));
             Debug::Perf::EmitCounter(L"FileOps.Rename.CaseTempEntropyFailureCount");
             return hr;
-        }
-
-        std::wstring tempPath = AppendPath(directory, leaf);
-        if (tempPath.empty())
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
         }
 
 #ifdef ENABLE_TESTS
@@ -9870,6 +9876,14 @@ HRESULT DeleteToRecycleBin(OperationContext& context, const PathInfo& path, File
     }
 
 #ifdef ENABLE_TESTS
+    if (MatchRecycleUnavailableDirectoryForSelfTest(path))
+    {
+        if (mutationResult != nullptr)
+        {
+            *mutationResult = ReduceRecyclePostDelete(true, kRecycleUnavailableStatus, false).receipt;
+        }
+        return kRecycleUnavailableStatus;
+    }
     if (TryInjectRecycleFailureForSelfTest(path, mutationResult))
     {
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
@@ -10159,7 +10173,8 @@ HRESULT DeleteToRecycleBinBatched(OperationContext& context, std::span<RecycleBi
     if (std::ranges::any_of(items,
                             [](const RecycleBinBatchEntry& entry) noexcept
     {
-        return MatchRecycleFailureDirectoryForSelfTest(entry.path) || MatchRecycleSeamPathForSelfTest(kRecycleFailurePathEnvVar, entry.path, false) ||
+        return MatchRecycleFailureDirectoryForSelfTest(entry.path) || MatchRecycleUnavailableDirectoryForSelfTest(entry.path) ||
+               MatchRecycleSeamPathForSelfTest(kRecycleFailurePathEnvVar, entry.path, false) ||
                MatchRecycleSeamPathForSelfTest(kRecycleUnknownPathEnvVar, entry.path, false);
     }))
     {
@@ -11917,10 +11932,10 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
     const std::filesystem::path replaceDestinationPath = root / (std::wstring(251u, L'r') + L".bin");
     std::wstring boundedStagePath;
     std::wstring secondStagePath;
-    if (! check(SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), L".rs_copy_tmp_", boundedStagePath)) &&
-                    SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), L".rs_copy_tmp_", secondStagePath)) &&
-                    boundedStagePath != secondStagePath && std::filesystem::path(boundedStagePath).parent_path() == root &&
-                    std::filesystem::path(boundedStagePath).filename().native().size() == 255u,
+    if (! check(SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), kStageExtension, boundedStagePath)) &&
+                    SUCCEEDED(MakeStageSiblingPath(replaceDestinationPath.native(), kStageExtension, secondStagePath)) && boundedStagePath != secondStagePath &&
+                    std::filesystem::path(boundedStagePath).parent_path() == root &&
+                    std::filesystem::path(boundedStagePath).filename().native().size() == 255u && boundedStagePath.ends_with(kStageExtension),
                 L"255-unit destination leaves need distinct bounded random stage names in the same parent"))
     {
         return;

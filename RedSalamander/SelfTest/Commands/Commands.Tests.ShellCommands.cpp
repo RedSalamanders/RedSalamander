@@ -788,7 +788,7 @@ private:
 
     const std::filesystem::path root     = suiteRoot / L"work" / (L"change_attributes_artifact_" + NewGuidText());
     const std::filesystem::path folder   = root / L"folder";
-    const std::filesystem::path artifact = folder / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::filesystem::path artifact = folder / L"payload.0123456789abcdef0123456789abcdef.rs-bak";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(folder), L"Failed to create recursive Change Attributes artifact folder.");

@@ -1417,6 +1417,20 @@ private:
                               contentMatches,
                               boundedRows,
                               bothRootsVisible));
+        if (! exact)
+        {
+            // Name the summary field that broke the contract so an intermittent failure is diagnosable from the trace alone.
+            AppendLog(result.has_value() ? std::format(L"MultipleFolderLiveProgressSummary: hr=0x{:08X} discoveredFiles={} expectedFiles={} discoveredBytes={} "
+                                                       L"expectedBytes={} copiedKnown={} copied={}",
+                                                       static_cast<unsigned long>(result.value().hr),
+                                                       result.value().discoveredFiles,
+                                                       expectedFiles,
+                                                       result.value().discoveredTotalBytes,
+                                                       8u * kClosureFileBytes,
+                                                       result.value().copiedFileCountKnown,
+                                                       result.value().copiedFileCount)
+                                         : std::wstring(L"MultipleFolderLiveProgressSummary: no result was published"));
+        }
         allRoutesCorrect = allRoutesCorrect && exact && monotonic && closedDuringCopy && contentMatches && boundedRows && bothRootsVisible;
     }
     // The product intentionally rejects Bulk Copy before I/O. This is Native API qualification on

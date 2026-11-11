@@ -9858,7 +9858,7 @@ void AutomateChangeCasePrompt(
 
     const std::filesystem::path root         = suiteRoot / L"work" / (L"item_properties_" + NewGuidText());
     const std::filesystem::path filePath     = root / L"alpha.txt";
-    const std::filesystem::path artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::filesystem::path artifactPath = root / L"payload.0123456789abcdef0123456789abcdef.rs-bak";
     constexpr uint64_t kFileSizeBytes        = 1536u;
     const std::string filePayload(static_cast<size_t>(kFileSizeBytes), 'x');
 
@@ -9910,7 +9910,7 @@ void AutomateChangeCasePrompt(
                   L"Failed to set local file-system plugin for item-properties test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for item-properties test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"payload.rs_ren_0123456789abcdef0123456789abcdef"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"payload.0123456789abcdef0123456789abcdef.rs-bak"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for item-properties test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"), L"Failed to focus alpha.txt.");
     if (! state.failure.empty())
@@ -10057,7 +10057,7 @@ void AutomateChangeCasePrompt(
                               artifactSnapshot.artifactClassifierQueryCount));
     const std::array<UINT, 7u> requiredArtifactStrings{{
         static_cast<UINT>(IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS),
-        // The `.rs_ren_` fixture is a rename hop, which may hold the only copy: I35 S1 (R-5) reads it as a possible original.
+        // The `.rs-bak` fixture is a backup or rename hop, which may hold the only copy: I35 S1 (R-5) reads it as a possible original.
         static_cast<UINT>(IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE),
         static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON),
         static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NO_CLAIM),
@@ -10330,7 +10330,7 @@ void AutomateChangeCasePrompt(
     const std::filesystem::path root         = suiteRoot / L"work" / (L"item_properties_streams_" + NewGuidText());
     const std::filesystem::path filePath     = root / L"alpha.txt";
     const std::filesystem::path dirPath      = root / L"beta";
-    const std::filesystem::path artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::filesystem::path artifactPath = root / L"payload.0123456789abcdef0123456789abcdef.rs-bak";
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
@@ -10409,7 +10409,7 @@ void AutomateChangeCasePrompt(
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for stream properties test.");
     state.Require(
-        WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta", L"payload.rs_ren_0123456789abcdef0123456789abcdef"}, SelfTest::Scale(3000ms)),
+        WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta", L"payload.0123456789abcdef0123456789abcdef.rs-bak"}, SelfTest::Scale(3000ms)),
         L"Pane contents not ready for stream properties test.");
     if (! state.failure.empty())
     {
@@ -10581,7 +10581,7 @@ struct ItemPropertiesFailureFixture final
         }
         root         = suiteRoot / L"work" / (std::wstring(rootPrefix) + NewGuidText());
         filePath     = root / L"alpha.txt";
-        artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+        artifactPath = root / L"payload.0123456789abcdef0123456789abcdef.rs-bak";
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
         state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the Properties failure test root.");

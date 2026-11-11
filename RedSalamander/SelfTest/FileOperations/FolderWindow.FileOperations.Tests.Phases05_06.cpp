@@ -411,7 +411,8 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         for (std::filesystem::directory_iterator it(caseOnlyRoot, leakedTempEc), end; ! leakedTempEc && it != end; it.increment(leakedTempEc))
         {
             const std::filesystem::path enumeratedPath = it->path();
-            leakedCaseTemp |= enumeratedPath.filename().native().starts_with(L".rs_case_tmp_") &&
+            // The hop is `<source leaf>.<32 hex>.rs-bak`; the one raced sibling is the only such name allowed to remain.
+            leakedCaseTemp |= FileOperationArtifacts::HasPossibleOriginalArtifactName(enumeratedPath.filename().native()) &&
                               ! OrdinalString::EqualsNoCase(enumeratedPath.filename().native(), collisionTempLeaf);
         }
         if (FAILED(collisionRenameHr) || collisionTempPath.empty() || ! FileSizeEquals(std::filesystem::path(collisionTempPath) / L"race.marker", 4u) ||

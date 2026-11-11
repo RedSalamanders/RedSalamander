@@ -1822,11 +1822,15 @@ private:
             const bool cutsAgain      = fileOps->CutCompletedTaskRetainedSourcesAgain(projected.taskId);
             state.Require(layoutRead && ! layout.completedFailedItemsActionVisible && ! layout.completedShowLogVisible &&
                               ! layout.completedExportIssuesVisible && layout.completedOpenDestinationActionVisible &&
-                              ! layout.completedRevealDestinationActionVisible && layout.completedDismissVisible && ! layout.taskStartNowVisible &&
+                              ! layout.completedRevealDestinationActionVisible && ! layout.completedDirectActionVisible &&
+                              layout.completedDiagnosticsMoreVisible && layout.completedDismissVisible && ! layout.taskStartNowVisible &&
                               ! layout.taskPauseVisible && ! layout.taskCancelVisible && ! selectsSources && ! cutsAgain,
-                          std::format(L"Interrupted Move actions should offer navigation and exact dismissal without Resume, retry, rollback, cleanup, "
-                                      L"Cut-again, fake diagnostics, or item reveal (layout={} compact={} failedItems={} showLog={} exportIssues={} "
-                                      L"openDestination={} revealDestination={} dismiss={} startNow={} pause={} cancel={} selectSources={} cutAgain={}).",
+                          // The card opens its source or its destination: two commands, so they share one menu (I63 slice C keeps
+                          // a menu for two commands or more and never for one).
+                          std::format(L"Interrupted Move actions should offer its two navigation commands in one More menu and exact dismissal without "
+                                      L"a lone direct command, Resume, retry, rollback, cleanup, Cut-again, fake diagnostics, or item reveal (layout={} "
+                                      L"compact={} failedItems={} showLog={} exportIssues={} openDestination={} revealDestination={} directAction={} "
+                                      L"directCommand={} more={} dismiss={} startNow={} pause={} cancel={} selectSources={} cutAgain={}).",
                                       layoutRead,
                                       layout.taskCompactRow,
                                       layout.completedFailedItemsActionVisible,
@@ -1834,6 +1838,9 @@ private:
                                       layout.completedExportIssuesVisible,
                                       layout.completedOpenDestinationActionVisible,
                                       layout.completedRevealDestinationActionVisible,
+                                      layout.completedDirectActionVisible,
+                                      layout.completedDirectActionCommand,
+                                      layout.completedDiagnosticsMoreVisible,
                                       layout.completedDismissVisible,
                                       layout.taskStartNowVisible,
                                       layout.taskPauseVisible,
@@ -2310,7 +2317,7 @@ constexpr std::string_view kBatchRenameNoOpProviderCapabilities = R"json({
     std::error_code ec;
     for (std::filesystem::recursive_directory_iterator it(root, ec), end; ! ec && it != end; it.increment(ec))
     {
-        if (it->path().filename().native().find(L".rs_ren_") != std::wstring::npos)
+        if (FileOperationArtifacts::HasPossibleArtifactName(it->path().filename().native()))
         {
             return true;
         }
@@ -8305,7 +8312,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                   L"Chain execution should move the first file's content to the vacated middle name.");
     state.Require(ReadBatchRenameFileText(root / L"chain-c.txt") == "second-content",
                   L"Chain execution should move the second file's content to the tail name.");
-    state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Chain execution must not leave .rs_ren_ temp files behind.");
+    state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Chain execution must not leave staging artifacts behind.");
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 2u,
                   std::format(L"Chain execution should run in two dependency layers without temp hops; saw {} RenameItems calls.",
                               renameItemsCalls.load(std::memory_order_relaxed)));
@@ -8503,7 +8510,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 2u,
                   std::format(L"Case-only self rename should execute one exact mutation per changed row without a temp hop; saw {} RenameItems calls.",
                               renameItemsCalls.load(std::memory_order_relaxed)));
-    state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Case-only dependency execution must not leave .rs_ren_ temp files behind.");
+    state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Case-only dependency execution must not leave staging artifacts behind.");
     state.Require(ListBatchRenameDirectoryLeaves(root) == std::vector<std::wstring>{L"caseswap.txt", L"plain-renamed.txt"},
                   L"Case-only dependency execution should apply the exact requested casing and the sibling rename.");
     state.Require(ReadBatchRenameFileText(root / L"caseswap.txt") == "case-content", L"Case-only rename should preserve the file content.");
@@ -9073,7 +9080,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                                SelfTest::PathExists(root / L"close-renamed-001.txt") && SelfTest::PathExists(root / L"close-renamed-002.txt");
     state.Require(originalsOnly || renamedOnly,
                   L"Closing during in-flight execution should leave either both originals or both destinations, never a half state.");
-    state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Closing during in-flight execution must not leave .rs_ren_ temp files behind.");
+    state.Require(! DirectoryHasBatchRenameTempLeftovers(root), L"Closing during in-flight execution must not leave staging artifacts behind.");
 
     if (renamedOnly)
     {
@@ -10230,7 +10237,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     {
         return false;
     }
-    const std::filesystem::path source = root / L"source.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::filesystem::path source = root / L"source.0123456789abcdef0123456789abcdef.rs-bak";
     state.Require(SelfTest::WriteTextFile(source, "start-operation-artifact-prompt-shutdown"),
                   L"StartOperation artifact-prompt shutdown fixture should create its source.");
     if (! state.failure.empty())

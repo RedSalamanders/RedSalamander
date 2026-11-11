@@ -173,6 +173,24 @@ unsigned long TakeFileOpsBridgeFailNextStageEntropyAttemptsForSelfTest() noexcep
     return g_fileOpsBridgeFailNextStageEntropyAttempts.exchange(0u, std::memory_order_acq_rel);
 }
 
+namespace
+{
+std::atomic<uint64_t> g_fileOpsFlyoutsBelowTwoCommands{0u};
+}
+
+void NoteFileOpsFlyoutOpeningForSelfTest(size_t commandCount) noexcept
+{
+    if (commandCount < 2u)
+    {
+        g_fileOpsFlyoutsBelowTwoCommands.fetch_add(1u, std::memory_order_acq_rel);
+    }
+}
+
+uint64_t TakeFileOpsFlyoutsBelowTwoCommandsForSelfTest() noexcept
+{
+    return g_fileOpsFlyoutsBelowTwoCommands.exchange(0u, std::memory_order_acq_rel);
+}
+
 void SetFileOpsBridgeFailNextDestinationOpenForSelfTest(unsigned long count, HRESULT status) noexcept
 {
     g_fileOpsBridgeFailNextDestinationOpenAttempts.store(0u, std::memory_order_release);
@@ -388,6 +406,11 @@ bool HasFileOpsFallbackWorkerReturnPauseEnteredForSelfTest() noexcept
 void ReleaseFileOpsFallbackWorkerReturnPauseForSelfTest() noexcept
 {
     g_fileOpsFallbackWorkerReturnPausePoint.Release();
+}
+
+void SetFileOpsSameFileProbeSharingUnenforcedForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsSameFileProbeSharingUnenforcedForSelfTest.store(enabled, std::memory_order_release);
 }
 
 void SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(bool enabled, ULONGLONG bailoutMs) noexcept
@@ -2244,21 +2267,67 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
     if (Debug::Perf::IsCaptureEnabled())
         Debug::Perf::Emit(L"FileOps.Queue.EnterCount", L"", 0u, 1u, 0u, S_OK);
 
+    // Queue order is the order of the waiting cards. Every admitted task holds its place until it
+    // enters or leaves without entering, so a task that is still Preparing holds the queue: nothing
+    // behind it starts. A place holder is passed only while it waits for its user's answer on its
+    // own card or is queued behind a named task; it then starts next once that reason clears.
     const auto firstUnblockedQueuedTaskId = [&]() noexcept -> uint64_t
     {
+        struct QueuePlace final
+        {
+            uint64_t orderKey = 0u;
+            uint64_t taskId   = 0u;
+            Task* holder      = nullptr;
+            bool waiting      = false; // inside this function's wait, as _queue records
+        };
+        // _queueMutex is held. _mutex nests inside it, as in the queue insert below, and keeps
+        // every admitted task alive for the walk.
+        std::scoped_lock tasksLock(_mutex);
+        std::vector<QueuePlace> places;
+        places.reserve(_tasks.size() + _queue.size());
+        const auto add = [&](Task* holder, const bool waiting) noexcept
+        {
+            if (holder != nullptr && std::ranges::find(places, holder->GetId(), &QueuePlace::taskId) == places.end())
+                places.push_back(QueuePlace{.orderKey = holder->GetQueueOrderKey(), .taskId = holder->GetId(), .holder = holder, .waiting = waiting});
+        };
+        for (const auto& owned : _tasks)
+        {
+            if (owned && owned->_holdsQueuePlace.load(std::memory_order_acquire) && ! owned->_cancelled.load(std::memory_order_acquire))
+                add(owned.get(), std::ranges::find(_queue, owned->GetId()) != _queue.end());
+        }
+        // A waiter that is not an admitted task (an entry driven directly) is known only by its
+        // published admission.
         for (const uint64_t queuedId : _queue)
         {
+            const auto published = std::ranges::find(_preparedMutationInterlocks, queuedId, &ActiveMutationInterlock::taskId);
+            if (published != _preparedMutationInterlocks.end())
+                add(published->task, true);
+        }
+        std::ranges::sort(places, [](const QueuePlace& left, const QueuePlace& right) noexcept {
+            return std::pair{left.orderKey, left.taskId} < std::pair{right.orderKey, right.taskId};
+        });
+
+        for (const QueuePlace& place : places)
+        {
+            if (place.holder->_awaitingUserDecision.load(std::memory_order_acquire))
+                continue;
             const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
                                                        [&](const ActiveMutationInterlock& published) noexcept
             {
-                if (published.taskId != queuedId || ! published.task || ! published.admission)
+                if (published.taskId != place.taskId || ! published.task || ! published.admission)
                     return false;
                 const auto selected = published.task->LoadSelectedAdmission();
                 return selected->interlock && selected->interlock->key == published.admission->key;
             });
-            if (prepared != _preparedMutationInterlocks.end() &&
-                ! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
-                return queuedId;
+            if (prepared == _preparedMutationInterlocks.end() || ! prepared->admission->relations.advisoryDecided)
+            {
+                if (place.waiting)
+                    continue;
+                // Still Preparing: it holds the queue.
+                return 0u;
+            }
+            if (! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+                return place.taskId;
         }
         return 0u;
     };
@@ -2385,6 +2454,8 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
             EraseMutationInterlockAdmission(_preparedMutationInterlocks, admissionKey);
             _activeMutationInterlocks.push_back(ActiveMutationInterlock{.taskId = task._taskId, .task = &task, .admission = admission});
             task._reservedOperation.store(true, std::memory_order_release);
+            // From here the active operation count accounts for this task.
+            task._holdsQueuePlace.store(false, std::memory_order_release);
             // Publish the monotonic preparation phase before withdrawing queue presentation;
             // strict acquisition and confirmation must never appear as transfer execution.
             if (admission->hasDeferredDirectoryDeletes)
@@ -2393,6 +2464,7 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
                 task._waitForOthers.store(false, std::memory_order_release);
             task.SetWaitingInQueue(false);
             ++_activeOperations;
+            task.UpdateKeepAwake(); // I63 G7: admitted, so it needs the computer awake unless it is paused or waiting for an answer
             task._perf.queueActiveOperations = _activeOperations;
             const uint64_t waitUs            = waited ? PerfElapsedUs(queueWaitStartUs) : 0u;
             if (queuedWait)
@@ -2467,6 +2539,7 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task, const std::sha
         }
         task._reservedOperation.store(false, std::memory_order_release);
     }
+    task.UpdateKeepAwake(); // I63 G7: the operation slot is given back
     NotifyQueueChanged();
 }
 
@@ -3029,6 +3102,356 @@ bool FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForS
     return true;
 }
 
+// Queue order is card order. On synthetic admitted tasks whose scopes never overlap, proves which
+// queued task EnterOperation starts next; a task starts when its worker's entry returns Entered.
+bool FolderWindow::FileOperationState::DebugValidateQueueStartOrderForSelfTest(std::wstring& failure) noexcept
+{
+    using namespace std::chrono_literals;
+    using Access = FileOperations::MutationInterlockAccess;
+    // Every wait is bounded: a short observation for "must not start", a long bound for "must start".
+    constexpr std::chrono::milliseconds kMustNotStart = 300ms;
+    constexpr std::chrono::milliseconds kMustStart    = 5000ms;
+    const uint64_t startedUs                          = PerfNowUs();
+    const auto makeScopes                             = [](uint64_t index) noexcept
+    {
+        FileOperations::MutationInterlockScope source{};
+        source.endpoint.pluginId                        = L"builtin/file-system";
+        source.endpoint.instanceId                      = L"host/default";
+        source.endpoint.profileId                       = L"local-win32-smb";
+        source.endpoint.rootId                          = L"fixture-volume";
+        source.endpoint.pathIdentity                    = FileSystemPathIdentity{.pathTextStableIdentity = true,
+                                                                                 .componentComparison    = FileSystemPathComponentComparison::OrdinalIgnoreCase,
+                                                                                 .preferredSeparator     = L'\\',
+                                                                                 .acceptedSeparators     = L"\\/"};
+        source.providerPath                             = std::format(L"C:\\fixture\\sources\\file-{}.bin", index);
+        source.access                                   = Access::WriteSource;
+        source.independentNewFileTransfer               = true;
+        source.independentPathKey                       = TryMakePathKey(source.endpoint.pathIdentity.value(), source.providerPath);
+        auto node                                       = std::make_shared<FileOperations::MutationInterlockAuthorityNode>();
+        node->endpoint                                  = source.endpoint;
+        node->retained.providerPath                     = source.providerPath;
+        node->retained.authority.kind                   = FILESYSTEM_BOUND_REGULAR_FILE;
+        node->retained.authority.identity.pathProfileId = source.endpoint.profileId;
+        for (unsigned int byte = 0u; byte < sizeof(index); ++byte)
+            node->retained.authority.identity.objectId.push_back(static_cast<std::byte>((index >> (byte * 8u)) & 0xffu));
+        source.root = node;
+        source.anchors.push_back({.authority = node, .relativePathKey = std::wstring{}});
+        auto destination                       = source;
+        destination.providerPath               = std::format(L"C:\\fixture\\destination\\file-{}.bin", index);
+        destination.access                     = Access::PublishDestination;
+        destination.conservativeIdentityDomain = true;
+        destination.root.reset();
+        destination.anchors.clear();
+        destination.independentParentKey = TryMakePathKey(destination.endpoint.pathIdentity.value(), L"C:\\fixture\\destination");
+        destination.independentPathKey   = TryMakePathKey(destination.endpoint.pathIdentity.value(), destination.providerPath);
+        return MutationInterlockScopes{std::move(source), std::move(destination)};
+    };
+    {
+        const auto first     = makeScopes(1u);
+        const auto second    = makeScopes(2u);
+        uint64_t comparisons = 0u;
+        if (TaskScopesOverlap(first, second, comparisons))
+        {
+            failure = L"Queue start order, fixture: the tasks' scopes must not overlap, so that only queue order decides.";
+            return false;
+        }
+    }
+
+    Common::Settings::Settings settings{};
+    settings.fileOperations.emplace().maxParallelTransfers = FileOperations::GetSharedParallelTransferLimit();
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    FileOperationState state(owner);
+
+    std::mutex startMutex;
+    std::vector<uint64_t> startOrder; // task ids in start order; guarded by startMutex
+    startOrder.reserve(8u);
+    std::atomic<uint64_t> heldTaskId{0u}; // this task keeps its operation until the scenario releases it
+    std::atomic<size_t> finishedWorkers{0u};
+    std::vector<std::jthread> workers;
+    workers.reserve(8u);
+    uint64_t scenarioCount = 0u;
+
+    const auto fail = [&](const std::wstring_view scenario, const std::wstring_view expectation) noexcept
+    {
+        failure = std::format(L"Queue start order, {}: {}", scenario, expectation);
+        return false;
+    };
+    // An admitted, queued task that holds its queue place and is still Preparing: its scopes are
+    // installed, nothing is published.
+    const auto addTask = [&](const uint64_t id, const uint64_t orderKey) noexcept -> Task*
+    {
+        auto candidate   = std::make_unique<Task>(state);
+        Task* const task = candidate.get();
+        task->_taskId    = id;
+        task->_admissionKey.store(id, std::memory_order_release);
+        task->_queueOrderKey.store(orderKey, std::memory_order_release);
+        task->_operation = FILESYSTEM_COPY;
+        task->_waitForOthers.store(true, std::memory_order_release);
+        task->_holdsQueuePlace.store(true, std::memory_order_release);
+        task->InstallPreparedMutationInterlockScopes(makeScopes(id), false);
+        std::scoped_lock lock(state._mutex);
+        state._tasks.push_back(std::move(candidate));
+        return task;
+    };
+    // The task's Preparing ends: its admission is published, then decided, which wakes the queue.
+    const auto publishDecided = [&](Task& task, MutationInterlockRelations relations) noexcept
+    {
+        state.PublishPreparedMutationInterlock(task);
+        relations.advisoryDecided = true;
+        state.PublishMutationInterlockDecision(task, std::move(relations));
+    };
+    const auto startWorker = [&](Task* const task) noexcept
+    {
+        workers.emplace_back([&, task](std::stop_token stopToken) noexcept
+        {
+            const auto result = state.EnterOperation(*task, stopToken);
+            if (result.outcome == OperationEntryOutcome::Entered)
+            {
+                const uint64_t id = task->GetId();
+                {
+                    std::scoped_lock lock(startMutex);
+                    startOrder.push_back(id);
+                }
+                while (heldTaskId.load(std::memory_order_acquire) == id)
+                    heldTaskId.wait(id, std::memory_order_acquire);
+                state.LeaveOperation(*task, result.accepted);
+            }
+            finishedWorkers.fetch_add(1u, std::memory_order_release);
+        });
+    };
+    const auto startCountReaches = [&](const size_t count, const std::chrono::milliseconds timeout) noexcept -> bool
+    {
+        const auto reached = [&]() noexcept
+        {
+            std::scoped_lock lock(startMutex);
+            return startOrder.size() >= count;
+        };
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (! reached() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        return reached();
+    };
+    const auto startOrderIs = [&](const std::vector<uint64_t>& expected) noexcept -> bool
+    {
+        std::scoped_lock lock(startMutex);
+        return startOrder == expected;
+    };
+    // The task's worker sleeps in EnterOperation's wait, so a "must not start" observation is not vacuous.
+    const auto reachesQueueWait = [&](const Task& waiter) noexcept -> bool
+    {
+        const auto deadline = std::chrono::steady_clock::now() + kMustStart;
+        while (! waiter.IsWaitingInQueue() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        return waiter.IsWaitingInQueue();
+    };
+    const auto joinWorkers = [&]() noexcept
+    {
+        {
+            // Pair stop with the predicate mutex, including any failure before the first wait.
+            std::scoped_lock lock(state._queueMutex);
+            for (std::jthread& worker : workers)
+                worker.request_stop();
+        }
+        heldTaskId.store(0u, std::memory_order_release);
+        heldTaskId.notify_all();
+        state._queueCv.notify_all();
+        workers.clear();
+    };
+    // No worker runs EnterOperation on a task when the tasks are destroyed.
+    const auto removeTasks = [&]() noexcept
+    {
+        joinWorkers();
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._activeMutationInterlocks.clear();
+            state._preparedMutationInterlocks.clear();
+            state._queue.clear();
+            state._activeOperations = 0u;
+        }
+        std::vector<std::unique_ptr<Task>> removed;
+        {
+            std::scoped_lock lock(state._mutex);
+            removed.swap(state._tasks);
+        }
+        removed.clear();
+        {
+            std::scoped_lock lock(startMutex);
+            startOrder.clear();
+        }
+        finishedWorkers.store(0u, std::memory_order_release);
+    };
+    const auto cleanup = wil::scope_exit([&]() noexcept { removeTasks(); });
+    // Every started task has left: the workers end by themselves, the queue is empty and no operation
+    // is counted. Leaves the state empty for the next scenario.
+    const auto scenarioSettles = [&](const std::wstring_view scenario) noexcept -> bool
+    {
+        const size_t started = workers.size();
+        const auto deadline  = std::chrono::steady_clock::now() + kMustStart;
+        while (finishedWorkers.load(std::memory_order_acquire) != started && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(1ms);
+        const bool finished = finishedWorkers.load(std::memory_order_acquire) == started;
+        joinWorkers();
+        bool drained = false;
+        {
+            std::scoped_lock lock(state._queueMutex);
+            drained = state._queue.empty() && state._activeOperations == 0u;
+        }
+        removeTasks();
+        if (! finished || ! drained)
+            return fail(scenario, L"every worker must end by itself and leave the queue empty with no active operation.");
+        ++scenarioCount;
+        return true;
+    };
+
+    // 1. A task that is still Preparing holds the queue.
+    {
+        constexpr std::wstring_view kScenario = L"a task that is still Preparing holds the queue";
+        Task* const taskA                     = addTask(11u, 1u);
+        Task* const taskB                     = addTask(12u, 2u);
+        Task* const taskC                     = addTask(13u, 3u);
+        publishDecided(*taskB, MutationInterlockRelations{});
+        startWorker(taskB);
+        publishDecided(*taskC, MutationInterlockRelations{});
+        startWorker(taskC);
+        if (! reachesQueueWait(*taskB) || ! reachesQueueWait(*taskC) || startCountReaches(1u, kMustNotStart))
+            return fail(kScenario, L"B and C must not start while A, ahead of them, is still Preparing.");
+        publishDecided(*taskA, MutationInterlockRelations{});
+        startWorker(taskA);
+        if (! startCountReaches(3u, kMustStart) || ! startOrderIs({11u, 12u, 13u}))
+            return fail(kScenario, L"the start order must be A, B, C once A is prepared.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
+    // 2. Reversed readiness: the tasks become ready last to first and still start first to last.
+    {
+        constexpr std::wstring_view kScenario = L"reversed readiness";
+        constexpr size_t kCount               = 6u;
+        std::array<Task*, kCount> byKey{};
+        std::vector<uint64_t> keyOrder;
+        for (size_t index = 0u; index < kCount; ++index)
+        {
+            // The ids run against the keys: the key decides, not the id.
+            byKey[index] = addTask(26u - index, index + 1u);
+            keyOrder.push_back(26u - index);
+        }
+        for (size_t index = kCount; index-- > 0u;)
+        {
+            if (index == 0u && ! startOrderIs({}))
+                return fail(kScenario, L"no task must start before the first task in queue order is prepared.");
+            publishDecided(*byKey[index], MutationInterlockRelations{});
+            startWorker(byKey[index]);
+            std::this_thread::sleep_for(20ms);
+        }
+        if (! startCountReaches(kCount, kMustStart) || ! startOrderIs(keyOrder))
+            return fail(kScenario, L"six tasks prepared in reverse order must start in queue order.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
+    // 3. The head waits for its user: it is passed, and starts next once the answer arrives.
+    {
+        constexpr std::wstring_view kScenario = L"the head waits for its user";
+        Task* const taskA                     = addTask(31u, 1u);
+        Task* const taskB                     = addTask(32u, 2u);
+        taskA->SetAwaitingUserDecision(true);
+        heldTaskId.store(32u, std::memory_order_release);
+        publishDecided(*taskB, MutationInterlockRelations{});
+        startWorker(taskB);
+        if (! startCountReaches(1u, kMustStart) || ! startOrderIs({32u}))
+            return fail(kScenario, L"B must start while A, ahead of it, waits for its user's answer.");
+        taskA->SetAwaitingUserDecision(false);
+        publishDecided(*taskA, MutationInterlockRelations{});
+        startWorker(taskA);
+        heldTaskId.store(0u, std::memory_order_release);
+        heldTaskId.notify_all();
+        if (! startCountReaches(2u, kMustStart) || ! startOrderIs({32u, 31u}))
+            return fail(kScenario, L"A must start next once its user has answered and B has left.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
+    // 4. The head is cancelled while Preparing. 5. The head fails Preparing.
+    for (const bool cancelHead : {true, false})
+    {
+        const std::wstring_view scenario = cancelHead ? L"the head is cancelled while Preparing" : L"the head fails Preparing";
+        const uint64_t firstId           = cancelHead ? 41u : 51u;
+        Task* const taskA                = addTask(firstId, 1u);
+        Task* const taskB                = addTask(firstId + 1u, 2u);
+        publishDecided(*taskB, MutationInterlockRelations{});
+        startWorker(taskB);
+        if (! reachesQueueWait(*taskB) || startCountReaches(1u, kMustNotStart))
+            return fail(scenario, L"B must not start while A, ahead of it, is still Preparing.");
+        if (cancelHead)
+        {
+            // As RequestCancel: publish, synchronize with the waiters' mutex, then wake.
+            taskA->_cancelled.store(true, std::memory_order_release);
+            {
+                std::scoped_lock lock(state._queueMutex);
+            }
+            state.NotifyQueueChanged();
+        }
+        else
+        {
+            // As the worker of a task whose Preparing failed.
+            taskA->_holdsQueuePlace.store(false, std::memory_order_release);
+            state.WithdrawPreparedMutationInterlock(taskA->_admissionKey.load(std::memory_order_acquire));
+        }
+        if (! startCountReaches(1u, kMustStart) || ! startOrderIs({firstId + 1u}))
+            return fail(scenario, L"B must start once A, ahead of it, no longer holds the queue.");
+        if (! scenarioSettles(scenario))
+            return false;
+    }
+    // 6. The head is queued behind a named task: it is passed while that task stays published.
+    {
+        constexpr std::wstring_view kScenario = L"the head is queued behind a named task";
+        constexpr uint64_t kNamedKey          = 63u;
+        Task* const taskA                     = addTask(61u, 1u);
+        Task* const taskB                     = addTask(62u, 2u);
+        // The named task is an admission only: published and decided, it never enters.
+        auto named                       = std::make_shared<MutationInterlockAdmission>();
+        named->key                       = kNamedKey;
+        named->scopes                    = std::make_shared<const MutationInterlockScopes>(makeScopes(kNamedKey));
+        named->relations.advisoryDecided = true;
+        named->isTransfer = named->hasDataTransfers = named->parallelNewFiles = true;
+        {
+            std::scoped_lock lock(state._queueMutex);
+            state._preparedMutationInterlocks.push_back({.taskId = kNamedKey, .admission = std::move(named)});
+        }
+        MutationInterlockRelations queuedAfterNamed{};
+        queuedAfterNamed.predecessorKeys[0] = kNamedKey;
+        queuedAfterNamed.predecessorCount   = 1u;
+        publishDecided(*taskA, queuedAfterNamed);
+        if (taskA->LoadMutationInterlockAdmission()->relations.predecessorCount != 1u)
+            return fail(kScenario, L"the fixture must keep A's relation to the task it is queued behind.");
+        startWorker(taskA);
+        publishDecided(*taskB, MutationInterlockRelations{});
+        startWorker(taskB);
+        if (! startCountReaches(1u, kMustStart) || ! startOrderIs({62u}))
+            return fail(kScenario, L"B must start although A, ahead of it, is queued behind a named task.");
+        if (! reachesQueueWait(*taskA) || startCountReaches(2u, kMustNotStart))
+            return fail(kScenario, L"A must not start while the task it is queued behind stays published.");
+        state.WithdrawPreparedMutationInterlock(kNamedKey);
+        if (! startCountReaches(2u, kMustStart) || ! startOrderIs({62u, 61u}))
+            return fail(kScenario, L"A must start once the task it is queued behind is withdrawn.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
+    // 7. Start now is not held by a task that is still Preparing.
+    {
+        constexpr std::wstring_view kScenario = L"Start now is not held";
+        Task* const taskA                     = addTask(71u, 1u);
+        Task* const taskB                     = addTask(72u, 2u);
+        publishDecided(*taskB, MutationInterlockRelations{});
+        taskB->_waitForOthers.store(false, std::memory_order_release);
+        startWorker(taskB);
+        if (! startCountReaches(1u, kMustStart) || ! startOrderIs({72u}) || ! taskA->_holdsQueuePlace.load(std::memory_order_acquire))
+            return fail(kScenario, L"B must start at once although A, still Preparing, holds the queue.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
+    Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.QueueStartOrder.Us", L"", PerfElapsedUs(startedUs), scenarioCount, 0u, S_OK);
+    return true;
+}
+
 bool FolderWindow::FileOperationState::DebugValidateInterlockWaitingPresentationForSelfTest(std::wstring& failure) noexcept
 {
     using namespace std::chrono_literals;
@@ -3151,6 +3574,8 @@ void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
             current                           = _preparedMutationInterlocks.erase(current);
         }
         RemoveFromQueue(task._taskId);
+        // A finished task never holds the queue, whichever path ended it.
+        task._holdsQueuePlace.store(false, std::memory_order_release);
     }
     _queueCv.notify_all();
     if (task._moveBreadcrumb.has_value())
@@ -3168,6 +3593,7 @@ void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
     // Live snapshots read this flag so a just-finished task renders its final status instead of
     // briefly flashing "Running" until the completed-summary row replaces the live row.
     task._taskFinished.store(true, std::memory_order_release);
+    task.UpdateKeepAwake(); // I63 G7: backstop for every path to the terminal state; the Task destructor releases as well
 #ifdef ENABLE_TESTS
     MaybePauseAfterTaskFinishedBeforeSummaryForSelfTest();
     _debugLastCompletionWorkerTid.store(GetCurrentThreadId(), std::memory_order_release);

@@ -1489,7 +1489,7 @@ Environment variables may select alternate test inputs such as profile names, bu
   Local provider's own walker (Verify Off), a tree of four folder levels with files at every level, an
   empty folder and a folder of 300 small files to a unique child of `path.smb.primary`
   (`REDSALAMANDER_SELFTEST_SMB_ROOT`; the case checks the remote-sandbox rule itself and removes only that
-  child). It requires `S_OK`, exactly the source tree with the same bytes, no `.rs_` artifact, and every
+  child). It requires `S_OK`, exactly the source tree with the same bytes, no staging artifact (`.rs-tmp` / `.rs-bak`), and every
   folder's last-write time equal to its source's within two seconds; it is an environment skip, with
   the reason, when the root is not configured, not a dedicated selftest UNC directory, or not reachable.
   In the R4 traversal family, `R4T5_LocalCopyHoldsNoDirectoryHandle` holds the first progress report of
@@ -1512,7 +1512,7 @@ Environment variables may select alternate test inputs such as profile names, bu
   `R0fSmb_ManagedMoveTreeToShare` (a Move to another volume) carry the nested tree of
   `R0fSmb_NestedTreeCopyToShare` and a flat folder of 40 files to a unique child of `path.smb.primary`;
   they require `S_OK` with folders ensured by the bridge, exactly the source trees (compared with a
-  second copy of the fixture for the Move), no `.rs_` artifact, no `bridge.publication.unknown`, no
+  second copy of the fixture for the Move), no staging artifact (`.rs-tmp` / `.rs-bak`), no `bridge.publication.unknown`, no
   Move source left, and folder times restored or named by the destination-keeps-no-timestamps note.
   `R4T7_BridgeCopyHoldsNoDirectoryHandle` holds the bridge before it restores `tree\a\b\c` (a test hold
   armed by `SetFileOpsBridgeDirectoryRestorePauseForSelfTest`) and requires every created folder to open
@@ -1999,6 +1999,7 @@ The FolderView current-item and selection contract requires deterministic Comman
 - `folder_view_selection_refresh_filter_contract`: cover surviving selection, removal/filter/hide no-resurrection, Select All followed by filter/unfilter, new-item-after-Select-All, ordinary disappearance/reappearance, rejected result preservation, and unselected automatic current repair.
 - `cmd_pane_navigation_directory_impact_preserves_selection_across_chained_renames`: cover selected-only proven rename-chain transfer to the final identity and prove that an unselected rename chain stays unselected.
 - `folder_view_drag_source_target_contract`: cover selected-or-current immutable drag snapshots, system drag-threshold rectangle, source membership after modifier transitions, Ctrl+Click deselection, lifecycle disarm, empty-background movement, double-click isolation, and agreement with command fallback.
+- `cmd_pane_folderView_activation_press_keeps_selection`, `cmd_pane_folderView_activation_press_modifiers` and `cmd_pane_folderView_activation_press_drag_and_double_click`: with the left pane active and three items selected in the right pane, cover the first press in the right pane. A plain press on an unselected item, on a selected item and on empty background keeps the three selected, makes a pressed item current and makes the pane active; the second plain press replaces the selection; a middle-button press only activates; a press while the same pane's navigation bar holds the focus follows the ordinary rule. Ctrl, Shift and Ctrl+Shift presses give the active-pane results. A drag from an unselected item drags and selects that item alone, a drag from a selected item drags the selection, and a double-click opens the folder under the pointer. The cases send the button messages to the owned FolderView and belong to the activation-required Commands suite.
 - `folder_view_selection_visibility_restore_contract`: cover Hide Selected/Unselected plus Show, hidden/system visibility, filtered masks/inversion, explicit Save/Restore timing, and non-actionable rename provenance.
 - Existing host-owned Delete/Move cases must also assert exactly-one-current and the selection-only ownership-epoch rule while retaining exact-per-source-`S_OK`, provider/folder/sort, newer-enumeration, and immutable-target gates. At least one keyed-sort fixture MUST deliver provider enumeration order different from resulting display order and prove that host removal uses the canonical successor/predecessor comparator, excludes every proven-removed identity, and never applies a captured display index to the raw payload.
 
