@@ -277,6 +277,16 @@ complete closure for `ghostty_runtime_identity`; the obsolete nonexistent
 
 ## Version-state coordination
 
+`RSWriteVersionOverrideHeader` writes its generated header only when the complete
+content changes. An ordinary build reusing the same saved context must preserve
+the existing header timestamp and MSBuild dependency freshness. A changed build
+number, description, internal name or original filename still updates that header
+and invalidates its C++/resource consumers normally. This does not skip version
+allocation, alter version bytes or permit reuse of an incompatible build receipt.
+The native build-policy control executes the actual header task with a synthetic
+incremental compile marker, proves stable and changed inputs, and rejects the
+original always-rewrite counterfactual without compiling product code.
+
 `.build\version\current-version.json` and `local-build-counter.txt` are shared
 repository state. The semantic `Resolve-RSVersionContext` operation owns the
 exclusive repository-local `.build\version\version-state.lock` file lease while it validates saved state, reuses or allocates

@@ -220,6 +220,7 @@
     <WriteLinesToFile
       File="$(RSVersionOverrideHeader)"
       Overwrite="true"
+      WriteOnlyWhenDifferent="true"
       Lines="#define VERSINFO_BUILDNUMBER $(RSVersionBuildNumber)&#x0D;&#x0A;#define RS_VERSION_FILEDESCRIPTION L&quot;$(RSVersionFileDescription)&quot;&#x0D;&#x0A;#define RS_VERSION_INTERNALNAME L&quot;$(RSVersionInternalName)&quot;&#x0D;&#x0A;#define RS_VERSION_ORIGINALFILENAME L&quot;$(RSVersionOriginalFilename)&quot;" />
   </Target>
 

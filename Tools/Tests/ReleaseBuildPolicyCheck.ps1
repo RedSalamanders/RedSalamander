@@ -174,3 +174,53 @@ foreach($control in @(
     if(-not $rejected){throw "Broken $($control.name) policy was accepted."}
 }
 Write-Host 'PASS /Wall without /WX, Debug/ASan symbols, Release-only ICF and independent negative controls.'
+
+# Exercise the actual version-header task through MSBuild's incremental dependency
+# engine. Only the fixed positive-number resolver is stubbed; no C++ is compiled.
+Import-Module (Join-Path $Root 'Tools/Modules/Testing/TestSandbox.psm1')
+$versionFixture=New-RSTestSandboxScratchDirectory -RepoRoot $Root -Harness VersionHeaderIncremental -Case ([guid]::NewGuid().ToString('N'))
+[xml]$versionTargets=[IO.File]::ReadAllText((Join-Path $Root 'Directory.Build.targets'))
+$versionTarget=$versionTargets.Project.Target|Where-Object Name -CEQ RSWriteVersionOverrideHeader
+if($versionTarget.WriteLinesToFile.WriteOnlyWhenDifferent -cne 'true'){throw 'The real version-header task must preserve unchanged bytes and dependency timestamps.'}
+foreach($variant in @('actual','rewrite-counterfactual')){
+    $directory=Join-Path $versionFixture $variant;[void][IO.Directory]::CreateDirectory($directory)
+    $target=$versionTarget.CloneNode($true)
+    if($variant -ceq 'rewrite-counterfactual'){$target.WriteLinesToFile.RemoveAttribute('WriteOnlyWhenDifferent')}
+    $project=Join-Path $directory 'VersionProbe.vcxproj'
+    $header=Join-Path $directory 'RSVersionOverrides.h';$stamp=Join-Path $directory 'compile.stamp'
+    $versionProbeText=@'
+<Project DefaultTargets="Probe">
+  <PropertyGroup>
+    <RSVersioningEnabled>true</RSVersioningEnabled><ConfigurationType>Application</ConfigurationType>
+    <RSVersionBuildNumber Condition="'$(RSVersionBuildNumber)'==''">123</RSVersionBuildNumber>
+    <RSVersionOverrideHeader>$(MSBuildProjectDirectory)/RSVersionOverrides.h</RSVersionOverrideHeader>
+    <RSVersionFileDescription Condition="'$(RSVersionFileDescription)'==''">Owned version probe</RSVersionFileDescription>
+    <RSVersionInternalName>VersionProbe</RSVersionInternalName><RSVersionOriginalFilename>VersionProbe.exe</RSVersionOriginalFilename>
+  </PropertyGroup>
+  <Target Name="RSResolveVersionBuildNumber" />
+@WRITE_TARGET@
+  <Target Name="Probe" DependsOnTargets="RSWriteVersionOverrideHeader;ProbeCompile" />
+  <Target Name="ProbeCompile" Inputs="$(RSVersionOverrideHeader)" Outputs="$(MSBuildProjectDirectory)/compile.stamp">
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/compile.stamp" Lines="owned synthetic compile marker" Overwrite="true" />
+  </Target>
+</Project>
+'@
+    [IO.File]::WriteAllText($project,$versionProbeText.Replace('@WRITE_TARGET@',$target.OuterXml))
+    & $msbuild $project '/nologo' '/v:minimal' '/nr:false' *> (Join-Path $directory 'initial.log')
+    if($LASTEXITCODE){throw 'Initial actual version-header task failed.'}
+    $headerBefore=[DateTime]::UtcNow.AddMinutes(-2);$compiledBefore=$headerBefore.AddMinutes(1)
+    [IO.File]::SetLastWriteTimeUtc($header,$headerBefore);[IO.File]::SetLastWriteTimeUtc($stamp,$compiledBefore)
+    & $msbuild $project '/nologo' '/v:minimal' '/nr:false' *> (Join-Path $directory 'unchanged.log')
+    if($LASTEXITCODE){throw 'Unchanged actual version-header task failed.'}
+    $rebuilt=[IO.File]::GetLastWriteTimeUtc($stamp) -ne $compiledBefore
+    if($rebuilt -ne ($variant -ceq 'rewrite-counterfactual')){throw 'Unchanged version bytes caused recompilation, or the original rewrite control failed to detect it.'}
+    if($variant -ceq 'actual'){
+        if([IO.File]::GetLastWriteTimeUtc($header) -ne $headerBefore){throw 'Unchanged version header was touched.'}
+        foreach($change in @('/p:RSVersionBuildNumber=124','/p:RSVersionFileDescription=Changed probe')){
+            [IO.File]::SetLastWriteTimeUtc($stamp,$compiledBefore)
+            & $msbuild $project '/nologo' '/v:minimal' '/nr:false' '/p:RSVersionBuildNumber=124' $change *> (Join-Path $directory ([guid]::NewGuid().ToString('N')+'.log'))
+            if($LASTEXITCODE -or [IO.File]::GetLastWriteTimeUtc($stamp) -eq $compiledBefore){throw 'Changed version inputs failed to invalidate the consuming compile target.'}
+        }
+    }
+}
+Write-Host "PASS actual stable version-header incrementality, changed inputs and original rewrite counterfactual; no C++ compilation. Evidence: $versionFixture"

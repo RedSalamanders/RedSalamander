@@ -222,7 +222,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls.",
+      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls. Verify actual version-header dependency incrementality, changed version inputs and the always-rewrite counterfactual without product compilation.",
       "usage": "Run through the current tooling Pester profile; required archive checks also run after dependency restore.",
       "usedBy": "Tools/Tests/ReleaseBuildPolicy.Tests.ps1",
       "prerequisites": [

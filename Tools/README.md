@@ -435,6 +435,11 @@ the direct Windows ACL API, preserving the provider's complete SDDL. It avoids
 per-entry provider setup while retaining all content/stream hashes, metadata,
 fresh no-follow traversal, stable acquisitions and post-move verification.
 
+Native build-policy controls also exercise the actual generated-version-header
+task: unchanged content preserves incremental dependencies, while changed version
+inputs invalidate them. The explicit counterfactual demonstrates the old rewrite
+cost without invoking the C++ compiler.
+
 | Goal | Command |
 |---|---|
 | Build the repository | `./build.ps1` (repository root) |
