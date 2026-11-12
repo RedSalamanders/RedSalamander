@@ -1200,10 +1200,19 @@ function Get-RSTestRunArchiveInventory {
                     $streams += [ordered]@{ name = $stream.Name; length = $stream.Length; sha256 = Get-RSTestRunArchiveFileHash -Path $streamPath }
                 }
             }
+            $security = $null
+            if (-not $isLink) {
+                # Get-Acl's provider/command setup is repeated for every entry in
+                # large retained tooling trees. Read the same owner/group/DACL
+                # through the FileSystemInfo already acquired by the no-follow
+                # traversal; keep exact SDDL and fail on any access error.
+                $acl = [IO.FileSystemAclExtensions]::GetAccessControl($entry)
+                $security = $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All)
+            }
             $rows.Add([ordered]@{
                 path = $relative; directory = $isDirectory; attributes = [int]$entry.Attributes
                 created_filetime_utc = $entry.CreationTimeUtc.ToFileTimeUtc(); written_filetime_utc = $entry.LastWriteTimeUtc.ToFileTimeUtc()
-                security = $(if (-not $isLink) { (Get-Acl -LiteralPath $entry.FullName -ErrorAction Stop).Sddl } else { $null })
+                security = $security
                 target = $target; streams = $streams
                 length = $(if (-not $isDirectory -and -not $isLink) { $entry.Length } else { 0 })
                 sha256 = $(if (-not $isDirectory -and -not $isLink) { Get-RSTestRunArchiveFileHash -Path $entry.FullName } else { $null })

@@ -1,0 +1,1 @@
+- Acquire retained-run security descriptors directly from the safely enumerated file objects, avoiding repeated PowerShell provider setup while preserving exact ACLs, file/stream hashes, metadata, link refusal and archive verification.

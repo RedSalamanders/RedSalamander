@@ -430,6 +430,11 @@ path mapping and verified inventory for recovery. Unsafe links, unresolved disks
 changed data, live owners and collisions retain the tree for review. Explicit cleanup
 is still separate. Archive retention does not qualify a test or bypass exact Resume.
 
+Archive security acquisition uses the already enumerated file/directory object and
+the direct Windows ACL API, preserving the provider's complete SDDL. It avoids
+per-entry provider setup while retaining all content/stream hashes, metadata,
+fresh no-follow traversal, stable acquisitions and post-move verification.
+
 | Goal | Command |
 |---|---|
 | Build the repository | `./build.ps1` (repository root) |
