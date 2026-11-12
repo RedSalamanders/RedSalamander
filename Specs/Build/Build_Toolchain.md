@@ -13,7 +13,8 @@ use that root. Projects without DxUi verify output ownership without importing i
 headers/archive; actual DxUi consumers keep the full ABI guard.
 
 Ordinary platform dependency and terminal inputs must already be prepared. Local
-SDK compilation disables manifest installation and terminal dependency building. An
+SDK compilation disables automatic installation with `VcpkgManifestInstall=false`,
+preserving manifest-mode include/library resolution, and disables terminal dependency building. An
 explicit positive build number bypasses ordinary mutable version allocation. It holds the existing platform
 dependency lock, refusing abandoned or contaminated state without repair. It does
 not replace ordinary outputs, change managed pins, run tests, package or publish.

@@ -97,7 +97,7 @@
     <VcpkgEnabled Condition="'$(IsLanguageResourceProject)'=='true'">false</VcpkgEnabled>
     <VcpkgEnableManifest Condition="'$(RSUseVcpkgManifest)'=='true'">true</VcpkgEnableManifest>
     <!-- Local SDK builds read an already restored triplet under its platform lease. -->
-    <VcpkgEnableManifest Condition="'$(CiSdkContract)'=='LocalUnpinnedAbiV1'">false</VcpkgEnableManifest>
+    <VcpkgManifestInstall Condition="'$(CiSdkContract)'=='LocalUnpinnedAbiV1'">false</VcpkgManifestInstall>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">

@@ -147,12 +147,13 @@ Describe 'Actual local SDK output ownership' -Tag RequiresBuildToolchain {
         $projects=@(Get-RSSolutionProjects -SolutionPath (Join-Path $localSdkCandidateRepo 'RedSalamander.sln') | Where-Object {$_.Path -and $_.RelativePath -like '*.vcxproj'})
         $projects.Count | Should BeGreaterThan 0
         foreach($project in $projects){
-            $text=& $localSdkCandidateMSBuild $project.Path '/nologo' '/noautoresponse' '/nr:false' '/v:quiet' '/p:Platform=x64' '/p:Configuration=Release' ('/p:SolutionDir='+$localSdkCandidateRepo+'\') ('/p:RSOutputRoot='+$isolated+'\') ('/p:RSDxUiSdkRoot='+$sdk) ('/p:RSCiEngineRoot='+(Join-Path $localSdkCandidateRepo '.ci-engine')) '/p:CiSdkContract=LocalUnpinnedAbiV1' '-getProperty:OutDir,IntDir,VcpkgInstalledDir,VcpkgEnableManifest'
+            $text=& $localSdkCandidateMSBuild $project.Path '/nologo' '/noautoresponse' '/nr:false' '/v:quiet' '/p:Platform=x64' '/p:Configuration=Release' ('/p:SolutionDir='+$localSdkCandidateRepo+'\') ('/p:RSOutputRoot='+$isolated+'\') ('/p:RSDxUiSdkRoot='+$sdk) ('/p:RSCiEngineRoot='+(Join-Path $localSdkCandidateRepo '.ci-engine')) '/p:CiSdkContract=LocalUnpinnedAbiV1' '-getProperty:OutDir,IntDir,VcpkgInstalledDir,VcpkgEnableManifest,VcpkgManifestInstall'
             $LASTEXITCODE | Should Be 0
             $metadata=($text -join "`n"|ConvertFrom-Json).Properties
             foreach($name in @('OutDir','IntDir')){[IO.Path]::GetFullPath($metadata.$name).StartsWith(($isolated+[IO.Path]::DirectorySeparatorChar),[StringComparison]::OrdinalIgnoreCase) | Should Be $true}
             [IO.Path]::GetFullPath($metadata.VcpkgInstalledDir).StartsWith((Join-Path $localSdkCandidateRepo '.build/vcpkg_installed/'),[StringComparison]::OrdinalIgnoreCase) | Should Be $true
-            $metadata.VcpkgEnableManifest | Should Be false
+            $metadata.VcpkgManifestInstall | Should Be false
+            if($project.Name -in @('RedSalamander','Common','FileSystem7z','FileSystemDummy')){$metadata.VcpkgEnableManifest | Should Be true}
         }
         Test-Path -LiteralPath $isolated | Should Be $false
         Write-Host ('PASS isolated output/dependency metadata for '+$projects.Count+' native solution projects; no compilation or ABI acceptance.')
