@@ -12,6 +12,7 @@
     <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)</SolutionDir>
 
     <RSBuildRoot>$(SolutionDir).build\</RSBuildRoot>
+    <RSOutputRoot Condition="'$(RSOutputRoot)'==''">$(RSBuildRoot)</RSOutputRoot>
 
     <!-- Avoid affecting msbuild invocations under any vcpkg install/build tree. -->
     <RSNormalizedProjectDirectory>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('/','\').ToLowerInvariant())</RSNormalizedProjectDirectory>
@@ -95,18 +96,20 @@
     <RSUseVcpkgManifest Condition="'$(IsLanguageResourceProject)'=='true'">false</RSUseVcpkgManifest>
     <VcpkgEnabled Condition="'$(IsLanguageResourceProject)'=='true'">false</VcpkgEnabled>
     <VcpkgEnableManifest Condition="'$(RSUseVcpkgManifest)'=='true'">true</VcpkgEnableManifest>
+    <!-- Local SDK builds read an already restored triplet under its platform lease. -->
+    <VcpkgManifestInstall Condition="'$(CiSdkContract)'=='LocalUnpinnedAbiV1'">false</VcpkgManifestInstall>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
-    <OutDir>$(RSBuildRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)</OutDir>
-    <IntDir>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
+    <OutDir>$(RSOutputRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)</OutDir>
+    <IntDir>$(RSOutputRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(IsLanguageResourceProject)'=='true'">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <TargetName>$(ResourceOwnerName)-$(ResourceCulture)</TargetName>
-    <OutDir>$(RSBuildRoot)$(Platform)\$(Configuration)\Lang\</OutDir>
-    <IntDir>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
+    <OutDir>$(RSOutputRoot)$(Platform)\$(Configuration)\Lang\</OutDir>
+    <IntDir>$(RSOutputRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
     <RSVersionFileDescription>$(ResourceOwnerName) $(ResourceCulture) resources</RSVersionFileDescription>
     <RSVersionInternalName>$(TargetName)</RSVersionInternalName>
     <RSVersionOriginalFilename>$(TargetName).dll</RSVersionOriginalFilename>

@@ -292,10 +292,10 @@ action and prompt generation. Explicit wheel or scrollbar input cancels that pen
 subsequent live layout changes preserve the user's position. The short-viewport witness changes
 viewport geometry between focus and paint and verifies the same full focus-chrome clearance. A separate
 scrollbar witness cancels a pending reveal and verifies the scroll position and focus after paint.
-The short-viewport keyboard witness follows the published action order: `More...` precedes the
-primary actions and Cancel is last. Starting at the exact task/prompt Cancel control, reverse Tab
-must reveal each preceding primary action and then More; forward Tab from More must reveal the first
-primary action. Each step first restores the top scroll position and verifies the previous focus
+The short-viewport keyboard witness follows the published action order: `More...`, when the prompt
+publishes one, precedes the primary actions and Cancel is last. Starting at the exact task/prompt
+Cancel control, reverse Tab must reveal each preceding primary action and then More; forward Tab from
+the first control of the row must reveal the next one. Each step first restores the top scroll position and verifies the previous focus
 identity, then requires positive native scrolling and visible UIA bounds, including focus chrome,
 above the footer. Traversal never submits an action or changes foreground ownership.
 Owned informational cards force the real conflict below the short viewport. Before each
@@ -731,8 +731,9 @@ with the card: `FolderWindow.FileOperations.PromptText.{h,cpp}`.
   while it remains eligible, so answering one never makes the overlay jump to a different decision first.
 - **What it shows (R8.3, R8.4).** Title: the card's operation title. Message: the card's shared name
   heading, question and consent facts in the card's words, then `From:`/`Deleting:` and `To:` rows.
-  Buttons: the published primary actions in the published order with the card's labels; `More...` opens
-  the published overflow actions in a menu; the Apply to all option (Off/On) appears only when the prompt
+  Buttons: the published primary actions in the published order with the card's labels; `More...`,
+  present only when the policy publishes overflow actions (two or more, see "Button placement"), opens
+  them in a menu; the Apply to all option (Off/On) appears only when the prompt
   is eligible; a close glyph. The published default is the primary button and carries the initial focus
   ring.
 - **Keyboard order.** Cancel remains the final action and the initial safe focus/default where
@@ -931,8 +932,15 @@ the per-task manual pause state for started live tasks and MUST NOT clear queue 
 global Queue/Parallel mode. Discovering/preparing tasks that have not entered execution are not bulk-command
 eligible and MUST NOT change a `Resume all` decision back to `Pause all`.
 
-Queued tasks have a stable engine-owned queue-order key. The popup sorts queued cards by that key and
-exposes Move Up/Move Down only when an adjacent queued task exists in the requested direction. A move
+Every task has a stable engine-owned queue-order key. The popup orders all active cards by that one
+key, then by task ID, so a card does not change position when its task starts; only a reorder or a
+queue-after decision moves it. Queued tasks start in the order of their cards (the exceptions are
+listed with the queue rules in `FileSystem_FileOperations.md`). A waiting card states its place:
+`Next in the queue`, then `Position N in the queue`; a card queued behind a named task by an overlap
+decision keeps that reason instead. The popup exposes Move Up/Move Down only for a move the engine
+will perform: an adjacent queued task exists in the requested direction, and neither card is queued
+behind a named task, so a reorder never crosses an overlap edge. The engine publishes both the
+places and the allowed moves; the popup computes neither. A move
 swaps the adjacent keys and the engine queue order under the queue mutex. Worker-thread start does not
 make a task ineligible: queue actions remain valid until the task enters operation. `Start now` releases
 only the selected task and queue reordering does not change the global Queue/Parallel mode.
@@ -1037,7 +1045,7 @@ only after five consecutive failed frames spanning at least two seconds, or at o
 not attached. A prepared frame resets the count. Text measurement and fit failures (DirectWrite
 layout errors, `ERROR_INSUFFICIENT_BUFFER` or `E_INVALIDARG` from a fit check, an overflowing
 wrapped heading) never select the failure surface: conflict actions and the terminal Dismiss,
-Issues and More actions fall back to one full-width 32-DIP row per action (24 DIP for the
+Issues and third (More or direct) actions fall back to one full-width 32-DIP row per action (24 DIP for the
 Apply-to-all row), the completed group keeps its disclosure and a full-width Clear completed row
 without the heading and badges, terminal facts and summary text are skipped, a `Debug::Warning` is
 logged once per step and `FileOps.Popup.Layout.Degraded` is emitted. The next paint measures again.
@@ -1405,8 +1413,10 @@ for a fallback whose worker has not joined yet returns it to 100 ms (x-lifetime#
 whose every post failed is therefore adopted within about a second. Explorer's TaskbarButtonCreated notification
 replays the cached progress model even when the popup is idle. No idle periodic retry is introduced.
 Active telemetry retains its existing 100 ms cadence except during an explicitly armed bounded UI
-motion deadline. Continuously changing progress interpolation alone must not raise that sampling
-cadence. Visible idle motion may use the bounded motion cadence until its final frame settles. The
+motion deadline or a pending or running automatic window resize, which is bounded by its debounce
+and its ease (I63 slice F). Continuously changing progress interpolation alone must not raise that
+sampling cadence. The rate history advances once per telemetry interval however fast the timer
+ticks. Visible idle motion may use the bounded motion cadence until its final frame settles. The
 timer tick that stops the timer still requests one frame: a motion whose deadline passed since the
 last frame (a late tick on a busy UI thread) settles at its target only when a frame resolves it, so
 a collapsing card never keeps its expanded height (owner report 2026-10-13).
@@ -1481,6 +1491,17 @@ localized captions or caller-specific IDs. Visual, UIA and Tab/Arrow order agree
 button never changes the safe default, Enter action or Escape binding. Narrow layouts wrap
 the same order without clipping actions.
 
+A menu button is shown only when its menu will contain at least two commands. A single command is
+shown as its own direct button, with its own caption, the standard variant and the same command
+route. No command means no button. The button and its menu are built from one list, so they cannot
+disagree. This holds for the completed card's `More...`, the conflict prompt's `More...` and the pane
+decision mirror. There is no exception (I63 decision D-6, owner, 2026-11-11): Recycle escalation's
+task-scoped `Delete all remaining permanently` and `Delete all remaining by name` are the only action
+beside the direct ones, so each is a direct button immediately before Cancel. It is never the default
+or the Escape action, and the prompt still opens with focus on Cancel. The cost is stated plainly: one
+press of that button deletes this item and every later item of the task that also cannot be recycled,
+with no second step.
+
 ## User-facing policy
 
 Card, footer and prompt wording follow these rules (I35, 2026-10-11);
@@ -1493,7 +1514,10 @@ Card, footer and prompt wording follow these rules (I35, 2026-10-11);
   provisional remaining time reads `Remaining: <time> (still counting)`. Live progress may show a
   zero transferred amount while work starts; that is progress, not a counter. A finished card draws its counters line only when a counter is
   nonzero and names only the nonzero counters (`Warnings: N`, `Errors: N`, joined by the localized
-  status separator); it never draws a `Result: 0x…` line, for any status: the result HRESULT stays in
+  status separator). The counters count problems, not records: the trailing `task.result` Error is
+  not counted when an Error of that task already explains the failure, so one failed item reads
+  `Errors: 1`; the record stays in Issues, the log and the export, and it counts when it is the only
+  Error (I63 B5). The card never draws a `Result: 0x…` line, for any status: the result HRESULT stays in
   the Issues pane's Technical details, the log and the export header. A blocked prompt, such as the
   possible-artifact touch guard, still states the fail-closed reason in plain words and names the item;
   it may quote the technical code beside the item's name.
@@ -1597,7 +1621,14 @@ unsupported when the source exists. Mixed results keep
 the missing count alongside any actual removed/retained/unknown source facts. A missing item
 prevents a blanket claim that every item moved.
 
-When a Move stops before mutation because the existing destination cannot provide object identity,
+A Move onto an existing file at a destination that cannot provide object identity raises the
+ordinary name-collision decision (Conflict Layout below) with both items' size and date, and the
+actions the location can perform: Replace (or Replace read-only), Keep both, Skip, Skip all and
+Cancel (I63 B1, B2). Replace is absent when the existing item is a link or a folder, or cannot be
+opened for replacement. The card is then a decision card, not a failed card. When the existing file
+changed between the decision and the replacement, nothing is replaced and the same decision is
+shown again with the current file's facts. Only a route that cannot qualify for that decision
+(`FileSystem_FileOperations.md`, product invariant 14) still stops before mutation; then
 the `identity.destinationExistsUnverifiable` problem uses
 `IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE`: an item already exists at the destination,
 the location cannot identify it safely for replacement, and the source and existing destination
@@ -1684,8 +1715,9 @@ rejects another admission of that exact sequence. The terminal item rows are den
 retain the consumption fact after cancel, failure, Copy-only
 downgrade, or `Copied; source kept`; neither Dismiss nor Retry recreates the old clipboard sequence.
 
-When typed results contain retained sources, the completed overflow menu offers `Open source` and
-`Select retained` where locations are known. `Cut retained items again` is offered only when every
+When typed results contain retained sources, the completed card's commands (its `More...` menu, or
+the direct button when only one command applies) offer `Open source` and `Select retained` where
+locations are known. `Cut retained items again` is offered only when every
 retained item has a captured no-follow identity and no source disposition is Unknown. Select and
 Cut-again rebind the complete set on click and compare object identities; one missing/replaced item
 aborts the action and shows a warning. The current `CF_HDROP` Cut-again action is shown only for the
@@ -1741,7 +1773,7 @@ because its breadcrumb contains no object identity or mutation receipt.
 The card uses the ordinary indeterminate warning tone without inventing an Issues payload.
 `warningCount`, `errorCount`, and issue rows remain zero unless a real diagnostic exists, so Failed
 items, Show log, and Export issues are absent on the breadcrumb-only notice. Open destination targets
-the recorded destination folder; Reveal item is absent because the breadcrumb deliberately stores no
+the recorded destination folder and, being the card's only command, is a direct button; Reveal item is absent because the breadcrumb deliberately stores no
 single destination leaf mapping.
 
 `Dismiss` acknowledges only the card's regular non-reparse JSON breadcrumb directly beneath the
@@ -1832,8 +1864,9 @@ hidden by the completed group or footer-only mode, or removed;
 unchanged paints reuse the layout. I26 records the native rendering and interaction qualification.
 
 Completed cards keep `Dismiss` as the first action, followed by a direct `Issues` action whenever
-that task has an actual retained projectable Issues row, then `More...` for available recovery
-and diagnostic commands. The same application-owned qualification predicate drives the pane
+that task has an actual retained projectable Issues row, then the available recovery and
+diagnostic commands: a `More...` menu button for two or more, the single command as a direct button
+with its own caption, and nothing when none applies. The same application-owned qualification predicate drives the pane
 and this action: raw typed observations must pass task/prompt identity checks, and invalid typed
 observations do not become ordinary problems merely because their severity is Error. Scan both
 retained diagnostic reservoirs; warning/error counters alone do not establish a row.
@@ -1844,9 +1877,12 @@ pane. The former `Failed items` menu item is replaced by the direct action.
 All terminal action captions use the hosted Body font and measured wrapping. Arrange complete
 actions into rows with the pinned shared measured-action helper, reserve their height before
 placing the progress indicator, and retain only current expanded-card measurements. The More
-button measures its actual ellipsis plus dropdown chrome and exposes the full localized name.
+button measures its actual ellipsis plus dropdown chrome and exposes the full localized name; a
+direct command button measures its own caption with the ordinary padding and exposes that caption
+as its name. Its automation ID keeps the `FileOperations.Action.<kind>.<taskId>.<data>` shape with
+its own kind and the command as data.
 Current correctness and interaction qualification is recorded in I26, including its explicit limits.
-The completed-card overflow action set includes `Open destination`, `Reveal item`, `Show log`,
+The completed-card command set includes `Open destination`, `Reveal item`, `Show log`,
 and `Export issues`, as well as applicable retained-source recovery commands.
 `Export issues` writes the task report and opens it with its associated application. A failed
 save or open shows a localized, dismissible error on the File Operations popup, without
@@ -2063,7 +2099,8 @@ including when a queue-paused snapshot retains old progress. A transfer manually
 user retains its truthful progress layout. Expanded cards reserve their measured body height on
 the first paint whenever content height changes or a card expands. This includes admission phases,
 running stream-row growth/contraction and informational tasks; body text, graphs and live controls
-must not overlap while interpolating from an obsolete smaller card. Collapse animation remains
+must not overlap while interpolating from an obsolete smaller card. How often that height changes
+is bounded by the reservations of "Layout stability" below. Collapse animation remains
 available because the expanded body is already hidden. Hidden plot controls
 do not prepare, paint, animate or request ticks. Existing bounded transfer sampling may continue
 while the visible task needs current rate; collapsing adds no timer or worker. Reopening retains
@@ -2111,6 +2148,66 @@ fill, so descending segments expose neither baseline gaps nor black seams betwee
 is clipped to the envelope, so its upper edge follows and remains below the history stroke instead of
 exposing square sample-column tops.
 
+## Layout stability
+
+An expanded card's height still follows its content on the first paint (the rule above), so what
+keeps the card list quiet during a transfer is how seldom the content's row count changes. Within
+one lifecycle phase of a card (collapsed, finished, decision, waiting, running) the card reserves
+the rows it has needed; a phase change starts the reservations afresh and re-measures at once. The
+rules are state machines in `RedSalamander/FileOperationsLayoutStability.h`, checked at compile time
+there; the popup keeps one set per card and removes it with the card (I63 slice F).
+
+- **Stream rows.** Each transfer stream has a row slot for its lifetime, assigned by the engine: a
+  new stream takes the lowest slot that no stream holds. A stream holds its slot while it runs and,
+  after it ended, for the 300 ms its finished row is still painted. A stream that begins its next
+  file keeps its slot, unless another stream took the slot after that linger; then it takes the
+  lowest free slot. The card draws each visible stream in the row of its slot, so a row never shows
+  another file while its stream runs and no stream moves up when a lower one ends. A row below the
+  highest visible slot without a stream is blank: no label, path, bar or region. The source label
+  and the `Source.0` region sit on the first painted stream row; the region's help text names the
+  other streams in slot order. The card reserves the high-water mark of the rows its slots spanned;
+  a reserved row without a stream stays blank, and the reservation is released one row at a time,
+  each after two seconds without need. Growth is immediate. Limits: two visible streams report one
+  slot only when the popup's tick trails the engine's while a finished stream lingers in a slot a
+  new stream took; the stream with the newer report keeps the row. A snapshot entry without a slot
+  (a synthetic fixture) is drawn in snapshot order in the lowest empty rows.
+- **Two-fact rows.** The progress amount and percent, the counts and ETA, and the throughput heading
+  and rate each stack onto two lines as soon as they do not fit. A stacked row returns to one line
+  only after its facts have fitted with sixteen DIP to spare for two seconds. The digits of these
+  three rows use tabular figures (the DirectWrite tabular-figures feature on the popup's own text
+  layouts), so a changing number keeps its width; a font without the feature keeps its default
+  figures. The shared text formats are unchanged, and the hosted graph's own labels keep their
+  figures.
+- **Work summary.** The skipped-counting work summary is measured once per text, width, line
+  height and text format; the painter draws the measured layout. A failed measurement keeps one
+  line height until one of these changes.
+- **Note rows.** The parallel-transfers note and the waiting reason keep their row, blank, for two
+  seconds after their text went away.
+- **Rate and ETA text.** The displayed rate text and ETA text change at most twice per second. The
+  throughput graph keeps its own samples and cadence.
+- **Per-file bar.** The row of a file that has completed keeps the bar's column without painting
+  the bar, so the path beside it is not widened and truncated again.
+- **Scrollbar.** The list's scrollbar is decided for the viewport the window is about to have:
+  while an automatic window resize is pending or running, the height it will add or remove counts
+  as already there. A bar that the resize is about to make unnecessary does not appear, and a
+  window that cannot grow enough shows the bar at once. While a bar is withheld the native range
+  reports no overflow. Scrolling is never held back by a resize: a scroll request made while the
+  bar is withheld (the wheel, a scrollbar message, or revealing the focused control) scrolls in
+  the content's own range, and the bar is shown from the next frame for as long as the content
+  overflows the viewport.
+
+Reduced motion changes none of these: they are reservations, not animation. Not part of this
+contract yet: a reserved width for the widest form of each number, an eased height change, scroll
+anchoring, enter and leave motion for cards, and a budget self-test.
+
+The popup emits three ETW counters through `Debug::Perf::EmitCounter`, at the points where it
+already detects each event: `FileOps.Popup.CardHeightChanges`, once for each new target height of
+a card after its first measurement (eased or snapped); `FileOps.Popup.ScrollBarToggles`, once each
+time the list's scrollbar appears or disappears; `FileOps.Popup.WindowResizes`, once for each
+automatic window resize: an immediate one (reduced motion, footer-only), an eased one that starts,
+and a new target while one eases. A user's own resize is not counted. No self-test reads these
+counters yet.
+
 ## Motion
 
 The popup resolves reduced-motion through the app theme's DxUi palette. When reduced motion is
@@ -2129,6 +2226,84 @@ enabled:
   moving marquee.
 
 ## Conflict Layout
+
+### Delete source (I63 B4)
+
+On a Move, a collision of two regular files may offer `Delete source` (see
+`FileSystem_FileOperations.md`, product invariant 13a, for when). It is never the default action and
+never the Escape action. It is published in the overflow list, so it appears under `More...` together
+with `Skip all`, or as its own button before Cancel when it is the only overflow action (no menu holds
+fewer than two commands). The repeat checkbox applies to it only when the prompt says `Same size and
+date`.
+
+A finished Move in which every item ended this way reads `Already there; source removed`, never
+`Moved`. The facts block adds `N already there, source removed` on the Result line.
+
+Where the source's location has no Recycle Bin (D-5), the card asks once per task: `This location has
+no Recycle Bin. Delete the source files permanently? The destination already holds them. This answer
+applies to every such source of this task and cannot be undone.`
+(`IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN`). It is a consent card of the Recycle-refusal class
+with three buttons: `Permanently delete`, `Keep source` (the class's Skip, captioned for a Move) and
+`Cancel`. Cancel is the default and the Escape action and takes the initial focus, as on every
+Recycle-refusal card. The card has no Apply to all box and no `More...` entry. Its answer covers the
+rest of the task. A source deleted permanently counts as `already there, source removed`, with the
+Information note `Already at the destination. The source was deleted permanently because its location
+has no Recycle Bin.` A source kept by `Keep source` is a skipped item with the Information note
+`Already at the destination. The source was kept because its location has no Recycle Bin.` A source
+kept after `Permanently delete` is a skipped item with a Warning that names the reason: it changed
+after the question, it may be the destination file itself under another name, or it could not be
+deleted permanently.
+
+### Bulk policies (I63 B6)
+
+A collision of two regular files may offer two task-wide choices, `Skip all with the same size and
+date` and `Replace all older` (see `FileSystem_FileOperations.md`, product invariant 13b). Each is
+offered only on a prompt whose own pair matches it: the first when the prompt says `Same size and
+date`, the second when the incoming file is `Newer` and `Replace` is offered. Both need the prompt to
+offer Apply to all, and neither uses the Apply to all box: the caption says the scope. They are
+published in the overflow list, so they appear under `More...` with `Skip all` (the menu then holds at
+least two commands); neither is the default action or the Escape action. A read-only occupant, a link,
+a folder, a type mismatch and the one-hour class never offer them.
+
+Choosing one answers the current item and, without another question, every later file of the task
+whose pair matches. Every other pair still asks. The finished card's Result line adds `N already
+there` for the items the first policy skipped (they are also counted as skipped) and `N replaced
+because older` for the items the second policy decided. A Copy whose every item the first policy
+skipped still shows its facts block. The task records one Information note when each policy is set,
+not one per item; the Issues pane shows each policy's applications as one row with a count.
+A task may also start with `Skip`, `Replace older` or `Keep both` preset (see
+`FileSystem_FileOperations.md`, product invariant 13c). No control sets it yet, and a preset decides
+its items without a card.
+
+### Item comparison (I63 B3)
+
+For a collision of two regular files the engine publishes, with the decision, how the incoming item
+compares with the existing one: its date relation (newer, older, same) and its size relation (larger,
+smaller, same). Two last-write times within two seconds of each other are the same date; two seconds
+is the coarsest timestamp a location stores. The card and the decision mirror render that one
+comparison through the shared prompt text and derive nothing themselves.
+
+- Each role line shows the item's size and date and then its own relation words, in the line's
+  separator style: `Newer`, `Older` or `Same date`, then `Larger`, `Smaller` or `Same size`. The
+  existing item's words are the inverse of the incoming item's. An unknown fact has no word.
+- When size and date are both the same, the relation words are omitted from the role lines and one
+  line under the question says `Same size and date`. No text says the items are identical: equal
+  size and date are not a content comparison.
+- When the sizes are equal and the last-write times are one hour apart (within the same two
+  seconds), that line says `One hour apart, same size`: volumes of the FAT family and some servers
+  store local time and shift across a daylight-saving change. Such an item is neither newer nor
+  older.
+- The decision mirror shows each role's line under its path, in the same words.
+- A link, a folder and a type mismatch carry no comparison.
+- The Issues pane keeps both role lines and the summary line on the row of an item whose decision
+  showed them (B3.3): the summary line closes the Problem section, and each role line follows its
+  path in the Source and Destination sections, in the same words. Only a decision the card showed
+  carries them; an item decided by a remembered answer, a bulk policy or a preset has none. The
+  finished card does not show them yet.
+
+`FileOps_ReviewRemediationContracts` covers the comparison at compile time (tolerance, one-hour
+class, unknown facts), the words of both roles, the two summary lines, and the comparison published
+with an engine decision.
 
 ### Reviewed question and repeat-choice contract
 
@@ -2258,11 +2433,12 @@ full-width rows rather than side-by-side columns so long names keep useful width
 every width: Incoming is always above Existing, including wide layouts. File names and parent
 locations retain the full available width and wrap independently, without silently dropping the
 root or extension. Complete values remain keyboard-accessible. For an ordinary eligible file-name
-collision, the engine publishes four direct actions in this order: `Keep both`, `Replace`, `Skip`,
-`Cancel task`; French: `Conserver les deux`, `Remplacer`, `Ignorer`, `Annuler la tâche`.
+collision, the engine publishes its direct actions in this order: `Keep both`, `Replace`, `Skip`,
+`Cancel task`; French: `Conserver les deux`, `Remplacer`, `Ignorer`, `Annuler la tâche`. A task with
+more than one item adds `Skip all` between `Skip` and `Cancel task`.
 Omit an action the typed policy cannot authorize; never manufacture replacement eligibility.
-The primary group has no three-button cap. `More...` is reserved for additional scoped actions such
-as `Skip All`, not these four choices. Measure localized labels and wrap whole controls into rows when
+The primary group has no three-button cap. `More...` appears only when two or more additional
+actions remain; a single one, such as `Skip All`, is published as a direct action before Cancel. Measure localized labels and wrap whole controls into rows when
 needed, preserving published action order, default and Escape semantics. Critical action labels
 MUST NOT be clipped or ellipsized. At a short work area, scroll content while keeping decisions
 and safe exit reachable; do not grow beyond that monitor’s work area.
@@ -2312,9 +2488,9 @@ line geometry. The box fill, border, theme colors, hit target, and state semanti
 The Recycle-failed escalation prompt never renders `Apply to all`; its Permanent delete grant is
 one-shot for the exact revalidated item. Cancel remains the default action at the right of the row; other choices precede it, including
 Delete permanently and Skip, so Enter or initial focus cannot authorize deletion. In a task with
-more than one selected item the **More…** menu also offers `Delete all remaining permanently`, the
-explicit task-scoped grant described in `FileSystem_FileOperations.md` (Delete and Recycle). It is
-never a direct button, never the default or Escape action, and ends with the task.
+more than one selected item the row also offers `Delete all remaining permanently`, the explicit
+task-scoped grant described in `FileSystem_FileOperations.md` (Delete and Recycle). It is a direct
+button immediately before Cancel (I63 D-6), never the default or Escape action, and ends with the task.
 
 Every other actionable conflict also keeps the engine-published Cancel action directly visible.
 Ordinary name conflicts retain Cancel as initial focus, default and Escape action even though it is
@@ -2338,8 +2514,8 @@ count and/or bytes; unknown facts are omitted rather than estimated. The publish
 | Placeholder hydration | Download and continue | Cancel |
 | EFS encryption cannot be preserved | Copy without encryption (Copy) or Move without encryption (Move); Copy and keep source on Move | Cancel |
 | Metadata loss on Move | Move anyway / Copy and keep source | Cancel |
-| Recycle failure | Delete permanently / Skip / Cancel (More: Delete all remaining permanently, multi-item task) | Cancel |
-| Recycle failure on a location without file identities (I35 R7.3) | Delete by name / Skip / Cancel (More: Delete all remaining by name, multi-item task); the question is "Recycle Bin delete failed. This location can only delete by name." with the by-name consent note | Cancel |
+| Recycle failure | Delete permanently / Skip / Delete all remaining permanently (multi-item task) / Cancel | Cancel |
+| Recycle failure on a location without file identities (I35 R7.3) | Delete by name / Skip / Delete all remaining by name (multi-item task) / Cancel; the question is "Recycle Bin delete failed. This location can only delete by name." with the by-name consent note | Cancel |
 
 Eligible non-Recycle risks may expose `Apply to all` only for the exact task/risk/destination-root
 scope. Recycle never exposes it; its only broader scope is the explicit More action above. The prompt snapshot includes the deferred-consent marker, known
@@ -2376,7 +2552,8 @@ read-only Exists offers Replace read-only; type mismatch never offers Overwrite;
 destination link offers Replace link and never follows or replaces its target. Apply to all is
 rendered only for an eligible exact scope. Destination-link scope includes the known link kind
 (file symlink, directory symlink, or junction); an unknown kind is one-shot. `Skip All` is a
-separate More-menu action that records the scoped Skip grant. Skip item honors the current checkbox:
+separate action that records the scoped Skip grant; it is a direct button unless another additional
+action shares a `More...` menu with it. Skip item honors the current checkbox:
 checked records that same grant for remaining matching conflicts in this task, including conflicts
 in different parent folders; unchecked skips only the current item. Retry remains one attempt even
 when the checkbox is checked. Recycle escalation and semantic target-conflict retention never expose Apply to all;
@@ -2800,6 +2977,8 @@ No selection shows a concise instruction, including the first open with no issue
 disabled while nothing is selected (issues#4); an empty list has a localized empty state. Refresh/sort
 retains selection by stable identity; removal clears it without selecting a destructive action.
 Retain existing copy, export, navigation and hide/restore lifecycle contracts.
+A collision row whose decision showed both items' facts (see `Item comparison`) shows them in the
+detail: the summary line under the Problem, and each item's line under its Source or Destination path.
 
 Decisions and outcomes require typed producer data with task, item/prompt identity and generation;
 do not parse translated messages or join records by path alone. Extend the existing bounded diagnostic

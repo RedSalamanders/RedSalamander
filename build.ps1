@@ -1134,7 +1134,7 @@ function Assert-BuildOutputProcessNotRunning {
                 -Platform $Platform `
                 -ProjectName $(if ($ProjectName) { $ProjectName } else { '' }) `
                 -ResolvedProjectPath $(if ($resolvedProjectPath) { $resolvedProjectPath } else { '' }) `
-                -ProjectNames $(if ($null -ne $unionSelection) { @($unionSelection.ProjectNames) } else { @() }))
+                -ProjectNames @(if ($null -ne $unionSelection) { $unionSelection.ProjectNames }))
         $buildArtifacts += New-RSBuildArtifactRecord `
             -RepoRoot $SolutionDir `
             -LiteralPath $toolchainIdentityPath

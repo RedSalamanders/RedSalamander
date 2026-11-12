@@ -78,6 +78,29 @@ Describe 'Build project selection helper' {
         $reordered.MSBuildTarget | Should Be 'Plugins\ViewerText:Rebuild;Tests\ProductUiTests:Rebuild'
     }
 
+    It 'declares runtime-loaded viewer and contract inputs in the actual native build graph' {
+        $projects = @(Get-RSSolutionProjects -SolutionPath $solutionPath)
+        $owners = @{
+            ViewerPETests = @('Common', 'RedSalamander', 'ViewerPE', 'ViewerWeb', 'ViewerImgRaw', 'ViewerText', 'ViewerSpace', 'ViewerVLC')
+            PluginContractTests = @('FileSystem', 'FileSystem7z', 'FileSystemCurl', 'FileSystemS3', 'FileSystemGoogleDrive', 'FileSystemMicrosoftDrive', 'FileSystemMtp', 'FileSystemDummy', 'Terminal', 'Terminal-ja-JP', 'ViewerPE', 'ViewerWeb', 'ViewerImgRaw', 'ViewerText', 'ViewerSpace', 'ViewerVLC', 'ViewerSqlite')
+        }
+        foreach ($owner in $owners.Keys) {
+            $ownerProject = @($projects | Where-Object Name -ceq $owner)[0]
+            [xml]$xml = Get-Content -LiteralPath $ownerProject.Path -Raw
+            $references = @($xml.SelectNodes('//*[local-name()="ProjectReference"]'))
+            foreach ($name in $owners[$owner]) {
+                $producer = @($projects | Where-Object Name -ceq $name)[0]
+                $matching = @($references | Where-Object {
+                    [IO.Path]::GetFullPath((Join-Path (Split-Path $ownerProject.Path) $_.Include)) -ieq $producer.Path
+                })
+                $matching.Count | Should Be 1
+                $matching[0].Project.Trim('{}') | Should Be $producer.Guid
+                # These are runtime fixtures, never additional link inputs.
+                $matching[0].LinkLibraryDependencies | Should Be 'false'
+            }
+        }
+    }
+
     It 'refuses unknown, folder, empty and injected target names' {
         foreach ($invalid in @('DoesNotExist', 'Plugins', '', 'ViewerText;Build')) {
             $attempt = Invoke-RSTestBlock { Get-RSBuildProjectUnion -SolutionPath $solutionPath -ProjectNames @('ProductUiTests', $invalid) }

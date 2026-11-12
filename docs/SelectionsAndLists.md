@@ -13,6 +13,9 @@ before applying a selection command.
 - Use **Edit** commands to select/unselect all, invert, select by mask, or match
   the current item's name or extension.
 - **Alt+Up** / **Alt+Down** move to the previous/next selected name.
+- A selection survives a visit to the other pane. The first click back in its
+  pane only moves the cursor; hold **Ctrl** or **Shift** to change the selection
+  with that click.
 
 **Edit -> Advanced -> Save Selection** records the selected displayed items, or
 the current item when nothing is selected. **Restore Selection** replaces the

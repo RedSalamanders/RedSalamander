@@ -1,5 +1,26 @@
 # Official Build Toolchain Identity
 
+## Explicit local SDK application builds
+
+`Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin
+closure against a frozen, independently hashed local DxUi descriptor. The native
+MSBuild executable is explicitly selected by the application caller; the shared
+broker verifies actual toolchain/ABI metadata. The canonical solution mapper owns
+the application target. `RSOutputRoot` defaults to `RSBuildRoot`; a separate output
+root requires the local SDK contract and a live shared compiler/output lease before
+any project writes. Application, plugins, language resources and intermediates all
+use that root. Projects without DxUi verify output ownership without importing its
+headers/archive; actual DxUi consumers keep the full ABI guard.
+
+Ordinary platform dependency and terminal inputs must already be prepared. Local
+SDK compilation disables automatic installation with `VcpkgManifestInstall=false`,
+preserving manifest-mode include/library resolution, and disables terminal dependency building. An
+explicit positive build number bypasses ordinary mutable version allocation. It holds the existing platform
+dependency lock, refusing abandoned or contaminated state without repair. It does
+not replace ordinary outputs, change managed pins, run tests, package or publish.
+Its build/link record explicitly grants no test, repository, production or native
+ARM64 runtime qualification. The current local and main gates remain required.
+
 ## Owned compiler metadata services
 
 `New-RSProcessStartInfo` delegates private Windows MSVC metadata endpoints to the
@@ -256,6 +277,16 @@ complete closure for `ghostty_runtime_identity`; the obsolete nonexistent
 
 ## Version-state coordination
 
+`RSWriteVersionOverrideHeader` writes its generated header only when the complete
+content changes. An ordinary build reusing the same saved context must preserve
+the existing header timestamp and MSBuild dependency freshness. A changed build
+number, description, internal name or original filename still updates that header
+and invalidates its C++/resource consumers normally. This does not skip version
+allocation, alter version bytes or permit reuse of an incompatible build receipt.
+The native build-policy control executes the actual header task with a synthetic
+incremental compile marker, proves stable and changed inputs, and rejects the
+original always-rewrite counterfactual without compiling product code.
+
 `.build\version\current-version.json` and `local-build-counter.txt` are shared
 repository state. The semantic `Resolve-RSVersionContext` operation owns the
 exclusive repository-local `.build\version\version-state.lock` file lease while it validates saved state, reuses or allocates
@@ -413,6 +444,10 @@ solution invocation. Resolve folder-qualified and reserved MSBuild targets throu
 Build/Rebuild/Clean retain the same union and the existing profile/dependency locks.
 Partial rebuilds cannot repair contamination that requires a full-solution rebuild.
 ProjectNames cannot accompany ProjectName, ProductionOnly or release/package actions.
+An omitted, empty or null optional project union preserves the ordinary full or
+single-project artifact selection. Normalize it before inspecting its cardinality;
+PowerShell pipeline unrolling must not turn a successful legacy targeted build into
+a receipt-publication failure. Nonempty mixed or unknown selections still refuse.
 
 The receipt target is `selected-projects`, with the canonical explicit project paths
 in `project_selection`. Artifact capture requires an output declaration for every
@@ -987,3 +1022,14 @@ Artifact use reopens the independently retained original SDK descriptor and rech
 Artifact-mutating tooling must preserve the admitted dependency recipe when the runner re-attests the profile. Before suspending its receipt, capture the SDK build argument through `Get-RSBuildReceiptDependencyBuildArguments`, which independently reopens the original binding and closes its reader. Rebuild with that descriptor and compare the resulting recipe, input key, manifest and descriptor hash before publishing the new receipt to native readers. A missing/changed SDK or compatibility miss cannot silently turn an SDK runtime qualification into Source coverage.
 
 SDK packaging is separate from build-time `-Zip`/winget generation: first seal the native build receipt, then use the canonical installer packaging command. Verify every profile output against that receipt and current source, reopen SDK input once, validate every shipped module's matching dependency recipe, copy the complete SDK `licenses` closure and close the reader after use. Unknown, mixed, missing or stale recipes refuse. Native package extraction/smoke and test-disabled production remain required. The existing Source portable-attestation exporter/importer refuse SDK-backed arguments until an independent portable SDK descriptor contract is implemented.
+
+## Runtime inputs of selected test projects
+
+Native test projects must declare every first-party executable, plugin and satellite
+they load or inspect as a build dependency, including runtime-only inputs with
+`LinkLibraryDependencies=false`. `ViewerPETests` includes the six viewer plugins
+and its Common/application PE fixtures; `PluginContractTests` includes its plugin
+and Terminal satellite producers. A selected build may consequently build the
+application when it is a real test input. Existing warm output is never evidence
+that an undeclared dependency is available on a clean profile. Runtime staging
+continues through `RuntimeDependencies.props` and the shared MSBuild targets.

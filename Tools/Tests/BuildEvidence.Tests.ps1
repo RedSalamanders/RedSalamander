@@ -435,6 +435,14 @@ Describe 'Operation Startrail build receipt records' {
             -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Plugin)
         $target.Count | Should Be 3
         ($target.relative_path -contains '.build/x64/Debug/Plugins/Plugin.dll') | Should Be $true
+        # The public legacy-target call previously unrolled its empty optional
+        # union into null after a successful native build. Exercise that binding.
+        $nullUnion = @(Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
+            -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Plugin -ProjectNames $null)
+        ($nullUnion.relative_path -join '|') | Should Be ($target.relative_path -join '|')
+        $emptyUnion = @(Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
+            -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectNames @())
+        ($emptyUnion.relative_path -join '|') | Should Be ($full.relative_path -join '|')
         (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
                 -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Missing }) | Should Be $true
     }

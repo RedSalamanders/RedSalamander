@@ -1360,7 +1360,6 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_CAPTURECHANGED: OnCaptureChanged(); return 0;
-        case WM_PARENTNOTIFY: OnParentNotify(LOWORD(wp), HIWORD(wp)); return 0;
         case WM_NOTIFY: return OnNotify(lp);
         case WM_SETCURSOR: return OnSetCursor(reinterpret_cast<HWND>(wp), LOWORD(lp), HIWORD(lp));
         case WndMsg::kPaneFocusChanged: UpdatePaneFocusStates(); return 0;

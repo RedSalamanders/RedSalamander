@@ -12957,12 +12957,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
+    // Every row has a current Win32 shape: a stage (`<leaf>.<32 hex>_<stream>.rs-tmp`) or a possible original (`<leaf>.<32 hex>.rs-bak`).
     const std::filesystem::path root     = suiteRoot / L"work" / (L"cleanup_leftovers_" + NewGuidText());
-    const std::filesystem::path leftover = root / L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0";
-    const std::filesystem::path original = root / L"report.docx.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}";
-    const std::filesystem::path recent   = root / L"current.bin.rs_tmp_00112233445566778899AABBCCDDEEFF_3";
+    const std::filesystem::path leftover = root / L"movie.mkv.9d380e53676eab4315ae57f418f5049d_0.rs-tmp";
+    const std::filesystem::path original = root / L"report.docx.0123456789abcdef0123456789abcdef.rs-bak";
+    const std::filesystem::path recent   = root / L"current.bin.00112233445566778899aabbccddeeff_3.rs-tmp";
     const std::filesystem::path ordinary = root / L"ordinary.txt";
-    const std::filesystem::path nested   = root / L"sub" / L"nested.bin.rs_tmp_00112233445566778899AABBCCDDEEFF_2";
+    const std::filesystem::path nested   = root / L"sub" / L"nested.bin.00112233445566778899aabbccddeeff_2.rs-tmp";
     state.Require(SelfTest::EnsureDirectory(root / L"sub") && SelfTest::WriteTextFile(leftover, "partial") && SelfTest::WriteTextFile(original, "original") &&
                       SelfTest::WriteTextFile(recent, "recent") && SelfTest::WriteTextFile(ordinary, "ordinary") && SelfTest::WriteTextFile(nested, "nested"),
                   L"Failed to create the leftover cleanup fixtures.");

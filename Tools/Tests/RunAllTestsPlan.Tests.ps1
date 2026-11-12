@@ -1449,7 +1449,7 @@ Set-StrictMode -Version Latest
         $prBuild = Get-RSBuildScriptArguments -Suite 'PR' -Configuration 'Debug' -Platform 'x64'
         Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite PR builds the solution so standalone tests and CppUnitTest DLLs exist.'
         Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectNames') -Expected $false -Message 'PR retains the full-solution receipt requirement.'
-        Assert-RSEqual -Actual (Get-RSBuildEnvironmentOverrides -Suite 'PR').Count -Expected 0 -Message 'Suite PR uses the default build environment like Suite CI.'
+        Assert-RSEqual -Actual (Get-RSBuildEnvironmentOverrides -Suite 'PR')['RSBuildEnableTests'] -Expected 'true' -Message 'Suite PR requires the application test surface like Suite CI.'
 
         $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
         $runner | Should Match "\`$failureClassificationEnabled = \(\`$ClassifyFailures -or \`$Suite -eq 'CI'\)"
@@ -2051,15 +2051,46 @@ $global:LASTEXITCODE=0
         Assert-RSEqual -Actual $ciBuild.ContainsKey('MaxCpuCount') -Expected $false -Message 'Suite CI should retain the build host worker policy.'
 
         $allEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'All'
-        Assert-RSEqual -Actual $allEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite All should retain the selected profile test surface.'
+        Assert-RSEqual -Actual $allEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite All must build the application selftests.'
 
         $ciEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'CI'
-        Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite CI should match the artifact-only GitHub gate and retain its selected test surface.'
+        Assert-RSEqual -Actual $ciEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite CI requires test-enabled artifacts.'
         Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildCompilerDebugInformation') -Expected $false -Message 'Suite CI should retain the normal compiler PDB policy.'
 
         $fullEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'Full'
         Assert-RSEqual -Actual $fullEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite Full should enable the application and standalone native test surfaces.'
         Assert-RSEqual -Actual $fullEnvironment['RSBuildCompilerDebugInformation'] -Expected 'Embedded' -Message 'Suite Full should avoid process-global compiler-PDB contention across worktrees.'
+        foreach ($focused in @('Compare','Commands','FileOps')) {
+            $environment = Get-RSBuildEnvironmentOverrides -Suite $focused
+            $environment['RSBuildEnableTests'] | Should Be 'true'
+            $environment.ContainsKey('RSBuildCompilerDebugInformation') | Should Be $false
+        }
+    }
+
+    It 'admits only a real test-enabled application surface before selftest launch' {
+        Import-Module $helperModule -ErrorAction Stop
+        # Reuse the release policy's canonical PE fixture builder without executing
+        # its separate Pester suite or manufacturing a second PE implementation.
+        $tokens=$null;$errors=$null
+        $fixtureAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'ReleaseWorkflowPolicy.Tests.ps1'),[ref]$tokens,[ref]$errors)
+        $builder=$fixtureAst.Find({param($node)$node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'New-RSFakePeBytes'},$true)
+        if ($errors.Count -or $null -eq $builder) { throw 'Canonical PE fixture builder unavailable.' }
+        . ([scriptblock]::Create($builder.Extent.Text))
+        $image=Join-Path $TestDrive 'selftest-surface.exe'
+        [IO.File]::WriteAllBytes($image,(New-RSFakePeBytes -Machine 0x8664 -TestSurfaceMarker))
+        $admitted = Invoke-RSTestBlock { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image }
+        $admitted.Succeeded | Should Be $true
+        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$false}) -ExecutablePath $image } | Should Throw 'test-enabled build receipt'
+        [IO.File]::WriteAllBytes($image,(New-RSFakePeBytes -Machine 0x8664))
+        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image } | Should Throw 'actual executable ENABLE_TESTS'
+        [IO.File]::WriteAllBytes($image,[byte[]](1,2,3))
+        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image } | Should Throw 'MZ header'
+        $runner=Get-Content (Join-Path $repoRoot 'Tools/Run-AllTests.ps1') -Raw
+        $guardIndex=$runner.IndexOf('Assert-RSSelfTestBuildSurface -Receipt $receipt')
+        $executeIndex=$runner.IndexOf('$execution = Invoke-RSRunnerStandaloneValidationEntry -Entry $entry')
+        $guardIndex | Should BeGreaterThan -1
+        # Every marked entry obtains its desktop lease inside the later executor.
+        $executeIndex | Should BeGreaterThan $guardIndex
     }
 
     It 'uses the unified test sandbox root when locating runner artifacts' {

@@ -34,6 +34,14 @@ bool FolderWindow::FileOperationState::Task::SubmitConflictDecision(uint64_t exp
     return true;
 }
 
+void FolderWindow::FileOperationState::Task::SeedPresetCollisionPolicy(FileOperations::PresetCollisionPolicy policy) noexcept
+{
+    std::scoped_lock lock(_conflictArbiter.mutex);
+    _conflictArbiter.presetPolicy = policy;
+    if (policy == FileOperations::PresetCollisionPolicy::ReplaceOlder)
+        _conflictArbiter.replaceOlderGrantGeneration = ConflictArbiter::kPresetPolicyGeneration;
+}
+
 #ifdef ENABLE_TESTS
 void FolderWindow::FileOperationState::Task::DebugSubmitCurrentConflictDecision(ConflictAction action, bool applyToAllChecked) noexcept
 {

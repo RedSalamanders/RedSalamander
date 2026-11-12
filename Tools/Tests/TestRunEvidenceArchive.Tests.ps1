@@ -64,6 +64,21 @@ Describe 'Verified same-volume run evidence archival' {
         }
     }
 
+    It 'records the same complete security descriptor as the provider for protected files and directories' {
+        foreach ($path in @($fixture.Source, $fixture.Payload)) {
+            $acl = Get-Acl -LiteralPath $path
+            $acl.SetAccessRuleProtection($true, $true)
+            Set-Acl -LiteralPath $path -AclObject $acl
+        }
+        $inventory = @(& $sandboxModule { param($Path) Get-RSTestRunArchiveInventory -RunRoot $Path } $fixture.Source)
+        foreach ($path in @($fixture.Source, $fixture.Payload)) {
+            $relative = [IO.Path]::GetRelativePath($fixture.Source, $path)
+            $actual = @($inventory | Where-Object { $_.path -ceq $relative })
+            $actual.Count | Should Be 1
+            $actual[0].security | Should Be (Get-Acl -LiteralPath $path).Sddl
+        }
+    }
+
     It 'archives Unicode and long paths with the same bytes and stream metadata' {
         $directory = $fixture.Source
         foreach ($index in 1..7) { $directory = Join-Path $directory ('évidence-' + ('x' * 32) + $index) }

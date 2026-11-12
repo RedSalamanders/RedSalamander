@@ -1675,6 +1675,13 @@ $requiredPlanArtifactPaths = @($testPlan | ForEach-Object {
             [IO.Path]::GetRelativePath($repoRoot, $candidate).Replace('\', '/')
         }
     } | Sort-Object -Unique)
+if (@($testPlan | Where-Object Kind -eq 'SelfTest').Count) {
+    try { Assert-RSSelfTestBuildSurface -Receipt $receipt -ExecutablePath $exeFullPath }
+    catch {
+        Write-Host ('BLOCKED ATTESTATION: ' + $_.Exception.Message) -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
+}
 if ($Suite -in @('PR', 'CI', 'Full') -and
     -not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot (Get-RSBuildSourceSnapshot -RepoRoot $repoRoot) `
         -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `

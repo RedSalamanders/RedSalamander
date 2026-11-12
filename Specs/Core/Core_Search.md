@@ -223,7 +223,7 @@ The local index core is responsible for:
 - tracked-root traversal rebuilds when direct journal access is unavailable.
 
 Local index rebuild/enumeration MUST NOT suppress RedSalamander artifact names. Current names such as
-`.rs_tmp_*`, `.rs_bak_*`, `.rs_ren_*`, `.rs_copy_tmp_*`, and `.~rs-write-*`, plus recognized legacy
+`*.<32 hex>[_<stream>].rs-tmp` and `*.<32 hex>.rs-bak`, plus the provider staging
 shapes, participate in the same path and content candidate rules as other items. The exact generated
 shape is only a `Possible` classification hint; arbitrary user files are not classified merely
 because a marker substring occurs inside a normal name.

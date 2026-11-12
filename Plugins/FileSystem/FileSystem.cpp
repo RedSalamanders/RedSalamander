@@ -3066,7 +3066,76 @@ interface __declspec(uuid("c1884e97-02e5-4c89-99b0-a619e8f78625")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult * result) noexcept            = 0;
     virtual HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE * duplicated) noexcept                            = 0;
     virtual HRESULT STDMETHODCALLTYPE RetireDirectoryReadPin(const LocalObjectIdentityPayload* expected) noexcept   = 0;
+    // The owned stage's side of IFileSystemExpectedOccupantPublication::PublishOverExpectedOccupant.
+    virtual HRESULT STDMETHODCALLTYPE PublishOwnedOverExpected(const wchar_t* finalPath,
+                                                               const FileSystemExpectedOccupant* expected,
+                                                               FileSystemFlags flags,
+                                                               const FileSystemOptions* options,
+                                                               FileSystemConditionalMutationResult* result,
+                                                               IFileSystemBoundObject** published) noexcept = 0;
 };
+
+// Reads, without following a link, the facts of an existing item for the expected-occupant
+// publication. identityAvailable reports whether the location can identify the item: where it can,
+// the bound route is the authority and this contract does not apply.
+[[nodiscard]] HRESULT ReadLocalOccupantFacts(const wchar_t* path, FileSystemExpectedOccupant& facts, bool& identityAvailable) noexcept
+{
+    facts             = {};
+    facts.sizeBytes   = sizeof(facts);
+    identityAvailable = false;
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+    const std::wstring extended = FileSystemInternal::ToExtendedPath(path);
+    wil::unique_handle file(CreateFileW(extended.c_str(),
+                                        FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr));
+    if (! file)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND);
+    }
+    BY_HANDLE_FILE_INFORMATION information{};
+    if (GetFileInformationByHandle(file.get(), &information) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    facts.attributes    = information.dwFileAttributes;
+    facts.creationTime  = (static_cast<__int64>(information.ftCreationTime.dwHighDateTime) << 32) | information.ftCreationTime.dwLowDateTime;
+    facts.lastWriteTime = (static_cast<__int64>(information.ftLastWriteTime.dwHighDateTime) << 32) | information.ftLastWriteTime.dwLowDateTime;
+    facts.fileSizeBytes = (static_cast<uint64_t>(information.nFileSizeHigh) << 32) | information.nFileSizeLow;
+    facts.fileIndex     = (static_cast<uint64_t>(information.nFileIndexHigh) << 32) | information.nFileIndexLow;
+#if defined(ENABLE_TESTS)
+    if (IsBindIdentityUnsupportedForSelfTest(path))
+    {
+        return S_OK;
+    }
+#endif
+    LocalObjectIdentityPayload identity{};
+    const HRESULT identityHr = QueryExactLocalObjectIdentity(file.get(), identity);
+    if (SUCCEEDED(identityHr))
+    {
+        identityAvailable = true;
+        return S_OK;
+    }
+    return identityHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? S_OK : identityHr;
+}
+
+// The occupant is the one the user decided on: same kind and protection attributes, same size, same
+// creation and last-write time, and the same file index where the location reports one.
+[[nodiscard]] bool LocalOccupantFactsEqual(const FileSystemExpectedOccupant& left, const FileSystemExpectedOccupant& right) noexcept
+{
+    constexpr unsigned long kComparedAttributes =
+        FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+    return ((left.attributes ^ right.attributes) & kComparedAttributes) == 0u && left.creationTime == right.creationTime &&
+           left.lastWriteTime == right.lastWriteTime && left.fileSizeBytes == right.fileSizeBytes && left.fileIndex == right.fileIndex;
+}
 
 constexpr size_t kBackupStreamHeaderBytes         = offsetof(WIN32_STREAM_ID, cStreamName);
 constexpr DWORD kBackupMetadataMaxStreamNameBytes = 64u * 1024u;
@@ -4373,6 +4442,136 @@ public:
         return abortHr;
     }
 
+    // Level 2 of the authority ladder: the location opened the occupant and cannot identify it. The
+    // occupant's facts are read again here and one replacing rename publishes the stage; a difference
+    // publishes nothing. No handle was held on the occupant and no copy of it is set aside.
+    HRESULT STDMETHODCALLTYPE PublishOwnedOverExpected(const wchar_t* finalPath,
+                                                       const FileSystemExpectedOccupant* expected,
+                                                       FileSystemFlags flags,
+                                                       const FileSystemOptions* options,
+                                                       FileSystemConditionalMutationResult* result,
+                                                       IFileSystemBoundObject** published) noexcept override
+    {
+        if (published == nullptr)
+        {
+            return E_POINTER;
+        }
+        *published             = nullptr;
+        const HRESULT resultHr = InitializeMutationResult(result);
+        if (FAILED(resultHr))
+        {
+            return resultHr;
+        }
+        if (finalPath == nullptr || finalPath[0] == L'\0' || expected == nullptr || expected->sizeBytes != sizeof(FileSystemExpectedOccupant) ||
+            ! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_PUBLICATION) == 0u || ! _ownedStage || ! _file || _kind != FILESYSTEM_BOUND_REGULAR_FILE)
+        {
+            return E_ACCESSDENIED;
+        }
+        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY;
+        const uint32_t requestedFlags   = static_cast<uint32_t>(flags);
+        if ((requestedFlags & ~allowedFlags) != 0u || (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u)
+        {
+            return E_INVALIDARG;
+        }
+        HRESULT hr = FileSystemCheckOperationControl(options);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        FileSystemExpectedOccupant current{};
+        bool identityAvailable = false;
+        hr                     = ReadLocalOccupantFacts(finalPath, current, identityAvailable);
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        // A location that now identifies the item is no longer the one the decision was made for.
+        if (identityAvailable || ! LocalOccupantFactsEqual(current, *expected))
+        {
+            Debug::Perf::Emit(L"FileOps.Local.ExpectedOccupantChanged", finalPath, 0u, 0u, 0u, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        const bool readOnly = (current.attributes & FILE_ATTRIBUTE_READONLY) != 0u;
+        if (readOnly && (requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) == 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+
+        // A replacing rename does not pass a read-only occupant. Clear the attribute by name for the
+        // rename only, and put it back when the rename does not commit.
+        constexpr unsigned long kSettableAttributes = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_ARCHIVE |
+                                                      FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_OFFLINE;
+        const std::wstring extendedFinal            = FileSystemInternal::ToExtendedPath(finalPath);
+        bool readOnlyCleared                        = false;
+        const auto restoreReadOnly                  = wil::scope_exit([&]() noexcept
+        {
+            if (readOnlyCleared)
+            {
+                static_cast<void>(SetFileAttributesW(extendedFinal.c_str(), current.attributes & kSettableAttributes));
+            }
+        });
+        if (readOnly)
+        {
+            const unsigned long writable = current.attributes & kSettableAttributes & ~static_cast<unsigned long>(FILE_ATTRIBUTE_READONLY);
+            if (SetFileAttributesW(extendedFinal.c_str(), writable != 0u ? writable : FILE_ATTRIBUTE_NORMAL) == FALSE)
+            {
+                const DWORD error = GetLastError();
+                return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_ACCESS_DENIED);
+            }
+            readOnlyCleared = true;
+        }
+
+        hr = ClearTemporaryAttributes();
+        if (SUCCEEDED(hr))
+        {
+            hr = FileSystemCheckOperationControl(options);
+        }
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        FileSystemConditionalMutationResult publishResult{};
+        publishResult.sizeBytes = sizeof(publishResult);
+        const HRESULT publishHr = RenameExactTo(finalPath, TRUE, &publishResult);
+        if (publishResult.outcomeKnown == FALSE && FAILED(publishHr) && OwnedStageStillAtItsName())
+        {
+            // A stage without a persistent identity cannot be reconciled by identity, and a refused
+            // replacing rename (the occupant is in use) is the ordinary failure here. The stage is
+            // still under the name only this operation produces: nothing was replaced.
+            return publishHr;
+        }
+        if (publishResult.outcomeKnown == FALSE)
+        {
+            // The occupant may already be replaced: its attribute is not written back.
+            readOnlyCleared      = false;
+            result->outcomeKnown = FALSE;
+            return FAILED(publishHr) ? publishHr : HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+        }
+        if (FAILED(publishHr) || publishResult.mutationCommitted == FALSE)
+        {
+            return FAILED(publishHr) ? publishHr : E_UNEXPECTED;
+        }
+
+        readOnlyCleared              = false;
+        _ownedStage                  = false;
+        result->mutationCommitted    = TRUE;
+        result->originalStillPresent = FALSE;
+        *published                   = static_cast<IFileSystemBoundObject*>(this);
+        AddRef();
+        Debug::Perf::EmitCounter(L"FileOps.Local.ExpectedOccupantReplaced");
+        return S_OK;
+    }
+
     HRESULT STDMETHODCALLTYPE RenameExactTo(const wchar_t* destinationPath, BOOL replaceIfExists, FileSystemConditionalMutationResult* result) noexcept override
     {
         const HRESULT resultHr = InitializeMutationResult(result);
@@ -4667,9 +4866,28 @@ private:
         return S_OK;
     }
 
+    // An owned stage carries a name no other writer produces. Opening that name (an open is never
+    // answered from a client cache) after a rename the location could not reconcile by identity
+    // proves the stage did not move.
+    [[nodiscard]] bool OwnedStageStillAtItsName() const noexcept
+    {
+        if (! _ownedStage || _path.empty())
+        {
+            return false;
+        }
+        const wil::unique_handle current(CreateFileW(FileSystemInternal::ToExtendedPath(_path).c_str(),
+                                                     FILE_READ_ATTRIBUTES,
+                                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                     nullptr,
+                                                     OPEN_EXISTING,
+                                                     FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                                     nullptr));
+        return current.is_valid();
+    }
+
     [[nodiscard]] static HRESULT MakeBackupPath(std::wstring_view finalPath, std::wstring& backupPath) noexcept
     {
-        return FileSystemInternal::MakeStageSiblingPath(finalPath, L".rs_bak_", backupPath);
+        return FileSystemInternal::MakeStageSiblingPath(finalPath, FileSystemInternal::kBackupExtension, backupPath);
     }
 
     [[nodiscard]] HRESULT ClearTemporaryAttributes() noexcept
@@ -6130,6 +6348,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemExpectedOccupantPublication))
+    {
+        *ppvObject = static_cast<IFileSystemExpectedOccupantPublication*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemIdentityDelete))
     {
         *ppvObject = static_cast<IFileSystemIdentityDelete*>(this);
@@ -6592,11 +6817,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         const std::wstring_view leaf = std::wstring_view(filePath).substr(separator + 1u);
         const Common::Paths::UniqueSiblingFileOptions options{
             .shareMode = FILE_SHARE_READ, .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY, .maximumAttempts = 32u};
-        // Keep the writer marker and random token intact when the readable leaf consumes the
+        // Keep the random token and the extension intact when the readable leaf consumes the
         // volume's component limit; the shared creator still owns exclusive creation/retries.
         const HRESULT tempHr =
             Common::Paths::CreateUniqueFileInDirectory(filePath.substr(0u, separator + 1u), options, [leaf](size_t, std::wstring& name) noexcept {
-            return Common::Paths::BuildUniqueSiblingName<wchar_t>(leaf, L".~rs-write-", L".tmp", 255u, name);
+            return Common::Paths::BuildUniqueSiblingName<wchar_t>(leaf, L".", FileSystemInternal::kStageExtension, 255u, name);
         }, tempPath, file);
         if (FAILED(tempHr))
         {
@@ -6865,6 +7090,151 @@ HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSyst
     descriptor.copyMoveMaxConcurrency         = std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
     descriptor.deleteMaxConcurrency           = std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
     descriptor.deleteRecycleBinMaxConcurrency = std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::ReadExpectedOccupant(const wchar_t* path, FileSystemExpectedOccupant* occupant) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || occupant == nullptr || occupant->sizeBytes != sizeof(FileSystemExpectedOccupant))
+    {
+        return E_INVALIDARG;
+    }
+    FileSystemExpectedOccupant facts{};
+    bool identityAvailable = false;
+    const HRESULT hr       = ReadLocalOccupantFacts(path, facts, identityAvailable);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    // Only a regular file the location cannot identify is replaced through its facts. An item the
+    // location identifies keeps the bound route; a folder, a link or another reparse point is never
+    // replaced this way.
+    if (identityAvailable || (facts.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    *occupant = facts;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::PublishOverExpectedOccupant(IFileSystemBoundObject* ownedStage,
+                                                                  const wchar_t* finalPath,
+                                                                  const FileSystemExpectedOccupant* expected,
+                                                                  FileSystemFlags flags,
+                                                                  const FileSystemOptions* options,
+                                                                  FileSystemConditionalMutationResult* result,
+                                                                  IFileSystemBoundObject** published) noexcept
+{
+    if (published != nullptr)
+    {
+        *published = nullptr;
+    }
+    if (ownedStage == nullptr || published == nullptr)
+    {
+        return E_POINTER;
+    }
+    wil::com_ptr<ILocalBoundObjectControl> control;
+    if (FAILED(ownedStage->QueryInterface(__uuidof(ILocalBoundObjectControl), control.put_void())) || ! control)
+    {
+        return E_INVALIDARG;
+    }
+    return control->PublishOwnedOverExpected(finalPath, expected, flags, options, result, published);
+}
+
+// I63 B7: the bound snapshot's metadata classes for a file whose location cannot identify it, so the host can keep a
+// Move source whose streams, extended attributes or encryption its pathname copy does not carry. Read-only, no-follow
+// and fully shared; the backup-stream inspection is the bound snapshot's own and fails rather than report absence.
+HRESULT STDMETHODCALLTYPE FileSystem::ReadUnidentifiedMetadataFeatures(const wchar_t* path,
+                                                                       const FileSystemOptions* options,
+                                                                       uint32_t* presentFeatures) noexcept
+{
+    if (presentFeatures == nullptr)
+    {
+        return E_POINTER;
+    }
+    *presentFeatures = 0u;
+    if (path == nullptr || path[0] == L'\0' || ! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+    const HRESULT controlHr = FileSystemCheckOperationControl(options);
+    if (FAILED(controlHr))
+    {
+        return controlHr;
+    }
+
+    const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
+    wil::unique_handle file(CreateFileW(extendedPath.c_str(),
+                                        FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr));
+    if (! file)
+    {
+        // ERROR_NOT_SUPPORTED is this contract's answer for an identified object; a refused open is an open failure.
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error == ERROR_NOT_SUPPORTED ? ERROR_OPEN_FAILED : (error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND));
+    }
+    FILE_ATTRIBUTE_TAG_INFO tagInfo{};
+    if (GetFileInformationByHandleEx(file.get(), FileAttributeTagInfo, &tagInfo, sizeof(tagInfo)) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    if ((tagInfo.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT identityHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+#if defined(ENABLE_TESTS)
+    if (! IsBindIdentityUnsupportedForSelfTest(path))
+#endif
+    {
+        LocalObjectIdentityPayload identity{};
+        identityHr = QueryExactLocalObjectIdentity(file.get(), identity);
+    }
+    if (SUCCEEDED(identityHr))
+    {
+        // An object this location identifies is bound, and its bound metadata answers.
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    if (identityHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+    {
+        // A failed query is not proof that the location has no identities.
+        return identityHr;
+    }
+
+    uint32_t features = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_SECURITY;
+    if ((tagInfo.FileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) != 0u)
+    {
+        features |= FILESYSTEM_METADATA_SPARSE;
+    }
+    if ((tagInfo.FileAttributes & FILE_ATTRIBUTE_COMPRESSED) != 0u)
+    {
+        features |= FILESYSTEM_METADATA_COMPRESSION;
+    }
+    if ((tagInfo.FileAttributes & FILE_ATTRIBUTE_ENCRYPTED) != 0u)
+    {
+        features |= FILESYSTEM_METADATA_EFS;
+    }
+    constexpr DWORD kRecallAttributes = FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+    if ((tagInfo.FileAttributes & kRecallAttributes) != 0u)
+    {
+        features |= FILESYSTEM_METADATA_PLACEHOLDER;
+    }
+#if defined(ENABLE_TESTS)
+    features |= ReadSelfTestMetadataMask(kMetadataForcePresentMaskEnvVar);
+#endif
+    const HRESULT streamHr = InspectBackupMetadataStreams(file.get(), features);
+    if (FAILED(streamHr))
+    {
+        Debug::Perf::Emit(L"fileops.local.metadata.inspect_failed", L"unidentified", 0u, features, 0u, streamHr);
+        return streamHr;
+    }
+    *presentFeatures = features;
     return S_OK;
 }
 

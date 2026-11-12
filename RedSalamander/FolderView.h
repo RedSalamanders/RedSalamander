@@ -1126,6 +1126,9 @@ private:
         size_t pressedIndex = static_cast<size_t>(-1);
         std::vector<std::filesystem::path> sourcePaths;
         std::vector<std::wstring> sourceDisplayNames;
+        // An activating press landed on an item outside the selection it kept: the source is that
+        // item alone, and it replaces the selection only when the drag starts.
+        bool selectsPressedItemOnStart = false;
     };
 
     struct IncrementalSearchState
@@ -1662,6 +1665,7 @@ private:
     void OnLButtonDown(POINT pt, WPARAM keys);
     void OnLButtonDblClk(POINT pt, WPARAM keys);
     void OnLButtonUp(POINT pt);
+    void OnMButtonDown() noexcept;
     void OnMouseMove(POINT pt, WPARAM keys);
     void OnMouseLeave();
     void OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpaceCharMayFollow);

@@ -1533,7 +1533,6 @@ private:
     LRESULT OnNotify(LPARAM data);
     LRESULT OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg);
     bool OnSetCursor(POINT pt);
-    void OnParentNotify(UINT eventMsg, UINT childId);
     LRESULT OnDeviceChange(UINT event, LPARAM data) noexcept;
     void OnNetworkConnectivityChanged() noexcept;
     void CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT titleStringId);

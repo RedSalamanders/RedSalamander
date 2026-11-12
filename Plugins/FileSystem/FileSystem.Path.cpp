@@ -9,7 +9,7 @@
 
 namespace FileSystemInternal
 {
-HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view marker, std::wstring& path) noexcept
+HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view extension, std::wstring& path) noexcept
 {
     path.clear();
     const size_t separator = finalPath.find_last_of(L"\\/");
@@ -18,7 +18,9 @@ HRESULT MakeStageSiblingPath(std::wstring_view finalPath, std::wstring_view mark
         return E_INVALIDARG;
     }
     std::wstring leaf;
-    const HRESULT hr = Common::Paths::BuildUniqueSiblingName(finalPath.substr(separator + 1u), marker, std::wstring_view{}, 255u, leaf);
+    // Only the readable leaf is shortened at the 255-unit component limit; the token and the
+    // extension always survive.
+    const HRESULT hr = Common::Paths::BuildUniqueSiblingName(finalPath.substr(separator + 1u), std::wstring_view{L"."}, extension, 255u, leaf);
     if (FAILED(hr))
     {
         return hr;

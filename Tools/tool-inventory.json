@@ -2,6 +2,36 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Build-LocalSdkCandidate.ps1",
+      "kind": "command",
+      "visibility": "public",
+      "lifecycle": "active",
+      "purpose": "Build the application and plugin closure against an explicit local SDK in fresh leased output and intermediate paths without granting qualification.",
+      "usage": "Explicit local developer invocation with an independently retained descriptor SHA, application-selected native MSBuild and positive build number.",
+      "usedBy": ["manual developer invocation", "Tools/Tests/LocalSdkCandidate.Tests.ps1"],
+      "prerequisites": ["local Windows", "PowerShell 7.4", "exact clean pinned CI engine", "matching native toolchain and API/ABI", "prepared ordinary platform dependencies and terminal inputs"],
+      "sideEffects": ["Acquires the existing platform dependency lock", "Creates and retains one fresh .build/local-unpinned operation", "Compiles test-enabled Release application and plugin outputs; never runs, packages or publishes them"],
+      "outputs": ["Local-only build, actual link and failure records; no test or repository acceptance"],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": ["Tools/Tests/LocalSdkCandidate.Tests.ps1"],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Tests/LocalSdkCandidate.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Exercise actual local SDK routing, early refusal, native output guard and every solution project's output/dependency metadata without compilation.",
+      "usage": "Current tooling profile; RequiresBuildToolchain evaluates explicit local MSBuild metadata in the marked sandbox.",
+      "usedBy": ["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"],
+      "prerequisites": ["PowerShell with Pester", "marked sandbox", "native Visual Studio for the RequiresBuildToolchain cohort"],
+      "sideEffects": ["Creates retained synthetic output-guard fixtures below the current owned sandbox run"],
+      "outputs": ["Pester routing, refusal and metadata results; no native compilation or qualification"],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [],
+      "replacement": null
+    },
+    {
       "path": "Tools/Invoke-R0ePairedValidation.ps1",
       "kind": "command",
       "visibility": "public",
@@ -192,7 +222,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls.",
+      "purpose": "Evaluate ordinary MSVC 14.52 compiler/linker and pinned DxUi profiles independently of ambient Full recovery overrides, with negative controls. Verify actual version-header dependency incrementality, changed version inputs and the always-rewrite counterfactual without product compilation.",
       "usage": "Run through the current tooling Pester profile; required archive checks also run after dependency restore.",
       "usedBy": "Tools/Tests/ReleaseBuildPolicy.Tests.ps1",
       "prerequisites": [
@@ -1921,6 +1951,7 @@
       "usage": "Import from artifact-mutating orchestration and pass explicit configuration/platform plus the narrow reviewed coordination scope; delegation requires a one-use token, verified immediate parent, and kill-on-close containment; use guarded path/publication helpers for caller-selected repository outputs.",
       "usedBy": [
         "build.ps1",
+        "Tools/Build-LocalSdkCandidate.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
@@ -1961,7 +1992,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Resolve unique native project unions and complete MSBuild solution-folder target names for one operation with explicitly partial receipt scope.",
-      "usage": "Import from build.ps1, Run-AllTests.ps1 and focused project-selection tests; do not invoke as a command.",
+      "usage": "Import from build.ps1, Run-AllTests.ps1 and focused project-selection tests; do not invoke as a command. Tests also guard runtime-only viewer and plugin producer references against clean-profile omissions.",
       "usedBy": [
         "build.ps1",
         "Tools/Run-AllTests.ps1",
@@ -1984,7 +2015,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct manifest-derived artifact/runtime closure with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
+      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
       "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -2407,7 +2438,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-  "purpose": "Construct self-test, Pester, and build invocation parameters, normalize bounded Pester case failure/skip details, including explicit no-activation requests, and classify execution results.",
+  "purpose": "Construct self-test, Pester, and build invocation parameters, normalize bounded Pester case failure/skip details, including explicit no-activation requests and mandatory test-enabled build overrides. Admit in-product tests only with a matching receipt and actual PE test marker before desktop admission or launch; classify execution results.",
       "usage": "Loaded through the TestRunPlan facade; domain modules import it when they need shared invocation or result semantics.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -2712,7 +2743,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure.",
+      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure.",
       "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest and Get-RSHostedStockPreparationRequest for pure policy selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. The project adapter opts eligible hosted native ARM64 entries into the wrapper's private stock preparation; paired studies retain the original fixture. Local preparation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
@@ -2791,7 +2822,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Own fail-closed exact X:/RedSalamander.Perf authorization, ownership markers, fresh uncached reparse-component checks and contained output validation, sandbox-confined test link creation with one PowerShell-resolved absolute link path for validation and creation (New-RSTestSandboxLink), run contexts, exact/stale-run removal, and live-owner-consistent root-local disk audits that require current root authority even when a requested path is absent. Preserve completed and abandoned runs through create-only, owner-checked, verified same-volume evidence archival; automatic stale maintenance preserves recorded unsafe-link refusals without rescanning payloads, while explicit archival always verifies afresh.",
+      "purpose": "Own fail-closed exact X:/RedSalamander.Perf authorization, ownership markers, fresh uncached reparse-component checks and contained output validation, sandbox-confined test link creation with one PowerShell-resolved absolute link path for validation and creation (New-RSTestSandboxLink), run contexts, exact/stale-run removal, and live-owner-consistent root-local disk audits that require current root authority even when a requested path is absent. Preserve completed and abandoned runs through create-only, owner-checked, verified same-volume evidence archival; automatic stale maintenance preserves recorded unsafe-link refusals without rescanning payloads, while explicit archival always verifies afresh. Acquire provider-equivalent archive security directly from safely enumerated FileSystemInfo objects without caching security or content identities.",
       "usage": "Loaded through the TestRunPlan facade or imported by an executing test fixture that allocates scratch; every test-data consumer uses the same marked fixed-local-drive root. Synthetic liveness cleanup requires an explicit CandidateRunIds allowlist.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
@@ -5017,7 +5048,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard build/runtime/package identity and real effective compiler metadata across all six profiles; execute the manual native platform selector for all supported inputs and runner labels.",
+      "purpose": "Guard build/runtime/package identity, execute the shared generated qualification architecture selector including invalid-input refusal, and evaluate real effective compiler metadata across all six profiles.",
       "usage": "Current tooling profile; RequiresBuildToolchain additionally evaluates real MSBuild items without compilation.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"

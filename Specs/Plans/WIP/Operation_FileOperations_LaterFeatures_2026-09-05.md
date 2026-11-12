@@ -37,7 +37,13 @@ completed reliability execution record.
 | Microsoft Drive same-endpoint/server-side Copy | I16 BR-1, owner deferral 2026-09-08 | Typed provider capability, exact asynchronous mutation outcome | Same-qualified-endpoint Copy is currently unsupported; only cross-endpoint bridge import/export Copy exists. |
 | Qualified MTP native Move | I16 BR-2, owner deferral 2026-09-08 | Isolated WPD move route and typed non-commit/uncertain outcomes | Host Move is currently Copy-only/source kept. Neither native Move nor destructive host-managed Move is qualified. |
 
-All six rows are HOLD under this document's status. Do not duplicate current core
+**Promoted 2026-11-10.** The owner promoted *Continue safe work and review conflicts later*
+to I63, slice G. I63 closed on 2026-11-11 without building it, and the owner moved it to
+[I64](FileOperations_CollectedCollisionsAndResiduals_2026-11-11.md), which owns its scope,
+default and tests from now on. The row above and the section "Review conflicts later" below
+are kept as the accepted intent that work starts from, not as a HOLD.
+
+The other five rows are HOLD under this document's status. Do not duplicate current core
 statuses here. Promotion requires scheduling by the owner; dependencies are technical
 prerequisites, not a reason to delay core retirement.
 
@@ -71,6 +77,9 @@ restart, malformed/truncated records, storage failure, age/size eviction, Disabl
 Clear isolation, redacted export, and search/cancellation costs at the retention bound.
 
 ## Review conflicts later
+
+Promoted to I63 slice G on 2026-11-10 (see "Deferred scope"). I63 decision D-12 reopens the
+default stated in the next sentence.
 
 Default stays **Ask as issues occur**. Offer **Continue safe work and review later**
 as a task-local choice in the existing options surface and eligible task menu;

@@ -1,5 +1,26 @@
 # SelfTest Specification
 
+ViewerPETests reserves fatal evidence in its acquired marked run's artifacts/ViewerPETests/crashes
+directory before COM initialization. The owned exception filter remains live through apartment teardown.
+An unhandled fault keeps its original failing status and retains a minimal minidump with thread and
+unloaded-module metadata plus a fixed 64-byte little-endian record: magic0x5253564352415348, version1,
+process ID, thread ID, exception code, address, dump-written flag and Win32 error (eight uint64 values).
+Normal completion removes only that process's unused reserved files. No product crash marker, AppData
+write, dialog, debugger attachment or foreground acquisition is part of this test policy.
+
+The registered TestViewerHarnessCrashPreservesOwnedEvidence case launches only its exact private
+noninteractive crash control inside the existing contained child runner. Only that typed control may expect
+an AV exit. Its new owned record, actual minidump exception stream, thread and address must agree; expected
+crash status never authorizes another failed child or substitutes for ordinary viewer qualification.
+Original crashes without dumps remain failed and unexplained until causal evidence is obtained.
+
+Selected native builds retain runtime fixtures through the test projects' actual
+build dependencies. Viewer PE tests inspect the application/Common PE files as
+well as loading viewer plugins; plugin contract tests load their complete plugin
+roster and the Terminal satellite. These inputs must be built and attested before
+execution, including on a clean profile. Missing fixtures fail the existing test
+assertions; they never become skips or narrower coverage claims.
+
 Canonical native plan entries declare their reviewed build producers. Affected
 selection uses those bindings before compilation and verifies the complete selected
 runtime receipt afterward; Fresh Full and exact Resume retain their full profile.
@@ -258,6 +279,30 @@ recovery journals must not reuse or mutate the caller's profile. Keep that direc
 stable until the contained child exits, because a provider worker may outlive an
 individual case. The runner never changes the parent's environment. A direct native
 diagnostic must supply the same isolated local-data setup; it is not Full evidence.
+
+Every runner build mode enables `RSBuildEnableTests=true`, including focused
+Release All/Compare/Commands/FileOps; Full also retains its embedded compiler
+debug-information override. Any planned in-product selftest requires both the
+test-enabled build receipt and the actual executable's ENABLE_TESTS resource
+marker before desktop admission or launch. A test-disabled or malformed image
+fails with blocked attestation, also with SkipBuild. Production packaging still
+requires test-disabled artifacts under its separate contract.
+
+Identity-less Delete fixtures that inspect technical Information diagnostics own a
+bounded in-memory diagnostic budget of at least 65,536 entries for their case scope.
+They preserve a larger configured budget, remove only their owned task diagnostics
+at the worker quiet point, and restore the original optional setting on every exit.
+The ordinary 256-entry UI reservoir may correctly evict technical notes before
+actionable rows; absence from that cache alone cannot prove missing audit logging.
+Retention-pressure fixtures continue to exercise the production limit explicitly.
+
+Popup idle-cadence traces attribute each real-popup task-snapshot call to its
+source line at the exact tested revision. Test-enabled builds maintain a bounded
+16-site UI-thread counter table with an explicit unattributed overflow counter;
+observing it never builds a snapshot, paints or calls taskbar COM. Production
+builds retain their original state and call signature. The cadence fixture logs
+per-interval deltas so excess snapshots can be traced to the actual caller while
+all existing timer, snapshot, heartbeat and copy/scan budgets remain unchanged.
 
 Native environment helpers distinguish a missing variable from a present empty value,
 including Windows' one-character required buffer followed by a zero-character successful
@@ -613,6 +658,7 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Runner-owned summary, retry-log and dashboard navigation uses the final evidence location. Native JSON, trace bytes and detached-disk receipts preserve the original execution paths as provenance; the create-only intent records their source-to-destination mapping. Startrail records, independent copied result artifacts, promotions, exact Resume checks and original verdicts are unchanged. This same-volume local retention is distinct from the separately governed external whole-run transport format and checked-in compact evidence. A standalone direct launch is retained on the next runner preflight after its owner exits.
 - Tooling Pester tests that create scratch files, fake toolchains, or synthetic perf-run trees must use `New-RSTestSandboxScratchDirectory(...)` beneath the selected run. Pester uses the same `X:\RedSalamander.Perf` root as native suites; no auxiliary repository sandbox is permitted. The standalone vcpkg merge synthetic check creates a unique run beneath this root and removes only that exact run through the canonical no-follow cleaner; it never stages fixtures in or cleans repository `.build`. The runner's `TEMP`/`TMP` projection keeps Pester `TestDrive` state inside the current run.
 - PowerShell sandbox containment must read current file attributes for every existing path component on every call, reject ordinary or dangling reparse components, and continue checking ancestors of missing descendants. Only file-not-found and directory-not-found permit a missing component; other I/O or access failures propagate. Fresh checks preserve exact marked fixed-local-drive root authorization, lexical containment, and alternate-data-stream rejection; they do not cache ancestor authority or establish an atomic concurrent-mutation guarantee. Governed Pester coverage retains unique owned fixtures, exercises Unicode/deep paths and replacement between calls, and restores any explicitly labeled in-process fault injection without modifying shared ownership markers or canonical source. After assertions, containment and source-scanner tests unlink only the exact synthetic links they created in finally blocks, preserving target data and witness files so completed tooling runs can archive safely. Absolute fixture junctions must not remain for the archive transaction; its refusal remains a failure.
+- Run-archive security descriptors are acquired directly from the no-follow traversal's current FileSystemInfo objects using the Windows owner/group/DACL API and complete SDDL serialization. This avoids repeated provider setup; it does not cache security or byte identities. Provider-equivalent protected file/directory descriptors, every stream/content hash, metadata, stable pre-move acquisitions and independent post-move verification remain required.
 - Native Full CI imports Pester 3.4.0 explicitly, matching the current suites' assertion and setup semantics. The artifact-writing lane and subsequent re-attestation inherit the initial build's vcpkg imports, configuration, include/link paths and runtime path. Governed test evidence outside the checkout and repository build diagnostics use separate upload artifacts so neither root is silently omitted.
 - FileOperations real cross-volume and filesystem-capability coverage (including NTFS WOF placeholders) use the only sanctioned second-local-drive root. It is disabled by default and may enumerate or mutate another fixed local volume only with `-AllowAlternateVolumeTestRoot`. An enabled `path.local.alternate` entry in the primary root's `config\machine-resources.json` restricts selection to that exact `<AltDrive>:\RedSalamander.Perf`; without the entry, the explicitly authorized run retains fixed-volume capability discovery. It allocates through `SelfTest::AcquireTestSandboxOnVolume(...)` under exact `<AltDrive>:\RedSalamander.Perf\runs\<runId>\scratch\<suite>\<case>`, validates the same marker, and rejects non-empty unmarked roots. No other direct child may be created on the alternate drive.
 - Nothing a test creates may expose a path outside a marked sandbox. A test never mounts, links (junction, symbolic link, hard link), shares, `subst`s or otherwise exposes a directory or volume that is not itself inside a marked `X:\RedSalamander.Perf`; the only mounted volume a test may own is a test-owned virtual disk file inside a marked sandbox, and no test passes a volume GUID it did not create to `SetVolumeMountPointW`. Every link a test creates lives in, and targets a path inside, the same marked sandbox, and each test-created SUBST drive or loopback administrative-share alias (`\\localhost\<drive>$\...`) names only a path inside one. Native fixtures call `Common::Testing::RequireSandboxedLinkTarget` (or `RequireSandboxedExposureTarget` for an alias) before the creating API, or use the guarded `CreateSandboxedSymbolicLink` / `CreateSandboxedHardLink` in `Common/Common.Tests.SandboxPath.h`; both link and target must be strict descendants of one marked base with reparse-free parents (the target leaf may itself be a guarded link, so cycles stay possible), a relative target resolves against the link's parent, and a drive-relative, rooted-without-drive, UNC, device or stream target is refused. PowerShell tests create links only through `New-RSTestSandboxLink` (validated by `Assert-RSTestSandboxLinkTarget`) in `Tools\Modules\Testing\TestSandbox.psm1`. A guard refusal fails the case; it is never a skip (an unreachable loopback administrative share stays an environment skip, but `ProbeLoopbackShare` reports a refused alias separately and the case fails). `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` scans test sources (`RedSalamander/SelfTest`, `Tests`, plugin `*.Tests.*`, `Common/Common.Tests.*` and test tooling) for `SetVolumeMountPoint`, `DefineDosDevice`, `CreateSymbolicLink`, `CreateHardLink`, `FSCTL_SET_REPARSE_POINT`, `NetShareAdd`, `std::filesystem` link creation, `subst`, `mklink`, share and mount cmdlets and `New-Item -ItemType Junction|SymbolicLink|HardLink`, and fails unless each call site is inside an allowlisted helper whose guard precedes it; each allowlist entry records why. Sandbox cleanup never follows links or mount points (below).
@@ -763,7 +809,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   DWM successfully reports exactly shell-cloaked mask 2; all other states fail within five seconds.
   The account-to-Search transition is observed for five seconds after account retirement. A
   verified same-session Progman shell is recognized only by `GetShellWindow`, exact Explorer
-  image and revalidated HWND/process; unknown foreground surfaces fail closed. Start/completion
+  image and revalidated HWND/process. The same-session GitHub compute-agent console is recognized
+  only by the exact `%ProgramData%\GitHub\HostedComputeAgent\hosted-compute-agent` image and title,
+  `ConsoleWindowClass`, and a successful no-AUMID result. It is observed without any close request;
+  the subsequent owned boundary still proves foreground, focus and restoration. Unknown foreground
+  surfaces fail closed. Start/completion
   and each close intent/result are retained create-only under the marked test root. There is no
   kill, input injection, foreground-policy change or permission to dismiss any other window.
   The adapter clears and restores its opt-in; local, x64, self-hosted, other-repository and
@@ -1521,7 +1571,7 @@ the same synchronous reporter and counter path as the pointer overload.
   Local provider's own walker (Verify Off), a tree of four folder levels with files at every level, an
   empty folder and a folder of 300 small files to a unique child of `path.smb.primary`
   (`REDSALAMANDER_SELFTEST_SMB_ROOT`; the case checks the remote-sandbox rule itself and removes only that
-  child). It requires `S_OK`, exactly the source tree with the same bytes, no `.rs_` artifact, and every
+  child). It requires `S_OK`, exactly the source tree with the same bytes, no staging artifact (`.rs-tmp` / `.rs-bak`), and every
   folder's last-write time equal to its source's within two seconds; it is an environment skip, with
   the reason, when the root is not configured, not a dedicated selftest UNC directory, or not reachable.
   In the R4 traversal family, `R4T5_LocalCopyHoldsNoDirectoryHandle` holds the first progress report of
@@ -1544,7 +1594,7 @@ the same synchronous reporter and counter path as the pointer overload.
   `R0fSmb_ManagedMoveTreeToShare` (a Move to another volume) carry the nested tree of
   `R0fSmb_NestedTreeCopyToShare` and a flat folder of 40 files to a unique child of `path.smb.primary`;
   they require `S_OK` with folders ensured by the bridge, exactly the source trees (compared with a
-  second copy of the fixture for the Move), no `.rs_` artifact, no `bridge.publication.unknown`, no
+  second copy of the fixture for the Move), no staging artifact (`.rs-tmp` / `.rs-bak`), no `bridge.publication.unknown`, no
   Move source left, and folder times restored or named by the destination-keeps-no-timestamps note.
   `R4T7_BridgeCopyHoldsNoDirectoryHandle` holds the bridge before it restores `tree\a\b\c` (a test hold
   armed by `SetFileOpsBridgeDirectoryRestorePauseForSelfTest`) and requires every created folder to open
@@ -1749,6 +1799,12 @@ the same synchronous reporter and counter path as the pointer overload.
   Directed ViewerPE cases do not move the pointer, so cleanup must not reset an
   untouched cursor. The warning surface and runner lease alone do not implement
   this restoration.
+- FileOps overwrite-preservation coverage uses the shared process-owned desktop
+  observer independently of its exact source/destination bytes, BLAKE3, file IDs
+  and closed inventories. Foreign desktop changes remain diagnostic; every owned
+  foreground transition and any observer/drain failure still fail. Observation
+  covers the negative controls and final settings restoration without restoring
+  another application's desktop state.
 - ViewerSpace's nonactivating analysis UIA case MUST observe ownership rather than
   require desktop-global cursor/foreground equality across the whole scenario.
   The person and independent applications may continue using the desktop. Hold
@@ -2031,6 +2087,7 @@ The FolderView current-item and selection contract requires deterministic Comman
 - `folder_view_selection_refresh_filter_contract`: cover surviving selection, removal/filter/hide no-resurrection, Select All followed by filter/unfilter, new-item-after-Select-All, ordinary disappearance/reappearance, rejected result preservation, and unselected automatic current repair.
 - `cmd_pane_navigation_directory_impact_preserves_selection_across_chained_renames`: cover selected-only proven rename-chain transfer to the final identity and prove that an unselected rename chain stays unselected.
 - `folder_view_drag_source_target_contract`: cover selected-or-current immutable drag snapshots, system drag-threshold rectangle, source membership after modifier transitions, Ctrl+Click deselection, lifecycle disarm, empty-background movement, double-click isolation, and agreement with command fallback.
+- `cmd_pane_folderView_activation_press_keeps_selection`, `cmd_pane_folderView_activation_press_modifiers` and `cmd_pane_folderView_activation_press_drag_and_double_click`: with the left pane active and three items selected in the right pane, cover the first press in the right pane. A plain press on an unselected item, on a selected item and on empty background keeps the three selected, makes a pressed item current and makes the pane active; the second plain press replaces the selection; a middle-button press only activates; a press while the same pane's navigation bar holds the focus follows the ordinary rule. Ctrl, Shift and Ctrl+Shift presses give the active-pane results. A drag from an unselected item drags and selects that item alone, a drag from a selected item drags the selection, and a double-click opens the folder under the pointer. The cases send the button messages to the owned FolderView and belong to the activation-required Commands suite.
 - `folder_view_selection_visibility_restore_contract`: cover Hide Selected/Unselected plus Show, hidden/system visibility, filtered masks/inversion, explicit Save/Restore timing, and non-actionable rename provenance.
 - Existing host-owned Delete/Move cases must also assert exactly-one-current and the selection-only ownership-epoch rule while retaining exact-per-source-`S_OK`, provider/folder/sort, newer-enumeration, and immutable-target gates. At least one keyed-sort fixture MUST deliver provider enumeration order different from resulting display order and prove that host removal uses the canonical successor/predecessor comparator, excludes every proven-removed identity, and never applies a captured display index to the raw payload.
 
