@@ -18,6 +18,7 @@
 
 #ifdef ENABLE_TESTS
 #include "SelfTest/FileOperations/FileOperations.Tests.FileOperationsSurfaceResources.h"
+#include <source_location>
 #endif
 
 namespace FileOperations
@@ -394,6 +395,12 @@ struct CaptionGlyphDebugSnapshot
 
 // UI-thread scalar observation only: reading these counters never builds a task
 // snapshot, paints, or calls taskbar COM. Baseline and candidate use one fixture.
+struct PopupSnapshotCallSiteDebugSample final
+{
+    uint32_t sourceLine = 0u;
+    uint64_t calls      = 0u;
+};
+
 struct PopupTelemetryDebugSnapshot final
 {
     uint64_t timerTicks       = 0u;
@@ -405,6 +412,8 @@ struct PopupTelemetryDebugSnapshot final
     uint32_t lastTaskbarState = 0u;
     UINT timerIntervalMs      = 0u;
     bool idlePolicyEnabled    = false;
+    std::array<PopupSnapshotCallSiteDebugSample, 16> snapshotCallSites{};
+    uint64_t unattributedTaskSnapshots = 0u;
 };
 
 struct PopupLayoutDebugSnapshot
@@ -1034,7 +1043,9 @@ public:
                 _taskbarSuccessCount,
                 _lastTaskbarState,
                 _telemetryTimerIntervalMs,
-                _debugIdleSuspensionEnabled};
+                _debugIdleSuspensionEnabled,
+                _snapshotCallSites,
+                _unattributedTaskSnapshots};
     }
     // UI-thread-only documentation fixture; never starts workers or admits operations.
     void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded);
@@ -1633,7 +1644,11 @@ private:
     bool EnsureCaptionGlyphTarget(UINT dpi) noexcept;
     void EnsureBrushes() noexcept;
 
+#ifdef ENABLE_TESTS
+    std::vector<TaskSnapshot> BuildSnapshot(std::source_location caller = std::source_location::current()) const;
+#else
     std::vector<TaskSnapshot> BuildSnapshot() const;
+#endif
     std::vector<RateSnapshot> BuildRateSnapshot() const;
     void UpdateRates() noexcept;
 
@@ -2235,10 +2250,12 @@ private:
     bool _debugIdleSuspensionEnabled         = true;
     uint64_t _telemetryTimerTickCount        = 0u;
     mutable uint64_t _taskSnapshotBuildCount = 0u;
-    mutable uint64_t _rateSnapshotBuildCount = 0u;
-    uint64_t _rateUpdateCount                = 0u;
-    uint64_t _taskbarSuccessCount            = 0u;
-    uint32_t _lastTaskbarState               = 0u;
+    mutable std::array<PopupSnapshotCallSiteDebugSample, 16> _snapshotCallSites{};
+    mutable uint64_t _unattributedTaskSnapshots = 0u;
+    mutable uint64_t _rateSnapshotBuildCount    = 0u;
+    uint64_t _rateUpdateCount                   = 0u;
+    uint64_t _taskbarSuccessCount               = 0u;
+    uint32_t _lastTaskbarState                  = 0u;
 #endif
 
     int _mouseWheelRemainder = 0;

@@ -10271,6 +10271,19 @@ using TickResult = std::optional<bool>;
                          after.presentationBuilds - before.presentationBuilds,
                          after.projectableScans - before.projectableScans,
                          after.uiCpuUs - before.uiCpuUs));
+        std::wstring callers;
+        for (size_t index = 0u; index < after.popup.snapshotCallSites.size(); ++index)
+        {
+            const auto& site             = after.popup.snapshotCallSites[index];
+            const auto& prior            = before.popup.snapshotCallSites[index];
+            const uint64_t previousCalls = site.sourceLine == prior.sourceLine ? prior.calls : 0u;
+            if (site.sourceLine != 0u && site.calls > previousCalls)
+                callers.append(std::format(L"{}{}:{}", callers.empty() ? L"" : L",", site.sourceLine, site.calls - previousCalls));
+        }
+        note(std::format(L"{} snapshot callers (Popup.cpp line:calls): [{}] unattributed={}",
+                         name,
+                         callers,
+                         after.popup.unattributedTaskSnapshots - before.popup.unattributedTaskSnapshots));
         return elapsed.conditionMet;
     };
     const auto work = [](State::PopupTelemetryWork value) noexcept { return static_cast<unsigned>(value); };

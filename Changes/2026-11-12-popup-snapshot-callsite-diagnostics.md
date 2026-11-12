@@ -1,0 +1,1 @@
+- Attribute popup idle-cadence task snapshots to bounded test-only source-line counters so excess work retains an actionable caller breakdown. Keep production state/signatures and all timing, snapshot and heartbeat assertions unchanged; this instrumentation alone does not claim a cadence repair.

@@ -5555,10 +5555,29 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
     }
 }
 
+#ifdef ENABLE_TESTS
+std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildSnapshot(std::source_location caller) const
+#else
 std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildSnapshot() const
+#endif
 {
 #ifdef ENABLE_TESTS
     ++_taskSnapshotBuildCount;
+    // Attribute excess work without taking a stack, allocating, or adding production
+    // state/call arguments. All current callers fit this bounded UI-thread table.
+    bool attributed = false;
+    for (auto& site : _snapshotCallSites)
+    {
+        if (site.sourceLine == 0u || site.sourceLine == caller.line())
+        {
+            site.sourceLine = caller.line();
+            ++site.calls;
+            attributed = true;
+            break;
+        }
+    }
+    if (! attributed)
+        ++_unattributedTaskSnapshots;
 #endif
 #ifdef ENABLE_TESTS
     if (debugVisualScenario.has_value())

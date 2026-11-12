@@ -287,6 +287,14 @@ The ordinary 256-entry UI reservoir may correctly evict technical notes before
 actionable rows; absence from that cache alone cannot prove missing audit logging.
 Retention-pressure fixtures continue to exercise the production limit explicitly.
 
+Popup idle-cadence traces attribute each real-popup task-snapshot call to its
+source line at the exact tested revision. Test-enabled builds maintain a bounded
+16-site UI-thread counter table with an explicit unattributed overflow counter;
+observing it never builds a snapshot, paints or calls taskbar COM. Production
+builds retain their original state and call signature. The cadence fixture logs
+per-interval deltas so excess snapshots can be traced to the actual caller while
+all existing timer, snapshot, heartbeat and copy/scan budgets remain unchanged.
+
 Native environment helpers distinguish a missing variable from a present empty value,
 including Windows' one-character required buffer followed by a zero-character successful
 read. Scope restoration preserves both states exactly. Actual read errors and buffer-size
