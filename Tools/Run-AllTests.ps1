@@ -483,6 +483,8 @@ function Invoke-RSInteractiveDesktopOperation {
         'Local\RedSalamander.InteractiveTestRun.v1')
     $interactiveTestMutexAcquired = $false
     $executionStateArmed = $false
+    Write-Host '[test-desktop] Waiting for the existing session lease.' -ForegroundColor DarkGray
+    $desktopWaitClock = [Diagnostics.Stopwatch]::StartNew()
     try {
         try {
             $interactiveTestMutexAcquired = $interactiveTestMutex.WaitOne([TimeSpan]::FromHours(3))
@@ -491,6 +493,8 @@ function Invoke-RSInteractiveDesktopOperation {
             $interactiveTestMutexAcquired = $true
             Write-Warning 'Acquired an abandoned interactive-test mutex from a terminated entry.'
         }
+        $desktopWaitClock.Stop()
+        Write-Host "[test-desktop] Session lease wait: $($desktopWaitClock.ElapsedMilliseconds) ms; acquired=$interactiveTestMutexAcquired." -ForegroundColor DarkGray
         if (-not $interactiveTestMutexAcquired) {
             throw 'Timed out after three hours waiting for another RedSalamander interactive test entry in this Windows session.'
         }
@@ -1110,8 +1114,12 @@ function Invoke-RSSelfTestProcess {
         # Fake MTP persists its recovery journal below LOCALAPPDATA. Each contained
         # process (including classification retries) needs independent state; keep
         # the caller environment and journals untouched for the process lifetime.
+        Write-Host '[selftest-preflight] Allocating the owned File Operations profile.' -ForegroundColor DarkGray
+        $profileClock = [Diagnostics.Stopwatch]::StartNew()
         $localData = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot `
             -Harness 'fileops-profile' -Case ([Guid]::NewGuid().ToString('N'))
+        $profileClock.Stop()
+        Write-Host "[selftest-preflight] Owned File Operations profile: $($profileClock.ElapsedMilliseconds) ms." -ForegroundColor DarkGray
         $startInfo.EnvironmentVariables['LOCALAPPDATA'] = $localData
     }
     # Only the runner hands a mount to a child, and only the one it created and proved.
@@ -1119,7 +1127,11 @@ function Invoke-RSSelfTestProcess {
         $startInfo.EnvironmentVariables.Remove($name)
     }
     if ($Arguments -contains '--fileops-selftest') {
+        Write-Host '[selftest-preflight] Preparing the test-owned volume.' -ForegroundColor DarkGray
+        $volumeClock = [Diagnostics.Stopwatch]::StartNew()
         $ownedVirtualDisk = Get-RSRunAllTestsOwnedVirtualDisk
+        $volumeClock.Stop()
+        Write-Host "[selftest-preflight] Test-owned volume: $($volumeClock.ElapsedMilliseconds) ms; status=$($ownedVirtualDisk.Status)." -ForegroundColor DarkGray
         if ($ownedVirtualDisk.Status -eq 'Mounted') {
             $startInfo.EnvironmentVariables['REDSALAMANDER_TEST_OWNED_VHDX_MOUNT'] = $ownedVirtualDisk.MountPath
             $startInfo.EnvironmentVariables['REDSALAMANDER_TEST_OWNED_VHDX_VOLUME'] = $ownedVirtualDisk.VolumeGuidPath
@@ -1140,7 +1152,11 @@ function Invoke-RSSelfTestProcess {
         -Operation {
             $process = $null
             try {
+                Write-Host '[selftest-preflight] Starting the contained native process.' -ForegroundColor DarkGray
+                $launchClock = [Diagnostics.Stopwatch]::StartNew()
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
+                $launchClock.Stop()
+                Write-Host "[selftest-preflight] Contained native process started: $($launchClock.ElapsedMilliseconds) ms; pid=$($process.Id)." -ForegroundColor DarkGray
                 $process.WaitForExit()
                 $nativeExitCode = $process.ExitCode
                 $exitDirectory = Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot `

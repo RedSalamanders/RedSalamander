@@ -1,5 +1,10 @@
 # Repository tooling
 
+Native startup diagnostics print the start and elapsed time of File Operations
+profile/volume setup, the existing interactive lease wait, and contained process
+launch. Keep the parent console log when investigating a delay. The rows do not
+change native deadlines or qualify performance/coverage.
+
 `Build-LocalSdkCandidate.ps1` explicitly builds the Release application and plugin
 closure against one independently hashed local DxUi descriptor. Supply the native
 Visual Studio `-MSBuildPath` selected for the application and a positive `-BuildNumber`

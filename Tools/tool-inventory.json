@@ -1601,6 +1601,7 @@
       "outputs": [
         "Aggregate-v2 run summary with v1 sidecar",
         "Per-launch artifacts/native-process-exits/<guid>.json with raw signed process exit, PID, executable and UTC observation",
+        "Console start/completion rows with monotonic elapsed time for FileOps profile/volume setup, session lease waiting and contained native process launch",
         "Normalized terminal results and verified promotions",
         "Validation plan, content-addressed decisions, fingerprints, and checkpoints",
         "Typed PASSED/FAILED/NOT_EVALUATED/invalid/blocked/corrupt process exit",
