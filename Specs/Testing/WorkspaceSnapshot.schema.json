@@ -10,6 +10,7 @@
     "canonicalization": { "const": "rs-canonical-json-v1" },
     "snapshot_id": { "$ref": "#/definitions/digest" },
     "repo_identity": { "$ref": "#/definitions/digest" },
+    "engine_inputs_identity": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
     "git_head": { "anyOf": [{ "$ref": "#/definitions/gitObject" }, { "type": "null" }] },
     "base": { "anyOf": [{ "$ref": "#/definitions/gitObject" }, { "type": "null" }] },
     "files": {

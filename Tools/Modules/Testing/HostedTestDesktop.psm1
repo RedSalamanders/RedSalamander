@@ -746,10 +746,13 @@ namespace RedSalamander.Testing {
                String.Equals(image,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WWAHost.exe"),StringComparison.OrdinalIgnoreCase))return "Account";
             if(title=="Search" && cls=="Windows.UI.Core.CoreWindow" && app=="MicrosoftWindows.Client.CBS_cw5n1h2txyewy!CortanaUI" &&
                String.Equals(image,System.IO.Path.Combine(windows,"SystemApps","MicrosoftWindows.Client.CBS_cw5n1h2txyewy","SearchHost.exe"),StringComparison.OrdinalIgnoreCase))return "Search";
-            if(WslIdentityMatches(title,cls,image,app,appStatus,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"wsl.exe")))return "WslStartup";
+            if(ConsoleIdentityMatches(title,cls,image,app,appStatus,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"wsl.exe")))return "WslStartup";
+            // Observation only: the hosted agent can become foreground after startup windows retire.
+            // It is never included in RequestClose's action allowlist.
+            if(ConsoleIdentityMatches(title,cls,image,app,appStatus,System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"GitHub","HostedComputeAgent","hosted-compute-agent")))return "RunnerConsole";
             return "Unknown";
         }
-        internal static bool WslIdentityMatches(string title,string cls,string image,string app,int appStatus,string expected) {
+        internal static bool ConsoleIdentityMatches(string title,string cls,string image,string app,int appStatus,string expected) {
             return cls=="ConsoleWindowClass" && String.IsNullOrEmpty(app) && appStatus==15703 &&
                 String.Equals(title,expected,StringComparison.OrdinalIgnoreCase) && String.Equals(image,expected,StringComparison.OrdinalIgnoreCase);
         }
@@ -990,7 +993,8 @@ function Invoke-RSHostedArm64StockPreparation {
         request one ordinary close each for the explicitly approved stock Microsoft account,
         Search and exact WSL update startup windows. WSL additionally requires matching
         held-process/CIM creation identity and the exact parsed update arguments. Exact image, AUMID, class, title, session, desktop and captured
-        HWND/thread/process identity are checked with retained process handles. Unknown surfaces
+        HWND/thread/process identity are checked with retained process handles. The exact same-session
+        GitHub compute-agent console is observed without a close request. Unknown surfaces
         fail closed. A bounded five-second observation after account close catches the delayed
         Search transition; no input, process termination, generic window dismissal or policy
         change is performed. Each close has a create-only intent and result under the marked root.
@@ -1034,7 +1038,7 @@ function Invoke-RSHostedStockPreparationCore {
         $surface=Get-RSHostedStockSurface
         try {
             $lastObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;title=$surface.Title;class=$surface.Class;image=$surface.Image;application_id=$surface.ApplicationId;foreground_desktop=$surface.ForegroundDesktop;foreground_desktop_error=$surface.ForegroundDesktopError}
-            if($surface.Kind -cnotin @('Empty','Shell','Account','Search','WslStartup')){throw 'An unapproved foreground surface prevents hosted preparation.'}
+            if($surface.Kind -cnotin @('Empty','Shell','RunnerConsole','Account','Search','WslStartup')){throw 'An unapproved foreground surface prevents hosted preparation.'}
             if($surface.Kind -cin @('Account','Search','WslStartup')){
                 if($seen.ContainsKey($surface.Kind)){throw 'An approved stock surface reappeared after its one permitted close.'}
                 $seen[$surface.Kind]=$true
@@ -1128,7 +1132,8 @@ function Invoke-RSWithHostedDefaultDesktop {
     .PARAMETER Action
         Synchronous entry operation that closes its containment job before returning.
     .OUTPUTS
-        Action output and boundary/readiness/restoration diagnostics.
+        Action output and boundary/readiness/restoration diagnostics, including the
+        complete exception chain when retirement fails. Failure remains fatal.
     .NOTES
         Owns only a neutral foreground window on the ephemeral hosted runner's Default desktop.
         With the project adapter's approved ARM64 opt-in, prepares only the three identified
@@ -1161,7 +1166,11 @@ function Invoke-RSWithHostedDefaultDesktop {
                 Write-Host ('Hosted Default desktop retired: ' + $desktop.Name + '; restored=' + $desktop.Restored)
                 if ($desktop.Restored -ne $true) { throw 'The hosted Default desktop did not restore its original foreground and focus.' }
             }
-        } catch { $restoreError = $_ }
+        } catch {
+            $restoreError = $_
+            # PowerShell's outer method-invocation message hides the native boundary cause.
+            Write-Host ('Hosted Default desktop retirement exception: ' + $_.Exception.ToString())
+        }
     }
     if ($null -ne $actionError -and $null -ne $restoreError) {
         throw [AggregateException]::new('Native entry and hosted desktop restoration both failed.', [Exception[]]@($actionError.Exception, $restoreError.Exception))

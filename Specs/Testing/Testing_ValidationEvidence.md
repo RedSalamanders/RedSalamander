@@ -14,6 +14,11 @@ That Done file is non-normative implementation history. The completed
 records the post-completion `L4-BUILD-01..08` and `L4-STAR-01..16` repairs;
 this specification remains the authoritative behavior contract.
 Build receipts and portable handoff are owned by `Specs/Build/Build_Toolchain.md`.
+Selftest-only All/Compare/Commands/FileOps may consume their exact selected
+RedSalamander project-union receipt under that contract, with the same source,
+profile and complete output-byte checks. Fresh Full/PR/CI and exact Resume continue
+to require a full-solution receipt; family/filtered evidence does not widen that
+acceptance. Affected selected-build admission follows the producer contract below.
 `Fresh`, explicit exact `Resume`, and opt-in `Affected` are active as described below;
 CI, nightly, release, and final closeout remain explicit Fresh.
 
@@ -37,6 +42,16 @@ Writing the record must succeed; archive refusal retains it in the original run.
 exit is diagnostic evidence and never overrides failed coverage or establishes a pass.
 
 `Get-RSWorkspaceSnapshot` is the canonical local source identity. It resolves only
+local inputs. New snapshots additionally include `engine_inputs_identity`, a nullable
+digest in the snapshot projection, separate from product file/iteration inventory.
+When `.ci/project.json` exists, the shared `Get-CiPinnedEngineInputsIdentity` binds the
+actual ignored engine's fresh raw bytes and exact clean pin. Missing, foreign, dirty
+or wrong-pin engines refuse before build/test reuse. Generated engine `.build` output
+is excluded. Historical v1 records without this optional field remain readable; their
+old snapshot identities cannot equal the new projection and grant no current reuse.
+This is input identity only, with no hosted delegation or main-result adoption.
+
+Workspace acquisition resolves only
 local Git objects, uses the merge base of an explicit impact base without fetching,
 and records separate committed-base, index, and worktree byte identities for changed,
 staged, untracked, deleted, renamed, and type-changed paths. `.git/`, `.build/`,
@@ -288,6 +303,12 @@ without named cases, or any other skipped Pester case, is `UNALLOWED_SKIP`. Fail
 flaky, crashed, timed-out, partial, source-mutating, and interrupted entries do not
 promote. A dead `running`/`provisional-passed` checkpoint repairs to `interrupted`.
 
+When normalization rejects an entry, the runner appends a `validation_acceptance`
+failure containing the terminal reason codes and, for `UNALLOWED_SKIP`, the named
+skipped cases. It preserves the executed case statuses and earlier failure details.
+The forced nonzero entry result records acceptance failure separately from an
+assertion failure; a successful assertion aggregate cannot conceal a rejected contract.
+
 Pruning retains the newest bounded set, caller-kept IDs, active runs, and referenced
 origins. Targets must be direct validated children of the runs root, and every existing
 component from the trusted evidence root through the target must be non-reparse. Planning
@@ -334,7 +355,12 @@ otherwise the receipt can faithfully attest artifacts
 that are incapable of executing the declared Full plan. The writer is `ExactArtifact`: exact Resume may
 reuse its promoted post-entry receipt/epoch evidence; when it executes, pre-existing
 reuse decisions are reset conservatively to current-epoch execution. Failure to produce
-or verify the compatible post-entry receipt is blocking.
+or verify the compatible post-entry receipt is blocking. Before suspension, independently
+capture any SDK descriptor from the accepted dependency binding, close that reader,
+and pass the original descriptor to re-attestation. Verify the recipe, SDK input key,
+manifest and descriptor hash remain equal before publishing the restored receipt.
+An SDK compatibility miss or unavailable/changed input blocks that SDK continuation;
+Source execution must never be reported as SDK runtime qualification.
 
 Run-state records that predate the required `mutation_state` and `decision_digest`
 bindings are legacy evidence and cannot be reused as current Startrail authority.
@@ -419,6 +445,19 @@ path naming one non-reparse direct child of `runs`; the directory leaf must equa
 `run-state.run_id`. Nested paths, case/path aliases, copied-renamed directories, and
 junctions are rejected before evidence records are read.
 
+Exact local Resume may reuse an individually promoted, terminal-PASSED entry from a
+closed `failed` or `interrupted` origin as well as a passed one. Requiring the entire
+origin campaign to be green would discard completed obligations after a later failure.
+Failed/non-promoted entries execute; running or invalidated parents supply no reuse.
+The original failure/interruption, immutable entry bytes and provenance are never
+rewritten. Stable artifact epoch, source/profile/coverage/runner/environment identity
+and all existing cross-record/result-byte verification remain mandatory. Changed
+receipts or inputs execute; corrupt evidence still aborts. A resumed aggregate passes
+only after complete current accounting, and pruning retains its verified original
+entry references. This closed-origin policy applies only to explicit local Resume
+and its aggregate/prune references; green-only history/other consumers keep their
+existing contract. It enables no local-to-hosted delegation or main-result adoption.
+
 ### Affected execution
 
 `Run-AllTests.ps1 -Suite Full -ValidationMode Affected [-ImpactBase <commit-ish>]`
@@ -426,6 +465,28 @@ constructs the canonical Full shadow decision, then publishes and executes a fil
 Affected plan containing only governed affected entries. Unknown relevant paths widen to
 the Full set. Empty/documentation-only sets are valid selected work but never a repository
 health claim. Affected does not read reusable test evidence and cannot replace final Full.
+
+Affected planning precedes native compilation. Portable entries may carry optional
+`build_project_names`; the current factory supplies reviewed native producers and
+binds them into the plan/entry contract. Existing records without this field remain
+readable but cannot authorize selected builds. A targeted impact decision may build
+the union only when every affected native entry resolves to an explicit producer,
+no selected entry writes artifacts, and no script reads undeclared native artifacts.
+Missing/ambiguous producers and unknown/shared inputs retain the full build.
+The post-build workspace snapshot must equal the prebuild snapshot before filtering
+execution. Exact project-selection and complete consumed-output byte verification
+remain required. This selected path stays filtered and NOT_EVALUATED for repository
+health; it grants no native delegation, Full seal or cross-run adoption.
+
+When the governed decision requires no build and selects zero affected entries,
+changed prose runs the canonical changelog, tool-inventory and specification-ownership
+checks. A genuinely empty change set has no such new obligations. This route acquires
+no native artifact-profile lease and does not scavenge historical runs. A fresh
+workspace barrier must match before schema-valid workspace/plan/decision diagnostics
+are archived with completed disposition. Completed archival describes the controller
+lifecycle, not a test verdict: no build receipt, entry promotion or Resume origin is
+created. Success returns NOT_EVALUATED (exit 2); check/source/archive failures remain
+failures. Unselected native outputs do not need to exist for this route.
 
 ### Commands family boundary
 

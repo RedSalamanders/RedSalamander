@@ -401,6 +401,19 @@ struct Check final
     std::wstring_view component;
     void (*recordFailure)(const wchar_t* message, unsigned int passed, unsigned int failed) noexcept = nullptr;
 
+    bool operator()(bool condition, std::wstring_view message, unsigned int& passed, unsigned int& failed) const noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return true;
+        }
+        // Views may name formatted text or a non-terminated slice. Only a failure needs
+        // a terminated copy for the existing synchronous diagnostic/callback contract.
+        const std::wstring terminated{message};
+        return operator()(false, terminated.c_str(), passed, failed);
+    }
+
     bool operator()(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) const noexcept
     {
         if (condition)

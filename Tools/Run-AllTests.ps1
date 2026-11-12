@@ -14,13 +14,18 @@
          3 invalid CLI/plan, 4 blocked attestation, or 5 corrupt evidence.
     PR delegation may leave only interactive standalone entries; an empty
     early scheduling set remains a valid plan.
+    A rejected validation contract is retained in Failures with its reason codes;
+    unallowed skips also name the skipped cases, even when assertions passed.
 
     Self-test artifacts are written under:
       REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\
     After execution, the complete run is verified and renamed on the same volume to
       REDSALAMANDER_TEST_ROOT\evidence\completed-runs\<runId>\
     Passed, failed, skipped and interrupted evidence is retained without payload copies.
-    Startup archives abandoned parseable runs instead of deleting them. Unsafe links,
+    Startup archives abandoned parseable runs instead of deleting them. A recorded
+    unsafe-link refusal leaves that stale run untouched on subsequent startup; explicit
+    archival always verifies the complete current tree. Such refusal records grant no pass.
+    Unsafe links,
     unresolved disks, live owners or conflicting destinations retain the run for review.
     The runner uses exact X:\RedSalamander.Perf on the repository drive by default.
     X: may be replaced by any fixed local drive through -TestRoot or
@@ -46,8 +51,9 @@
       Full      - Run all self-tests plus standalone/native and script tests
 
 .PARAMETER SkipBuild
-    When set, skips the build step only when a schema-valid full-solution receipt
-    matches this checkout/profile and every attested output still matches its digest.
+    Requires a schema-valid receipt for this checkout/profile and unchanged output
+    bytes. PR/CI/Full require the full solution. All/Compare/Commands/FileOps may
+    also use the exact RedSalamander selected-project union and its runtime closure.
 
 .PARAMETER ApplyLegacySandboxCleanup
     Retired compatibility switch. The runner rejects it because test tooling never
@@ -69,8 +75,9 @@
     should omit it so the runner creates a unique identifier.
 
 .PARAMETER AllowAlternateVolumeTestRoot
-    Allows File Operations selftests to create their marked
-    X:\RedSalamander.Perf root on one alternate fixed local volume. An enabled
+    Allows File Operations selftests to use an existing explicitly initialized,
+    marked X:\RedSalamander.Perf root on one alternate fixed local volume. This
+    switch never authorizes first creation or marking of a drive-root folder. An enabled
     path.local.alternate machine resource restricts selection to that exact root.
 
 .PARAMETER FailFast
@@ -1385,31 +1392,6 @@ try {
         configuration = $Configuration
         platform = $Platform
     }
-    $artifactOperationLock = Enter-RSArtifactOperationLock `
-        -RepoRoot $repoRoot `
-        -Operation "Run-AllTests $Suite ($operationMode) $Configuration|$Platform" `
-        -Scope $artifactOperationScope
-
-    if ($artifactOperationLock.WasAbandoned) {
-        [void](Set-RSArtifactOperationContaminated `
-                -RepoRoot $repoRoot `
-                -Reason "The previous build/test owner exited without clearing the exclusive artifact-operation lock." `
-                -AbandonedOwner $artifactOperationLock.AbandonedOwner `
-                -Scope $artifactOperationScope)
-    }
-
-    if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $artifactOperationScope) {
-        $markerPath = Get-RSArtifactContaminationMarkerPath `
-            -RepoRoot $repoRoot `
-            -Scope $artifactOperationScope
-        Write-Host "BLOCKED ATTESTATION: shared build artifacts may be mixed after an interrupted operation. Run build.ps1 -Rebuild before starting tests. Marker: $markerPath" -ForegroundColor Red
-        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
-    }
-
-    Assert-RSNoResidualArtifactToolProcesses `
-        -RepoRoot $repoRoot `
-        -Scope $artifactOperationScope
-
 $testRunContext = New-RSTestRunContext `
     -RepoRoot $repoRoot `
     -RunId $RunId `
@@ -1441,15 +1423,28 @@ $testMachineResourceEnvironmentLease = Set-RSTestMachineResourceEnvironment -Con
 $artifactRoot = $testRunContext.ArtifactRoot
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 
-$staleRunCleanupResults = @(Save-RSTestSandboxStaleRunEvidence `
-        -TestRoot $testRunContext.TestRoot `
-        -RunId $testRunContext.RunId)
-if (@($staleRunCleanupResults).Count -gt 0) {
-    $archivedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Archived' }).Count
-    $retainedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Retained' }).Count
-    Write-Host "Stale TestSandbox evidence: $archivedStaleRuns archived, $retainedStaleRuns retained for review." -ForegroundColor DarkGray
-    foreach ($retainedRun in @($staleRunCleanupResults | Where-Object Status -eq 'Retained')) {
-        Write-Warning "Retained $($retainedRun.RunId): $($retainedRun.Reason)"
+function Save-RSRunnerStaleRunEvidence {
+    $staleRunArchiveClock = [Diagnostics.Stopwatch]::StartNew()
+    $staleRunCleanupResults = @(Save-RSTestSandboxStaleRunEvidence `
+            -TestRoot $testRunContext.TestRoot `
+            -RunId $testRunContext.RunId)
+    $staleRunArchiveClock.Stop()
+    Write-Host "Stale TestSandbox archive preflight: $($staleRunArchiveClock.ElapsedMilliseconds) ms." -ForegroundColor DarkGray
+    if (@($staleRunCleanupResults).Count -gt 0) {
+        $archivedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Archived' }).Count
+        $retainedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Retained' }).Count
+        Write-Host "Stale TestSandbox evidence: $archivedStaleRuns archived, $retainedStaleRuns retained for review." -ForegroundColor DarkGray
+        $repeatedRetentions = 0
+        foreach ($retainedRun in @($staleRunCleanupResults | Where-Object Status -eq 'Retained')) {
+            if ([bool](Get-RSObjectValue -Object $retainedRun -Names @('RepeatedSafetyRefusal') -DefaultValue $false)) {
+                ++$repeatedRetentions
+                continue
+            }
+            Write-Warning "Retained $($retainedRun.RunId): $($retainedRun.Reason)"
+        }
+        if ($repeatedRetentions -gt 0) {
+            Write-Host "$repeatedRetentions previously refused unsafe run(s) remain untouched; explicit archival performs fresh verification." -ForegroundColor DarkGray
+        }
     }
 }
 
@@ -1460,6 +1455,106 @@ $quarantineStatus = Read-RSTestQuarantineFile -Path $QuarantinePath
 
 # --- Build step ---
 
+function Get-RSRunnerRequestedTestPlan {
+    Get-RSTestRunPlan -Suite $Suite -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
+        -RedSalamanderExePath $exeFullPath -TimeoutMultiplier $TimeoutMultiplier `
+        -FailFast:$FailFast -CaseFilter $CaseFilter -CommandsFamily $CommandsFamily `
+        -RepeatCount $SelfTestRepeat -ShuffleSeed $SelfTestShuffleSeed -PerfBudgetPath $PerfBudgetPath `
+        -RequirePerfBudgets:$RequirePerfBudgets -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
+        -SelfTestOrderProofCase $SelfTestOrderProofCase
+}
+
+function Invoke-RSRunnerCompilerFreeChecks {
+    foreach ($check in @(
+        @{Path='Tools/Test-Changelog.ps1';Arguments=@{}},
+        @{Path='Tools/Get-ToolInventory.ps1';Arguments=@{FailOnFindings=$true;Format='Json'}},
+        @{Path='Tools/Get-SpecInventory.ps1';Arguments=@{FailOnFindings=$true}}
+    )) {
+        $global:LASTEXITCODE = 0
+        $checkArguments = $check.Arguments
+        & (Join-Path $repoRoot $check.Path) @checkArguments
+        if (-not $? -or $LASTEXITCODE) { throw "Compiler-free affected validation failed: $($check.Path)." }
+    }
+}
+
+$buildArgs = Get-RSBuildScriptArguments -Suite $Suite -Configuration $Configuration -Platform $Platform
+$requiredBuildSelection = @()
+$useAffectedSelectedBuild = $false
+$prebuildAffectedEntries = @()
+$prebuildWorkspaceSnapshot = $null
+if ($ValidationMode -ceq 'Affected') {
+    Import-RSRunnerValidationModules
+    $prebuildEntries = @(Get-RSRunnerRequestedTestPlan)
+    if ($NonInteractive) { $prebuildEntries = @($prebuildEntries | Where-Object { -not $_.RequiresInteractiveDesktop }) }
+    $prebuildPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite $Suite `
+        -Entries $prebuildEntries -ValidationMode Affected -CoverageScope filtered
+    $prebuildWorkspaceSnapshot = Get-RSWorkspaceSnapshot -RepoRoot $repoRoot -ImpactBase $ImpactBase
+    $prebuildManifest = Read-RSValidationImpactManifest -Path (Join-Path $repoRoot 'Tools/validation-impact.json') `
+        -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationImpact.schema.json') -RepoRoot $repoRoot
+    $prebuildTrackedInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+    $prebuildGovernance = Test-RSValidationImpactGovernance -Manifest $prebuildManifest -TrackedPaths $prebuildTrackedInputs -RepoRoot $repoRoot
+    if (-not $prebuildGovernance.IsValid) {
+        Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete before build: $(@($prebuildGovernance.UnmappedBuildInputs) -join ', ')"
+    }
+    $prebuildDecision = Get-RSValidationImpactDecision -Manifest $prebuildManifest -WorkspaceSnapshot $prebuildWorkspaceSnapshot `
+        -ValidationPlan $prebuildPlan -PlannerMode enforced
+    if ($prebuildDecision.advisory_build_action -ceq 'none' -and @($prebuildDecision.entries | Where-Object affected).Count -eq 0) {
+        if (@($prebuildDecision.changed_paths).Count) { Invoke-RSRunnerCompilerFreeChecks }
+        $compilerFreePostSnapshot = Get-RSWorkspaceSnapshot -RepoRoot $repoRoot -ImpactBase $ImpactBase
+        if ($compilerFreePostSnapshot.snapshot_id -cne $prebuildWorkspaceSnapshot.snapshot_id) {
+            Write-Host 'BLOCKED ATTESTATION: inputs changed during compiler-free affected validation.' -ForegroundColor Red
+            exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+        }
+        # Diagnostic plans are not completed test evidence: no build receipt,
+        # native result, Full promotion or Resume origin is manufactured.
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $artifactRoot 'workspace-prebuild.json') `
+            -InputObject $prebuildWorkspaceSnapshot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/WorkspaceSnapshot.schema.json') -AllowedRoot $artifactRoot
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $artifactRoot 'affected-prebuild-plan.json') `
+            -InputObject $prebuildPlan -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationPlan.schema.json') -AllowedRoot $artifactRoot
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $artifactRoot 'affected-prebuild-decision.json') `
+            -InputObject $prebuildDecision -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationPlanDecision.schema.json') -AllowedRoot $artifactRoot
+        $runEvidenceArchiveAttempted = $true
+        $compilerFreeArchives = @(Save-RSRunAllTestsEvidence -Context $testRunContext -Disposition completed)
+        $runEvidenceArchived = $true
+        foreach ($archive in $compilerFreeArchives) {
+            Write-Host "Compiler-free plan diagnostics: $($archive.ArtifactRoot)" -ForegroundColor DarkGray
+        }
+        Write-Host 'NO_AFFECTED_TESTS: compiler-free ownership checks passed when applicable; no native build or tests executed. Repository coverage is NOT_EVALUATED.' -ForegroundColor Cyan
+        exit (Get-RSValidationExitCode -TerminalState NOT_EVALUATED)
+    }
+    $affectedBuild = Get-RSValidationAffectedBuildSelection -Decision $prebuildDecision -ExecutionEntries $prebuildEntries `
+        -SolutionPath (Join-Path $repoRoot 'RedSalamander.sln')
+    Write-Host ('Affected build: ' + $affectedBuild.Reason) -ForegroundColor DarkGray
+    if ($affectedBuild.UseSelectedBuild) {
+        $useAffectedSelectedBuild = $true
+        $buildArgs.ProjectNames = @($affectedBuild.Selection.ProjectNames)
+        $prebuildAffectedEntries = @($prebuildEntries | Where-Object { $_.Id -in $affectedBuild.EntryIds })
+        Write-Host ('Selected build projects: ' + ($buildArgs.ProjectNames -join ', ')) -ForegroundColor Cyan
+    }
+}
+if ($buildArgs.ContainsKey('ProjectNames')) {
+    Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/BuildProjectSelection.psm1') -ErrorAction Stop
+    $selectedBuild = Get-RSBuildProjectUnion -SolutionPath (Join-Path $repoRoot 'RedSalamander.sln') -ProjectNames $buildArgs.ProjectNames
+    $requiredBuildSelection = @($selectedBuild.ProjectSelection)
+}
+$artifactOperationLock = Enter-RSArtifactOperationLock `
+    -RepoRoot $repoRoot `
+    -Operation "Run-AllTests $Suite ($operationMode) $Configuration|$Platform" `
+    -Scope $artifactOperationScope
+if ($artifactOperationLock.WasAbandoned) {
+    [void](Set-RSArtifactOperationContaminated `
+        -RepoRoot $repoRoot `
+        -Reason "The previous build/test owner exited without clearing the exclusive artifact-operation lock." `
+        -AbandonedOwner $artifactOperationLock.AbandonedOwner `
+        -Scope $artifactOperationScope)
+}
+if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $artifactOperationScope) {
+    $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $repoRoot -Scope $artifactOperationScope
+    Write-Host "BLOCKED ATTESTATION: shared build artifacts may be mixed after an interrupted operation. Run build.ps1 -Rebuild before starting tests. Marker: $markerPath" -ForegroundColor Red
+    exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+}
+Assert-RSNoResidualArtifactToolProcesses -RepoRoot $repoRoot -Scope $artifactOperationScope
+Save-RSRunnerStaleRunEvidence
 if (-not $SkipBuild) {
     Write-Header "Building $Configuration|$Platform"
     $buildScript = Join-Path $repoRoot 'build.ps1'
@@ -1468,7 +1563,6 @@ if (-not $SkipBuild) {
         exit 1
     }
 
-    $buildArgs = Get-RSBuildScriptArguments -Suite $Suite -Configuration $Configuration -Platform $Platform
     if ($BuildNumber -gt 0) { $buildArgs.BuildNumber = $BuildNumber }
     $buildEnvironmentOverrides = Get-RSBuildEnvironmentOverrides -Suite $Suite
     $previousBuildEnvironment = @{}
@@ -1497,11 +1591,15 @@ if (-not $SkipBuild) {
     $receiptSchema = Join-Path $repoRoot 'Specs\Build\BuildReceipt.schema.json'
     $receipt = Read-RSBuildReceipt -BuildOutputDir $buildOutputDir -SchemaPath $receiptSchema
     $sourceSnapshot = Get-RSBuildSourceSnapshot -RepoRoot $repoRoot
-    $requiredExecutable = [IO.Path]::GetRelativePath($repoRoot, $exeFullPath).Replace('\', '/')
+    $requiredExecutable = if ($useAffectedSelectedBuild) {
+        @($prebuildAffectedEntries | Where-Object Kind -in @('SelfTest', 'Executable', 'CppUnitTest') | ForEach-Object {
+            [IO.Path]::GetRelativePath($repoRoot, $_.Path).Replace('\', '/')
+        } | Sort-Object -Unique)
+    } else { @([IO.Path]::GetRelativePath($repoRoot, $exeFullPath).Replace('\', '/')) }
     if (-not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot $sourceSnapshot `
             -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `
-            -RequiredRelativePath @($requiredExecutable))) {
-        Write-Host ("BLOCKED ATTESTATION: -SkipBuild requires a compatible full-solution build receipt and byte-identical artifacts. " +
+            -RequiredRelativePath @($requiredExecutable) -RequiredProjectSelection $requiredBuildSelection)) {
+        Write-Host ("BLOCKED ATTESTATION: -SkipBuild requires a compatible full-solution receipt or the exact selected project union, with byte-identical artifacts. " +
                 "Run build.ps1 for $Configuration|$Platform, or import a verified same-workflow portable attestation.") -ForegroundColor Red
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }
@@ -1520,7 +1618,8 @@ if ($null -eq $receipt) {
 
 Import-RSRunnerValidationModules
 
-if (-not (Test-Path $exeFullPath)) {
+if ((-not $useAffectedSelectedBuild -or @($prebuildAffectedEntries | Where-Object Kind -eq 'SelfTest').Count) -and
+    -not (Test-Path $exeFullPath)) {
     Write-Host "ERROR: Executable not found: $exeFullPath" -ForegroundColor Red
     Write-Host "  Build a Debug configuration first, or use -ExePath to specify the path." -ForegroundColor Yellow
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
@@ -1528,22 +1627,15 @@ if (-not (Test-Path $exeFullPath)) {
 
 # --- Determine test plan ---
 
-$testPlan = @(Get-RSTestRunPlan `
-        -Suite $Suite `
-        -RepoRoot $repoRoot `
-        -Platform $Platform `
-        -Configuration $Configuration `
-        -RedSalamanderExePath $exeFullPath `
-        -TimeoutMultiplier $TimeoutMultiplier `
-        -FailFast:$FailFast `
-        -CaseFilter $CaseFilter `
-        -CommandsFamily $CommandsFamily `
-        -RepeatCount $SelfTestRepeat `
-        -ShuffleSeed $SelfTestShuffleSeed `
-        -PerfBudgetPath $PerfBudgetPath `
-        -RequirePerfBudgets:$RequirePerfBudgets `
-        -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
-        -SelfTestOrderProofCase $SelfTestOrderProofCase)
+$testPlan = @(Get-RSRunnerRequestedTestPlan)
+if ($useAffectedSelectedBuild) {
+    $afterBuildWorkspace = Get-RSWorkspaceSnapshot -RepoRoot $repoRoot -ImpactBase $ImpactBase
+    if ($afterBuildWorkspace.snapshot_id -cne $prebuildWorkspaceSnapshot.snapshot_id) {
+        Write-Host 'BLOCKED ATTESTATION: inputs changed after affected build selection. Recompute the plan and build on current inputs.' -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
+    $testPlan = @($testPlan | Where-Object { $_.Id -in $affectedBuild.EntryIds })
+}
 if ($DeferPrGate) {
     $prPlan = @(Get-RSTestRunPlan -Suite PR -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
         -RedSalamanderExePath $exeFullPath -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast)
@@ -1563,19 +1655,25 @@ if ($NonInteractive) {
 $requiredPlanArtifactPaths = @($testPlan | ForEach-Object {
         $candidate = [IO.Path]::GetFullPath([string]$_.Path)
         $outputRoot = [IO.Path]::GetFullPath($buildOutputDir).TrimEnd('\')
-        if ($candidate.StartsWith($outputRoot + '\', [StringComparison]::OrdinalIgnoreCase) -and
-            (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        if ($candidate.StartsWith($outputRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
             [IO.Path]::GetRelativePath($repoRoot, $candidate).Replace('\', '/')
         }
     } | Sort-Object -Unique)
+if (@($testPlan | Where-Object Kind -eq 'SelfTest').Count) {
+    try { Assert-RSSelfTestBuildSurface -Receipt $receipt -ExecutablePath $exeFullPath }
+    catch {
+        Write-Host ('BLOCKED ATTESTATION: ' + $_.Exception.Message) -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
+}
 if ($Suite -in @('PR', 'CI', 'Full') -and
     -not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot (Get-RSBuildSourceSnapshot -RepoRoot $repoRoot) `
         -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `
-        -RequiredRelativePath $requiredPlanArtifactPaths)) {
-    Write-Host 'BLOCKED ATTESTATION: the verified solution receipt does not contain the complete selected executable/plugin test plan closure.' -ForegroundColor Red
+        -RequiredRelativePath $requiredPlanArtifactPaths -RequiredProjectSelection $requiredBuildSelection)) {
+    Write-Host 'BLOCKED ATTESTATION: the verified receipt does not contain the complete selected executable/plugin test plan closure.' -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
-$validationCoverageScope = if ($DeferPrGate -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+$validationCoverageScope = if ($useAffectedSelectedBuild -or $DeferPrGate -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
     'filtered'
 } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
     'family'
@@ -1853,14 +1951,24 @@ function Publish-RSRunnerEntryEvidence {
         -ResultParsed $resultParsed -CoverageValid $coverageValid `
         -RequiredArtifactsPresent $requiredArtifactsPresent
     if ($terminalResult.status -ne 'PASSED') {
+        $reason = "Validation acceptance rejected '$($Entry.Id)': $($terminalResult.reason_codes -join ', ')."
+        $skipped = @((Get-RSObjectValue -Object $Result -Names @('Cases','cases') -DefaultValue @()) | Where-Object status -eq 'skipped')
+        if('UNALLOWED_SKIP' -in $terminalResult.reason_codes -and $skipped.Count){
+            $reason += ' Skipped cases: ' + (($skipped | ForEach-Object name) -join '; ') + '.'
+        }
+        $failures = @(Get-RSObjectValue -Object $Result -Names @('Failures','failures') -DefaultValue @()) + @(
+            [pscustomobject]@{name='validation_acceptance';status='failed';reason=$reason;durationMs=0})
         if ($Result -is [Collections.IDictionary]) {
             $Result['ExitCode'] = 1
             $Result['Failed'] = [Math]::Max(1, [int](Get-RSObjectValue -Object $Result -Names @('Failed', 'failed') -DefaultValue 0))
+            $Result['Failures'] = $failures
         } else {
             $Result | Add-Member -NotePropertyName ExitCode -NotePropertyValue 1 -Force
             $Result | Add-Member -NotePropertyName Failed `
                 -NotePropertyValue ([Math]::Max(1, [int](Get-RSObjectValue -Object $Result -Names @('Failed', 'failed') -DefaultValue 0))) -Force
+            $Result | Add-Member -NotePropertyName Failures -NotePropertyValue $failures -Force
         }
+        Write-Warning $reason
     }
     if ($null -eq $validationEvidenceRun) {
         return [pscustomobject]@{ TerminalResult = $terminalResult; PublishedEvidence = $null }
@@ -2023,6 +2131,8 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
     }
     # Fail closed before the writer can delete or replace any selected-profile byte.
     # A crash after this point leaves no usable receipt and a durable mutating epoch.
+    $reattestDependencyBuildArguments = Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt $preMutationReceipt
+    $preMutationDependencyIdentity = @($preMutationReceipt.build_arguments | Where-Object {$_ -clike 'dxui-recipe=*' -or $_ -clike 'dxui-sdk-*'} | Sort-Object)
     Suspend-RSBuildReceipt -BuildOutputDir $buildOutputDir
     $receipt = $null
     $artifactEpoch = Start-RSValidationArtifactMutation -Run $validationEvidenceRun `
@@ -2041,7 +2151,7 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
     $reattestExitCode = 1
     try {
         & (Join-Path $repoRoot 'build.ps1') -Configuration $Configuration -Platform $Platform `
-            -BuildNumber $reattestBuildNumber -MaxCpuCount 4
+            -BuildNumber $reattestBuildNumber -MaxCpuCount 4 @reattestDependencyBuildArguments
         $reattestExitCode = $LASTEXITCODE
     } finally {
         foreach ($key in @($reattestEnvironmentOverrides.Keys)) {
@@ -2060,6 +2170,11 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
             -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `
             -RequiredRelativePath $requiredPlanArtifactPaths)) {
         Write-Host "BLOCKED ATTESTATION: the re-attested profile failed byte-for-byte receipt verification after '$($artifactMutator.Id)'." -ForegroundColor Red
+        exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
+    }
+    $restoredDependencyIdentity = @($restoredReceipt.build_arguments | Where-Object {$_ -clike 'dxui-recipe=*' -or $_ -clike 'dxui-sdk-*'} | Sort-Object)
+    if (($restoredDependencyIdentity -join "`n") -cne ($preMutationDependencyIdentity -join "`n")) {
+        Write-Host 'BLOCKED ATTESTATION: profile re-attestation changed the selected dependency recipe or original SDK binding.' -ForegroundColor Red
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }
     $receipt = $restoredReceipt

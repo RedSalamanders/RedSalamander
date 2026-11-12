@@ -1,0 +1,14 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object","additionalProperties":false,
+  "required":["schemaVersion","role","platform","configuration","sourceCommit","apiRevision","inputKey","manifestSha256","descriptorPath","descriptorSha256","sdkRoot","msbuildPath","msbuildSha256","archiveSha256","librarySha256","toolchainReference"],
+  "properties":{
+    "schemaVersion":{"const":1},"role":{"const":"PinnedQualifiedSdkBuildInput"},
+    "platform":{"enum":["x64","ARM64"]},"configuration":{"const":"Release"},
+    "sourceCommit":{"type":"string","pattern":"^[a-f0-9]{40}$"},"apiRevision":{"type":"integer","minimum":1},
+    "inputKey":{"$ref":"#/$defs/hash"},"manifestSha256":{"$ref":"#/$defs/hash"},
+    "descriptorPath":{"type":"string","minLength":1},"descriptorSha256":{"$ref":"#/$defs/hash"},
+    "sdkRoot":{"type":"string","minLength":1},"msbuildPath":{"type":"string","minLength":1},"msbuildSha256":{"$ref":"#/$defs/hash"},
+    "archiveSha256":{"$ref":"#/$defs/hash"},"librarySha256":{"$ref":"#/$defs/hash"},"toolchainReference":{"$ref":"#/$defs/hash"}
+  },"$defs":{"hash":{"type":"string","pattern":"^[a-f0-9]{64}$"}}
+}

@@ -54,6 +54,20 @@ Describe 'SanitizedEnvironment helper' {
         Import-Module $helperModule -Force -ErrorAction Stop
     }
 
+    It 'gives each child its own compiler metadata namespace without changing its caller' {
+        $original=[Environment]::GetEnvironmentVariable('_MSPDBSRV_ENDPOINT_','Process')
+        try {
+            $env:_MSPDBSRV_ENDPOINT_='inherited-foreign-service'
+            $first=New-RSProcessStartInfo -FilePath 'cmd.exe' -Arguments @('/d','/c','exit','0') -AdditionalEnvironment @{'_MSPDBSRV_ENDPOINT_'='requested-shared-service';'RS_TEST_FLAG'='preserved'}
+            $second=New-RSProcessStartInfo -FilePath 'cmd.exe'
+            $first.Environment['_MSPDBSRV_ENDPOINT_'] | Should Match '^red-ci-[a-f0-9]{32}$'
+            $second.Environment['_MSPDBSRV_ENDPOINT_'] | Should Match '^red-ci-[a-f0-9]{32}$'
+            $first.Environment['_MSPDBSRV_ENDPOINT_'] | Should Not Be $second.Environment['_MSPDBSRV_ENDPOINT_']
+            $first.Environment['RS_TEST_FLAG'] | Should Be 'preserved'
+            $env:_MSPDBSRV_ENDPOINT_ | Should Be 'inherited-foreign-service'
+        } finally {[Environment]::SetEnvironmentVariable('_MSPDBSRV_ENDPOINT_',$original,'Process')}
+    }
+
     It 'creates a child ProcessStartInfo without mutating the caller Path' {
         $originalPath = [System.Environment]::GetEnvironmentVariable('Path', 'Process')
         try {

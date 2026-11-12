@@ -1,5 +1,34 @@
 # SelfTest Specification
 
+ViewerPETests reserves fatal evidence in its acquired marked run's artifacts/ViewerPETests/crashes
+directory before COM initialization. The owned exception filter remains live through apartment teardown.
+An unhandled fault keeps its original failing status and retains a minimal minidump with thread and
+unloaded-module metadata plus a fixed 64-byte little-endian record: magic0x5253564352415348, version1,
+process ID, thread ID, exception code, address, dump-written flag and Win32 error (eight uint64 values).
+Normal completion removes only that process's unused reserved files. No product crash marker, AppData
+write, dialog, debugger attachment or foreground acquisition is part of this test policy.
+
+The registered TestViewerHarnessCrashPreservesOwnedEvidence case launches only its exact private
+noninteractive crash control inside the existing contained child runner. Only that typed control may expect
+an AV exit. Its new owned record, actual minidump exception stream, thread and address must agree; expected
+crash status never authorizes another failed child or substitutes for ordinary viewer qualification.
+Original crashes without dumps remain failed and unexplained until causal evidence is obtained.
+
+Selected native builds retain runtime fixtures through the test projects' actual
+build dependencies. Viewer PE tests inspect the application/Common PE files as
+well as loading viewer plugins; plugin contract tests load their complete plugin
+roster and the Terminal satellite. These inputs must be built and attested before
+execution, including on a clean profile. Missing fixtures fail the existing test
+assertions; they never become skips or narrower coverage claims.
+
+Canonical native plan entries declare their reviewed build producers. Affected
+selection uses those bindings before compilation and verifies the complete selected
+runtime receipt afterward; Fresh Full and exact Resume retain their full profile.
+No-build/zero-entry decisions perform only applicable compiler-free ownership checks
+and return NOT_EVALUATED without a native artifact lease or a reusable test seal.
+The owning acceptance rules are in [Testing_ValidationEvidence.md](Testing_ValidationEvidence.md)
+and [Build_Toolchain.md](../Build/Build_Toolchain.md).
+
 The File Operations apply-to-all convergence fixture holds one named per-item worker before its
 checkpoint until another worker publishes the conflict prompt, then witnesses the real non-owner
 wait before holding the prompt for 250 ms. It retains four conflicting files, one cached prompt,
@@ -242,6 +271,30 @@ stable until the contained child exits, because a provider worker may outlive an
 individual case. The runner never changes the parent's environment. A direct native
 diagnostic must supply the same isolated local-data setup; it is not Full evidence.
 
+Every runner build mode enables `RSBuildEnableTests=true`, including focused
+Release All/Compare/Commands/FileOps; Full also retains its embedded compiler
+debug-information override. Any planned in-product selftest requires both the
+test-enabled build receipt and the actual executable's ENABLE_TESTS resource
+marker before desktop admission or launch. A test-disabled or malformed image
+fails with blocked attestation, also with SkipBuild. Production packaging still
+requires test-disabled artifacts under its separate contract.
+
+Identity-less Delete fixtures that inspect technical Information diagnostics own a
+bounded in-memory diagnostic budget of at least 65,536 entries for their case scope.
+They preserve a larger configured budget, remove only their owned task diagnostics
+at the worker quiet point, and restore the original optional setting on every exit.
+The ordinary 256-entry UI reservoir may correctly evict technical notes before
+actionable rows; absence from that cache alone cannot prove missing audit logging.
+Retention-pressure fixtures continue to exercise the production limit explicitly.
+
+Popup idle-cadence traces attribute each real-popup task-snapshot call to its
+source line at the exact tested revision. Test-enabled builds maintain a bounded
+16-site UI-thread counter table with an explicit unattributed overflow counter;
+observing it never builds a snapshot, paints or calls taskbar COM. Production
+builds retain their original state and call signature. The cadence fixture logs
+per-interval deltas so excess snapshots can be traced to the actual caller while
+all existing timer, snapshot, heartbeat and copy/scan budgets remain unchanged.
+
 Native environment helpers distinguish a missing variable from a present empty value,
 including Windows' one-character required buffer followed by a zero-character successful
 read. Scope restoration preserves both states exactly. Actual read errors and buffer-size
@@ -439,7 +492,12 @@ or receipt-mismatched state. After the writer completes, the runner MUST rebuild
 the same full-solution profile, byte-verify that receipt, publish a create-only
 content-addressed epoch decision, atomically switch run state back to `stable`, and
 recompute the impact decision and every downstream entry fingerprint before any artifact
-reader starts. A crash after suspension remains receipt-less and repairs to interrupted;
+reader starts. Re-attestation MUST preserve the originally verified dependency recipe.
+Before suspension, reopen any original SDK descriptor and close its reader; pass that
+descriptor to the rebuild and require unchanged recipe/key/manifest/descriptor hash
+before downstream native execution. Refuse lost or changed SDK input rather than
+silently switching an SDK runtime qualification to Source.
+A crash after suspension remains receipt-less and repairs to interrupted;
 it cannot expose earlier evidence as current. Rebuilt MSVC binaries and PDBs are not
 required to reproduce the pre-entry byte
 identity. Re-attestation MUST apply the same suite-owned build environment as the initial
@@ -586,9 +644,12 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Runner preflight recognizes canonical IDs (`<UTC>-<pid>-<guid>`), standalone IDs (`<harness>-<pid>-<tick>`) and native `adhoc-<pid>` IDs. It archives abandoned parseable runs instead of deleting them, rechecking real owner liveness and process-start/PID-reuse metadata before mutation. Current/allowed/live-owner and unparseable manual directories remain protected. The disk audit retains that classification and reports blocked stale or unexpected directories without exemptions. Process-start lookup retains the Windows metadata fallback for protected processes. Explicit `Clean-TestSandbox.ps1` deletion remains a separate operator action with its original no-follow and VHDX checks.
 - After contained children exit and the existing owned-VHDX teardown finishes, the runner renames its complete run to `evidence\completed-runs\<runId>` on the same marked volume. Passed, failed, skipped and early-exit output is retained, including scratch witnesses and hidden/read-only files. There is no payload copy, automatic deletion, overwrite, hard-link rewrite, or read-only clearing. An explicitly enabled alternate-volume run archives only its same-id participating marked roots as well; ordinary runs never inspect other drives. Existing run IDs are not reused.
 - Archive transactions serialize per root/run through an exclusive file lease in `evidence\run-archive-records\<runId>`. Create-only flushed intent/completion records bind source and destination, disposition, relative membership, ordinary file/stream SHA-256, security, attributes, creation/write times and link targets. No-follow pre/post inventory verification is required. Only self-contained relative links may move unchanged; absolute/escaping links, mounts and unknown reparse points retain the tree for review. Disk preflight is read-only: only schema/path-validated detached receipts with an independently unattached image may archive; it never invokes cleanup to make a run eligible. A crash before or after rename is recoverable from the unchanged intent; changed bytes or destination collisions fail closed. No archive failure may produce a successful runner exit.
+- Automatic stale-sibling maintenance records an `UnsafeReparsePoint` refusal as create-only `retained.json` beside the archive records, binding schema/run/source/creation identity and the original reason. After fresh marked-root, ordinary-path, real stale-owner and exclusive per-run lease checks, a matching bounded record leaves that tree untouched without reacquiring payload inventory. Repeated refusals are reported as a count; first/new/transient failures retain their diagnostics. This is a preservation decision, never a test pass, cleanup permission, intent or completion receipt. Malformed/mismatched/reparse records retain the tree for review. Explicit `Save-RSTestSandboxRunEvidence` does not honor that shortcut: after repair, it always verifies the complete current tree and preserves the old refusal record. Current-run closeout also always verifies normally. Other transient failures are not memoized. `Save-RSTestSandboxStaleRunEvidence -CandidateRunIds` may narrow maintenance to exact IDs but never widens stale-owner eligibility; an explicitly empty list selects nothing.
+- The runner reports elapsed milliseconds for stale-sibling archive preflight separately from build/test execution. Controlled archival comparisons retain the exact synthetic tree, first-refusal setup, alternating repeated-scan/recorded-refusal timings and untouched payload/record checks; this scenario does not establish an organization-wide speed target.
 - Runner-owned summary, retry-log and dashboard navigation uses the final evidence location. Native JSON, trace bytes and detached-disk receipts preserve the original execution paths as provenance; the create-only intent records their source-to-destination mapping. Startrail records, independent copied result artifacts, promotions, exact Resume checks and original verdicts are unchanged. This same-volume local retention is distinct from the separately governed external whole-run transport format and checked-in compact evidence. A standalone direct launch is retained on the next runner preflight after its owner exits.
 - Tooling Pester tests that create scratch files, fake toolchains, or synthetic perf-run trees must use `New-RSTestSandboxScratchDirectory(...)` beneath the selected run. Pester uses the same `X:\RedSalamander.Perf` root as native suites; no auxiliary repository sandbox is permitted. The standalone vcpkg merge synthetic check creates a unique run beneath this root and removes only that exact run through the canonical no-follow cleaner; it never stages fixtures in or cleans repository `.build`. The runner's `TEMP`/`TMP` projection keeps Pester `TestDrive` state inside the current run.
 - PowerShell sandbox containment must read current file attributes for every existing path component on every call, reject ordinary or dangling reparse components, and continue checking ancestors of missing descendants. Only file-not-found and directory-not-found permit a missing component; other I/O or access failures propagate. Fresh checks preserve exact marked fixed-local-drive root authorization, lexical containment, and alternate-data-stream rejection; they do not cache ancestor authority or establish an atomic concurrent-mutation guarantee. Governed Pester coverage retains unique owned fixtures, exercises Unicode/deep paths and replacement between calls, and restores any explicitly labeled in-process fault injection without modifying shared ownership markers or canonical source. After assertions, containment and source-scanner tests unlink only the exact synthetic links they created in finally blocks, preserving target data and witness files so completed tooling runs can archive safely. Absolute fixture junctions must not remain for the archive transaction; its refusal remains a failure.
+- Run-archive security descriptors are acquired directly from the no-follow traversal's current FileSystemInfo objects using the Windows owner/group/DACL API and complete SDDL serialization. This avoids repeated provider setup; it does not cache security or byte identities. Provider-equivalent protected file/directory descriptors, every stream/content hash, metadata, stable pre-move acquisitions and independent post-move verification remain required.
 - Native Full CI imports Pester 3.4.0 explicitly, matching the current suites' assertion and setup semantics. The artifact-writing lane and subsequent re-attestation inherit the initial build's vcpkg imports, configuration, include/link paths and runtime path. Governed test evidence outside the checkout and repository build diagnostics use separate upload artifacts so neither root is silently omitted.
 - FileOperations real cross-volume and filesystem-capability coverage (including NTFS WOF placeholders) use the only sanctioned second-local-drive root. It is disabled by default and may enumerate or mutate another fixed local volume only with `-AllowAlternateVolumeTestRoot`. An enabled `path.local.alternate` entry in the primary root's `config\machine-resources.json` restricts selection to that exact `<AltDrive>:\RedSalamander.Perf`; without the entry, the explicitly authorized run retains fixed-volume capability discovery. It allocates through `SelfTest::AcquireTestSandboxOnVolume(...)` under exact `<AltDrive>:\RedSalamander.Perf\runs\<runId>\scratch\<suite>\<case>`, validates the same marker, and rejects non-empty unmarked roots. No other direct child may be created on the alternate drive.
 - Nothing a test creates may expose a path outside a marked sandbox. A test never mounts, links (junction, symbolic link, hard link), shares, `subst`s or otherwise exposes a directory or volume that is not itself inside a marked `X:\RedSalamander.Perf`; the only mounted volume a test may own is a test-owned virtual disk file inside a marked sandbox, and no test passes a volume GUID it did not create to `SetVolumeMountPointW`. Every link a test creates lives in, and targets a path inside, the same marked sandbox, and each test-created SUBST drive or loopback administrative-share alias (`\\localhost\<drive>$\...`) names only a path inside one. Native fixtures call `Common::Testing::RequireSandboxedLinkTarget` (or `RequireSandboxedExposureTarget` for an alias) before the creating API, or use the guarded `CreateSandboxedSymbolicLink` / `CreateSandboxedHardLink` in `Common/Common.Tests.SandboxPath.h`; both link and target must be strict descendants of one marked base with reparse-free parents (the target leaf may itself be a guarded link, so cycles stay possible), a relative target resolves against the link's parent, and a drive-relative, rooted-without-drive, UNC, device or stream target is refused. PowerShell tests create links only through `New-RSTestSandboxLink` (validated by `Assert-RSTestSandboxLinkTarget`) in `Tools\Modules\Testing\TestSandbox.psm1`. A guard refusal fails the case; it is never a skip (an unreachable loopback administrative share stays an environment skip, but `ProbeLoopbackShare` reports a refused alias separately and the case fails). `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` scans test sources (`RedSalamander/SelfTest`, `Tests`, plugin `*.Tests.*`, `Common/Common.Tests.*` and test tooling) for `SetVolumeMountPoint`, `DefineDosDevice`, `CreateSymbolicLink`, `CreateHardLink`, `FSCTL_SET_REPARSE_POINT`, `NetShareAdd`, `std::filesystem` link creation, `subst`, `mklink`, share and mount cmdlets and `New-Item -ItemType Junction|SymbolicLink|HardLink`, and fails unless each call site is inside an allowlisted helper whose guard precedes it; each allowlist entry records why. Sandbox cleanup never follows links or mount points (below).
@@ -706,6 +767,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   completes. Desktop handles and synchronization objects retire only after the join.
   Retirement preserves simultaneous action, restoration, join and
   handle-release errors; a timeout is never reported as successful restoration.
+  The entry wrapper logs the complete retirement exception chain before propagating failure,
+  so hosted logs preserve the boundary cause hidden by PowerShell's outer invocation message.
   The child uses the existing native warning and original focus/input assertions. Its containment job
   must drain before the process-desktop scope retires, the original foreground and native focus
   are restored, the desktop handle closes and the interactive mutex releases. A foreign desktop or
@@ -737,7 +800,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   DWM successfully reports exactly shell-cloaked mask 2; all other states fail within five seconds.
   The account-to-Search transition is observed for five seconds after account retirement. A
   verified same-session Progman shell is recognized only by `GetShellWindow`, exact Explorer
-  image and revalidated HWND/process; unknown foreground surfaces fail closed. Start/completion
+  image and revalidated HWND/process. The same-session GitHub compute-agent console is recognized
+  only by the exact `%ProgramData%\GitHub\HostedComputeAgent\hosted-compute-agent` image and title,
+  `ConsoleWindowClass`, and a successful no-AUMID result. It is observed without any close request;
+  the subsequent owned boundary still proves foreground, focus and restoration. Unknown foreground
+  surfaces fail closed. Start/completion
   and each close intent/result are retained create-only under the marked test root. There is no
   kill, input injection, foreground-policy change or permission to dismiss any other window.
   The adapter clears and restores its opt-in; local, x64, self-hosted, other-repository and
@@ -885,6 +952,12 @@ Environment variables may select alternate test inputs such as profile names, bu
   self-test options to `writeJsonSummary=false` before building inventory JSON.
 - Fatal-error UI must never block a self-test lane. When `IsRunningAnySelfTest()` is true, `ShowFatalErrorDialog(...)` must append a self-test trace row, write diagnostic output, and return before entering any modal loop; the fatal caller remains responsible for returning a non-zero process exit code. The Monitor's fatal-exception handler follows the same rule on its `--chrome-selftest` and `--monitor-scrollback-selftest` paths: it appends the self-test trace row and returns -1 instead of showing its modal.
 - A test process never waits on a dialog. In a Debug build a failed runtime check (an STL range check, a CRT or `_ASSERTE` assertion) otherwise opens the CRT's modal Abort/Retry/Ignore box on the desktop, which holds an unattended run until its watchdog ends it and interrupts whoever is at the desktop. `Tests/TestSupport/TestSupport.Tests.FailureReports.h` (`RouteFailureReportsAwayFromDialogs`, modeled on DxUi's `Tests/Support/FailureReports.h`) clears the CRT's abort message and fault report (`_set_abort_behavior`), adds `SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX` to the process error mode and, in a `_DEBUG` build, installs a `_CrtSetReportHookW2` hook that leaves `_CRT_WARN` to the CRT and writes every other report to stderr before `abort()`. The run ends with exit code 3, the code of the dialog's Abort, and with no Windows Error Reporting dialog. Every native test entry point calls it as its first statement: the `wmain`/`main` of CrashHandlingTests, FileSystemCurlTests, LocalizationTests, PluginContractTests, ProductUiTests, RedConfigureTests, SettingsSchemaTests, ViewerPETests and ViewerSqliteTests, and a `TEST_MODULE_INITIALIZE` in PerformanceTests2, whose test host has no entry point of ours. `RedSalamander.exe` (`--selftest`, `--compare-selftest`, `--commands-selftest`, `--fileops-selftest`) call it only in `ENABLE_TESTS` builds and only on those paths, so an interactive Debug run keeps the dialogs a developer can attach a debugger to. The hidden `ProductUiTests.exe --failure-report-self-test` fails a Debug-CRT assertion on purpose (exit code 0 in a Release build, which has no such checks). `Tools/Tests/FailureReportRouting.Tests.ps1` runs it from every built x64 profile (and every ARM64 profile on a native ARM64 host) with a 30-second bound that ends only the exact process it started, and requires exit code 3 with the report in Debug and ASan Debug and exit code 0 in Release; its source contract also requires every test project's entry to route first, so a new test project that omits the call fails the tooling profile. A Debug or ASan Debug test executable runs unattended only with this routing in place.
+
+Plugin debug self-test checks, including Terminal input-routing and lifecycle
+contracts, use `Common::DebugSelfTest::Check` so failures reach the inherited stderr
+as well as the debugger provider. Its `wstring_view` overload preserves a
+non-terminated slice or formatted label by copying only on failure, then invokes
+the same synchronous reporter and counter path as the pointer overload.
 
 ## Command-Line Safety
 
@@ -1717,6 +1790,12 @@ Environment variables may select alternate test inputs such as profile names, bu
   Directed ViewerPE cases do not move the pointer, so cleanup must not reset an
   untouched cursor. The warning surface and runner lease alone do not implement
   this restoration.
+- FileOps overwrite-preservation coverage uses the shared process-owned desktop
+  observer independently of its exact source/destination bytes, BLAKE3, file IDs
+  and closed inventories. Foreign desktop changes remain diagnostic; every owned
+  foreground transition and any observer/drain failure still fail. Observation
+  covers the negative controls and final settings restoration without restoring
+  another application's desktop state.
 - ViewerSpace's nonactivating analysis UIA case MUST observe ownership rather than
   require desktop-global cursor/foreground equality across the whole scenario.
   The person and independent applications may continue using the desktop. Hold
@@ -2825,3 +2904,11 @@ required to qualify this behavior.
 
 
 Selected-root non-name-surrogate directory-reparse controls may inject the observed reparse attribute of an owned ordinary directory, but must retain its real no-follow bound DIRECTORY authority. Require exactly one injected root observation and one selected-root bound-directory classification, then assert descendant file and directory conflict Skip outcomes, copied sibling bytes, unchanged source/blocker inventories, worker quiet and hook disarming. This seam does not create or validate an operating-system cloud reparse tag.
+
+Physical alternate-volume self-test acquisition requires an already initialized,
+reparse-free exact X:\RedSalamander.Perf with a valid ownership marker. The
+AllowAlternateVolumeTestRoot switch permits its use, never first creation or marker
+initialization. Automatic drive discovery must reject unmarked/missing roots without
+writing to them. First initialization is a separate exact-path-authorized action.
+An explicitly configured unauthorized alternate root fails visibly; it does not
+silently choose another drive. This does not change the separate owned-VHDX contract.

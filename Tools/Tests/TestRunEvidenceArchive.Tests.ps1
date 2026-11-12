@@ -64,6 +64,21 @@ Describe 'Verified same-volume run evidence archival' {
         }
     }
 
+    It 'records the same complete security descriptor as the provider for protected files and directories' {
+        foreach ($path in @($fixture.Source, $fixture.Payload)) {
+            $acl = Get-Acl -LiteralPath $path
+            $acl.SetAccessRuleProtection($true, $true)
+            Set-Acl -LiteralPath $path -AclObject $acl
+        }
+        $inventory = @(& $sandboxModule { param($Path) Get-RSTestRunArchiveInventory -RunRoot $Path } $fixture.Source)
+        foreach ($path in @($fixture.Source, $fixture.Payload)) {
+            $relative = [IO.Path]::GetRelativePath($fixture.Source, $path)
+            $actual = @($inventory | Where-Object { $_.path -ceq $relative })
+            $actual.Count | Should Be 1
+            $actual[0].security | Should Be (Get-Acl -LiteralPath $path).Sddl
+        }
+    }
+
     It 'archives Unicode and long paths with the same bytes and stream metadata' {
         $directory = $fixture.Source
         foreach ($index in 1..7) { $directory = Join-Path $directory ('évidence-' + ('x' * 32) + $index) }
@@ -81,6 +96,7 @@ Describe 'Verified same-volume run evidence archival' {
             { Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id } | Should Throw 'Exception calling'
             (Test-Path -LiteralPath $fixture.Payload) | Should Be $true
             (Test-Path -LiteralPath (Join-Path $fixture.Records 'intent.json')) | Should Be $true
+            (Test-Path -LiteralPath (Join-Path $fixture.Records 'retained.json')) | Should Be $false
         } finally { $lease.Dispose() }
         $result = Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id -Disposition interrupted
         (Test-Path -LiteralPath $result.RecordPath) | Should Be $true
@@ -156,6 +172,81 @@ Describe 'Verified same-volume run evidence archival' {
         finally { [IO.Directory]::Delete($link) }
     }
 
+    It 'retains a recorded unsafe stale tree without rescanning and retries only explicit archival' {
+        $process = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @('-NoProfile', '-Command', 'exit 0') -WindowStyle Hidden -PassThru -Wait
+        try { $abandonedId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + "-$($process.Id)-" + [guid]::NewGuid().ToString('N') }
+        finally { $process.Dispose() }
+        $source = Join-Path $fixture.Root "runs\$abandonedId"
+        [IO.Directory]::Move($fixture.Source, $source)
+        $fixture.Id = $abandonedId; $fixture.Source = $source
+        $fixture.Payload = Join-Path $source 'unique.txt'
+        $records = Join-Path $fixture.Root "evidence\run-archive-records\$abandonedId"
+        $target = Join-Path $fixture.Root "evidence\archive-retention-$abandonedId"
+        [void][IO.Directory]::CreateDirectory($target)
+        $link = Join-Path $source 'outside'
+        New-RSTestSandboxLink -ItemType Junction -Path $link -Target $target | Out-Null
+        try {
+            $first = @(Save-RSTestSandboxStaleRunEvidence -TestRoot $fixture.Root -CandidateRunIds @($abandonedId))
+            $first.Count | Should Be 1
+            $first[0].Status | Should Be 'Retained'
+            $recordPath = Join-Path $records 'retained.json'
+            $recordBytes = [IO.File]::ReadAllText($recordPath)
+            ($recordBytes | ConvertFrom-Json).reason_code | Should Be 'UnsafeReparsePoint'
+            (Test-Path -LiteralPath (Join-Path $records 'intent.json')) | Should Be $false
+            (Test-Path -LiteralPath (Join-Path $records 'complete.json')) | Should Be $false
+
+            # A read of ordinary payload bytes would fail. Automatic maintenance must only read the refusal record.
+            $locked = [IO.FileStream]::new($fixture.Payload, 'Open', 'Read', 'None')
+            try {
+                $again = @(Save-RSTestSandboxStaleRunEvidence -TestRoot $fixture.Root -CandidateRunIds @($abandonedId))
+                $again.Count | Should Be 1
+                $again[0].Status | Should Be 'Retained'
+                $again[0].RepeatedSafetyRefusal | Should Be $true
+            } finally { $locked.Dispose() }
+            [IO.File]::ReadAllText($recordPath) | Should Be $recordBytes
+            (Test-Path -LiteralPath $target) | Should Be $true
+        } finally { [IO.Directory]::Delete($link) }
+
+        # Repair alone does not silently requeue maintenance; an explicit request rechecks the complete current tree.
+        $again = @(Save-RSTestSandboxStaleRunEvidence -TestRoot $fixture.Root -CandidateRunIds @($abandonedId))
+        $again[0].Status | Should Be 'Retained'
+        $archived = Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $abandonedId -Abandoned -Disposition interrupted
+        $archived.Status | Should Be 'Archived'
+        (Get-Content -LiteralPath (Join-Path $archived.RunRoot 'unique.txt') -Raw) | Should Be 'synthetic archive regression evidence'
+        [IO.File]::ReadAllText($recordPath) | Should Be $recordBytes
+    }
+
+    It 'never treats a mismatched or malformed refusal record as archive or cleanup authority' {
+        [void][IO.Directory]::CreateDirectory($fixture.Records)
+        $recordPath = Join-Path $fixture.Records 'retained.json'
+        [IO.File]::WriteAllText($recordPath, '{malformed')
+        $rejection = ''
+        try { $null = Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id -RespectRetainedRefusal }
+        catch { $rejection = $_.Exception.Message }
+        $rejection | Should Match 'Conversion from JSON failed'
+        [IO.File]::WriteAllText($recordPath, '{"schema":"foreign"}')
+        $rejection = ''
+        try { $null = Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id -RespectRetainedRefusal }
+        catch { $rejection = $_.Exception.Message }
+        $rejection | Should Match 'retention record does not match'
+        (Test-Path -LiteralPath $fixture.Payload) | Should Be $true
+        (Test-Path -LiteralPath (Join-Path $fixture.Records 'complete.json')) | Should Be $false
+        # A diagnostic refusal is not a success receipt and cannot bypass real owner liveness.
+        { Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id -RespectRetainedRefusal -Abandoned } | Should Throw 'live, allowed, or unparseable'
+        { Save-RSTestSandboxStaleRunEvidence -TestRoot $fixture.Root -CandidateRunIds @('..') } | Should Throw 'single filesystem path segment'
+    }
+
+    It 'refuses a reparse refusal record before reading its target' {
+        [void][IO.Directory]::CreateDirectory($fixture.Records)
+        $recordPath = Join-Path $fixture.Records 'retained.json'
+        $before = (Get-FileHash -LiteralPath $fixture.Payload).Hash
+        New-RSTestSandboxLink -ItemType SymbolicLink -Path $recordPath -Target $fixture.Payload | Out-Null
+        try {
+            { Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id -RespectRetainedRefusal } | Should Throw 'reparse-point component'
+            (Get-FileHash -LiteralPath $fixture.Payload).Hash | Should Be $before
+        } finally { [IO.File]::Delete($recordPath) }
+    }
+
     It 'retains malformed disk receipts without invoking destructive disk cleanup' {
         $receiptDirectory = Join-Path $fixture.Source 'artifacts\test-owned-vhdx'
         [void][IO.Directory]::CreateDirectory($receiptDirectory)
@@ -163,6 +254,7 @@ Describe 'Verified same-volume run evidence archival' {
         try {
             { Save-RSTestSandboxRunEvidence -TestRoot $fixture.Root -RunId $fixture.Id } | Should Throw 'Malformed test-owned'
             (Test-Path -LiteralPath $fixture.Payload) | Should Be $true
+            (Test-Path -LiteralPath (Join-Path $fixture.Records 'retained.json')) | Should Be $false
         } finally { [IO.File]::Delete((Join-Path $receiptDirectory 'test.receipt.json')) }
     }
 

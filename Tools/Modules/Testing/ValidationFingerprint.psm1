@@ -723,6 +723,13 @@ function Get-RSWorkspaceSnapshotOnce {
     # The tracked exact lock binds source identity. A dirty managed checkout must
     # never reuse that identity; a fresh workspace may restore it during the build.
     $null = Get-RSDxUiSourceIdentity -RepoRoot $root -AllowMissing
+    # Generated engine implementation is a separate input, not a fictional product file.
+    # The shared reader verifies the actual ordinary clean checkout and fresh source bytes.
+    $engineInputs = $null
+    if (Test-Path -LiteralPath (Join-Path $root '.ci/project.json') -PathType Leaf) {
+        Import-Module (Join-Path $root '.ci-engine/Tools/Modules/Ci.SourceInputs.psm1') -ErrorAction Stop
+        $engineInputs = Get-CiPinnedEngineInputsIdentity -Root $root
+    }
     $gitDiscoveryTimer = [Diagnostics.Stopwatch]::StartNew()
     $commits = Resolve-RSValidationImpactBase -RepoRoot $root -ImpactBase $ImpactBase
     $baseMap = Get-RSValidationGitObjectMap -RepoRoot $root -Tree $commits.Base
@@ -812,6 +819,7 @@ function Get-RSWorkspaceSnapshotOnce {
         schema = 'red-salamander.workspace-snapshot.v1'
         canonicalization = 'rs-canonical-json-v1'
         repo_identity = Get-RSCanonicalJsonDigest -InputObject ([ordered]@{ physical_root = $root.ToLowerInvariant() })
+        engine_inputs_identity = $engineInputs
         git_head = $commits.Head
         base = $commits.Base
         files = @($files)
@@ -821,6 +829,7 @@ function Get-RSWorkspaceSnapshotOnce {
         canonicalization = $projection.canonicalization
         snapshot_id = Get-RSCanonicalJsonDigest -InputObject $projection
         repo_identity = $projection.repo_identity
+        engine_inputs_identity = $projection.engine_inputs_identity
         git_head = $projection.git_head
         base = $projection.base
         files = $projection.files

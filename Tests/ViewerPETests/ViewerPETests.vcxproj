@@ -136,6 +136,41 @@
     <ClInclude Include="..\TestSupport\TestSupport.Tests.DesktopObservation.h" />
     <ClInclude Include="ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.h" />
   </ItemGroup>
+  <!-- Runtime-loaded test inputs must build on a clean selected profile. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
+      <Project>{87FB9A11-83CC-44D8-9FEC-9AA9D72667EF}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\RedSalamander\RedSalamander.vcxproj">
+      <Project>{D2B87EB8-E4D3-43B4-9610-407E297F8916}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerPE\ViewerPE.vcxproj">
+      <Project>{0DE8F6B5-FCD1-4BBF-AB29-B987731B9FAA}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerWeb\ViewerWeb.vcxproj">
+      <Project>{BEC3E5BC-7169-4D18-BCE4-BB8457D6FF22}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerImgRaw\ViewerImgRaw.vcxproj">
+      <Project>{A1E63302-8AEF-47F2-8E38-BA12988ED0C9}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerText\ViewerText.vcxproj">
+      <Project>{019B602A-6927-48AC-B2CE-F2630537B1DB}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerSpace\ViewerSpace.vcxproj">
+      <Project>{6B1D68C6-8B63-4D95-94DC-5C686FC9FD67}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Plugins\ViewerVLC\ViewerVLC.vcxproj">
+      <Project>{58A0DE28-F167-48CA-9CC2-CA6D6313A0F1}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

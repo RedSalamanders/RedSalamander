@@ -1,0 +1,1 @@
+- Let explicit exact local Full Resume retain independently verified successful entries from a closed failed or interrupted campaign. Failed entries, changed inputs and incompatible artifacts still execute; corruption remains fatal, original failures stay recorded, and hosted/main gates remain unchanged.

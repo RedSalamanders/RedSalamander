@@ -519,16 +519,22 @@ function Get-RSBuildArtifactRecords {
         [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration,
         [Parameter(Mandatory = $true)][ValidateSet('x64', 'ARM64')][string]$Platform,
         [AllowEmptyString()][string]$ProjectName = '',
-        [AllowEmptyString()][string]$ResolvedProjectPath = ''
+        [AllowEmptyString()][string]$ResolvedProjectPath = '',
+        [string[]]$ProjectNames = @()
     )
 
     $output = [IO.Path]::GetFullPath($BuildOutputDir).TrimEnd('\')
     $declarations = @(Get-RSBuildArtifactManifestDeclarations -RepoRoot $RepoRoot `
         -BuildOutputDir $output -ArtifactManifestDir $ArtifactManifestDir `
         -Configuration $Configuration -Platform $Platform)
-    if (-not [string]::IsNullOrWhiteSpace($ProjectName) -and
-        @($declarations | Where-Object Project -eq $ProjectName).Count -eq 0) {
-        throw "No output declaration was produced for selected project '$ProjectName'."
+    $selectedNames = @($ProjectNames | Where-Object { $null -ne $_ })
+    if ($ProjectName -and $selectedNames.Count) { throw 'Use ProjectName or ProjectNames, not both.' }
+    if ($ProjectName) { $selectedNames += $ProjectName }
+    foreach ($selectedName in $selectedNames) {
+        if ([string]::IsNullOrWhiteSpace($selectedName) -or
+            @($declarations | Where-Object Project -eq $selectedName).Count -ne 1) {
+            throw "No unique output declaration was produced for selected project '$selectedName'."
+        }
     }
 
     $extraByProject = @{}
@@ -608,7 +614,7 @@ function Get-RSBuildArtifactRecords {
             $_.FullName -notlike "*\receipts\*" -and $_.Extension -in @('.exe', '.dll') -and
             -not $declaredBinaryPaths.Contains($_.FullName)
         } | Sort-Object FullName)
-    if ([string]::IsNullOrWhiteSpace($ProjectName) -and $unknownBinaries.Count -gt 0) {
+    if (-not $selectedNames.Count -and $unknownBinaries.Count -gt 0) {
         throw "Ungoverned executable or DLL remains in the selected build output: $($unknownBinaries.FullName -join ', ')"
     }
 
@@ -621,8 +627,8 @@ function Get-RSBuildArtifactRecords {
         }
         $record = New-RSBuildArtifactRecord -RepoRoot $RepoRoot -LiteralPath $path -RuntimeClosure $recordClosure
         if (-not $targetByPath.ContainsKey($path) -and $record.role -eq 'plugin') { $record.role = 'library' }
-        if (-not [string]::IsNullOrWhiteSpace($ProjectName) -and
-            $targetByPath.ContainsKey($path) -and $targetByPath[$path].Project -eq $ProjectName -and
+        if ($selectedNames.Count -and
+            $targetByPath.ContainsKey($path) -and $targetByPath[$path].Project -in $selectedNames -and
             [IO.Path]::GetExtension($path) -eq '.exe') {
             $record.role = 'launchable'
         }
@@ -772,7 +778,7 @@ function Get-RSBuildIdentityBundle {
         ToolchainIdentityDigest = $toolchain.Digest
         VcpkgIdentityDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $vcpkgInputs
         GhosttyRuntimeIdentity = Get-RSGhosttyRuntimeIdentityDigest -RepoRoot $root
-        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1','Dependencies/RedMonitor.lock.json','Tools/Verify-RedMonitorClient.ps1','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'))
+        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1','Specs/Build/Build_DxUiSdkInput.schema.json','Dependencies/RedMonitor.lock.json','Tools/Verify-RedMonitorClient.ps1','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'))
         RuntimeDependencyDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $runtimeFiles
     }
 }
@@ -1013,14 +1019,24 @@ function Test-RSBuildReceiptForArtifactUse {
         [Parameter(Mandatory = $true)][string]$Platform,
         [Parameter(Mandatory = $true)][string]$Configuration,
         [Parameter(Mandatory = $true)][string]$RepoRoot,
-        [string[]]$RequiredRelativePath = @()
+        [string[]]$RequiredRelativePath = @(),
+        [string[]]$RequiredProjectSelection = @()
     )
 
     try { $null = Get-RSDxUiSourceIdentity -RepoRoot $RepoRoot } catch { return $false }
     if ($null -eq $Receipt) { return $false }
     try { $null = Assert-RSBuildReceiptSemantics -Receipt $Receipt } catch { return $false }
-    if ($Receipt.target -ne 'solution' -or
-        -not [bool]$Receipt.tests_enabled -or
+    if ($Receipt.target -ne 'solution') {
+        # Default readers still require a full solution. Selected readers must
+        # declare both their complete project union and the artifacts consumed.
+        if ($Receipt.target -cne 'selected-projects' -or -not $RequiredProjectSelection.Count -or -not $RequiredRelativePath.Count) { return $false }
+        $expectedProjects = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($project in $RequiredProjectSelection) {
+            if ([string]::IsNullOrWhiteSpace($project) -or -not $expectedProjects.Add($project.Replace('\', '/'))) { return $false }
+        }
+        if (-not $expectedProjects.SetEquals([string[]]@($Receipt.project_selection))) { return $false }
+    }
+    if (-not [bool]$Receipt.tests_enabled -or
         $Receipt.source_snapshot_id -ne $SourceSnapshot.SnapshotId -or
         $Receipt.git_head -ne $SourceSnapshot.GitHead -or
         $Receipt.platform -ne $Platform -or $Receipt.configuration -ne $Configuration) { return $false }
@@ -1038,7 +1054,25 @@ function Test-RSBuildReceiptForArtifactUse {
     foreach ($relative in $RequiredRelativePath) {
         if (-not $artifactPaths.Contains($relative.Replace('\', '/'))) { return $false }
     }
+    try {
+        $sdkContext=Open-RSDxUiSdkArtifactInput -RepoRoot $RepoRoot -Receipt $Receipt
+        Close-RSDxUiSdkArtifactInput $sdkContext
+    } catch {return $false}
     return $true
+}
+
+function Get-RSBuildReceiptDependencyBuildArguments {
+    # Capture only independently re-opened dependency input before an artifact
+    # writer suspends the profile receipt. Compilation reauthenticates it again.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepoRoot,[Parameter(Mandatory)][object]$Receipt)
+    $sdkContext=Open-RSDxUiSdkArtifactInput -RepoRoot $RepoRoot -Receipt $Receipt
+    if($null -eq $sdkContext){return @{}}
+    try{
+        $path=[string]$sdkContext.Reader.Descriptor.Path
+        if([string]::IsNullOrWhiteSpace($path)){throw 'Re-attestation requires the original independently verified SDK descriptor.'}
+        return @{DxUiSdkInputDescriptor=$path}
+    }finally{Close-RSDxUiSdkArtifactInput $sdkContext}
 }
 
 function Get-RSPortableBuildAttestationProjection {
@@ -1089,7 +1123,9 @@ function Get-RSVerifiedBuildReceiptArtifacts {
 
     $null = Assert-RSBuildReceiptSemantics -Receipt $Receipt
     $outputRoot = [IO.Path]::GetFullPath($BuildOutputDir).TrimEnd('\')
+    $paths=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $artifacts = foreach ($artifact in @($Receipt.outputs | Sort-Object relative_path)) {
+        if(-not $paths.Add([string]$artifact.relative_path)){throw 'Receipt output paths are ambiguous.'}
         $path = Resolve-RSBuildArtifactPath -RepoRoot $RepoRoot -RelativePath ([string]$artifact.relative_path)
         if (-not $path.StartsWith($outputRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
             throw "Receipt output is outside the selected build output: $($artifact.relative_path)"
@@ -1098,7 +1134,7 @@ function Get-RSVerifiedBuildReceiptArtifacts {
         if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
             [int64]$file.Length -ne [int64]$artifact.size_bytes -or
             (Get-RSFileSha256 -LiteralPath $file.FullName) -ne $artifact.sha256) {
-            throw "Receipt output changed before portable publication: $($artifact.relative_path)"
+            throw "Receipt output changed before artifact use: $($artifact.relative_path)"
         }
         [pscustomobject][ordered]@{
             id = $artifact.id
@@ -1128,6 +1164,7 @@ function New-RSPortableBuildAttestation {
     )
 
     if ($ProducerRunId -notmatch '^[0-9]+$') { throw 'Portable producer run ID must contain only decimal digits.' }
+    if(@($Receipt.build_arguments|Where-Object {$_ -clike 'dxui-recipe=*'}).Count){throw 'SDK-backed inputs require an independent portable descriptor contract; this Source attestation cannot export them.'}
     $portableArtifacts = @(Get-RSVerifiedBuildReceiptArtifacts -Receipt $Receipt `
         -RepoRoot $RepoRoot -BuildOutputDir $BuildOutputDir)
     $toolchainRelativePath = ".build/$($Receipt.platform)/$($Receipt.configuration)/toolchain-identity.json"
@@ -1274,6 +1311,7 @@ function Import-RSPortableBuildAttestation {
     $outputRoot = [IO.Path]::GetFullPath($BuildOutputDir).TrimEnd('\')
     $attestationPath = Join-Path $outputRoot 'portable-build-attestation.json'
     $attestation = Read-RSValidationJsonFile -LiteralPath $attestationPath -SchemaPath $PortableSchemaPath -AllowedRoot $outputRoot
+    if(@($attestation.build_arguments|Where-Object {$_ -clike 'dxui-recipe=*'}).Count){throw 'This Source portable importer cannot authenticate SDK-backed input descriptors.'}
     $computedAttestationId = Get-RSCanonicalJsonDigest -InputObject (Get-RSPortableBuildAttestationProjection -Attestation $attestation)
     if ($attestation.attestation_id -ne $computedAttestationId -or
         $attestation.attestation_id -ne $ExpectedAttestationId -or
@@ -1396,6 +1434,8 @@ Export-ModuleMember -Function @(
     'Suspend-RSBuildReceipt',
     'Test-RSBuildReceiptCompatible',
     'Test-RSBuildReceiptForArtifactUse',
+    'Get-RSBuildReceiptDependencyBuildArguments',
+    'Get-RSVerifiedBuildReceiptArtifacts',
     'New-RSPortableBuildAttestation',
     'Publish-RSPortableBuildAttestation',
     'Publish-RSPortableBuildPayload',

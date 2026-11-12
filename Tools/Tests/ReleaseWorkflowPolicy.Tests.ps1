@@ -660,12 +660,17 @@ Describe 'Release workflow source contracts' {
         $diagnostics | Should Not Match 'steps\.test_root\.outputs\.path'
     }
 
-    It 'uses normal dependency success semantics and no permissive artifact download' {
+    It 'keeps required downloads strict and confines optional fallback to DxUi same-run library inputs' {
         $releaseWorkflow | Should Not Match 'continue-on-error:\s*true'
         $native = Get-Content (Join-Path $repoRoot '.ci-engine/.github/workflows/native.yml') -Raw
         $native | Should Match 'needs: \[admission, test-gate\]'
         $native | Should Match "if-no-files-found: error"
-        $native | Should Not Match 'continue-on-error:\s*true'
+        $optional = [regex]::Matches($native, '(?ms)^      - name: Download this attempt''s SDK library inputs\r?\n.*?(?=^      - name:|\z)')
+        $optional.Count | Should Be 1
+        $optional[0].Value | Should Match "if: github.repository == 'RedSalamanders/DxUi'"
+        $optional[0].Value | Should Match 'name: sdk-library-inputs-\$\{\{ matrix.platform \}\}-\$\{\{ github.run_attempt \}\}'
+        $optional[0].Value | Should Match 'continue-on-error:\s*true'
+        $native.Replace($optional[0].Value, '') | Should Not Match 'continue-on-error:\s*true'
         $artifacts = Get-Content (Join-Path $repoRoot '.ci-engine/Tools/Modules/Ci.Artifacts.psm1') -Raw
         $artifacts | Should Match 'Test-CiRegressionReceipt'
         $artifacts | Should Match 'Get-FileHash'

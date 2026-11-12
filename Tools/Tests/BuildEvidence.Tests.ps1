@@ -1,6 +1,44 @@
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\BuildEvidence.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+
+Describe 'Dependency-preserving profile re-attestation arguments' {
+    BeforeEach {
+        Mock Open-RSDxUiSdkArtifactInput {return $null} -ModuleName BuildEvidence
+        Mock Close-RSDxUiSdkArtifactInput {} -ModuleName BuildEvidence
+    }
+    It 'keeps Source arguments empty without manufacturing SDK input' {
+        $arguments=Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})
+        $arguments.Count | Should Be 0
+        Assert-MockCalled Open-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It
+        Assert-MockCalled Close-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 0 -Exactly -Scope It
+    }
+    It 'forwards only the original independently opened descriptor and closes its reader' {
+        Mock Open-RSDxUiSdkArtifactInput {
+            param($RepoRoot,$Receipt)
+            return [pscustomobject]@{Reader=[pscustomobject]@{Descriptor=[pscustomobject]@{Path=(Join-Path $RepoRoot '.build/original descriptor.json')}}}
+        } -ModuleName BuildEvidence
+        $arguments=Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})
+        $arguments.Count | Should Be 1
+        $arguments.DxUiSdkInputDescriptor | Should Be (Join-Path $repoRoot '.build/original descriptor.json')
+        Assert-MockCalled Close-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It
+    }
+    It 'refuses unavailable or changed SDK input and does not convert it to Source' {
+        Mock Open-RSDxUiSdkArtifactInput {throw 'Original SDK input changed'} -ModuleName BuildEvidence
+        {Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})} | Should Throw 'Original SDK input changed'
+    }
+    It 'refuses an empty descriptor and always closes the opened reader' {
+        Mock Open-RSDxUiSdkArtifactInput {return [pscustomobject]@{Reader=[pscustomobject]@{Descriptor=[pscustomobject]@{Path=''}}}} -ModuleName BuildEvidence
+        {Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})} | Should Throw 'Re-attestation requires the original independently verified SDK descriptor'
+        Assert-MockCalled Close-RSDxUiSdkArtifactInput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It
+    }
+    It 'does not publish arguments when reauthentication at close fails' {
+        Mock Open-RSDxUiSdkArtifactInput {return [pscustomobject]@{Reader=[pscustomobject]@{Descriptor=[pscustomobject]@{Path='owned-descriptor'}}}} -ModuleName BuildEvidence
+        Mock Close-RSDxUiSdkArtifactInput {throw 'SDK changed during close'} -ModuleName BuildEvidence
+        {Get-RSBuildReceiptDependencyBuildArguments -RepoRoot $repoRoot -Receipt ([pscustomobject]@{build_arguments=@()})} | Should Throw 'SDK changed during close'
+    }
+}
 
 function Test-RSActionThrows {
     param([Parameter(Mandatory = $true)][scriptblock]$Action)
@@ -251,10 +289,14 @@ Describe 'Operation Startrail build receipt records' {
         $Platform = 'x64'
         $Configuration = 'Release'
         $ProjectName = ''
+        $unionSelection = $null
         $resolvedProjectPath = ''
         $artifactManifestDir = $artifactManifestDir
         $buildArtifacts = @()
         $receiptTestsEnabled = $false
+        # This extracted Source capture starts after build.ps1's SDK setup.
+        $sdkInput = $null
+        $sdkRecordPath = $null
         $production = (@($statements | Sort-Object { $_.Extent.StartOffset } | ForEach-Object { $_.Extent.Text }) -join [Environment]::NewLine)
         . ([scriptblock]::Create($production))
 
@@ -393,8 +435,43 @@ Describe 'Operation Startrail build receipt records' {
             -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Plugin)
         $target.Count | Should Be 3
         ($target.relative_path -contains '.build/x64/Debug/Plugins/Plugin.dll') | Should Be $true
+        # The public legacy-target call previously unrolled its empty optional
+        # union into null after a successful native build. Exercise that binding.
+        $nullUnion = @(Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
+            -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Plugin -ProjectNames $null)
+        ($nullUnion.relative_path -join '|') | Should Be ($target.relative_path -join '|')
+        $emptyUnion = @(Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
+            -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectNames @())
+        ($emptyUnion.relative_path -join '|') | Should Be ($full.relative_path -join '|')
         (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
                 -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectName Missing }) | Should Be $true
+    }
+
+    It 'captures the selected project and shared runtime union without adopting stale unrelated outputs' {
+        $root = Join-Path $TestDrive 'union-output-repo'
+        $output = Join-Path $root '.build/x64/Debug'
+        [void][IO.Directory]::CreateDirectory($output)
+        foreach ($file in @('First.exe', 'Second.exe', 'Shared.dll', 'Stale.exe')) {
+            [IO.File]::WriteAllBytes((Join-Path $output $file), [byte[]](1, 2, 3))
+        }
+        $manifest = New-RSBuildArtifactManifestFixture -Root $root -Output $output `
+            -ProjectTarget @{First='First.exe';Second='Second.exe';Shared='Shared.dll'} `
+            -VcpkgTlog @{First=@((Join-Path $output 'Shared.dll'));Second=@((Join-Path $output 'Shared.dll'))}
+        $union = @(Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output `
+            -ArtifactManifestDir $manifest -Configuration Debug -Platform x64 -ProjectNames @('First', 'Second'))
+        $union.Count | Should Be 3
+        @($union | Where-Object role -eq 'launchable').Count | Should Be 2
+        @($union | Where-Object relative_path -like '*Stale.exe').Count | Should Be 0
+        foreach ($application in @($union | Where-Object role -eq 'launchable')) {
+            ($application.runtime_closure -contains '.build/x64/Debug/Shared.dll') | Should Be $true
+        }
+        (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output -ArtifactManifestDir $manifest `
+            -Configuration Debug -Platform x64 -ProjectNames @('First', 'Missing') }) | Should Be $true
+        (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output -ArtifactManifestDir $manifest `
+            -Configuration Debug -Platform x64 }) | Should Be $true
+        Remove-Item -LiteralPath (Join-Path $output 'Shared.dll')
+        (Test-RSActionThrows { Get-RSBuildArtifactRecords -RepoRoot $root -BuildOutputDir $output -ArtifactManifestDir $manifest `
+            -Configuration Debug -Platform x64 -ProjectNames @('First', 'Second') }) | Should Be $true
     }
 
     It 'rejects undeclared binaries and measures the effective project test surface' {
@@ -550,6 +627,20 @@ Describe 'Operation Startrail build receipt records' {
             -Target common -ProjectSelection @('Common\Common.vcxproj') -BuildArguments @('/t:Build') `
             -TestsEnabled $true -OfficialRelease $false -StartedUtc $started -EndedUtc $started.AddSeconds(1) `
             -Duration ([timespan]::FromSeconds(1)) -Outputs $artifacts
+        $unionReceipt = New-RSBuildReceipt -SourceSnapshot $source -Identity $identity -Platform x64 -Configuration Debug `
+            -Target selected-projects -ProjectSelection @('App/App.vcxproj', 'Library/Library.vcxproj') -BuildArguments @('/t:App;Library') `
+            -TestsEnabled $true -OfficialRelease $false -StartedUtc $started -EndedUtc $started.AddSeconds(1) `
+            -Duration ([timespan]::FromSeconds(1)) -Outputs $artifacts
+        $unionArguments = @{
+            Receipt=$unionReceipt;SourceSnapshot=$source;Platform='x64';Configuration='Debug';RepoRoot=$root
+            RequiredRelativePath=@('.build/x64/Debug/App.exe', '.build/x64/Debug/Library.dll')
+        }
+        (Test-RSBuildReceiptForArtifactUse @unionArguments) | Should Be $false
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('Library/Library.vcxproj', 'App/App.vcxproj')) | Should Be $true
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('App/App.vcxproj')) | Should Be $false
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('App/App.vcxproj', 'Other/Other.vcxproj')) | Should Be $false
+        $withoutArtifacts = $unionArguments.Clone(); $withoutArtifacts.RequiredRelativePath=@()
+        (Test-RSBuildReceiptForArtifactUse @withoutArtifacts -RequiredProjectSelection @('App/App.vcxproj', 'Library/Library.vcxproj')) | Should Be $false
         Publish-RSBuildReceipt -BuildOutputDir $output -Receipt $targetReceipt -SchemaPath $schema | Out-Null
         Test-Path -LiteralPath (Join-Path $output "receipts\$($receipt.receipt_id).json") | Should Be $true
         Test-Path -LiteralPath (Join-Path $output "receipts\$($targetReceipt.receipt_id).json") | Should Be $true
@@ -568,6 +659,7 @@ Describe 'Operation Startrail build receipt records' {
         (Test-RSBuildReceiptForArtifactUse -Receipt $stored -SourceSnapshot $source -Platform x64 `
             -Configuration Debug -RepoRoot $root -RequiredRelativePath @('.build/x64/Debug/App.exe')) | Should Be $true
         [IO.File]::WriteAllBytes($artifactPath, [byte[]](9, 9, 9))
+        (Test-RSBuildReceiptForArtifactUse @unionArguments -RequiredProjectSelection @('App/App.vcxproj', 'Library/Library.vcxproj')) | Should Be $false
         (Test-RSBuildReceiptCompatible -Receipt $stored -SourceSnapshot $source -Identity $identity `
             -Platform x64 -Configuration Debug -Target solution -RepoRoot $root `
             -ProjectSelection @('RedSalamander.sln') -BuildArguments @('/t:Rebuild')) | Should Be $false
@@ -630,6 +722,18 @@ Describe 'Operation Startrail build receipt records' {
             -ProducerRunAttempt 2 -ProducerJob 'build' -CreatedUtc $created
         $portableSchema = Join-Path $repoRoot 'Specs\Build\PortableBuildAttestation.schema.json'
         $receiptSchema = Join-Path $repoRoot 'Specs\Build\BuildReceipt.schema.json'
+        foreach($recipe in @('Unknown','PinnedReleaseSdkV1','PinnedQualifiedReleaseSdkV2')){
+            $sdkReceipt=New-RSBuildReceipt -SourceSnapshot $source -Identity $identity -Platform x64 -Configuration Debug `
+                -Target solution -ProjectSelection @('RedSalamander.sln') -BuildArguments @('ci=true',"dxui-recipe=$recipe") `
+                -TestsEnabled $true -OfficialRelease $false -StartedUtc $created -EndedUtc $created -Duration ([timespan]::Zero) -Outputs $artifacts
+            $message=''
+            try{
+                New-RSPortableBuildAttestation -Receipt $sdkReceipt -RepoRoot $root -BuildOutputDir $output `
+                    -ToolchainSchemaPath $toolchain.Schema -ProducerRepository 'owner/repo' -ProducerWorkflow CI `
+                    -ProducerRunId 1234 -ProducerRunAttempt 2 -ProducerJob build -CreatedUtc $created | Out-Null
+            }catch{$message=$_.Exception.Message}
+            $message | Should Match 'independent portable descriptor contract'
+        }
         $unreviewedProducerFile = Join-Path $output 'unreviewed.txt'
         [IO.File]::WriteAllText($unreviewedProducerFile, 'not in receipt', [Text.UTF8Encoding]::new($false))
         $payload = Publish-RSPortableBuildPayload -RepoRoot $root -BuildOutputDir $output `
@@ -646,6 +750,21 @@ Describe 'Operation Startrail build receipt records' {
                 Publish-RSPortableBuildAttestation -BuildOutputDir $output -Attestation $invalidPortable -SchemaPath $portableSchema
             }) | Should Be $true
         Publish-RSPortableBuildAttestation -BuildOutputDir $output -Attestation $portable -SchemaPath $portableSchema | Out-Null
+        $portablePath=Join-Path $output 'portable-build-attestation.json'
+        $originalPortableBytes=[IO.File]::ReadAllBytes($portablePath)
+        foreach($recipe in @('Unknown','PinnedReleaseSdkV1','PinnedQualifiedReleaseSdkV2')){
+            $sdkPortable=$portable|ConvertTo-Json -Depth 20|ConvertFrom-Json -DateKind String
+            $sdkPortable.build_arguments+= "dxui-recipe=$recipe"
+            Publish-RSPortableBuildAttestation -BuildOutputDir $output -Attestation $sdkPortable -SchemaPath $portableSchema | Out-Null
+            $message=''
+            try{
+                Import-RSPortableBuildAttestation -RepoRoot $root -BuildOutputDir $output -PortableSchemaPath $portableSchema -BuildReceiptSchemaPath $receiptSchema -ToolchainSchemaPath $toolchain.Schema -ExpectedRepository 'owner/repo' `
+                    -ExpectedWorkflow CI -ExpectedRunId 1234 -ExpectedRunAttempt 2 -ExpectedProducerJob build -ExpectedAttestationId $portable.attestation_id `
+                    -ExpectedToolchainIdentityDigest $toolchain.Digest -ExpectedSourceCommit $source.GitHead -ExpectedPlatform x64 -ExpectedConfiguration Debug | Out-Null
+            }catch{$message=$_.Exception.Message}
+            $message|Should Match 'Source portable importer cannot authenticate SDK-backed'
+        }
+        [IO.File]::WriteAllBytes($portablePath,$originalPortableBytes)
 
         $import = {
             param($job, $workflow, $sourceCommit, $attestationId, $toolchainDigest)

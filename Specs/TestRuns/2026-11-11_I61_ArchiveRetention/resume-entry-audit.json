@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "role": "ReadOnlyOriginalEntryIntegrityAudit",
+  "originRunId": "20261111T012351Z-14388-73a5b62534984be2bb8dcc38553e081f",
+  "originStatus": "failed",
+  "originalFailurePreserved": true,
+  "verifiedPromotions": [
+    {
+      "entry": "tooling.pester-build-toolchain",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "77d80db5c540972d766c5d65260012f7e16d9c077c6c04cfd8e0d94af5a35ec1",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "selftest.compare-directories",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "741b9bc02b410a11c88b41ecd207134f01a2a6b851d056b27560ccccdb276db3",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "selftest.commands",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "188d09b34a9f692fc54b6d03b266e9d06d555993fd0440827dac77949e7a9b5d",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "selftest.file-operations",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "3ace856c1aafbe3c7bba001f6df15c3e81491ce9b471fbb7999f8be943cd8930",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.product-ui",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "c35340249a57eb9018d6b403c79e9200510be0e1b5300ebf29d77e0ca9c95a49",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "viewer-sqlite.noninteractive",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "d1f2f8061c0e13f49b1335f49721fe84435fcffa6ef2f3959261f77f2ed7f9df",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "viewer-sqlite.interactive",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "dece751b0d30e501e63e09f0ede784f9e020095e2bf2d0cda0a30aca622bd1ef",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.filesystem-curl",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "8dad46de8b432543168c3c7c859362f9c1a1914abe940d8631e1f8431d119329",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.localization",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "31bb1fc9e05270e6af791fce3a11b2f4395a5e4b1a2167ff90c1ef3c64fc8079",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.red-configure",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "1db4916d4cb686afaf17832f861f05e074249ac38a9a8c3244aa724eccd3486f",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.plugin-contract",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "f615d97ad09d922c448f28d30b50792c5f15364115c5c8efdb61173c9adfe792",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.settings-schema",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "d8c46b1beba3346220100a48e8c0601e4ac0ec3112e0977878ccca36d5ffa5b9",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "standalone.crash-handling",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "70e0c7f92d2d54af2267d387fb4a04c4b036c96a7ffef70bf180d7f4a6a93094",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "perf.performance-tests2",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "3746cbfbbe6c387dcda5e4a0e94431fc735303e05a2e25be056804f18ac7c2df",
+      "currentReuseAuthorized": false
+    },
+    {
+      "entry": "tooling.vcpkg-merge-synthetic",
+      "originalStatus": "promoted",
+      "integrityVerified": true,
+      "promotionDigest": "f9f077607b6e646c4506711549d467da3edfa07ed0040048bc2ea1e54d15bb9d",
+      "currentReuseAuthorized": false
+    }
+  ],
+  "currentSourceArtifactEquivalenceVerified": false,
+  "currentResumeAcceptanceEstablished": false,
+  "newNativeExecutionOccurred": false,
+  "wholeRepositoryQualified": false,
+  "readerModuleSha256": "f266a33960451471c8bab1a856b4d1207f056e42c8c9206219ab3ea7ffd1deff",
+  "summaryModuleSha256": "f3737fb22fc1c77721d5deebfa1fe902cdbd8a1a95c80c1f0a4fa56180aa839a"
+}

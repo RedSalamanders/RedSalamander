@@ -1,0 +1,1 @@
+- Preserve rejected validation reason codes and skipped case names in runner failure details, route Terminal debug contract labels through the shared stderr reporter, and make the image reservation test wait for explicit harness release rather than a brief timing window. Acceptance, skip and native qualification requirements remain unchanged.

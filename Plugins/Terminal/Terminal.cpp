@@ -195,15 +195,7 @@ HRESULT Terminal::DebugRunInputRoutingContractSelfTests(unsigned int* passedTest
     *passedTests     = 0u;
     *failedTests     = 0u;
     const auto check = [passedTests, failedTests](bool condition, std::wstring_view name) noexcept
-    {
-        if (condition)
-        {
-            ++*passedTests;
-            return;
-        }
-        ++*failedTests;
-        Debug::Error(L"Terminal input-routing contract failed: {}", name);
-    };
+    { Common::DebugSelfTest::Check{L"Terminal input-routing contract"}(condition, name, *passedTests, *failedTests); };
 
     const HRESULT initializeHr = initializeEngine();
     check(SUCCEEDED(initializeHr), L"initializeEngine");
@@ -362,15 +354,7 @@ HRESULT Terminal::DebugRunRuntimeLifecycleSelfTests(unsigned int* passedTests, u
     *passedTests     = 0u;
     *failedTests     = 0u;
     const auto check = [passedTests, failedTests](bool condition, std::wstring_view name) noexcept
-    {
-        if (condition)
-        {
-            ++*passedTests;
-            return;
-        }
-        ++*failedTests;
-        Debug::Error(L"Terminal runtime lifecycle contract failed: {}", name);
-    };
+    { Common::DebugSelfTest::Check{L"Terminal runtime lifecycle contract"}(condition, name, *passedTests, *failedTests); };
     const auto engineReleased = [](const Terminal& terminal) noexcept
     {
         return ! terminal._runtime.IsLoaded() && terminal._ghosttyTerminal == nullptr && terminal._formatter == nullptr && terminal._renderState == nullptr &&

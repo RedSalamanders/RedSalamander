@@ -121,10 +121,13 @@ Describe 'Hosted Default desktop entry lifetime' {
             $script:priorDefaultDesktopEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
-        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; ReportRestored=$true }
+        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; NestedRestoreFailure=$false; ReportRestored=$true }
         $lease = [pscustomobject]@{ Name='Default'; Restored=$false; ForegroundBoundaryReady=$true }
         $lease | Add-Member -MemberType ScriptMethod -Name Dispose -Value {
             $global:rsDefaultDesktopTest.Events.Add('restore')
+            if ($global:rsDefaultDesktopTest.NestedRestoreFailure) {
+                throw [InvalidOperationException]::new('Hosted boundary retirement failed.', [TimeoutException]::new('seeded boundary join threshold exceeded'))
+            }
             if ($global:rsDefaultDesktopTest.FailRestore) { throw 'seeded restore failure' }
             $this.Restored=$global:rsDefaultDesktopTest.ReportRestored
         }
@@ -236,6 +239,17 @@ Describe 'Hosted Default desktop entry lifetime' {
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 0 } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'did not restore its original foreground and focus'
+    }
+    It 'logs the inner retirement cause while retaining failure of a successful native entry' {
+        Mock Write-Host {} -ModuleName HostedTestDesktop
+        $global:rsDefaultDesktopTest.NestedRestoreFailure=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'Hosted boundary retirement failed'
+        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly -ParameterFilter {
+            "$Object" -match 'Hosted Default desktop retirement exception:' -and
+            "$Object" -match 'System.TimeoutException: seeded boundary join threshold exceeded'
+        }
     }
     It 'refuses local invocation before any desktop or native action' {
         $env:GITHUB_ACTIONS='false'
@@ -365,6 +379,20 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $result.retired | Should Be $false
         $result.error | Should Match 'seeded close failure'
         (Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json).completed | Should Be $false
+    }
+    It 'observes the captured runner console without asking it to close' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-runner-console-'+[guid]::NewGuid().ToString('N'))
+        $surface=[pscustomobject]@{Kind='RunnerConsole';Window=123;Thread=1;Process=2;Session=3;Title='fixture';Class='ConsoleWindowClass';Image='fixture';ApplicationId='';ForegroundDesktop='Default';ForegroundDesktopError=0}
+        $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind); throw 'Runner console must never be closed.' }
+        $surface | Add-Member ScriptMethod Dispose { }
+        $global:stockObservations.Enqueue($surface)
+        & (Get-Module HostedTestDesktop) { param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0 } $dir
+        $global:stockCloses.Count | Should Be 0
+        $completion=Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json
+        $completion.completed | Should Be $true
+        $completion.last_observation.kind | Should Be 'RunnerConsole'
+        @(Get-ChildItem -LiteralPath $dir -Filter '*-intent.json').Count | Should Be 0
     }
     It 'refuses a second appearance without sending another close' {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
@@ -558,16 +586,24 @@ Describe 'Hosted WSL startup guard managed contracts' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedStockSurfaceNative }
         $type=('RedSalamander.Testing.HostedStockSurface' -as [type])
         $flags=[Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
-        $identity=$type.GetMethod('WslIdentityMatches',$flags)
+        $identity=$type.GetMethod('ConsoleIdentityMatches',$flags)
         $arguments=$type.GetMethod('WslArgumentsMatch',$flags)
         $creation=$type.GetMethod('WslCreationMatches',$flags)
+        foreach($image in @('C:\Windows\System32\wsl.exe','C:\ProgramData\GitHub\HostedComputeAgent\hosted-compute-agent')) {
+            $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'',[int]15703,$image)) | Should Be $true
+            $identity.Invoke($null,[object[]]@($image,'Other',$image,'',[int]15703,$image)) | Should Be $false
+            $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass','C:\Other\wsl.exe','',[int]15703,$image)) | Should Be $false
+            $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'unexpected.app',[int]0,$image)) | Should Be $false
+            $identity.Invoke($null,[object[]]@('other','ConsoleWindowClass',$image,'',[int]15703,$image)) | Should Be $false
+            $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'',[int]5,$image)) | Should Be $false
+            $identity.Invoke($null,[object[]]@(($image+'.exe'),'ConsoleWindowClass',($image+'.exe'),'', [int]15703,$image)) | Should Be $false
+        }
         $image='C:\Windows\System32\wsl.exe'
-        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'',[int]15703,$image)) | Should Be $true
-        $identity.Invoke($null,[object[]]@($image,'Other',$image,'',[int]15703,$image)) | Should Be $false
-        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass','C:\Other\wsl.exe','',[int]15703,$image)) | Should Be $false
-        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'unexpected.app',[int]0,$image)) | Should Be $false
-        $identity.Invoke($null,[object[]]@('other','ConsoleWindowClass',$image,'',[int]15703,$image)) | Should Be $false
-        $identity.Invoke($null,[object[]]@($image,'ConsoleWindowClass',$image,'',[int]5,$image)) | Should Be $false
+        $classify=$type.GetMethod('Classify',$flags)
+        [string]$agent=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)) 'GitHub/HostedComputeAgent/hosted-compute-agent'
+        $classify.Invoke($null,[object[]]@([IntPtr]::Zero,$agent,'ConsoleWindowClass',$agent,'',[int]15703)) | Should Be 'RunnerConsole'
+        $classify.Invoke($null,[object[]]@([IntPtr]::Zero,$agent,'ConsoleWindowClass',($agent+'.exe'),'', [int]15703)) | Should Be 'Unknown'
+        $classify.Invoke($null,[object[]]@([IntPtr]::Zero,'other','ConsoleWindowClass',$agent,'',[int]15703)) | Should Be 'Unknown'
         $call=[object[]]::new(2);$call[1]=$image
         $call[0]=[string[]]@($image,'--update','--confirm','--prompt-before-exit');$arguments.Invoke($null,$call) | Should Be $true
         $call[0]=[string[]]@('wsl.exe','--update','--confirm','--prompt-before-exit');$arguments.Invoke($null,$call) | Should Be $true

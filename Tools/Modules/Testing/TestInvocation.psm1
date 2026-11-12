@@ -274,7 +274,7 @@ function Get-RSBuildScriptArguments {
     }
 
     if ($Suite -notin @('PR', 'CI', 'Full')) {
-        $arguments.ProjectName = 'RedSalamander'
+        $arguments.ProjectNames = @('RedSalamander')
     }
     elseif ($Suite -eq 'Full') {
         # The complete test-enabled solution launches many compiler, linker,
@@ -300,7 +300,18 @@ function Get-RSBuildEnvironmentOverrides {
         }
     }
 
-    return @{}
+    # Every suite can launch an in-product selftest, including focused Release.
+    # Production defaults otherwise produce a valid executable with no test surface.
+    return @{ RSBuildEnableTests = 'true' }
+}
+
+function Assert-RSSelfTestBuildSurface {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Receipt, [Parameter(Mandatory)][string]$ExecutablePath)
+    if (-not $Receipt.tests_enabled) { throw 'In-product selftests require a test-enabled build receipt; rebuild with RSBuildEnableTests=true.' }
+    Import-Module (Join-Path $PSScriptRoot '../Packaging/ReleaseArtifactPolicy.psm1') -ErrorAction Stop
+    $surface = Get-RSPeTestSurface -Bytes ([IO.File]::ReadAllBytes($ExecutablePath)) -Name ([IO.Path]::GetFileName($ExecutablePath))
+    if (-not $surface.TestBuildMarker) { throw 'In-product selftests require the actual executable ENABLE_TESTS resource marker.' }
 }
 
 function Test-RSSelfTestResultCoverage {
@@ -582,6 +593,7 @@ Export-ModuleMember -Function @(
     'Convert-RSPesterTestResults',
     'Get-RSBuildScriptArguments',
     'Get-RSBuildEnvironmentOverrides',
+    'Assert-RSSelfTestBuildSurface',
     'Test-RSSelfTestResultCoverage',
     'Get-RSObjectValue',
     'Test-RSTestResultPassed',

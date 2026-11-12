@@ -18,7 +18,8 @@ x64 or ARM64; runtime requires native execution.
 .PARAMETER Explain
 Publishes the canonical plan without building or launching tests.
 .PARAMETER SkipBuild
-Requires the canonical runner's byte-verified solution receipt.
+Requires the canonical runner's byte-verified solution receipt or its exact governed
+Affected/focused project union. No-build/zero-entry changes need no native receipt.
 .PARAMETER ResumeFrom
 Explicit exact promoted Full origin; valid only with Mode Full. No automatic widening.
 .PARAMETER Interactive

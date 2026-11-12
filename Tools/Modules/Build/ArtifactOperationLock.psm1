@@ -1829,10 +1829,11 @@ function Test-RSArtifactCommandLineTargetsIndependentRedSalamanderWorktree {
     $rootProperties = @{
         '/Project/PropertyGroup/SolutionDir' = '$(MSBuildThisFileDirectory)'
         '/Project/PropertyGroup/RSBuildRoot' = '$(SolutionDir).build\'
+        '/Project/PropertyGroup/RSOutputRoot' = '$(RSBuildRoot)'
         '/Project/PropertyGroup/VcpkgManifestRoot' = '$(SolutionDir)'
         '/Project/PropertyGroup/VcpkgInstalledDir' = '$(RSBuildRoot)vcpkg_installed\$(RSVcpkgPlatformScope)\'
-        '/Project/PropertyGroup/OutDir' = '$(RSBuildRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)'
-        '/Project/PropertyGroup/IntDir' = '$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\'
+        '/Project/PropertyGroup/OutDir' = '$(RSOutputRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)'
+        '/Project/PropertyGroup/IntDir' = '$(RSOutputRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\'
     }
     foreach ($xpath in $rootProperties.Keys) {
         $node = $props.SelectSingleNode($xpath)

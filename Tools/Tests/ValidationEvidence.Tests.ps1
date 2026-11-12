@@ -24,9 +24,10 @@ function Update-RSEvidenceDecisionDigest([object]$Decision) {
     return $Decision
 }
 
-function New-RSEvidenceFixture([string]$Root, [string]$RunId = '20260813T120000Z-42-0123456789abcdef0123456789abcdef', [string]$RequestedSuite = 'Full') {
+function New-RSEvidenceFixture([string]$Root, [string]$RunId = '20260813T120000Z-42-0123456789abcdef0123456789abcdef', [string]$RequestedSuite = 'Full', [switch]$Cacheable) {
     $execution = New-RSTestRunPlanEntry -Id 'tooling.pester' -Name 'Tooling' -Kind Pester `
         -Path (Join-Path $repoRoot 'Tools\Tests')
+    if ($Cacheable) { $execution.CachePolicy = 'ExactArtifact' }
     $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite $RequestedSuite -Entries @($execution)
     $entry = $plan.entries[0]
     $snapshot = [pscustomobject]@{ snapshot_id = 'a' * 64 }
@@ -49,7 +50,7 @@ function New-RSEvidenceFixture([string]$Root, [string]$RunId = '20260813T120000Z
     $run = New-RSValidationEvidenceRun -EvidenceRoot $Root -RunId $RunId -Plan $plan `
         -Decision $decision -BuildReceipt $receipt -SchemaRoot (Join-Path $repoRoot 'Specs\Testing')
     return [pscustomobject]@{
-        Run = $run; Plan = $plan; Decision = $decision; Entry = $entry
+        Run = $run; Plan = $plan; Decision = $decision; Entry = $entry; Execution = $execution
         Snapshot = $snapshot; Fingerprint = $fingerprint; Receipt = $receipt
     }
 }
@@ -494,6 +495,96 @@ Describe 'Operation Startrail provisional evidence and promotion barriers' {
         $resumeRun.State.entries[0].status | Should Be 'reused'
         $resumeRun.State.entries[0].origin_evidence_digest | Should Be $published.Evidence.evidence_digest
         (Complete-RSValidationEvidenceRun -Run $resumeRun) | Should Be 'passed'
+    }
+
+    It 'resumes verified promoted entries from closed failed and interrupted runs without rewriting their failures' {
+        foreach ($status in @('failed', 'interrupted')) {
+            $origin = New-RSEvidenceFixture -Root (Join-Path $TestDrive "resume-closed-$status") -Cacheable
+            $published = Publish-RSEvidenceFixturePass -Fixture $origin
+            if ($status -eq 'failed') { [void](Complete-RSValidationEvidenceRun -Run $origin.Run -ForceFailed) }
+            else { [void](Repair-RSValidationInterruptedRunState -Run $origin.Run) }
+            $origin.Run.State.status | Should Be $status
+            $statePath = Join-Path $origin.Run.RunDirectory 'run-state.json'
+            $stateHash = (Get-FileHash -LiteralPath $statePath).Hash
+
+            $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries @($origin.Execution) -ValidationMode Resume
+            $decision = $origin.Decision.PSObject.Copy()
+            $decision.plan_digest = $plan.plan_digest
+            $decision = Update-RSEvidenceDecisionDigest -Decision $decision
+            $candidates = @(Get-RSValidationResumeCandidates -OriginRunDirectory $origin.Run.RunDirectory `
+                    -CurrentPlan $plan -CurrentDecision $decision -CurrentSnapshot $origin.Snapshot `
+                    -BuildReceipt $origin.Receipt -SchemaRoot $origin.Run.SchemaRoot)
+            $candidates.Count | Should Be 1
+            $candidates[0].reason_code | Should Be 'REUSED_EXACT'
+            $candidates[0].reusable | Should Be $true
+            (Get-RSEvidenceActionErrorMessage {
+                    Read-RSVerifiedValidationPromotionEvidence -OriginRunDirectory $origin.Run.RunDirectory `
+                        -EntryId $origin.Entry.id -PromotionDigest $published.Promotion.promotion_digest `
+                        -SchemaRoot $origin.Run.SchemaRoot -RequireTerminalGreen
+                }) | Should Match 'not terminal green'
+
+            $resumeDecision = New-RSValidationResumeDecision -FreshDecision $decision -Candidate $candidates
+            $run = New-RSValidationEvidenceRun -EvidenceRoot $origin.Run.EvidenceRoot `
+                -RunId '20260813T130000Z-43-1123456789abcdef0123456789abcdef' -Plan $plan `
+                -Decision $resumeDecision -BuildReceipt $origin.Receipt -SchemaRoot $origin.Run.SchemaRoot `
+                -ValidationMode Resume -CampaignId $origin.Run.State.campaign_id -CampaignSequence 2 -ParentRunId $origin.Run.State.run_id
+            (Complete-RSValidationEvidenceRun -Run $run) | Should Be 'passed'
+            $legacy = [pscustomobject]@{exit_code=0;passed=1;failed=0;skipped=0;total=1;duration_ms=1000}
+            $summary = New-RSValidationRunSummaryV2 -Run $run -Plan $plan -Decision $resumeDecision `
+                -LegacySummary $legacy -EvidenceRoot $origin.Run.EvidenceRoot -SchemaRoot $origin.Run.SchemaRoot -CoverageScope complete
+            $summary.repository_verdict | Should Be 'PASSED'
+            $summary.counts.reused | Should Be 1
+            $summary.counts.executed | Should Be 0
+            @((Get-RSValidationEvidencePrunePlan -EvidenceRoot $origin.Run.EvidenceRoot -MaximumRuns 1) | Where-Object RunId -eq $origin.Run.State.run_id).Count | Should Be 0
+            (Get-FileHash -LiteralPath $statePath).Hash | Should Be $stateHash
+
+            # Closing the parent as failed/interrupted never makes changed, failed or corrupt entry evidence valid.
+            $changedReceipt = $origin.Receipt.PSObject.Copy(); $changedReceipt.receipt_id = '2' * 64
+            (Get-RSValidationResumeCandidates -OriginRunDirectory $origin.Run.RunDirectory -CurrentPlan $plan `
+                -CurrentDecision $decision -CurrentSnapshot $origin.Snapshot -BuildReceipt $changedReceipt `
+                -SchemaRoot $origin.Run.SchemaRoot).reason_code | Should Be 'BUILD_ARTIFACT_CHANGED'
+            [IO.File]::WriteAllText($published.PromotionPath, '{', [Text.UTF8Encoding]::new($false))
+            (Get-RSValidationResumeCandidates -OriginRunDirectory $origin.Run.RunDirectory -CurrentPlan $plan `
+                -CurrentDecision $decision -CurrentSnapshot $origin.Snapshot -BuildReceipt $origin.Receipt `
+                -SchemaRoot $origin.Run.SchemaRoot).reason_code | Should Be 'CORRUPT_EVIDENCE'
+        }
+    }
+
+    It 'does not resume a promoted entry while its parent run is still running' {
+        $origin = New-RSEvidenceFixture -Root (Join-Path $TestDrive 'resume-still-running') -Cacheable
+        $published = Publish-RSEvidenceFixturePass -Fixture $origin
+        (Get-RSValidationResumeCandidates -OriginRunDirectory $origin.Run.RunDirectory -CurrentPlan $origin.Plan `
+            -CurrentDecision $origin.Decision -CurrentSnapshot $origin.Snapshot -BuildReceipt $origin.Receipt `
+            -SchemaRoot $origin.Run.SchemaRoot).reason_code | Should Be 'PREVIOUS_NOT_GREEN'
+        (Get-RSEvidenceActionErrorMessage {
+                Read-RSVerifiedValidationPromotionEvidence -OriginRunDirectory $origin.Run.RunDirectory `
+                    -EntryId $origin.Entry.id -PromotionDigest $published.Promotion.promotion_digest `
+                    -SchemaRoot $origin.Run.SchemaRoot -RequireClosedRun
+            }) | Should Match 'not closed'
+    }
+
+    It 'executes failed entries and rejects promotions from invalidated parents' {
+        $failed = New-RSEvidenceFixture -Root (Join-Path $TestDrive 'resume-failed-entry') -Cacheable
+        Set-RSValidationEntryCheckpoint -Run $failed.Run -EntryId $failed.Entry.id -Status failed
+        (Complete-RSValidationEvidenceRun -Run $failed.Run) | Should Be 'failed'
+        $candidate = @(Get-RSValidationResumeCandidates -OriginRunDirectory $failed.Run.RunDirectory -CurrentPlan $failed.Plan `
+            -CurrentDecision $failed.Decision -CurrentSnapshot $failed.Snapshot -BuildReceipt $failed.Receipt `
+            -SchemaRoot $failed.Run.SchemaRoot)
+        $candidate[0].reusable | Should Be $false
+        $candidate[0].reason_code | Should Be 'PREVIOUS_NOT_GREEN'
+
+        $invalidated = New-RSEvidenceFixture -Root (Join-Path $TestDrive 'resume-invalidated-parent') -Cacheable
+        $published = Publish-RSEvidenceFixturePass -Fixture $invalidated
+        $invalidated.Run.State.status = 'invalidated'
+        & (Get-Module ValidationEvidence) { param($Run) Write-RSValidationRunState -Run $Run } $invalidated.Run
+        (Get-RSValidationResumeCandidates -OriginRunDirectory $invalidated.Run.RunDirectory -CurrentPlan $invalidated.Plan `
+            -CurrentDecision $invalidated.Decision -CurrentSnapshot $invalidated.Snapshot -BuildReceipt $invalidated.Receipt `
+            -SchemaRoot $invalidated.Run.SchemaRoot).reason_code | Should Be 'PREVIOUS_NOT_GREEN'
+        (Get-RSEvidenceActionErrorMessage {
+                Read-RSVerifiedValidationPromotionEvidence -OriginRunDirectory $invalidated.Run.RunDirectory `
+                    -EntryId $invalidated.Entry.id -PromotionDigest $published.Promotion.promotion_digest `
+                    -SchemaRoot $invalidated.Run.SchemaRoot -RequireClosedRun
+            }) | Should Match 'not closed'
     }
 
     It 'builds a schema-valid aggregate v2 with explicit verdict axes and promotion accounting' {

@@ -117,6 +117,11 @@ that all six native product pipelines passed.
 
 ## Project adapter
 
+Workflow controls execute the pinned manual platform selector for All, x64 and ARM64 and
+verify both runner labels. Git fixture repositories that deliberately exceed MAX_PATH enable
+Git long-path handling for initialization and every subsequent operation. Repeated test invocations
+use distinct owned scratch cases; a prior run's output is evidence, not a destination to overwrite.
+
 The adapter resolves a relative `EngineRoot` from the current PowerShell filesystem location before importing the engine; non-filesystem providers are rejected. Absolute engine paths retain their existing meaning.
 
 The adapter uses RSBuildEnableTests=true for Release test builds and Suite CI through the hosted desktop wrapper. Production uses RSBuildEnableTests=false, -OfficialRelease and -ProductionOnly. The exact tested PluginContractTests.exe is downloaded as an immutable packaging input, checked against its regression digest and reused solely for portable smoke; it is not recompiled or shipped. Generated test scratch, logs and evidence stay in the governed marked RedSalamander.Perf sandbox. Downloaded frozen receipts and harness binaries are build inputs under .build/ci; native test generation does not write there. Production packaging retains the RuntimeDependencies.props and clean-extraction contracts. Full artifact-mutating qualification remains an explicit separate obligation.
@@ -152,3 +157,12 @@ single explicit directory only when emitted, and retain workspace diagnostics in
 The pinned shared engine restores vcpkg's ABI-indexed package cache for normal and manual native qualification. Exact engine/input keys are preferred; fallback lookup stays within the same runner OS, host architecture and target platform, and the pinned vcpkg restore still selects each package by its computed ABI. A miss rebuilds the package. This supplies dependency inputs only: product objects, DxUi SDK outputs and build/test receipts are not restored by this cache. Dependency pins, native execution, failure detectors and production/publication gates remain required. The owning behavior is the shared engine's Specs/CI.md.
 
 The pinned shared conformance rejects extension-wide Markdown exclusions. Pin maintenance migrates only the original global default to owned prose locations and known guides. Runtime/test include exceptions retain precedence; historical artifacts keep their original source identity.
+
+Eligible Main ReleaseTestBuild and Production adapters may prepare the exact pinned qualified SDK input through the shared engine, then pass its independent descriptor to build.ps1. Static, ReleaseTest and manual Debug/ASan/Qualification do not prepare it. The build receipt and SDK reader still independently govern artifact reuse and production packaging; dependency availability never grants regression success or publication. No native/local obligation is removed.
+
+Prepare SDK inputs before applying the returned vcpkg build environment. SDK
+builds and their subsequent ReleaseTest reuse retain canonical vcpkg MSBuild
+imports and installed paths but omit the helper's synthetic `CL` include override.
+Source and manual qualification keep their existing environment. Never clear an
+inherited caller compiler override: the SDK ABI reader must independently reject
+unsupported overrides rather than accepting a different compiler environment.
