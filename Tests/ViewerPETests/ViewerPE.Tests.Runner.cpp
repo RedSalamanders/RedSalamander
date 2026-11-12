@@ -1005,7 +1005,12 @@ public:
         if (_installed)
         {
             AcquireSRWLockExclusive(&_gate);
+            // Restore the exact OS-returned filter without invoking or wrapping it.
+            // Windows' filter typedef omits noexcept; its existing ABI contract is unchanged.
+#pragma warning(push)
+#pragma warning(disable : 5039)
             static_cast<void>(SetUnhandledExceptionFilter(_previous));
+#pragma warning(pop)
             _current = nullptr;
             ReleaseSRWLockExclusive(&_gate);
         }
