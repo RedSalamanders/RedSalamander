@@ -24,8 +24,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   qualification:
-    uses: RedSalamanders/.github/.github/workflows/qualification.yml@7d5577c9fbac3442f4657bb0f990ba5cf6495b8b
+    uses: RedSalamanders/.github/.github/workflows/qualification.yml@a094b2ea66fc6fd7a8933488a71dacda262903a4
     with:
-      engine_ref: 7d5577c9fbac3442f4657bb0f990ba5cf6495b8b
+      engine_ref: a094b2ea66fc6fd7a8933488a71dacda262903a4
       configuration: ${{ inputs.configuration }}
       scope: ${{ inputs.scope }}
