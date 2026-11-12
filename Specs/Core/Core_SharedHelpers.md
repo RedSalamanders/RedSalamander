@@ -328,6 +328,11 @@ SHA-256; consumers retain schema, gate and complete-execution checks. See the
 
 ## Build and SDK provenance primitives
 
+ViewerPETests' private ViewerHarnessCrashCapture in Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp owns
+standalone viewer fatal evidence. Its local policy intentionally differs from production CrashHandler:
+marked preopened test artifacts, bounded metadata and no product paths or crash UI. Reuse its existing
+contained child launcher for the crash control; never introduce a second child ownership implementation.
+
 Tools/Modules/Build/BuildEvidence.psm1 owns Get-RSVerifiedBuildReceiptArtifacts for complete selected-profile byte verification; reuse it for portable export and SDK packaging. Its Get-RSBuildReceiptDependencyBuildArguments captures the original independently reopened SDK descriptor before artifact mutation and closes that reader before rebuilding; Source produces no SDK argument. Tools/Modules/Build/DxUiDependency.psm1 owns Write-RSDxUiSdkBuildRecord, Open-RSDxUiSdkArtifactInput and Close-RSDxUiSdkArtifactInput for this application's sealed-receipt policy. Shared SDK authentication/ABI/storage stays in the exact pinned organization engine. The artifact reader deliberately requires the selected VS instance's native MSBuild location rather than general build discovery fallbacks; it never executes a record-supplied path.
 
 Get-RSSolutionProjects in Tools/Modules/Build/BuildProjectSelection.psm1 owns solution

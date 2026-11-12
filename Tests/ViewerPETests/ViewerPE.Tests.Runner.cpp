@@ -26,6 +26,7 @@
 #include <vector>
 
 #include <UIAutomation.h>
+#include <dbghelp.h>
 #include <shlwapi.h>
 #include <wincodec.h>
 
@@ -73,6 +74,7 @@
 
 #pragma comment(lib, "windowscodecs")
 #pragma comment(lib, "shlwapi")
+#pragma comment(lib, "dbghelp")
 
 namespace
 {
@@ -984,6 +986,117 @@ struct ViewerHarnessDesktopIdentity final
 }
 
 constexpr std::wstring_view kViewerHarnessBlockedChild{L"__Internal_ViewerHarnessBlockedChild"};
+constexpr std::wstring_view kViewerHarnessCrashChild{L"__Internal_ViewerHarnessCrashCapture"};
+
+// Unlike product CrashHandler, this test policy preopens marked-sandbox evidence handles,
+// captures only stacks/thread/unloaded-module metadata, and never resolves AppData, prompts,
+// writes product markers or allocates a filename in the exception callback.
+class ViewerHarnessCrashCapture final
+{
+public:
+    ViewerHarnessCrashCapture()                                            = default;
+    ViewerHarnessCrashCapture(const ViewerHarnessCrashCapture&)            = delete;
+    ViewerHarnessCrashCapture& operator=(const ViewerHarnessCrashCapture&) = delete;
+    ViewerHarnessCrashCapture(ViewerHarnessCrashCapture&&)                 = delete;
+    ViewerHarnessCrashCapture& operator=(ViewerHarnessCrashCapture&&)      = delete;
+
+    ~ViewerHarnessCrashCapture()
+    {
+        if (_installed)
+        {
+            AcquireSRWLockExclusive(&_gate);
+            static_cast<void>(SetUnhandledExceptionFilter(_previous));
+            _current = nullptr;
+            ReleaseSRWLockExclusive(&_gate);
+        }
+        const bool ownsDump   = static_cast<bool>(_dump);
+        const bool ownsRecord = static_cast<bool>(_record);
+        _dump.reset();
+        _record.reset();
+        if (! _captured.load(std::memory_order_acquire))
+        {
+            if (ownsDump)
+                static_cast<void>(DeleteFileW(_dumpPath.c_str()));
+            if (ownsRecord)
+                static_cast<void>(DeleteFileW(_recordPath.c_str()));
+        }
+    }
+
+    [[nodiscard]] bool Install()
+    {
+        std::error_code error;
+        const auto directory = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kViewerPEHarnessSegment,
+                                                                                 .leafSegment         = L"crashes",
+                                                                                 .fallbackRunIdPrefix = L"viewer-pe",
+                                                                                 .kind          = RedSalamander::TestSupport::TestDirectoryKind::Artifacts,
+                                                                                 .cleanExisting = false},
+                                                                                error);
+        if (error || directory.empty())
+            return false;
+        const auto stem = std::format(L"viewer-{}-{}", GetCurrentProcessId(), GetTickCount64());
+        _dumpPath       = directory / (stem + L".dmp");
+        _recordPath     = directory / (stem + L".exception.bin");
+        _dump.reset(CreateFileW(_dumpPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (! _dump)
+            return false;
+        _record.reset(CreateFileW(_recordPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (! _record)
+            return false;
+        AcquireSRWLockExclusive(&_gate);
+        if (_current != nullptr)
+        {
+            ReleaseSRWLockExclusive(&_gate);
+            return false;
+        }
+        _current   = this;
+        _previous  = SetUnhandledExceptionFilter(&Capture);
+        _installed = true;
+        ReleaseSRWLockExclusive(&_gate);
+        std::wcout << std::format(L"[INFO] Viewer fatal evidence: {}\n", _dumpPath.native());
+        return true;
+    }
+
+private:
+    static LONG WINAPI Capture(EXCEPTION_POINTERS* exception) noexcept
+    {
+        AcquireSRWLockShared(&_gate);
+        const auto unlock = wil::scope_exit([]() noexcept { ReleaseSRWLockShared(&_gate); });
+        auto* owner       = _current;
+        if (! owner || owner->_captured.exchange(true, std::memory_order_acq_rel))
+            return EXCEPTION_CONTINUE_SEARCH;
+        MINIDUMP_EXCEPTION_INFORMATION information{};
+        information.ThreadId          = GetCurrentThreadId();
+        information.ExceptionPointers = exception;
+        constexpr auto type           = static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules);
+        const BOOL written =
+            MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), owner->_dump.get(), type, exception ? &information : nullptr, nullptr, nullptr);
+        const DWORD error = written ? ERROR_SUCCESS : GetLastError();
+        // Fixed 64-byte little-endian record: magic, version, PID, TID, exception, address, dump success, Win32 error.
+        const std::array<uint64_t, 8> record{0x5253564352415348ull,
+                                             1u,
+                                             GetCurrentProcessId(),
+                                             GetCurrentThreadId(),
+                                             exception && exception->ExceptionRecord ? exception->ExceptionRecord->ExceptionCode : 0u,
+                                             exception && exception->ExceptionRecord ? reinterpret_cast<uintptr_t>(exception->ExceptionRecord->ExceptionAddress)
+                                                                                     : 0u,
+                                             written != FALSE ? 1u : 0u,
+                                             error};
+        DWORD bytes = 0u;
+        static_cast<void>(WriteFile(owner->_record.get(), record.data(), static_cast<DWORD>(sizeof(record)), &bytes, nullptr));
+        static_cast<void>(FlushFileBuffers(owner->_record.get()));
+        static_cast<void>(FlushFileBuffers(owner->_dump.get()));
+        return EXCEPTION_EXECUTE_HANDLER; // Preserve termination and its original exception status.
+    }
+    inline static SRWLOCK _gate                       = SRWLOCK_INIT;
+    inline static ViewerHarnessCrashCapture* _current = nullptr; // Borrowed only while holding _gate.
+    wil::unique_handle _dump;
+    wil::unique_handle _record;
+    std::filesystem::path _dumpPath;
+    std::filesystem::path _recordPath;
+    LPTOP_LEVEL_EXCEPTION_FILTER _previous = nullptr;
+    std::atomic<bool> _captured{false};
+    bool _installed = false;
+};
 constexpr std::wstring_view kViewerHarnessReadyPrefix{L"--harness-ready-event="};
 constexpr std::string_view kViewerHarnessStdoutMarker{"viewer-harness-stdout-\xCE\xBB\n"};
 constexpr std::string_view kViewerHarnessStderrMarker{"viewer-harness-stderr-\xCE\xBB\n"};
@@ -1000,16 +1113,27 @@ struct ViewerHarnessTimeoutProbe final
     bool stderrCaptured            = false;
 };
 
+struct ViewerHarnessCrashProbe final
+{
+    DWORD processId = 0u;
+};
+
 [[nodiscard]] bool RunFilteredSelfExecutable(std::wstring_view testName,
                                              std::chrono::milliseconds timeout,
                                              TestDesktopInteraction desktopInteraction,
                                              bool& success,
                                              bool* desktopBoundaryIntact             = nullptr,
-                                             ViewerHarnessTimeoutProbe* timeoutProbe = nullptr) noexcept
+                                             ViewerHarnessTimeoutProbe* timeoutProbe = nullptr,
+                                             ViewerHarnessCrashProbe* crashProbe     = nullptr) noexcept
 {
     if (desktopBoundaryIntact)
     {
         *desktopBoundaryIntact = true;
+    }
+    if (crashProbe && (testName != kViewerHarnessCrashChild || desktopInteraction != TestDesktopInteraction::Noninteractive || timeoutProbe))
+    {
+        Check(false, L"Expected crash status is restricted to the exact owned noninteractive crash-capture control", success);
+        return false;
     }
     if (timeoutProbe && (testName != kViewerHarnessBlockedChild || desktopInteraction != TestDesktopInteraction::Noninteractive || ! timeoutProbe->readyEvent ||
                          timeoutProbe->readyEventName.empty()))
@@ -1148,6 +1272,8 @@ struct ViewerHarnessTimeoutProbe final
 
     wil::unique_handle processHandle(processInfo.hProcess);
     wil::unique_handle threadHandle(processInfo.hThread);
+    if (crashProbe)
+        crashProbe->processId = processInfo.dwProcessId;
     stdoutWrite.reset();
     stderrWrite.reset();
     nullInput.reset();
@@ -1536,8 +1662,9 @@ struct ViewerHarnessTimeoutProbe final
         return false;
     }
 
-    Check(exitCode == 0u, std::format(L"{} fresh harness run passes (exit=0x{:08X})", testName, exitCode), success);
-    return exitCode == 0u;
+    const DWORD expectedExit = crashProbe ? EXCEPTION_ACCESS_VIOLATION : 0u;
+    Check(exitCode == expectedExit, std::format(L"{} fresh harness expected exit=0x{:08X}, actual=0x{:08X}", testName, expectedExit, exitCode), success);
+    return exitCode == expectedExit;
 }
 
 [[nodiscard]] bool TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput() noexcept
@@ -18686,6 +18813,96 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
     return success;
 }
 
+[[nodiscard]] bool TestViewerHarnessCrashPreservesOwnedEvidence()
+{
+    bool success             = true;
+    const std::wstring runId = RedSalamander::TestSupport::ResolveTestRunId(L"viewer-crash-control");
+    if (! Check(! runId.empty(), L"Crash evidence control resolves a valid owned run identity", success))
+        return false;
+    const RedSalamander::TestSupport::ScopedEnvironmentVariable runIdentity(RedSalamander::TestSupport::kTestRunIdEnvironmentVariable,
+                                                                            std::optional<std::wstring_view>{runId});
+    std::error_code error;
+    const auto directory = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kViewerPEHarnessSegment,
+                                                                             .leafSegment         = L"crashes",
+                                                                             .fallbackRunIdPrefix = L"viewer-crash-control",
+                                                                             .kind                = RedSalamander::TestSupport::TestDirectoryKind::Artifacts,
+                                                                             .cleanExisting       = false},
+                                                                            error);
+    if (! Check(! error && ! directory.empty(), L"Crash control uses acquired marked artifact storage", success))
+        return false;
+    std::unordered_map<std::wstring, bool> existing;
+    for (std::filesystem::directory_iterator entry(directory, error), end; ! error && entry != end; entry.increment(error))
+        existing.emplace(entry->path().filename().native(), true);
+    if (! Check(! error, L"Crash control inventories only its acquired artifact directory", success))
+        return false;
+    ViewerHarnessCrashProbe probe;
+    if (! RunFilteredSelfExecutable(kViewerHarnessCrashChild, 30000ms, TestDesktopInteraction::Noninteractive, success, nullptr, nullptr, &probe))
+        return false;
+    const auto prefix = std::format(L"viewer-{}-", probe.processId);
+    std::filesystem::path recordPath;
+    for (std::filesystem::directory_iterator entry(directory, error), end; ! error && entry != end; entry.increment(error))
+    {
+        const auto name = entry->path().filename().native();
+        if (! existing.contains(name) && name.starts_with(prefix) && name.ends_with(L".exception.bin"))
+        {
+            if (! Check(recordPath.empty() && entry->symlink_status(error).type() == std::filesystem::file_type::regular,
+                        L"Exactly one new plain crash record belongs to the contained child",
+                        success))
+                return false;
+            recordPath = entry->path();
+        }
+    }
+    if (! Check(! error && ! recordPath.empty(), L"Controlled unhandled exception retains its own record", success))
+        return false;
+    const auto bytes = ReadBinaryFile(recordPath);
+    std::array<uint64_t, 8> record{};
+    if (! Check(bytes.has_value() && bytes.value().size() == sizeof(record), L"Crash record has the fixed versioned extent", success))
+        return false;
+    std::memcpy(record.data(), bytes.value().data(), sizeof(record));
+    Check(record[0] == 0x5253564352415348ull && record[1] == 1u && record[2] == probe.processId && record[3] != 0u && record[4] == EXCEPTION_ACCESS_VIOLATION &&
+              record[5] != 0u && record[6] == 1u && record[7] == ERROR_SUCCESS,
+          L"Crash record preserves child/thread, original AV address/status and successful dump outcome",
+          success);
+    auto dumpName = recordPath.filename().native();
+    dumpName.resize(dumpName.size() - std::wstring_view(L".exception.bin").size());
+    auto dump = ReadBinaryFile(directory / (dumpName + L".dmp"));
+    if (! Check(dump.has_value() && dump.value().size() >= sizeof(MINIDUMP_HEADER), L"Controlled failure preserves its minidump", success))
+        return false;
+    MINIDUMP_HEADER header{};
+    std::memcpy(&header, dump.value().data(), sizeof(header));
+    if (! Check(header.Signature == MINIDUMP_SIGNATURE, L"Crash evidence is an actual minidump", success))
+        return false;
+    const auto& data             = dump.value();
+    const size_t directoryOffset = header.StreamDirectoryRva;
+    if (! Check(directoryOffset <= data.size() && header.NumberOfStreams <= (data.size() - directoryOffset) / sizeof(MINIDUMP_DIRECTORY),
+                L"Crash stream directory stays inside the retained file",
+                success))
+        return false;
+    std::optional<MINIDUMP_EXCEPTION_STREAM> exception;
+    for (size_t index = 0u; index < header.NumberOfStreams; ++index)
+    {
+        MINIDUMP_DIRECTORY entry{};
+        std::memcpy(&entry, data.data() + directoryOffset + index * sizeof(entry), sizeof(entry));
+        if (entry.StreamType != ExceptionStream)
+            continue;
+        const size_t offset = entry.Location.Rva;
+        if (! Check(! exception.has_value() && entry.Location.DataSize >= sizeof(MINIDUMP_EXCEPTION_STREAM) && offset <= data.size() &&
+                        sizeof(MINIDUMP_EXCEPTION_STREAM) <= data.size() - offset,
+                    L"Exactly one exception stream has a bounded extent",
+                    success))
+            return false;
+        exception.emplace();
+        std::memcpy(&exception.value(), data.data() + offset, sizeof(MINIDUMP_EXCEPTION_STREAM));
+    }
+    if (! Check(exception.has_value(), L"Real dump contains the unhandled exception stream", success))
+        return false;
+    Check(exception.value().ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && exception.value().ThreadId == record[3] &&
+              exception.value().ExceptionRecord.ExceptionAddress == record[5],
+          L"Dump exception identity agrees with independently retained fatal record",
+          success);
+    return success;
+}
+
 [[nodiscard]] bool RunFullSuiteInFreshProcesses(std::optional<TestDesktopInteraction> requestedInteraction = std::nullopt,
                                                 std::wstring_view exactFilter                              = {}) noexcept
 {
@@ -18694,6 +18911,7 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
     std::vector<IsolatedViewerTest> isolatedTests{
         {L"TestViewerHarnessTimeoutJoinsOwnedChildrenWithoutDesktopInput", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
         {L"TestViewerHarnessDesktopObservationDoesNotGrantRestoration", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerHarnessCrashPreservesOwnedEvidence", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
         {L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
         {L"TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
         {L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
@@ -18868,6 +19086,20 @@ int wmain(int argc, wchar_t** argv)
         return 3;
     }
 
+    if (filter == kViewerHarnessCrashChild && ! explicitNoActivate)
+        return 2;
+    // Declared before COM ownership: fatal capture remains live through apartment teardown.
+    ViewerHarnessCrashCapture crashCapture;
+    if (! crashCapture.Install())
+    {
+        std::wcerr << L"[FAIL] Viewer harness cannot reserve its marked crash evidence.\n";
+        return 1;
+    }
+    if (filter == kViewerHarnessCrashChild)
+    {
+        RaiseException(EXCEPTION_ACCESS_VIOLATION, EXCEPTION_NONCONTINUABLE, 0u, nullptr);
+        return 3;
+    }
     const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(coHr) && coHr != RPC_E_CHANGED_MODE)
     {
@@ -19067,6 +19299,10 @@ int wmain(int argc, wchar_t** argv)
     if (shouldRun(L"TestViewerSpaceAnalysisHostVirtualGridAndLifetime"))
     {
         success = TestViewerSpaceAnalysisHostVirtualGridAndLifetime() && success;
+    }
+    if (shouldRun(L"TestViewerHarnessCrashPreservesOwnedEvidence"))
+    {
+        success = TestViewerHarnessCrashPreservesOwnedEvidence() && success;
     }
     if (shouldRun(L"TestViewerSpaceAnalysisAllowsAmbientDesktopChanges"))
     {

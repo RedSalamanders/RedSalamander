@@ -1,5 +1,19 @@
 # SelfTest Specification
 
+ViewerPETests reserves fatal evidence in its acquired marked run's artifacts/ViewerPETests/crashes
+directory before COM initialization. The owned exception filter remains live through apartment teardown.
+An unhandled fault keeps its original failing status and retains a minimal minidump with thread and
+unloaded-module metadata plus a fixed 64-byte little-endian record: magic0x5253564352415348, version1,
+process ID, thread ID, exception code, address, dump-written flag and Win32 error (eight uint64 values).
+Normal completion removes only that process's unused reserved files. No product crash marker, AppData
+write, dialog, debugger attachment or foreground acquisition is part of this test policy.
+
+The registered TestViewerHarnessCrashPreservesOwnedEvidence case launches only its exact private
+noninteractive crash control inside the existing contained child runner. Only that typed control may expect
+an AV exit. Its new owned record, actual minidump exception stream, thread and address must agree; expected
+crash status never authorizes another failed child or substitutes for ordinary viewer qualification.
+Original crashes without dumps remain failed and unexplained until causal evidence is obtained.
+
 Selected native builds retain runtime fixtures through the test projects' actual
 build dependencies. Viewer PE tests inspect the application/Common PE files as
 well as loading viewer plugins; plugin contract tests load their complete plugin
