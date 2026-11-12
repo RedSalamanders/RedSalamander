@@ -1,5 +1,25 @@
 # Official Build Toolchain Identity
 
+## Explicit local SDK application builds
+
+`Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin
+closure against a frozen, independently hashed local DxUi descriptor. The native
+MSBuild executable is explicitly selected by the application caller; the shared
+broker verifies actual toolchain/ABI metadata. The canonical solution mapper owns
+the application target. `RSOutputRoot` defaults to `RSBuildRoot`; a separate output
+root requires the local SDK contract and a live shared compiler/output lease before
+any project writes. Application, plugins, language resources and intermediates all
+use that root. Projects without DxUi verify output ownership without importing its
+headers/archive; actual DxUi consumers keep the full ABI guard.
+
+Ordinary platform dependency and terminal inputs must already be prepared. Local
+SDK compilation disables manifest installation and terminal dependency building. An
+explicit positive build number bypasses ordinary mutable version allocation. It holds the existing platform
+dependency lock, refusing abandoned or contaminated state without repair. It does
+not replace ordinary outputs, change managed pins, run tests, package or publish.
+Its build/link record explicitly grants no test, repository, production or native
+ARM64 runtime qualification. The current local and main gates remain required.
+
 ## Owned compiler metadata services
 
 `New-RSProcessStartInfo` delegates private Windows MSVC metadata endpoints to the

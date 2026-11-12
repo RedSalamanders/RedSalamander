@@ -2,6 +2,36 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Build-LocalSdkCandidate.ps1",
+      "kind": "command",
+      "visibility": "public",
+      "lifecycle": "active",
+      "purpose": "Build the application and plugin closure against an explicit local SDK in fresh leased output and intermediate paths without granting qualification.",
+      "usage": "Explicit local developer invocation with an independently retained descriptor SHA, application-selected native MSBuild and positive build number.",
+      "usedBy": ["manual developer invocation", "Tools/Tests/LocalSdkCandidate.Tests.ps1"],
+      "prerequisites": ["local Windows", "PowerShell 7.4", "exact clean pinned CI engine", "matching native toolchain and API/ABI", "prepared ordinary platform dependencies and terminal inputs"],
+      "sideEffects": ["Acquires the existing platform dependency lock", "Creates and retains one fresh .build/local-unpinned operation", "Compiles test-enabled Release application and plugin outputs; never runs, packages or publishes them"],
+      "outputs": ["Local-only build, actual link and failure records; no test or repository acceptance"],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": ["Tools/Tests/LocalSdkCandidate.Tests.ps1"],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Tests/LocalSdkCandidate.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Exercise actual local SDK routing, early refusal, native output guard and every solution project's output/dependency metadata without compilation.",
+      "usage": "Current tooling profile; RequiresBuildToolchain evaluates explicit local MSBuild metadata in the marked sandbox.",
+      "usedBy": ["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"],
+      "prerequisites": ["PowerShell with Pester", "marked sandbox", "native Visual Studio for the RequiresBuildToolchain cohort"],
+      "sideEffects": ["Creates retained synthetic output-guard fixtures below the current owned sandbox run"],
+      "outputs": ["Pester routing, refusal and metadata results; no native compilation or qualification"],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [],
+      "replacement": null
+    },
+    {
       "path": "Tools/Invoke-R0ePairedValidation.ps1",
       "kind": "command",
       "visibility": "public",
@@ -1920,6 +1950,7 @@
       "usage": "Import from artifact-mutating orchestration and pass explicit configuration/platform plus the narrow reviewed coordination scope; delegation requires a one-use token, verified immediate parent, and kill-on-close containment; use guarded path/publication helpers for caller-selected repository outputs.",
       "usedBy": [
         "build.ps1",
+        "Tools/Build-LocalSdkCandidate.ps1",
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
         "Tools/Invoke-SanitizedMsbuild.ps1",

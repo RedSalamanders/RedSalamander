@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <Target Name="RSValidateOutputRoot" BeforeTargets="PrepareForBuild"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <PropertyGroup>
+      <_RSCanonicalOutputRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory).build\'))</_RSCanonicalOutputRoot>
+      <_RSEvaluatedOutputRoot>$([System.IO.Path]::GetFullPath('$(RSOutputRoot)'))</_RSEvaluatedOutputRoot>
+    </PropertyGroup>
+    <Error Condition="'$(_RSEvaluatedOutputRoot)'!='$(_RSCanonicalOutputRoot)' and ('$(CiSdkContract)'!='LocalUnpinnedAbiV1' or '$(RSDxUiSdkRoot)'=='' or '$(RSCiEngineRoot)'=='')" Text="Separate RedSalamander output roots require the explicit local SDK broker and its active compiler lease." />
+    <CallTarget Targets="RSRequireLocalSdkOutputLease" Condition="'$(_RSEvaluatedOutputRoot)'!='$(_RSCanonicalOutputRoot)'" />
+  </Target>
+  <!-- Non-DxUi projects verify output ownership without importing SDK headers or an archive. -->
+  <Target Name="RSRequireLocalSdkOutputLease">
+    <Exec Command="pwsh -NoProfile -NonInteractive -File &quot;$(RSCiEngineRoot)\Tools\Test-SdkConsumerLease.ps1&quot; -ProjectRoot &quot;$(CiSdkProjectRoot)&quot; -LeasePath &quot;$(CiSdkLeasePath)&quot; -SdkRoot &quot;$(CiSdkRoot)&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot; -SdkContract &quot;$(CiSdkContract)&quot; -PreflightLocalOutputs -OutputDirectory &quot;$(OutDir)/.&quot; -IntermediateDirectory &quot;$(IntDir)/.&quot;" />
+  </Target>
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
     <EnableASAN>true</EnableASAN>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -249,7 +262,8 @@
   <Target Name="RSPrepareTerminalRuntime"
           BeforeTargets="ClCompile;RSCopyRuntimeDependencies"
           Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectName)'=='Terminal'">
-    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)Tools\Build-GhosttyTerminalRuntime.ps1&quot; -Platform &quot;$(Platform)&quot;" />
+    <Error Condition="'$(CiSdkContract)'=='LocalUnpinnedAbiV1' and !Exists('$(MSBuildThisFileDirectory).build\TerminalEngine\Product\$(Platform)\bin\ghostty-vt.dll')" Text="Prepare terminal runtime inputs through the ordinary build before a local SDK build; local SDK compilation never rebuilds dependencies." />
+    <Exec Condition="'$(CiSdkContract)'!='LocalUnpinnedAbiV1'" Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)Tools\Build-GhosttyTerminalRuntime.ps1&quot; -Platform &quot;$(Platform)&quot;" />
   </Target>
 
   <Target Name="RSCopyRuntimeDependencies"

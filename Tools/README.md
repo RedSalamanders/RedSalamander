@@ -1,5 +1,17 @@
 # Repository tooling
 
+`Build-LocalSdkCandidate.ps1` explicitly builds the Release application and plugin
+closure against one independently hashed local DxUi descriptor. Supply the native
+Visual Studio `-MSBuildPath` selected for the application and a positive `-BuildNumber`
+to avoid the ordinary version-state allocator. Prepare ordinary platform
+dependencies and terminal inputs first. `RSOutputRoot` isolates application, plugin,
+language-resource and intermediate outputs; `RSBuildRoot` retains dependency inputs.
+The existing platform dependency lock excludes mutation during the build, and an
+abandoned or contaminated dependency state is refused without repair. Every native
+project verifies the shared output lease; actual DxUi consumers retain the full ABI
+guard. Manifest installation and terminal dependency builds are disabled for this recipe. The local
+build/link record grants no test, package, repository or production acceptance.
+
 Build several native projects once with `build.ps1 -ProjectNames ViewerText,ProductUiTests`.
 This evaluates their solution and deployed runtime union and publishes a selected
 receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
