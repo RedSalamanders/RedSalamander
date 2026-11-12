@@ -166,7 +166,7 @@ The resolved value is cached in `task._resolvedCrossFsBridgeBufferBytes` for dia
 
 For each file, the bridge does **not** write directly to the final destination. Instead:
 
-1. `MakeTempDestinationPath` builds a sibling temp name `<destination>.rs_tmp_<128-bit-hex>_<streamId>`. The 128 bits come from `BCryptGenRandom` (CSPRNG) so a local attacker cannot pre-create or race the staging file; the stream id is for diagnostic correlation only. (If `BCryptGenRandom` fails, it degrades to a PID/TID/tick name rather than blocking the copy.)
+1. `MakeTempDestinationPath` builds a sibling temp name `<destination>.<128-bit-hex>_<streamId>.rs-tmp`. The 128 bits come from `BCryptGenRandom` (CSPRNG) so a local attacker cannot pre-create or race the staging file; the stream id is for diagnostic correlation only. (If the generator fails, the item fails before any stage exists; there is no predictable-name fallback.)
 2. It opens an `IFileReader` on the source (capturing `GetSize` and `GetFileBasicInformation` first), and an `IFileWriter` on the temp path. The temp writer is opened with the overwrite/replace-readonly flags **stripped** (`tempFlags`), because the random name should never collide.
 3. It pumps source bytes into the writer (serial or pipelined; see below).
 4. After the last write, it checks the integrity invariant: when the source size was known, `fileCompletedBytes` must equal `fileTotalBytes`, otherwise the file fails with `ERROR_PARTIAL_COPY` (`bridge.integrity.sizeMismatch`).

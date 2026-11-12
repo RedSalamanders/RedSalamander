@@ -1124,9 +1124,10 @@ interface __declspec(uuid("c40c2400-9fd0-4f5c-a003-8e679120ad09")) __declspec(no
 // after a deletion reports the partial-tree receipt (outcome known, mutation committed, original still
 // present). An open or listing the location refuses with ERROR_NOT_SUPPORTED is reported as
 // ERROR_OPEN_FAILED, never as the "has an exact identity" answer. The host uses this route for the built-in Local provider only (D-7.3), for Permanent Delete
-// and a refused Recycle's escalation, each behind its own consent; never for Move, Rename or an
-// expected-destination replacement, and never for an object whose open failed (sharing violation,
-// access denied, delete pending).
+// and a refused Recycle's escalation, each behind its own consent, and (I63 B7) for the regular-file
+// source of a Managed Move after the destination's publication proof, with the facts resolved before
+// the copy opened the file; never for Rename or an expected-destination replacement, and never for an
+// object whose open failed (sharing violation, access denied, delete pending).
 struct FileSystemDeleteIdentity
 {
     uint32_t sizeBytes; // sizeof(FileSystemDeleteIdentity)
@@ -1373,6 +1374,54 @@ interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(
         FileSystemFlags flags, const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept                         = 0;
     virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept = 0;
+};
+
+// The facts a provider reads on an existing destination it can open and cannot identify. The host
+// keeps them from the user's decision to the publication and never interprets them.
+struct FileSystemExpectedOccupant
+{
+    uint32_t sizeBytes = 0; // sizeof(FileSystemExpectedOccupant)
+
+    unsigned long attributes = 0; // FILE_ATTRIBUTE_* flags
+    __int64 creationTime     = 0; // FILETIME ticks
+    __int64 lastWriteTime    = 0; // FILETIME ticks
+    uint64_t fileSizeBytes   = 0;
+    uint64_t fileIndex       = 0; // 0 when the location reports none
+};
+
+// Optional publication contract for a provider that binds objects (IFileSystemObjectBinding) and can
+// still meet an existing destination it opens and cannot identify: BindObject returns
+// ERROR_NOT_SUPPORTED for it, so PublishAs has no exact destination to replace. The location is asked
+// for the safety it can give and nothing more: the facts of the occupant the user decided on are read
+// again immediately before one replacing rename of the completed stage. No handle is held on the
+// occupant during the transfer and no set-aside copy of it is made.
+// - ReadExpectedOccupant succeeds only for a regular file the location cannot identify. It returns
+//   ERROR_NOT_SUPPORTED for an object BindObject can bind (the bound route is the authority there),
+//   for a directory, and for a link or any other reparse point.
+// - PublishOverExpectedOccupant renames the owned stage over finalPath only while the occupant read at
+//   that moment equals `expected`. Otherwise it fails with ERROR_REVISION_MISMATCH and publishes
+//   nothing. FILESYSTEM_FLAG_ALLOW_OVERWRITE is required; a read-only occupant also needs
+//   FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY. A rename the location refuses leaves the occupant and the
+//   stage as they were: there is no fallback to writing over the occupant. The result and the
+//   published object follow PublishAs.
+// - ReadUnidentifiedMetadataFeatures (I63 B7) reports, for a regular file the location opens and cannot
+//   identify, the FILESYSTEM_METADATA_* classes present on it, read no-follow: the answer
+//   IFileSystemBoundMetadata::GetMetadataSnapshot gives for a bound file. It returns ERROR_NOT_SUPPORTED
+//   for an object BindObject can bind, a directory, a link or any other reparse point. A class it failed
+//   to inspect is a failure of the call, never a class reported as absent. The host keeps a Move source
+//   whose metadata the pathname copy does not carry.
+interface __declspec(uuid("7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7")) __declspec(novtable) IFileSystemExpectedOccupantPublication : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE ReadExpectedOccupant(const wchar_t* path, FileSystemExpectedOccupant* occupant) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE PublishOverExpectedOccupant(IFileSystemBoundObject * ownedStage,
+                                                                  const wchar_t* finalPath,
+                                                                  const FileSystemExpectedOccupant* expected,
+                                                                  FileSystemFlags flags,
+                                                                  const FileSystemOptions* options,
+                                                                  FileSystemConditionalMutationResult* result,
+                                                                  IFileSystemBoundObject** published) noexcept                 = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadUnidentifiedMetadataFeatures(
+        const wchar_t* path, const FileSystemOptions* options, uint32_t* presentFeatures) noexcept = 0;
 };
 
 // Optional bounded transfer of a directory metadata witness to an already-held

@@ -194,7 +194,7 @@ LRESULT CALLBACK LeftoverScanCompletionProbeWndProc(HWND hwnd, UINT message, WPA
     std::error_code error;
     for (std::filesystem::directory_iterator entry(folder, error), end; ! error && entry != end; entry.increment(error))
     {
-        if (entry->path().filename().native().find(L".rs_tmp_") != std::wstring::npos)
+        if (FileOperationArtifacts::HasPossibleArtifactName(entry->path().filename().native()))
             return true;
     }
     return false;
@@ -343,8 +343,8 @@ public:
         return deadline.has_value() && std::chrono::steady_clock::now() >= deadline.value() ? std::nullopt : prompt;
     }
 
-    // Answers as the card does: an action under More (Delete all remaining by name) is submitted with
-    // its overflow placement and no Apply-to-all state.
+    // Answers as the card does: an action under More is submitted with its overflow placement and no
+    // Apply-to-all state; a direct action (Delete all remaining by name is one, I63 D-6) as published.
     [[nodiscard]] bool Answer(uint64_t taskId, const IdentityLessPrompt& prompt, IdentityLessAction action) noexcept
     {
         IdentityLessTask* const task = _operations->FindTask(taskId);
@@ -699,7 +699,7 @@ struct QueuedByNameDelete final
                                   touchedSummary.has_value() ? DescribeIdentityLessIssues(touchedSummary.value()) : std::wstring(L"<no summary>")));
 
     // 5. A planted leftover goes to the same consent: no touch-guard prompt, the leftover warning in it.
-    const std::filesystem::path leftover = root / L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0";
+    const std::filesystem::path leftover = root / L"movie.mkv.9d380e53676eab4315ae57f418f5049d_0.rs-tmp";
     if (! WriteFilledTestFile(leftover, 8192u, 0x33u))
         return reject(L"leftover fixture unavailable");
     HostResetTestPromptRequestCount();
@@ -773,7 +773,7 @@ struct QueuedByNameDelete final
                         bulkSummary.has_value() ? DescribeIdentityLessIssues(bulkSummary.value()) : std::wstring(L"<no summary>")));
 
     // 8. A Recycle of a leftover: the guard warns (OK/Cancel, no receipt), the escalation repeats the warning.
-    const std::filesystem::path recycledLeftover = root / L"clip.mp4.rs_tmp_0123456789ABCDEF0123456789ABCDEF_1";
+    const std::filesystem::path recycledLeftover = root / L"clip.mp4.0123456789abcdef0123456789abcdef_1.rs-tmp";
     if (! WriteFilledTestFile(recycledLeftover, 4096u, 0x77u) ||
         SetEnvironmentVariableW(kIdentityLessRecycleFailEnv.data(), (location / recycledLeftover.filename()).c_str()) == FALSE)
         return reject(L"Recycle leftover fixture unavailable");
@@ -969,30 +969,48 @@ struct QueuedByNameDelete final
         ShapeCase{L".redsalamander-upload-0123456789abcdef0123456789abcdef", true, false},
         ShapeCase{L".redsalamander-writer-0123456789ABCDEF0123456789ABCDEF", true, false},
         ShapeCase{L".redsalamander-rollback-0123456789abcdef0123456789abcdef", true, true},
-        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdef", true, true},
         ShapeCase{L".report.docx.rs-mtp-overwrite-0123456789abcdef0123456789abcdef.tmp", true, false},
-        ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.tmp", true, false},
-        ShapeCase{L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0", true, false},
-        ShapeCase{L"report.docx.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}", true, true},
-        ShapeCase{L"report.docx.rs_bak_0123456789abcdef0123456789abcdef", true, true},
-        ShapeCase{L"report.docx.rs_copy_tmp_0123456789abcdef0123456789abcdef", true, false},
-        ShapeCase{L"report.docx.rs_copy_tmp_01234567_89abcdef_0123456789abcdef", true, false},
+        // I63: the Win32 stages end in a real extension after a 32-hex token (a bridge stage also carries its stream id).
+        ShapeCase{L"harbor-timelapse.mp4.60d51a8a47eba25f7f7b699fb5137228_0.rs-tmp", true, false},
+        ShapeCase{L"harbor-timelapse.mp4.60D51A8A47EBA25F7F7B699FB5137228_1F.rs-tmp", true, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.rs-tmp", true, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.rs-bak", true, true},
+        // Names written by earlier versions are ordinary files: only the names the current build writes are recognized.
+        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdef", false, false},
+        ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.tmp", false, false},
+        ShapeCase{L"movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0", false, false},
+        ShapeCase{L"movie.mkv.rs_tmp_0000ABCD_00001234_0000000000ABCDEF_3", false, false},
+        ShapeCase{L"report.docx.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}", false, false},
+        ShapeCase{L"report.docx.rs_bak_0123456789abcdef0123456789abcdef", false, false},
+        ShapeCase{L"report.docx.rs_copy_tmp_0123456789abcdef0123456789abcdef", false, false},
+        ShapeCase{L"report.docx.rs_copy_tmp_01234567_89abcdef_0123456789abcdef", false, false},
+        ShapeCase{L"report.docx.~rs-write-0123456789abcdef0123456789abcdef.tmp", false, false},
+        ShapeCase{L"report.docx.~rs-write-{01234567-89AB-CDEF-0123-456789ABCDEF}.tmp", false, false},
+        ShapeCase{L"payload.rs_ren_0123456789abcdef0123456789abcdef", false, false},
+        ShapeCase{L"notes.rs_case_tmp_0123456789abcdef0123456789abcdef", false, false},
+        ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.bin", false, false},
+        ShapeCase{L"notes.rs_case_tmp_0123", false, false},
+        ShapeCase{L"report.docx.rs_bak_0123456789abcdef0123456789abcdeg", false, false},
+        ShapeCase{L"report.docx.rs_copy_tmp_0123456789abcdef0123456789abcde", false, false},
+        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdef.txt", false, false},
+        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdeg", false, false},
+        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcde", false, false},
         // Near misses stay ordinary.
+        ShapeCase{L"report.rs-tmp", false, false},
+        ShapeCase{L"report.rs-bak", false, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcde.rs-tmp", false, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdeg.rs-tmp", false, false},
+        ShapeCase{L"report.docx0123456789abcdef0123456789abcdef.rs-tmp", false, false},
+        ShapeCase{L".0123456789abcdef0123456789abcdef.rs-tmp", false, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef_.rs-tmp", false, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef_0.rs-bak", false, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.rs-tmp.txt", false, false},
         ShapeCase{L".rs-bak-0123456789abcdef-report.docx", false, false},
         ShapeCase{L".rs-bak-0123456789abcdef0123456789abcdefreport.docx", false, false},
         ShapeCase{L".redsalamander-upload-0123456789abcdef0123456789abcdeg", false, false},
         ShapeCase{L".redsalamander-upload-0123456789abcdef0123456789abcdef.txt", false, false},
         ShapeCase{L"redsalamander-upload-0123456789abcdef0123456789abcdef", false, false},
         ShapeCase{L".report.docx.rs-mtp-overwrite-0123456789abcdef.tmp", false, false},
-        ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.bin", false, false},
-        ShapeCase{L"notes.rs_case_tmp_0123", false, false},
-        ShapeCase{L"report.docx.rs_bak_0123456789abcdef0123456789abcdeg", false, false},
-        ShapeCase{L"report.docx.rs_copy_tmp_0123456789abcdef0123456789abcde", false, false},
-        // The case-only rename's temporary name is the whole leaf: no prefix, no suffix, 32 hex digits.
-        ShapeCase{L"notes.rs_case_tmp_0123456789abcdef0123456789abcdef", false, false},
-        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdef.txt", false, false},
-        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdeg", false, false},
-        ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcde", false, false},
     };
     for (const ShapeCase& shape : kShapes)
     {
@@ -1068,7 +1086,7 @@ struct QueuedByNameDelete final
 
     // 4. An item whose open failed is never handed off, whatever its Delete route.
     const std::array lockedLocal{candidate(
-        local, win32Paths, L"\\\\nas\\share\\movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0", sharingViolation, Artifacts::DeleteHandoff::PermanentCard)};
+        local, win32Paths, L"\\\\nas\\share\\movie.mkv.9d380e53676eab4315ae57f418f5049d_0.rs-tmp", sharingViolation, Artifacts::DeleteHandoff::PermanentCard)};
     if (Artifacts::BuildTouchGuardRequest(lockedLocal, request) != S_OK || request.items.size() != 1u || request.items.front().handedOff ||
         Artifacts::AcceptTouchGuard(request, receipt) != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
         return reject(L"an item whose open failed was handed to a by-name route");
@@ -1077,7 +1095,7 @@ struct QueuedByNameDelete final
     //    handed off is filtered, a handed-off item that turned bindable is a mismatch.
     Artifacts::Candidate bound = candidate(local,
                                            win32Paths,
-                                           L"\\\\nas\\share\\clip.mp4.rs_tmp_0123456789ABCDEF0123456789ABCDEF_1",
+                                           L"\\\\nas\\share\\clip.mp4.0123456789abcdef0123456789abcdef_1.rs-tmp",
                                            Artifacts::IdentityProbe{Artifacts::IdentityProbeOutcome::Bound, S_OK, S_OK},
                                            Artifacts::DeleteHandoff::None);
     bound.probeState           = Artifacts::ProbeState::Present;
@@ -1088,7 +1106,7 @@ struct QueuedByNameDelete final
         .kind          = FILESYSTEM_BOUND_REGULAR_FILE,
     };
     const Artifacts::Candidate handedOff =
-        candidate(local, win32Paths, L"\\\\nas\\share\\movie.mkv.rs_tmp_9D380E53676EAB4315AE57F418F5049D_0", noFileId, Artifacts::DeleteHandoff::RecycleWarn);
+        candidate(local, win32Paths, L"\\\\nas\\share\\movie.mkv.9d380e53676eab4315ae57f418f5049d_0.rs-tmp", noFileId, Artifacts::DeleteHandoff::RecycleWarn);
     const std::array mixed{bound, handedOff};
     if (Artifacts::BuildTouchGuardRequest(mixed, request) != S_OK || request.items.size() != 2u || ! request.allItemsRevalidatable ||
         Artifacts::AcceptTouchGuard(request, receipt) != S_OK || receipt.items.size() != 1u || Artifacts::RevalidateTouchGuard(receipt, mixed) != S_OK)
@@ -1151,11 +1169,11 @@ struct QueuedByNameDelete final
         static_cast<void>(SelfTest::RemoveAll(root));
         static_cast<void>(SelfTest::RemoveAll(outside));
     });
-    const std::wstring tail                 = L".rs_tmp_00112233445566778899AABBCCDDEEFF_0";
+    const std::wstring tail                 = L".00112233445566778899aabbccddeeff_0.rs-tmp";
     const std::filesystem::path top         = root / (L"a.mkv" + tail);
     const std::filesystem::path middle      = root / L"sub" / (L"b.bin" + tail);
     const std::filesystem::path deep        = root / L"sub" / L"deeper" / (L"c.bin" + tail);
-    const std::filesystem::path leftoverDir = root / L"folder.rs_tmp_00112233445566778899AABBCCDDEEFF_1";
+    const std::filesystem::path leftoverDir = root / L"folder.00112233445566778899aabbccddeeff_1.rs-tmp";
     const std::filesystem::path inner       = leftoverDir / (L"inner.bin" + tail);
     const std::filesystem::path beyondLink  = outside / (L"e.bin" + tail);
     if (! WriteFilledTestFile(top, 512u, 0x71u) || ! WriteFilledTestFile(middle, 512u, 0x72u) || ! WriteFilledTestFile(deep, 512u, 0x73u) ||
@@ -1379,7 +1397,7 @@ struct QueuedByNameDelete final
         return HasStageLeafIn(root / L"dst") || state.completedTasks.contains(copyTask.value());
     }, {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = L"bridge owned stage"});
     IdentityLessTask* const task = operations->FindTask(copyTask.value());
-    // Only the host bridge names its owned stage `.rs_tmp_`: seeing one proves the route under test.
+    // The host bridge names its owned stage (`<leaf>.<32 hex>_<stream>.rs-tmp`): seeing one proves the route under test.
     if (! staged.conditionMet || state.completedTasks.contains(copyTask.value()) || task == nullptr)
         return reject(L"the bridge Copy never showed its owned stage while running");
     task->RequestCancel();
@@ -3474,7 +3492,7 @@ struct QueuedByNameDelete final
                                   refusedSummary.has_value() ? DescribeIdentityLessIssues(refusedSummary.value()) : std::wstring(L"<no summary>")));
 
     // 2. A leftover whose open fails the same way is refused by the touch guard, never handed off.
-    const std::filesystem::path leftover = root / L"movie.mkv.rs_tmp_00112233445566778899AABBCCDDEEFF_0";
+    const std::filesystem::path leftover = root / L"movie.mkv.00112233445566778899aabbccddeeff_0.rs-tmp";
     if (! WriteFilledTestFile(leftover, 4096u, 0x62u) ||
         SetEnvironmentVariableW(kIdentityLessBindOpenNotSupportedEnv.data(), (location / leftover.filename()).c_str()) == FALSE)
         return reject(L"open-failure leftover fixture unavailable");

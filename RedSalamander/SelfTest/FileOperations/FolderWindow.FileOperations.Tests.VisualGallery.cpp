@@ -622,14 +622,14 @@ template <typename VerifyProvider>
         }
     }
     using Hit = FileOperationsPopupInternal::PopupHitTest::Kind;
-    for (const auto menu : {Hit::FooterOptions, Hit::FooterQueueMode, Hit::TaskCompletedMore, Hit::TaskSpeedLimit, Hit::TaskConflictMore})
+    // The file-exists decision publishes Skip all as a direct button, so it has no More flyout to capture.
+    for (const auto menu : {Hit::FooterOptions, Hit::FooterQueueMode, Hit::TaskCompletedMore, Hit::TaskSpeedLimit})
     {
         const std::wstring_view name = menu == Hit::FooterOptions       ? L"menu-options"
                                        : menu == Hit::FooterQueueMode   ? L"menu-queue"
                                        : menu == Hit::TaskCompletedMore ? L"menu-completed-more"
-                                       : menu == Hit::TaskSpeedLimit    ? L"menu-speed"
-                                                                        : L"menu-conflict-more";
-        task                         = menu == Hit::TaskCompletedMore ? partial : menu == Hit::TaskConflictMore ? result[32].tasks.front() : parallel;
+                                                                        : L"menu-speed";
+        task                         = menu == Hit::TaskCompletedMore ? partial : parallel;
         task.taskId                  = 1u;
         addVariant(name, task);
         result.back().menu = menu;
@@ -1983,7 +1983,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     failed.finished              = true;
     failed.lifecyclePhase        = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Terminal);
     failed.resultHr              = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-    failed.errorCount            = 2u;
+    failed.errorCount            = 1u;
     failed.retainedSourceCount   = 1u;
     failed.completedBytes        = 0u;
     failed.itemCompletedBytes    = 0u;
@@ -2489,7 +2489,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                 {
                     task.finished              = true;
                     task.resultHr              = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-                    task.errorCount            = 2u;
+                    task.errorCount            = 1u;
                     task.retainedSourceCount   = 1u;
                     task.lastDiagnosticMessage = LoadStringResource(nullptr, IDS_FILEOPS_DIAG_DESTINATION_EXISTS_UNVERIFIABLE);
                     if (scene == 25u)
@@ -2831,6 +2831,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     bool completedSemanticsFit                           = true;
     size_t doneHeadingWitnessCount                       = 0u;
     size_t groupBadgeWitnessCount                        = 0u;
+    // Count only the flyouts the menu scenarios open from here on.
+    static_cast<void>(TakeFileOpsFlyoutsBelowTwoCommandsForSelfTest());
     for (size_t display = 0u; display < monitors.size(); ++display)
     {
         const auto& monitor = monitors[display];
@@ -4003,9 +4005,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                         // Mutate one retained presentation snapshot on one HWND. The
                         // counter-only stage must retain recovery More without an
                         // Issues button; a zero-counter row must still show Issues.
+                        // A card with exactly one command shows that command as its
+                        // own button (directCommand) instead of a one-entry More menu.
                         auto& current                  = popupState->debugVisualScenario.value().front();
                         const std::wstring issuesLabel = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
-                        const auto inspectActions      = [&](std::wstring_view stage, bool issues, bool more, size_t count, bool collapsed, bool footerOnly)
+                        const auto inspectActions =
+                            [&](std::wstring_view stage, bool issues, bool more, size_t count, bool collapsed, bool footerOnly, uint32_t directCommand = 0u)
                         {
                             for (unsigned frame = 0u; frame < 2u; ++frame)
                                 RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -4019,21 +4024,24 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                         : observed.completedIssuesHostedText.empty() && observed.completedIssuesHostedName.empty());
                             const bool fits = read && observed.taskCollapsed == collapsed && observed.footerOnly == footerOnly &&
                                               observed.completedDismissVisible == (count != 0u) && observed.completedDiagnosticsMoreVisible == more &&
-                                              observed.completedVisibleActionCount == count && observed.completedActionRowFits &&
-                                              ! observed.taskHasVisibleButtonOverlap && ! observed.completedFailedItemsActionVisible && issueContent;
+                                              observed.completedDirectActionVisible == (directCommand != 0u) &&
+                                              observed.completedDirectActionCommand == directCommand && observed.completedVisibleActionCount == count &&
+                                              observed.completedActionRowFits && ! observed.taskHasVisibleButtonOverlap &&
+                                              ! observed.completedFailedItemsActionVisible && issueContent;
                             directIssuesTransitionsFit = directIssuesTransitionsFit && fits;
                             ++directIssuesTransitionCount;
-                            AppendLog(
-                                std::format(L"DirectIssuesTransition: dpi={} width={} stage={} issues={} more={} count={} collapsed={} footerOnly={} fit={}",
-                                            dpi,
-                                            widthDip,
-                                            stage,
-                                            observed.completedIssuesVisible,
-                                            observed.completedDiagnosticsMoreVisible,
-                                            observed.completedVisibleActionCount,
-                                            observed.taskCollapsed,
-                                            observed.footerOnly,
-                                            fits));
+                            AppendLog(std::format(L"DirectIssuesTransition: dpi={} width={} stage={} issues={} more={} direct={} count={} collapsed={} "
+                                                  L"footerOnly={} fit={}",
+                                                  dpi,
+                                                  widthDip,
+                                                  stage,
+                                                  observed.completedIssuesVisible,
+                                                  observed.completedDiagnosticsMoreVisible,
+                                                  observed.completedDirectActionCommand,
+                                                  observed.completedVisibleActionCount,
+                                                  observed.taskCollapsed,
+                                                  observed.footerOnly,
+                                                  fits));
                         };
                         current.hasProjectableIssues = false;
                         inspectActions(L"row-removed-counters-retained", false, true, 2u, false, false);
@@ -4042,7 +4050,13 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                         current.warningCount = 0u;
                         current.errorCount   = 0u;
                         inspectActions(L"row-without-counters", true, true, 3u, false, false);
-                        current.operation = FILESYSTEM_DELETE;
+                        // Without a recorded destination item Reveal is absent, and with no counters, retained
+                        // diagnostics or source actions Open destination is the only command left: it must be
+                        // its own button (command 4) after Dismiss and Issues, with no one-entry More menu.
+                        current.currentDestinationPath.clear();
+                        inspectActions(L"single-command-direct", true, false, 3u, false, false, 4u);
+                        current.currentDestinationPath = scenario.tasks.front().currentDestinationPath;
+                        current.operation              = FILESYSTEM_DELETE;
                         inspectActions(L"issues-without-more", true, false, 2u, false, false);
                         current.operation = scenario.tasks.front().operation;
                         static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
@@ -4227,6 +4241,14 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
         if (! promptCapture.succeeded || ! manifest.good())
             return false;
     }
+    // Every menu scenario has been captured: a flyout that opened with fewer than two commands is a defect,
+    // because a single command belongs on its own button.
+    if (const uint64_t flyoutsBelowTwoCommands = TakeFileOpsFlyoutsBelowTwoCommandsForSelfTest(); flyoutsBelowTwoCommands != 0u)
+    {
+        Fail(std::format(L"{} File Operations flyout(s) opened with fewer than two commands; a menu button needs at least two commands.",
+                         flyoutsBelowTwoCommands));
+        return false;
+    }
     if (pathDetailCaptureSets != monitors.size() * 2u || pathDetailDarkSets != monitors.size() || pathDetailLightSets != monitors.size() ||
         pathDetailCaptureCount != pathDetailCaptureSets * 2u)
     {
@@ -4265,7 +4287,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
     if (! directIssuesFit || directIssuesWitnessCount != 8u * monitors.size())
         Fail(L"Direct Issues must follow actual projectable rows, while counter-only diagnostics retain More and clean Delete retains Dismiss; all hosted "
              L"terminal action labels, hit targets, and bounds must fit at both widths and tested themes.");
-    if (! directIssuesTransitionsFit || directIssuesTransitionCount != 10u * monitors.size())
+    if (! directIssuesTransitionsFit || directIssuesTransitionCount != 11u * monitors.size())
         Fail(L"Direct Issues must arrive and retire on one popup HWND independently of warning counters and hide for collapsed/footer-only views; see "
              L"DirectIssuesTransition diagnostics.");
     if (! notStartedFit || notStartedWitnessCount != 2u * monitors.size())
@@ -4291,7 +4313,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
            groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && terminalFactsFit &&
            terminalFactsWitnessCount == 4u * monitors.size() && terminalFactsTransitionsFit &&
            terminalFactsTransitionCount == kTerminalFactsTransitionsPerMonitor * monitors.size() && directIssuesFit &&
-           directIssuesWitnessCount == 8u * monitors.size() && directIssuesTransitionsFit && directIssuesTransitionCount == 10u * monitors.size() &&
+           directIssuesWitnessCount == 8u * monitors.size() && directIssuesTransitionsFit && directIssuesTransitionCount == 11u * monitors.size() &&
            notStartedFit && notStartedWitnessCount == 2u * monitors.size() && verificationHalfFit && verificationHalfWitnessCount == 2u * monitors.size() &&
            speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits &&
            footerSummariesFit && abbreviatedPathsFit;

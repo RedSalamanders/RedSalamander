@@ -7,6 +7,7 @@
 #include "FileOperationItemResultReducer.h"
 #include "FileOperationTraversalPolicy.h"
 #include "FileOperationsConflictBroker.h"
+#include "FileOperationsLayoutStability.h"
 #include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
@@ -194,6 +195,7 @@ SelfTestPausePoint g_fileOpsPostFinishedCompletionPausePoint;
 SelfTestPausePoint g_fileOpsFallbackWorkerReturnPausePoint;
 SelfTestPausePoint g_fileOpsBridgeMoveSourceCleanupPausePoint;
 std::atomic<ULONGLONG> g_fileOpsBridgeMoveSourceCleanupPauseBailoutMs{5'000ull};
+std::atomic<bool> g_fileOpsSameFileProbeSharingUnenforcedForSelfTest{false};
 SelfTestPausePoint g_fileOpsBridgeDirectoryRestorePausePoint;
 std::mutex g_fileOpsBridgeDirectoryRestorePauseMutex;
 std::wstring g_fileOpsBridgeDirectoryRestorePausePath;
@@ -213,6 +215,7 @@ SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
+SelfTestPausePoint g_fileOpsPreparingBeforePublishPausePoint;
 SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
 SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 
@@ -2393,6 +2396,40 @@ void CountDiscoveryCompletionOnceLocked(Task& task, const void* cookieKey, uint6
     SaturatingAtomicAdd(task._discoveryCompletedMutationsWhileOpen, 1u);
 }
 
+static_assert(Task::kMaxInFlightFiles <= FileOperationsLayoutStability::kMaxStreamSlots, "one occupancy bit per stream slot");
+
+// I63 F1: the row slots the in-flight entries hold at nowTick, except the entry at exceptIndex (under _inFlightFilesMutex).
+// An entry holds its slot while it runs and for the linger in which the popup still paints its finished row.
+[[nodiscard]] uint32_t HeldStreamSlotsLocked(const Task& task, size_t exceptIndex, ULONGLONG nowTick) noexcept
+{
+    uint32_t held = 0u;
+    for (size_t index = 0u; index < task._inFlightFileCount && index < task._inFlightFiles.size(); ++index)
+    {
+        const Task::InFlightFileProgress& entry = task._inFlightFiles[index];
+        if (index == exceptIndex || entry.streamSlot >= task._inFlightFiles.size())
+            continue;
+        if (FileOperationsLayoutStability::StreamHoldsRow(
+                entry.explicitLifecycle, entry.terminal, entry.totalBytes, entry.completedBytes, entry.lastUpdateTick, nowTick))
+            held |= uint32_t{1u} << entry.streamSlot;
+    }
+    return held;
+}
+
+// I63 F1: gives the entry at index its row slot (under _inFlightFilesMutex). A new stream takes the lowest slot no other
+// entry holds. A continuing stream keeps its slot, unless another stream took it while this one held none (a stream that
+// begins its next file after its last file's linger); then it takes the lowest free slot too. The slots are never
+// compacted: an entry that leaves frees its slot and no other entry moves.
+void AssignStreamSlotLocked(Task& task, size_t index, bool newStream, ULONGLONG nowTick) noexcept
+{
+    if (index >= task._inFlightFileCount || index >= task._inFlightFiles.size())
+        return;
+    Task::InFlightFileProgress& entry = task._inFlightFiles[index];
+    const uint32_t held               = HeldStreamSlotsLocked(task, index, nowTick);
+    if (! newStream && entry.streamSlot < task._inFlightFiles.size() && (held & (uint32_t{1u} << entry.streamSlot)) == 0u)
+        return;
+    entry.streamSlot = FileOperationsLayoutStability::LowestFreeSlot(held, task._inFlightFiles.size());
+}
+
 void UpdateInFlightFileProgress(Task& task,
                                 const void* cookieKey,
                                 uint64_t progressStreamId,
@@ -2430,6 +2467,13 @@ void UpdateInFlightFileProgress(Task& task,
             task._inFlightFiles[write] = std::move(task._inFlightFiles[read]);
         }
         ++write;
+    }
+    // A moved-from or expired entry past the new count keeps its flags (explicitLifecycle, terminal, the counted bits).
+    // Left there, the next stream that grows into the slot reads them as a live leaf it replaces and withdraws the
+    // task's file counts for good (the one-way _fileWorkCountsUnavailable).
+    for (size_t vacated = write; vacated < task._inFlightFileCount; ++vacated)
+    {
+        task._inFlightFiles[vacated] = {};
     }
     task._inFlightFileCount = write;
 
@@ -2491,8 +2535,10 @@ void UpdateInFlightFileProgress(Task& task,
 
     if (task._inFlightFileCount < task._inFlightFiles.size())
     {
-        task._inFlightFiles[task._inFlightFileCount] = std::move(added);
+        const size_t addedIndex         = task._inFlightFileCount;
+        task._inFlightFiles[addedIndex] = std::move(added);
         ++task._inFlightFileCount;
+        AssignStreamSlotLocked(task, addedIndex, true, nowTick);
         return;
     }
 
@@ -2512,6 +2558,7 @@ void UpdateInFlightFileProgress(Task& task,
 
         ++task._perf.progressInFlightEvictions;
         task._inFlightFiles[replaceIndex] = std::move(added);
+        AssignStreamSlotLocked(task, replaceIndex, true, nowTick);
     }
 }
 
@@ -2532,6 +2579,7 @@ void RemoveInFlightFileBySourcePath(Task& task, const wchar_t* sourcePath) noexc
                 task._inFlightFiles[j - 1u] = std::move(task._inFlightFiles[j]);
             }
             --task._inFlightFileCount;
+            task._inFlightFiles[task._inFlightFileCount] = {}; // the vacated tail holds no state (see UpdateInFlightFileProgress)
             break;
         }
     }
@@ -5478,7 +5526,7 @@ struct ConflictActionPolicy
             default: AddPrimaryIfAvailable(ConflictAction::Retry); break;
         }
 
-        // Name collisions keep all four eligible choices direct and in the approved order.
+        // Name collisions keep their eligible choices direct and in the approved order.
         // Every prompt keeps Cancel last while preserving safe default/Escape semantics.
         AddPrimaryIfAvailable(ConflictAction::Skip);
         // Keep Cancel rightmost without changing the safe default or Escape action.
@@ -5502,6 +5550,21 @@ struct ConflictActionPolicy
                 overflowActions[overflowActionCount] = action;
                 ++overflowActionCount;
             }
+        }
+
+        // A menu needs two commands. A single remaining action is published as a direct action,
+        // immediately before Cancel; the default and Escape actions do not change. This includes
+        // Recycle escalation's task-scoped grant (I63 D-6, owner, 2026-11-11): alone, it is a direct
+        // button, never the default and never the Escape action.
+        if (overflowActionCount == 1u && primaryActionCount < primaryActions.size())
+        {
+            const auto end        = primaryActions.begin() + static_cast<std::ptrdiff_t>(primaryActionCount);
+            const auto cancelSlot = std::ranges::find(primaryActions.begin(), end, ConflictAction::Cancel);
+            std::move_backward(cancelSlot, end, end + 1);
+            *cancelSlot = overflowActions[0];
+            ++primaryActionCount;
+            overflowActions[0]  = ConflictAction::None;
+            overflowActionCount = 0u;
         }
     }
 };
@@ -5546,10 +5609,12 @@ struct ConflictActionPolicy
                                                              bool allowKeepBoth,
                                                              bool applyToAllEligible,
                                                              bool allowDestructiveReplacement,
-                                                             bool allowConcurrentRun       = false,
-                                                             bool allowLiveInvalidation    = true,
-                                                             bool allowReadOnlyDelete      = false,
-                                                             FileSystemOperation operation = FILESYSTEM_COPY) noexcept
+                                                             bool allowConcurrentRun                           = false,
+                                                             bool allowLiveInvalidation                        = true,
+                                                             bool allowReadOnlyDelete                          = false,
+                                                             FileSystemOperation operation                     = FILESYSTEM_COPY,
+                                                             bool allowDiscardSource                           = false,
+                                                             FileOperations::ConflictItemComparison comparison = {}) noexcept
 {
     ConflictActionPolicy policy{};
 
@@ -5597,8 +5662,9 @@ struct ConflictActionPolicy
         if (applyToAllEligible)
         {
             // Q2: an eligible multi-item task also offers the explicit task-scoped "Delete all
-            // remaining permanently" choice ("Delete all remaining by name" on the by-name class),
-            // which FinalizePresentation places under More.
+            // remaining permanently" choice ("Delete all remaining by name" on the by-name class).
+            // It is the only action beside the direct ones, so FinalizePresentation publishes it as
+            // a direct button immediately before Cancel (I63 D-6).
             policy.Add(ConflictAction::PermanentDeleteAll);
         }
         policy.FinalizePresentation(bucket, false);
@@ -5616,6 +5682,11 @@ struct ConflictActionPolicy
             {
                 policy.Add(ConflictAction::KeepBoth);
             }
+            if (allowDiscardSource)
+            {
+                // I63 B4: only the bridge's file pre-flight of a Move that may remove its source offers it.
+                policy.Add(ConflictAction::DiscardSource);
+            }
             break;
         case ConflictBucket::ReadOnlyRegularFileExists:
             if (allowDestructiveReplacement)
@@ -5625,6 +5696,10 @@ struct ConflictActionPolicy
             if (allowKeepBoth)
             {
                 policy.Add(ConflictAction::KeepBoth);
+            }
+            if (allowDiscardSource)
+            {
+                policy.Add(ConflictAction::DiscardSource);
             }
             break;
         case ConflictBucket::TypeMismatch:
@@ -5714,6 +5789,21 @@ struct ConflictActionPolicy
             policy.Add(ConflictAction::SkipAll);
         }
     }
+    // I63 B6: the two task-wide bulk policies. Each is offered only on a plain regular-file collision whose own pair
+    // matches it, so choosing it never has to say what it does to a pair it does not cover, and only where Apply to
+    // all is offered (the task can meet another such collision). Replace all older also needs Replace for this pair.
+    // They wait under More beside Skip All; neither is the default or the Escape action.
+    if (bucket == ConflictBucket::RegularFileExists && applyToAllEligible)
+    {
+        if (comparison.date == FileOperations::ConflictDateRelation::Same && comparison.size == FileOperations::ConflictSizeRelation::Same)
+        {
+            policy.Add(ConflictAction::SkipSameSizeAndDate);
+        }
+        if (allowDestructiveReplacement && comparison.date == FileOperations::ConflictDateRelation::Newer)
+        {
+            policy.Add(ConflictAction::ReplaceOlder);
+        }
+    }
     policy.Add(ConflictAction::Cancel);
     policy.FinalizePresentation(bucket, applyToAllEligible);
     return policy;
@@ -5722,18 +5812,28 @@ struct ConflictActionPolicy
 [[nodiscard]] bool IsCacheableConflictDecision(ConflictAction action) noexcept
 {
     return action != ConflictAction::Retry && action != ConflictAction::Cancel && action != ConflictAction::None && action != ConflictAction::SkipAll &&
-           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes && action != ConflictAction::InvalidateLiveOutput;
+           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes &&
+           action != ConflictAction::InvalidateLiveOutput &&
+           // I63 B6: a bulk policy is a grant of its own (ConflictArbiter), never an Apply-to-all answer.
+           action != ConflictAction::SkipSameSizeAndDate && action != ConflictAction::ReplaceOlder;
 }
 
 [[nodiscard]] bool IsCachedConflictDecisionEligible(const Task& task,
                                                     const Task::PerItemCallbackCookie* perItemCookie,
                                                     const Task::ConflictDecisionScope& scope,
                                                     std::wstring_view conflictDestinationPath,
-                                                    ConflictAction action) noexcept
+                                                    ConflictAction action,
+                                                    bool sameSizeAndDate = false) noexcept
 {
     if (! scope.applyToAllEligible)
     {
         return false;
+    }
+
+    if (action == ConflictAction::DiscardSource)
+    {
+        // I63 B4: a remembered Delete source covers only files with the same size and date as the pair it was given for.
+        return sameSizeAndDate;
     }
 
     if (action != ConflictAction::KeepBoth)
@@ -5901,6 +6001,12 @@ struct ConflictActionPolicy
                 entry.reset();
     }
     *reusable = Task::CachedConflictDecision{scope, action, originatingPromptGeneration};
+    if (action == ConflictAction::DiscardSource && scope.bucket == ConflictBucket::RegularFileExists)
+    {
+        // I63 B6: a Delete source for all covers the class Skip all with the same size and date covers; the one
+        // given last wins.
+        arbiter.skipSameSizeAndDateGrantGeneration = 0u;
+    }
     return true;
 }
 
@@ -5908,7 +6014,8 @@ struct ConflictActionPolicy
 [[nodiscard]] const Task::CachedConflictDecision* LoadEligibleConflictDecisionFromCacheLocked(const Task& task,
                                                                                               const Task::PerItemCallbackCookie* perItemCookie,
                                                                                               const Task::ConflictDecisionScope& scope,
-                                                                                              std::wstring_view conflictDestinationPath) noexcept
+                                                                                              std::wstring_view conflictDestinationPath,
+                                                                                              bool sameSizeAndDate = false) noexcept
 {
     for (const std::optional<Task::CachedConflictDecision>& entry : task._conflictArbiter.decisionCache)
     {
@@ -5916,12 +6023,95 @@ struct ConflictActionPolicy
         {
             continue;
         }
-        if (IsCachedConflictDecisionEligible(task, perItemCookie, scope, conflictDestinationPath, entry->action))
+        if (IsCachedConflictDecisionEligible(task, perItemCookie, scope, conflictDestinationPath, entry->action, sameSizeAndDate))
         {
             return &entry.value();
         }
     }
     return nullptr;
+}
+
+// I63 B6: the bulk policy, if any, that decides this collision without a prompt. A policy covers only a plain
+// regular-file collision (not a read-only occupant, a link, a folder or a type mismatch) that could take an
+// Apply-to-all answer and whose facts were read and match: the same size and date for Skip all with the same size
+// and date, an incoming file newer by more than the timestamp tolerance for Replace all older. The one-hour class
+// and unknown facts never match. The two classes are disjoint. Returns None when no policy applies.
+[[nodiscard]] ConflictAction LoadConflictPolicyGrantLocked(const Task::ConflictArbiter& arbiter,
+                                                           ConflictBucket bucket,
+                                                           const Task::ConflictDecisionScope& scope,
+                                                           FileOperations::ConflictItemComparison comparison,
+                                                           uint64_t& originatingGeneration) noexcept
+{
+    originatingGeneration    = 0u;
+    const bool fileCollision = bucket == ConflictBucket::RegularFileExists || bucket == ConflictBucket::ReadOnlyRegularFileExists;
+    if (! fileCollision || ! scope.applyToAllEligible)
+    {
+        return ConflictAction::None;
+    }
+    // I63 B6.5 (D-13): a preset Skip or Keep both decides every file collision this scope covers, a read-only occupant
+    // included. A preset Replace older is the Replace all older grant set from the start (below).
+    if (arbiter.presetPolicy == FileOperations::PresetCollisionPolicy::Skip || arbiter.presetPolicy == FileOperations::PresetCollisionPolicy::KeepBoth)
+    {
+        originatingGeneration = Task::ConflictArbiter::kPresetPolicyGeneration;
+        return arbiter.presetPolicy == FileOperations::PresetCollisionPolicy::Skip ? ConflictAction::Skip : ConflictAction::KeepBoth;
+    }
+    if (bucket != ConflictBucket::RegularFileExists)
+    {
+        return ConflictAction::None;
+    }
+    if (arbiter.skipSameSizeAndDateGrantGeneration != 0u && comparison.date == FileOperations::ConflictDateRelation::Same &&
+        comparison.size == FileOperations::ConflictSizeRelation::Same)
+    {
+        originatingGeneration = arbiter.skipSameSizeAndDateGrantGeneration;
+        return ConflictAction::SkipSameSizeAndDate;
+    }
+    if (arbiter.replaceOlderGrantGeneration != 0u && comparison.date == FileOperations::ConflictDateRelation::Newer)
+    {
+        originatingGeneration = arbiter.replaceOlderGrantGeneration;
+        return ConflictAction::ReplaceOlder;
+    }
+    return ConflictAction::None;
+}
+
+// I63 B6: the answer a bulk policy gives for one item. The policy itself is never executed: its item is skipped or
+// replaced exactly as a single Skip or Replace would be.
+[[nodiscard]] constexpr ConflictAction ConflictPolicyItemAction(ConflictAction policy) noexcept
+{
+    return policy == ConflictAction::SkipSameSizeAndDate ? ConflictAction::Skip : policy == ConflictAction::ReplaceOlder ? ConflictAction::Overwrite : policy;
+}
+
+// I63 B6: records a bulk policy chosen at a prompt. Each policy is set once per task and stays set; returns true only
+// when this call set it. Skip all with the same size and date and a remembered Delete source for all cover the same
+// class (plain file collisions with the same size and date): the one given last wins, so this clears that answer.
+[[nodiscard]] bool GrantConflictPolicyLocked(Task::ConflictArbiter& arbiter, ConflictAction policy, uint64_t originatingGeneration) noexcept
+{
+    const uint64_t generation = originatingGeneration != 0u ? originatingGeneration : 1u;
+    if (policy == ConflictAction::SkipSameSizeAndDate)
+    {
+        for (std::optional<Task::CachedConflictDecision>& entry : arbiter.decisionCache)
+        {
+            if (entry.has_value() && entry->action == ConflictAction::DiscardSource && entry->scope.bucket == ConflictBucket::RegularFileExists)
+            {
+                entry.reset();
+            }
+        }
+        if (arbiter.skipSameSizeAndDateGrantGeneration != 0u)
+        {
+            return false;
+        }
+        arbiter.skipSameSizeAndDateGrantGeneration = generation;
+        return true;
+    }
+    if (policy == ConflictAction::ReplaceOlder)
+    {
+        if (arbiter.replaceOlderGrantGeneration != 0u)
+        {
+            return false;
+        }
+        arbiter.replaceOlderGrantGeneration = generation;
+        return true;
+    }
+    return false;
 }
 
 // Q2: whether this task already holds the task-scoped "Delete all remaining permanently" grant for
@@ -6002,13 +6192,25 @@ void SetConflictPromptLocked(Task& task,
     prompt.destinationPath     = std::move(destinationPath);
     prompt.sourceMetadata      = std::move(sourceMetadata);
     prompt.destinationMetadata = std::move(destinationMetadata);
-    prompt.decisionScope       = std::move(decisionScope);
-    prompt.applyToAllEligible  = actionPolicy.applyToAllEligible;
-    prompt.applyToAllChecked   = false;
-    prompt.skipAllEligible     = actionPolicy.skipAllEligible;
-    prompt.buttonsPublishable  = actionPolicy.buttonsPublishable;
-    prompt.retryFailed         = attemptCount != 0u;
-    prompt.attemptCount        = attemptCount;
+    // I63 B3: one comparison, made here, for every view of this decision.
+    if ((bucket == ConflictBucket::RegularFileExists || bucket == ConflictBucket::ReadOnlyRegularFileExists) && prompt.sourceMetadata.available &&
+        prompt.destinationMetadata.available && ! prompt.sourceMetadata.isDirectory && ! prompt.destinationMetadata.isDirectory &&
+        ! prompt.sourceMetadata.isLink && ! prompt.destinationMetadata.isLink)
+    {
+        prompt.comparison = FileOperations::CompareConflictItems(prompt.sourceMetadata.sizeKnown,
+                                                                 prompt.sourceMetadata.sizeBytes,
+                                                                 prompt.sourceMetadata.lastWriteTime,
+                                                                 prompt.destinationMetadata.sizeKnown,
+                                                                 prompt.destinationMetadata.sizeBytes,
+                                                                 prompt.destinationMetadata.lastWriteTime);
+    }
+    prompt.decisionScope      = std::move(decisionScope);
+    prompt.applyToAllEligible = actionPolicy.applyToAllEligible;
+    prompt.applyToAllChecked  = false;
+    prompt.skipAllEligible    = actionPolicy.skipAllEligible;
+    prompt.buttonsPublishable = actionPolicy.buttonsPublishable;
+    prompt.retryFailed        = attemptCount != 0u;
+    prompt.attemptCount       = attemptCount;
     if (consentFacts != nullptr)
     {
         prompt.consentDetail       = consentFacts->consentDetail;
@@ -6091,6 +6293,22 @@ void SetConflictPromptMetadataLoadingLocked(Task& task,
     entry.conflictPrompt->sourceParentPath      = prompt.pathDisplay.sourceParentPath;
     entry.conflictPrompt->destinationName       = prompt.pathDisplay.destinationName;
     entry.conflictPrompt->destinationParentPath = prompt.pathDisplay.destinationParentPath;
+    // I63 B3.3: the two items' facts as this decision shows them, kept for the Issues row of an item that ends at this
+    // collision. Only a collision of two regular files whose facts were read carries them; they are never authority.
+    const bool fileCollision = prompt.bucket == ConflictBucket::RegularFileExists || prompt.bucket == ConflictBucket::ReadOnlyRegularFileExists;
+    if (fileCollision && prompt.sourceMetadata.available && prompt.destinationMetadata.available && ! prompt.sourceMetadata.isDirectory &&
+        ! prompt.destinationMetadata.isDirectory && ! prompt.sourceMetadata.isLink && ! prompt.destinationMetadata.isLink)
+    {
+        FileOperations::ConflictObservedComparison observed{};
+        observed.source.sizeKnown          = prompt.sourceMetadata.sizeKnown;
+        observed.source.sizeBytes          = prompt.sourceMetadata.sizeBytes;
+        observed.source.lastWriteTime      = prompt.sourceMetadata.lastWriteTime;
+        observed.destination.sizeKnown     = prompt.destinationMetadata.sizeKnown;
+        observed.destination.sizeBytes     = prompt.destinationMetadata.sizeBytes;
+        observed.destination.lastWriteTime = prompt.destinationMetadata.lastWriteTime;
+        observed.comparison                = prompt.comparison;
+        entry.conflictPrompt->itemFacts    = observed;
+    }
     return entry;
 }
 
@@ -6224,6 +6442,7 @@ struct ConflictPromptBeginResult
     ConflictBucket bucket = ConflictBucket::Unknown;
     Task::ConflictDecisionScope decisionScope{};
     std::optional<FileOperations::ConflictObservationReference> acceptedObservation;
+    bool fromPolicy = false; // I63 B6: decided by a bulk policy the user chose earlier in this task
 };
 
 [[nodiscard]] ConflictPromptBeginResult BeginConflictPrompt(Task& task,
@@ -6238,7 +6457,8 @@ struct ConflictPromptBeginResult
                                                             bool allowDestructiveReplacement               = false,
                                                             const DeferredConsentPromptFacts* consentFacts = nullptr,
                                                             bool exactExecutionPaths                       = false,
-                                                            bool allowReadOnlyDelete                       = false) noexcept
+                                                            bool allowReadOnlyDelete                       = false,
+                                                            bool allowDiscardSource                        = false) noexcept
 {
     const auto selectedAdmission = task.LoadSelectedAdmission();
     // Exact paths are supplied only by an executor holding this mutation's bound authority.
@@ -6294,7 +6514,24 @@ struct ConflictPromptBeginResult
             L"FileOps.Conflict.MetadataPromptUs", L"", metadataUs, sourceMetadata.available ? 1u : 0u, destinationMetadata.available ? 1u : 0u, S_OK);
     }
 
-    bucket                                    = RefineTypedConflictBucket(task._operation, bucket, sourceMetadata, destinationMetadata);
+    bucket = RefineTypedConflictBucket(task._operation, bucket, sourceMetadata, destinationMetadata);
+    // I63 B4/B6: a remembered Delete source is reused only for a pair of files with the same size and date, and the
+    // bulk policies are offered and applied by this comparison. It is the engine's, made here with the same guards as
+    // the published prompt's (SetConflictPromptLocked).
+    FileOperations::ConflictItemComparison itemComparison{};
+    if ((bucket == ConflictBucket::RegularFileExists || bucket == ConflictBucket::ReadOnlyRegularFileExists) && sourceMetadata.available &&
+        destinationMetadata.available && ! sourceMetadata.isDirectory && ! destinationMetadata.isDirectory && ! sourceMetadata.isLink &&
+        ! destinationMetadata.isLink)
+    {
+        itemComparison = FileOperations::CompareConflictItems(sourceMetadata.sizeKnown,
+                                                              sourceMetadata.sizeBytes,
+                                                              sourceMetadata.lastWriteTime,
+                                                              destinationMetadata.sizeKnown,
+                                                              destinationMetadata.sizeBytes,
+                                                              destinationMetadata.lastWriteTime);
+    }
+    const bool sameSizeAndDate =
+        itemComparison.date == FileOperations::ConflictDateRelation::Same && itemComparison.size == FileOperations::ConflictSizeRelation::Same;
     const bool allowKeepBoth                  = IsKeepBothActionEligible(task, perItemCookie, bucket, promptDestinationPath);
     Task::ConflictDecisionScope decisionScope = BuildConflictDecisionScope(task, perItemCookie, bucket, sourceMetadata, destinationMetadata);
     if (allowKeepBoth && perItemCookie != nullptr)
@@ -6341,12 +6578,49 @@ struct ConflictPromptBeginResult
                                                                         consentFacts != nullptr && consentFacts->allowConcurrentRun,
                                                                         consentFacts == nullptr || consentFacts->allowLiveInvalidation,
                                                                         allowReadOnlyDelete,
-                                                                        task._operation);
+                                                                        task._operation,
+                                                                        allowDiscardSource,
+                                                                        itemComparison);
 
     if (! ignoreCachedDecision)
     {
+        // I63 B6: a bulk policy chosen earlier in this task decides a matching plain file collision before any
+        // remembered Apply-to-all answer, so for such a pair the policy wins. The item is answered through the same
+        // route as a single Skip or Replace, with its own facts (a Replace at a destination without identities hands
+        // over this item's own occupant, read by its caller before this call). Only the item's answer must still be
+        // offered here: a route that cannot replace this pair falls through to the remembered answers or a prompt.
+        uint64_t policyGeneration        = 0u;
+        const ConflictAction policyGrant = LoadConflictPolicyGrantLocked(task._conflictArbiter, bucket, decisionScope, itemComparison, policyGeneration);
+        if (policyGrant != ConflictAction::None && IsCachedActionOffered(actionPolicy, bucket, ConflictPolicyItemAction(policyGrant)))
+        {
+            if (policyGrant == ConflictAction::SkipSameSizeAndDate)
+            {
+                task._skippedSameSizeAndDateCount.fetch_add(1u, std::memory_order_acq_rel);
+            }
+            else if (policyGrant == ConflictAction::ReplaceOlder)
+            {
+                task._replacedOlderCount.fetch_add(1u, std::memory_order_acq_rel);
+            }
+            // One Issues row per policy with a count (Q10), joined to the prompt that set it; no note per item.
+            auto accepted = MakeAcceptedConflictDiagnosticLocked(
+                task, policyGrant, true, decisionScope, FileOperations::ConflictDecisionOrigin::CachedScope, policyGeneration);
+            std::optional<FolderWindow::FileOperationState::TaskDiagnosticEntry> aggregatePublication;
+            const std::optional<uint64_t> aggregateGeneration = NoteCachedConflictApplicationLocked(task, accepted, aggregatePublication);
+            const FileOperations::ConflictObservationReference observation{task._taskId,
+                                                                           aggregateGeneration.value_or(accepted.acceptedDecision->promptGeneration)};
+            lock.unlock();
+            ClearConflictPrompt(task);
+            if (task._state != nullptr)
+            {
+                if (! aggregateGeneration.has_value())
+                    task._state->EnqueueTaskDiagnostic(std::move(accepted));
+                else if (aggregatePublication.has_value())
+                    task._state->PublishCachedConflictAggregate(std::move(aggregatePublication.value()), false);
+            }
+            return {ConflictPolicyItemAction(policyGrant), false, true, bucket, decisionScope, observation, true};
+        }
         if (const Task::CachedConflictDecision* cachedDecision =
-                LoadEligibleConflictDecisionFromCacheLocked(task, perItemCookie, decisionScope, promptDestinationPath);
+                LoadEligibleConflictDecisionFromCacheLocked(task, perItemCookie, decisionScope, promptDestinationPath, sameSizeAndDate);
             cachedDecision != nullptr && IsCachedActionOffered(actionPolicy, bucket, cachedDecision->action))
         {
             const ConflictAction action = cachedDecision->action;
@@ -6456,6 +6730,9 @@ struct ConflictPromptBeginResult
         consentPrompt      = task._conflictArbiter.prompt.deferredConsent;
         expectedGeneration = task._conflictArbiter.prompt.generation;
     }
+    // The worker now waits for a person. A queued task that has not entered is passed meanwhile.
+    task.SetAwaitingUserDecision(true);
+    const auto answeredScope     = wil::scope_exit([&task]() noexcept { task.SetAwaitingUserDecision(false); });
     const uint64_t perfStartUs   = PerfNowUs();
     const auto perfCallbackScope = wil::scope_exit([&] noexcept
     {
@@ -6488,6 +6765,13 @@ struct ConflictPromptBeginResult
     bool repeatStorageFailed       = false;
     uint64_t originatingGeneration = 0u;
     std::optional<FolderWindow::FileOperationState::TaskDiagnosticEntry> accepted;
+    ConflictAction chosenPolicy = ConflictAction::None; // I63 B6
+    bool chosenPolicyIsNew      = false;
+    std::wstring chosenPolicySourcePath;
+    std::wstring chosenPolicyDestinationPath;
+    // I63 G7: other streams of this task may still transfer while this worker waits; see RefreshAwaitingAnswerQuiet.
+    uint64_t keepAwakeWorkSeen      = 0u;
+    ULONGLONG keepAwakeLastWorkTick = GetTickCount64();
     for (;;)
     {
         if (task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
@@ -6503,7 +6787,10 @@ struct ConflictPromptBeginResult
             return {ConflictAction::Cancel, false};
         }
         if (wait != WAIT_OBJECT_0)
+        {
+            task.RefreshAwaitingAnswerQuiet(keepAwakeWorkSeen, keepAwakeLastWorkTick);
             continue;
+        }
         std::scoped_lock lock(task._conflictArbiter.mutex);
         if (task._conflictArbiter.prompt.generation != expectedGeneration || ! task._conflictArbiter.prompt.active)
             return {ConflictAction::Cancel, false};
@@ -6533,6 +6820,27 @@ struct ConflictPromptBeginResult
                 accepted = MakeAcceptedConflictDiagnosticLocked(
                     task, action, applyToAll, decisionScope, FileOperations::ConflictDecisionOrigin::User, originatingGeneration);
             }
+            if (action == ConflictAction::SkipSameSizeAndDate || action == ConflictAction::ReplaceOlder)
+            {
+                // I63 B6: the bulk policy is recorded on the task, and the current item, which matches it (the
+                // policy is offered only then), is answered as a single Skip or Replace.
+                chosenPolicy      = action;
+                chosenPolicyIsNew = GrantConflictPolicyLocked(task._conflictArbiter, action, originatingGeneration);
+                if (chosenPolicyIsNew)
+                {
+                    chosenPolicySourcePath      = task._conflictArbiter.prompt.sourcePath;
+                    chosenPolicyDestinationPath = task._conflictArbiter.prompt.destinationPath;
+                }
+                if (action == ConflictAction::SkipSameSizeAndDate)
+                {
+                    task._skippedSameSizeAndDateCount.fetch_add(1u, std::memory_order_acq_rel);
+                }
+                else
+                {
+                    task._replacedOlderCount.fetch_add(1u, std::memory_order_acq_rel);
+                }
+                action = ConflictPolicyItemAction(action);
+            }
         }
         // Consume, publish repeat policy, reset the event and release ownership as one
         // transition. Diagnostics may flush only after no accepted prompt remains live.
@@ -6550,6 +6858,20 @@ struct ConflictPromptBeginResult
     if (accepted.has_value() && task._state != nullptr)
     {
         task._state->EnqueueTaskDiagnostic(std::move(accepted.value()));
+    }
+    if (chosenPolicyIsNew)
+    {
+        // I63 B6: one Information note per task when a policy is first set, not one per item.
+        const bool skipPolicy = chosenPolicy == ConflictAction::SkipSameSizeAndDate;
+        task.LogDiagnostic(FolderWindow::FileOperationState::DiagnosticSeverity::Info,
+                           S_OK,
+                           skipPolicy ? L"conflict.policy.skipSameSizeAndDate" : L"conflict.policy.replaceOlder",
+                           skipPolicy ? L"Skip all with the same size and date: later files of this task already at the destination with the same size "
+                                        L"and date are skipped without asking."
+                                      : L"Replace all older: later files of this task whose existing destination file is older are replaced without "
+                                        L"asking.",
+                           chosenPolicySourcePath,
+                           chosenPolicyDestinationPath);
     }
 
     if (observation != nullptr && originatingGeneration != 0u && ! repeatStorageFailed)
@@ -6676,7 +6998,9 @@ struct DeferredConsentResult
         case ConflictAction::ReplaceReadOnly:
         case ConflictAction::ReplaceLink:
         case ConflictAction::PermanentDelete:
-        case ConflictAction::PermanentDeleteAll: return true;
+        case ConflictAction::PermanentDeleteAll:
+        case ConflictAction::DiscardSource:
+        case ConflictAction::ReplaceOlder: return true;
         case ConflictAction::KeepBoth:
         case ConflictAction::Proceed:
         case ConflictAction::RetainSource:
@@ -6684,6 +7008,7 @@ struct DeferredConsentResult
         case ConflictAction::Retry:
         case ConflictAction::Skip:
         case ConflictAction::SkipAll:
+        case ConflictAction::SkipSameSizeAndDate:
         case ConflictAction::RunConcurrently:
         case ConflictAction::QueueUntilOtherTaskFinishes:
         case ConflictAction::InvalidateLiveOutput:
@@ -8540,14 +8865,179 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                 ((flags & 2u) == 0u && policy.Contains(ConflictAction::KeepBoth)) ||
                 ((flags & 16u) == 0u && policy.Contains(ConflictAction::RunConcurrently)) ||
                 ((flags & 32u) == 0u && policy.Contains(ConflictAction::InvalidateLiveOutput)) ||
-                // Q2: the task-scoped Recycle grant exists only on an eligible escalation, under More;
-                // the by-name escalation (I35 R7.3) offers its own "Delete all remaining by name".
+                // Q2: the task-scoped Recycle grant exists only on an eligible escalation; the by-name
+                // escalation (I35 R7.3) offers its own "Delete all remaining by name". I63 D-6: it is a
+                // direct action, never the default and never the Escape action.
                 policy.Contains(ConflictAction::PermanentDeleteAll) !=
                     ((bucket == ConflictBucket::RecycleFailed || bucket == ConflictBucket::RecycleFailedByName) && (flags & 4u) != 0u) ||
-                std::find(policy.primaryActions.begin(), primaryEnd, ConflictAction::PermanentDeleteAll) != primaryEnd)
+                std::find(policy.overflowActions.begin(), overflowEnd, ConflictAction::PermanentDeleteAll) != overflowEnd ||
+                policy.defaultAction == ConflictAction::PermanentDeleteAll || policy.escapeAction == ConflictAction::PermanentDeleteAll ||
+                // I63: More never holds a single command.
+                policy.overflowActionCount == 1u)
             {
                 return false;
             }
+        }
+    }
+    // I63 B4: Delete source exists only on a file collision of a Move, only when the caller offers it, is never the
+    // default or Escape action, and sits under More while two or more actions wait there; a single one is published
+    // as a direct action immediately before Cancel.
+    for (size_t bucketIndex = 0u; bucketIndex < static_cast<size_t>(ConflictBucket::Count); ++bucketIndex)
+    {
+        for (unsigned int flags = 0u; flags < 64u; ++flags)
+        {
+            const auto bucket        = static_cast<ConflictBucket>(bucketIndex);
+            const auto withheld      = BuildConflictActionPolicy(bucket,
+                                                                 (flags & 1u) != 0u,
+                                                                 (flags & 2u) != 0u,
+                                                                 (flags & 4u) != 0u,
+                                                                 (flags & 8u) != 0u,
+                                                                 (flags & 16u) != 0u,
+                                                                 (flags & 32u) != 0u,
+                                                                 false,
+                                                                 FILESYSTEM_MOVE,
+                                                                 false);
+            const auto offered       = BuildConflictActionPolicy(bucket,
+                                                                 (flags & 1u) != 0u,
+                                                                 (flags & 2u) != 0u,
+                                                                 (flags & 4u) != 0u,
+                                                                 (flags & 8u) != 0u,
+                                                                 (flags & 16u) != 0u,
+                                                                 (flags & 32u) != 0u,
+                                                                 false,
+                                                                 FILESYSTEM_MOVE,
+                                                                 true);
+            const bool fileCollision = bucket == ConflictBucket::RegularFileExists || bucket == ConflictBucket::ReadOnlyRegularFileExists;
+            const auto primaryEnd    = offered.primaryActions.begin() + static_cast<std::ptrdiff_t>(offered.primaryActionCount);
+            const auto overflowEnd   = offered.overflowActions.begin() + static_cast<std::ptrdiff_t>(offered.overflowActionCount);
+            const bool inPrimary     = std::find(offered.primaryActions.begin(), primaryEnd, ConflictAction::DiscardSource) != primaryEnd;
+            const bool inOverflow    = std::find(offered.overflowActions.begin(), overflowEnd, ConflictAction::DiscardSource) != overflowEnd;
+            if (withheld.Contains(ConflictAction::DiscardSource) || offered.Contains(ConflictAction::DiscardSource) != fileCollision ||
+                offered.actionCount != withheld.actionCount + (fileCollision ? 1u : 0u) || offered.defaultAction != withheld.defaultAction ||
+                offered.escapeAction != ConflictAction::Cancel || offered.defaultAction == ConflictAction::DiscardSource || (inPrimary && inOverflow) ||
+                (fileCollision && ! inPrimary && ! inOverflow) || (! fileCollision && (inPrimary || inOverflow)) ||
+                (inPrimary && (offered.overflowActionCount != 0u || offered.primaryActionCount < 2u ||
+                               offered.primaryActions[offered.primaryActionCount - 2u] != ConflictAction::DiscardSource ||
+                               offered.primaryActions[offered.primaryActionCount - 1u] != ConflictAction::Cancel)) ||
+                (inOverflow && offered.overflowActionCount < 2u))
+            {
+                return false;
+            }
+        }
+    }
+    // I63 B6: the bulk policies exist only on a plain regular-file collision whose own pair matches, only where Apply to
+    // all is offered, Replace all older only where Replace is offered; they sit under More (which then holds at least
+    // two commands) and are never the default or the Escape action. Every class, every switch, both Move forms.
+    {
+        constexpr std::array<FileOperations::ConflictItemComparison, 7u> comparisons{{
+            {FileOperations::ConflictDateRelation::Unknown, FileOperations::ConflictSizeRelation::Unknown},
+            {FileOperations::ConflictDateRelation::Same, FileOperations::ConflictSizeRelation::Same},
+            {FileOperations::ConflictDateRelation::Same, FileOperations::ConflictSizeRelation::Larger},
+            {FileOperations::ConflictDateRelation::Newer, FileOperations::ConflictSizeRelation::Same},
+            {FileOperations::ConflictDateRelation::Newer, FileOperations::ConflictSizeRelation::Unknown},
+            {FileOperations::ConflictDateRelation::Older, FileOperations::ConflictSizeRelation::Same},
+            {FileOperations::ConflictDateRelation::OneHourApart, FileOperations::ConflictSizeRelation::Same},
+        }};
+        for (size_t bucketIndex = 0u; bucketIndex < static_cast<size_t>(ConflictBucket::Count); ++bucketIndex)
+        {
+            for (unsigned int flags = 0u; flags < 64u; ++flags)
+            {
+                for (const bool discard : {false, true})
+                {
+                    for (const FileOperations::ConflictItemComparison& comparison : comparisons)
+                    {
+                        const auto bucket         = static_cast<ConflictBucket>(bucketIndex);
+                        const auto policy         = BuildConflictActionPolicy(bucket,
+                                                                              (flags & 1u) != 0u,
+                                                                              (flags & 2u) != 0u,
+                                                                              (flags & 4u) != 0u,
+                                                                              (flags & 8u) != 0u,
+                                                                              (flags & 16u) != 0u,
+                                                                              (flags & 32u) != 0u,
+                                                                              false,
+                                                                              FILESYSTEM_MOVE,
+                                                                              discard,
+                                                                              comparison);
+                        const bool plainFile      = bucket == ConflictBucket::RegularFileExists && (flags & 4u) != 0u;
+                        const bool expectSkipSame = plainFile && comparison.date == FileOperations::ConflictDateRelation::Same &&
+                                                    comparison.size == FileOperations::ConflictSizeRelation::Same;
+                        const bool expectReplace  = plainFile && (flags & 8u) != 0u && comparison.date == FileOperations::ConflictDateRelation::Newer;
+                        const auto primaryEnd     = policy.primaryActions.begin() + static_cast<std::ptrdiff_t>(policy.primaryActionCount);
+                        const auto overflowEnd    = policy.overflowActions.begin() + static_cast<std::ptrdiff_t>(policy.overflowActionCount);
+                        const auto underMore      = [&](ConflictAction action) noexcept
+                        {
+                            return std::find(policy.overflowActions.begin(), overflowEnd, action) != overflowEnd &&
+                                   std::find(policy.primaryActions.begin(), primaryEnd, action) == primaryEnd;
+                        };
+                        if (policy.Contains(ConflictAction::SkipSameSizeAndDate) != expectSkipSame ||
+                            policy.Contains(ConflictAction::ReplaceOlder) != expectReplace ||
+                            (expectSkipSame && ! underMore(ConflictAction::SkipSameSizeAndDate)) ||
+                            (expectReplace && ! underMore(ConflictAction::ReplaceOlder)) ||
+                            ((expectSkipSame || expectReplace) && policy.overflowActionCount < 2u) ||
+                            policy.defaultAction == ConflictAction::SkipSameSizeAndDate || policy.defaultAction == ConflictAction::ReplaceOlder ||
+                            policy.escapeAction != ConflictAction::Cancel || ! policy.Contains(ConflictAction::Cancel) ||
+                            policy.primaryActionCount + policy.overflowActionCount != policy.actionCount)
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // The grants: disjoint classes, plain file collisions only, set once, never an Apply-to-all answer, and the
+        // later of Skip all with the same size and date and a Delete source for all replaces the other.
+        Task::ConflictArbiter b6Arbiter;
+        Task::ConflictDecisionScope b6Scope{};
+        b6Scope.bucket                         = ConflictBucket::RegularFileExists;
+        b6Scope.sourceKind                     = Task::ConflictItemKind::RegularFile;
+        b6Scope.destinationKind                = Task::ConflictItemKind::RegularFile;
+        b6Scope.sourceProfileId                = L"source-profile";
+        b6Scope.destinationProfileId           = L"destination-profile";
+        b6Scope.destinationRootId              = L"root";
+        b6Scope.applyToAllEligible             = true;
+        Task::ConflictDecisionScope b6Unscoped = b6Scope;
+        b6Unscoped.applyToAllEligible          = false;
+        constexpr FileOperations::ConflictItemComparison b6Same{FileOperations::ConflictDateRelation::Same, FileOperations::ConflictSizeRelation::Same};
+        constexpr FileOperations::ConflictItemComparison b6Newer{FileOperations::ConflictDateRelation::Newer, FileOperations::ConflictSizeRelation::Larger};
+        constexpr FileOperations::ConflictItemComparison b6Older{FileOperations::ConflictDateRelation::Older, FileOperations::ConflictSizeRelation::Same};
+        constexpr FileOperations::ConflictItemComparison b6OneHour{FileOperations::ConflictDateRelation::OneHourApart,
+                                                                   FileOperations::ConflictSizeRelation::Same};
+        constexpr FileOperations::ConflictItemComparison b6Unknown{};
+        uint64_t b6Generation = 0u;
+        const auto loadGrant  = [&](ConflictBucket candidateBucket,
+                                    const Task::ConflictDecisionScope& candidateScope,
+                                    FileOperations::ConflictItemComparison candidateComparison) noexcept
+        { return LoadConflictPolicyGrantLocked(b6Arbiter, candidateBucket, candidateScope, candidateComparison, b6Generation); };
+        const auto anyCached = [&]() noexcept
+        { return std::ranges::any_of(b6Arbiter.decisionCache, [](const auto& entry) noexcept { return entry.has_value(); }); };
+        if (loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Same) != ConflictAction::None ||
+            ! StoreConflictDecisionInCacheLocked(b6Arbiter, b6Scope, ConflictAction::DiscardSource, 3u) || ! anyCached() ||
+            ! GrantConflictPolicyLocked(b6Arbiter, ConflictAction::SkipSameSizeAndDate, 4u) || anyCached() ||
+            GrantConflictPolicyLocked(b6Arbiter, ConflictAction::SkipSameSizeAndDate, 9u) ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Same) != ConflictAction::SkipSameSizeAndDate || b6Generation != 4u ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Newer) != ConflictAction::None ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Older) != ConflictAction::None ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6OneHour) != ConflictAction::None ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Unknown) != ConflictAction::None ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Unscoped, b6Same) != ConflictAction::None ||
+            loadGrant(ConflictBucket::ReadOnlyRegularFileExists, b6Scope, b6Same) != ConflictAction::None ||
+            loadGrant(ConflictBucket::DestinationLink, b6Scope, b6Same) != ConflictAction::None ||
+            loadGrant(ConflictBucket::TypeMismatch, b6Scope, b6Same) != ConflictAction::None ||
+            ! GrantConflictPolicyLocked(b6Arbiter, ConflictAction::ReplaceOlder, 5u) ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Newer) != ConflictAction::ReplaceOlder || b6Generation != 5u ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Same) != ConflictAction::SkipSameSizeAndDate ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Older) != ConflictAction::None ||
+            ! StoreConflictDecisionInCacheLocked(b6Arbiter, b6Scope, ConflictAction::DiscardSource, 6u) ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Same) != ConflictAction::None ||
+            loadGrant(ConflictBucket::RegularFileExists, b6Scope, b6Newer) != ConflictAction::ReplaceOlder ||
+            GrantConflictPolicyLocked(b6Arbiter, ConflictAction::Skip, 7u) || IsCacheableConflictDecision(ConflictAction::SkipSameSizeAndDate) ||
+            IsCacheableConflictDecision(ConflictAction::ReplaceOlder) ||
+            ConflictPolicyItemAction(ConflictAction::SkipSameSizeAndDate) != ConflictAction::Skip ||
+            ConflictPolicyItemAction(ConflictAction::ReplaceOlder) != ConflictAction::Overwrite || ! IsModifierConflictAction(ConflictAction::ReplaceOlder) ||
+            IsModifierConflictAction(ConflictAction::SkipSameSizeAndDate))
+        {
+            return false;
         }
     }
     const auto matchesActions = [](const auto& actual, size_t actualCount, std::initializer_list<ConflictAction> expected) noexcept
@@ -8592,6 +9082,50 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
     const ConflictActionPolicy overlapOverflow = BuildConflictActionPolicy(ConflictBucket::SameHostOverlap, false, false, false, false, false);
     const ConflictActionPolicy liveBounded     = BuildConflictActionPolicy(ConflictBucket::SameHostLiveOutput, false, false, false, false, false, true);
     const ConflictActionPolicy liveOverflow    = BuildConflictActionPolicy(ConflictBucket::SameHostLiveOutput, false, false, false, false, false, false);
+    const ConflictActionPolicy discardMore =
+        BuildConflictActionPolicy(ConflictBucket::RegularFileExists, false, true, true, true, false, true, false, FILESYSTEM_MOVE, true);
+    const ConflictActionPolicy discardDirect =
+        BuildConflictActionPolicy(ConflictBucket::RegularFileExists, false, true, false, true, false, true, false, FILESYSTEM_MOVE, true);
+    const ConflictActionPolicy discardReadOnly =
+        BuildConflictActionPolicy(ConflictBucket::ReadOnlyRegularFileExists, false, true, true, true, false, true, false, FILESYSTEM_MOVE, true);
+    // I63 B6 pinned layouts: a Copy collision with the same size and date, one whose incoming file is newer, and a Move
+    // collision with the same size and date where Delete source also waits under More.
+    const ConflictActionPolicy skipSameMore =
+        BuildConflictActionPolicy(ConflictBucket::RegularFileExists,
+                                  false,
+                                  true,
+                                  true,
+                                  true,
+                                  false,
+                                  true,
+                                  false,
+                                  FILESYSTEM_COPY,
+                                  false,
+                                  {FileOperations::ConflictDateRelation::Same, FileOperations::ConflictSizeRelation::Same});
+    const ConflictActionPolicy replaceOlderMore =
+        BuildConflictActionPolicy(ConflictBucket::RegularFileExists,
+                                  false,
+                                  true,
+                                  true,
+                                  true,
+                                  false,
+                                  true,
+                                  false,
+                                  FILESYSTEM_COPY,
+                                  false,
+                                  {FileOperations::ConflictDateRelation::Newer, FileOperations::ConflictSizeRelation::Larger});
+    const ConflictActionPolicy skipSameMove =
+        BuildConflictActionPolicy(ConflictBucket::RegularFileExists,
+                                  false,
+                                  true,
+                                  true,
+                                  true,
+                                  false,
+                                  true,
+                                  false,
+                                  FILESYSTEM_MOVE,
+                                  true,
+                                  {FileOperations::ConflictDateRelation::Same, FileOperations::ConflictSizeRelation::Same});
 
     Task::ConflictPromptState loading{};
     loading.active          = true;
@@ -8599,45 +9133,45 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
 
     return matchesPolicy(regularAllowed,
                          {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(regularWithheld,
                          {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(readOnlyAllowed,
                          {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(readOnlyWithheld,
                          {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(typeMismatch,
                          {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(destinationLink,
                          {ConflictAction::ReplaceLink, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceLink, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceLink, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(targetConflict, {ConflictAction::Skip, ConflictAction::Cancel}, {ConflictAction::Skip, ConflictAction::Cancel}, {}, false, false) &&
            matchesPolicy(accessRetry,
                          {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll},
+                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {},
                          true,
                          true) &&
            matchesPolicy(diskFull,
@@ -8655,8 +9189,8 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false) &&
            matchesPolicy(recycle,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::PermanentDeleteAll},
-                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::PermanentDeleteAll},
+                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::PermanentDeleteAll, ConflictAction::Cancel},
+                         {},
                          false,
                          false) &&
            matchesPolicy(recycleOneItem,
@@ -8666,11 +9200,11 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false,
                          false) &&
            // I35 R7.3: the by-name consents mirror the exact ones: Cancel last and default, no
-           // Apply to all, and the task-scoped choice only on an eligible escalation, under More.
+           // Apply to all, and the task-scoped choice only on an eligible escalation, as a direct action.
            matchesPolicy(recycleByName,
                          {ConflictAction::Cancel, ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::PermanentDeleteAll},
-                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::PermanentDeleteAll},
+                         {ConflictAction::PermanentDelete, ConflictAction::Skip, ConflictAction::PermanentDeleteAll, ConflictAction::Cancel},
+                         {},
                          false,
                          false) &&
            matchesPolicy(recycleByNameOne,
@@ -8720,6 +9254,70 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false,
                          false,
                          ConflictAction::QueueUntilOtherTaskFinishes) &&
+           // I63 B4: Delete source waits under More with Skip All; without Skip All it is the one command More would hold,
+           // so it is published directly before Cancel.
+           matchesPolicy(discardMore,
+                         {ConflictAction::Overwrite,
+                          ConflictAction::KeepBoth,
+                          ConflictAction::DiscardSource,
+                          ConflictAction::Skip,
+                          ConflictAction::SkipAll,
+                          ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::DiscardSource, ConflictAction::SkipAll},
+                         true,
+                         true) &&
+           matchesPolicy(discardDirect,
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
+                         {},
+                         false,
+                         false) &&
+           matchesPolicy(discardReadOnly,
+                         {ConflictAction::ReplaceReadOnly,
+                          ConflictAction::KeepBoth,
+                          ConflictAction::DiscardSource,
+                          ConflictAction::Skip,
+                          ConflictAction::SkipAll,
+                          ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::DiscardSource, ConflictAction::SkipAll},
+                         true,
+                         true) &&
+           matchesPolicy(skipSameMore,
+                         {ConflictAction::Overwrite,
+                          ConflictAction::KeepBoth,
+                          ConflictAction::Skip,
+                          ConflictAction::SkipAll,
+                          ConflictAction::SkipSameSizeAndDate,
+                          ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::SkipAll, ConflictAction::SkipSameSizeAndDate},
+                         true,
+                         true) &&
+           matchesPolicy(replaceOlderMore,
+                         {ConflictAction::Overwrite,
+                          ConflictAction::KeepBoth,
+                          ConflictAction::Skip,
+                          ConflictAction::SkipAll,
+                          ConflictAction::ReplaceOlder,
+                          ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::SkipAll, ConflictAction::ReplaceOlder},
+                         true,
+                         true) &&
+           matchesPolicy(skipSameMove,
+                         {ConflictAction::Overwrite,
+                          ConflictAction::KeepBoth,
+                          ConflictAction::DiscardSource,
+                          ConflictAction::Skip,
+                          ConflictAction::SkipAll,
+                          ConflictAction::SkipSameSizeAndDate,
+                          ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::DiscardSource, ConflictAction::SkipAll, ConflictAction::SkipSameSizeAndDate},
+                         true,
+                         true) &&
            loading.actionCount == 0u && loading.primaryActionCount == 0u && loading.overflowActionCount == 0u &&
            loading.defaultAction == ConflictAction::None && loading.escapeAction == ConflictAction::None && ! loading.applyToAllEligible &&
            ! loading.skipAllEligible && ! loading.buttonsPublishable;
@@ -8976,6 +9574,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         (progress->phase != FileSystemFileWorkPhase::Terminal && progress->disposition != FileSystemFileWorkDisposition::None))
         return rejectLocked();
     InFlightFileProgress* entry = nullptr;
+    size_t streamIndex          = _inFlightFiles.size(); // I63 F1: the regular row this report binds, if any
+    bool newStream              = false;                 // and whether a stream new to that row begins there
     if (progress->progressStreamId == FILESYSTEM_PRODUCER_PROGRESS_STREAM_ID)
     {
         for (auto& producer : _producerFileWork)
@@ -9005,7 +9605,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         {
             if (_inFlightFiles[index].cookieKey == cookie && _inFlightFiles[index].progressStreamId == progress->progressStreamId)
             {
-                entry = &_inFlightFiles[index];
+                entry       = &_inFlightFiles[index];
+                streamIndex = index;
                 break;
             }
         }
@@ -9015,12 +9616,19 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
             {
                 if (_inFlightFiles[index].terminal)
                 {
-                    entry = &_inFlightFiles[index];
+                    entry       = &_inFlightFiles[index];
+                    streamIndex = index;
+                    newStream   = true;
                     break;
                 }
             }
             if (entry == nullptr && _inFlightFileCount < _inFlightFiles.size())
-                entry = &_inFlightFiles[_inFlightFileCount++];
+            {
+                streamIndex = _inFlightFileCount;
+                newStream   = true;
+                entry       = &_inFlightFiles[_inFlightFileCount++];
+                *entry      = {}; // a slot past the count is not a leaf this Begin replaces, whatever an earlier occupant left
+            }
         }
     }
     if (entry == nullptr)
@@ -9039,7 +9647,9 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         {
             if (entry->explicitLifecycle && ! entry->terminal)
                 _fileWorkCountsUnavailable = true;
+            const size_t keptSlot    = entry->streamSlot; // a stream's next file stays in its row (I63 F1)
             *entry                   = {};
+            entry->streamSlot        = keptSlot;
             entry->cookieKey         = cookie;
             entry->scopeIndex        = scopeIndex;
             entry->progressStreamId  = progress->progressStreamId;
@@ -9050,6 +9660,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         }
         entry->terminal       = false;
         entry->completedBytes = progress->completedBytes;
+        if (streamIndex < _inFlightFileCount)
+            AssignStreamSlotLocked(*this, streamIndex, newStream, GetTickCount64());
     }
     else if (! sameLeaf || entry->terminal)
     {
@@ -9827,6 +10439,14 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     {
         perItemCookie = static_cast<PerItemCallbackCookie*>(cookie);
     }
+    // I63 B2: the bridge found a destination the location opens and cannot identify, and it can
+    // publish over the occupant the user is shown. Replace is then offered without a bound object;
+    // the decision carries no authority beyond that occupant.
+    if (! exactDestination && exactDestinationHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && perItemCookie != nullptr &&
+        perItemCookie->expectedOccupantReplaceOffered)
+    {
+        atomicReplaceEligible = true;
+    }
 
     ConflictBucket bucket = ClassifyConflictBucket(operationType, _flags, wil::com_ptr<IFileSystemIO>{}, status, sourceText, destinationText, false);
 #ifdef ENABLE_TESTS
@@ -9863,11 +10483,25 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     // Replace link stays bound-only: a link needs exact identity. Files on an identity-less route
     // are replaced conditionally through the writer contract instead.
     const bool allowDestructiveReplacement = static_cast<bool>(exactDestination) || (atomicReplaceEligible && bucket != ConflictBucket::DestinationLink);
-    const ConflictPromptBeginResult promptBegin =
-        BeginConflictPrompt(*this, perItemCookie, bucket, status, sourceText, destinationText, allowRetry, attemptCount, false, allowDestructiveReplacement);
-    bucket                           = promptBegin.bucket;
-    const size_t resolvedBucketIndex = static_cast<size_t>(bucket);
-    ConflictAction decision          = promptBegin.action;
+    // I63 B4: only the bridge's file pre-flight of a Managed Move sets this flag, for the duration of this call.
+    const bool allowDiscardSource               = perItemCookie != nullptr && perItemCookie->discardSourceOffered;
+    const ConflictPromptBeginResult promptBegin = BeginConflictPrompt(*this,
+                                                                      perItemCookie,
+                                                                      bucket,
+                                                                      status,
+                                                                      sourceText,
+                                                                      destinationText,
+                                                                      allowRetry,
+                                                                      attemptCount,
+                                                                      false,
+                                                                      allowDestructiveReplacement,
+                                                                      nullptr,
+                                                                      false,
+                                                                      false,
+                                                                      allowDiscardSource);
+    bucket                                      = promptBegin.bucket;
+    const size_t resolvedBucketIndex            = static_cast<size_t>(bucket);
+    ConflictAction decision                     = promptBegin.action;
     if (promptBegin.ownsPrompt)
     {
         const auto result = WaitForConflictDecision(*this, cookie, promptBegin.decisionScope);
@@ -9925,6 +10559,17 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
             }
             *action = FileSystemIssueAction::Cancel;
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        case ConflictAction::DiscardSource:
+            // The provider ABI has no such action: the decision travels to the bridge on the cookie and the
+            // nominal answer is Skip. It is not a skip: _observedSkipAction and explicitSkipObserved stay unset.
+            if (perItemCookie != nullptr && perItemCookie->discardSourceOffered)
+            {
+                perItemCookie->discardSourceRequested = true;
+                *action                               = FileSystemIssueAction::Skip;
+                return S_OK;
+            }
+            *action = FileSystemIssueAction::Cancel;
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         case ConflictAction::Retry:
             if (perItemCookie != nullptr && resolvedBucketIndex < perItemCookie->issueRetryCounts.size())
             {
@@ -9935,15 +10580,20 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
         case ConflictAction::Skip:
         case ConflictAction::SkipAll:
         {
-            auto [diagnosticSource, diagnosticDestination] = GetMostSpecificPathsForDiagnostics(*this, perItemCookie, sourceText, destinationText);
-            // I35 R5.6: a Skip the user chose is an Information note; the typed Skipped completion keeps the task Partial.
-            RecordDiagnostic(DiagnosticSeverity::Info,
-                             status,
-                             L"item.conflict.skip",
-                             L"Conflict action Skip item selected.",
-                             LocalizedDiagnosticText{IDS_FILEOPS_NOTE_SKIPPED_AT_REQUEST},
-                             diagnosticSource,
-                             diagnosticDestination);
+            // I63 B6: a skip by Skip all with the same size and date is noted once, when the policy is set; it is
+            // still the same typed user skip.
+            if (! promptBegin.fromPolicy)
+            {
+                auto [diagnosticSource, diagnosticDestination] = GetMostSpecificPathsForDiagnostics(*this, perItemCookie, sourceText, destinationText);
+                // I35 R5.6: a Skip the user chose is an Information note; the typed Skipped completion keeps the task Partial.
+                RecordDiagnostic(DiagnosticSeverity::Info,
+                                 status,
+                                 L"item.conflict.skip",
+                                 L"Conflict action Skip item selected.",
+                                 LocalizedDiagnosticText{IDS_FILEOPS_NOTE_SKIPPED_AT_REQUEST},
+                                 diagnosticSource,
+                                 diagnosticDestination);
+            }
             _observedSkipAction.store(true, std::memory_order_release);
             if (perItemCookie != nullptr)
             {
@@ -9959,6 +10609,10 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
         case ConflictAction::QueueUntilOtherTaskFinishes:
         case ConflictAction::InvalidateLiveOutput:
         case ConflictAction::DeleteReadOnly:
+        // I63 B6: a bulk policy reaches its caller only as Skip or Overwrite (WaitForConflictDecision,
+        // BeginConflictPrompt); the policy value itself is never an item's answer.
+        case ConflictAction::SkipSameSizeAndDate:
+        case ConflictAction::ReplaceOlder:
         case ConflictAction::None:
         default: *action = FileSystemIssueAction::Cancel; return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
@@ -12250,12 +12904,17 @@ HRESULT FolderWindow::FileOperationState::Task::RunSameHostOverlapAdvisory() noe
     // peer in the visible order, so it takes a fresh key behind every task admitted so far; a task
     // that queues after peers already ahead of it keeps its own place. Queue order keys are
     // compared: a reordered or late-queued peer's admission key says nothing about where it waits.
-    const bool queuesAfterLaterPeer = advice.latestQueueOrderKey > _queueOrderKey.load(std::memory_order_acquire);
-    if (queuesAfterLaterPeer)
+    // The key and the edge change together under _queueMutex, where MoveQueuedTask reads both before it swaps two keys
+    // (lock order _queueMutex, then _mutex inside AllocateLateQueueOrderKey).
     {
-        _queueOrderKey.store(_state->AllocateLateQueueOrderKey(), std::memory_order_release);
+        std::scoped_lock queueLock(_state->_queueMutex);
+        const bool queuesAfterLaterPeer = advice.latestQueueOrderKey > _queueOrderKey.load(std::memory_order_acquire);
+        if (queuesAfterLaterPeer)
+        {
+            _queueOrderKey.store(_state->AllocateLateQueueOrderKey(), std::memory_order_release);
+        }
+        _overlapQueued.store(true, std::memory_order_release);
     }
-    _overlapQueued.store(true, std::memory_order_release);
     Debug::Perf::EmitValue(L"FileOps.Overlap.QueuedAfter", advice.taskCount, S_OK);
     return S_OK;
 }
@@ -12474,6 +13133,15 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareTransferDestinationNames(
 HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
 {
     const uint64_t startedUs = PerfNowUs();
+#ifdef ENABLE_TESTS
+    // Holds the one selected task in Preparing, before it publishes its admission. The queue-order
+    // case uses it to prove that a task which is still Preparing holds its queue place.
+    if (! _sourcePaths.empty())
+    {
+        g_fileOpsPreparingBeforePublishPausePoint.PauseForSource(
+            _sourcePaths.front().native(), _taskId, 30'000u, [this]() noexcept { return CancelRequestedDurable(); });
+    }
+#endif
     if (_stopToken.stop_requested() || _cancelled.load(std::memory_order_acquire))
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -12676,6 +13344,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         _workerReleased.store(true, std::memory_order_release);
         _workerReleased.notify_all();
         WakePauseWaiters();
+        UpdateKeepAwake(); // I63 G7
         {
             // Take the prompt mutex after the stop state is published so a worker between its
             // predicate check and its wait cannot miss this notification.
@@ -12692,10 +13361,17 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
 
     const uint64_t preparedAdmissionKey = _admissionKey.load(std::memory_order_acquire);
-    const HRESULT preparedHr            = PrepareForExecution();
+    // A task that will not enter the operation gives up its queue place before the wake, so the
+    // queued tasks behind it never wait on a task that cannot start.
+    const auto withdrawBeforeEntry = [&]() noexcept
+    {
+        _holdsQueuePlace.store(false, std::memory_order_release);
+        _state->WithdrawPreparedMutationInterlock(preparedAdmissionKey);
+    };
+    const HRESULT preparedHr = PrepareForExecution();
     if (FAILED(preparedHr) && _state != nullptr)
     {
-        _state->WithdrawPreparedMutationInterlock(preparedAdmissionKey);
+        withdrawBeforeEntry();
     }
     HRESULT pendingReadiness = E_PENDING;
     if (_selectedRootReadinessStatus.compare_exchange_strong(pendingReadiness, preparedHr, std::memory_order_acq_rel))
@@ -12755,7 +13431,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
 
     if (stopToken.stop_requested() || _cancelled.load(std::memory_order_acquire))
     {
-        _state->WithdrawPreparedMutationInterlock(preparedAdmissionKey);
+        withdrawBeforeEntry();
         // I35 R9.6: a cancel during preparation logs the same Info line as "Don't start".
         LogDiagnostic(DiagnosticSeverity::Info,
                       HRESULT_FROM_WIN32(ERROR_CANCELLED),
@@ -12768,7 +13444,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     const HRESULT readinessHr = _selectedRootReadinessStatus.load(std::memory_order_acquire);
     if (FAILED(readinessHr))
     {
-        _state->WithdrawPreparedMutationInterlock(preparedAdmissionKey);
+        withdrawBeforeEntry();
         const bool preparationCanceled = IsCancellationStatus(readinessHr);
         LogDiagnostic(preparationCanceled ? DiagnosticSeverity::Info : DiagnosticSeverity::Error,
                       readinessHr,
@@ -12785,7 +13461,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const bool consumed         = _clipboardMoveConsumed.load(std::memory_order_acquire);
         if (! ClipboardMutationGateAllows(readinessHr, consumptionHr, consumed))
         {
-            _state->WithdrawPreparedMutationInterlock(preparedAdmissionKey);
+            withdrawBeforeEntry();
             completeAndPost(FAILED(readinessHr) ? readinessHr : consumptionHr);
             return;
         }
@@ -12800,7 +13476,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     const HRESULT breadcrumbCreateHr = CreateMoveBreadcrumbAfterAcceptance();
     if (FAILED(breadcrumbCreateHr))
     {
-        _state->WithdrawPreparedMutationInterlock(preparedAdmissionKey);
+        withdrawBeforeEntry();
         LogDiagnostic(DiagnosticSeverity::Error,
                       breadcrumbCreateHr,
                       L"move.breadcrumb.createFailed",
@@ -12833,6 +13509,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
 
     if (! canStart)
     {
+        withdrawBeforeEntry();
         completeAndPost(HRESULT_FROM_WIN32(ERROR_CANCELLED));
         return;
     }
@@ -13578,6 +14255,7 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
         std::scoped_lock lock(_pauseMutex);
         _paused.store(false, std::memory_order_release);
     }
+    UpdateKeepAwake(); // I63 G7: a stopping task counts as running until it finishes
     {
         // Take the prompt mutex after _cancelled is published so a worker between its predicate
         // check and its wait cannot miss this notification.
@@ -13622,6 +14300,7 @@ void FolderWindow::FileOperationState::Task::SetPaused(bool paused) noexcept
     }
 
     MarkRateSamplingStateChanged();
+    UpdateKeepAwake(); // I63 G7: a paused task releases the request before it can resume and takes it before the worker wakes
     if (! paused)
     {
         _pauseCv.notify_all();
@@ -13786,6 +14465,7 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
     }
 
     MarkRateSamplingStateChanged();
+    UpdateKeepAwake(); // I63 G7: the task the queue paused waits behind one that runs; that one holds the request
     if (! paused)
     {
         _pauseCv.notify_all();
@@ -14025,6 +14705,60 @@ std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> FolderWindow:
     for (const CachedConflictAggregate& aggregate : aggregates)
         records.push_back(BuildCachedConflictAggregateRecord(aggregate));
     return records;
+}
+
+void FolderWindow::FileOperationState::Task::UpdateKeepAwake() noexcept
+{
+    _keepAwakeLease.Update([this]() noexcept
+    {
+        FileOperations::KeepAwakeFacts facts{};
+        facts.admitted       = _reservedOperation.load(std::memory_order_acquire) || _enteredOperation.load(std::memory_order_acquire);
+        facts.finished       = _taskFinished.load(std::memory_order_acquire);
+        facts.stopping       = CancelRequestedDurable();
+        facts.userPaused     = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+        facts.awaitingAnswer = _awaitingUserDecision.load(std::memory_order_acquire) && _awaitingAnswerQuiet.load(std::memory_order_acquire);
+        return facts;
+    });
+}
+
+void FolderWindow::FileOperationState::Task::SetAwaitingAnswerQuiet(const bool quiet) noexcept
+{
+    if (_awaitingAnswerQuiet.exchange(quiet, std::memory_order_acq_rel) != quiet)
+        UpdateKeepAwake();
+}
+
+void FolderWindow::FileOperationState::Task::RefreshAwaitingAnswerQuiet(uint64_t& workSeen, ULONGLONG& lastWorkTick) noexcept
+{
+    // Every progress and item-completed callback of the task counts, whichever stream reported it.
+    const uint64_t work = _progressCallbackCount.load(std::memory_order_relaxed) + _itemCompletedCallbackCount.load(std::memory_order_relaxed);
+    const ULONGLONG now = GetTickCount64();
+    if (work != workSeen)
+    {
+        workSeen     = work;
+        lastWorkTick = now;
+    }
+    SetAwaitingAnswerQuiet(FileOperations::AwaitingAnswerIsQuiet(now - lastWorkTick));
+}
+
+void FolderWindow::FileOperationState::Task::SetAwaitingUserDecision(const bool awaiting) noexcept
+{
+    if (_awaitingUserDecision.exchange(awaiting, std::memory_order_acq_rel) == awaiting)
+    {
+        return;
+    }
+    // I63 G7: every wait starts as not quiet, so the request is kept until the task shows no progress; the answer takes
+    // the request back at once.
+    _awaitingAnswerQuiet.store(false, std::memory_order_release);
+    UpdateKeepAwake();
+    if (_state == nullptr || ! _holdsQueuePlace.load(std::memory_order_acquire))
+    {
+        return;
+    }
+    // Only a place holder changes what the queue may start. Take the waiters' mutex after the
+    // state is published so a waiter between its predicate and its sleep cannot miss the wake.
+    Debug::Perf::Emit(L"FileOps.Queue.PassedOver", awaiting ? L"awaiting user decision" : L"decision answered", 0u, _taskId, 0u, S_OK);
+    SynchronizeWaiterMutexBeforeNotify(_state->_queueMutex);
+    _state->NotifyQueueChanged();
 }
 
 bool FolderWindow::FileOperationState::Task::CancelRequestedDurable() const noexcept
@@ -15503,7 +16237,14 @@ struct CrossFileSystemBridge
     wil::com_ptr<IFileSystemObjectBinding> sourceBinding;
     HRESULT sourceBindingQueryHr = E_NOINTERFACE;
     wil::com_ptr<IFileSystemObjectBinding> destinationBinding;
-    HRESULT destinationBindingQueryHr                  = E_NOINTERFACE;
+    HRESULT destinationBindingQueryHr = E_NOINTERFACE;
+    // I63 B2: Replace at a destination the location opens and cannot identify. Null where the
+    // provider has no such contract; Replace is then withheld there.
+    wil::com_ptr<IFileSystemExpectedOccupantPublication> expectedOccupantPublication;
+    // I63 B7: removal of a Move source its location opens and cannot identify, by the facts the provider read before
+    // the copy opened it. Null where the source provider has no such contract; such a source is then copied and kept.
+    wil::com_ptr<IFileSystemIdentityDelete> sourceIdentityDelete;
+    wil::com_ptr<IFileSystemExpectedOccupantPublication> sourceUnidentifiedFacts;
     IFileSystemDirectoryOperations* destinationDirOps  = nullptr;
     unsigned int sourcePluginMaxConcurrencyBudget      = 1;
     unsigned int destinationPluginMaxConcurrencyBudget = 1;
@@ -15580,6 +16321,17 @@ struct CrossFileSystemBridge
         FileOperations::BoundObjectAuthority authority{};
         bool armed              = false;
         unsigned int retryCount = 0;
+        // I63 B7: a source its location opens and cannot identify, never together with armed. A regular file keeps
+        // the delete identity text the provider resolved before the copy opened it, and is removed by name only while
+        // those facts are unchanged; a folder is removed by name only when the Move emptied it.
+        std::wstring byNameFacts;
+        bool removeEmptyByName = false;
+
+        // True while this record will remove the source after publication, by exact authority or by name.
+        [[nodiscard]] bool Pending() const noexcept
+        {
+            return armed || ! byNameFacts.empty() || removeEmptyByName;
+        }
     };
 
     // This is the selected root's aggregate, shared by independent file/directory transactions.
@@ -15889,6 +16641,9 @@ struct CrossFileSystemBridge
         }
         sourceBindingQueryHr      = sourceFs.QueryInterface(__uuidof(IFileSystemObjectBinding), sourceBinding.put_void());
         destinationBindingQueryHr = destinationFs.QueryInterface(__uuidof(IFileSystemObjectBinding), destinationBinding.put_void());
+        static_cast<void>(destinationFs.QueryInterface(__uuidof(IFileSystemExpectedOccupantPublication), expectedOccupantPublication.put_void()));
+        static_cast<void>(sourceFs.QueryInterface(__uuidof(IFileSystemIdentityDelete), sourceIdentityDelete.put_void()));
+        static_cast<void>(sourceFs.QueryInterface(__uuidof(IFileSystemExpectedOccupantPublication), sourceUnidentifiedFacts.put_void()));
         destinationUsesOrdinalIgnoreCaseComponents =
             UsesOrdinalIgnoreCaseComponents(destinationFs, rootDestinationPathIn, selectedAdmission->destination->pluginId);
         destinationUsesWindowsChildNameRules = destinationUsesOrdinalIgnoreCaseComponents ||
@@ -16246,6 +17001,54 @@ struct CrossFileSystemBridge
             return FAILED(binding.status) ? binding.status : E_UNEXPECTED;
         }
 
+        // I63 B7: the location opens the source but cannot identify it (an open that failed is not Unsupported). Only
+        // a provider that also resolves such an object's facts and deletes by them (the Local provider) removes it,
+        // by name, after the publication proof (FinalizeByNameSourceCleanup); any other source is copied and kept.
+        if (binding.state == FileOperations::ObjectBindingState::Unsupported && sourceIdentityDelete && sourceUnidentifiedFacts)
+        {
+            if (expectedKind == FILESYSTEM_BOUND_DIRECTORY)
+            {
+                // Removed only once the Move emptied it, through the provider's empty-folder removal.
+                cleanupRecord.removeEmptyByName = true;
+                return S_FALSE;
+            }
+            if (expectedKind == FILESYSTEM_BOUND_REGULAR_FILE)
+            {
+                // The pathname copy carries no alternate stream, extended attribute or encryption, and reading a cloud
+                // placeholder is not its removal: a source that has one is copied and kept, as the bound route keeps
+                // one after a refused consent. No question is asked.
+                constexpr uint32_t kNotCarriedByName = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS |
+                                                       FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES | FILESYSTEM_METADATA_EFS | FILESYSTEM_METADATA_PLACEHOLDER;
+                uint32_t presentFeatures             = 0u;
+                const HRESULT metadataHr = sourceUnidentifiedFacts->ReadUnidentifiedMetadataFeatures(sourcePath.c_str(), &options, &presentFeatures);
+                if (FAILED(metadataHr) || (presentFeatures & kNotCarriedByName) != 0u)
+                {
+                    MarkManagedSourceRetained(sourcePath,
+                                              destinationPath,
+                                              FAILED(metadataHr) ? metadataHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                                              FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_METADATA_BY_NAME});
+                    return S_FALSE;
+                }
+                // The facts are read now, before the copy opens the file: a file swapped in under the name after this
+                // read has other facts at the cleanup and is kept.
+                FileSystemDeleteIdentity facts{};
+                facts.sizeBytes       = sizeof(facts);
+                const HRESULT factsHr = sourceIdentityDelete->ResolveDeleteIdentity(sourcePath.c_str(), &options, &facts);
+                const auto factsEnd   = std::find(std::begin(facts.identity), std::end(facts.identity), L'\0');
+                const bool factsUsable =
+                    SUCCEEDED(factsHr) && facts.isDirectory == FALSE && factsEnd != std::begin(facts.identity) && factsEnd != std::end(facts.identity);
+                if (factsUsable)
+                {
+                    cleanupRecord.byNameFacts.assign(std::begin(facts.identity), factsEnd);
+                    return S_FALSE;
+                }
+                MarkManagedSourceRetained(sourcePath,
+                                          destinationPath,
+                                          FAILED(factsHr) ? factsHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                          L"Copied; source kept because the facts of a source this location cannot identify could not be read.");
+                return S_FALSE;
+            }
+        }
         MarkManagedSourceRetained(sourcePath,
                                   destinationPath,
                                   FAILED(binding.status) ? binding.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
@@ -16259,7 +17062,8 @@ struct CrossFileSystemBridge
     {
         if (! cleanupRecord.armed)
         {
-            return S_OK;
+            // I63 B7: a source its location cannot identify is removed by name, or there is nothing to remove.
+            return cleanupRecord.Pending() ? FinalizeByNameSourceCleanup(sourcePath, destinationPath, cleanupRecord) : S_OK;
         }
         if (! cleanupRecord.authority.boundObject)
         {
@@ -16398,6 +17202,88 @@ struct CrossFileSystemBridge
         }
     }
 
+    // I63 B2.7, B7.3: one Information note per task, on the first item replaced or source removed by its facts at a
+    // location that cannot identify files.
+    void NoteCheckedByFactsOnce(std::wstring_view sourcePath, std::wstring_view destinationPath) noexcept
+    {
+        if (! task._expectedOccupantReplaceNoted.exchange(true, std::memory_order_acq_rel))
+        {
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
+                               S_OK,
+                               L"bridge.identityLess.checkedByFacts",
+                               FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_NOTE_CHECKED_BY_FACTS},
+                               sourcePath,
+                               destinationPath);
+        }
+    }
+
+    // I63 B7: removes a Move source its location opens and cannot identify, at the point where an exact source would
+    // be removed: after the destination's publication proof and every consent. A file is removed through the provider's
+    // delete by name, which compares the facts it resolved before the copy opened the file on the handle that deletes
+    // it; a folder only when the Move emptied it, through the provider's empty-folder removal. A file that changed, or
+    // that the location will not delete, is kept: the item reports "Copied; source kept" with the reason, a typed
+    // result and not an Error. Nothing is asked: the Move is the decision.
+    [[nodiscard]] HRESULT FinalizeByNameSourceCleanup(const std::wstring& sourcePath,
+                                                      const std::wstring& destinationPath,
+                                                      ManagedSourceCleanupRecord& cleanupRecord) noexcept
+    {
+        constexpr size_t kFactsCapacity = sizeof(FileSystemDeleteIdentity::identity) / sizeof(wchar_t);
+        const bool folder               = cleanupRecord.removeEmptyByName;
+        const std::wstring factsText    = std::move(cleanupRecord.byNameFacts);
+        cleanupRecord                   = {};
+        if (CancelRequested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+#ifdef ENABLE_TESTS
+        MaybePauseBeforeBridgeMoveSourceCleanupForSelfTest();
+#endif
+        if (CancelRequested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        if (folder)
+        {
+            // ERROR_DIR_NOT_EMPTY keeps the folder as a typed source-kept result (RemoveEmptiedSourceDirectoryByName).
+            return RemoveEmptiedSourceDirectoryByName(sourcePath, destinationPath);
+        }
+        if (! sourceIdentityDelete || factsText.empty() || factsText.size() >= kFactsCapacity)
+        {
+            return E_UNEXPECTED;
+        }
+
+        FileSystemDeleteIdentity expected{};
+        expected.sizeBytes   = sizeof(expected);
+        expected.isDirectory = FALSE;
+        std::copy(factsText.begin(), factsText.end(), std::begin(expected.identity));
+        expected.identity[factsText.size()] = L'\0';
+        mutationAttemptFlags.fetch_or(kSourceDeleteAttemptedFlag, std::memory_order_acq_rel);
+        FileSystemOptions deleteOptions = options;
+        const HRESULT deleteHr = sourceIdentityDelete->DeleteIfIdentity(sourcePath.c_str(), &expected, FILESYSTEM_FLAG_NONE, &deleteOptions, &task, cookie);
+        Debug::Perf::Emit(L"FileOps.Move.SourceRemovedByFacts", L"", 0u, SUCCEEDED(deleteHr) ? 1u : 0u, 0u, deleteHr);
+        if (SUCCEEDED(deleteHr))
+        {
+            NoteCheckedByFactsOnce(sourcePath, destinationPath);
+            return S_OK;
+        }
+        if (deleteHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || deleteHr == E_ABORT)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        // A single file is deleted through the handle that compared its facts, so a failure is a known non-commit.
+        if (deleteHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+        {
+            MarkManagedSourceRetained(
+                sourcePath, destinationPath, deleteHr, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_CHANGED_BY_NAME});
+        }
+        else
+        {
+            MarkManagedSourceRetained(
+                sourcePath, destinationPath, deleteHr, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_NOT_REMOVED_BY_NAME});
+        }
+        return S_OK;
+    }
+
     [[nodiscard]] HRESULT ValidateChildNameForDestination(const std::wstring_view name) const noexcept
     {
         HRESULT hr = ValidateBridgeStructuralChildName(name);
@@ -16442,38 +17328,39 @@ struct CrossFileSystemBridge
 
     [[nodiscard]] HRESULT MakeTempDestinationPath(std::wstring_view destinationPath, uint64_t progressStreamId, std::wstring& stagePath) const noexcept
     {
-        // The name carries 128 bits of CSPRNG entropy so a local attacker cannot pre-create
-        // or race the staging file (PID/TID/tick names are predictable); the stream id stays
-        // for diagnostic correlation only.
-        wchar_t suffix[96]{};
-        constexpr size_t suffixMax = (sizeof(suffix) / sizeof(suffix[0])) - 1u;
-
-        uint64_t random[2]{};
+        // `<final leaf>.<32 hex>_<stream>.rs-tmp`: a real extension, so the stage groups with the other
+        // incomplete artifacts. The 128-bit token comes from the system generator so a local attacker
+        // cannot pre-create or race the stage; the stream id stays for diagnostic correlation only.
+        // The leaf never exceeds 255 units: only its readable prefix is shortened.
+        stagePath.clear();
 #ifdef ENABLE_TESTS
         if (ConsumeBridgeCounterForSelfTest(g_fileOpsBridgeFailNextStageEntropyCount, g_fileOpsBridgeFailNextStageEntropyAttempts))
         {
             return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
         }
 #endif
-        const NTSTATUS randomStatus = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(random), sizeof(random), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-        if (! BCRYPT_SUCCESS(randomStatus))
+        // Only a Win32 destination hosts a bridge stage, so either separator ends the parent.
+        const size_t separator = destinationPath.find_last_of(L"\\/");
+        if (separator == std::wstring_view::npos || separator + 1u >= destinationPath.size())
         {
-            Debug::Error(L"CrossFileSystemBridge: BCryptGenRandom failed before exclusive stage creation (status=0x{:08X}).",
-                         static_cast<unsigned long>(randomStatus));
+            return E_INVALIDARG;
+        }
+
+        std::array<wchar_t, 32> suffix{};
+        const auto formatted = std::format_to_n(suffix.data(), static_cast<std::ptrdiff_t>(suffix.size() - 1u), L"_{:X}.rs-tmp", progressStreamId);
+        const std::wstring_view suffixText(suffix.data(), static_cast<size_t>(formatted.out - suffix.data()));
+
+        std::wstring leaf;
+        const HRESULT nameHr = Common::Paths::BuildUniqueSiblingName<wchar_t>(destinationPath.substr(separator + 1u), L".", suffixText, 255u, leaf);
+        if (FAILED(nameHr))
+        {
+            Debug::Error(L"CrossFileSystemBridge: stage name generation failed before exclusive stage creation (hr=0x{:08X}).",
+                         static_cast<unsigned long>(nameHr));
             return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
         }
 
-        const auto r         = std::format_to_n(suffix,
-                                                suffixMax,
-                                                L".rs_tmp_{:016X}{:016X}_{:X}",
-                                                static_cast<unsigned long long>(random[0]),
-                                                static_cast<unsigned long long>(random[1]),
-                                                progressStreamId);
-        const size_t written = (r.size < suffixMax) ? static_cast<size_t>(r.size) : suffixMax;
-        suffix[written]      = L'\0';
-
-        stagePath.assign(destinationPath);
-        stagePath.append(suffix);
+        stagePath.assign(destinationPath.substr(0u, separator + 1u));
+        stagePath.append(leaf);
         return S_OK;
     }
 
@@ -16937,9 +17824,17 @@ struct CrossFileSystemBridge
                                                      bool& replaceReadOnlyGranted,
                                                      bool& replaceLinkGranted,
                                                      bool& keepBothRequested,
-                                                     wil::com_ptr<IFileSystemBoundObject>& expectedDestination) noexcept
+                                                     wil::com_ptr<IFileSystemBoundObject>& expectedDestination,
+                                                     bool expectedOccupantReplace = false,
+                                                     bool discardSourceOffer      = false,
+                                                     bool* discardSourceRequested = nullptr) noexcept
     {
-        keepBothRequested = false;
+        keepBothRequested        = false;
+        bool discardSourceChosen = false;
+        if (discardSourceRequested != nullptr)
+        {
+            *discardSourceRequested = false;
+        }
         expectedDestination.reset();
         FileSystemIssueAction action = FileSystemIssueAction::Cancel;
         FileSystemOptions issueOptions{};
@@ -16950,7 +17845,10 @@ struct CrossFileSystemBridge
             auto* perItemCookie = static_cast<PerItemCallbackCookie*>(cookie);
             if (perItemCookie != nullptr)
             {
-                perItemCookie->keepBothRequested = false;
+                perItemCookie->keepBothRequested              = false;
+                perItemCookie->expectedOccupantReplaceOffered = expectedOccupantReplace;
+                perItemCookie->discardSourceOffered           = discardSourceOffer;
+                perItemCookie->discardSourceRequested         = false;
             }
             issueOptions.sizeBytes = sizeof(FileSystemOptions);
 #ifdef ENABLE_TESTS
@@ -16959,10 +17857,20 @@ struct CrossFileSystemBridge
 #endif
             issueHr = task.FileSystemIssue(
                 task.GetOperation(), sourcePath.c_str(), destinationPath.c_str(), issueStatus, &action, expectedDestination.put(), &issueOptions, cookie);
+            if (perItemCookie != nullptr)
+            {
+                perItemCookie->expectedOccupantReplaceOffered = false;
+                perItemCookie->discardSourceOffered           = false;
+            }
             if (perItemCookie != nullptr && perItemCookie->keepBothRequested)
             {
                 keepBothRequested                = true;
                 perItemCookie->keepBothRequested = false;
+            }
+            if (perItemCookie != nullptr && perItemCookie->discardSourceRequested)
+            {
+                discardSourceChosen                   = true;
+                perItemCookie->discardSourceRequested = false;
             }
         }
         if (FAILED(issueHr))
@@ -16975,12 +17883,23 @@ struct CrossFileSystemBridge
             return S_OK;
         }
 
+        if (discardSourceChosen)
+        {
+            // Only a caller that passed the out-parameter offered the action, so this is unreachable otherwise.
+            if (discardSourceRequested == nullptr)
+            {
+                return E_UNEXPECTED;
+            }
+            *discardSourceRequested = true;
+            return S_OK;
+        }
+
         switch (action)
         {
             case FileSystemIssueAction::Overwrite:
-                if (! expectedDestination && destinationBinding)
+                if (! expectedDestination && destinationBinding && ! expectedOccupantReplace)
                 {
-                    return E_UNEXPECTED; // a binding route must carry the exact authority
+                    return E_UNEXPECTED; // a binding route carries the exact authority, or the occupant the user saw
                 }
                 overwriteGranted = true;
                 return S_OK;
@@ -16993,7 +17912,7 @@ struct CrossFileSystemBridge
                 replaceLinkGranted = true;
                 return S_OK;
             case FileSystemIssueAction::ReplaceReadOnly:
-                if (! expectedDestination && destinationBinding)
+                if (! expectedDestination && destinationBinding && ! expectedOccupantReplace)
                 {
                     return E_UNEXPECTED;
                 }
@@ -17137,8 +18056,9 @@ struct CrossFileSystemBridge
                                    ownedStageCleanupAllowed);
     }
 
-    // Rename merge on a profile without object binding: the provider's own delete of the emptied
-    // source directory, by name, which is the authority its Permanent Delete already has.
+    // Rename merge on a profile without object binding, and (I63 B7) a source folder its location opens and cannot
+    // identify: the provider's own delete of the emptied source directory, by name, which fails on a folder that still
+    // holds anything; that is the authority its Permanent Delete already has.
     [[nodiscard]] HRESULT RemoveEmptiedSourceDirectoryByName(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
     {
         if (CancelRequested())
@@ -17165,6 +18085,349 @@ struct CrossFileSystemBridge
                            sourcePath,
                            destinationPath);
         return deleteHr;
+    }
+
+    // I63 B4, B8: Delete source is offered only when the existing destination is provably another file than the
+    // source. Two bound objects answer by identity. Where the destination's location opens the file and cannot
+    // identify it, the location is asked another way: the destination is held denying all sharing and the
+    // source's own name is then opened for reading. A sharing refusal means one file reached by two names;
+    // success means two files. That holds only where the location enforces sharing, so it is measured first: a
+    // second open of the held destination must be refused. Both handles must be regular files. Any doubt withholds
+    // the action. The cost is two binds, and three opens at a destination without identity, per collision of a
+    // Move that may remove its source. Not covered: one file reached through two different systems (a local disk
+    // and a network or virtual path to that same disk), which no identity and no sharing rule relates.
+    // I63 B7: with sourceMayBeUnbound, a source its location opens and cannot identify is asked the same way.
+    [[nodiscard]] bool SourceAndDestinationAreDistinctFiles(const std::wstring& sourcePath,
+                                                            const std::wstring& destinationPath,
+                                                            bool sourceMayBeUnbound = false) noexcept
+    {
+        if (! sourceBinding || ! destinationBinding || NavigationLocation::EqualsNoCase(sourcePath, destinationPath))
+        {
+            return false;
+        }
+        constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+        wil::com_ptr<IFileSystemBoundObject> source;
+        const HRESULT sourceHr   = sourceBinding->BindObject(sourcePath.c_str(), bindFlags, source.put());
+        const bool sourceUnbound = sourceMayBeUnbound && sourceHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        if (! sourceUnbound && (FAILED(sourceHr) || ! source))
+        {
+            return false;
+        }
+        wil::com_ptr<IFileSystemBoundObject> destination;
+        const HRESULT destinationHr = destinationBinding->BindObject(destinationPath.c_str(), bindFlags, destination.put());
+        const bool destinationBound = SUCCEEDED(destinationHr) && destination;
+        if (source && destinationBound)
+        {
+            BOOL same = TRUE;
+            return SUCCEEDED(source->IsSameObject(destination.get(), &same)) && same == FALSE;
+        }
+        if ((! destinationBound && destinationHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)) ||
+            ! NavigationLocation::LooksLikeWindowsAbsolutePath(sourcePath) || ! NavigationLocation::LooksLikeWindowsAbsolutePath(destinationPath))
+        {
+            return false;
+        }
+        source.reset();
+        destination.reset();
+        constexpr DWORD kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+        const auto isRegularFile  = [](HANDLE file) noexcept
+        {
+            // A link's handle holds the link and not what it names, and a folder is not this question's subject.
+            BY_HANDLE_FILE_INFORMATION facts{};
+            return GetFileInformationByHandle(file, &facts) != FALSE &&
+                   (facts.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0u;
+        };
+        // A reader that has the destination open for a moment (a scanner on a file just published, an icon read)
+        // refuses the hold. That is tried again a few times before the answer is doubt.
+        constexpr unsigned int kHoldAttempts = 5u;
+        constexpr DWORD kHoldRetryDelayMs    = 25u;
+        wil::unique_hfile heldDestination;
+        for (unsigned int attempt = 1u;; ++attempt)
+        {
+            heldDestination.reset(CreateFileW(destinationPath.c_str(), GENERIC_READ, 0u, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            if (heldDestination || GetLastError() != ERROR_SHARING_VIOLATION || attempt >= kHoldAttempts || CancelRequested())
+            {
+                break;
+            }
+            Sleep(kHoldRetryDelayMs);
+        }
+        if (! heldDestination || ! isRegularFile(heldDestination.get()))
+        {
+            return false;
+        }
+        // Control: the location must refuse a second open of the name that is held. One that admits it does not
+        // enforce sharing, so the source's open below would succeed for one file as for two.
+        {
+            const wil::unique_hfile control(
+                CreateFileW(destinationPath.c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            bool sharingEnforced = ! control && GetLastError() == ERROR_SHARING_VIOLATION;
+#ifdef ENABLE_TESTS
+            sharingEnforced = sharingEnforced && ! g_fileOpsSameFileProbeSharingUnenforcedForSelfTest.load(std::memory_order_acquire);
+#endif
+            if (! sharingEnforced)
+            {
+                Debug::Perf::Emit(L"FileOps.Conflict.SameFileProbeUnenforced", L"", 0u, 1u, 0u, S_OK);
+                return false;
+            }
+        }
+        const wil::unique_hfile sourceByName(
+            CreateFileW(sourcePath.c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+        const bool distinct = sourceByName.is_valid() && isRegularFile(sourceByName.get());
+        Debug::Perf::Emit(L"FileOps.Conflict.SameFileProbe", L"", 0u, distinct ? 1u : 0u, 0u, S_OK);
+        return distinct;
+    }
+
+    // I63 B4: Delete source on a Move collision. The destination keeps the file it has and nothing is copied; the
+    // source goes to the Recycle Bin by name through the source provider's own Delete, which only the Local provider
+    // is asked to do (ValidateDestinationOverwritePolicy). A location without a Recycle Bin is refused by that
+    // provider before any change (ERROR_NOT_SUPPORTED); that source is then deleted permanently or kept by the task's
+    // one answer to that question (I63 D-5, RemoveSourceWithoutRecycleBin).
+    // Returns S_OK when the source is gone and S_FALSE when it was kept, which the callers treat as a skip.
+    [[nodiscard]] HRESULT RemoveSourceAlreadyAtDestination(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
+    {
+        if (CancelRequested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        mutationAttemptFlags.fetch_or(kSourceDeleteAttemptedFlag, std::memory_order_acq_rel);
+        FileSystemOptions deleteOptions = options;
+        const HRESULT deleteHr          = sourceFs.DeleteItem(sourcePath.c_str(), FILESYSTEM_FLAG_USE_RECYCLE_BIN, &deleteOptions, &task, cookie);
+        if (SUCCEEDED(deleteHr))
+        {
+            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
+                               deleteHr,
+                               L"bridge.move.discardSource",
+                               L"The destination already holds the file; the source was moved to the Recycle Bin on request.",
+                               sourcePath,
+                               destinationPath);
+            return S_OK;
+        }
+        if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+        {
+            // The provider refused before any change: the source's location has no Recycle Bin (I63 D-5).
+            return RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, deleteHr);
+        }
+        if (deleteHr == COPYENGINE_E_RECYCLE_FORCE_NUKE)
+        {
+            // Windows destroyed the source instead of recycling it: it is gone, and the card must not say it can be restored.
+            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Warning,
+                               deleteHr,
+                               L"delete.recycle.destroyed",
+                               FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RECYCLE_DESTROYED},
+                               sourcePath,
+                               destinationPath);
+            return S_OK;
+        }
+        NoteFailure(QualifiedItemFailurePhase::SourceCleanup, deleteHr);
+        task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                           deleteHr,
+                           L"bridge.move.discardSourceFailed",
+                           L"The source could not be moved to the Recycle Bin after the destination was found to hold the file.",
+                           sourcePath,
+                           destinationPath);
+        return deleteHr;
+    }
+
+    // I63 D-5: the one question a task asks when Delete source meets a source location without a Recycle Bin: "This
+    // location has no Recycle Bin. Delete the source files permanently?", with Permanently delete, Keep source and
+    // Cancel. It is the Recycle-refusal consent card (bucket RecycleFailed) of a Move, which no other Move route raises,
+    // asked without Apply to all because its answer already covers the task. The answer (PermanentDelete or Skip) is
+    // kept on the arbiter; one worker asks at a time and the others wait for its answer. Cancel cancels the task.
+    [[nodiscard]] HRESULT AskSourceWithoutRecycleBinOnce(const std::wstring& sourcePath,
+                                                         const std::wstring& destinationPath,
+                                                         HRESULT refusal,
+                                                         ConflictAction& answer) noexcept
+    {
+        answer        = ConflictAction::None;
+        auto& arbiter = task._conflictArbiter;
+        {
+            std::unique_lock lock(arbiter.mutex);
+            for (;;)
+            {
+                if (CancelRequested())
+                {
+                    return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                }
+                if (arbiter.sourceNoRecycleBinAnswer == ConflictAction::Cancel)
+                {
+                    return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                }
+                if (arbiter.sourceNoRecycleBinAnswer != ConflictAction::None)
+                {
+                    answer = arbiter.sourceNoRecycleBinAnswer;
+                    return S_OK;
+                }
+                if (! arbiter.sourceNoRecycleBinQuestionOpen)
+                {
+                    arbiter.sourceNoRecycleBinQuestionOpen = true;
+                    break;
+                }
+                static_cast<void>(arbiter.cv.wait_for(lock, std::chrono::milliseconds(50)));
+            }
+        }
+
+        const auto* perItemCookie = static_cast<const Task::PerItemCallbackCookie*>(cookie);
+        DeferredConsentRequest request{};
+        request.risk                        = FileOperations::DeferredConsentRisk::RecycleEscalation;
+        request.status                      = refusal;
+        request.perItemCookie               = perItemCookie;
+        request.sourcePath                  = sourcePath;
+        request.destinationPath             = destinationPath;
+        request.itemIndex                   = perItemCookie != nullptr ? std::optional<size_t>(perItemCookie->itemIndex) : std::nullopt;
+        request.destinationRootId           = destinationRootId;
+        request.applyToAllEligible          = false;
+        request.exactExecutionPaths         = true;
+        const DeferredConsentResult consent = RequestDeferredConsent(task, request);
+        const ConflictAction chosen         = FAILED(consent.status)                              ? ConflictAction::Cancel
+                                              : consent.action == ConflictAction::PermanentDelete ? ConflictAction::PermanentDelete
+                                                                                                  : ConflictAction::Skip;
+        if (chosen == ConflictAction::Cancel)
+        {
+            // Cancel is the task's answer too. It is requested here, before the waiting workers wake: this item's
+            // ERROR_CANCELLED reaches the scheduler only after it unwinds, and a worker that woke first would find no
+            // answer and no cancel, and would ask the same question again.
+            task.RequestCancel();
+        }
+        {
+            std::scoped_lock lock(arbiter.mutex);
+            arbiter.sourceNoRecycleBinQuestionOpen = false;
+            arbiter.sourceNoRecycleBinAnswer       = chosen;
+        }
+        arbiter.cv.notify_all();
+        if (chosen == ConflictAction::Cancel)
+        {
+            return FAILED(consent.status) ? consent.status : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        answer = chosen;
+        return S_OK;
+    }
+
+    // I63 D-5: Delete source where the source's location has no Recycle Bin (the provider refused the Recycle before any
+    // change). The task asks once (AskSourceWithoutRecycleBinOnce). Keep source keeps the source: the item ends as a skip
+    // does, with an Information note. Permanently delete removes it with the strongest authority the location gives: the
+    // source is bound before the question and again, with delete access, after it; the second object must be the first
+    // one, with the same size and last-write time; it must still be provably another file than the destination (the
+    // proof that offered Delete source, made again because time has passed); and the delete consumes that bound object,
+    // whose handle refuses writers, renames and other deletes from the second bind on. Any refusal or doubt keeps the
+    // source: a skipped item with a Warning, never an Error that ends the task. A delete whose outcome is unknown is an
+    // Error and is not retried. A source the location cannot bind is kept without the question. Cost: two binds and two
+    // metadata reads per such source, plus the proof's binds or, at a destination without identity, its two opens.
+    [[nodiscard]] HRESULT RemoveSourceWithoutRecycleBin(const std::wstring& sourcePath, const std::wstring& destinationPath, HRESULT refusal) noexcept
+    {
+        // The item ends as a skip does (both files stay, the task is Partial) and the note says why the source is there.
+        const auto keep = [&](HRESULT status, UINT messageId, FileOperationState::DiagnosticSeverity severity, std::wstring_view category) noexcept -> HRESULT
+        {
+            task.LogDiagnostic(severity, status, category, FileOperationState::LocalizedDiagnosticText{messageId}, sourcePath, destinationPath);
+            RecordSkippedDestinationCollision(
+                sourcePath, destinationPath, status, L"bridge.conflict.skip", L"Destination already exists; the source was kept (no Recycle Bin).");
+            return S_FALSE;
+        };
+        constexpr std::wstring_view kNoRecycleBinCategory = L"bridge.move.discardSource.noRecycleBin";
+        constexpr std::wstring_view kKeptCategory         = L"bridge.move.discardSource.permanentKept";
+        constexpr auto kWarning                           = FileOperationState::DiagnosticSeverity::Warning;
+        if (CancelRequested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        // The object the question is about: bound for reading only, so nothing is held while the user decides.
+        constexpr FileSystemBindFlags readFlags    = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+        FileOperations::ObjectBindingResult before = FileOperations::BindObjectAuthority(&sourceFs, sourcePath, sourcePathProfileId, readFlags);
+        FileSystemBasicInformation beforeBasic{};
+        beforeBasic.sizeBytes  = sizeof(beforeBasic);
+        const bool beforeBound = before.state == FileOperations::ObjectBindingState::Bound && before.authority.kind == FILESYSTEM_BOUND_REGULAR_FILE &&
+                                 before.authority.boundObject && SUCCEEDED(before.authority.boundObject->GetBasicInformation(&beforeBasic));
+        before.authority.boundObject.reset();
+        if (! beforeBound)
+        {
+            return keep(refusal, IDS_FILEOPS_NOTE_DISCARD_SOURCE_NO_RECYCLE_BIN, kWarning, kNoRecycleBinCategory);
+        }
+
+        ConflictAction answer    = ConflictAction::None;
+        const HRESULT questionHr = AskSourceWithoutRecycleBinOnce(sourcePath, destinationPath, refusal, answer);
+        if (FAILED(questionHr))
+        {
+            return questionHr;
+        }
+        if (answer != ConflictAction::PermanentDelete)
+        {
+            return keep(refusal, IDS_FILEOPS_NOTE_DISCARD_SOURCE_NO_RECYCLE_BIN, FileOperationState::DiagnosticSeverity::Info, kNoRecycleBinCategory);
+        }
+        if (CancelRequested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        // Bound with delete access: from here the handle refuses writers, renames and other deletes of this object.
+        constexpr FileSystemBindFlags deleteFlags =
+            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE);
+        FileOperations::ObjectBindingResult current = FileOperations::BindObjectAuthority(&sourceFs, sourcePath, sourcePathProfileId, deleteFlags);
+        FileSystemBasicInformation currentBasic{};
+        currentBasic.sizeBytes = sizeof(currentBasic);
+        if (current.state != FileOperations::ObjectBindingState::Bound || current.authority.kind != FILESYSTEM_BOUND_REGULAR_FILE ||
+            ! current.authority.boundObject || FAILED(current.authority.boundObject->GetBasicInformation(&currentBasic)))
+        {
+            return keep(FAILED(current.status) ? current.status : HRESULT_FROM_WIN32(ERROR_FILE_INVALID),
+                        IDS_FILEOPS_NOTE_DISCARD_SOURCE_NOT_DELETED,
+                        kWarning,
+                        kKeptCategory);
+        }
+        const bool unchanged = ! current.authority.identity.objectId.empty() && current.authority.identity.objectId == before.authority.identity.objectId &&
+                               current.authority.identity.pathProfileId == before.authority.identity.pathProfileId &&
+                               current.authority.committedSizeBytes == before.authority.committedSizeBytes &&
+                               currentBasic.lastWriteTime == beforeBasic.lastWriteTime;
+        if (! unchanged)
+        {
+            return keep(HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), IDS_FILEOPS_NOTE_DISCARD_SOURCE_CHANGED, kWarning, kKeptCategory);
+        }
+        if (! SourceAndDestinationAreDistinctFiles(sourcePath, destinationPath))
+        {
+            return keep(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), IDS_FILEOPS_NOTE_DISCARD_SOURCE_SAME_FILE, kWarning, kKeptCategory);
+        }
+        if (CancelRequested())
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        mutationAttemptFlags.fetch_or(kSourceDeleteAttemptedFlag, std::memory_order_acq_rel);
+        FileSystemConditionalMutationResult result{};
+        result.sizeBytes                = sizeof(result);
+        FileSystemOptions deleteOptions = options;
+        const HRESULT deleteHr          = current.authority.boundObject->DeleteIfUnchanged(FILESYSTEM_FLAG_NONE, &deleteOptions, &result);
+        const FileOperations::ManagedCleanupAttemptDisposition disposition = FileOperations::ClassifyManagedCleanupMutation({
+            .status               = deleteHr,
+            .outcomeKnown         = result.outcomeKnown != FALSE,
+            .mutationCommitted    = result.mutationCommitted != FALSE,
+            .originalStillPresent = result.originalStillPresent != FALSE,
+        });
+        const bool removed                                                 = disposition == FileOperations::ManagedCleanupAttemptDisposition::Removed;
+        Debug::Perf::Emit(L"FileOps.Move.SourceDeletedPermanently", L"", 0u, removed ? 1u : 0u, 0u, deleteHr);
+        if (removed)
+        {
+            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
+                               deleteHr,
+                               L"bridge.move.discardSource.permanent",
+                               FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_NOTE_DISCARD_SOURCE_DELETED_PERMANENTLY},
+                               sourcePath,
+                               destinationPath);
+            return S_OK;
+        }
+        if (disposition == FileOperations::ManagedCleanupAttemptDisposition::Retained)
+        {
+            return keep(deleteHr, IDS_FILEOPS_NOTE_DISCARD_SOURCE_NOT_DELETED, kWarning, kKeptCategory);
+        }
+        const HRESULT unknownHr = FAILED(deleteHr) ? deleteHr : E_UNEXPECTED;
+        managedCleanupIndeterminate.store(true, std::memory_order_release);
+        NoteFailure(QualifiedItemFailurePhase::SourceCleanup, unknownHr);
+        task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                           unknownHr,
+                           L"bridge.move.discardSource.permanentUnknown",
+                           L"The permanent delete of the source has an unknown outcome; it was not retried.",
+                           sourcePath,
+                           destinationPath);
+        return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
     }
 
     // A created folder's identity snapshot, taken from the object its publication returned, which is released here: the
@@ -17659,7 +18922,7 @@ struct CrossFileSystemBridge
                                    L"The destination's digest of the published object does not match the bytes read from the source.",
                                    sourcePath,
                                    destinationPath);
-                if (managedCleanupRecord.armed)
+                if (managedCleanupRecord.Pending())
                 {
                     MarkManagedSourceRetained(sourcePath,
                                               destinationPath,
@@ -17680,7 +18943,7 @@ struct CrossFileSystemBridge
         if (FAILED(hr))
         {
             StoreVerificationState(FileOperations::VerificationState::Canceled);
-            if (managedCleanupRecord.armed)
+            if (managedCleanupRecord.Pending())
             {
                 MarkManagedSourceRetained(sourcePath,
                                           destinationPath,
@@ -17812,7 +19075,7 @@ struct CrossFileSystemBridge
         if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT || CancelRequested())
         {
             StoreVerificationState(FileOperations::VerificationState::Canceled);
-            if (managedCleanupRecord.armed)
+            if (managedCleanupRecord.Pending())
             {
                 MarkManagedSourceRetained(sourcePath,
                                           destinationPath,
@@ -17831,7 +19094,7 @@ struct CrossFileSystemBridge
                                L"Requested content verification could not obtain an exact provider proof or bound-object readback.",
                                sourcePath,
                                destinationPath);
-            if (managedCleanupRecord.armed)
+            if (managedCleanupRecord.Pending())
             {
                 MarkManagedSourceRetained(sourcePath,
                                           destinationPath,
@@ -17860,7 +19123,7 @@ struct CrossFileSystemBridge
             if (FAILED(hr))
             {
                 StoreVerificationState(FileOperations::VerificationState::Canceled);
-                if (managedCleanupRecord.armed)
+                if (managedCleanupRecord.Pending())
                 {
                     MarkManagedSourceRetained(sourcePath,
                                               destinationPath,
@@ -17887,7 +19150,7 @@ struct CrossFileSystemBridge
                                L"Published destination BLAKE3 content does not match the bytes read from the source.",
                                sourcePath,
                                destinationPath);
-            if (managedCleanupRecord.armed)
+            if (managedCleanupRecord.Pending())
             {
                 MarkManagedSourceRetained(sourcePath,
                                           destinationPath,
@@ -18060,9 +19323,19 @@ struct CrossFileSystemBridge
                                                              bool& replaceReadOnlyGranted,
                                                              bool& replaceLinkGranted,
                                                              wil::com_ptr<IFileSystemBoundObject>& expectedDestination,
-                                                             std::optional<FileSystemBasicInformation>& replaceExpectation) noexcept
+                                                             std::optional<FileSystemBasicInformation>& replaceExpectation,
+                                                             std::optional<FileSystemExpectedOccupant>* expectedOccupant = nullptr,
+                                                             bool* discardSourceRequested                                = nullptr) noexcept
     {
         replaceExpectation.reset();
+        if (discardSourceRequested != nullptr)
+        {
+            *discardSourceRequested = false;
+        }
+        if (expectedOccupant != nullptr)
+        {
+            expectedOccupant->reset();
+        }
         const bool requestedOverwrite       = (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE)) != 0u;
         const bool requestedReplaceReadOnly = (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY)) != 0u;
         overwriteGranted                    = false;
@@ -18146,19 +19419,52 @@ struct CrossFileSystemBridge
         {
             CaptureReplaceExpectation(destinationPath, occupantBeforePrompt);
         }
+        // I63 B2: a binding destination that opens this file and cannot identify it. The provider
+        // reads the facts of the occupant the user is about to decide on; they travel with the
+        // decision to the publication, where one replacing rename is conditioned on them. Success
+        // here is also what offers Replace on the prompt.
+        std::optional<FileSystemExpectedOccupant> occupantForReplace;
+        if (destinationBinding && expectedOccupantPublication && expectedOccupant != nullptr && ! linkCollision)
+        {
+            FileSystemExpectedOccupant occupant{};
+            occupant.sizeBytes = sizeof(occupant);
+            if (SUCCEEDED(expectedOccupantPublication->ReadExpectedOccupant(destinationPath.c_str(), &occupant)))
+            {
+                occupantForReplace = occupant;
+            }
+        }
 
+        // I63 B4: Delete source is offered when this Move may remove its source (Managed Move), the source is on the
+        // Local file system (the one provider whose Delete is known to use the Recycle Bin or to refuse before any
+        // change), and the destination is a regular file that is provably not the source under another name.
+        const bool offerDiscardSource = discardSourceRequested != nullptr && sourceCleanupPermitted && task._operation == FILESYSTEM_MOVE && ! linkCollision &&
+                                        NavigationLocation::EqualsNoCase(task._sourcePluginId, L"builtin/file-system") &&
+                                        SourceAndDestinationAreDistinctFiles(sourcePath, destinationPath);
         // Raise a PER-FILE conflict instead of failing the whole bridge transfer. The
         // host serializes prompts and caches apply-to-all answers (Fairstream 1C/1D).
         bool keepBothRequested        = false;
         const HRESULT collisionStatus = linkCollision ? HRESULT_FROM_WIN32(ERROR_REPARSE_POINT_ENCOUNTERED)
                                                       : HRESULT_FROM_WIN32(readonlyCollision ? ERROR_ACCESS_DENIED : ERROR_ALREADY_EXISTS);
-        const HRESULT promptHr        = PromptDestinationCollision(
-            sourcePath, destinationPath, collisionStatus, overwriteGranted, replaceReadOnlyGranted, replaceLinkGranted, keepBothRequested, expectedDestination);
+        const HRESULT promptHr        = PromptDestinationCollision(sourcePath,
+                                                                   destinationPath,
+                                                                   collisionStatus,
+                                                                   overwriteGranted,
+                                                                   replaceReadOnlyGranted,
+                                                                   replaceLinkGranted,
+                                                                   keepBothRequested,
+                                                                   expectedDestination,
+                                                                   occupantForReplace.has_value(),
+                                                                   offerDiscardSource,
+                                                                   discardSourceRequested);
         if (! keepBothRequested)
         {
             if (SUCCEEDED(promptHr) && promptHr != S_FALSE && overwriteGranted && ! expectedDestination)
             {
                 replaceExpectation = occupantBeforePrompt;
+                if (expectedOccupant != nullptr)
+                {
+                    *expectedOccupant = occupantForReplace;
+                }
             }
             return promptHr;
         }
@@ -18197,6 +19503,7 @@ struct CrossFileSystemBridge
                                             const std::wstring& destinationPath,
                                             IFileSystemBoundObject& ownedStage,
                                             IFileSystemBoundObject* expectedDestination,
+                                            const FileSystemExpectedOccupant* expectedOccupant,
                                             bool overwriteGranted,
                                             bool replaceReadOnlyGranted,
                                             bool replaceLinkGranted,
@@ -18208,6 +19515,7 @@ struct CrossFileSystemBridge
                                    {.sourcePath             = sourcePath,
                                     .destinationPath        = destinationPath,
                                     .expectedDestination    = expectedDestination,
+                                    .expectedOccupant       = expectedOccupant,
                                     .overwriteGranted       = overwriteGranted,
                                     .replaceReadOnlyGranted = replaceReadOnlyGranted,
                                     .replaceLinkGranted     = replaceLinkGranted,
@@ -18228,9 +19536,11 @@ struct CrossFileSystemBridge
         std::wstring_view sourcePath;
         std::wstring_view destinationPath;
         IFileSystemBoundObject* expectedDestination = nullptr;
-        bool overwriteGranted                       = false;
-        bool replaceReadOnlyGranted                 = false;
-        bool replaceLinkGranted                     = false;
+        // Replace without a bound destination: the occupant the user saw (I63 B2), or null.
+        const FileSystemExpectedOccupant* expectedOccupant = nullptr;
+        bool overwriteGranted                              = false;
+        bool replaceReadOnlyGranted                        = false;
+        bool replaceLinkGranted                            = false;
         std::wstring_view unknownCategory; // empty: no diagnostic for an unknown outcome
         std::wstring_view unknownMessage;
         std::wstring_view partialCategory; // empty: no diagnostic for a partial post-publication cleanup
@@ -18253,13 +19563,40 @@ struct CrossFileSystemBridge
         publicationResult.sizeBytes       = sizeof(publicationResult);
         const uint64_t publicationStartUs = PerfNowUs();
         mutationAttemptFlags.fetch_or(kFinalPublishAttemptedFlag, std::memory_order_acq_rel);
-        HRESULT publishHr =
-            ownedStage->PublishAs(destinationPath.c_str(),
-                                  publication.expectedDestination,
-                                  BuildPublicationFlags(publication.overwriteGranted, publication.replaceReadOnlyGranted, publication.replaceLinkGranted),
-                                  &options,
-                                  &publicationResult,
-                                  publishedAuthority.put());
+        HRESULT publishHr                = E_UNEXPECTED;
+        const bool expectedOccupantRoute = publication.expectedOccupant != nullptr && publication.expectedDestination == nullptr &&
+                                           publication.overwriteGranted && expectedOccupantPublication;
+        if (expectedOccupantRoute)
+        {
+            // I63 B2: the location cannot identify the occupant. The provider reads its facts again
+            // and renames the stage over it only while they equal what the user decided on.
+            publishHr = expectedOccupantPublication->PublishOverExpectedOccupant(ownedStage,
+                                                                                 destinationPath.c_str(),
+                                                                                 publication.expectedOccupant,
+                                                                                 BuildPublicationFlags(true, publication.replaceReadOnlyGranted, false),
+                                                                                 &options,
+                                                                                 &publicationResult,
+                                                                                 publishedAuthority.put());
+            if (publishHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+            {
+                task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                                   publishHr,
+                                   L"bridge.replace.occupantChanged",
+                                   L"The destination changed after the replace decision; nothing was replaced.",
+                                   publication.sourcePath,
+                                   publication.destinationPath);
+            }
+        }
+        else
+        {
+            publishHr =
+                ownedStage->PublishAs(destinationPath.c_str(),
+                                      publication.expectedDestination,
+                                      BuildPublicationFlags(publication.overwriteGranted, publication.replaceReadOnlyGranted, publication.replaceLinkGranted),
+                                      &options,
+                                      &publicationResult,
+                                      publishedAuthority.put());
+        }
 #ifdef ENABLE_TESTS
         // Reviewed publication-result seam: real PublishAs completed with exact committed
         // authority. Substitute only its HRESULT to exercise a provider's committed-error return,
@@ -18299,6 +19636,11 @@ struct CrossFileSystemBridge
             ReportFilePublication(publication.sourcePath, publication.destinationPath);
             task.NoteLiveOutputPublished(destinationPath);
             RecordOwnedStageDisposition(OwnedStageDisposition::Published);
+            if (expectedOccupantRoute)
+            {
+                // I63 B2.7: said once per task, shared with a source removed by its facts (B7.3).
+                NoteCheckedByFactsOnce(publication.sourcePath, publication.destinationPath);
+            }
             if (! publishedAuthority)
             {
                 NoteFailure(QualifiedItemFailurePhase::FinalPublish, E_UNEXPECTED);
@@ -18338,7 +19680,13 @@ struct CrossFileSystemBridge
             NoteFailure(QualifiedItemFailurePhase::FinalPublish, E_UNEXPECTED);
             return E_UNEXPECTED;
         }
-        NoteFailure(QualifiedItemFailurePhase::FinalPublish, publishHr);
+        // I63 B2: a changed occupant goes back to the user as a new decision on the current occupant
+        // (PumpAndPublishFile), as on the atomic-final writer route; it is not this item's recorded
+        // failure while that decision can still be raised.
+        if (! (expectedOccupantRoute && publishHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)))
+        {
+            NoteFailure(QualifiedItemFailurePhase::FinalPublish, publishHr);
+        }
         return publishHr;
     }
 
@@ -18513,6 +19861,10 @@ struct CrossFileSystemBridge
         bool replaceLinkGranted     = false;
         wil::com_ptr<IFileSystemBoundObject> expectedDestination;
         std::optional<FileSystemBasicInformation> replaceExpectation;
+        // The occupant the user agreed to replace where the location cannot identify it (I63 B2).
+        std::optional<FileSystemExpectedOccupant> expectedOccupant;
+        // The user answered Delete source: the destination keeps its file, nothing is bound, staged or copied (I63 B4).
+        bool discardSourceRequested = false;
 
         // Source authority, metadata, cleanup record, reader, and sizes.
         FileOperations::BoundObjectAuthority sourceMetadataAuthority{};
@@ -18636,7 +19988,9 @@ struct CrossFileSystemBridge
                                                                         txn.replaceReadOnlyGranted,
                                                                         txn.replaceLinkGranted,
                                                                         txn.expectedDestination,
-                                                                        txn.replaceExpectation);
+                                                                        txn.replaceExpectation,
+                                                                        &txn.expectedOccupant,
+                                                                        &txn.discardSourceRequested);
         if (FAILED(hrDestPolicy))
         {
             return hrDestPolicy;
@@ -18766,7 +20120,7 @@ struct CrossFileSystemBridge
                 hasSourceMetadataSnapshot = SUCCEEDED(sourceMetadata->GetMetadataSnapshot(&options, &sourceMetadataSnapshot));
             }
         }
-        if (retainSourceByConsent && managedCleanupRecord.armed)
+        if (retainSourceByConsent && managedCleanupRecord.Pending())
         {
             MarkManagedSourceRetained(sourcePath, destinationPath, S_FALSE, L"Copied; source kept by the placeholder-hydration consent decision.");
             managedCleanupRecord = {};
@@ -18869,7 +20223,7 @@ struct CrossFileSystemBridge
         {
             directFinalCreateSupported = FALSE;
         }
-        if (managedCleanupRecord.armed && txn.identityLess && ! txn.writerProofRoute)
+        if (managedCleanupRecord.Pending() && txn.identityLess && ! txn.writerProofRoute)
         {
             MarkManagedSourceRetained(sourcePath,
                                       destinationPath,
@@ -18884,9 +20238,10 @@ struct CrossFileSystemBridge
         txn.identityLessReplace = overwriteGranted && ! txn.expectedDestination && txn.identityLess;
         // I35 XP-04: requested verification never removes the only publication route an identity-less
         // destination has; without a writer proof the verify phase reports Unavailable for the item.
-        txn.useAtomicFinalWriter  = writerRoute.useAtomicFinalWriter && (! managedCleanupRecord.armed || txn.writerProofRoute) &&
-                                    (! overwriteGranted || txn.identityLessReplace) && (! verificationRequested || txn.writerProofRoute || txn.identityLess);
-        txn.useIdentityOwnedStage = ! txn.identityLess && (managedCleanupRecord.armed || ! txn.useAtomicFinalWriter);
+        txn.useAtomicFinalWriter = writerRoute.useAtomicFinalWriter && (! managedCleanupRecord.Pending() || txn.writerProofRoute) &&
+                                   (! overwriteGranted || txn.identityLessReplace) && (! verificationRequested || txn.writerProofRoute || txn.identityLess);
+        // I63 B7: a source removed by name after publication needs the same exact publication proof as a bound one.
+        txn.useIdentityOwnedStage = ! txn.identityLess && (managedCleanupRecord.Pending() || ! txn.useAtomicFinalWriter);
         txn.useDirectFinalWriter  = ! txn.useAtomicFinalWriter && txn.identityLess && directFinalCreateSupported == TRUE && ! overwriteGranted &&
                                     ! txn.replaceReadOnlyGranted && ! txn.replaceLinkGranted;
         if (! txn.useAtomicFinalWriter && ! txn.useIdentityOwnedStage && ! txn.useDirectFinalWriter)
@@ -18980,7 +20335,7 @@ struct CrossFileSystemBridge
                     return hr;
                 }
             }
-            if (txn.writerProofRoute && (verificationRequested || managedCleanupRecord.armed))
+            if (txn.writerProofRoute && (verificationRequested || managedCleanupRecord.Pending()))
             {
                 // R3-2: hash the streamed bytes with every digest the writer can prove afterwards.
                 static_cast<void>(writer->QueryInterface(IID_PPV_ARGS(writerProof.addressof())));
@@ -19089,7 +20444,7 @@ struct CrossFileSystemBridge
                 }
                 if (consent.action == ConflictAction::RetainSource)
                 {
-                    if (managedCleanupRecord.armed)
+                    if (managedCleanupRecord.Pending())
                     {
                         MarkManagedSourceRetained(sourcePath, destinationPath, S_FALSE, retainedReason);
                         managedCleanupRecord = {};
@@ -19138,7 +20493,7 @@ struct CrossFileSystemBridge
         BridgeCopyPerf& copyPerf                                                        = txn.copyPerf;
         HRESULT hr                                                                      = S_OK;
 
-        const bool isMove         = managedCleanupRecord.armed;
+        const bool isMove         = managedCleanupRecord.Pending();
         txn.isMove                = isMove;
         bool queryCommitSizeProof = isMove;
 #ifdef ENABLE_TESTS
@@ -19652,7 +21007,7 @@ struct CrossFileSystemBridge
 
             constexpr uint32_t kSecuritySignificantLoss =
                 FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
-            if (managedCleanupRecord.armed && (finalMetadata.lostFeatures & kSecuritySignificantLoss) != 0u)
+            if (managedCleanupRecord.Pending() && (finalMetadata.lostFeatures & kSecuritySignificantLoss) != 0u)
             {
                 const DeferredConsentResult consent = RequestBridgeConsent(FileOperations::DeferredConsentRisk::MetadataLoss,
                                                                            FAILED(finalMetadata.firstFailure) ? finalMetadata.firstFailure : S_FALSE,
@@ -19713,7 +21068,7 @@ struct CrossFileSystemBridge
         }
         txn.writerProof.reset();
         txn.writerProofHashers.clear();
-        if (managedCleanupRecord.armed && txn.identityLess && txn.writerProofMatched != true)
+        if (managedCleanupRecord.Pending() && txn.identityLess && txn.writerProofMatched != true)
         {
             MarkManagedSourceRetained(sourcePath,
                                       destinationPath,
@@ -19743,6 +21098,7 @@ struct CrossFileSystemBridge
                                    destinationPath,
                                    *txn.ownedStage,
                                    txn.expectedDestination.get(),
+                                   txn.expectedOccupant.has_value() ? &txn.expectedOccupant.value() : nullptr,
                                    txn.overwriteGranted,
                                    txn.replaceReadOnlyGranted,
                                    txn.replaceLinkGranted,
@@ -19910,6 +21266,40 @@ struct CrossFileSystemBridge
     // The exact Move source cleanup after publication.
     [[nodiscard]] HRESULT FinishCleanup(PublicationTransaction& txn) noexcept
     {
+        if (! txn.managedCleanupRecord.armed && ! txn.managedCleanupRecord.byNameFacts.empty())
+        {
+            // I63 B7: the source is removed by name. Its reader is no longer needed; releasing it keeps the probe and the
+            // delete from meeting the copy's own handle.
+            txn.reader.reset();
+            if (txn.overwriteGranted || txn.replaceReadOnlyGranted || txn.replaceLinkGranted)
+            {
+                // I63 B8: an existing destination item was replaced. It may have been the source itself under another
+                // spelling, and the published copy then answers the source's facts. The location is asked (a held
+                // destination and an open of the source's name) after every handle this transaction holds on the
+                // published file is released: the probe holds the destination denying all sharing, so one handle
+                // left open would refuse it. Unless the two are distinct files, the source is kept.
+                txn.publishedAuthority.reset();
+                txn.destinationStageMetadata.reset();
+                txn.commitSizeProof.reset();
+                txn.writerProof.reset();
+                txn.writer.reset();
+                txn.expectedDestination.reset();
+                if (txn.promoted)
+                {
+                    // Promoted: the abort path no longer needs the stage object, which is now the published file.
+                    txn.ownedStage.reset();
+                }
+                if (! SourceAndDestinationAreDistinctFiles(txn.sourcePath, txn.destinationPath, true))
+                {
+                    MarkManagedSourceRetained(txn.sourcePath,
+                                              txn.destinationPath,
+                                              HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS),
+                                              FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_SAME_FILE});
+                    txn.managedCleanupRecord = {};
+                    return S_OK;
+                }
+            }
+        }
         return FinalizeManagedSourceCleanup(txn.sourcePath, txn.destinationPath, txn.managedCleanupRecord);
     }
 
@@ -19964,6 +21354,12 @@ struct CrossFileSystemBridge
         if (hr != S_OK)
         {
             return hr;
+        }
+        if (txn.discardSourceRequested)
+        {
+            // I63 B4: the destination keeps its file. No source binding, stage, permit or byte is involved; the
+            // source is removed (or kept, where its location has no Recycle Bin) and the file counts as done.
+            return RemoveSourceAlreadyAtDestination(txn.sourcePath, txn.destinationPath);
         }
         hr = BindSource(txn, adoptFileSizeAsTotalWhenUnknown);
         if (FAILED(hr))
@@ -20064,6 +21460,9 @@ struct CrossFileSystemBridge
         hr = Publish(txn);
         if (FAILED(hr))
         {
+            // I63 B2: nothing was published over an occupant that is no longer the one decided on;
+            // the stage is aborted below and the decision is raised again on the current occupant.
+            replaceRefused = hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && txn.expectedOccupant.has_value() && ! txn.promoted;
             return hr;
         }
         if (verificationRequested)
@@ -21076,9 +22475,10 @@ struct CrossFileSystemBridge
         }
 
         RestoreSequentialDirectoryMetadata(frame);
-        const bool boundCleanup = frame.managedDirectoryCleanup.armed;
-        const HRESULT cleanupHr = boundCleanup ? FinalizeManagedSourceCleanup(sourcePath, destinationPath, frame.managedDirectoryCleanup)
-                                               : (renameMerge ? RemoveEmptiedSourceDirectoryByName(sourcePath, destinationPath) : S_OK);
+        // I63 B7: the record also removes, by name, an emptied folder its location cannot identify.
+        const bool recordCleanup = frame.managedDirectoryCleanup.Pending();
+        const HRESULT cleanupHr  = recordCleanup ? FinalizeManagedSourceCleanup(sourcePath, destinationPath, frame.managedDirectoryCleanup)
+                                                 : (renameMerge ? RemoveEmptiedSourceDirectoryByName(sourcePath, destinationPath) : S_OK);
         if (renameMerge && frame.depth == 0u && cleanupHr == S_OK && ! managedSourceRetained.load(std::memory_order_acquire))
         {
             rootSourceRemoved.store(true, std::memory_order_release);
@@ -24085,6 +25485,56 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     // The bridge rebinds the exact source and must still prove publication before
                     // DeleteIfUnchanged. Unproved publication retains the source; no ancestor
                     // attribute or scheduling key becomes destructive authority.
+                    return S_FALSE;
+                }
+                // I63 B1: an item already exists at a destination that opens items but cannot
+                // identify them. That is a name collision, not a refusal. The bridge raises the typed
+                // decision before any byte is read (ValidateDestinationOverwritePolicy), with both
+                // items' facts, and offers what the location can perform; the user's decision is the
+                // authority. As on the new-file route above, the source stays exactly bound and is
+                // removed only after the publication proof, and every folder above the destination
+                // must be a plain directory.
+                if (plan.strategy == FileOperations::OperationStrategy::Managed && guard.destinationIdentityUnsupported && guard.source.boundObject &&
+                    guard.source.kind == FILESYSTEM_BOUND_REGULAR_FILE &&
+                    (plan.destinationEndpoint.verificationHostReadback || plan.destinationEndpoint.verificationProviderBlake3Proof) &&
+                    FileOperations::IsLocalFileSystemEndpoint(plan.sourceEndpoint) && FileOperations::IsLocalFileSystemEndpoint(plan.destinationEndpoint) &&
+                    newFileParentsAreDirectories(plan.destinationEndpoint, destinationPath))
+                {
+                    Debug::Perf::EmitCounter(L"FileOps.Conflict.DestinationIdentityUnavailable");
+                    return S_FALSE;
+                }
+                // I63 B1.5: a folder onto an existing item at such a destination. Onto a plain folder the two folders
+                // merge, as at a location that identifies its items (product invariant 7): no decision is asked for the
+                // folder itself, and each child that collides raises its own decision in the bridge's file pre-flight.
+                // Onto a file the bridge raises the type-mismatch decision (Keep both, Skip, Cancel). The source folder
+                // stays exactly bound and is removed only once the merge emptied it. A destination that is a link or
+                // any other reparse point, and a linked folder above it, keep the refusal below. The attribute read
+                // only selects this route; it grants no replacement and no removal.
+                unsigned long identityLessItemAttributes = 0u;
+                if (plan.strategy == FileOperations::OperationStrategy::Managed && guard.destinationIdentityUnsupported && guard.source.boundObject &&
+                    guard.source.kind == FILESYSTEM_BOUND_DIRECTORY &&
+                    (plan.destinationEndpoint.verificationHostReadback || plan.destinationEndpoint.verificationProviderBlake3Proof) &&
+                    FileOperations::IsLocalFileSystemEndpoint(plan.sourceEndpoint) && FileOperations::IsLocalFileSystemEndpoint(plan.destinationEndpoint) &&
+                    destinationFileSystemIo &&
+                    SUCCEEDED(destinationFileSystemIo->GetAttributes(std::wstring(destinationPath).c_str(), &identityLessItemAttributes)) &&
+                    (identityLessItemAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u &&
+                    newFileParentsAreDirectories(plan.destinationEndpoint, destinationPath))
+                {
+                    Debug::Perf::EmitCounter(L"FileOps.Conflict.DestinationIdentityUnavailable");
+                    return S_FALSE;
+                }
+                // I63 B7: the source's location opens it and cannot identify it: the guard stopped at the source's
+                // bind, which is Unsupported (an open that failed is Indeterminate and keeps its refusal). The bridge
+                // copies it and removes it only after the destination's publication proof and only while the facts
+                // read before the copy are unchanged; otherwise the source is kept. The destination is checked by the
+                // bridge as for any other item, and every folder above it must be a plain directory.
+                if (plan.strategy == FileOperations::OperationStrategy::Managed && ! guard.source.boundObject && ! guard.destinationIdentityUnsupported &&
+                    ! guard.destination.has_value() &&
+                    (plan.destinationEndpoint.verificationHostReadback || plan.destinationEndpoint.verificationProviderBlake3Proof) &&
+                    FileOperations::IsLocalFileSystemEndpoint(plan.sourceEndpoint) && FileOperations::IsLocalFileSystemEndpoint(plan.destinationEndpoint) &&
+                    newFileParentsAreDirectories(plan.destinationEndpoint, destinationPath))
+                {
+                    Debug::Perf::EmitCounter(L"FileOps.Move.SourceIdentityUnavailable");
                     return S_FALSE;
                 }
             }

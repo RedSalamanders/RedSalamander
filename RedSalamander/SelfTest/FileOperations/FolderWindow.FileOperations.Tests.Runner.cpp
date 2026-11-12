@@ -11595,7 +11595,7 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
     // Dummy provider offers no object binding, so an artifact-shaped destination name cannot be
     // verified and the guard blocks the Copy.
     passed                                                 = false;
-    constexpr std::wstring_view kArtifactLeaf              = L"staged.rs_tmp_0123456789abcdef0123456789abcdef_1";
+    constexpr std::wstring_view kArtifactLeaf              = L"staged.0123456789abcdef0123456789abcdef_1.rs-tmp";
     const std::wstring artifactRoot                        = std::format(L"/admission-failure-artifact-{}", GetTickCount64());
     const std::wstring artifactSource                      = artifactRoot + L"/source";
     const std::wstring artifactDestination                 = artifactRoot + L"/destination";
@@ -12907,6 +12907,21 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     return actual >= 0 && (actual >= expected ? actual - expected : expected - actual) <= kSmbLastWriteToleranceTicks;
 }
 
+// True when a relative tree entry names a stage or another operation artifact: the Win32 staging names end in `.rs-tmp`
+// or `.rs-bak`, and earlier versions wrote `.rs_` names.
+[[nodiscard]] bool IsOperationArtifactEntryForSelfTest(std::wstring_view entry) noexcept
+{
+    return ContainsIgnoreCase(entry, L".rs-tmp") || ContainsIgnoreCase(entry, L".rs-bak") || ContainsIgnoreCase(entry, L".rs_");
+}
+
+// True when `leaf` is a Win32 stage of the final file `finalLeaf`: `<final leaf>.<32 hex>[_<stream>].rs-tmp`, a name the artifact
+// registry recognizes.
+[[nodiscard]] bool IsStageLeafOfFinalForSelfTest(std::wstring_view leaf, std::wstring_view finalLeaf) noexcept
+{
+    return leaf.size() > finalLeaf.size() && leaf.starts_with(finalLeaf) && leaf[finalLeaf.size()] == L'.' && leaf.ends_with(L".rs-tmp") &&
+           FileOperationArtifacts::HasPossibleArtifactName(leaf);
+}
+
 // Empty when `copied` holds exactly the tree at `expected` (the same entries with the same bytes, and no stage or other
 // operation artifact); otherwise what differs.
 [[nodiscard]] std::wstring DescribeTreeDifferenceForSelfTest(const std::filesystem::path& expected, const std::filesystem::path& copied) noexcept
@@ -12917,7 +12932,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     {
         return std::format(L"'{}' or '{}' could not be listed", expected.native(), copied.native());
     }
-    const auto leftover = std::ranges::find_if(copiedEntries, [](const std::wstring& entry) noexcept { return ContainsIgnoreCase(entry, L".rs_"); });
+    const auto leftover = std::ranges::find_if(copiedEntries, [](const std::wstring& entry) noexcept { return IsOperationArtifactEntryForSelfTest(entry); });
     if (leftover != copiedEntries.end())
     {
         return std::format(L"'{}' kept a stage or another operation artifact: '{}'", copied.filename().native(), *leftover);
@@ -13092,7 +13107,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     }
 
     // The share holds exactly the source tree: every folder and file with the same bytes, and nothing else (no
-    // stage such as .rs_copy_tmp_ left behind).
+    // stage such as a .rs-tmp file left behind).
     if (const std::wstring difference = DescribeTreeDifferenceForSelfTest(source, copied); ! difference.empty())
     {
         return reject(difference);
@@ -13372,7 +13387,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
                               FileSizeEquals(source / L"000-payload.bin", kPayloadBytes);
     const bool destinationClean =
         CollectRelativeTreeForSelfTest(destination, destinationEntries) &&
-        std::ranges::none_of(destinationEntries, [](const std::wstring& entry) noexcept { return ContainsIgnoreCase(entry, L".rs_"); });
+        std::ranges::none_of(destinationEntries, [](const std::wstring& entry) noexcept { return IsOperationArtifactEntryForSelfTest(entry); });
     const bool passed        = counted && correctLiveTotals && duplicateDidNotGrow && changedMetadataWithdrewCertainty &&
                                info->hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && info->discoveryDurationUs <= 2'000'000u &&
                                info->discoveryBytesCompletedWhileOpen == 0u && info->discoveryGrowthAfterCloseCount == 0u && sourceIntact && destinationClean;
@@ -13479,7 +13494,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         std::vector<std::wstring> destinationEntries;
         const bool destinationClean =
             CollectRelativeTreeForSelfTest(copied, destinationEntries) &&
-            std::ranges::none_of(destinationEntries, [](const std::wstring& entry) noexcept { return ContainsIgnoreCase(entry, L".rs_"); });
+            std::ranges::none_of(destinationEntries, [](const std::wstring& entry) noexcept { return IsOperationArtifactEntryForSelfTest(entry); });
         const bool sourceIntact        = ! cancel || DescribeTreeDifferenceForSelfTest(expected, source).empty();
         const bool destinationComplete = DescribeTreeDifferenceForSelfTest(expected, copied).empty();
         bool passed =
@@ -15590,7 +15605,15 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 ! RunFileOperationQueuedMissingSourceTaskSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOpsBridgePausedReaderStopSelfTestForSelfTest(*state.fileOps) || ! RunFileOpsLeftoverScanWorkerRetirementChecks(state) ||
                 ! RunFileOperationUnverifiableDestinationCollisionSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
-                ! RunFileOpsCompletedCardAutoCollapseChecks(state))
+                ! RunFileOperationIdentityLessCollisionDecisionSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOperationIdentityLessFolderMergeSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOperationIdentityLessSourceMoveSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOperationDiscardSourceSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOperationBulkCollisionPoliciesSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) || ! RunFileOperationKeepAwakeSelfTest() ||
+                ! RunFileOperationDiscardSourceWithoutRecycleBinSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOperationPresetCollisionPolicySelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
+                ! RunFileOperationConflictObservedFactsSelfTest() || ! RunFileOperationStreamSlotSelfTest(*state.fileOps) ||
+                ! RunFileOperationConflictComparisonTextSelfTest() || ! RunFileOpsCompletedCardAutoCollapseChecks(state))
             {
                 Fail(L"File Operations review regression failed; see the trace.");
                 return true;
@@ -15631,6 +15654,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! FolderWindow::FileOperationState::DebugValidateInterlockWaitingPresentationForSelfTest(failure) ||
                 ! FolderWindow::FileOperationState::DebugValidateSharedTransferBudgetForSelfTest(failure) ||
                 ! FolderWindow::FileOperationState::DebugValidateSharedTransferAdmissionsForSelfTest(failure) ||
+                ! FolderWindow::FileOperationState::DebugValidateQueueStartOrderForSelfTest(failure) ||
                 ! RunFileOperationSharedTransferSelfTests(state, failure) || ! CaptureFileOpsWaitingCards(state, true))
             {
                 Fail(failure.empty() ? L"Identity-interlock waiting card failed; see WaitingCard witnesses in the trace." : failure);

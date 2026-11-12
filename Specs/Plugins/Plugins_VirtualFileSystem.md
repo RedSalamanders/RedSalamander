@@ -1371,7 +1371,9 @@ tree), returns `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` from `ResolveDeleteIden
 can bind, so a delete by name never replaces exact authority, compares the facts again on the no-follow
 handle that performs the delete, and deletes only the entries of the pinned tree, each after comparing
 its own facts (a stop after a deletion reports the partial-tree receipt). The Local provider does this
-for identity-less locations (I35 R7.3, D-7.3).
+for identity-less locations (I35 R7.3, D-7.3). The host also uses the file form for the source of a
+Managed Move at such a location (I63 B7): it resolves the facts before the copy opens the file and
+deletes after the destination's publication proof.
 
 The pinned-tree scale selftest temporarily sets the actual Local provider to manual Delete concurrency 8,
 verifies the typed route, and restores and verifies the original provider configuration after its workers
@@ -1434,6 +1436,32 @@ publication, artifact cleanup, or source deletion. A missing/failed/malformed pr
 only to an advertised exact bound-object host readback; otherwise the item reports verification
 `Unavailable`.
 
+A provider that implements `IFileSystemObjectBinding` may additionally expose
+`IFileSystemExpectedOccupantPublication` (`7c1f5d0e-3b7a-4f0c-9a55-2e8d6b41c3f7`, I63 B2) for an
+existing destination it can open and cannot identify, where `BindObject` returns
+`ERROR_NOT_SUPPORTED` and `PublishAs` therefore has no exact destination to replace.
+`ReadExpectedOccupant` returns a size-validated `FileSystemExpectedOccupant` (attributes, creation
+and last-write time, size, and the file index or zero) only for a regular file the location cannot
+identify; it returns `ERROR_NOT_SUPPORTED` for an object `BindObject` can bind, for a directory and
+for a link or any other reparse point. The host keeps the structure from the user's decision to the
+publication and never interprets it. `PublishOverExpectedOccupant` takes the exact owned stage,
+requires `FILESYSTEM_FLAG_ALLOW_OVERWRITE` (and `FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY` for a
+read-only occupant), reads the occupant again and renames the stage over the final name only while
+that read equals the expectation; otherwise it fails with `ERROR_REVISION_MISMATCH` and publishes
+nothing. A read-only attribute is cleared only after the facts matched and is restored when the
+rename does not commit. A rename the location refuses leaves the occupant and the stage as they
+were: the provider MUST NOT fall back to writing over the occupant, hold a handle on the occupant
+during the transfer, or set a copy of it aside. The result structure and the returned published
+object follow `PublishAs`, including `outcomeKnown`; a stage without a persistent identity whose
+rename failed is reported as a known non-commit only when the stage is found again under its own
+name. The interface grants nothing by itself: it is used only after a typed user decision for that
+occupant. `ReadUnidentifiedMetadataFeatures` (I63 B7) reports the `FILESYSTEM_METADATA_*` classes
+present on a regular file the location opens and cannot identify, read no-follow, as
+`GetMetadataSnapshot` does for a bound file; it returns `ERROR_NOT_SUPPORTED` for an object
+`BindObject` can bind, a directory, a link or any other reparse point, and a class it failed to
+inspect is a failure of the call. The host keeps a Move source whose streams, extended attributes,
+encryption or cloud placeholder its pathname copy does not carry.
+
 Every conditional call initializes `FileSystemConditionalMutationResult::outcomeKnown`, including
 transport failure. Unknown outcome forbids retry or destructive cleanup until exact reconciliation.
 `expectedDestination == nullptr` means publish/rename only if absent; replacement requires the
@@ -1495,7 +1523,7 @@ classifies a reparse object as Link only for a name-surrogate
 reparse tag; non-name-surrogate WOF/cloud/dedup-style reparses retain their regular-file/directory
 kind. Local advertises `boundDelete`, `conditionalDelete`, `exclusiveStage`, and
 `conditionalPublish` only because these paths are executable and contract-tested. Replacement
-moves the exact expected destination handle to a recognizable `.rs_bak_` sibling, publishes the
+moves the exact expected destination handle to a recognizable `<name>.<32 hex>.rs-bak` sibling, publishes the
 stage with no-replace semantics, and deletes/restores only retained handles. A replacement race is
 never overwritten or pathname-deleted; uncertain cleanup retains a visible Possible artifact.
 

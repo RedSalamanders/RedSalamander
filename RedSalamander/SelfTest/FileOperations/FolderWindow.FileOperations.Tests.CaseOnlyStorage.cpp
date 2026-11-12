@@ -182,7 +182,7 @@
         result.finalDestinationPath != hostDestination.native())
         return reject(L"actual host typed result did not retain Completed/Published/Removed rename truth");
     AppendLog(std::format(L"D8 host task={} AdmitInlineRename/RenameIfUnchanged: exact leaf='{}', volume={:016X}, fileId={}, bytes={}, BLAKE3={}; "
-                          L"identity/exact bytes retained, no .rs_case_tmp_ siblings, one S_OK callback after retirement, foreground preserved",
+                          L"identity/exact bytes retained, no case-only hop (.rs-bak) siblings, one S_OK callback after retirement, foreground preserved",
                           taskId,
                           hostDestination.filename().native(),
                           hostAfterId.VolumeSerialNumber,
@@ -211,7 +211,8 @@
         std::string providerAfterBytes;
         if (providerResult != HRESULT_FROM_WIN32(ERROR_WRITE_FAULT) || ! GetEnvVarTrimmed(failVariable).empty() || temporaryName.empty() ||
             temporaryPath.parent_path().native() != MakeExtendedPathForSelfTest(providerSource.parent_path()) ||
-            ! temporaryPath.filename().native().starts_with(L".rs_case_tmp_") || GetEnvVarTrimmed(revertedVariable) != L"1" ||
+            ! temporaryPath.filename().native().starts_with(providerSource.filename().native() + L".") ||
+            ! FileOperationArtifacts::HasPossibleOriginalArtifactName(temporaryPath.filename().native()) || GetEnvVarTrimmed(revertedVariable) != L"1" ||
             ! oneExactLeaf(providerSource.parent_path(), providerSource.filename().native()) || ! readId(providerSource, providerAfterId) ||
             ! sameId(providerId, providerAfterId) || ! ReadFileTextFsIo(io, providerSource, providerAfterBytes) || providerAfterBytes != providerBytes ||
             digest(providerAfterBytes) != providerDigest || ! FilesEqualBytes(providerSource, providerReference) || GetForegroundWindow() != foreground ||

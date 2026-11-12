@@ -3394,9 +3394,8 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
         std::string observedFaultBytes;
         size_t retainedFaultStages = 0u;
         std::error_code stageError;
-        const std::wstring faultStagePrefix = faultDestination.filename().wstring() + L".rs_copy_tmp_";
         for (std::filesystem::directory_iterator it(faultDestinationRoot, stageError), end; ! stageError && it != end; it.increment(stageError))
-            if (it->path().filename().wstring().starts_with(faultStagePrefix))
+            if (IsStageLeafOfFinalForSelfTest(it->path().filename().native(), faultDestination.filename().native()))
                 ++retainedFaultStages;
         std::string observedFaultSourceBytes;
         const bool copyOutputsValid    = ReadFileTextFsIo(localIo, goodDestination, observedGoodBytes) && observedGoodBytes == goodCopyBytes &&

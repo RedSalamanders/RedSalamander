@@ -1,5 +1,6 @@
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "FolderWindow.FileOperations.IssuesProjection.h"
+#include "FolderWindow.FileOperations.PromptText.h"
 #include "WindowActivation.h"
 
 #include "DxUiThemePalette.h"
@@ -715,6 +716,15 @@ void FileOperationsIssuesPaneState::RefreshRows(bool force) noexcept
         // Q9: the Problem column shows typed localized text; the engine message stays technical.
         if (facts.originalProblem || facts.acceptedDecision)
             observation.problemText = FolderWindow::FileOperationState::FormatIssueProblemText(issue, std::wstring_view(statusSystemText));
+        // I63 B3.3: the two items' facts as the collision decision showed them, in the decision's words.
+        if (issue.conflictPrompt.has_value() && issue.conflictPrompt->itemFacts.has_value())
+        {
+            FileOperations::ConflictObservedTexts observedTexts =
+                FileOperations::BuildConflictObservedTexts(issue.operation, issue.conflictPrompt->itemFacts.value());
+            observation.sourceFactsText      = std::move(observedTexts.source);
+            observation.destinationFactsText = std::move(observedTexts.destination);
+            observation.comparisonText       = std::move(observedTexts.summary);
+        }
         if (facts.acceptedDecision)
         {
             const auto& accepted              = *facts.acceptedDecision;
@@ -1214,6 +1224,9 @@ void FileOperationsIssuesPaneState::UpdateDetail(bool resetScroll) noexcept
         else
             texts[8] = ! row->sourceName.empty() ? row->sourceName : row->destinationName;
         texts[0] = section(IDS_FILEOPS_ISSUES_PROBLEM, row->problemText);
+        // I63 B3.3: how the two items compared closes the Problem; each item's line follows its path below.
+        if (row->hasConflictFacts && ! row->comparisonText.empty())
+            texts[0] += L"\n" + row->comparisonText;
         texts[1] = section(IDS_FILEOPS_ISSUES_COL_OPERATION, row->operationText);
         // issues#9: an ordinary failure has no decision or result to report; its Problem is the
         // failure. Conflict rows keep explicit "not recorded" / "unknown" facts.
@@ -1239,6 +1252,10 @@ void FileOperationsIssuesPaneState::UpdateDetail(bool resetScroll) noexcept
             texts[4] = section(IDS_FILEOPS_ISSUES_COL_SOURCE, row->sourceName.empty() ? row->sourcePathText : row->sourceParentPath);
         if (! row->destinationName.empty() || ! row->destinationPathText.empty())
             texts[5] = section(IDS_FILEOPS_ISSUES_COL_DESTINATION, row->destinationName.empty() ? row->destinationPathText : row->destinationParentPath);
+        if (row->hasConflictFacts && ! texts[4].empty() && ! row->sourceFactsText.empty())
+            texts[4] += L"\n" + row->sourceFactsText;
+        if (row->hasConflictFacts && ! texts[5].empty() && ! row->destinationFactsText.empty())
+            texts[5] += L"\n" + row->destinationFactsText;
         // The engine's own message (English, technical) appears only here, in logs and in exports.
         texts[6] = std::format(L"{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
                                LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TIME),

@@ -57,9 +57,16 @@ bool TryAcceptLocked(
     arbiter.decisionAction        = skipAll ? Task::ConflictAction::Skip : (permanentDeleteAll ? Task::ConflictAction::PermanentDelete : action);
     // Skip consumes the same explicit checkbox scope as other reusable choices. Retry
     // remains one attempt even when checked, so a persistent error cannot auto-retry.
-    arbiter.decisionApplyToAll = permanentDeleteAll || (skipAll && prompt.skipAllEligible) ||
-                                 (prompt.applyToAllEligible && action != Task::ConflictAction::Retry && action != Task::ConflictAction::Cancel &&
-                                  action != Task::ConflictAction::SkipAll && applyToAll.value_or(prompt.applyToAllChecked));
+    // Delete source repeats only for files that look alike: the same size and the same date. For any
+    // other pair the answer covers this item alone, whatever the Apply to all box says.
+    const bool discardSourceMayRepeat = action != Task::ConflictAction::DiscardSource ||
+                                        (prompt.comparison.date == ConflictDateRelation::Same && prompt.comparison.size == ConflictSizeRelation::Same);
+    // The bulk policies (I63 B6) are task-wide by their own caption; the Apply to all box never applies to them.
+    const bool bulkPolicy = action == Task::ConflictAction::SkipSameSizeAndDate || action == Task::ConflictAction::ReplaceOlder;
+    arbiter.decisionApplyToAll =
+        permanentDeleteAll || (skipAll && prompt.skipAllEligible) ||
+        (prompt.applyToAllEligible && action != Task::ConflictAction::Retry && action != Task::ConflictAction::Cancel &&
+         action != Task::ConflictAction::SkipAll && ! bulkPolicy && discardSourceMayRepeat && applyToAll.value_or(prompt.applyToAllChecked));
     arbiter.decisionWasOffered = true;
     arbiter.decisionGeneration = generation;
     // Signal before unlocking: no old submission can signal a successor prompt.

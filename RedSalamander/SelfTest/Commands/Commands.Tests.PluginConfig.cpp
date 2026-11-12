@@ -6091,9 +6091,9 @@ private:
                   L"Local Native Move must be one provider mutation, never enumerate or partially rename a raced directory merge, and preserve exact-object "
                   L"case-only directory rename handling.");
     state.Require(
-        localProviderFileOpsSource.find("BuildUniqueSiblingName") != std::string::npos &&
+        localProviderFileOpsSource.find("MakeStageSiblingPath(sourceExtended, kBackupExtension, tempPath)") != std::string::npos &&
             localProviderFileOpsSource.find("exclusiveTempFlags = renameFlags & ~MOVEFILE_REPLACE_EXISTING") != std::string::npos &&
-            localProviderFileOpsSource.find(".rs_case_tmp_") != std::string::npos &&
+            localProviderFileOpsSource.find(".rs_case_tmp_") == std::string::npos &&
             localProviderFileOpsSource.find("leaf.append(std::to_wstring(pid))") == std::string::npos &&
             localProviderFileOpsSource.find("const ULONGLONG tick = GetTickCount64();") == std::string::npos,
         L"Local case-only rename must fail closed on CSPRNG failure and claim an unpredictable temporary sibling atomically without replacing a raced object.");
