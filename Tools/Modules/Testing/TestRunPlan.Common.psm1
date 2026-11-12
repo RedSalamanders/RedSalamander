@@ -192,7 +192,9 @@ function New-RSTestRunPlanEntry {
 
         [string]$JsonName = '',
 
-        [switch]$RequiresInteractiveDesktop
+        [switch]$RequiresInteractiveDesktop,
+
+        [string[]]$BuildProjectNames = @()
     )
 
     Assert-RSValidationIdentifier -Id $Id
@@ -208,6 +210,7 @@ function New-RSTestRunPlanEntry {
         WorkingDirectory = $WorkingDirectory
         JsonName = $JsonName
         RequiresInteractiveDesktop = [bool]$RequiresInteractiveDesktop
+        BuildProjectNames = @($BuildProjectNames)
         ImpactTags = @($policy.ImpactTags)
         InputSets = @($policy.InputSets)
         ArtifactIds = @($policy.ArtifactIds)
@@ -278,6 +281,7 @@ function ConvertTo-RSValidationPlanEntry {
         impact_tags = @($Entry.ImpactTags)
         input_sets = @($Entry.InputSets)
         artifact_ids = @($Entry.ArtifactIds)
+        build_project_names = @(if ($null -ne $Entry.PSObject.Properties['BuildProjectNames']) { $Entry.BuildProjectNames })
         artifact_read_ids = @($Entry.ArtifactReadIds)
         artifact_write_ids = @($Entry.ArtifactWriteIds)
         produces_artifact_ids = @($Entry.ProducesArtifactIds)

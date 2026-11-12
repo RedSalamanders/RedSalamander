@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $helperModule = Join-Path $repoRoot 'Tools\Modules\Build\BuildProjectSelection.psm1'
 $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -ErrorAction Stop
 
 Describe 'Build project selection helper' {
     BeforeAll {
@@ -65,6 +66,71 @@ Describe 'Build project selection helper' {
         ($projects | Where-Object Name -eq 'RedSalamander').SolutionTarget | Should Be 'RedSalamander'
     }
 
+    It 'builds one canonical union through the solution graph and keeps partial receipt scope' {
+        $selection = Get-RSBuildProjectUnion -SolutionPath $solutionPath -ProjectNames @('ViewerText', 'ProductUiTests', 'viewertext')
+        $selection.BuildInput | Should Be $solutionPath
+        $selection.ReceiptTarget | Should Be 'selected-projects'
+        ($selection.ProjectSelection -join '|') | Should Be 'Plugins/ViewerText/ViewerText.vcxproj|Tests/ProductUiTests/ProductUiTests.vcxproj'
+        $selection.MSBuildTarget | Should Be 'Plugins\ViewerText;Tests\ProductUiTests'
+        $selection.CleanTarget | Should Be 'Plugins\ViewerText:Clean;Tests\ProductUiTests:Clean'
+        $reordered = Get-RSBuildProjectUnion -SolutionPath $solutionPath -ProjectNames @('ProductUiTests', 'ViewerText') -Rebuild
+        ($reordered.ProjectSelection -join '|') | Should Be ($selection.ProjectSelection -join '|')
+        $reordered.MSBuildTarget | Should Be 'Plugins\ViewerText:Rebuild;Tests\ProductUiTests:Rebuild'
+    }
+
+    It 'declares runtime-loaded viewer and contract inputs in the actual native build graph' {
+        $projects = @(Get-RSSolutionProjects -SolutionPath $solutionPath)
+        $owners = @{
+            ViewerPETests = @('Common', 'RedSalamander', 'ViewerPE', 'ViewerWeb', 'ViewerImgRaw', 'ViewerText', 'ViewerSpace', 'ViewerVLC')
+            PluginContractTests = @('FileSystem', 'FileSystem7z', 'FileSystemCurl', 'FileSystemS3', 'FileSystemGoogleDrive', 'FileSystemMicrosoftDrive', 'FileSystemMtp', 'FileSystemDummy', 'Terminal', 'Terminal-ja-JP', 'ViewerPE', 'ViewerWeb', 'ViewerImgRaw', 'ViewerText', 'ViewerSpace', 'ViewerVLC', 'ViewerSqlite')
+        }
+        foreach ($owner in $owners.Keys) {
+            $ownerProject = @($projects | Where-Object Name -ceq $owner)[0]
+            [xml]$xml = Get-Content -LiteralPath $ownerProject.Path -Raw
+            $references = @($xml.SelectNodes('//*[local-name()="ProjectReference"]'))
+            foreach ($name in $owners[$owner]) {
+                $producer = @($projects | Where-Object Name -ceq $name)[0]
+                $matching = @($references | Where-Object {
+                    [IO.Path]::GetFullPath((Join-Path (Split-Path $ownerProject.Path) $_.Include)) -ieq $producer.Path
+                })
+                $matching.Count | Should Be 1
+                $matching[0].Project.Trim('{}') | Should Be $producer.Guid
+                # These are runtime fixtures, never additional link inputs.
+                $matching[0].LinkLibraryDependencies | Should Be 'false'
+            }
+        }
+    }
+
+    It 'refuses unknown, folder, empty and injected target names' {
+        foreach ($invalid in @('DoesNotExist', 'Plugins', '', 'ViewerText;Build')) {
+            $attempt = Invoke-RSTestBlock { Get-RSBuildProjectUnion -SolutionPath $solutionPath -ProjectNames @('ProductUiTests', $invalid) }
+            $attempt.Succeeded | Should Be $false
+        }
+    }
+
+    It 'rejects incompatible public union roles before tool discovery or module import' {
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'), [ref]$tokens, [ref]$errors)
+        @($errors).Count | Should Be 0
+        $guard = @($ast.FindAll({param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Extent.Text -match 'ProjectNames cannot be combined'
+        }, $true))
+        $guard.Count | Should Be 1
+        $firstImport = @($ast.FindAll({param($node)
+            $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Import-Module'
+        }, $true) | Sort-Object {$_.Extent.StartOffset} | Select-Object -First 1)[0]
+        ($guard[0].Extent.EndOffset -lt $firstImport.Extent.StartOffset) | Should Be $true
+        $ProjectNames = @('ViewerText', 'ProductUiTests')
+        $ProjectName = ''; $ProductionOnly = $false; $Zip = $false; $GenerateWingetManifest = $false; $OfficialRelease = $false
+        foreach ($conflictingParameter in @('ProjectName', 'ProductionOnly', 'Zip', 'GenerateWingetManifest', 'OfficialRelease')) {
+            Set-Variable -Name $conflictingParameter -Value $(if ($conflictingParameter -eq 'ProjectName') {'Common'} else {$true})
+            { . ([scriptblock]::Create($guard[0].Extent.Text)) } | Should Throw 'ProjectNames cannot be combined'
+            Set-Variable -Name $conflictingParameter -Value $(if ($conflictingParameter -eq 'ProjectName') {''} else {$false})
+        }
+        . ([scriptblock]::Create($guard[0].Extent.Text))
+    }
+
 }
 
 Describe 'Actual nested solution target selection' -Tag RequiresBuildToolchain {
@@ -119,7 +185,9 @@ EndGlobal
         $reserved = ($projects | Where-Object Name -eq 'Build').SolutionTarget
         $nested | Should Be 'Outer_Folder\Child\Plug_in'
         $reserved | Should Be 'Solution:Build'
-        $output = @(& $msbuild $sln ("/t:$nested`:Rebuild;$reserved`:Rebuild") /p:Configuration=Release /p:Platform=x64 /nologo /v:quiet /nr:false 2>&1)
+        $union = Get-RSBuildProjectUnion -SolutionPath $sln -ProjectNames @('Build', 'Plug.in', 'build') -Rebuild
+        $union.ProjectNames.Count | Should Be 2
+        $output = @(& $msbuild $union.BuildInput ("/t:" + $union.MSBuildTarget) /p:Configuration=Release /p:Platform=x64 /nologo /v:quiet /nr:false 2>&1)
         $output | Set-Content -LiteralPath (Join-Path $fixture 'msbuild.log')
         $LASTEXITCODE | Should Be 0
         $selected = @(Get-Content -LiteralPath (Join-Path $fixture 'selected.txt'))

@@ -120,9 +120,9 @@ struct Projection final
     PresentationCapabilities capabilities;
     Endpoint endpoint;
     std::filesystem::path qualifiedLocation;
-    // A backup (.rs_bak_, S3 .rs-bak-, a remote rollback sibling), a rename hop (.rs_ren_) or the
-    // case-only rename's temporary name (.rs_case_tmp_) may hold the only complete copy of the user's
-    // data; surfaces name it as a possible original, never as an incomplete file.
+    // A backup or a case-only rename hop (.rs-bak, S3 .rs-bak-, a remote rollback sibling) may hold the
+    // only complete copy of the user's data; surfaces name it as a possible original, never as an
+    // incomplete file.
     bool mayHoldOriginal = false;
 };
 
@@ -167,8 +167,8 @@ struct ArtifactNameShapeProjectionDebugResult final
 // The classifier is a pure function of the candidate's leaf name. There is no durable record,
 // nothing to load, and no recovery authority: a name-shape match only says "Possible".
 [[nodiscard]] bool HasPossibleArtifactName(std::wstring_view leaf) noexcept;
-// The leftover shapes that may hold the only complete copy of the user's data (.rs_bak_, .rs_ren_,
-// .rs_case_tmp_, the S3 .rs-bak- key and the remote .redsalamander-rollback- sibling).
+// The leftover shapes that may hold the only complete copy of the user's data (the Win32 .rs-bak
+// name, the S3 .rs-bak- key and the remote .redsalamander-rollback- sibling).
 [[nodiscard]] bool HasPossibleOriginalArtifactName(std::wstring_view leaf) noexcept;
 // I35 R7.3: a Delete item handed to its own route's consent (DeleteHandoff) instead of the receipt.
 [[nodiscard]] bool IsDeleteHandoffCandidate(const Candidate& candidate) noexcept;

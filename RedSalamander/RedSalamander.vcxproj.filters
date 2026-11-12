@@ -36,6 +36,8 @@
     <ClInclude Include="FolderWindow.h" />
     <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
     <ClInclude Include="FileOperationsConflictBroker.h" />
+    <ClInclude Include="FileOperationsPowerRequest.h" />
+    <ClInclude Include="FileOperationsLayoutStability.h" />
     <ClInclude Include="FileOperationItemResultReducer.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesProjection.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />
@@ -164,6 +166,7 @@
     <ClCompile Include="FolderWindow.FileOperations.DecisionMirror.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.PromptText.cpp" />
     <ClCompile Include="FileOperationsConflictBroker.cpp" />
+    <ClCompile Include="FileOperationsPowerRequest.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.IssuesProjection.cpp" />
     <ClCompile Include="SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.State.cpp" />

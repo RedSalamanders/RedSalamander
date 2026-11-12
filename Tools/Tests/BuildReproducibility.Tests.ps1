@@ -798,8 +798,10 @@ Describe 'Pinned build-tool and CI identity' {
                     $entry.runner | Should Be $(if($entry.platform -ceq 'x64'){'windows-2025-vs2026'}else{'windows-11-vs2026-arm'})
                 }
             }
-            $env:CI_QUALIFICATION_PLATFORM='arm64'
-            { & ([scriptblock]::Create($selector)) } | Should Throw 'Qualification platform must be All, x64 or ARM64.'
+            foreach ($invalidSelection in @('arm64','unknown')) {
+                $env:CI_QUALIFICATION_PLATFORM=$invalidSelection
+                { & ([scriptblock]::Create($selector)) } | Should Throw 'Qualification platform must be All, x64 or ARM64.'
+            }
         } finally {
             [Environment]::SetEnvironmentVariable('CI_QUALIFICATION_PLATFORM',$oldPlatform,'Process')
             [Environment]::SetEnvironmentVariable('GITHUB_OUTPUT',$oldOutput,'Process')

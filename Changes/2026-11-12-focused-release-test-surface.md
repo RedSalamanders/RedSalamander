@@ -1,0 +1,1 @@
+- Build the native test surface for every test-runner mode, including focused Release, and reject a production receipt or executable without its ENABLE_TESTS resource before in-product selftests can wait for desktop admission or launch. Use the canonical positive-block assertion to prove enabled-image admission; production packaging remains test-disabled.

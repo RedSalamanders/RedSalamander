@@ -841,6 +841,7 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_LBUTTONDOWN: OnMeasuredLButtonDownMessage({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_LBUTTONUP: OnLButtonUp({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}); return 0;
+        case WM_MBUTTONDOWN: OnMButtonDown(); return 0;
         case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_CANCELMODE:
         case WM_CAPTURECHANGED: DisarmPotentialDrag(); return 0;

@@ -1,0 +1,1 @@
+- Add an explicit local Release SDK application build in fresh leased outputs, including plugin and language-resource intermediates. Keep ordinary dependencies under the existing platform lock, refuse abandoned or contaminated inputs, and retain actual ABI and linker-input verification. Local build results grant no test, repository or production qualification.

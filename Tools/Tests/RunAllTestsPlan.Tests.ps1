@@ -6,6 +6,150 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $testSupport = Join-Path $PSScriptRoot 'TestSupport.psm1'
 Import-Module $testSupport -Force
 
+Describe 'Actual affected build selection and source barrier' {
+    BeforeAll {
+        Import-Module $helperModule -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationImpact.psm1') -ErrorAction Stop
+        $tokens=$null;$errors=$null
+        $runnerAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$tokens,[ref]$errors)
+        if($errors.Count){throw 'Cannot parse the actual affected build flow.'}
+        $request=@($runnerAst.FindAll({param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Get-RSRunnerRequestedTestPlan'
+        },$true))
+        $statements=@($runnerAst.FindAll({param($node) $node -is [Management.Automation.Language.IfStatementAst]},$true))
+        $pre=@($statements|Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if \(\$ValidationMode -ceq' -and
+            $_.Extent.Text -match 'Get-RSValidationAffectedBuildSelection'
+        })
+        $union=@($statements|Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if \(\$buildArgs.ContainsKey'
+        })
+        $post=@($statements|Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if \(\$useAffectedSelectedBuild\)' -and
+            $_.Extent.Text -match '\$afterBuildWorkspace = Get-RSWorkspaceSnapshot'
+        })
+        $build=@($statements|Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and $_.Extent.Text -match '^if \(-not \$SkipBuild\)' -and
+            $_.Extent.Text -match '& \$buildScript @buildArgs'
+        })
+        if($request.Count -ne 1 -or $pre.Count -ne 1 -or $union.Count -ne 1 -or $post.Count -ne 1 -or $build.Count -ne 1){throw 'Affected build boundary is absent or ambiguous.'}
+        if($pre[0].Extent.StartOffset -ge $build[0].Extent.StartOffset -or $union[0].Extent.StartOffset -ge $build[0].Extent.StartOffset){throw 'Affected selection occurs after native compilation.'}
+        $initial=@($pre[0].Parent.Statements|Where-Object {
+            $_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -in @(
+                '$buildArgs','$requiredBuildSelection','$useAffectedSelectedBuild','$prebuildAffectedEntries','$prebuildWorkspaceSnapshot')
+        })
+        $preText=$pre[0].Extent.Text.Replace('exit (Get-RSValidationExitCode -TerminalState NOT_EVALUATED)',"throw 'compiler-free-not-evaluated'").Replace('exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)',"throw 'compiler-free-source-changed'")
+        $script:actualAffectedSetup=(@($request[0].Extent.Text)+@($initial|ForEach-Object {$_.Extent.Text})+@($preText,$union[0].Extent.Text)) -join "`n"
+        $script:actualAffectedPost=$post[0].Extent.Text.Replace('exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)',"throw 'affected-build-source-changed'")
+        $checks=@($runnerAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSRunnerCompilerFreeChecks'},$true))
+        if($checks.Count -ne 1){throw 'Compiler-free checks are absent or ambiguous.'}
+        $script:actualCompilerFreeChecks=$checks[0].Extent.Text
+        foreach($name in @('Enter-RSArtifactOperationLock','Save-RSRunnerStaleRunEvidence')) {
+            $calls=@($runnerAst.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq $name},$true))
+            if($calls.Count -ne 1 -or $calls[0].Extent.StartOffset -le $pre[0].Extent.EndOffset){throw 'Native artifact coordination precedes the compiler-free no-work exit.'}
+        }
+    }
+
+    It 'executes the actual planning statements before build and refuses a changed source before selecting tests' {
+        $Suite='Full';$Configuration='Debug';$Platform='x64';$ValidationMode='Affected';$NonInteractive=$true
+        $exeFullPath=Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'
+        $TimeoutMultiplier=1.0;$FailFast=$false;$CaseFilter='';$CommandsFamily='';$SelfTestRepeat=1
+        $SelfTestShuffleSeed='';$PerfBudgetPath='';$RequirePerfBudgets=$false;$SelfTestFlakyProofCase='';$SelfTestOrderProofCase='';$ImpactBase='HEAD'
+        $script:prebuildFixtureSnapshot=[pscustomobject]@{snapshot_id='a'*64;files=@([pscustomobject]@{path='Tests/ProductUiTests/selected.cpp';old_path=$null})}
+        function Import-RSRunnerValidationModules {}
+        function Get-RSWorkspaceSnapshot {param($RepoRoot,$ImpactBase) return $script:prebuildFixtureSnapshot}
+        . ([scriptblock]::Create($script:actualAffectedSetup))
+        $useAffectedSelectedBuild | Should Be $true
+        ($buildArgs.ProjectNames -join '|') | Should Be 'ProductUiTests'
+        ($requiredBuildSelection -join '|') | Should Be 'Tests/ProductUiTests/ProductUiTests.vcxproj'
+        ($prebuildAffectedEntries.Id -join '|') | Should Be 'standalone.product-ui'
+        $testPlan=@([pscustomobject]@{Id='standalone.product-ui'},[pscustomobject]@{Id='selftest.commands'})
+        . ([scriptblock]::Create($script:actualAffectedPost))
+        ($testPlan.Id -join '|') | Should Be 'standalone.product-ui'
+        $testPlan=@([pscustomobject]@{Id='standalone.product-ui'},[pscustomobject]@{Id='selftest.commands'})
+        $script:prebuildFixtureSnapshot=[pscustomobject]@{snapshot_id='b'*64;files=@()}
+        $attempt=Invoke-RSTestBlock {. ([scriptblock]::Create($script:actualAffectedPost))}
+        $attempt.Succeeded | Should Be $false
+        $attempt.Error.Exception.Message | Should Match 'affected-build-source-changed'
+        $testPlan.Count | Should Be 2
+    }
+
+    It 'keeps actual Fresh and Resume Full requests on the full solution before compilation' {
+        $Suite='Full';$Configuration='Release';$Platform='ARM64'
+        function Get-RSWorkspaceSnapshot {throw 'Fresh/Resume must not enter affected selection.'}
+        foreach($ValidationMode in @('Fresh','Resume')) {
+            . ([scriptblock]::Create($script:actualAffectedSetup))
+            $useAffectedSelectedBuild | Should Be $false
+            $buildArgs.ContainsKey('ProjectNames') | Should Be $false
+            $requiredBuildSelection.Count | Should Be 0
+        }
+    }
+
+    It 'runs the actual compiler-free command set and stops on an unsuccessful check' {
+        $repoRoot=Join-Path $TestDrive 'compiler-free-recording'
+        [void][IO.Directory]::CreateDirectory((Join-Path $repoRoot 'Tools'))
+        $recording=@'
+param([switch]$FailOnFindings,[string]$Format)
+[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'calls.txt'),$MyInvocation.MyCommand.Name+'|'+$FailOnFindings+'|'+$Format+"`n")
+if(Test-Path (Join-Path $PSScriptRoot ($MyInvocation.MyCommand.Name+'.fail'))){$global:LASTEXITCODE=9}else{$global:LASTEXITCODE=0}
+'@
+        foreach($name in @('Test-Changelog.ps1','Get-ToolInventory.ps1','Get-SpecInventory.ps1')) {
+            [IO.File]::WriteAllText((Join-Path $repoRoot ('Tools/'+$name)),$recording)
+        }
+        . ([scriptblock]::Create($script:actualCompilerFreeChecks))
+        Invoke-RSRunnerCompilerFreeChecks
+        $calls=@(Get-Content (Join-Path $repoRoot 'Tools/calls.txt'))
+        ($calls -join ',') | Should Be 'Test-Changelog.ps1|False|,Get-ToolInventory.ps1|True|Json,Get-SpecInventory.ps1|True|'
+        [IO.File]::WriteAllText((Join-Path $repoRoot 'Tools/Test-Changelog.ps1.fail'),'fail')
+        $attempt=Invoke-RSTestBlock {Invoke-RSRunnerCompilerFreeChecks}
+        $attempt.Succeeded | Should Be $false
+        $attempt.Error.Exception.Message | Should Match 'Test-Changelog.ps1'
+        @(Get-Content (Join-Path $repoRoot 'Tools/calls.txt')).Count | Should Be 4
+    }
+
+    It 'finishes actual prose and empty selections without a native lease/build and refuses concurrent source edits' {
+        $Suite='Full';$Configuration='Debug';$Platform='x64';$ValidationMode='Affected';$NonInteractive=$true
+        $exeFullPath=Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'
+        $TimeoutMultiplier=1.0;$FailFast=$false;$CaseFilter='';$CommandsFamily='';$SelfTestRepeat=1
+        $SelfTestShuffleSeed='';$PerfBudgetPath='';$RequirePerfBudgets=$false;$SelfTestFlakyProofCase='';$SelfTestOrderProofCase='';$ImpactBase='HEAD'
+        $artifactRoot=Join-Path $TestDrive 'compiler-free-diagnostics'
+        $testRunContext=[pscustomobject]@{RunId='fixture'}
+        function Import-RSRunnerValidationModules {}
+        function Get-RSWorkspaceSnapshot {
+            param($RepoRoot,$ImpactBase)
+            ++$script:compilerFreeSnapshotCalls
+            if($script:compilerFreeMutate -and $script:compilerFreeSnapshotCalls -gt 1){return [pscustomobject]@{snapshot_id='b'*64;files=@()}}
+            return $script:prebuildFixtureSnapshot
+        }
+        function Invoke-RSRunnerCompilerFreeChecks {++$script:compilerFreeCheckCalls}
+        function Write-RSAtomicCanonicalJsonFile {
+            param($LiteralPath,$InputObject,$SchemaPath,$AllowedRoot)
+            if($AllowedRoot -cne $artifactRoot -or -not $SchemaPath.EndsWith('.schema.json')){throw 'Diagnostic write changed its schema/owned root.'}
+            $script:compilerFreeWrites+=,$LiteralPath
+        }
+        function Save-RSRunAllTestsEvidence {param($Context,$Disposition) $script:compilerFreeDisposition=$Disposition}
+        foreach($case in @('prose','empty','changed')) {
+            $script:compilerFreeSnapshotCalls=0;$script:compilerFreeCheckCalls=0;$script:compilerFreeWrites=@();$script:compilerFreeDisposition=''
+            $script:compilerFreeMutate=$case -ceq 'changed'
+            $files=if($case -ceq 'empty'){@()}else{@([pscustomobject]@{path='Specs/Testing/example.md';old_path=$null})}
+            $script:prebuildFixtureSnapshot=[pscustomobject]@{snapshot_id='a'*64;files=@($files)}
+            $runEvidenceArchiveAttempted=$false;$runEvidenceArchived=$false
+            $attempt=Invoke-RSTestBlock {. ([scriptblock]::Create($script:actualAffectedSetup))}
+            $attempt.Succeeded | Should Be $false
+            if($case -ceq 'changed') {
+                $attempt.Error.Exception.Message | Should Match 'compiler-free-source-changed'
+                $script:compilerFreeWrites.Count | Should Be 0
+                $script:compilerFreeDisposition | Should Be ''
+            } else {
+                $attempt.Error.Exception.Message | Should Match 'compiler-free-not-evaluated'
+                $script:compilerFreeWrites.Count | Should Be 3
+                $script:compilerFreeDisposition | Should Be 'completed'
+            }
+            $script:compilerFreeCheckCalls | Should Be $(if($case -ceq 'empty'){0}else{1})
+        }
+    }
+}
+
 Describe 'Dependency-preserving artifact re-attestation flow' {
     BeforeAll {
         $tokens=$null;$errors=$null
@@ -1304,7 +1448,8 @@ Set-StrictMode -Version Latest
 
         $prBuild = Get-RSBuildScriptArguments -Suite 'PR' -Configuration 'Debug' -Platform 'x64'
         Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite PR builds the solution so standalone tests and CppUnitTest DLLs exist.'
-        Assert-RSEqual -Actual (Get-RSBuildEnvironmentOverrides -Suite 'PR').Count -Expected 0 -Message 'Suite PR uses the default build environment like Suite CI.'
+        Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectNames') -Expected $false -Message 'PR retains the full-solution receipt requirement.'
+        Assert-RSEqual -Actual (Get-RSBuildEnvironmentOverrides -Suite 'PR')['RSBuildEnableTests'] -Expected 'true' -Message 'Suite PR requires the application test surface like Suite CI.'
 
         $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
         $runner | Should Match "\`$failureClassificationEnabled = \(\`$ClassifyFailures -or \`$Suite -eq 'CI'\)"
@@ -1883,13 +2028,18 @@ $global:LASTEXITCODE=0
 
         Assert-RSEqual -Actual $allBuild['Configuration'] -Expected 'Debug' -Message 'Suite All should pass the requested configuration.'
         Assert-RSEqual -Actual $allBuild['Platform'] -Expected 'x64' -Message 'Suite All should pass the requested platform.'
-        Assert-RSEqual -Actual $allBuild['ProjectName'] -Expected 'RedSalamander' -Message 'Suite All should build only RedSalamander.'
+        Assert-RSEqual -Actual ($allBuild['ProjectNames'] -join ',') -Expected 'RedSalamander' -Message 'Suite All should build only the RedSalamander project union.'
+        foreach ($focusedSuite in @('Compare', 'Commands', 'FileOps')) {
+            $focusedBuild = Get-RSBuildScriptArguments -Suite $focusedSuite -Configuration Debug -Platform x64
+            Assert-RSEqual -Actual ($focusedBuild.ProjectNames -join ',') -Expected 'RedSalamander' -Message 'Focused suites require the complete application project graph.'
+        }
 
         $fullBuild = Get-RSBuildScriptArguments -Suite 'Full' -Configuration 'Debug' -Platform 'x64'
 
         Assert-RSEqual -Actual $fullBuild['Configuration'] -Expected 'Debug' -Message 'Suite Full should pass the requested configuration.'
         Assert-RSEqual -Actual $fullBuild['Platform'] -Expected 'x64' -Message 'Suite Full should pass the requested platform.'
         Assert-RSEqual -Actual $fullBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite Full should build the solution so standalone tests and CppUnitTest DLLs exist.'
+        Assert-RSEqual -Actual $fullBuild.ContainsKey('ProjectNames') -Expected $false -Message 'Full must not accept a partial project union.'
         Assert-RSEqual -Actual $fullBuild['MaxCpuCount'] -Expected 4 -Message 'Suite Full should bound complete-solution build fan-out.'
 
         $ciBuild = Get-RSBuildScriptArguments -Suite 'CI' -Configuration 'Debug' -Platform 'x64'
@@ -1897,18 +2047,50 @@ $global:LASTEXITCODE=0
         Assert-RSEqual -Actual $ciBuild['Configuration'] -Expected 'Debug' -Message 'Suite CI should pass the requested configuration.'
         Assert-RSEqual -Actual $ciBuild['Platform'] -Expected 'x64' -Message 'Suite CI should pass the requested platform.'
         Assert-RSEqual -Actual $ciBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite CI should build the solution so standalone tests and CppUnitTest DLLs exist.'
+        Assert-RSEqual -Actual $ciBuild.ContainsKey('ProjectNames') -Expected $false -Message 'CI must not accept a partial project union.'
         Assert-RSEqual -Actual $ciBuild.ContainsKey('MaxCpuCount') -Expected $false -Message 'Suite CI should retain the build host worker policy.'
 
         $allEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'All'
-        Assert-RSEqual -Actual $allEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite All should retain the selected profile test surface.'
+        Assert-RSEqual -Actual $allEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite All must build the application selftests.'
 
         $ciEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'CI'
-        Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite CI should match the artifact-only GitHub gate and retain its selected test surface.'
+        Assert-RSEqual -Actual $ciEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite CI requires test-enabled artifacts.'
         Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildCompilerDebugInformation') -Expected $false -Message 'Suite CI should retain the normal compiler PDB policy.'
 
         $fullEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'Full'
         Assert-RSEqual -Actual $fullEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite Full should enable the application and standalone native test surfaces.'
         Assert-RSEqual -Actual $fullEnvironment['RSBuildCompilerDebugInformation'] -Expected 'Embedded' -Message 'Suite Full should avoid process-global compiler-PDB contention across worktrees.'
+        foreach ($focused in @('Compare','Commands','FileOps')) {
+            $environment = Get-RSBuildEnvironmentOverrides -Suite $focused
+            $environment['RSBuildEnableTests'] | Should Be 'true'
+            $environment.ContainsKey('RSBuildCompilerDebugInformation') | Should Be $false
+        }
+    }
+
+    It 'admits only a real test-enabled application surface before selftest launch' {
+        Import-Module $helperModule -ErrorAction Stop
+        # Reuse the release policy's canonical PE fixture builder without executing
+        # its separate Pester suite or manufacturing a second PE implementation.
+        $tokens=$null;$errors=$null
+        $fixtureAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'ReleaseWorkflowPolicy.Tests.ps1'),[ref]$tokens,[ref]$errors)
+        $builder=$fixtureAst.Find({param($node)$node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'New-RSFakePeBytes'},$true)
+        if ($errors.Count -or $null -eq $builder) { throw 'Canonical PE fixture builder unavailable.' }
+        . ([scriptblock]::Create($builder.Extent.Text))
+        $image=Join-Path $TestDrive 'selftest-surface.exe'
+        [IO.File]::WriteAllBytes($image,(New-RSFakePeBytes -Machine 0x8664 -TestSurfaceMarker))
+        $admitted = Invoke-RSTestBlock { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image }
+        $admitted.Succeeded | Should Be $true
+        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$false}) -ExecutablePath $image } | Should Throw 'test-enabled build receipt'
+        [IO.File]::WriteAllBytes($image,(New-RSFakePeBytes -Machine 0x8664))
+        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image } | Should Throw 'actual executable ENABLE_TESTS'
+        [IO.File]::WriteAllBytes($image,[byte[]](1,2,3))
+        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image } | Should Throw 'MZ header'
+        $runner=Get-Content (Join-Path $repoRoot 'Tools/Run-AllTests.ps1') -Raw
+        $guardIndex=$runner.IndexOf('Assert-RSSelfTestBuildSurface -Receipt $receipt')
+        $executeIndex=$runner.IndexOf('$execution = Invoke-RSRunnerStandaloneValidationEntry -Entry $entry')
+        $guardIndex | Should BeGreaterThan -1
+        # Every marked entry obtains its desktop lease inside the later executor.
+        $executeIndex | Should BeGreaterThan $guardIndex
     }
 
     It 'uses the unified test sandbox root when locating runner artifacts' {

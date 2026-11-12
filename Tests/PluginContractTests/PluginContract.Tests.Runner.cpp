@@ -2097,8 +2097,9 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
     {
         std::vector<std::filesystem::path> stages;
         enumerationError.clear();
-        constexpr std::wstring_view stageMarker{L".~rs-write-"};
-        constexpr std::wstring_view stageSuffix{L".tmp"};
+        // The writer stage is `<destination leaf>.<32 hex>.rs-tmp`; only the readable leaf is shortened at 255 units.
+        constexpr std::wstring_view stageMarker{L"."};
+        constexpr std::wstring_view stageSuffix{L".rs-tmp"};
         constexpr size_t stageTokenLength  = 32u;
         const size_t readablePrefixLimit   = 255u - stageMarker.size() - stageTokenLength - stageSuffix.size();
         const std::wstring destinationLeaf = destination.filename().wstring();
@@ -2108,7 +2109,10 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
              iterator.increment(enumerationError))
         {
             const std::wstring name = iterator->path().filename().wstring();
-            if (name.starts_with(prefix) && name.ends_with(L".tmp"))
+            if (name.size() == prefix.size() + stageTokenLength + stageSuffix.size() && name.starts_with(prefix) && name.ends_with(stageSuffix) &&
+                std::ranges::all_of(std::wstring_view(name).substr(prefix.size(), stageTokenLength), [](wchar_t digit) noexcept {
+                return (digit >= L'0' && digit <= L'9') || (digit >= L'a' && digit <= L'f') || (digit >= L'A' && digit <= L'F');
+            }))
             {
                 stages.push_back(iterator->path());
             }

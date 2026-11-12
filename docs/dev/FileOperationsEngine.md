@@ -46,7 +46,7 @@ On `Shutdown` the state requests cancellation and joins owned workers and comple
 - If `_waitForOthers` is true (Wait), it pushes its task ID onto `_queue`, calls `NotifyQueueChanged`, and waits on `_queueCv` until one of:
   - the stop token fires or `_cancelled` is set (returns `false` after `RemoveFromQueue`), or
   - `_waitForOthers` flipped to false mid-wait (mode switched to Parallel) — it removes itself from the queue and proceeds, or
-  - `_activeOperations == 0 && _queue.front() == _taskId` — it is the oldest waiter and nothing else is active, so it pops the queue head and `++_activeOperations`.
+  - nothing is active and it is the first task, in queue order, that may start. Queue order is the order of the cards (`_queueOrderKey`, then task ID). Every admitted task holds its place from admission (`_holdsQueuePlace`) until it enters or ends without entering, so a task that is still Preparing holds the queue. A place holder is passed only while its worker waits for the user's answer (`_awaitingUserDecision`) or while a published overlap predecessor blocks it.
 
 The start gate precedes discovery and provider mutation. A queued task cannot begin its traversal or transfer before admission to the active operation set.
 
@@ -134,7 +134,7 @@ Callbacks into the host go through a `BridgeCallback` that holds a `callbackMute
 
 The bridge never writes the final destination path directly. For each file:
 
-1. **Stage** — `MakeTempDestinationPath` builds `<dest>.rs_tmp_<128-bit-CSPRNG>_<streamId>` (128 bits from `BCryptGenRandom`, falling back to PID/TID/tick only if the CSPRNG fails). `CreateFileWriter` opens that temp with overwrite/replace-readonly flags **stripped** (`tempFlags`), so a grant for the final destination can never authorize clobbering a staging path.
+1. **Stage** — `MakeTempDestinationPath` builds `<dest>.<128-bit hex>_<streamId>.rs-tmp` through `Common::Paths::BuildUniqueSiblingName` (128 bits from the system generator; a generator failure fails the item, there is no predictable fallback; the leaf is capped at 255 units by shortening only the readable prefix). `CreateFileWriter` opens that temp with overwrite/replace-readonly flags **stripped** (`tempFlags`), so a grant for the final destination can never authorize clobbering a staging path.
 2. **Copy** — bytes are pumped through a host buffer (serial `copySerial` or a producer/consumer pipeline mode). A `wil::scope_exit cleanupTemp` deletes the temp via `BestEffortDeleteTempFile` unless `promoted` — this is the **rollback**: a failed or cancelled transfer leaves no temp residue.
 3. **Integrity gate** — after the copy, if the source size was known and `fileCompletedBytes != fileTotalBytes`, the file finishes `ERROR_PARTIAL_COPY` (no promote).
 4. **Commit + promote** — `writer->Commit()`, then `PromoteTempToFinalPath` does `destinationFs.MoveItem(temp -> final)`, carrying the resolved overwrite/replace-readonly grant into the promote flags so the rename can replace an existing file. Only after a successful promote is `promoted = true` (suppressing the rollback delete).

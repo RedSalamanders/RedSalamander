@@ -431,6 +431,11 @@ Invoke-Pester .\Tools\Tests\ToolingGovernance.Tests.ps1 -PassThru
 
 Run focused tests for each touched module or entrypoint. Use the owning scoped
 testing contract to select affected iteration and PrePush/local-versus-PR obligations.
+Fixtures invoked again by failure classification must allocate separate attempt directories
+inside their current marked run. Retain prior attempts rather than copying over populated
+synthetic checkouts. Long-path Git origins set repository-local `core.longpaths` before adding
+their inputs. Workflow guards exercise generated selection scripts when the supported matrix
+is computed; a literal YAML shape is not the architecture-selection contract.
 Full remains explicit and is required where the affected behavior's acceptance contract
 requires it; a scoped pass or pending CI is not a Full repository pass. Historical
 Terminal reproduction uses its archival profile rather than extending every default run.

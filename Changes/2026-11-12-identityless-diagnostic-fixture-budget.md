@@ -1,0 +1,1 @@
+- Isolate the identity-less Delete fixtures' bounded diagnostic budget so preceding actionable rows cannot evict their technical logging witnesses. Restore the original setting and remove only owned task diagnostics; production retention and existing outcome assertions remain unchanged.

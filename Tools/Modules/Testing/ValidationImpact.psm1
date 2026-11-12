@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'ValidationFingerprint.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot '../Build/BuildProjectSelection.psm1') -Scope Local -ErrorAction Stop
 
 # Cache only immutable pattern translations. Paths, source bytes and validation outcomes
 # are always evaluated again. Miss insertion is serialized; hits and matches are thread-safe.
@@ -220,6 +221,66 @@ function Get-RSValidationImpactDecision {
     return [pscustomobject]$record
 }
 
+function Get-RSValidationAffectedBuildSelection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Decision,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$ExecutionEntries,
+        [Parameter(Mandatory)][string]$SolutionPath
+    )
+
+    $result = [pscustomobject]@{
+        UseSelectedBuild = $false
+        Reason = 'The governed impact decision requires the existing full build.'
+        Selection = $null
+        EntryIds = @()
+    }
+    if ($Decision.advisory_build_action -cne 'targeted') { return $result }
+    $known = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $ExecutionEntries) {
+        if (-not $known.Add([string]$entry.Id)) { throw 'Affected build entries have duplicate identities.' }
+    }
+    $decisionIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $selectedIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $Decision.entries) {
+        if (-not $decisionIds.Add([string]$entry.id)) { throw 'Affected build decision has duplicate identities.' }
+        if ($entry.affected) { [void]$selectedIds.Add([string]$entry.id) }
+    }
+    if (-not $known.SetEquals($decisionIds)) { throw 'Affected build decision does not describe the requested plan.' }
+    $names = [Collections.Generic.List[string]]::new()
+    foreach ($entry in $ExecutionEntries) {
+        if (-not $selectedIds.Contains([string]$entry.Id)) { continue }
+        if (@($entry.ArtifactWriteIds).Count) {
+            $result.Reason = 'An affected artifact writer requires the full profile and re-attestation barrier.'
+            return $result
+        }
+        if ($entry.Kind -in @('SelfTest', 'Executable', 'CppUnitTest')) {
+            if ($null -eq $entry.PSObject.Properties['BuildProjectNames'] -or -not @($entry.BuildProjectNames).Count) {
+                $result.Reason = "Native entry '$($entry.Id)' has no reviewed build-project binding."
+                return $result
+            }
+            foreach ($name in $entry.BuildProjectNames) { $names.Add([string]$name) }
+        } elseif (@($entry.ArtifactReadIds).Count) {
+            $result.Reason = "Script entry '$($entry.Id)' reads native artifacts outside an explicit build-project binding."
+            return $result
+        }
+    }
+    if (-not $names.Count) {
+        $result.Reason = 'No affected native project union is available; retain the existing build/receipt gate.'
+        return $result
+    }
+    try {
+        $result.Selection = Get-RSBuildProjectUnion -SolutionPath $SolutionPath -ProjectNames $names.ToArray()
+    } catch {
+        $result.Reason = "The affected project binding could not be resolved; retain the full build. $($_.Exception.Message)"
+        return $result
+    }
+    $result.UseSelectedBuild = $true
+    $result.Reason = 'Every affected native entry has an explicit project binding; evaluate its complete solution/runtime union.'
+    $result.EntryIds = @($ExecutionEntries | Where-Object { $selectedIds.Contains([string]$_.Id) } | ForEach-Object { $_.Id })
+    return $result
+}
+
 function Get-RSValidationModeGateMatrix {
     [CmdletBinding()]
     param()
@@ -239,5 +300,6 @@ Export-ModuleMember -Function @(
     'Get-RSValidationImpactRulesForPath',
     'Test-RSValidationImpactGovernance',
     'Get-RSValidationImpactDecision',
+    'Get-RSValidationAffectedBuildSelection',
     'Get-RSValidationModeGateMatrix'
 )

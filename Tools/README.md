@@ -1,5 +1,59 @@
 # Repository tooling
 
+`Build-LocalSdkCandidate.ps1` explicitly builds the Release application and plugin
+closure against one independently hashed local DxUi descriptor. Supply the native
+Visual Studio `-MSBuildPath` selected for the application and a positive `-BuildNumber`
+to avoid the ordinary version-state allocator. Prepare ordinary platform
+dependencies and terminal inputs first. `RSOutputRoot` isolates application, plugin,
+language-resource and intermediate outputs; `RSBuildRoot` retains dependency inputs.
+The existing platform dependency lock excludes mutation during the build, and an
+abandoned or contaminated dependency state is refused without repair. Every native
+project verifies the shared output lease; actual DxUi consumers retain the full ABI
+guard. Manifest installation and terminal dependency builds are disabled for this recipe. The local
+build/link record grants no test, package, repository or production acceptance.
+
+Build several native projects once with `build.ps1 -ProjectNames ViewerText,ProductUiTests`.
+This evaluates their solution and deployed runtime union and publishes a selected
+receipt. Selftest-only All/Compare/Commands/FileOps accept their exact application
+union with byte verification; PR/CI/Full and package gates retain full-solution
+receipts. Selection cannot grant contamination repair rights for the full solution.
+All runner build modes enable the native test surface. Before desktop admission or
+launch, in-product cases require both a test-enabled receipt and the actual PE's
+ENABLE_TESTS resource marker; production artifacts fail closed, including SkipBuild.
+Runtime-loaded test fixtures are declared by native project references. Viewer
+PE tests require the application/Common PE inputs, so their honest selected
+closure includes those producers; plugin contract tests include their full roster.
+
+Affected validation now plans before compiling. Reviewed native entry producers
+select their solution/runtime union; unknown/shared inputs, artifact writers and
+missing producer bindings retain the full build. Inputs must remain unchanged
+through build selection. Prose/empty changes with no affected entries execute no
+native build or tests, acquire no profile artifact lease, and skip historical-run
+scavenging. Changed prose still runs changelog, tooling and specification ownership
+checks. Diagnostic plans and completed archival grant no Full pass or Resume seal;
+the canonical result remains NOT_EVALUATED (exit 2).
+
+Local workspace snapshots, build receipts and validation fingerprints bind the actual
+ignored `.ci-engine` through the shared source-input reader. Restore the exact clean
+pin before using those tools. Missing, modified, foreign or mismatched engines refuse
+reuse; generated engine output does not alter source identity. Existing local and main
+gates remain required.
+
+Explicit exact Full Resume preserves individually verified promoted entries from a
+closed failed/interrupted campaign. Failed entries and incompatible inputs execute;
+running/invalidated origins grant no reuse and corruption remains fatal. Original
+failures stay recorded. This is local continuation under the existing gates, with
+complete artifact/epoch/input checks; it grants no hosted delegation or main adoption.
+
+Automatic runner startup records unsafe-link archival refusals in the existing
+per-run `evidence/run-archive-records/<run-id>/retained.json`. Later startup leaves
+that original tree untouched after fresh path/owner checks, and reports repeated
+refusals as a count. This record grants no test pass, cleanup or archive completion.
+After investigating/repairing a retained run, an explicit
+`Save-RSTestSandboxRunEvidence -TestRoot <marked-root> -RunId <id> -Abandoned -Disposition interrupted`
+through the TestSandbox module always rechecks the current complete tree. Other
+transient archive failures continue to retry; current-run closeout never skips verification.
+
 The sanitized child-process factory uses the pinned shared policy to assign a
 private compiler metadata-service endpoint to each child without changing its
 parent. Restore `.ci-engine` at `.ci/project.json`'s exact commit before local
@@ -41,7 +95,9 @@ startup foreground surfaces after identity and session revalidation. WSL also re
 held process creation to match query-only CIM and exact parsed update arguments. The fixture retains
 create-only audit records beneath
 the marked test root. It observes the delayed Search transition for five seconds after account
-retirement. Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
+retirement. The exact same-session GitHub compute-agent console may be observed without a close
+request; it remains subject to the owned boundary's foreground, focus and restoration checks.
+Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
 studies do not perform these actions. Native focus, input and capture assertions are unchanged.
 
 When direct foreground acquisition is refused, the selected hosted native x64 role or the opted-in native ARM64 role may use one
@@ -377,6 +433,16 @@ path mapping and verified inventory for recovery. Unsafe links, unresolved disks
 changed data, live owners and collisions retain the tree for review. Explicit cleanup
 is still separate. Archive retention does not qualify a test or bypass exact Resume.
 
+Archive security acquisition uses the already enumerated file/directory object and
+the direct Windows ACL API, preserving the provider's complete SDDL. It avoids
+per-entry provider setup while retaining all content/stream hashes, metadata,
+fresh no-follow traversal, stable acquisitions and post-move verification.
+
+Native build-policy controls also exercise the actual generated-version-header
+task: unchanged content preserves incremental dependencies, while changed version
+inputs invalidate them. The explicit counterfactual demonstrates the old rewrite
+cost without invoking the C++ compiler.
+
 | Goal | Command |
 |---|---|
 | Build the repository | `./build.ps1` (repository root) |
@@ -407,6 +473,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Audit-RemainingWin32UiDependencies.ps1` | Public UI source audit | Inventory or reject Win32/GDI UI findings; each allowed residual has an exact path/category/line pattern and owner/exit condition. Default output is structured findings with an information-stream summary; `-AsMarkdown` emits Markdown. |
 | `Audit-VisibleNativeSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for visible native controls. |
 | `Build-GhosttyTerminalRuntime.ps1` | Public active runtime builder | Thin stable entrypoint for canonical Product builds and explicit isolated candidate builds; delegates validation, restore, build, and attestation to `GhosttyRuntimeLifecycle.psm1`, with native-command/lease progress separate from captured streams and one disposable compiler cache shared across authenticated dependency fetches. |
+| `Build-LocalSdkCandidate.ps1` | Public local candidate builder | Builds the isolated Release application/plugin union from an independently hashed local DxUi SDK descriptor; grants no test or production acceptance. |
 | `Build-TerminalEngine.ps1` | Dormant generic lifecycle compatibility command | Stable facade for `External/TerminalEngine/TerminalEngine.proj` and reviewed future-upgrade evidence; not the product builder. |
 | `Clean-TestSandbox.ps1` | Public maintenance command | Lists or explicitly removes one exact run directory beneath marked `X:\RedSalamander.Perf`; it never touches historical outside-root locations. Apply protects live owners using the runner's PID-reuse policy. Preview/WhatIf/success exit 0; a failed removal returns `Status: Failed`, warns and exits 1. Review manually named runs and verify evidence preservation first. Removal never follows reparse points: junctions and directory symlinks are unlinked, and a run containing a volume mount point is refused whole (an administrator must remove the mount). A run that records a test-owned VHDX receipt is torn down first when elevated; unelevated, a VHDX kept detached after a failed FileOps suite is deleted with the run and any other receipt refuses the whole run with the receipt path and the exact recovery commands; a dry run warns. |
 | `CompareTestRuns.ps1` | Public report command | Compares two archived self-test runs. |

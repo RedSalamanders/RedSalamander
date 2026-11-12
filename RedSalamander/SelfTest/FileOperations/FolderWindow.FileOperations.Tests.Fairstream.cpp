@@ -5306,7 +5306,7 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
     }
     for (std::filesystem::recursive_directory_iterator it(localDest, ec), end; ! ec && it != end; it.increment(ec))
     {
-        if (it->path().filename().native().find(L".rs_tmp_") != std::wstring::npos)
+        if (FileOperationArtifacts::HasPossibleArtifactName(it->path().filename().native()))
         {
             Fail(L"Causeway hostile-child-name test left a staging file behind.");
             return true;
@@ -7485,8 +7485,7 @@ case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged:
         return true;
     }
 
-    const std::filesystem::path targetPath        = state.tempRoot / L"floodgate-local-overwrite-writer.txt";
-    const std::filesystem::path siblingTempPrefix = targetPath.parent_path() / std::filesystem::path(targetPath.filename().wstring() + L".~rs-write-");
+    const std::filesystem::path targetPath = state.tempRoot / L"floodgate-local-overwrite-writer.txt";
     std::error_code ec;
     std::filesystem::remove(targetPath, ec);
 
@@ -7573,8 +7572,7 @@ case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged:
             break;
         }
 
-        const std::wstring entryPath = entry.path().wstring();
-        if (entryPath.starts_with(siblingTempPrefix.wstring()))
+        if (IsStageLeafOfFinalForSelfTest(entry.path().filename().native(), targetPath.filename().native()))
         {
             Fail(L"Floodgate local overwrite writer left a staged temp file behind.");
             return true;
@@ -7594,9 +7592,8 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
         return true;
     }
 
-    const std::filesystem::path sourcePath        = state.tempRoot / L"floodgate-local-copy-overwrite-source.txt";
-    const std::filesystem::path targetPath        = state.tempRoot / L"floodgate-local-copy-overwrite-target.txt";
-    const std::filesystem::path siblingTempPrefix = targetPath.parent_path() / std::filesystem::path(targetPath.filename().wstring() + L".rs_copy_tmp_");
+    const std::filesystem::path sourcePath = state.tempRoot / L"floodgate-local-copy-overwrite-source.txt";
+    const std::filesystem::path targetPath = state.tempRoot / L"floodgate-local-copy-overwrite-target.txt";
 
     constexpr std::string_view kOriginal    = "copy-original-preserved";
     constexpr std::string_view kReplacement = "copy-replacement-bytes";
@@ -7682,8 +7679,7 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
             break;
         }
 
-        const std::wstring entryPath = entry.path().wstring();
-        if (entryPath.starts_with(siblingTempPrefix.wstring()))
+        if (IsStageLeafOfFinalForSelfTest(entry.path().filename().native(), targetPath.filename().native()))
         {
             Fail(L"Floodgate local copy overwrite failure left a staged temp file behind.");
             return true;
@@ -7722,7 +7718,7 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
     for (const auto& entry : std::filesystem::directory_iterator(targetPath.parent_path(), ec))
     {
         const std::wstring entryPath = entry.path().wstring();
-        if (entryPath.starts_with(siblingTempPrefix.wstring()))
+        if (IsStageLeafOfFinalForSelfTest(entry.path().filename().native(), targetPath.filename().native()))
         {
             ++retainedStageCount;
             // The injected Unknown path deliberately bypasses provider cleanup. Antivirus or another
@@ -7865,7 +7861,7 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
         }
 
         const std::wstring entryPath = entry.path().wstring();
-        if (! entryPath.starts_with(siblingTempPrefix.wstring()))
+        if (! IsStageLeafOfFinalForSelfTest(entry.path().filename().native(), targetPath.filename().native()))
         {
             continue;
         }
@@ -7978,12 +7974,11 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
                                  siblingPublished));
                 return true;
             }
-            const auto stagePrefix  = destinationFault.filename().wstring() + L".rs_copy_tmp_";
             size_t retainedChildren = 0u;
             std::error_code stageError;
             for (const auto& entry : std::filesystem::directory_iterator(destinationTree, stageError))
             {
-                if (entry.path().filename().wstring().starts_with(stagePrefix))
+                if (IsStageLeafOfFinalForSelfTest(entry.path().filename().native(), destinationFault.filename().native()))
                     ++retainedChildren;
             }
             if (stageError || retainedChildren != 1u || FAILED(state.fsLocal->DeleteItem(root.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)) ||
@@ -8282,10 +8277,9 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
         return true;
     }
 
-    const std::wstring tempPrefix = perfTarget.filename().wstring() + L".rs_copy_tmp_";
     for (const auto& entry : std::filesystem::directory_iterator(perfTarget.parent_path(), ec))
     {
-        if (entry.path().filename().wstring().starts_with(tempPrefix))
+        if (IsStageLeafOfFinalForSelfTest(entry.path().filename().native(), perfTarget.filename().native()))
         {
             Fail(L"R0a ordinary new-name Local Copy must not create a hidden sibling stage.");
             return true;

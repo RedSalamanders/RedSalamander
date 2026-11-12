@@ -1,0 +1,1 @@
+- Use the canonical process-owned desktop observer in overwrite-preservation coverage so unrelated foreground changes remain diagnostic while transient owned activation, missing observations and event-drain failures still fail; keep all exact byte, hash, file-ID and closed-inventory assertions.

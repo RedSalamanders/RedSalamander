@@ -444,6 +444,9 @@ constexpr ULONGLONG kFileOperationsPopupHostReattachRetryMaxMs      = 60000ull;
 constexpr uint32_t kFileOperationsPopupFramePrepareFailureLimit     = 5u;
 constexpr ULONGLONG kFileOperationsPopupAccessibleTextIntervalMs    = 1000ull;
 constexpr ULONGLONG kRateSampleBucketMs                             = 100ull;
+// I63 slice F: UpdateRates runs at most once per telemetry interval, however fast the motion timer ticks. A timer tick is
+// rarely exact, so the gap is one motion tick short of the interval.
+constexpr ULONGLONG kRateUpdateMinGapMs = static_cast<ULONGLONG>(kFileOperationsPopupTimerIntervalMs - kFileOperationsPopupUiMotionTimerIntervalMs);
 constexpr UINT kFileOperationsPopupDeferredSpeedLimitPromptMessage  = WM_APP + 0x71;
 constexpr wchar_t kFileOperationsSpeedLimitPromptClassName[]        = L"RedSalamander.FileOperations.SpeedLimitPrompt";
 constexpr UINT kFileOperationsSpeedLimitPromptDeferredActionMessage = WM_APP + 0x74;
@@ -569,10 +572,47 @@ constexpr ULONGLONG kTaskbarListRetryDelayMs                   = 1000ull;
 
 [[nodiscard]] bool FileProgressIsVisible(const FileOperationsPopupInternal::TaskSnapshot::InFlightFileSnapshot& entry, ULONGLONG nowTick) noexcept
 {
-    if (entry.explicitLifecycle)
-        return ! entry.terminal || (entry.lastUpdateTick != 0u && nowTick >= entry.lastUpdateTick && nowTick - entry.lastUpdateTick <= 300u);
-    return entry.totalBytes == 0u || entry.completedBytes < entry.totalBytes ||
-           (entry.lastUpdateTick != 0u && nowTick >= entry.lastUpdateTick && nowTick - entry.lastUpdateTick <= 300u);
+    return FileOperationsLayoutStability::StreamHoldsRow(
+        entry.explicitLifecycle, entry.terminal, entry.totalBytes, entry.completedBytes, entry.lastUpdateTick, nowTick);
+}
+
+using InFlightStreamRows =
+    std::array<const FileOperationsPopupInternal::TaskSnapshot::InFlightFileSnapshot*, FileOperationsPopupInternal::TaskSnapshot::kMaxInFlightFiles>;
+
+// I63 slice F (F1): the visible streams placed in their engine slots. Returns how many rows they span (the highest
+// occupied slot plus one; 0 when no stream is visible). A row below that without a visible stream stays nullptr and is
+// painted blank, so no stream moves up when a lower one ends. Two visible streams report one slot only when the popup's
+// tick trails the engine's while a finished stream lingers in a slot a new stream took; the newer report keeps the row.
+// An entry without a slot (a synthetic fixture) takes the lowest empty row, in snapshot order, after the slotted ones.
+[[nodiscard]] size_t ResolveVisibleStreamRows(const FileOperationsPopupInternal::TaskSnapshot& task, ULONGLONG nowTick, InFlightStreamRows& rows) noexcept
+{
+    rows.fill(nullptr);
+    const size_t count = std::min(task.inFlightFileCount, task.inFlightFiles.size());
+    size_t rowCount    = 0u;
+    for (size_t index = 0u; index < count; ++index)
+    {
+        const auto& entry = task.inFlightFiles[index];
+        if (entry.streamSlot >= rows.size() || ! FileProgressIsVisible(entry, nowTick))
+            continue;
+        auto& row = rows[entry.streamSlot];
+        if (row == nullptr || row->lastUpdateTick < entry.lastUpdateTick)
+            row = &entry;
+        rowCount = std::max(rowCount, entry.streamSlot + 1u);
+    }
+    size_t nextEmpty = 0u;
+    for (size_t index = 0u; index < count; ++index)
+    {
+        const auto& entry = task.inFlightFiles[index];
+        if (entry.streamSlot < rows.size() || ! FileProgressIsVisible(entry, nowTick))
+            continue;
+        while (nextEmpty < rows.size() && rows[nextEmpty] != nullptr)
+            ++nextEmpty;
+        if (nextEmpty >= rows.size())
+            break;
+        rows[nextEmpty] = &entry;
+        rowCount        = std::max(rowCount, nextEmpty + 1u);
+    }
+    return rowCount;
 }
 
 enum class PopupDisplayRowKind : uint8_t
@@ -939,80 +979,76 @@ struct CompletedTaskRevealLocation
     return CompletedTaskRevealLocation{std::filesystem::path(std::move(folder)), std::move(leaf)};
 }
 
-[[nodiscard]] bool CompletedTaskHasOverflowActions(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+// The completed card's recovery and diagnostic commands, in menu order. The card and the menu are
+// built from this one list: two or more commands get the menu button, a single command is its own
+// button, and no command means no button.
+struct CompletedOverflowCommands final
 {
-    return task.warningCount > 0 || task.errorCount > 0 || task.hasRetainedDiagnostics || CompletedTaskCanUseDestinationActions(task) ||
-           ResolveCompletedTaskRevealLocation(task).has_value() || task.hasSourceActionPaths || task.exactRetainedSourceActionAvailable;
-}
+    std::array<uint32_t, 7> ids{};
+    size_t count = 0u;
+};
 
-[[nodiscard]] std::wstring FormatFileTimeLocalCompact(__int64 fileTime) noexcept
+[[nodiscard]] CompletedOverflowCommands BuildCompletedOverflowCommands(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
 {
-    if (fileTime <= 0)
+    CompletedOverflowCommands commands{};
+    const auto add = [&commands](uint32_t id) noexcept
     {
-        return {};
-    }
-
-    ULARGE_INTEGER uli{};
-    uli.QuadPart = static_cast<ULONGLONG>(fileTime);
-
-    FILETIME ft{};
-    ft.dwLowDateTime  = uli.LowPart;
-    ft.dwHighDateTime = uli.HighPart;
-
-    SYSTEMTIME utc{};
-    SYSTEMTIME local{};
-    if (FileTimeToSystemTime(&ft, &utc) == FALSE || SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) == FALSE)
-    {
-        return {};
-    }
-
-    const int dateLength = GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, nullptr, 0, nullptr);
-    const int timeLength = GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, nullptr, 0);
-    if (dateLength <= 1 || timeLength <= 1)
-    {
-        return {};
-    }
-
-    std::wstring dateText(static_cast<size_t>(dateLength), L'\0');
-    std::wstring timeText(static_cast<size_t>(timeLength), L'\0');
-    if (GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, dateText.data(), dateLength, nullptr) == 0 ||
-        GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, timeText.data(), timeLength) == 0)
-    {
-        return {};
-    }
-    dateText.resize(static_cast<size_t>(dateLength - 1));
-    timeText.resize(static_cast<size_t>(timeLength - 1));
-    return FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_DATE_TIME, dateText, timeText);
-}
-
-[[nodiscard]] std::wstring FormatConflictMetadataText(const FileOperationsPopupInternal::TaskSnapshot::ConflictPromptSnapshot::ItemMetadata& metadata)
-{
-    if (! metadata.available)
-    {
-        return {};
-    }
-
-    std::wstring result;
-    if (metadata.isDirectory)
-    {
-        result = LoadStringResource(nullptr, IDS_FOLDERVIEW_TYPE_FOLDER);
-    }
-    else if (metadata.sizeKnown)
-    {
-        result = FormatBytesCompact(metadata.sizeBytes);
-    }
-
-    const std::wstring timeText = FormatFileTimeLocalCompact(metadata.lastWriteTime);
-    if (! timeText.empty())
-    {
-        if (! result.empty())
+        if (commands.count < commands.ids.size())
         {
-            result.append(L" \u2022 ");
+            commands.ids[commands.count] = id;
+            ++commands.count;
         }
-        result.append(timeText);
+    };
+    if (ResolveCompletedTaskRevealLocation(task).has_value())
+        add(kCompletedOverflowActionRevealDestination);
+    if (task.hasSourceActionPaths)
+        add(kCompletedOverflowActionOpenSource);
+    if (task.exactRetainedSourceActionAvailable)
+    {
+        add(kCompletedOverflowActionSelectRetained);
+        add(kCompletedOverflowActionCutRetainedAgain);
     }
+    if (CompletedTaskCanUseDestinationActions(task))
+        add(kCompletedOverflowActionOpenDestination);
+    // I35 R5.3: Show log and Export issues follow any retained diagnostic (notes included), never the
+    // informational-notes display setting; the export always contains everything.
+    if (! task.interruptedMoveNotice && (task.warningCount > 0 || task.errorCount > 0 || task.hasRetainedDiagnostics))
+    {
+        add(kCompletedOverflowActionShowLog);
+        add(kCompletedOverflowActionExportIssues);
+    }
+    return commands;
+}
 
-    return result;
+[[nodiscard]] UINT CompletedOverflowCommandLabelId(uint32_t command) noexcept
+{
+    switch (command)
+    {
+        case kCompletedOverflowActionShowLog: return IDS_FILEOP_BTN_SHOW_LOG;
+        case kCompletedOverflowActionExportIssues: return IDS_FILEOP_BTN_EXPORT_ISSUES;
+        case kCompletedOverflowActionOpenDestination: return IDS_FILEOP_BTN_OPEN_DESTINATION;
+        case kCompletedOverflowActionRevealDestination: return IDS_FILEOP_BTN_REVEAL_ITEM;
+        case kCompletedOverflowActionOpenSource: return IDS_FILEOP_BTN_OPEN_SOURCE;
+        case kCompletedOverflowActionSelectRetained: return IDS_FILEOP_BTN_SELECT_RETAINED;
+        case kCompletedOverflowActionCutRetainedAgain: return IDS_FILEOP_BTN_CUT_RETAINED_AGAIN;
+        default: return 0u;
+    }
+}
+
+[[nodiscard]] std::wstring CompletedOverflowCommandLabel(uint32_t command)
+{
+    const UINT labelId = CompletedOverflowCommandLabelId(command);
+    return labelId != 0u ? LoadStringResource(nullptr, labelId) : std::wstring{};
+}
+
+// Every popup flyout reports its commands before it opens. A menu with fewer than two commands is a
+// defect: a single command belongs on its own button.
+void NoteFlyoutOpening([[maybe_unused]] std::span<const DxUi::MenuFlyoutItem> items) noexcept
+{
+#ifdef ENABLE_TESTS
+    NoteFileOpsFlyoutOpeningForSelfTest(static_cast<size_t>(
+        std::ranges::count_if(items, [](const DxUi::MenuFlyoutItem& item) noexcept { return item.kind != DxUi::MenuItemKind::Separator; })));
+#endif
 }
 
 using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
@@ -1048,6 +1084,20 @@ float MeasureWrappedTextHeight(IDWriteFactory* factory, IDWriteTextFormat* forma
     facts.factItemCount           = conflict.factItemCount;
     facts.factBytesKnown          = conflict.factBytesKnown;
     facts.factBytes               = conflict.factBytes;
+    const auto itemFacts          = [](const FileOperationsPopupInternal::TaskSnapshot::ConflictPromptSnapshot::ItemMetadata& metadata) noexcept
+    {
+        return FileOperations::ConflictPromptItemFacts{
+            .available     = metadata.available,
+            .isDirectory   = metadata.isDirectory,
+            .sizeKnown     = metadata.sizeKnown,
+            .sizeBytes     = metadata.sizeBytes,
+            .lastWriteTime = metadata.lastWriteTime,
+        };
+    };
+    facts.sourceItem      = itemFacts(conflict.sourceMetadata);
+    facts.destinationItem = itemFacts(conflict.destinationMetadata);
+    facts.dateRelation    = conflict.dateRelation;
+    facts.sizeRelation    = conflict.sizeRelation;
     return facts;
 }
 
@@ -1100,11 +1150,12 @@ struct ConflictPromptContent final
     {
         content.question = BuildConflictQuestion(task);
     }
-    content.commonName            = CommonConflictName(task);
-    content.facts                 = BuildConflictFactText(task);
+    const FileOperations::ConflictPromptTextFacts textFacts = ConflictPromptTextFactsFor(task);
+    content.commonName                                      = CommonConflictName(task);
+    content.facts                                           = BuildConflictFactText(task);
     content.sourceLabel           = LoadStringResource(nullptr, task.operation == FILESYSTEM_DELETE ? IDS_FILEOPS_LABEL_DELETING : IDS_FILEOPS_LABEL_FROM);
     content.sourcePath            = task.conflict.sourcePath;
-    content.sourceMetadata        = FormatConflictMetadataText(task.conflict.sourceMetadata);
+    content.sourceMetadata        = FileOperations::BuildConflictPromptItemText(textFacts, false);
     content.sourceName            = task.conflict.sourceName;
     content.sourceParentPath      = task.conflict.sourceParentPath;
     content.destinationName       = task.conflict.destinationName;
@@ -1113,7 +1164,7 @@ struct ConflictPromptContent final
     {
         content.destinationLabel    = LoadStringResource(nullptr, IDS_FILEOPS_LABEL_TO);
         content.destinationPath     = task.conflict.destinationPath;
-        content.destinationMetadata = FormatConflictMetadataText(task.conflict.destinationMetadata);
+        content.destinationMetadata = FileOperations::BuildConflictPromptItemText(textFacts, true);
     }
     if (! task.lastDiagnosticMessage.empty())
     {
@@ -1621,7 +1672,8 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
         case Kind::TaskToggleThroughput:
         case Kind::TaskConflictInspectSource:
         case Kind::TaskConflictInspectDestination:
-        case Kind::TaskIssues: return false;
+        case Kind::TaskIssues:
+        case Kind::TaskCompletedAction: return false;
     }
     return false;
 }
@@ -1761,7 +1813,14 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
                 return LoadStringResource(nullptr, IDS_FILEOPS_WAITING_EXCLUSIVE_TRANSFER);
             if (task.waitingForParallelTransferSlot)
                 return FormatStringResource(nullptr, IDS_FILEOPS_WAITING_PARALLEL_LIMIT_FMT, task.sharedParallelTransferLimit);
-            return LoadStringResource(nullptr, task.waitingForIdentityInterlock ? IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK : IDS_FILEOPS_GRAPH_WAITING);
+            if (task.waitingForIdentityInterlock)
+                return LoadStringResource(nullptr, IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK);
+            // A queued card states its place: the queue starts in card order.
+            if (task.queuePosition == 1u)
+                return LoadStringResource(nullptr, IDS_FILEOPS_WAITING_QUEUE_NEXT);
+            if (task.queuePosition > 1u)
+                return FormatStringResource(nullptr, IDS_FILEOPS_WAITING_QUEUE_POSITION_FMT, task.queuePosition);
+            return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING);
         case TaskStatusKind::Paused: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
         case TaskStatusKind::Conflict:
             return LoadStringResource(nullptr, task.conflict.metadataLoading ? IDS_FILEOPS_CONFLICT_READING_DETAILS : IDS_FILEOPS_STATUS_WAITING_FOR_DECISION);
@@ -1997,7 +2056,9 @@ struct TerminalAxisBadge final
     if (! task.finished || task.interruptedMoveNotice || TaskCanceledBeforeMutation(task))
         return false;
     const auto counts = VisibleTerminalFactCounts(task);
-    return std::ranges::any_of(counts, [](unsigned long count) noexcept { return count > 0u; }) || TaskHasTerminalAxisBadges(task);
+    // I63 B6: a Copy whose every item a bulk policy skipped has no other count, and still says how many were there.
+    return std::ranges::any_of(counts, [](unsigned long count) noexcept { return count > 0u; }) || TaskHasTerminalAxisBadges(task) ||
+           task.skippedSameSizeAndDateCount > 0u || task.replacedOlderCount > 0u;
 }
 
 [[nodiscard]] std::wstring BuildTerminalFactsText(const FileOperationsPopupInternal::TaskSnapshot& task)
@@ -2032,6 +2093,24 @@ struct TerminalAxisBadge final
             if (counts[index] == 0u)
                 continue;
             const std::wstring clause = FormatStringResource(nullptr, ids[index], counts[index]);
+            clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
+        }
+        if (axis == 0u && task.alreadyThereSourceRemovedCount > 0u)
+        {
+            // I63 B4: a Delete source answer is no copy, so it has no slot among the counts above.
+            const std::wstring clause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_ALREADY_THERE, task.alreadyThereSourceRemovedCount);
+            clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
+        }
+        if (axis == 0u && task.skippedSameSizeAndDateCount > 0u)
+        {
+            // I63 B6: items Skip all with the same size and date left alone; they are also among the skipped items.
+            const std::wstring clause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_SKIPPED_SAME, task.skippedSameSizeAndDateCount);
+            clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
+        }
+        if (axis == 0u && task.replacedOlderCount > 0u)
+        {
+            // I63 B6: items Replace all older replaced; they are also among the copied items.
+            const std::wstring clause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_REPLACED_OLDER, task.replacedOlderCount);
             clauses                   = clauses.empty() ? clause : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN, clauses, clause);
         }
         if (axis == 2u && clauses.empty() && TaskHasVerificationResultBadge(task))
@@ -4835,6 +4914,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::CleanupCollapsedTask
         ++it;
     }
 
+    std::erase_if(_taskLayoutStability, [&](const auto& entry) { return ! seen.contains(entry.first); });
+
     for (auto it = _taskDisclosureAnimations.begin(); it != _taskDisclosureAnimations.end();)
     {
         if (! seen.contains(it->first))
@@ -4852,6 +4933,9 @@ float FileOperationsPopupInternal::FileOperationsPopupState::ResolveAnimatedTask
     constexpr ULONGLONG kDurationMs    = kFileOperationsPopupUiMotionDurationMs;
     TaskHeightAnimation& taskAnimation = _taskHeightAnimations[taskId];
     ScalarAnimation& animation         = taskAnimation.height;
+    // I63 F4: a new target after the card's first measurement is one height change.
+    if (FileOperationsLayoutStability::CardHeightChanged(animation.initialized, animation.target, static_cast<double>(targetHeight)))
+        Debug::Perf::EmitCounter(L"FileOps.Popup.CardHeightChanges");
     // Expanded content changes immediately, including expansion and active stream rows.
     // Reserve its complete height on that frame. Collapse can animate because its body is hidden.
     reducedMotion          = reducedMotion || (expanded && (! taskAnimation.expanded || animation.target != targetHeight));
@@ -5471,10 +5555,29 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
     }
 }
 
+#ifdef ENABLE_TESTS
+std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildSnapshot(std::source_location caller) const
+#else
 std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildSnapshot() const
+#endif
 {
 #ifdef ENABLE_TESTS
     ++_taskSnapshotBuildCount;
+    // Attribute excess work without taking a stack, allocating, or adding production
+    // state/call arguments. All current callers fit this bounded UI-thread table.
+    bool attributed = false;
+    for (auto& site : _snapshotCallSites)
+    {
+        if (site.sourceLine == 0u || site.sourceLine == caller.line())
+        {
+            site.sourceLine = caller.line();
+            ++site.calls;
+            attributed = true;
+            break;
+        }
+    }
+    if (! attributed)
+        ++_unattributedTaskSnapshots;
 #endif
 #ifdef ENABLE_TESTS
     if (debugVisualScenario.has_value())
@@ -5520,6 +5623,9 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.canceledRetainedSourceCount      = completed.canceledRetainedSourceCount;
         snap.unknownSourceCount               = completed.unknownSourceCount;
         snap.missingSourceCount               = completed.missingSourceCount;
+        snap.alreadyThereSourceRemovedCount   = completed.alreadyThereSourceRemovedCount;
+        snap.skippedSameSizeAndDateCount      = completed.skippedSameSizeAndDateCount;
+        snap.replacedOlderCount               = completed.replacedOlderCount;
         snap.verifiedItemCount                = completed.verifiedItemCount;
         snap.verificationProblemItemCount     = completed.verificationProblemItemCount;
         snap.verificationFailedItemCount      = completed.verificationFailedItemCount;
@@ -5533,21 +5639,12 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.completedSummaryProjected        = true;
     };
 
-    std::vector<FolderWindow::FileOperationState::Task*> waitingTasks;
-    waitingTasks.reserve(tasks.size());
-    for (auto* task : tasks)
+    // The engine owns queue order and the moves it will perform; the cards only show them.
+    std::vector<FolderWindow::FileOperationState::QueuedTaskOrder> queuedOrder;
+    if (! tasks.empty())
     {
-        if (task && ! task->HasStarted() && (task->IsWaitingForOthers() || task->IsWaitingInQueue()))
-        {
-            waitingTasks.push_back(task);
-        }
-    }
-    std::ranges::sort(waitingTasks, {}, &FolderWindow::FileOperationState::Task::GetQueueOrderKey);
-    std::unordered_map<uint64_t, size_t> waitingTaskIndex;
-    waitingTaskIndex.reserve(waitingTasks.size());
-    for (size_t index = 0u; index < waitingTasks.size(); ++index)
-    {
-        waitingTaskIndex.emplace(waitingTasks[index]->GetId(), index);
+        // Tasks were collected, so the engine is alive.
+        fileOps->CollectQueuedTaskOrder(queuedOrder);
     }
     std::ranges::stable_sort(tasks,
                              [](const auto* left, const auto* right)
@@ -5556,11 +5653,9 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         {
             return right != nullptr;
         }
-        const bool leftWaiting  = ! left->HasStarted() && (left->IsWaitingForOthers() || left->IsWaitingInQueue());
-        const bool rightWaiting = ! right->HasStarted() && (right->IsWaitingForOthers() || right->IsWaitingInQueue());
-        const uint64_t leftKey  = leftWaiting ? left->GetQueueOrderKey() : left->GetId();
-        const uint64_t rightKey = rightWaiting ? right->GetQueueOrderKey() : right->GetId();
-        return leftKey < rightKey;
+        // One key for every active card: the engine's queue order key, then the task ID. A card
+        // keeps its position when its task starts; only a reorder or a queue-after decision moves it.
+        return std::pair{left->GetQueueOrderKey(), left->GetId()} < std::pair{right->GetQueueOrderKey(), right->GetId()};
     });
 
     for (const auto& info : informationalTasks)
@@ -5658,6 +5753,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
                 snap.inFlightFiles[i].explicitLifecycle = task->_inFlightFiles[i].explicitLifecycle;
                 snap.inFlightFiles[i].sizeKnown         = task->_inFlightFiles[i].sizeKnown;
                 snap.inFlightFiles[i].terminal          = task->_inFlightFiles[i].terminal;
+                snap.inFlightFiles[i].streamSlot        = task->_inFlightFiles[i].streamSlot;
 
                 // Defensive: for display purposes, avoid showing a misleading "100%" when a plugin reports
                 // currentItemCompletedBytes > currentItemTotalBytes (can happen with out-of-order updates or bugs).
@@ -5708,6 +5804,8 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             snap.conflict.destinationMetadata.sizeBytes     = task->_conflictArbiter.prompt.destinationMetadata.sizeBytes;
             snap.conflict.destinationMetadata.lastWriteTime = task->_conflictArbiter.prompt.destinationMetadata.lastWriteTime;
             snap.conflict.destinationMetadata.attributes    = task->_conflictArbiter.prompt.destinationMetadata.attributes;
+            snap.conflict.dateRelation                      = static_cast<uint8_t>(task->_conflictArbiter.prompt.comparison.date);
+            snap.conflict.sizeRelation                      = static_cast<uint8_t>(task->_conflictArbiter.prompt.comparison.size);
             CopyPublishedConflictPolicy(task->_conflictArbiter.prompt, snap.conflict);
             snap.conflict.applyToAllChecked  = task->_conflictArbiter.prompt.applyToAllChecked;
             snap.conflict.retryFailed        = task->_conflictArbiter.prompt.retryFailed;
@@ -5733,10 +5831,12 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.overlapQueued                  = task->IsOverlapQueued();
         snap.queuePaused                    = task->IsQueuePaused();
         snap.queueOrderKey                  = task->GetQueueOrderKey();
-        if (const auto waitingIt = waitingTaskIndex.find(snap.taskId); waitingIt != waitingTaskIndex.end())
+        if (const auto queued = std::ranges::find(queuedOrder, snap.taskId, &FolderWindow::FileOperationState::QueuedTaskOrder::taskId);
+            queued != queuedOrder.end())
         {
-            snap.canMoveQueueUp   = waitingIt->second > 0u;
-            snap.canMoveQueueDown = waitingIt->second + 1u < waitingTasks.size();
+            snap.canMoveQueueUp   = queued->canMoveUp;
+            snap.canMoveQueueDown = queued->canMoveDown;
+            snap.queuePosition    = queued->position;
         }
         const auto selectedAdmission    = task->LoadSelectedAdmission();
         snap.plannedItems               = task->GetPlannedItemCount();
@@ -5948,6 +6048,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
     _collapsedTasks.clear();
     _compactExpandedTasks.clear();
     _taskHeightAnimations.clear();
+    _taskLayoutStability.clear();
     _rates.clear();
     _completedGroupExpanded     = completedGroupExpanded;
     _maxAutoSizedWindowHeight   = 0;
@@ -5969,6 +6070,21 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
             const bool readOnlyDelete = task.operation == FILESYSTEM_DELETE && prompt.bucket == FileOperations::ConflictClass::ReadOnlyRegularFile;
             DebugBuildFileOpsVisualConflictPolicyForSelfTest(prompt, task.conflict.destinationMetadata.available, readOnlyDelete, task.operation);
             CopyPublishedConflictPolicy(prompt, task.conflict);
+            // A synthetic scene has no engine prompt: compare its two items as the engine would.
+            if ((prompt.bucket == FileOperations::ConflictClass::RegularFileExists ||
+                 prompt.bucket == FileOperations::ConflictClass::ReadOnlyRegularFileExists) &&
+                task.conflict.sourceMetadata.available && task.conflict.destinationMetadata.available && ! task.conflict.sourceMetadata.isDirectory &&
+                ! task.conflict.destinationMetadata.isDirectory && ! task.conflict.sourceMetadata.isLink && ! task.conflict.destinationMetadata.isLink)
+            {
+                const FileOperations::ConflictItemComparison comparison = FileOperations::CompareConflictItems(task.conflict.sourceMetadata.sizeKnown,
+                                                                                                               task.conflict.sourceMetadata.sizeBytes,
+                                                                                                               task.conflict.sourceMetadata.lastWriteTime,
+                                                                                                               task.conflict.destinationMetadata.sizeKnown,
+                                                                                                               task.conflict.destinationMetadata.sizeBytes,
+                                                                                                               task.conflict.destinationMetadata.lastWriteTime);
+                task.conflict.dateRelation                              = static_cast<uint8_t>(comparison.date);
+                task.conflict.sizeRelation                              = static_cast<uint8_t>(comparison.size);
+            }
         }
         auto& history                            = _rates[task.taskId];
         history.initialized                      = true;
@@ -6273,9 +6389,11 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalFa
     auto& cached      = _terminalFacts[slot];
     const auto counts = TerminalFactCounts(task);
     auto& prepared    = cached.prepared;
-    if (prepared.layout && prepared.taskId == task.taskId && cached.counts == counts && cached.verificationState == task.verificationState &&
-        cached.startedMutation == task.startedMutation && cached.languageRevision == languageRevision && prepared.format.get() == _bodyFormat.get() &&
-        prepared.widthPx == widthPx)
+    if (prepared.layout && prepared.taskId == task.taskId && cached.counts == counts &&
+        cached.alreadyThereSourceRemovedCount == task.alreadyThereSourceRemovedCount &&
+        cached.skippedSameSizeAndDateCount == task.skippedSameSizeAndDateCount && cached.replacedOlderCount == task.replacedOlderCount &&
+        cached.verificationState == task.verificationState && cached.startedMutation == task.startedMutation && cached.languageRevision == languageRevision &&
+        prepared.format.get() == _bodyFormat.get() && prepared.widthPx == widthPx)
         return S_OK;
     cached                   = {};
     const uint64_t startedUs = PerfNowUs();
@@ -6296,16 +6414,19 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalFa
         hr = layout->SetMaxHeight(heightPx);
     if (SUCCEEDED(hr))
     {
-        prepared.taskId          = task.taskId;
-        prepared.text            = std::move(text);
-        prepared.format          = _bodyFormat;
-        prepared.layout          = std::move(layout);
-        prepared.widthPx         = widthPx;
-        prepared.heightPx        = heightPx;
-        cached.counts            = counts;
-        cached.verificationState = task.verificationState;
-        cached.startedMutation   = task.startedMutation;
-        cached.languageRevision  = languageRevision;
+        prepared.taskId                       = task.taskId;
+        prepared.text                         = std::move(text);
+        prepared.format                       = _bodyFormat;
+        prepared.layout                       = std::move(layout);
+        prepared.widthPx                      = widthPx;
+        prepared.heightPx                     = heightPx;
+        cached.counts                         = counts;
+        cached.alreadyThereSourceRemovedCount = task.alreadyThereSourceRemovedCount;
+        cached.skippedSameSizeAndDateCount    = task.skippedSameSizeAndDateCount;
+        cached.replacedOlderCount             = task.replacedOlderCount;
+        cached.verificationState              = task.verificationState;
+        cached.startedMutation                = task.startedMutation;
+        cached.languageRevision               = languageRevision;
     }
     Debug::Perf::Emit(
         L"FileOps.Popup.TerminalFacts.MeasureUs", L"current terminal facts cache miss", PerfElapsedUs(startedUs), prepared.text.size(), metrics.lineCount, hr);
@@ -6325,11 +6446,17 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalAc
                                                        true,
                                                        rightToLeft ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
     const float widthDip = _controlsHost.PixelsToDip(widthPx);
+    // A menu needs two commands; a single one is shown with its own caption.
+    const CompletedOverflowCommands commands = BuildCompletedOverflowCommands(task);
+    const uint32_t directCommand             = commands.count == 1u ? commands.ids[0] : 0u;
     std::array<std::wstring, 3> labels{{LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS),
                                         task.hasProjectableIssues ? LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES) : std::wstring{},
-                                        CompletedTaskHasOverflowActions(task) ? std::wstring(L"\u2026") : std::wstring{}}};
+                                        commands.count >= 2u  ? std::wstring(L"\u2026")
+                                        : directCommand != 0u ? CompletedOverflowCommandLabel(directCommand)
+                                                              : std::wstring{}}};
     auto& cached = _terminalActions[slot];
-    if (cached.format.get() == format && cached.widthDip == widthDip && cached.dpi == _dpi && cached.rightToLeft == rightToLeft && cached.labels == labels)
+    if (cached.format.get() == format && cached.widthDip == widthDip && cached.dpi == _dpi && cached.rightToLeft == rightToLeft &&
+        cached.directCommand == directCommand && cached.labels == labels)
         return S_OK;
     const uint64_t startedUs = PerfNowUs();
     std::array<D2D1_SIZE_F, 3> sizes{};
@@ -6349,7 +6476,8 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalAc
         {
             if (labels[index].empty())
                 continue;
-            const float padding = index == 2u ? 52.0f : 24.0f;
+            // Only the menu button reserves the drop-down chrome.
+            const float padding = index == 2u && directCommand == 0u ? 52.0f : 24.0f;
             wil::com_ptr<IDWriteTextLayout> text;
             RETURN_IF_FAILED(_dwriteFactory->CreateTextLayout(
                 labels[index].data(), static_cast<UINT32>(labels[index].size()), format, widthDip - padding, 4096.0f, text.put()));
@@ -6375,19 +6503,21 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalAc
             cached.heightDip     = top + 32.0f;
             top += 32.0f + 6.0f;
         }
-        cached.labels      = std::move(labels);
-        cached.widthDip    = widthDip;
-        cached.dpi         = _dpi;
-        cached.rightToLeft = rightToLeft;
+        cached.labels        = std::move(labels);
+        cached.directCommand = directCommand;
+        cached.widthDip      = widthDip;
+        cached.dpi           = _dpi;
+        cached.rightToLeft   = rightToLeft;
         return hr;
     }
-    cached.labels      = std::move(labels);
-    cached.bounds      = bounds;
-    cached.format      = format;
-    cached.widthDip    = widthDip;
-    cached.heightDip   = layout.heightDip;
-    cached.dpi         = _dpi;
-    cached.rightToLeft = rightToLeft;
+    cached.labels        = std::move(labels);
+    cached.directCommand = directCommand;
+    cached.bounds        = bounds;
+    cached.format        = format;
+    cached.widthDip      = widthDip;
+    cached.heightDip     = layout.heightDip;
+    cached.dpi           = _dpi;
+    cached.rightToLeft   = rightToLeft;
     Debug::Perf::Emit(L"FileOps.Popup.TerminalActions.MeasureUs", L"current terminal actions cache miss", PerfElapsedUs(startedUs), 0u, layout.rowCount, S_OK);
     return S_OK;
 }
@@ -6612,6 +6742,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::LayoutChrome(
     _footerDensityRect        = {};
 }
 
+int FileOperationsPopupInternal::FileOperationsPopupState::ModelMaxScrollPosition() const noexcept
+{
+    return static_cast<int>(std::ceil(std::max(0.0f, _contentHeight - std::max(0.0f, _listViewportRect.bottom - _listViewportRect.top))));
+}
+
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateScrollBar(HWND hwnd, float viewH, float contentH) noexcept
 {
     if (! hwnd)
@@ -6619,8 +6754,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateScrollBar(HWND
         return;
     }
 
-    const int viewHeight      = std::max(0, static_cast<int>(std::ceil(viewH)));
-    const int contentHeightPx = std::max(0, static_cast<int>(std::ceil(contentH)));
+    const int viewHeight = std::max(0, static_cast<int>(std::ceil(viewH)));
+    // I63 slice F: while the bar is withheld (a pending automatic resize will make the content fit) the native range
+    // says "fits", so SetScrollInfo cannot show the bar ahead of that resize.
+    const int contentHeightPx = std::max(0, static_cast<int>(std::ceil(_scrollBarVisible ? contentH : std::min(contentH, viewH))));
 
     if (! _scrollBarVisible)
     {
@@ -6784,6 +6921,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
     {
         _autoResizePending   = false;
         _autoResizeAnimating = false;
+        Debug::Perf::EmitCounter(L"FileOps.Popup.WindowResizes");
         SetWindowPos(hwnd,
                      nullptr,
                      targetRect.left,
@@ -6821,12 +6959,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
         _autoResizeAnimationStartRect  = windowRc;
         _autoResizeAnimationTargetRect = _autoResizePendingTargetRect;
         _autoResizeAnimationStartTick  = nowTick;
+        Debug::Perf::EmitCounter(L"FileOps.Popup.WindowResizes");
     }
     else if (! RectsNearEqual(_autoResizeAnimationTargetRect, targetRect))
     {
         _autoResizeAnimationStartRect  = windowRc;
         _autoResizeAnimationTargetRect = targetRect;
         _autoResizeAnimationStartTick  = nowTick;
+        Debug::Perf::EmitCounter(L"FileOps.Popup.WindowResizes");
     }
 
     const float fraction = EaseFileOperationsUiMotionFraction(nowTick - _autoResizeAnimationStartTick, kResizeEaseMs);
@@ -6936,11 +7076,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshTelemetryTime
 #endif
     const UINT waitingIntervalMs =
         idleIntervalMs != 0u ? (std::min)(idleIntervalMs, kFileOperationsPopupWaitingTimerIntervalMs) : kFileOperationsPopupWaitingTimerIntervalMs;
-    const UINT desired = explicitMotion                      ? kFileOperationsPopupUiMotionTimerIntervalMs
-                         : work                              ? kFileOperationsPopupTimerIntervalMs
-                         : HasVisibleUiMotion(hwnd, nowTick) ? kFileOperationsPopupUiMotionTimerIntervalMs
-                         : waitingWork                       ? waitingIntervalMs
-                                                             : idleIntervalMs;
+    // I63 slice F: an automatic window resize that is pending or running is bounded motion (debounce plus ease), so it takes the
+    // motion cadence ahead of the telemetry cadence for its own duration. Continuous progress alone never raises the cadence.
+    const bool resizeMotion = (_autoResizePending || _autoResizeAnimating) && recoveryVisible && ! _failureSurface;
+    const UINT desired      = explicitMotion || resizeMotion      ? kFileOperationsPopupUiMotionTimerIntervalMs
+                              : work                              ? kFileOperationsPopupTimerIntervalMs
+                              : HasVisibleUiMotion(hwnd, nowTick) ? kFileOperationsPopupUiMotionTimerIntervalMs
+                              : waitingWork                       ? waitingIntervalMs
+                                                                  : idleIntervalMs;
     if (desired == _telemetryTimerIntervalMs)
         return;
     if (desired != 0u)
@@ -7248,16 +7391,74 @@ float FileOperationsPopupInternal::FileOperationsPopupState::InPlotGraphLabelRow
     return std::min(plot.bottom, top + tallest);
 }
 
-void FileOperationsPopupInternal::FileOperationsPopupState::PrepareFactPair(
-    GraphLabelLayout& pair, std::wstring leading, std::wstring trailing, IDWriteTextFormat* format, float width, float leadingSlot)
+namespace
+{
+// I63 F3: the digits of a numeric fact take tabular (equal-width) figures, so a value that changes keeps its width and
+// does not move its neighbours. Set on the popup's own text layout; the shared text formats and DxUi are unchanged. A font
+// without the feature ignores it; if the typography cannot be made, the layout keeps its default figures.
+void ApplyTabularFigures(IDWriteFactory* factory, IDWriteTextLayout* layout, UINT32 length) noexcept
+{
+    if (! factory || ! layout || length == 0u)
+        return;
+    wil::com_ptr<IDWriteTypography> typography;
+    if (FAILED(factory->CreateTypography(typography.put())) || ! typography)
+        return;
+    const DWRITE_FONT_FEATURE tabular{DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, 1u};
+    if (FAILED(typography->AddFontFeature(tabular)))
+        return;
+    static_cast<void>(layout->SetTypography(typography.get(), DWRITE_TEXT_RANGE{0u, length}));
+}
+} // namespace
+
+void FileOperationsPopupInternal::FileOperationsPopupState::PrepareFactPair(GraphLabelLayout& pair,
+                                                                            std::wstring leading,
+                                                                            std::wstring trailing,
+                                                                            IDWriteTextFormat* format,
+                                                                            float width,
+                                                                            float leadingSlot,
+                                                                            FileOperationsLayoutStability::HeldCondition* stackHold,
+                                                                            ULONGLONG tick,
+                                                                            bool tabularFigures)
 {
     if (! _dwriteFactory || ! format || width <= 0.0f)
     {
         pair = {};
         return;
     }
+    // I63 slice F: with a stack hold the pair stacks as soon as its facts do not fit and returns to one line only with room to
+    // spare, once the hold has passed. The decision belongs to the card, not to the cached layout, so it is evaluated on every call.
+    const auto resolveStacked = [&](const GraphLabelLayout& layout, bool currentlyStacked)
+    {
+        const bool both         = layout.rate && layout.eta;
+        const float neededWidth = std::max(layout.rateWidth, leadingSlot) + layout.etaWidth + DipsToPixels(8.0f, _dpi);
+        if (! stackHold)
+            return both && neededWidth > width;
+        const float pixelsPerDip = DipsToPixels(1.0f, _dpi);
+        const bool wanted        = both && FileOperationsLayoutStability::PairWantsStack(neededWidth / pixelsPerDip, width / pixelsPerDip, currentlyStacked);
+        return stackHold->Update(wanted, tick) && both;
+    };
+    const auto applyStacked = [&](GraphLabelLayout& layout, bool stacked)
+    {
+        layout.stacked = stacked;
+        if (layout.rate)
+            static_cast<void>(layout.rate->SetMaxWidth(stacked || ! layout.eta ? width : std::max(1.0f, layout.rateWidth)));
+        if (layout.eta)
+        {
+            static_cast<void>(layout.eta->SetMaxWidth(stacked ? width : std::max(1.0f, layout.etaWidth)));
+            static_cast<void>(layout.eta->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
+        }
+    };
     if (pair.width == width && pair.format.get() == format && pair.rateText == leading && pair.etaText == trailing && pair.leadingSlot == leadingSlot)
+    {
+        // The measured layouts still hold; only a held stacking can have changed with time.
+        if (stackHold)
+        {
+            const bool stacked = resolveStacked(pair, pair.stacked);
+            if (stacked != pair.stacked)
+                applyStacked(pair, stacked);
+        }
         return;
+    }
     Debug::Perf::Scope measurement(L"FileOps.Popup.FactPair.MeasureUs");
     GraphLabelLayout next{};
     next.width         = width;
@@ -7272,6 +7473,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareFactPair(
         if (FAILED(_dwriteFactory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), format, width, 4096.0f, layout.put())) ||
             FAILED(layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP)) || FAILED(layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR)))
             return false;
+        if (tabularFigures)
+            ApplyTabularFigures(_dwriteFactory.get(), layout.get(), static_cast<UINT32>(text.size()));
         DWRITE_TEXT_METRICS metrics{};
         if (FAILED(layout->GetMetrics(&metrics)))
             return false;
@@ -7285,15 +7488,38 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareFactPair(
         pair = {};
         return;
     }
-    next.stacked = std::max(next.rateWidth, leadingSlot) + next.etaWidth + DipsToPixels(8.0f, _dpi) > width && next.rate && next.eta;
-    if (next.rate)
-        static_cast<void>(next.rate->SetMaxWidth(next.stacked || ! next.eta ? width : std::max(1.0f, next.rateWidth)));
-    if (next.eta)
-    {
-        static_cast<void>(next.eta->SetMaxWidth(next.stacked ? width : std::max(1.0f, next.etaWidth)));
-        static_cast<void>(next.eta->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
-    }
+    applyStacked(next, resolveStacked(next, pair.stacked));
     pair = std::move(next);
+}
+
+float FileOperationsPopupInternal::FileOperationsPopupState::PrepareWrappedText(
+    WrappedTextCache& cache, IDWriteTextFormat* format, std::wstring_view text, float width, float lineHeight) noexcept
+{
+    if (cache.format.get() == format && cache.width == width && cache.lineHeight == lineHeight && cache.text == text)
+        return cache.height;
+    cache.text.assign(text);
+    cache.format     = format;
+    cache.width      = width;
+    cache.lineHeight = lineHeight;
+    cache.height     = 0.0f;
+    cache.layout.reset();
+    // The same measurement as MeasureWrappedTextHeight, keeping the layout it builds.
+    if (! _dwriteFactory || ! format || text.empty() || width <= 0.0f)
+        return cache.height;
+    Debug::Perf::Scope measurement(L"FileOps.Popup.WrappedText.MeasureUs");
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(_dwriteFactory->CreateTextLayout(
+            text.data(), static_cast<UINT32>(text.size()), format, width, std::max(lineHeight, 4096.0f), cache.layout.put())) ||
+        ! cache.layout || FAILED(cache.layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP)) || FAILED(cache.layout->GetMetrics(&metrics)))
+    {
+        cache.layout.reset();
+        cache.height = lineHeight;
+        return cache.height;
+    }
+    cache.height = std::max(lineHeight, std::ceil(metrics.height));
+    if (FAILED(cache.layout->SetMaxHeight(cache.height)))
+        cache.layout.reset();
+    return cache.height;
 }
 
 float FileOperationsPopupInternal::FileOperationsPopupState::FactPairHeight(const GraphLabelLayout& pair) const noexcept
@@ -7329,15 +7555,35 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFactPair(
          trailingId);
 }
 
-void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformation(const std::vector<TaskSnapshot>& snapshot, float width)
+auto FileOperationsPopupInternal::FileOperationsPopupState::ResolveTaskLayoutStability(const TaskSnapshot& task, bool collapsed) -> TaskLayoutStability&
+{
+    using Phase                    = TaskLayoutStability::Phase;
+    const Phase phase              = collapsed                                                ? Phase::Collapsed
+                                     : task.finished                                          ? Phase::Finished
+                                     : task.conflict.active                                   ? Phase::Decision
+                                     : task.waitingInQueue || task.paused || task.queuePaused ? Phase::Waiting
+                                                                                              : Phase::Running;
+    TaskLayoutStability& stability = _taskLayoutStability[task.taskId];
+    if (stability.phase != phase)
+    {
+        stability       = TaskLayoutStability{};
+        stability.phase = phase;
+    }
+    return stability;
+}
+
+void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformation(const std::vector<TaskSnapshot>& snapshot, float width, ULONGLONG tick)
 {
     _cardInformationLayouts.resize(snapshot.size());
     for (size_t index = 0u; index < snapshot.size(); ++index)
     {
         const auto& task  = snapshot[index];
         auto& information = _cardInformationLayouts[index];
-        if (task.kind != TaskSnapshot::Kind::FileOperation || task.conflict.active ||
-            IsTaskCollapsedForDisplay(task.taskId, fileOps && fileOps->GetPopupCompactDensity()))
+        if (task.kind != TaskSnapshot::Kind::FileOperation)
+            continue;
+        const bool collapsed           = IsTaskCollapsedForDisplay(task.taskId, fileOps && fileOps->GetPopupCompactDensity());
+        TaskLayoutStability& stability = ResolveTaskLayoutStability(task, collapsed);
+        if (task.conflict.active || collapsed)
             continue;
         const auto presentation = ResolveWholeTaskProgressPresentation(task);
         PrepareFactPair(information.waitingReason,
@@ -7348,6 +7594,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                         {},
                         _smallFormat.get(),
                         width);
+        // I63 slice F: a conditional note row keeps its height reserved, blank, for the hold after the note went away.
+        const bool waitingReasonPresent = static_cast<bool>(information.waitingReason.rate);
+        if (waitingReasonPresent)
+            stability.waitingReasonHeight = FactPairHeight(information.waitingReason);
+        stability.waitingReasonReservedHeight = stability.waitingReasonRow.Update(waitingReasonPresent, tick) ? stability.waitingReasonHeight : 0.0f;
         std::wstring progress;
         std::wstring percent;
         if (presentation.showWorkFacts && ! TaskUsesSkippedCountingWorkSummary(task))
@@ -7363,7 +7614,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                 percent = FormatStringResource(
                     nullptr, IDS_FMT_FILEOPS_COMPACT_PERCENT, static_cast<unsigned>(std::lround(Clamp01(static_cast<float>(presentation.fraction)) * 100.0f)));
         }
-        PrepareFactPair(information.progress, std::move(progress), std::move(percent), _headerFormat.get(), width);
+        PrepareFactPair(
+            information.progress, std::move(progress), std::move(percent), _headerFormat.get(), width, 0.0f, &stability.progressStacked, tick, true);
         std::wstring rate;
         std::wstring eta;
         if (presentation.showThroughputGraph)
@@ -7381,6 +7633,19 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                     nullptr, IDS_FMT_FILEOPS_ETA_PROVISIONAL, FormatDurationHms(SaturatingCeilNonNegativeToUint64(history.provisionalEtaSeconds)));
             else
                 eta = LoadStringResource(nullptr, IDS_FILEOPS_ETA_UNAVAILABLE);
+            // I63 slice F: the rate and ETA text change at most twice a second; the throughput graph keeps its own data and cadence.
+            const auto holdShown = [&](std::wstring& shown, uint64_t& shownSinceTick, std::wstring& fresh)
+            {
+                if (fresh != shown &&
+                    FileOperationsLayoutStability::MayReplaceShownText(shown.empty(), shownSinceTick, tick, FileOperationsLayoutStability::kNumericTextHoldMs))
+                {
+                    shown          = fresh;
+                    shownSinceTick = tick;
+                }
+                fresh = shown;
+            };
+            holdShown(stability.shownRate, stability.shownRateTick, rate);
+            holdShown(stability.shownEta, stability.shownEtaTick, eta);
 #ifdef ENABLE_TESTS
             if (debugVisualScenario && ! debugGraphLabelText[0].empty() && ! debugGraphLabelText[1].empty())
             {
@@ -7388,6 +7653,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                 eta  = debugGraphLabelText[1];
             }
 #endif
+        }
+        else
+        {
+            stability.shownRate.clear();
+            stability.shownEta.clear();
         }
         // Popup presentation uses only published recursive facts. A selected folder's 0/1
         // counter cannot stand in for the files and folders inside it, especially for Move
@@ -7421,17 +7691,29 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PrepareCardInformati
                         std::move(counts),
                         std::move(eta),
                         _smallFormat.get(),
-                        std::max(1.0f, width - (presentation.showDiscoveryActivity ? DipsToPixels(30.0f, _dpi) : 0.0f)));
+                        std::max(1.0f, width - (presentation.showDiscoveryActivity ? DipsToPixels(30.0f, _dpi) : 0.0f)),
+                        0.0f,
+                        &stability.countsStacked,
+                        tick,
+                        true);
         PrepareFactPair(information.throughput,
                         presentation.showThroughputGraph ? LoadStringResource(nullptr, IDS_FILEOPS_THROUGHPUT) : std::wstring{},
                         std::move(rate),
                         _bodyFormat.get(),
-                        std::max(1.0f, width - DipsToPixels(28.0f, _dpi)));
+                        std::max(1.0f, width - DipsToPixels(28.0f, _dpi)),
+                        0.0f,
+                        &stability.throughputStacked,
+                        tick,
+                        true);
         std::wstring concurrency;
         if (presentation.showWorkFacts && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE) && task.autoConcurrencyUsed &&
             task.effectiveConcurrencyBudget > 0u)
             concurrency = FormatStringResource(nullptr, IDS_FMT_FILEOPS_PARALLEL_TRANSFERS, task.effectiveConcurrencyBudget);
         PrepareFactPair(information.concurrency, std::move(concurrency), {}, _smallFormat.get(), width);
+        const bool concurrencyPresent = static_cast<bool>(information.concurrency.rate);
+        if (concurrencyPresent)
+            stability.concurrencyHeight = FactPairHeight(information.concurrency);
+        stability.concurrencyReservedHeight = stability.concurrencyRow.Update(concurrencyPresent, tick) ? stability.concurrencyHeight : 0.0f;
     }
 }
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(const D2D1_RECT_F& rect,
@@ -7616,6 +7898,7 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
             return ConflictActionText(static_cast<ConflictAction>(hit.data), bucket, operation);
         }
         case PopupHitTest::Kind::TaskIssues: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
+        case PopupHitTest::Kind::TaskCompletedAction: return CompletedOverflowCommandLabel(hit.data);
         case PopupHitTest::Kind::TaskDismiss: return LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS);
         case PopupHitTest::Kind::FooterOptions:
             return _controlsHost.HasFluentIconFont() ? std::wstring(1u, FluentIcons::kMore) : std::wstring(1u, FluentIcons::kFallbackMore);
@@ -7717,7 +8000,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureHostedFocusVis
     const int position = std::clamp(_scrollPos + static_cast<int>(std::ceil(delta)), 0, maximum);
     if (position != _scrollPos)
     {
-        _scrollPos = position;
+        // I63 slice F: revealing the focused control is a scroll request; a bar withheld for a pending resize is shown.
+        _scrollRequestedWhileWithheld = _scrollRequestedWhileWithheld || ! _scrollBarVisible;
+        _scrollPos                    = position;
         Invalidate(hwnd); // Reflow through the normal frame; never recurse into painting from focus callbacks.
     }
 }
@@ -8832,7 +9117,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
         button->SetVariant(HostedButtonVariant(hit.kind));
         button->SetMultiline(hit.kind == PopupHitTest::Kind::TaskConflictAction || hit.kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll ||
                              hit.kind == PopupHitTest::Kind::TaskIssues || hit.kind == PopupHitTest::Kind::TaskDismiss ||
-                             hit.kind == PopupHitTest::Kind::TaskCompletedMore);
+                             hit.kind == PopupHitTest::Kind::TaskCompletedMore || hit.kind == PopupHitTest::Kind::TaskCompletedAction);
         if (hit.kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll)
         {
             const auto task      = std::ranges::find(snapshot, hit.taskId, &TaskSnapshot::taskId);
@@ -9427,7 +9712,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     }
 
     if (! footerOnly)
-        PrepareCardInformation(snapshot, conflictActionWidthPx);
+        PrepareCardInformation(snapshot, conflictActionWidthPx, renderTick);
     std::vector<float> cardHeights;
     cardHeights.reserve(displayRows.size());
     if (! footerOnly)
@@ -9516,7 +9801,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 TaskUsesSkippedCountingWorkSummary(task))
             {
                 const std::wstring summary = FormatDiscoveryProgressText(task);
-                const float summaryHeight  = MeasureWrappedTextHeight(_dwriteFactory.get(), _bodyFormat.get(), summary, conflictActionWidthPx, baseLineH);
+                const float summaryHeight =
+                    PrepareWrappedText(_cardInformationLayouts[row.taskIndex].summaryLayout, _bodyFormat.get(), summary, conflictActionWidthPx, baseLineH);
                 // Transfer cards formerly reserved two discovery rows. A skipped scan has one
                 // semantic summary, which may wrap at narrow widths or larger text sizes.
                 h += summaryHeight - (task.operation == FILESYSTEM_COPY ? 2.0f : 0.0f) * baseLineH;
@@ -9570,21 +9856,25 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
             }
             if (! displayCollapsed && ! task.conflict.active)
             {
-                const auto& information = _cardInformationLayouts[row.taskIndex];
+                auto& information                    = _cardInformationLayouts[row.taskIndex];
+                TaskLayoutStability& layoutStability = _taskLayoutStability[task.taskId];
                 if (! task.finished && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE))
                 {
                     const auto progress = ResolveWholeTaskProgressPresentation(task);
                     const float summaryHeight =
                         ! progress.showWorkFacts ? 0.0f
                         : TaskUsesSkippedCountingWorkSummary(task)
-                            ? MeasureWrappedTextHeight(
-                                  _dwriteFactory.get(), _bodyFormat.get(), FormatDiscoveryProgressText(task), conflictActionWidthPx, baseLineH)
+                            ? PrepareWrappedText(
+                                  information.summaryLayout, _bodyFormat.get(), FormatDiscoveryProgressText(task), conflictActionWidthPx, baseLineH)
                             : FactPairHeight(information.progress) + DipsToPixels(4.0f, _dpi);
-                    size_t streams = 0u;
-                    for (size_t stream = 0u; progress.showTransferProgress && progress.transferActive && stream < task.inFlightFileCount; ++stream)
-                        if (FileProgressIsVisible(task.inFlightFiles[stream], renderTick))
-                            ++streams;
-                    const float pathHeight = (static_cast<float>(std::max<size_t>(1u, streams)) + 1.0f) * baseLineH + fromToGapY;
+                    // I63 slice F: each stream is drawn in its engine slot (F1), so the rows needed are the highest visible slot
+                    // plus one. The card keeps the rows it needed until they have gone unused for the hold, one row at a time. A
+                    // row without a stream (an empty slot below a live one, or a reserved row) stays blank.
+                    InFlightStreamRows visibleStreams{};
+                    const size_t streams =
+                        progress.showTransferProgress && progress.transferActive ? ResolveVisibleStreamRows(task, renderTick, visibleStreams) : 0u;
+                    layoutStability.reservedStreamRows = layoutStability.streamRows.Update(std::max<size_t>(1u, streams), renderTick);
+                    const float pathHeight             = (static_cast<float>(layoutStability.reservedStreamRows) + 1.0f) * baseLineH + fromToGapY;
                     const float countsHeight =
                         information.counts.rate || information.counts.eta ? FactPairHeight(information.counts) + DipsToPixels(4.0f, _dpi) : 0.0f;
                     const float progressHeight = progress.showTransferProgress ? DipsToPixels(26.0f, _dpi) : DipsToPixels(8.0f, _dpi);
@@ -9594,10 +9884,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                                      : 0.0f;
                     h = DipsToPixels(8.0f + 18.0f + 8.0f + 24.0f + 10.0f, _dpi) + summaryHeight + countsHeight + progressHeight + pathHeight + plotHeight;
                 }
-                if (information.concurrency.rate)
-                    h += FactPairHeight(information.concurrency) + DipsToPixels(6.0f, _dpi);
-                if (information.waitingReason.rate)
-                    h += FactPairHeight(information.waitingReason) + DipsToPixels(4.0f, _dpi);
+                // I63 slice F: both note rows stay reserved, blank, for the hold after their text went away.
+                if (layoutStability.concurrencyReservedHeight > 0.0f)
+                    h += layoutStability.concurrencyReservedHeight + DipsToPixels(6.0f, _dpi);
+                if (layoutStability.waitingReasonReservedHeight > 0.0f)
+                    h += layoutStability.waitingReasonReservedHeight + DipsToPixels(4.0f, _dpi);
             }
             // Decision content changes immediately (metadata/inspection outcomes).
             // Snap its measured height too; interpolating a shorter previous card
@@ -9667,11 +9958,27 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
         LayoutChrome(width, height, showPauseResumeAll, showCancelAll, globalSummaryText);
 
-        const float viewH              = std::max(0.0f, _listViewportRect.bottom - _listViewportRect.top);
-        const bool shouldShowScrollBar = ! footerOnly && _contentHeight > viewH;
+        const float viewH = std::max(0.0f, _listViewportRect.bottom - _listViewportRect.top);
+        // I63 slice F: the bar is decided for the viewport the window is about to have, so a pending or running automatic
+        // resize that will make the content fit does not flash a bar, and one that cannot does not hold the bar back.
+        float pendingResizeDelta = 0.0f;
+        if (_autoResizePending || _autoResizeAnimating)
+        {
+            RECT windowRect{};
+            if (GetWindowRect(hwnd, &windowRect) != FALSE)
+            {
+                const RECT& target = _autoResizeAnimating ? _autoResizeAnimationTargetRect : _autoResizePendingTargetRect;
+                pendingResizeDelta = static_cast<float>((target.bottom - target.top) - (windowRect.bottom - windowRect.top));
+            }
+        }
+        if (footerOnly || _contentHeight <= viewH)
+            _scrollRequestedWhileWithheld = false;
+        const bool shouldShowScrollBar =
+            ! footerOnly && FileOperationsLayoutStability::ScrollBarNeeded(_contentHeight, viewH, pendingResizeDelta, _scrollRequestedWhileWithheld);
         if (shouldShowScrollBar != _scrollBarVisible)
         {
             _scrollBarVisible = shouldShowScrollBar;
+            Debug::Perf::EmitCounter(L"FileOps.Popup.ScrollBarToggles");
             if (! shouldShowScrollBar)
             {
                 _scrollPos = 0;
@@ -11202,15 +11509,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             continue;
                         const auto& local = actions.bounds[index];
                         PopupButton action{};
-                        action.bounds = D2D1::RectF(textX + DipsToPixels(local.left, _dpi),
-                                                    dismissButtonTop + DipsToPixels(local.top, _dpi),
-                                                    textX + DipsToPixels(local.right, _dpi),
-                                                    dismissButtonTop + DipsToPixels(local.bottom, _dpi));
-                        action.hit    = {kinds[index], task.taskId, index == 2u ? 2u : 0u};
+                        action.bounds           = D2D1::RectF(textX + DipsToPixels(local.left, _dpi),
+                                                              dismissButtonTop + DipsToPixels(local.top, _dpi),
+                                                              textX + DipsToPixels(local.right, _dpi),
+                                                              dismissButtonTop + DipsToPixels(local.bottom, _dpi));
+                        const bool directAction = index == 2u && actions.directCommand != 0u;
+                        action.hit              = directAction ? PopupHitTest{PopupHitTest::Kind::TaskCompletedAction, task.taskId, actions.directCommand}
+                                                               : PopupHitTest{kinds[index], task.taskId, index == 2u ? 2u : 0u};
                         _buttons.push_back(action);
                         // Retained DxUi buttons own the measured, wrapped Body caption.
                         // Paint only the fallback chrome here, without a duplicate small label.
-                        if (index == 2u)
+                        if (index == 2u && ! directAction)
                             DrawMenuButton(action, nullptr, {});
                         else
                             DrawButton(action, nullptr, {});
@@ -11235,7 +11544,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const bool priorityTransfer = ! task.conflict.active && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
                 float primaryProgressTop    = 0.0f;
                 D2D1_RECT_F primaryEtaRect{};
-                const bool skippedCountingSummary = TaskUsesSkippedCountingWorkSummary(task);
+                const bool skippedCountingSummary          = TaskUsesSkippedCountingWorkSummary(task);
+                const TaskLayoutStability& layoutStability = _taskLayoutStability[task.taskId];
                 if (priorityTransfer && information.progress.rate && ! skippedCountingSummary)
                 {
                     textY += DipsToPixels(4.0f, _dpi);
@@ -11251,10 +11561,20 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 if (skippedCountingSummary && compactProgressPresentation.showWorkFacts)
                 {
                     const std::wstring summaryText = FormatDiscoveryProgressText(task);
-                    const float summaryHeight      = MeasureWrappedTextHeight(_dwriteFactory.get(), _bodyFormat.get(), summaryText, textMaxW, lineH);
-                    const D2D1_RECT_F summaryRc    = D2D1::RectF(textX, textY, textX + textMaxW, textY + summaryHeight);
-                    static_cast<void>(
-                        DrawWrappedText(_dwriteFactory.get(), _target.get(), _bodyFormat.get(), _subTextBrush.get(), summaryText, summaryRc, lineH));
+                    WrappedTextCache& summaryCache = _cardInformationLayouts[row.taskIndex].summaryPaint;
+                    // The card's height was measured with the scrollbar gutter reserved (conflictActionWidthPx). The text
+                    // wraps at that same width here: at the card's full width, with no scrollbar, it could take fewer
+                    // lines than the height holds and leave an empty line.
+                    const float summaryWrapW    = std::min(textMaxW, conflictActionWidthPx);
+                    const float summaryHeight   = PrepareWrappedText(summaryCache, _bodyFormat.get(), summaryText, summaryWrapW, lineH);
+                    const D2D1_RECT_F summaryRc = D2D1::RectF(textX, textY, textX + summaryWrapW, textY + summaryHeight);
+                    // I63 S7: the measured layout is drawn as it is; without one (empty text, a failed layout) the uncached path draws.
+                    if (summaryCache.layout && _subTextBrush)
+                        _target->DrawTextLayout(
+                            D2D1::Point2F(summaryRc.left, summaryRc.top), summaryCache.layout.get(), _subTextBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    else
+                        static_cast<void>(
+                            DrawWrappedText(_dwriteFactory.get(), _target.get(), _bodyFormat.get(), _subTextBrush.get(), summaryText, summaryRc, lineH));
                     _hostedTooltipDescriptors.push_back({.bounds       = summaryRc,
                                                          .text         = summaryText,
                                                          .automationId = std::format(L"FileOperations.Task.{}.WorkSummary", task.taskId),
@@ -11466,6 +11786,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     DrawFactPair(information.waitingReason, bounds, task.taskId, L"WaitingReason", {});
                     textY = bounds.bottom + DipsToPixels(4.0f, _dpi);
                 }
+                else if (! task.conflict.active && layoutStability.waitingReasonReservedHeight > 0.0f)
+                    textY += layoutStability.waitingReasonReservedHeight + DipsToPixels(4.0f, _dpi);
                 // A decision replaces ordinary transfer details. Keeping both here
                 // exposes stale paths and a moving mini-progress above the conflict.
                 if (! task.conflict.active)
@@ -11521,49 +11843,53 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         const bool showInFlightFiles = compactProgressPresentation.showTransferProgress && compactProgressPresentation.transferActive &&
                                                        (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
 
-                        std::array<size_t, TaskSnapshot::kMaxInFlightFiles> activeInFlightIndices{};
-                        size_t activeInFlightCount = 0;
-                        if (showInFlightFiles)
-                        {
-                            for (size_t j = 0; j < task.inFlightFileCount && activeInFlightCount < activeInFlightIndices.size(); ++j)
-                            {
-                                const auto& entry = task.inFlightFiles[j];
-                                if (FileProgressIsVisible(entry, nowTick))
-                                {
-                                    activeInFlightIndices[activeInFlightCount] = j;
-                                    ++activeInFlightCount;
-                                }
-                            }
-                        }
-
-                        const size_t inFlightCount = showInFlightFiles ? std::max<size_t>(1u, activeInFlightCount) : 1u;
-                        // Q7: the task publishes one stable source region, on the first row. The other
-                        // active streams are painted rows and are named in that region's help text.
+                        // I63 slice F (F1): each stream is drawn in the row of its engine slot, so a row never shows another file
+                        // while its stream runs. A slot below the highest visible one without a visible stream is a blank row.
+                        InFlightStreamRows slotRows{};
+                        const size_t streamRowCount = showInFlightFiles ? ResolveVisibleStreamRows(task, nowTick, slotRows) : 0u;
+                        // Q7: the task publishes one stable source region, on the first painted stream row (the lowest occupied
+                        // slot). The other active streams are painted rows and are named in that region's help text, in slot order.
+                        const TaskSnapshot::InFlightFileSnapshot* firstStream = nullptr;
+                        size_t activeInFlightCount                            = 0u;
                         std::wstring otherStreams;
-                        for (size_t i = 1u; showInFlightFiles && i < activeInFlightCount; ++i)
+                        for (size_t slot = 0u; slot < streamRowCount; ++slot)
                         {
+                            const TaskSnapshot::InFlightFileSnapshot* const slotStream = slotRows[slot];
+                            if (slotStream == nullptr)
+                                continue;
+                            ++activeInFlightCount;
+                            if (firstStream == nullptr)
+                            {
+                                firstStream = slotStream;
+                                continue;
+                            }
                             if (! otherStreams.empty())
                                 otherStreams += L'\n';
-                            otherStreams += task.inFlightFiles[activeInFlightIndices[i]].sourcePath;
+                            otherStreams += slotStream->sourcePath;
                         }
 
+                        const size_t inFlightCount = streamRowCount > 0u ? streamRowCount : 1u;
                         for (size_t i = 0; i < inFlightCount; ++i)
                         {
                             std::wstring_view sourcePathText;
-                            uint64_t fileTotalBytes                                 = 0;
-                            uint64_t fileCompletedBytes                             = 0;
-                            const TaskSnapshot::InFlightFileSnapshot* inFlightEntry = nullptr;
-
-                            const bool hasActiveInFlight = showInFlightFiles && activeInFlightCount > 0;
-                            const bool useInFlightEntry  = hasActiveInFlight && i < activeInFlightCount;
+                            uint64_t fileTotalBytes                                       = 0;
+                            uint64_t fileCompletedBytes                                   = 0;
+                            const TaskSnapshot::InFlightFileSnapshot* const inFlightEntry = streamRowCount > 0u ? slotRows[i] : nullptr;
+                            const bool useInFlightEntry                                   = inFlightEntry != nullptr;
+                            if (streamRowCount > 0u && ! useInFlightEntry)
+                            {
+                                // An empty slot below a live stream: a blank row, with no label, path, bar or region.
+                                textY += lineH;
+                                continue;
+                            }
+                            // The source label and the source region sit on the first painted row.
+                            const bool regionRow = useInFlightEntry ? inFlightEntry == firstStream : i == 0u;
 
                             if (useInFlightEntry)
                             {
-                                const auto& entry  = task.inFlightFiles[activeInFlightIndices[i]];
-                                inFlightEntry      = &entry;
-                                sourcePathText     = entry.sourcePath;
-                                fileTotalBytes     = entry.totalBytes;
-                                fileCompletedBytes = entry.completedBytes;
+                                sourcePathText     = inFlightEntry->sourcePath;
+                                fileTotalBytes     = inFlightEntry->totalBytes;
+                                fileCompletedBytes = inFlightEntry->completedBytes;
                             }
                             else
                             {
@@ -11581,7 +11907,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 else if (inFlightEntry->phase == FileSystemFileWorkPhase::Verifying)
                                     rowLabel = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_VERIFYING);
                             }
-                            if (i == 0u || rowLabel != fromLabel)
+                            if (regionRow || rowLabel != fromLabel)
                             {
                                 const D2D1_RECT_F fromRc = D2D1::RectF(textX, textY, textX + labelW, textY + lineH);
                                 _target->DrawTextW(rowLabel.data(),
@@ -11603,10 +11929,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             }
 
                             // If nothing is actively copying (e.g., end-of-file or finalization), avoid showing a "stuck at 100%" mini bar.
-                            if (! showInFlightFiles || (! useInFlightEntry && fileTotalBytes > 0 && fileCompletedBytes >= fileTotalBytes))
+                            // I63 slice F: a finished file's row keeps the bar column, drawing nothing in it, so the path column does not
+                            // widen and re-truncate when the file completes.
+                            if (! showInFlightFiles)
                             {
                                 miniBarW = 0.0f;
                             }
+                            const bool drawMiniBar = showInFlightFiles && (useInFlightEntry || fileTotalBytes == 0 || fileCompletedBytes < fileTotalBytes);
 
                             const float barRight = rightEdge;
                             const float barLeft  = barRight - miniBarW;
@@ -11623,7 +11952,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                                _textBrush.get(),
                                                D2D1_DRAW_TEXT_OPTIONS_CLIP);
 
-                            if (i == 0u)
+                            if (regionRow)
                                 addPathRegion(
                                     fromPathRc,
                                     fromLabel,
@@ -11636,7 +11965,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                         : FormatStringResource(
                                               nullptr, IDS_FMT_FILEOPS_PATH_OTHER_STREAMS, fromLabel, sourcePathText, activeInFlightCount - 1u, otherStreams));
 
-                            if (miniBarW > 0.0f && _progressBgBrush && _progressGlobalBrush && _progressItemBrush && _progressVerifyBrush)
+                            if (drawMiniBar && miniBarW > 0.0f && _progressBgBrush && _progressGlobalBrush && _progressItemBrush && _progressVerifyBrush)
                             {
                                 const float barTop          = textY + (lineH - miniBarH) * 0.5f;
                                 const D2D1_RECT_F miniBarRc = D2D1::RectF(barLeft, barTop, barRight, barTop + miniBarH);
@@ -11715,6 +12044,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             textY += lineH;
                         }
 
+                        // I63 slice F: the rows the card still reserves for streams that ended stay blank.
+                        if (layoutStability.reservedStreamRows > inFlightCount)
+                            textY += static_cast<float>(layoutStability.reservedStreamRows - inFlightCount) * lineH;
+
                         textY += fromToGapY;
 
                         const std::wstring& toLabel = destinationLabel;
@@ -11760,8 +12093,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                                           : 0.0f;
                 const float buttonsHeight           = hasConflictPrompt ? (conflictButtonsHeight + conflictApplyLineHeight) : buttonH;
 
-                const float noteHeight =
-                    ! hasConflictPrompt && information.concurrency.rate ? FactPairHeight(information.concurrency) + DipsToPixels(6.0f, _dpi) : 0.0f;
+                const float noteHeight      = ! hasConflictPrompt && layoutStability.concurrencyReservedHeight > 0.0f
+                                                  ? layoutStability.concurrencyReservedHeight + DipsToPixels(6.0f, _dpi)
+                                                  : 0.0f;
                 const float buttonRowBottom = cardRect.bottom - bottomPadding - noteHeight;
                 const float buttonRowTop    = buttonRowBottom - buttonsHeight;
 #ifdef ENABLE_TESTS
@@ -13090,6 +13424,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowQueueModeMenu(HW
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
+    NoteFlyoutOpening(items);
     static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
                                                    point,
                                                    items,
@@ -13145,6 +13480,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
+    NoteFlyoutOpening(items);
     static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
                                                    point,
                                                    items,
@@ -13264,6 +13600,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
+    NoteFlyoutOpening(items);
     static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
                                                    pt,
                                                    items,
@@ -13503,66 +13840,26 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
     const auto taskIt                        = std::find_if(snapshot.begin(), snapshot.end(), [taskId](const TaskSnapshot& task) noexcept {
         return task.kind == TaskSnapshot::Kind::FileOperation && task.taskId == taskId && task.finished;
     });
-    if (taskIt == snapshot.end() || ! CompletedTaskHasOverflowActions(*taskIt))
+    if (taskIt == snapshot.end())
+    {
+        return;
+    }
+
+    // The card shows this menu button only for two or more commands; a single one is its own button.
+    const CompletedOverflowCommands commands = BuildCompletedOverflowCommands(*taskIt);
+    if (commands.count < 2u)
     {
         return;
     }
 
     std::vector<DxUi::MenuFlyoutItem> items;
-    items.reserve(8u);
-
-    // I35 R5.3: Show log and Export issues follow any retained diagnostic (notes included), never the
-    // informational-notes display setting; the export always contains everything.
-    const bool hasDiagnostics = ! taskIt->interruptedMoveNotice && (taskIt->warningCount > 0 || taskIt->errorCount > 0 || taskIt->hasRetainedDiagnostics);
-
-    if (ResolveCompletedTaskRevealLocation(*taskIt).has_value())
+    items.reserve(commands.count);
+    for (size_t index = 0u; index < commands.count; ++index)
     {
-        DxUi::MenuFlyoutItem revealItem{};
-        revealItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_REVEAL_ITEM);
-        revealItem.commandId = static_cast<int>(kCompletedOverflowActionRevealDestination);
-        items.push_back(std::move(revealItem));
-    }
-
-    if (taskIt->hasSourceActionPaths)
-    {
-        DxUi::MenuFlyoutItem openSourceItem{};
-        openSourceItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_OPEN_SOURCE);
-        openSourceItem.commandId = static_cast<int>(kCompletedOverflowActionOpenSource);
-        items.push_back(std::move(openSourceItem));
-    }
-
-    if (taskIt->exactRetainedSourceActionAvailable)
-    {
-        DxUi::MenuFlyoutItem selectRetainedItem{};
-        selectRetainedItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_SELECT_RETAINED);
-        selectRetainedItem.commandId = static_cast<int>(kCompletedOverflowActionSelectRetained);
-        items.push_back(std::move(selectRetainedItem));
-
-        DxUi::MenuFlyoutItem cutRetainedItem{};
-        cutRetainedItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_CUT_RETAINED_AGAIN);
-        cutRetainedItem.commandId = static_cast<int>(kCompletedOverflowActionCutRetainedAgain);
-        items.push_back(std::move(cutRetainedItem));
-    }
-
-    if (CompletedTaskCanUseDestinationActions(*taskIt))
-    {
-        DxUi::MenuFlyoutItem openDestinationItem{};
-        openDestinationItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_OPEN_DESTINATION);
-        openDestinationItem.commandId = static_cast<int>(kCompletedOverflowActionOpenDestination);
-        items.push_back(std::move(openDestinationItem));
-    }
-
-    if (hasDiagnostics)
-    {
-        DxUi::MenuFlyoutItem showLogItem{};
-        showLogItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_SHOW_LOG);
-        showLogItem.commandId = static_cast<int>(kCompletedOverflowActionShowLog);
-        items.push_back(std::move(showLogItem));
-
-        DxUi::MenuFlyoutItem exportIssuesItem{};
-        exportIssuesItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_EXPORT_ISSUES);
-        exportIssuesItem.commandId = static_cast<int>(kCompletedOverflowActionExportIssues);
-        items.push_back(std::move(exportIssuesItem));
+        DxUi::MenuFlyoutItem item{};
+        item.text      = CompletedOverflowCommandLabel(commands.ids[index]);
+        item.commandId = static_cast<int>(commands.ids[index]);
+        items.push_back(std::move(item));
     }
 
     DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
@@ -13573,6 +13870,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
+    NoteFlyoutOpening(items);
     static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
                                                    pt,
                                                    items,
@@ -13708,6 +14006,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
+    NoteFlyoutOpening(items);
     static_cast<void>(
         DxUi::ContextMenu::ShowAsync(hwnd,
                                      pt,
@@ -14539,7 +14838,13 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnTimer(HWND hwnd
             return 0;
         }
 
-        UpdateRates();
+        // I63 slice F: the rate history advances once per telemetry interval, not on every 16 ms motion tick.
+        const ULONGLONG rateTick = GetTickCount64();
+        if (rateTick < _lastRateUpdateTick || rateTick - _lastRateUpdateTick >= kRateUpdateMinGapMs)
+        {
+            UpdateRates();
+            _lastRateUpdateTick = rateTick;
+        }
         Invalidate(hwnd);
     }
     return 0;
@@ -14587,8 +14892,17 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnVScroll(HWND hw
         return 0;
     }
 
-    const int page     = std::max(1, static_cast<int>(si.nPage));
-    const int maxPos   = std::max(0, si.nMax - page + 1);
+    const int page = std::max(1, static_cast<int>(si.nPage));
+    int maxPos     = std::max(0, si.nMax - page + 1);
+    if (! _scrollBarVisible)
+    {
+        // I63 slice F: the bar is withheld for a pending automatic resize and the native range says "fits". The request
+        // is not held back: it uses the content's own range, and the next frame shows the bar.
+        maxPos = ModelMaxScrollPosition();
+        if (maxPos == 0)
+            return 0;
+        _scrollRequestedWhileWithheld = true;
+    }
     const int lineStep = std::max(1, DipsToPixels(36, _dpi));
     const int pageStep = page;
 
@@ -15011,6 +15325,14 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
         return 0;
     }
 
+    if (hit.kind == PopupHitTest::Kind::TaskCompletedAction)
+    {
+        // The command route validates the task and the command against the current snapshot.
+        static_cast<void>(SubmitCompletedOverflowAction(hwnd, hit.taskId, hit.data, true));
+        Invalidate(hwnd);
+        return 0;
+    }
+
     if (hit.kind == PopupHitTest::Kind::TaskShowLog)
     {
         if (fileOps)
@@ -15125,7 +15447,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
         return SubmitConflictOverflowAction(hwnd, payload->taskId, payload->data, generation) ? 1 : 0;
     }
 
-    if (payload->kind == PopupHitTest::Kind::TaskCompletedMore && payload->data != 0u)
+    if ((payload->kind == PopupHitTest::Kind::TaskCompletedMore || payload->kind == PopupHitTest::Kind::TaskCompletedAction) && payload->data != 0u)
     {
         return SubmitCompletedOverflowAction(hwnd, payload->taskId, payload->data, false) ? 1 : 0;
     }
@@ -15344,6 +15666,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     result.hostedPreviousFocusTargetId          = _debugPreviousFocusTargetId;
     result.hostedLastFocusTargetId              = _debugLastFocusTargetId;
     result.scrollPosition                       = _scrollPos;
+    result.scrollBarVisible                     = _scrollBarVisible;
     result.pendingFocusReveal                   = _pendingFocusReveal.has_value();
     result.listViewportRect                     = _listViewportRect;
     if (const auto* focusedControl = _controlsHost.GetFocusControl())
@@ -15607,6 +15930,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             result.taskPaintedTransferColor          = painted->second.transferColor;
             result.taskPaintedTransferCompletedBytes = painted->second.transferCompletedBytes;
         }
+        if (const auto stability = _taskLayoutStability.find(taskIt->taskId); stability != _taskLayoutStability.end())
+            result.taskReservedStreamRows = stability->second.reservedStreamRows;
         if (const auto animation = _taskHeightAnimations.find(taskIt->taskId); animation != _taskHeightAnimations.end())
         {
             result.selectedTaskHeightMotionActive = scalarAnimationActive(animation->second.height);
@@ -15981,11 +16306,12 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
         labelFits = false;
         if (index >= _hostedButtons.size() || ! _hostedButtons[index] || ! rectHasArea(button.bounds))
             return false;
-        const DxUi::Button& hosted      = *_hostedButtons[index];
-        const bool more                 = button.hit.kind == PopupHitTest::Kind::TaskCompletedMore;
-        const UINT labelId              = static_cast<UINT>(button.hit.kind == PopupHitTest::Kind::TaskIssues ? IDS_FILEOPS_BTN_ISSUES
-                                                            : more                                            ? IDS_FILEOPS_CONFLICT_BTN_MORE
-                                                                                                              : IDS_FILEOP_BTN_DISMISS);
+        const DxUi::Button& hosted = *_hostedButtons[index];
+        const bool more            = button.hit.kind == PopupHitTest::Kind::TaskCompletedMore;
+        const UINT labelId = static_cast<UINT>(button.hit.kind == PopupHitTest::Kind::TaskIssues            ? IDS_FILEOPS_BTN_ISSUES
+                                               : more                                                       ? IDS_FILEOPS_CONFLICT_BTN_MORE
+                                               : button.hit.kind == PopupHitTest::Kind::TaskCompletedAction ? CompletedOverflowCommandLabelId(button.hit.data)
+                                                                                                            : IDS_FILEOP_BTN_DISMISS);
         const std::wstring label        = LoadStringResource(nullptr, labelId);
         const std::wstring expectedText = more ? L"\u2026" : label;
         const auto actualBounds         = hosted.GetBounds();
@@ -16108,6 +16434,18 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                 if (result.found && button.hit.taskId == result.taskId)
                 {
                     result.completedExportIssuesVisible = true;
+                    ++result.completedVisibleActionCount;
+                }
+                break;
+            case PopupHitTest::Kind::TaskCompletedAction:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.completedActionRowFits = result.completedActionRowFits && completedActionOrdinal == (result.completedIssuesVisible ? 2u : 1u);
+                    ++completedActionOrdinal;
+                    result.completedDirectActionVisible = true;
+                    result.completedDirectActionCommand = button.hit.data;
+                    bool labelFits                      = false;
+                    result.completedActionRowFits       = result.completedActionRowFits && completedActionFits(i, button, labelFits);
                     ++result.completedVisibleActionCount;
                 }
                 break;
@@ -16369,9 +16707,15 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnMouseWheel(HWND
     si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
     if (GetScrollInfo(hwnd, SB_VERT, &si))
     {
-        const int page   = std::max(1, static_cast<int>(si.nPage));
-        const int maxPos = std::max(0, si.nMax - page + 1);
-        _scrollPos       = std::clamp(_scrollPos - steps * step, 0, maxPos);
+        const int page = std::max(1, static_cast<int>(si.nPage));
+        int maxPos     = std::max(0, si.nMax - page + 1);
+        if (! _scrollBarVisible && steps != 0)
+        {
+            // I63 slice F: as for WM_VSCROLL, a wheel step is not held back by a withheld bar.
+            maxPos                        = ModelMaxScrollPosition();
+            _scrollRequestedWhileWithheld = maxPos != 0;
+        }
+        _scrollPos = std::clamp(_scrollPos - steps * step, 0, maxPos);
 
         SCROLLINFO set{};
         set.cbSize = sizeof(set);
@@ -16410,6 +16754,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnShowWindow(HWND
                 _inspectionReturn->invokingHit.taskId, _inspectionReturn->invokingHit.promptGeneration, _inspectionReturn->context))
         {
             _scrollPos                      = _inspectionReturn->scrollPos;
+            _scrollRequestedWhileWithheld   = _scrollRequestedWhileWithheld || (_scrollPos != 0 && ! _scrollBarVisible);
             _inspectionReturn->restoreFocus = true;
             Invalidate(hwnd);
         }
@@ -17738,7 +18083,7 @@ std::wstring DebugBuildFileOperationsTaskHeaderText(const FileOperationsPopupInt
 
 std::wstring DebugFormatFileOperationsConflictTimestamp(__int64 fileTime) noexcept
 {
-    return FormatFileTimeLocalCompact(fileTime);
+    return FileOperations::FormatConflictPromptFileTime(fileTime);
 }
 
 std::wstring DebugFormatFileOperationsDiscoveryProgress(const FileOperationsPopupInternal::TaskSnapshot& task)

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "role": "ControlledOwnedSyntheticArchiveInspectionComparison",
+  "nativeProductQualification": false,
+  "organizationAccelerationTargetQualified": false,
+  "files": 1024,
+  "bytesPerPayload": 1024,
+  "warmup": {
+    "mode": "RepeatedFullInspection",
+    "elapsedMilliseconds": 1017.288
+  },
+  "rounds": [
+    {
+      "mode": "RepeatedFullInspection",
+      "elapsedMilliseconds": 726.8263,
+      "round": 1
+    },
+    {
+      "mode": "RecordedRefusal",
+      "elapsedMilliseconds": 27.3056,
+      "round": 1
+    },
+    {
+      "mode": "RecordedRefusal",
+      "elapsedMilliseconds": 19.826,
+      "round": 2
+    },
+    {
+      "mode": "RepeatedFullInspection",
+      "elapsedMilliseconds": 773.0123,
+      "round": 2
+    },
+    {
+      "mode": "RepeatedFullInspection",
+      "elapsedMilliseconds": 807.487,
+      "round": 3
+    },
+    {
+      "mode": "RecordedRefusal",
+      "elapsedMilliseconds": 26.9841,
+      "round": 3
+    }
+  ],
+  "untouchedPayload": true,
+  "unchangedRefusalRecord": true,
+  "sourceCommit": "c45f3deba2b9edf555bc294b8775d9f56fdb2565",
+  "implementationSha256": "43eaf3b848a586f087aa2b21ff9d163e4e8118898ab624f29d9fa13ab8bdf6d6",
+  "fixtureOwnership": "Current-process owned; stale-owner behavior separately covered by actual exited-owner controls",
+  "scope": "Per-run archive inspection core; excludes startup process enumeration and unrelated archival"
+}

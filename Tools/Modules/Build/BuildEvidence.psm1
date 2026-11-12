@@ -519,16 +519,22 @@ function Get-RSBuildArtifactRecords {
         [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration,
         [Parameter(Mandatory = $true)][ValidateSet('x64', 'ARM64')][string]$Platform,
         [AllowEmptyString()][string]$ProjectName = '',
-        [AllowEmptyString()][string]$ResolvedProjectPath = ''
+        [AllowEmptyString()][string]$ResolvedProjectPath = '',
+        [string[]]$ProjectNames = @()
     )
 
     $output = [IO.Path]::GetFullPath($BuildOutputDir).TrimEnd('\')
     $declarations = @(Get-RSBuildArtifactManifestDeclarations -RepoRoot $RepoRoot `
         -BuildOutputDir $output -ArtifactManifestDir $ArtifactManifestDir `
         -Configuration $Configuration -Platform $Platform)
-    if (-not [string]::IsNullOrWhiteSpace($ProjectName) -and
-        @($declarations | Where-Object Project -eq $ProjectName).Count -eq 0) {
-        throw "No output declaration was produced for selected project '$ProjectName'."
+    $selectedNames = @($ProjectNames | Where-Object { $null -ne $_ })
+    if ($ProjectName -and $selectedNames.Count) { throw 'Use ProjectName or ProjectNames, not both.' }
+    if ($ProjectName) { $selectedNames += $ProjectName }
+    foreach ($selectedName in $selectedNames) {
+        if ([string]::IsNullOrWhiteSpace($selectedName) -or
+            @($declarations | Where-Object Project -eq $selectedName).Count -ne 1) {
+            throw "No unique output declaration was produced for selected project '$selectedName'."
+        }
     }
 
     $extraByProject = @{}
@@ -608,7 +614,7 @@ function Get-RSBuildArtifactRecords {
             $_.FullName -notlike "*\receipts\*" -and $_.Extension -in @('.exe', '.dll') -and
             -not $declaredBinaryPaths.Contains($_.FullName)
         } | Sort-Object FullName)
-    if ([string]::IsNullOrWhiteSpace($ProjectName) -and $unknownBinaries.Count -gt 0) {
+    if (-not $selectedNames.Count -and $unknownBinaries.Count -gt 0) {
         throw "Ungoverned executable or DLL remains in the selected build output: $($unknownBinaries.FullName -join ', ')"
     }
 
@@ -621,8 +627,8 @@ function Get-RSBuildArtifactRecords {
         }
         $record = New-RSBuildArtifactRecord -RepoRoot $RepoRoot -LiteralPath $path -RuntimeClosure $recordClosure
         if (-not $targetByPath.ContainsKey($path) -and $record.role -eq 'plugin') { $record.role = 'library' }
-        if (-not [string]::IsNullOrWhiteSpace($ProjectName) -and
-            $targetByPath.ContainsKey($path) -and $targetByPath[$path].Project -eq $ProjectName -and
+        if ($selectedNames.Count -and
+            $targetByPath.ContainsKey($path) -and $targetByPath[$path].Project -in $selectedNames -and
             [IO.Path]::GetExtension($path) -eq '.exe') {
             $record.role = 'launchable'
         }
@@ -1013,14 +1019,24 @@ function Test-RSBuildReceiptForArtifactUse {
         [Parameter(Mandatory = $true)][string]$Platform,
         [Parameter(Mandatory = $true)][string]$Configuration,
         [Parameter(Mandatory = $true)][string]$RepoRoot,
-        [string[]]$RequiredRelativePath = @()
+        [string[]]$RequiredRelativePath = @(),
+        [string[]]$RequiredProjectSelection = @()
     )
 
     try { $null = Get-RSDxUiSourceIdentity -RepoRoot $RepoRoot } catch { return $false }
     if ($null -eq $Receipt) { return $false }
     try { $null = Assert-RSBuildReceiptSemantics -Receipt $Receipt } catch { return $false }
-    if ($Receipt.target -ne 'solution' -or
-        -not [bool]$Receipt.tests_enabled -or
+    if ($Receipt.target -ne 'solution') {
+        # Default readers still require a full solution. Selected readers must
+        # declare both their complete project union and the artifacts consumed.
+        if ($Receipt.target -cne 'selected-projects' -or -not $RequiredProjectSelection.Count -or -not $RequiredRelativePath.Count) { return $false }
+        $expectedProjects = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($project in $RequiredProjectSelection) {
+            if ([string]::IsNullOrWhiteSpace($project) -or -not $expectedProjects.Add($project.Replace('\', '/'))) { return $false }
+        }
+        if (-not $expectedProjects.SetEquals([string[]]@($Receipt.project_selection))) { return $false }
+    }
+    if (-not [bool]$Receipt.tests_enabled -or
         $Receipt.source_snapshot_id -ne $SourceSnapshot.SnapshotId -or
         $Receipt.git_head -ne $SourceSnapshot.GitHead -or
         $Receipt.platform -ne $Platform -or $Receipt.configuration -ne $Configuration) { return $false }

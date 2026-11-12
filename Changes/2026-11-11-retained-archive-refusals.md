@@ -1,0 +1,1 @@
+- Avoid repeatedly scanning historical runs whose unsafe links already prevented archival. Automatic startup preserves those runs through recorded refusals and reports a count; explicit archival still verifies the full current tree after repair. Existing owner/path checks, failed evidence, transient retries and current-run archive verification remain required.

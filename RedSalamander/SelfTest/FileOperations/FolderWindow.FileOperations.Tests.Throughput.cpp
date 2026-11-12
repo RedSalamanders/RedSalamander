@@ -605,7 +605,7 @@ constexpr std::array<MoveFixtureFile, 4> kMoveFixtureFiles{{
 }
 
 // Every name under `root` (recursively) with a stage or backup name shape (a Possible artifact: the
-// Local provider's .rs_copy_tmp_, the bridge's .rs_tmp_, ...); listing failures count as found.
+// Local provider's and the bridge's `.rs-tmp` stages or a `.rs-bak` backup); listing failures count as found.
 [[nodiscard]] std::vector<std::wstring> FindStageNames(const std::filesystem::path& root)
 {
     std::vector<std::wstring> found;
@@ -1844,7 +1844,7 @@ private:
         return {.passed = true};
     }
     // A leftover stage is a Possible artifact: deleting it asks the touch guard once and removes it.
-    const std::filesystem::path planted = target.root / L"payload.bin.rs_tmp_0123456789ABCDEF0123456789ABCDEF_0";
+    const std::filesystem::path planted = target.root / L"payload.bin.0123456789abcdef0123456789abcdef_0.rs-tmp";
     if (! WriteThroughputCorpusFile(planted, kMoveOldBytes, 7u))
         return {.reason = L"the planted stage could not be created"};
     HostResetTestPromptRequestCount();

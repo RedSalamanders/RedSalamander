@@ -276,6 +276,8 @@ Describe 'R0e command identity admission' {
 Describe 'R0e incomplete cohort retention' {
     It 'preserves run identity and log on archive failure and restores environment and location' {
         $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+        # Quarantine classification reruns this fixture inside the same canonical run.
+        # Retain each attempt's evidence without reusing its populated synthetic checkout.
         $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $repo -Harness R0ePester -Case ('PartialCommand-'+[guid]::NewGuid().ToString('N'))
         $script:fixtureRepo=Join-Path $scratch 'repo'; $script:fixtureEngine=Join-Path $scratch 'engine'
         foreach($dir in @($script:fixtureEngine,(Join-Path $script:fixtureRepo '.ci'),(Join-Path $script:fixtureRepo '.build'))) { [void][IO.Directory]::CreateDirectory($dir) }

@@ -118,6 +118,7 @@ class FileSystem final : public IFileSystem,
                          public IFileSystemCooperativeCopy,
                          public FileSystemRouteCapabilitiesBase,
                          public IFileSystemObjectBinding,
+                         public IFileSystemExpectedOccupantPublication,
                          public IFileSystemIdentityDelete,
                          public IFileSystemSearch,
                          public IFileSystemIO,
@@ -248,6 +249,19 @@ public:
 
     HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept override;
+    // IFileSystemExpectedOccupantPublication: Replace at a location that opens a file and cannot identify it.
+    HRESULT STDMETHODCALLTYPE ReadExpectedOccupant(const wchar_t* path, FileSystemExpectedOccupant* occupant) noexcept override;
+    HRESULT STDMETHODCALLTYPE PublishOverExpectedOccupant(IFileSystemBoundObject* ownedStage,
+                                                          const wchar_t* finalPath,
+                                                          const FileSystemExpectedOccupant* expected,
+                                                          FileSystemFlags flags,
+                                                          const FileSystemOptions* options,
+                                                          FileSystemConditionalMutationResult* result,
+                                                          IFileSystemBoundObject** published) noexcept override;
+    // I63 B7: the metadata classes of a file this location opens but cannot identify (a Move source).
+    HRESULT STDMETHODCALLTYPE ReadUnidentifiedMetadataFeatures(const wchar_t* path,
+                                                               const FileSystemOptions* options,
+                                                               uint32_t* presentFeatures) noexcept override;
     // I35 R7.3 (D-7.3): only for an object this location opens but cannot identify (no FileIdInfo, or an
     // all-zero id); ResolveDeleteIdentity refuses with ERROR_NOT_SUPPORTED an object BindObject can bind,
     // so a delete by name never replaces exact authority.

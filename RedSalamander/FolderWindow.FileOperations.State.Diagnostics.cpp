@@ -140,10 +140,18 @@ std::wstring FolderWindow::FileOperationState::FormatIssueProblemText(const Task
     // A prompt observation, and an accepted (also cached apply-to-all) decision without one,
     // name the same problem the card and pane prompt explained, including an unclassified error's
     // actual status rather than labelling a known Windows error as unknown.
+    // I63 D-5: a Move raises a Recycle refusal only when Delete source meets a source location without a Recycle Bin.
+    // The row says what the card asked (FormatConflictPromptText), not that a Recycle Bin delete failed.
+    const auto promptProblem = [&](FileOperations::ConflictClass bucket) noexcept
+    {
+        if (bucket == FileOperations::ConflictClass::RecycleFailed && issue.operation == FILESYSTEM_MOVE)
+            return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_MOVE_SOURCE_NO_RECYCLE_BIN);
+        return FileOperations::FormatConflictProblemText(bucket, issue.status, systemText);
+    };
     if (issue.conflictPrompt.has_value())
-        return FileOperations::FormatConflictProblemText(issue.conflictPrompt.value().bucket, issue.status, systemText);
+        return promptProblem(issue.conflictPrompt.value().bucket);
     if (issue.acceptedDecision.has_value())
-        return FileOperations::FormatConflictProblemText(issue.acceptedDecision.value().scope.bucket, issue.status, systemText);
+        return promptProblem(issue.acceptedDecision.value().scope.bucket);
     // Stable producer codes whose fact is a kept source, a retained cleanup item or a verification
     // outcome. Their status is often S_FALSE or a sentinel whose system message would misstate it.
     static constexpr std::array<std::pair<std::wstring_view, UINT>, 18> kProducerProblems{{
@@ -586,7 +594,14 @@ std::wstring FileOperations::FormatConflictActionLabel(ConflictAction action, Co
             }
         case ConflictAction::Retry: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_RETRY);
         case ConflictAction::KeepBoth: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_KEEP_BOTH);
-        case ConflictAction::Skip: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP);
+        case ConflictAction::DiscardSource: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_DISCARD_SOURCE);
+        case ConflictAction::SkipSameSizeAndDate: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP_SAME_SIZE_AND_DATE);
+        case ConflictAction::ReplaceOlder: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_REPLACE_OLDER);
+        case ConflictAction::Skip:
+            // I63 D-5: on a Move, the Recycle-refusal question is about the source; skipping it keeps the source.
+            return LoadStringResource(nullptr,
+                                      bucket == ConflictClass::RecycleFailed && operation == FILESYSTEM_MOVE ? IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE
+                                                                                                             : IDS_FILEOPS_CONFLICT_BTN_SKIP);
         case ConflictAction::SkipAll: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_SKIP_ALL);
         case ConflictAction::Cancel:
             return LoadStringResource(nullptr, bucket == ConflictClass::SameHostOverlap ? IDS_FILEOPS_CONSENT_BTN_DONT_START : IDS_FILEOP_BTN_CANCEL);
@@ -1698,11 +1713,16 @@ void FolderWindow::FileOperationState::EnqueueTaskDiagnostic(TaskDiagnosticEntry
         if (entry.severity == DiagnosticSeverity::Warning || entry.severity == DiagnosticSeverity::Error)
         {
             auto& counts = _taskDiagnosticCounts[entry.taskId];
+            // I63 B5: the counters count problems, not records. The trailing task.result Error
+            // restates a failure that an Error of this task already explains, so it is not counted
+            // a second time; when it is the only Error it is the only account of the failure and
+            // counts. The record itself is kept either way.
+            const bool restatedResult = entry.severity == DiagnosticSeverity::Error && counts.second != 0u && entry.category == L"task.result";
             if (entry.severity == DiagnosticSeverity::Warning)
             {
                 ++counts.first;
             }
-            else
+            else if (! restatedResult)
             {
                 ++counts.second;
             }
@@ -1855,6 +1875,13 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.clipboardMoveAdmission                   = task._clipboardMoveAdmission;
     summary.clipboardMoveConsumed                    = task._clipboardMoveConsumed.load(std::memory_order_acquire);
     summary.clipboardMoveConsumptionStatus           = task._clipboardMoveConsumptionStatus.load(std::memory_order_acquire);
+    summary.alreadyThereSourceRemovedCount           = static_cast<unsigned long>(
+        std::min<uint64_t>(task._alreadyThereSourceRemovedCount.load(std::memory_order_acquire), std::numeric_limits<unsigned long>::max()));
+    // I63 B6: the items the bulk policies decided. Skipped ones are also ordinary skips in skippedItemCount.
+    summary.skippedSameSizeAndDateCount = static_cast<unsigned long>(
+        std::min<uint64_t>(task._skippedSameSizeAndDateCount.load(std::memory_order_acquire), std::numeric_limits<unsigned long>::max()));
+    summary.replacedOlderCount =
+        static_cast<unsigned long>(std::min<uint64_t>(task._replacedOlderCount.load(std::memory_order_acquire), std::numeric_limits<unsigned long>::max()));
 
     bool anySkipped              = false;
     bool anyCompleted            = false;
@@ -2084,6 +2111,13 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     {
         setResultSummary(summary.retainedSourceNativeCount == summary.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
                                                                                           : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT);
+    }
+    else if (summary.operation == FILESYSTEM_MOVE && summary.alreadyThereSourceRemovedCount > 0u && summary.publishedItemCount == 0u &&
+             summary.retainedSourceCount == 0u && summary.failedItemCount == 0u && ! anySkipped)
+    {
+        // I63 B4: every file was already at the destination and only the sources were removed. Not "Moved":
+        // nothing was moved.
+        setResultSummary(IDS_FILEOPS_RESULT_ALREADY_THERE_SOURCE_REMOVED);
     }
     else if (anySkipped && summary.publishedItemCount == 0u)
     {
