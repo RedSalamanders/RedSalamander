@@ -775,7 +775,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   DWM successfully reports exactly shell-cloaked mask 2; all other states fail within five seconds.
   The account-to-Search transition is observed for five seconds after account retirement. A
   verified same-session Progman shell is recognized only by `GetShellWindow`, exact Explorer
-  image and revalidated HWND/process; unknown foreground surfaces fail closed. Start/completion
+  image and revalidated HWND/process. The same-session GitHub compute-agent console is recognized
+  only by the exact `%ProgramData%\GitHub\HostedComputeAgent\hosted-compute-agent` image and title,
+  `ConsoleWindowClass`, and a successful no-AUMID result. It is observed without any close request;
+  the subsequent owned boundary still proves foreground, focus and restoration. Unknown foreground
+  surfaces fail closed. Start/completion
   and each close intent/result are retained create-only under the marked test root. There is no
   kill, input injection, foreground-policy change or permission to dismiss any other window.
   The adapter clears and restores its opt-in; local, x64, self-hosted, other-repository and

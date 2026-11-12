@@ -80,7 +80,9 @@ startup foreground surfaces after identity and session revalidation. WSL also re
 held process creation to match query-only CIM and exact parsed update arguments. The fixture retains
 create-only audit records beneath
 the marked test root. It observes the delayed Search transition for five seconds after account
-retirement. Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
+retirement. The exact same-session GitHub compute-agent console may be observed without a close
+request; it remains subject to the owned boundary's foreground, focus and restoration checks.
+Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
 studies do not perform these actions. Native focus, input and capture assertions are unchanged.
 
 When direct foreground acquisition is refused, the selected hosted native x64 role or the opted-in native ARM64 role may use one
