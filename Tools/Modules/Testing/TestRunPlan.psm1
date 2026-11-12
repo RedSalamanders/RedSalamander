@@ -53,6 +53,7 @@ Export-ModuleMember -Function @(
     'Convert-RSPesterTestResults',
     'Get-RSBuildScriptArguments',
     'Get-RSBuildEnvironmentOverrides',
+    'Assert-RSSelfTestBuildSurface',
     'Test-RSSelfTestResultCoverage',
     'Get-RSObjectValue',
     'Test-RSTestResultPassed',

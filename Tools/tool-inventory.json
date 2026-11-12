@@ -2437,7 +2437,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-  "purpose": "Construct self-test, Pester, and build invocation parameters, normalize bounded Pester case failure/skip details, including explicit no-activation requests, and classify execution results.",
+  "purpose": "Construct self-test, Pester, and build invocation parameters, normalize bounded Pester case failure/skip details, including explicit no-activation requests and mandatory test-enabled build overrides. Admit in-product tests only with a matching receipt and actual PE test marker before desktop admission or launch; classify execution results.",
       "usage": "Loaded through the TestRunPlan facade; domain modules import it when they need shared invocation or result semantics.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",

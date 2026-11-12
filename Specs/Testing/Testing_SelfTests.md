@@ -271,6 +271,14 @@ stable until the contained child exits, because a provider worker may outlive an
 individual case. The runner never changes the parent's environment. A direct native
 diagnostic must supply the same isolated local-data setup; it is not Full evidence.
 
+Every runner build mode enables `RSBuildEnableTests=true`, including focused
+Release All/Compare/Commands/FileOps; Full also retains its embedded compiler
+debug-information override. Any planned in-product selftest requires both the
+test-enabled build receipt and the actual executable's ENABLE_TESTS resource
+marker before desktop admission or launch. A test-disabled or malformed image
+fails with blocked attestation, also with SkipBuild. Production packaging still
+requires test-disabled artifacts under its separate contract.
+
 Identity-less Delete fixtures that inspect technical Information diagnostics own a
 bounded in-memory diagnostic budget of at least 65,536 entries for their case scope.
 They preserve a larger configured budget, remove only their owned task diagnostics
