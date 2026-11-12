@@ -1790,6 +1790,12 @@ the same synchronous reporter and counter path as the pointer overload.
   Directed ViewerPE cases do not move the pointer, so cleanup must not reset an
   untouched cursor. The warning surface and runner lease alone do not implement
   this restoration.
+- FileOps overwrite-preservation coverage uses the shared process-owned desktop
+  observer independently of its exact source/destination bytes, BLAKE3, file IDs
+  and closed inventories. Foreign desktop changes remain diagnostic; every owned
+  foreground transition and any observer/drain failure still fail. Observation
+  covers the negative controls and final settings restoration without restoring
+  another application's desktop state.
 - ViewerSpace's nonactivating analysis UIA case MUST observe ownership rather than
   require desktop-global cursor/foreground equality across the whole scenario.
   The person and independent applications may continue using the desktop. Hold

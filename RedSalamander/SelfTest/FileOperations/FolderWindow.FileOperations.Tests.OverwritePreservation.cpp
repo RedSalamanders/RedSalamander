@@ -25,7 +25,9 @@
     RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
     if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
         return reject(L"no-activation guard unavailable");
-    const HWND foreground    = GetForegroundWindow();
+    RedSalamander::TestSupport::ScopedNonActivatingDesktopObserver desktop;
+    if (! desktop.Start())
+        return reject(L"process-owned no-activation observation unavailable");
     const HWND originalPopup = operations->GetPopupHwndForSelfTest();
     const auto sourceFs      = folder->GetFileSystem(FolderWindow::Pane::Left);
     const auto destinationFs = folder->GetFileSystem(FolderWindow::Pane::Right);
@@ -525,8 +527,12 @@
             logProof(scenario, L"after-observed", destination, destinationAfter);
         if (! capturedSource || ! capturedDestination || ! sameProof(sourceBefore, sourceAfter) || ! sameProof(destinationBefore, destinationAfter) ||
             ! FilesEqualBytes(source, sourceReference) || ! FilesEqualBytes(destination, destinationReference) || ! capturedInventory ||
-            afterInventory != beforeInventory || GetForegroundWindow() != foreground)
-            return reject(L"source/original exact bytes/hash/file IDs, closed no-follow inventory or foreground changed");
+            afterInventory != beforeInventory)
+            return reject(L"source/original exact bytes/hash/file IDs or closed no-follow inventory changed");
+        if (! desktop.Sample())
+            return reject(std::format(L"owned foreground or unavailable desktop observation (failure={}, ownedTransitions={})",
+                                      static_cast<unsigned>(desktop.Failure()),
+                                      desktop.OwnedForegroundTransitions()));
         logProof(scenario, L"after", source, sourceAfter);
         logProof(scenario, L"after", destination, destinationAfter);
         AppendLog(std::format(L"D4 case={} task={} hr=0x{:08X} publication={} verification={} source={} stage={} completion={}; normal worker quiet",
@@ -587,9 +593,12 @@
         Proof sourceAfter;
         Proof destinationAfter;
         if (! capture(sourceIo, source, sourceAfter) || ! capture(destinationIo, destination, destinationAfter) || ! sameProof(sourceBefore, sourceAfter) ||
-            destinationAfter.bytes != sourceBefore.bytes || destinationAfter.digest != sourceBefore.digest || ! FilesEqualBytes(source, reference) ||
-            GetForegroundWindow() != foreground)
+            destinationAfter.bytes != sourceBefore.bytes || destinationAfter.digest != sourceBefore.digest || ! FilesEqualBytes(source, reference))
             return reject(L"negative-control successful publication or source preservation differs");
+        if (! desktop.Sample())
+            return reject(std::format(L"negative-control owned foreground or unavailable desktop observation (failure={}, ownedTransitions={})",
+                                      static_cast<unsigned>(desktop.Failure()),
+                                      desktop.OwnedForegroundTransitions()));
         const auto readEnv = [](std::wstring_view name) { return RedSalamander::TestSupport::GetEnvironmentString(name); };
         if (readEnv(kSource) != arm || ! readEnv(kFired).empty() || ! readEnv(kStage).empty() || ! readEnv(kBytes).empty() || ! readEnv(kDigest).empty())
             return reject(L"absent/nonmatching/complete-write arm unexpectedly consumed or published a failure receipt");
@@ -627,13 +636,17 @@
         logProof(control + 2u, kNames[control], destination, destinationAfter);
         quietBeforeEnvironmentRestore.release();
     }
+    if (! desktop.Finish())
+        return reject(L"owned foreground or desktop event drain failed before fixture cleanup");
     if (! cleanup())
         return reject(L"owned worker/fixture cleanup failed");
     drain.release();
     if (! restoreSettings())
         return reject(L"restored settings save did not become quiet");
     restore.release();
-    return GetForegroundWindow() == foreground;
+    if (! desktop.Finish())
+        return reject(L"owned foreground or desktop event drain failed after settings restoration");
+    return true;
 }
 
 [[nodiscard]] bool RunFileOpsOverwritePreservationChecks(SelfTestState& state) noexcept
