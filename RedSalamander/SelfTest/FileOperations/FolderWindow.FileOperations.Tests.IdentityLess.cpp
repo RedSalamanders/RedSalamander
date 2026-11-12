@@ -207,18 +207,24 @@ class IdentityLessCaseScope final
 public:
     IdentityLessCaseScope(SelfTestState& state, FolderWindow::FileOperationState* operations) noexcept : _state(state), _operations(operations)
     {
-        auto& settings  = EnsureFileOperationsSettingsForSelfTest();
-        _verify         = settings.verifyAfterCopy;
-        _infoEnabled    = settings.diagnosticsInfoEnabled;
-        _autoAccept     = HostGetAutoAcceptPrompts();
-        _autoDismiss    = operations->GetAutoDismissSuccess();
-        _queueMode      = operations->GetQueueNewTasks();
-        _originalPopup  = operations->GetPopupHwndForSelfTest();
-        _promptOverride = HostGetTestPromptResultOverride();
+        auto& settings      = EnsureFileOperationsSettingsForSelfTest();
+        _verify             = settings.verifyAfterCopy;
+        _infoEnabled        = settings.diagnosticsInfoEnabled;
+        _diagnosticCapacity = settings.maxDiagnosticsInMemory;
+        _autoAccept         = HostGetAutoAcceptPrompts();
+        _autoDismiss        = operations->GetAutoDismissSuccess();
+        _queueMode          = operations->GetQueueNewTasks();
+        _originalPopup      = operations->GetPopupHwndForSelfTest();
+        _promptOverride     = HostGetTestPromptResultOverride();
         // Admission auto-accept would answer the by-name consent (permanentDeleteTestOverride).
         HostSetAutoAcceptPrompts(false);
         HostClearTestPromptResultOverride();
         settings.diagnosticsInfoEnabled = true;
+        // These cases inspect technical Information notes, not UI retention. Earlier
+        // families may fill the bounded reservoir with actionable rows, which correctly
+        // evict a new technical note even though it was written to the audit log.
+        // Keep a bounded case-local budget; restore it after removing only our tasks.
+        settings.maxDiagnosticsInMemory = std::max(settings.maxDiagnosticsInMemory.value_or(0u), 65'536u);
         operations->SetAutoDismissSuccess(false);
         operations->ApplyQueueMode(false);
     }
@@ -258,6 +264,7 @@ public:
         auto& settings                  = EnsureFileOperationsSettingsForSelfTest();
         settings.verifyAfterCopy        = _verify;
         settings.diagnosticsInfoEnabled = _infoEnabled;
+        settings.maxDiagnosticsInMemory = _diagnosticCapacity;
         _operations->ApplyQueueMode(_queueMode);
         _operations->SetAutoDismissSuccess(_autoDismiss);
         HostSetAutoAcceptPrompts(_autoAccept);
@@ -425,6 +432,7 @@ private:
     FolderWindow::FileOperationState* _operations = nullptr;
     std::vector<uint64_t> _tasks;
     std::unordered_map<uint64_t, uint64_t> _answeredGenerations; // task id -> generation of its last answered question
+    std::optional<uint32_t> _diagnosticCapacity;
     HWND _originalPopup              = nullptr;
     HostPromptResult _promptOverride = HOST_PROMPT_RESULT_NONE;
     bool _verify                     = false;

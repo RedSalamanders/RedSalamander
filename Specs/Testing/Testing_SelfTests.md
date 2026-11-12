@@ -271,6 +271,14 @@ stable until the contained child exits, because a provider worker may outlive an
 individual case. The runner never changes the parent's environment. A direct native
 diagnostic must supply the same isolated local-data setup; it is not Full evidence.
 
+Identity-less Delete fixtures that inspect technical Information diagnostics own a
+bounded in-memory diagnostic budget of at least 65,536 entries for their case scope.
+They preserve a larger configured budget, remove only their owned task diagnostics
+at the worker quiet point, and restore the original optional setting on every exit.
+The ordinary 256-entry UI reservoir may correctly evict technical notes before
+actionable rows; absence from that cache alone cannot prove missing audit logging.
+Retention-pressure fixtures continue to exercise the production limit explicitly.
+
 Native environment helpers distinguish a missing variable from a present empty value,
 including Windows' one-character required buffer followed by a zero-character successful
 read. Scope restoration preserves both states exactly. Actual read errors and buffer-size
