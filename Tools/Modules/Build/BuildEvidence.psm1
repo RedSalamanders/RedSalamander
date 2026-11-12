@@ -527,8 +527,9 @@ function Get-RSBuildArtifactRecords {
     $declarations = @(Get-RSBuildArtifactManifestDeclarations -RepoRoot $RepoRoot `
         -BuildOutputDir $output -ArtifactManifestDir $ArtifactManifestDir `
         -Configuration $Configuration -Platform $Platform)
-    if ($ProjectName -and $ProjectNames.Count) { throw 'Use ProjectName or ProjectNames, not both.' }
-    $selectedNames = @($ProjectNames | Where-Object { $null -ne $_ }) + @(if ($ProjectName) { $ProjectName })
+    $selectedNames = @($ProjectNames | Where-Object { $null -ne $_ })
+    if ($ProjectName -and $selectedNames.Count) { throw 'Use ProjectName or ProjectNames, not both.' }
+    if ($ProjectName) { $selectedNames += $ProjectName }
     foreach ($selectedName in $selectedNames) {
         if ([string]::IsNullOrWhiteSpace($selectedName) -or
             @($declarations | Where-Object Project -eq $selectedName).Count -ne 1) {

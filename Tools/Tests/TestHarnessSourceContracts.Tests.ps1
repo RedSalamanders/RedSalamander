@@ -5192,8 +5192,13 @@ Specs\TestRuns\local_scratch
 
         $runnerLockIndex = $runner.IndexOf('Enter-RSArtifactOperationLock')
         $runnerContextIndex = $runner.IndexOf('$testRunContext = New-RSTestRunContext')
+        $runnerBuildIndex = $runner.IndexOf('& $buildScript @buildArgs')
+        # Sandbox planning is independent of profile artifacts. The native writer
+        # still requires admission before it can run or mutate those artifacts.
         $runnerLockIndex | Should BeGreaterThan -1
-        $runnerContextIndex | Should BeGreaterThan $runnerLockIndex
+        $runnerContextIndex | Should BeGreaterThan -1
+        $runnerLockIndex | Should BeGreaterThan $runnerContextIndex
+        $runnerBuildIndex | Should BeGreaterThan $runnerLockIndex
         $runner | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$artifactOperationScope'
         $runner | Should Match 'SetThreadExecutionState\(\$executionState\)'
         $runner | Should Match 'ES_CONTINUOUS \| ES_SYSTEM_REQUIRED \| ES_DISPLAY_REQUIRED'

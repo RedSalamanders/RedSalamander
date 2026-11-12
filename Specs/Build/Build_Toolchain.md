@@ -444,6 +444,10 @@ solution invocation. Resolve folder-qualified and reserved MSBuild targets throu
 Build/Rebuild/Clean retain the same union and the existing profile/dependency locks.
 Partial rebuilds cannot repair contamination that requires a full-solution rebuild.
 ProjectNames cannot accompany ProjectName, ProductionOnly or release/package actions.
+An omitted, empty or null optional project union preserves the ordinary full or
+single-project artifact selection. Normalize it before inspecting its cardinality;
+PowerShell pipeline unrolling must not turn a successful legacy targeted build into
+a receipt-publication failure. Nonempty mixed or unknown selections still refuse.
 
 The receipt target is `selected-projects`, with the canonical explicit project paths
 in `project_selection`. Artifact capture requires an output declaration for every
