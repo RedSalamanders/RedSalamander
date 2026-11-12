@@ -4,7 +4,7 @@
   "repository": "RedSalamanders/RedSalamander",
   "engine": {
     "repository": "RedSalamanders/.github",
-    "ref": "0b25b7337a49e4a617294be138e6e2e146b48df0"
+    "ref": "7d5577c9fbac3442f4657bb0f990ba5cf6495b8b"
   },
   "kind": "application",
   "adapter": "Tools/Invoke-ProjectCi.ps1",

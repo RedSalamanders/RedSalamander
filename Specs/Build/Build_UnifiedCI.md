@@ -1,5 +1,13 @@
 # Unified organization CI contract
 
+Qualified SDK builds retain the actual compiler search-path guard after the
+project's `LibraryPath` normalization. Freshly absent canonical optional ATL and
+versioned NETFX library directories may be omitted; core MSVC/Windows/CRT defaults,
+existing optional entries, ordering, include/reference paths and immutable input
+identity remain required. See the shared [SDK cache contract](https://github.com/RedSalamanders/.github/blob/main/Specs/SDK_Cache.md).
+This compatibility rule grants no native or production acceptance; both main
+regression branches must still pass before production can start.
+
 The manual native suite defaults to Full and may explicitly select CommandsHandoff,
 FileOpsVolumes or ViewerSpaceCapture, each mapped to one fixed diagnostic case. The adapter permits filtered runner
 exit 2 only after validating the exact archived native cases, quarantine state, profile and
