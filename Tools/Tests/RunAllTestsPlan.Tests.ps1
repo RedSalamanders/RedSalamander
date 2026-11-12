@@ -2078,7 +2078,8 @@ $global:LASTEXITCODE=0
         . ([scriptblock]::Create($builder.Extent.Text))
         $image=Join-Path $TestDrive 'selftest-surface.exe'
         [IO.File]::WriteAllBytes($image,(New-RSFakePeBytes -Machine 0x8664 -TestSurfaceMarker))
-        { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image } | Should Not Throw
+        $admitted = Invoke-RSTestBlock { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image }
+        $admitted.Succeeded | Should Be $true
         { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$false}) -ExecutablePath $image } | Should Throw 'test-enabled build receipt'
         [IO.File]::WriteAllBytes($image,(New-RSFakePeBytes -Machine 0x8664))
         { Assert-RSSelfTestBuildSurface -Receipt ([pscustomobject]@{tests_enabled=$true}) -ExecutablePath $image } | Should Throw 'actual executable ENABLE_TESTS'
