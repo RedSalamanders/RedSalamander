@@ -1,0 +1,1 @@
+- Updated the shared SDK library-path guard to admit only freshly absent optional ATL/NETFX default directories after normalization, retaining required compiler/Windows/CRT paths and the existing main native and production gates.
