@@ -180,6 +180,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Import-Module ./Tools/Modules/Testing/HostedTestDesktop.psm1
+          Import-Module ./Tools/Modules/Testing/HostedDiagnosticEvidence.psm1 -Force
           Invoke-RSWithHostedTestDesktop -Action {
             $priorDesktopRequest = [Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')
             try {
@@ -189,6 +190,8 @@ jobs:
                   'terminal_',
                   'cmd_pane_embedded_terminal_',
                   'cmd_pane_open_command_shell_prefers_windows_terminal')) {
+                $invocationStartedUtc = [DateTimeOffset]::UtcNow
+                $capturedLines = [System.Collections.Generic.List[string]]::new()
                 .\Tools\Run-AllTests.ps1 `
                   -Suite Commands `
                   -ValidationMode Fresh `
@@ -197,10 +200,25 @@ jobs:
                   -Configuration Debug `
                   -Platform ARM64 `
                   -AllowExternalTestRoot `
-                  -BuildNumber ([int]$env:RS_BUILD_NUMBER)
-                if ($LASTEXITCODE -ne 0) {
-                  throw "Native ARM64 Commands filter '$caseFilter' failed with exit code $LASTEXITCODE."
-                }
+                  -BuildNumber ([int]$env:RS_BUILD_NUMBER) |
+                  ForEach-Object {
+                    $line = [string]$_
+                    $capturedLines.Add($line)
+                    Write-Host $line
+                  }
+                $exitCode = $LASTEXITCODE
+                $invocationEndedUtc = [DateTimeOffset]::UtcNow
+                [void](Assert-RSHostedFilteredCaseRun `
+                  -ExitCode $exitCode `
+                  -Output ($capturedLines -join "`n") `
+                  -TestRoot $env:REDSALAMANDER_TEST_ROOT `
+                  -RepoRoot $env:GITHUB_WORKSPACE `
+                  -Suite 'Commands' `
+                  -CaseFilter $caseFilter `
+                  -Platform 'ARM64' `
+                  -Configuration 'Debug' `
+                  -InvocationStartedUtc $invocationStartedUtc `
+                  -InvocationEndedUtc $invocationEndedUtc)
               }
             } finally {
               [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorDesktopRequest, 'Process')

@@ -1,6 +1,8 @@
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'ValidationEvidence.psm1') -Scope Local
 Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1') -Scope Local
+Import-Module (Join-Path $PSScriptRoot '../Build/BuildEvidence.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'ValidationFingerprint.psm1') -Scope Local -ErrorAction Stop
 
 function Get-RSHostedPairedDispatch {
     param([Parameter(Mandatory)][string]$EventName, [Parameter(Mandatory)][string]$EventJson,
@@ -49,25 +51,16 @@ function Assert-RSHostedDiagnosticSelection {
     if ($matches.Count -ne 1) { throw 'Unknown hosted diagnostic selection.' }
 }
 
-function Test-RSHostedDiagnosticOutcome {
-    param([Parameter(Mandatory)][int]$ExitCode, [Parameter(Mandatory)][string]$RunId,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Summary,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Native,
-          [Parameter(Mandatory)][string]$Platform, [Parameter(Mandatory)][string]$Configuration,
-          [Parameter(Mandatory)][bool]$ReceiptVerified,
-          [Parameter(Mandatory)][string]$ExpectedExePath,
-          [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc, [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc)
-    Assert-RSHostedDiagnosticSelection $Selection
-    if ($RunId -cnotmatch '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$') { throw 'Invalid diagnostic run ID.' }
-    if (-not $ReceiptVerified -or $ExitCode -ne 2 -or $Summary.schema -cne 'red-salamander.run-all-tests.v1' -or
-        $Summary.run_id -cne $RunId -or $Summary.suite -cne $Selection.suite -or $Summary.case_filter -cne $Selection.case -or
-        $Summary.platform -cne $Platform -or $Summary.configuration -cne $Configuration -or [int]$Summary.exit_code -ne 2) {
-        throw 'Filtered runner, profile, or source receipt does not match the diagnostic request.'
+function Test-RSHostedTimeWindow {
+    param(
+        [Parameter(Mandatory)][object]$Summary,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc
+    )
+
+    if ($InvocationStartedUtc -gt $InvocationEndedUtc) {
+        throw 'Invocation window bounds are inverted.'
     }
-    # V1 has no receipt ID; bind the summary to this child invocation and executable.
-    if ($Summary.executable -isnot [string] -or $Summary.executable -ine $ExpectedExePath -or
-        $InvocationStartedUtc -gt $InvocationEndedUtc) { throw 'Diagnostic executable or invocation window does not match.' }
     $times = @()
     foreach ($value in @($Summary.run_started_utc, $Summary.run_ended_utc)) {
         $parsed = [DateTimeOffset]::MinValue
@@ -85,6 +78,11 @@ function Test-RSHostedDiagnosticOutcome {
     if ($times.Count -ne 2 -or $times[0] -lt $InvocationStartedUtc -or $times[1] -gt $InvocationEndedUtc -or $times[0] -gt $times[1]) {
         throw 'Diagnostic summary falls outside the invocation window.'
     }
+}
+
+function Assert-RSHostedCleanQuarantine {
+    param([Parameter(Mandatory)][object]$Summary)
+
     $q = $Summary.quarantine
     if ($q -isnot [System.Collections.IDictionary] -or -not $q.Contains('is_valid') -or -not $q.Contains('has_blocking_entries') -or
         -not $q.Contains('active_count') -or -not $q.Contains('active_entries') -or -not $q.Contains('invalid_count') -or
@@ -94,6 +92,30 @@ function Test-RSHostedDiagnosticOutcome {
         @($q.active_entries).Count -ne 0 -or @($q.invalid_entries).Count -ne 0 -or @($q.errors).Count -ne 0) {
         throw 'Missing, invalid, or blocking quarantine state.'
     }
+}
+
+function Test-RSHostedDiagnosticOutcome {
+    param([Parameter(Mandatory)][int]$ExitCode, [Parameter(Mandatory)][string]$RunId,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Summary,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Native,
+          [Parameter(Mandatory)][string]$Platform, [Parameter(Mandatory)][string]$Configuration,
+          [Parameter(Mandatory)][bool]$ReceiptVerified,
+          [Parameter(Mandatory)][string]$ExpectedExePath,
+          [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc, [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc)
+    Assert-RSHostedDiagnosticSelection $Selection
+    if ($RunId -cnotmatch '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$') { throw 'Invalid diagnostic run ID.' }
+    if (-not $ReceiptVerified -or $ExitCode -ne 2 -or $Summary.schema -cne 'red-salamander.run-all-tests.v1' -or
+        $Summary.run_id -cne $RunId -or $Summary.suite -cne $Selection.suite -or $Summary.case_filter -cne $Selection.case -or
+        $Summary.platform -cne $Platform -or $Summary.configuration -cne $Configuration -or [int]$Summary.exit_code -ne 2) {
+        throw 'Filtered runner, profile, or source receipt does not match the diagnostic request.'
+    }
+    # V1 has no receipt ID; bind the summary to this child invocation and executable.
+    if ($Summary.executable -isnot [string] -or $Summary.executable -ine $ExpectedExePath) {
+        throw 'Diagnostic executable or invocation window does not match.'
+    }
+    Test-RSHostedTimeWindow -Summary $Summary -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc
+    Assert-RSHostedCleanQuarantine -Summary $Summary
     if (-not $Native.Contains('suite') -or $Native.suite -cne $Selection.nativeSuite -or -not $Native.Contains('cases') -or
         -not $Native.Contains('passed') -or -not $Native.Contains('failed') -or -not $Native.Contains('skipped')) {
         throw 'Native diagnostic result is incomplete.'
@@ -119,10 +141,12 @@ function Test-RSHostedDiagnosticOutcome {
     return $true
 }
 
-function Read-RSHostedDiagnosticEvidence {
-    param([Parameter(Mandatory)][string]$TestRoot, [Parameter(Mandatory)][string]$RunId,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection)
-    Assert-RSHostedDiagnosticSelection $Selection
+function Read-RSHostedVerifiedArchiveRecord {
+    param(
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$RunId
+    )
+
     if ($RunId -cnotmatch '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$') { throw 'Invalid diagnostic run ID.' }
     $run = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "evidence/completed-runs/$RunId") -RequireDescendant
     $records = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "evidence/run-archive-records/$RunId") -RequireDescendant
@@ -134,18 +158,144 @@ function Read-RSHostedDiagnosticEvidence {
     if ($intent.schema -cne 'red-salamander.run-archive.v1' -or $intent.run_id -cne $RunId -or $intent.disposition -cne 'completed' -or
         $intent.destination -ine $run -or $intent.source -ine $expectedSource -or $complete.source -ine $expectedSource -or
         $complete.schema -cne 'red-salamander.run-archive-complete.v1' -or $complete.destination -ine $run -or
-        $complete.intent_sha256 -ine (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash) { throw 'Diagnostic archive proof is invalid.' }
+        $complete.intent_sha256 -ine (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash) {
+        throw 'Diagnostic archive proof is invalid.'
+    }
+    return @{
+        RunDirectory = $run
+        Intent = $intent
+        ArchiveIntentSha256 = $complete.intent_sha256
+    }
+}
+
+function Read-RSHostedDiagnosticEvidence {
+    param([Parameter(Mandatory)][string]$TestRoot, [Parameter(Mandatory)][string]$RunId,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection)
+    Assert-RSHostedDiagnosticSelection $Selection
+    $archive = Read-RSHostedVerifiedArchiveRecord -TestRoot $TestRoot -RunId $RunId
+    $run = $archive.RunDirectory
+    $intent = $archive.Intent
     $relative = 'artifacts\selftest\last_run\' + $Selection.native + '\results.json'
     $nativePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run $relative) -RequireDescendant
     $rows = @($intent.inventory | Where-Object { $_.path -ieq $relative -and -not $_.directory })
     if ($rows.Count -ne 1 -or [int64]$rows[0].length -ne (Get-Item -LiteralPath $nativePath).Length -or
         $rows[0].sha256 -ine (Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash) { throw 'Native diagnostic result does not match the archive.' }
     $summaryPath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run 'artifacts/selftest/last_run/run-all-tests-results.json') -RequireDescendant
+    $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json -AsHashtable
+    if ($summary.Contains('schema') -and $summary.schema -ceq 'red-salamander.run-all-tests.v2') {
+        # Current runners publish v2 at the stable path and retain v1 beside it.
+        $summaryPath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run 'artifacts/selftest/last_run/run-all-tests-results-v1.json') -RequireDescendant
+    }
     return @{ summary=(Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json -AsHashtable);
         native=(Get-Content -LiteralPath $nativePath -Raw | ConvertFrom-Json -AsHashtable);
         summarySha256=(Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash;
         nativeSha256=(Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash;
-        archiveIntentSha256=$complete.intent_sha256 }
+        archiveIntentSha256=$archive.ArchiveIntentSha256 }
 }
 
-Export-ModuleMember -Function Get-RSHostedDiagnosticSelection, Get-RSHostedDiagnosticRunId, Test-RSHostedDiagnosticOutcome, Read-RSHostedDiagnosticEvidence, Get-RSHostedPairedDispatch
+function Assert-RSHostedFilteredCaseRun {
+    <#
+    .SYNOPSIS
+        Verifies a Run-AllTests.ps1 -CaseFilter invocation from its archived evidence.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$ExitCode,
+        [Parameter(Mandatory)][string]$Output,
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][ValidateSet('Commands')][string]$Suite,
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_]+$')][string]$CaseFilter,
+        [Parameter(Mandatory)][string]$Platform,
+        [Parameter(Mandatory)][string]$Configuration,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc
+    )
+
+    if ($ExitCode -ne 2) {
+        throw "Filtered hosted runner for '$Suite' filter '$CaseFilter' failed with exit code $ExitCode."
+    }
+    $runId = Get-RSHostedDiagnosticRunId -Output $Output
+    $archive = Read-RSHostedVerifiedArchiveRecord -TestRoot $TestRoot -RunId $runId
+    $run = $archive.RunDirectory
+    $lastRun = Join-Path $run 'artifacts/selftest/last_run'
+    $v2Path = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $lastRun 'run-all-tests-results.json') -RequireDescendant
+    $v1Path = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $lastRun 'run-all-tests-results-v1.json') -RequireDescendant
+    $v2 = Read-RSValidationJsonFile -LiteralPath $v2Path -AllowedRoot $TestRoot `
+        -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+    $v1 = Get-Content -LiteralPath $v1Path -Raw | ConvertFrom-Json -AsHashtable
+
+    if ($v2.schema -cne 'red-salamander.run-all-tests.v2' -or $v2.run_id -cne $runId -or
+        $v2.requested_gate -cne $Suite -or $v2.change_verdict -cne 'PASSED' -or
+        $v2.validation_mode -cne 'Fresh' -or $v2.coverage_scope -cne 'filtered' -or
+        @($v2.entries).Count -ne 1 -or $v2.entries[0].id -cne 'selftest.commands' -or
+        $v2.entries[0].execution -cne 'executed' -or $v2.entries[0].promotion_state -cne 'promoted') {
+        throw "Filtered hosted v2 summary for '$CaseFilter' did not reach change_verdict PASSED."
+    }
+    if ($v2.repository_verdict -cne 'NOT_EVALUATED') {
+        throw "Filtered hosted exit 2 for '$CaseFilter' expected repository_verdict NOT_EVALUATED but got '$($v2.repository_verdict)'."
+    }
+    if ([int]$v2.counts.executed -ne 1 -or [int]$v2.counts.promoted -ne 1 -or
+        [int]$v2.counts.reused -ne 0 -or [int]$v2.counts.provisional -ne 0 -or
+        [int]$v2.counts.invalidated -ne 0 -or [int]$v2.counts.incomplete -ne 0 -or
+        [int64]$v2.case_counts.passed -lt 1 -or [int64]$v2.case_counts.failed -ne 0 -or [int64]$v2.case_counts.skipped -ne 0) {
+        throw "Filtered hosted case counts for '$CaseFilter' are incomplete, skipped, or failed."
+    }
+
+    if ($v1.schema -cne 'red-salamander.run-all-tests.v1' -or $v1.run_id -cne $runId -or
+        $v1.suite -cne $Suite -or $v1.case_filter -cne $CaseFilter -or
+        $v1.platform -cne $Platform -or $v1.configuration -cne $Configuration -or
+        [int]$v1.exit_code -ne $ExitCode -or
+        [int64]$v1.passed -lt 1 -or [int64]$v1.failed -ne 0 -or [int64]$v1.skipped -ne 0) {
+        throw "Filtered hosted v1 summary for '$CaseFilter' does not match the expected run identity or counts."
+    }
+    Test-RSHostedTimeWindow -Summary $v1 -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc
+    Assert-RSHostedCleanQuarantine -Summary $v1
+
+    # Aggregates are written after archival, so native bytes (not aggregates) are
+    # authenticated against its inventory. Require actual selected passing cases.
+    $relative = 'artifacts\selftest\last_run\commands\results.json'
+    $nativePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run $relative) -RequireDescendant
+    $rows = @($archive.Intent.inventory | Where-Object { $_.path -ieq $relative -and -not $_.directory })
+    if ($rows.Count -ne 1 -or [int64]$rows[0].length -ne (Get-Item -LiteralPath $nativePath).Length -or
+        $rows[0].sha256 -ine (Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash) {
+        throw 'Native filtered result does not match the archive.'
+    }
+    $native = Get-Content -LiteralPath $nativePath -Raw | ConvertFrom-Json -AsHashtable
+    if ($native.suite -cne 'Commands') { throw 'Native filtered suite mismatch.' }
+    $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($case in @($native.cases)) {
+        $matches = [string]::Equals($case.name, $CaseFilter, [StringComparison]::OrdinalIgnoreCase) -or
+            ($CaseFilter.EndsWith('_') -and ([string]$case.name).StartsWith($CaseFilter, [StringComparison]::OrdinalIgnoreCase))
+        if (-not $matches -or $case.status -cne 'passed' -or -not $names.Add([string]$case.name)) {
+            throw 'Native filtered cases are unexpected, duplicated, or not passing.'
+        }
+    }
+    if ($names.Count -lt 1 -or [int64]$native.passed -ne $names.Count -or [int64]$native.failed -ne 0 -or
+        [int64]$native.skipped -ne 0 -or [int64]$v1.total -ne $names.Count -or
+        [int64]$v1.passed -ne $names.Count -or [int64]$v2.case_counts.total -ne $names.Count -or
+        [int64]$v2.case_counts.passed -ne $names.Count) { throw 'Native filtered case counts do not match runner summaries.' }
+
+    $buildOutput = Join-Path $RepoRoot ".build/$Platform/$Configuration"
+    $receipt = Read-RSBuildReceipt -BuildOutputDir $buildOutput -SchemaPath (Join-Path $RepoRoot 'Specs/Build/BuildReceipt.schema.json')
+    $snapshot = Get-RSBuildSourceSnapshot -RepoRoot $RepoRoot
+    $requiredExe = ".build/$Platform/$Configuration/RedSalamander.exe"
+    if ($v1.executable -ine [IO.Path]::GetFullPath((Join-Path $RepoRoot $requiredExe)) -or
+        $null -eq $receipt -or $v2.snapshot_id -cne $snapshot.SnapshotId -or
+        $v2.build_receipt_id -cne $receipt.receipt_id -or
+        -not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot $snapshot -Platform $Platform `
+            -Configuration $Configuration -RepoRoot $RepoRoot -RequiredRelativePath @($requiredExe) `
+            -RequiredProjectSelection @('RedSalamander/RedSalamander.vcxproj'))) {
+        throw 'Native filtered source, executable, or artifact receipt mismatch.'
+    }
+
+    return [pscustomobject]@{
+        RunId = $runId
+        RepositoryVerdict = [string]$v2.repository_verdict
+        ChangeVerdict = [string]$v2.change_verdict
+        Passed = [int64]$v2.case_counts.passed
+        ArchiveIntentSha256 = $archive.ArchiveIntentSha256
+    }
+}
+
+Export-ModuleMember -Function Get-RSHostedDiagnosticSelection, Get-RSHostedDiagnosticRunId, Test-RSHostedDiagnosticOutcome, Read-RSHostedDiagnosticEvidence, Assert-RSHostedFilteredCaseRun, Get-RSHostedPairedDispatch

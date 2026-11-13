@@ -231,15 +231,14 @@ $global:LASTEXITCODE=2
     }
 }
 
-Describe 'Hosted stock preparation evidence identity' {
-    It 'changes the scoped environment identity when the opt-in changes' {
-        $old=$env:RS_HOSTED_ARM64_STOCK_PREPARATION
-        try {
-            $env:RS_HOSTED_ARM64_STOCK_PREPARATION=$null
-            $without=Get-ScopedEnvironmentIdentity
-            $env:RS_HOSTED_ARM64_STOCK_PREPARATION='1'
-            $with=Get-ScopedEnvironmentIdentity
-            $with | Should Not Be $without
-        } finally { $env:RS_HOSTED_ARM64_STOCK_PREPARATION=$old }
+Describe 'Canonical scoped evidence authority' {
+    It 'keeps obsolete receipt and source identity exports absent' {
+        $exports = @((Get-Module ScopedTesting).ExportedCommands.Keys)
+        foreach ($name in @('Get-ScopedSourceIdentity','Get-ScopedArtifactIdentity','Get-ScopedRunIdentity',
+                'Get-ScopedEnvironmentIdentity','Test-ScopedReceipt','Write-ScopedReceipt')) {
+            ($exports -contains $name) | Should Be $false
+        }
+        $runner = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'))
+        $runner | Should Match 'hosted_stock_preparation=\[string\]\$env:RS_HOSTED_ARM64_STOCK_PREPARATION'
     }
 }

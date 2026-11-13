@@ -4379,6 +4379,19 @@ private:
         return false;
     }
 
+    // Non-action presses establish the target pane before the next keyboard command.
+    for (const UINT message : {static_cast<UINT>(WM_RBUTTONDOWN), static_cast<UINT>(WM_MBUTTONDOWN)})
+    {
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(rightNavigationView, message, 0, MAKELPARAM(1, 1));
+        state.Require(WaitForFocusedFolderViewForMainMenu(rightFolderView, SelfTest::Scale(2000ms)) &&
+                          g_folderWindow.GetActivePane() == FolderWindow::Pane::Right,
+                      std::format(L"Navigation bar message {} did not focus its owning pane.", message));
+        state.Require(g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right) == std::optional<std::filesystem::path>{right},
+                      L"A non-action navigation-bar press changed the pane location.");
+    }
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+
     const std::filesystem::path expectedAncestorPath = std::filesystem::path(baselineSnapshot.pathAncestorTargetText);
     state.Require(! expectedAncestorPath.empty() && expectedAncestorPath != right,
                   L"Unfocused-pane breadcrumb click target should resolve to a non-current ancestor path.");
@@ -29983,6 +29996,33 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
                                             L"FolderView activation press keeps selection",
                                             [&](const FolderViewActivationPressFixture& fixture, const std::filesystem::path&) noexcept
     {
+        // The blocked overlay stops item actions while the press activates its pane.
+        if (! fixture.Arrange({L"a.txt", L"b.txt"}, L"a.txt", L"the blocked-overlay press"))
+            return;
+        const auto armedBeforeOverlay = fixture.Down(L"a.txt");
+        state.Require(armedBeforeOverlay.potentialDragSourceCount != 0u, L"Overlay fixture did not arm a drag before the overlay appeared.");
+        g_folderWindow.DebugShowOverlaySampleBusyWithCancel(FolderWindow::Pane::Right);
+        {
+            const auto hideOverlay = wil::scope_exit([]() noexcept { g_folderWindow.DebugHideOverlaySample(FolderWindow::Pane::Right); });
+            RECT client{};
+            GetClientRect(fixture.rightView, &client);
+            const LPARAM background = MAKELPARAM(client.right - 2, client.bottom - 2);
+            SendMessageW(fixture.rightView, WM_MOUSEMOVE, MK_LBUTTON, background);
+            state.Require(fixture.Snapshot().potentialDragSourceCount == 0u && GetCapture() != fixture.rightView,
+                          L"An overlay retained an earlier armed drag or capture after pointer movement.");
+            state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, fixture.leftView, SelfTest::Scale(2000ms)),
+                          L"The left pane did not regain focus before the blocked-overlay activation press.");
+            SendMessageW(fixture.rightView, WM_LBUTTONDOWN, MK_LBUTTON, background);
+            SendMessageW(fixture.rightView, WM_LBUTTONUP, 0, background);
+            PumpPendingMessages();
+            state.Require(fixture.RightPaneIsActive() && fixture.Selected({L"a.txt", L"b.txt"}) && fixture.Snapshot().currentDisplayName == L"a.txt",
+                          L"A blocked-overlay press failed to activate its pane or changed its selection.");
+            const POINT blockedPoint = fixture.PointFor(L"sub");
+            SendMessageW(fixture.rightView, WM_LBUTTONDBLCLK, MK_LBUTTON, MAKELPARAM(blockedPoint.x, blockedPoint.y));
+            state.Require(fixture.Selected({L"a.txt", L"b.txt"}) && fixture.Snapshot().currentDisplayName == L"a.txt",
+                          L"A blocked overlay allowed double-click activation or changed the current item.");
+        }
+
         // An item outside the selection: the pane becomes active, the item becomes current, nothing else changes.
         if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the unselected-item press"))
         {

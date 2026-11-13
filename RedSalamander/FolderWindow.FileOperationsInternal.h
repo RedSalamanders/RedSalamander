@@ -239,6 +239,23 @@ struct TransferMutationGuard
     bool samePathText                   = false;
 };
 
+struct LocalDirectoryAncestryProbeResult final
+{
+    HRESULT status               = E_UNEXPECTED;
+    bool destinationInsideSource = false; // Set only by a found marker through validated non-follow interior folders.
+};
+
+// Local-only fallback when provider IDs cannot compare directory ancestry. S_OK is a
+// bounded negative observation through the selected non-follow tree with a held,
+// deletion-denying control marker and a final control-path check; it is not a namespace
+// lease or future publication authority. Interior reparses are not traversed. A found
+// marker through plain interior folders sets destinationInsideSource with ERROR_INVALID_NAME.
+// Other failures retain their exact status without implying containment and refuse recursion.
+[[nodiscard]] LocalDirectoryAncestryProbeResult ProbeLocalDirectoryTransferAncestry(std::wstring_view sourcePath,
+                                                                                    std::wstring_view destinationPath,
+                                                                                    const FileSystemPathIdentity& pathIdentity,
+                                                                                    const std::function<bool()>& cancelled) noexcept;
+
 // A task holds every exact binding while it owns the interlock. Nodes form an interned parent chain,
 // so a large sibling selection retains each common ancestor once instead of one handle chain per item.
 // The scheduler walks from `root` toward the endpoint root to recognize alias-equivalent
@@ -2024,10 +2041,11 @@ struct FolderWindow::FileOperationState
         // under any File Operations lock (it takes only its own leaf mutex and the power request's).
         void UpdateKeepAwake() noexcept;
         // I63 G7: a wait for an answer gives the request back only once the task is quiet. The waiting worker calls
-        // RefreshAwaitingAnswerQuiet on each poll with its own two locals (the progress count it last saw and when it
-        // changed); a route with a single worker calls SetAwaitingAnswerQuiet(true) at once.
+        // RefreshAwaitingAnswerQuiet at its deadline or on resumed work; progress callbacks publish their actual tick.
+        // A route with a single worker calls SetAwaitingAnswerQuiet(true) at once.
         void SetAwaitingAnswerQuiet(bool quiet) noexcept;
-        void RefreshAwaitingAnswerQuiet(uint64_t& workSeen, ULONGLONG& lastWorkTick) noexcept;
+        void NoteKeepAwakeWork(ULONGLONG workTick) noexcept;
+        [[nodiscard]] DWORD RefreshAwaitingAnswerQuiet(ULONGLONG waitStartedTick) noexcept;
         // A cancel status, or the aborted status of a call the cancel watch cut short under a requested cancel.
         [[nodiscard]] bool IsCancellationOutcome(HRESULT hr) const noexcept;
         bool IsWaitingInQueue() const noexcept;
@@ -2351,6 +2369,8 @@ struct FolderWindow::FileOperationState
         // I63 G7: this task's share of the process-wide keep-awake request; released when the task is destroyed.
         FileOperations::KeepAwakeLease _keepAwakeLease{FileOperations::PowerRequest::Shared()};
         std::atomic<bool> _awaitingAnswerQuiet{false};
+        std::atomic<ULONGLONG> _keepAwakeLastWorkTick{0};
+        wil::unique_event_nothrow _keepAwakeWorkEvent;
         std::atomic<bool> _enteredOperation{false};
         std::atomic<ULONGLONG> _enteredOperationTick{0};
         std::atomic<bool> _cancelled{false};
@@ -2554,6 +2574,9 @@ struct FolderWindow::FileOperationState
         std::atomic_uint32_t _dbgPauseWaiterCount{0};
         std::atomic<bool> _dbgConflictWaitBeforeSleepGate{false};
         std::atomic<bool> _dbgConflictWaitBeforeSleepReached{false};
+        std::atomic_uint32_t _dbgConflictDecisionWaitCount{0};
+        std::atomic_uint32_t _dbgConflictDecisionInfiniteWaitCount{0};
+        std::atomic<DWORD> _dbgConflictQuietPeriodMs{static_cast<DWORD>(FileOperations::kAwaitingAnswerQuietMs)};
         std::atomic<bool> _dbgQueueWaitBeforeSleepGate{false};
         std::atomic<bool> _dbgQueueWaitBeforeSleepReached{false};
 #endif
@@ -2753,6 +2776,8 @@ struct FolderWindow::FileOperationState
                                    FileOperations::CreateDirectoryAdmission& admissionOut) noexcept;
 
     HRESULT StartOperation(OperationAdmission admission, uint64_t* taskIdOut = nullptr);
+    // A failed OS worker launch withdraws its Preparing place and wakes queue predicates.
+    void WithdrawUnstartedTask(Task* task) noexcept;
 
     // External launch paths do not create a File Operations task, but they still consume the same
     // exact-set artifact warning receipt and immediately revalidate it before returning S_OK to the

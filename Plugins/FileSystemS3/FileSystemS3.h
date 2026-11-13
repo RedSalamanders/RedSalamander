@@ -405,7 +405,7 @@ private:
   "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
   "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
   "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
-  "verification": { "hostReadback": false, "providerProof": "writer-digest" },
+  "verification": { "hostReadback": false, "providerProof": "none" },
   "cancellation": { "abort": false, "deadline": false, "routeClass": "uncontained", "providerWatchdogTimeoutMs": 0 },
   "names": {
     "pathTextStableIdentity": true,

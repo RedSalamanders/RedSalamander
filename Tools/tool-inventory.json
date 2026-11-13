@@ -67,14 +67,14 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate exact filtered hosted diagnostic cases without promoting repository coverage.",
-      "usage": "Imported by the project CI adapter for fixed explicit diagnostic scopes and immutable paired-dispatch admission.",
-      "usedBy": ["Tools/Invoke-ProjectCi.ps1"],
-      "prerequisites": ["PowerShell 7", "marked TestSandbox", "verified full-solution receipt"],
+      "purpose": "Validate exact filtered hosted diagnostic cases and archived filtered case runs without promoting repository coverage.",
+      "usage": "Imported by the project CI adapter and filtered hosted product qualification workflows for fixed explicit diagnostic scopes and immutable paired-dispatch admission.",
+      "usedBy": ["Tools/Invoke-ProjectCi.ps1", ".github/workflows/ghostty-runtime-product-qualification.yml"],
+      "prerequisites": ["PowerShell 7", "marked TestSandbox", "verified full-solution or exact selected application-closure receipt as required by the diagnostic contract"],
       "sideEffects": ["Reads exact archived runner and native case evidence"],
       "outputs": ["Validated filtered diagnostic selection and evidence"],
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
-      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"],
+      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1", "Tools/Tests/HostedTestDesktop.Tests.ps1"],
       "replacement": null
     },
     {
@@ -560,7 +560,7 @@
         "Git"
       ],
       "sideEffects": [
-        "Read-only Git/GitHub scope discovery; reusable evidence helpers are used only by standalone library/RedXe copies."
+        "Read-only Git/GitHub scope discovery; canonical Startrail owns all execution receipts and source/artifact identities."
       ],
       "outputs": [
         "Native naming findings",
@@ -2030,7 +2030,8 @@
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
         "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
-        "Tools/Modules/Build/DxUiDependency.psm1"
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer",
@@ -2073,10 +2074,12 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Choose safe MSBuild invocation and classify optional-code diagnostic headers once for log counts and replay colors.",
+      "purpose": "Share host-ordered MSBuild discovery, choose safe invocation and classify optional-code diagnostic headers once for log counts and replay colors.",
       "usage": "Import from build.ps1 and focused build-output tests, including the relocated native fixture; do not invoke as a command.",
       "usedBy": [
         "build.ps1",
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Modules/Build/VcpkgInstallSafety.psm1",
         "Tools/Tests/MSBuildInvocation.Tests.ps1",
         "Tools/Tests/RelocatedTestSandbox.Tests.ps1"
       ],
@@ -2589,6 +2592,7 @@
         "Tools/Modules/Testing/TestRunPlan.Common.psm1",
         "Tools/Modules/Testing/TestRunSummary.psm1",
         "Tools/Modules/Testing/ValidationEvidence.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
         "Tools/Modules/Testing/ValidationImpact.psm1",
         "Tools/Modules/Testing/TestRunArchive.psm1",
         "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
@@ -2603,6 +2607,7 @@
         "Tools/Tests/TestRunArchive.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Tests/HostedTestDesktop.Tests.ps1",
         "Tools/Tests/ValidationImpact.Tests.ps1",
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
         "Tools/Tests/RunResultReference.Tests.ps1"

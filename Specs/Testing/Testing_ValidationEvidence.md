@@ -22,6 +22,18 @@ acceptance. Affected selected-build admission follows the producer contract belo
 `Fresh`, explicit exact `Resume`, and opt-in `Affected` are active as described below;
 CI, nightly, release, and final closeout remain explicit Fresh.
 
+`ScopedTesting.psm1` owns scope discovery, native naming, reviewed PR delegation and
+scheduled-source decisions only. Its former local receipt writers and independent
+source/artifact/environment identities are retired; canonical Startrail records own
+execution and reuse. Hosted stock-preparation opt-in remains an interactive capability
+input in the canonical runner fingerprint.
+
+Workspace snapshot acquisition may cache a historical Git tree map only by repository
+and resolved immutable commit identity. It must reread the mutable index and worktree.
+Canonical blob hashing uses measured batches bounded to 64 MiB, isolating an individually
+larger object. Affected planning may reuse an already validated impact manifest and
+graph-governance result only when the post-build workspace snapshot is identical.
+
 ## Workspace and entry identity (Phase 3 active)
 
 FileOperations child-profile isolation is runner-owned execution policy. Its unique

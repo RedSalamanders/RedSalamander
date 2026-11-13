@@ -1561,6 +1561,102 @@
                       scrollReconcile.maxStructuralUs);
     note(std::format(L"scroll timing: rebuild baseline {}; reconcile {}", describeTiming(scrollRebuild), describeTiming(scrollReconcile)));
 
+    // Audit wheel/DPI regression: focus on a global completed-group action is a
+    // deferred list reveal too. Quarter-detents may not consume it or clamp an
+    // offset against the intentionally empty native scroll range.
+    TaskSnapshot terminal   = makeCopy(copyId + 9u, L"C:\\Stable\\Finished");
+    terminal.finished       = true;
+    terminal.lifecyclePhase = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Terminal);
+    terminal.statusKind     = TaskSnapshot::StatusKind::Done;
+    terminal.completedBytes = terminal.totalBytes;
+    terminal.completedItems = terminal.totalItems;
+    cards.push_back(terminal);
+    popupState->DebugSetVisualScenario(cards, false, true);
+    paint();
+    paint();
+    const std::wstring completedToggleId = actionId(PopupHitTest::Kind::CompletedGroupToggle, 0u);
+    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), completedToggleId) || ! layoutFor(firstCardId).pendingFocusReveal)
+        fail(L"completed-group focus did not queue its list reveal");
+    popupState->DebugWithholdScrollBarForSelfTest(popup.get(), 72);
+    const auto beforeQuarterDetents  = layoutFor(firstCardId);
+    const auto quarterDetentsStarted = std::chrono::steady_clock::now();
+    for (size_t quarter = 0u; quarter < 3u; ++quarter)
+    {
+        SendMessageW(popup.get(), WM_MOUSEWHEEL, MAKEWPARAM(0, 30), 0);
+        const auto observed = layoutFor(firstCardId);
+        if (observed.scrollPosition != beforeQuarterDetents.scrollPosition || ! observed.pendingFocusReveal)
+            fail(L"a quarter-detent changed the offset or consumed the deferred reveal while the native range was withheld");
+    }
+    SendMessageW(popup.get(), WM_MOUSEWHEEL, MAKEWPARAM(0, 30), 0);
+    const auto afterDetent          = layoutFor(firstCardId);
+    const int expectedWheelPosition = std::max(0, beforeQuarterDetents.scrollPosition - std::max(1, MulDiv(36, static_cast<int>(dpi), 96)));
+    if (afterDetent.scrollPosition != expectedWheelPosition || afterDetent.pendingFocusReveal)
+        fail(L"four quarter-detents did not consume exactly one model-range scroll step");
+    paint();
+    const auto quarterDetentsUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - quarterDetentsStarted).count());
+    Debug::Perf::Emit(L"FileOps.Popup.StableTree.QuarterDetentSyncUs",
+                      L"3 running cards plus completed group; four delta-30 messages; withheld native range",
+                      quarterDetentsUs,
+                      4u,
+                      static_cast<uint64_t>(afterDetent.scrollPosition));
+
+    // This exercises DPI invalidation at the real current monitor DPI; it does
+    // not claim native mixed-monitor/DPI qualification. The old pending target
+    // must be gone before the next paint can resize the window.
+    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), firstToggleId))
+        fail(L"DPI fixture could not change hosted focus before invalidation");
+    const auto beforeDpi = layoutFor(firstCardId);
+    popupState->DebugArmAutoResizeMotionForSelfTest();
+    RECT suggested{};
+    GetWindowRect(popup.get(), &suggested);
+    RECT savedExpanded = suggested;
+    savedExpanded.bottom += 100;
+    popupState->SetExpandedPlacementForRestore(savedExpanded, true);
+    OffsetRect(&suggested, 1, 1);
+    SendMessageW(popup.get(), WM_DPICHANGED, MAKEWPARAM(dpi, dpi), reinterpret_cast<LPARAM>(&suggested));
+    const auto afterDpi = layoutFor(firstCardId);
+    if (afterDpi.autoResizeMotionActive || afterDpi.expandedPlacementRestorePending || afterDpi.expandedPlacementRestoreRect.left != savedExpanded.left + 1 ||
+        afterDpi.expandedPlacementRestoreRect.top != savedExpanded.top + 1 ||
+        afterDpi.expandedPlacementRestoreRect.bottom - afterDpi.expandedPlacementRestoreRect.top != savedExpanded.bottom - savedExpanded.top ||
+        afterDpi.taskReservedStreamRows != 0u || afterDpi.hostedFocusedAutomationId != beforeDpi.hostedFocusedAutomationId ||
+        afterDpi.pendingFocusReveal != beforeDpi.pendingFocusReveal)
+        fail(L"DPI invalidation retained old pixel resize/reservation state or lost the hosted focus transaction");
+    paint();
+    paint();
+    if (layoutFor(firstCardId).taskReservedStreamRows == 0u)
+        fail(L"DPI invalidation did not remeasure the running card's stream reservations");
+    RECT clientBeforeGrowth{};
+    GetClientRect(popup.get(), &clientBeforeGrowth);
+    const bool fixedGeometryBeforeGrowth = popupState->debugFixedGeometry;
+    popupState->debugFixedGeometry       = false;
+    popupState->DebugAutoResizeClientHeightForSelfTest(popup.get(), clientBeforeGrowth.bottom);
+    popupState->DebugAutoResizeClientHeightForSelfTest(popup.get(), clientBeforeGrowth.bottom + 1);
+    popupState->debugFixedGeometry = fixedGeometryBeforeGrowth;
+    RECT clientAfterGrowth{};
+    GetClientRect(popup.get(), &clientAfterGrowth);
+    if (clientAfterGrowth.bottom != clientBeforeGrowth.bottom + 1)
+        fail(L"one-pixel auto-size growth was suppressed or rounded to an overflowing viewport");
+
+    TaskSnapshot scopePrompt                           = makeCopy(copyId + 8u, L"C:\\Stable\\Scope");
+    scopePrompt.operation                              = FILESYSTEM_MOVE;
+    scopePrompt.conflict.active                        = true;
+    scopePrompt.conflict.generation                    = 500u;
+    scopePrompt.conflict.bucket                        = static_cast<uint8_t>(FileOperations::ConflictClass::RegularFileExists);
+    scopePrompt.conflict.status                        = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+    scopePrompt.conflict.destinationMetadata.available = true;
+    popupState->DebugSetVisualScenario({scopePrompt}, false, true);
+    paint();
+    paint();
+    if (! layoutFor(scopePrompt.taskId).conflictApplyToAllHasDiscardSourceHelp)
+        fail(L"Move's repeat checkbox omitted Delete source's limited size/date scope from tooltip or accessible help");
+    scopePrompt.operation = FILESYSTEM_COPY;
+    popupState->DebugSetVisualScenario({scopePrompt}, false, true);
+    paint();
+    paint();
+    if (layoutFor(scopePrompt.taskId).conflictApplyToAllHasDiscardSourceHelp)
+        fail(L"Copy's repeat checkbox retained stale Delete source scope help");
+
     // 3. popup-b#5: a visible conflict body with no comparison children (no paths, no last note)
     // reaches a stable hosted tree; repainting it changes nothing.
     TaskSnapshot bare = makeCopy(copyId + 10u, L"C:\\Stable\\Bare");

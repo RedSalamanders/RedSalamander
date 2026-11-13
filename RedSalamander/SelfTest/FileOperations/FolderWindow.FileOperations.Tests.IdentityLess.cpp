@@ -983,6 +983,15 @@ struct QueuedByNameDelete final
         ShapeCase{L"harbor-timelapse.mp4.60D51A8A47EBA25F7F7B699FB5137228_1F.rs-tmp", true, false},
         ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.rs-tmp", true, false},
         ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.rs-bak", true, true},
+        // Case-only renames on case-insensitive destinations must not bypass the leftover warning/touch guard.
+        ShapeCase{L"report.docx.0123456789ABCDEF0123456789ABCDEF.RS-TMP", true, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef_1f.Rs-TmP", true, false},
+        ShapeCase{L"report.docx.0123456789abcdef0123456789abcdef.RS-BAK", true, true},
+        ShapeCase{L".RS-BAK-0123456789abcdef0123456789abcdef-report.docx", true, true},
+        ShapeCase{L".REDSALAMANDER-UPLOAD-0123456789abcdef0123456789abcdef", true, false},
+        ShapeCase{L".RedSalamander-Writer-0123456789abcdef0123456789abcdef", true, false},
+        ShapeCase{L".REDSALAMANDER-ROLLBACK-0123456789abcdef0123456789abcdef", true, true},
+        ShapeCase{L".report.docx.RS-MTP-OVERWRITE-0123456789abcdef0123456789abcdef.TMP", true, false},
         // Names written by earlier versions are ordinary files: only the names the current build writes are recognized.
         ShapeCase{L".rs_case_tmp_0123456789abcdef0123456789abcdef", false, false},
         ShapeCase{L".report.docx.rs-mtp-create-0123456789abcdef0123456789abcdef.tmp", false, false},
@@ -1019,6 +1028,10 @@ struct QueuedByNameDelete final
         ShapeCase{L".redsalamander-upload-0123456789abcdef0123456789abcdef.txt", false, false},
         ShapeCase{L"redsalamander-upload-0123456789abcdef0123456789abcdef", false, false},
         ShapeCase{L".report.docx.rs-mtp-overwrite-0123456789abcdef.tmp", false, false},
+        ShapeCase{L".REDSALAMANDER-ROLLBACK-0123456789abcdef0123456789abcdef-1", false, false},
+        ShapeCase{L".REDSALAMANDER-UPLOAD-0123456789abcdef0123456789abcdeg", false, false},
+        ShapeCase{L".report.RS-MTP-OVERWRITE-0123456789abcdef0123456789abcdef.TMP.txt", false, false},
+        ShapeCase{L"report.0123456789abcdef0123456789abcdef.RS-BAK.txt", false, false},
     };
     for (const ShapeCase& shape : kShapes)
     {

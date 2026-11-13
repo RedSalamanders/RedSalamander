@@ -677,3 +677,176 @@ Describe 'Hosted WSL startup audit' {
         (Get-Content (Join-Path $dir 'completion.json') -Raw|ConvertFrom-Json).wsl_startup_close_requested | Should Be $false
     }
 }
+
+Describe 'HostedTestDesktop AggregateException and filtered case run verification' {
+    It 'preserves both action and restoration exceptions as AggregateException in Invoke-RSWithHostedTestDesktop' {
+        $priorGitHubActions = [Environment]::GetEnvironmentVariable('GITHUB_ACTIONS', 'Process')
+        $env:GITHUB_ACTIONS = 'true'
+        $global:rsHostedAggQueue = [Collections.Generic.Queue[object]]::new()
+        try {
+            $smallMode = [pscustomobject]@{ Width = 1024; Height = 768; BitsPerPixel = 32; Frequency = 60 }
+            $largeMode = [pscustomobject]@{ Width = 1920; Height = 1080; BitsPerPixel = 32; Frequency = 60 }
+            $small = [pscustomobject]@{ Mode = $smallMode; Width = 1024; Height = 768; WorkWidth = 1024; WorkHeight = 728; CoordinateScale = 1.0 }
+            $large = [pscustomobject]@{ Mode = $largeMode; Width = 1920; Height = 1080; WorkWidth = 1920; WorkHeight = 1040; CoordinateScale = 1.0 }
+            $global:rsHostedAggQueue.Enqueue($small)
+            $global:rsHostedAggQueue.Enqueue($large)
+            $global:rsHostedAggMode = $largeMode
+            Mock Get-RSHostedDesktopState { $global:rsHostedAggQueue.Dequeue() } -ModuleName HostedTestDesktop
+            Mock Get-RSHostedDisplayModes { $global:rsHostedAggMode } -ModuleName HostedTestDesktop
+            Mock Set-RSHostedDisplayMode {
+                if ($Mode.Width -eq 1024) { throw [InvalidOperationException]::new('seeded display restore failure') }
+            } -ModuleName HostedTestDesktop
+
+            $caught = $null
+            try {
+                Invoke-RSWithHostedTestDesktop -Action { throw [InvalidOperationException]::new('seeded action failure') }
+            } catch {
+                $caught = $_.Exception
+            }
+            ($null -ne $caught) | Should Be $true
+            ($caught -is [System.AggregateException]) | Should Be $true
+            $caught.InnerExceptions.Count | Should Be 2
+            $caught.InnerExceptions[0].Message | Should Match 'seeded action failure'
+            $caught.InnerExceptions[1].Message | Should Match 'seeded display restore failure'
+        } finally {
+            [Environment]::SetEnvironmentVariable('GITHUB_ACTIONS', $priorGitHubActions, 'Process')
+            Remove-Variable rsHostedAggQueue, rsHostedAggMode -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'validates archived filtered case runs in Assert-RSHostedFilteredCaseRun for exit 2 NOT_EVALUATED and rejects failures' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+        Mock Read-RSBuildReceipt { [pscustomobject]@{receipt_id=('b'*64)} } -ModuleName HostedDiagnosticEvidence
+        Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64)} } -ModuleName HostedDiagnosticEvidence
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        $sandboxRoot = Join-Path $TestDrive ('filtered-case-' + [guid]::NewGuid().ToString('N'))
+        $null = New-Item -ItemType Directory -Path $sandboxRoot -Force
+        Mock Assert-RSTestSandboxContainedPath {
+            param($TestRoot, $Path, [switch]$RequireDescendant)
+            return [IO.Path]::GetFullPath($Path)
+        } -ModuleName HostedDiagnosticEvidence
+
+        $runId = '20261113T120000Z-1234-' + ('a' * 32)
+        $runDir = Join-Path $sandboxRoot "evidence/completed-runs/$runId"
+        $lastRunDir = Join-Path $runDir 'artifacts/selftest/last_run'
+        $recordsDir = Join-Path $sandboxRoot "evidence/run-archive-records/$runId"
+        $null = New-Item -ItemType Directory -Path $lastRunDir, $recordsDir -Force
+
+        $startedUtc = [DateTimeOffset]::Parse('2026-11-13T12:00:00Z')
+        $endedUtc = [DateTimeOffset]::Parse('2026-11-13T12:01:00Z')
+        $v2 = [ordered]@{
+            schema = 'red-salamander.run-all-tests.v2'
+            run_id = $runId
+            validation_mode = 'Fresh'
+            requested_gate = 'Commands'
+            coverage_scope = 'filtered'
+            snapshot_id = ('a'*64); build_receipt_id = ('b'*64)
+            plan_digest = ('a'*64); coverage_plan_digest = ('a'*64); decision_digest = ('a'*64)
+            duration_ms = 1; estimated_avoided_duration_ms = 0; commands_broad_seal_state = 'absent'
+            entries = @(@{
+                id='selftest.commands';execution='executed';promotion_state='promoted';evidence_digest=('a'*64)
+                promotion_digest=('a'*64);origin_run_id=$null;artifact_epoch=0;artifact_read_ids=@();artifact_write_ids=@()
+                produces_artifact_ids=@();cache_policy='ExactArtifact';reason_codes=@();coverage_digest=('a'*64)
+                outcome_digest=('a'*64);capability_digest=$null;duration_ms=1
+            })
+            repository_verdict = 'NOT_EVALUATED'
+            change_verdict = 'PASSED'
+            counts = [ordered]@{ executed = 1; reused = 0; provisional = 0; promoted = 1; invalidated = 0; incomplete = 0 }
+            case_counts = [ordered]@{ passed = 3; failed = 0; skipped = 0; total = 3 }
+        }
+        $v1 = [ordered]@{
+            schema = 'red-salamander.run-all-tests.v1'
+            run_id = $runId
+            run_started_utc = '2026-11-13T12:00:05.0000000Z'
+            run_ended_utc = '2026-11-13T12:00:55.0000000Z'
+            suite = 'Commands'
+            case_filter = 'terminal_'
+            platform = 'ARM64'
+            configuration = 'Debug'
+            exit_code = 2
+            executable = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
+            total = 3
+            passed = 3
+            failed = 0
+            skipped = 0
+            quarantine = [ordered]@{
+                is_valid = $true; has_blocking_entries = $false
+                active_count = 0; active_entries = @()
+                invalid_count = 0; invalid_entries = @(); errors = @()
+            }
+        }
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        [IO.File]::WriteAllText((Join-Path $lastRunDir 'run-all-tests-results-v1.json'), ($v1 | ConvertTo-Json -Depth 10))
+        [void][IO.Directory]::CreateDirectory((Join-Path $lastRunDir 'commands'))
+        $nativePath = Join-Path $lastRunDir 'commands/results.json'
+        $native = @{suite='Commands';passed=3;failed=0;skipped=0;cases=@(
+            @{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'},@{name='terminal_three';status='passed'})}
+        [IO.File]::WriteAllText($nativePath, ($native | ConvertTo-Json -Depth 10))
+
+        $intentPath = Join-Path $recordsDir 'intent.json'
+        $intent = [ordered]@{
+            schema = 'red-salamander.run-archive.v1'
+            run_id = $runId
+            disposition = 'completed'
+            source = [IO.Path]::GetFullPath((Join-Path $sandboxRoot "runs/$runId"))
+            destination = [IO.Path]::GetFullPath($runDir)
+            inventory = @(@{path='artifacts\selftest\last_run\commands\results.json';directory=$false;
+                length=(Get-Item $nativePath).Length;sha256=(Get-FileHash $nativePath).Hash})
+        }
+        [IO.File]::WriteAllText($intentPath, ($intent | ConvertTo-Json -Depth 6))
+        $intentHash = (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash
+        $complete = [ordered]@{
+            schema = 'red-salamander.run-archive-complete.v1'
+            source = [IO.Path]::GetFullPath((Join-Path $sandboxRoot "runs/$runId"))
+            destination = [IO.Path]::GetFullPath($runDir)
+            intent_sha256 = $intentHash
+        }
+        [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 6))
+
+        $outputText = "Header`nRun id: $runId`nDone"
+        $verified = Assert-RSHostedFilteredCaseRun `
+            -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' `
+            -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' `
+            -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc
+        $verified.RunId | Should Be $runId
+        $verified.RepositoryVerdict | Should Be 'NOT_EVALUATED'
+        $verified.ChangeVerdict | Should Be 'PASSED'
+
+        # Reject mismatched case filter, failed case count, or exit 1
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'other_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match'
+        { Assert-RSHostedFilteredCaseRun -ExitCode 1 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'failed with exit code 1'
+        { Assert-RSHostedFilteredCaseRun -ExitCode 0 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'failed with exit code 0'
+
+        $v2.case_counts.failed = 1
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'incomplete, skipped, or failed'
+
+        $v2.case_counts.failed = 0
+        $v2.build_receipt_id = 'c'*64
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'artifact receipt mismatch'
+        $v2.build_receipt_id = 'b'*64
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        [IO.File]::AppendAllText($nativePath, ' ')
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match the archive'
+
+        # Re-seal a coherent archive containing an unselected case: valid bytes and
+        # aggregate counts alone must not authorize the requested filter.
+        $native.cases[0].name = 'unselected_case'
+        [IO.File]::WriteAllText($nativePath, ($native | ConvertTo-Json -Depth 10))
+        $intent.inventory[0].length = (Get-Item $nativePath).Length
+        $intent.inventory[0].sha256 = (Get-FileHash $nativePath).Hash
+        [IO.File]::WriteAllText($intentPath, ($intent | ConvertTo-Json -Depth 10))
+        $complete.intent_sha256 = (Get-FileHash $intentPath).Hash
+        [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 10))
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'unexpected, duplicated, or not passing'
+
+        $intent.inventory = @()
+        [IO.File]::WriteAllText($intentPath, ($intent | ConvertTo-Json -Depth 10))
+        $complete.intent_sha256 = (Get-FileHash $intentPath).Hash
+        [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 10))
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match the archive'
+    }
+}

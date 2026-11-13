@@ -485,6 +485,19 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP "Odstranění zdroje se použije pro všechny pouze tehdy, mají-li oba soubory stejnou velikost a datum."
+    IDS_FILEOPS_RETAINED_DESTINATION_AUTHORITY "Zkopírováno; zdroj ponechán, protože cíl nemůže uchovat přesnou identitu zveřejněné položky."
+    IDS_FILEOPS_RETAINED_SOURCE_FACTS "Zkopírováno; zdroj ponechán, protože nelze přečíst jeho název, velikost a data."
+    IDS_FILEOPS_RETAINED_SOURCE_AUTHORITY "Zkopírováno; zdroj ponechán, protože jeho přesná identita není dostupná."
+    IDS_FILEOPS_RETAINED_FOLDER_CHILDREN "Zdrojová složka byla ponechána, protože obsahuje nevybranou nebo nově přidanou položku."
+    IDS_FILEOPS_RETAINED_SOURCE_CLEANUP "Zkopírováno; zdroj ponechán, protože jeho podmíněné odstranění nebylo dokončeno."
+    IDS_FILEOPS_RETAINED_SOURCE_PLACEHOLDER "Zkopírováno; zdroj ponechán podle volby pro cloudový zástupný soubor."
+    IDS_FILEOPS_RETAINED_SOURCE_EFS "Zkopírováno; zdroj ponechán, protože nelze zachovat šifrování EFS."
+    IDS_FILEOPS_RETAINED_SOURCE_SPARSE "Zkopírováno; zdroj ponechán, protože nelze zachovat řídké přidělení prostoru."
+    IDS_FILEOPS_RETAINED_SOURCE_SECURITY_METADATA "Zkopírováno; zdroj ponechán, protože metadata zabezpečení nebyla zachována."
+    IDS_FILEOPS_RETAINED_DESTINATION_CONTENT_PROOF "Zkopírováno; zdroj ponechán, protože cíl nemohl ověřit zveřejněný obsah."
+    IDS_FILEOPS_RETAINED_FOLDER_INCOMPLETE "Zdrojová složka byla ponechána, protože alespoň jedna podřízená položka nebyla dokončena."
+    IDS_FILEOPS_DIAG_DESTINATION_ANCESTRY_UNPROVED "Nelze ověřit, že cíl leží mimo zdrojovou složku. Nic nebylo zkopírováno ani přesunuto."
     IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK "Čekání na dokončení konfliktních operací. Identifikátory souborů nejsou pro tuto operaci dostupné, proto musí proběhnout samostatně."
     IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE "&Paralelní přenosy"
     IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC "Sdílený limit pro operace se soubory (1–16; výchozí 4). Různé soubory s novými cílovými názvy lze přenášet současně. Přepsání a konfliktní operace zůstávají postupné."

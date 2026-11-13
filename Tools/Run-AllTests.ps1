@@ -1498,6 +1498,7 @@ $requiredBuildSelection = @()
 $useAffectedSelectedBuild = $false
 $prebuildAffectedEntries = @()
 $prebuildWorkspaceSnapshot = $null
+$prebuildManifest = $null
 if ($ValidationMode -ceq 'Affected') {
     Import-RSRunnerValidationModules
     $prebuildEntries = @(Get-RSRunnerRequestedTestPlan)
@@ -1834,14 +1835,20 @@ function New-RSRunnerEntryFingerprintRecord {
 
 $entryFingerprintRecord = New-RSRunnerEntryFingerprintRecord -ExecutionEntries $testPlan -PortablePlan $validationPlan
 $entryFingerprintRows = @($entryFingerprintRecord.entries)
-$impactManifest = Read-RSValidationImpactManifest `
-    -Path (Join-Path $repoRoot 'Tools\validation-impact.json') `
-    -SchemaPath (Join-Path $repoRoot 'Specs\Testing\ValidationImpact.schema.json') `
-    -RepoRoot $repoRoot
-$trackedGraphInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
-$impactGovernance = Test-RSValidationImpactGovernance -Manifest $impactManifest -TrackedPaths $trackedGraphInputs -RepoRoot $repoRoot
-if (-not $impactGovernance.IsValid) {
-    Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete: $(@($impactGovernance.UnmappedBuildInputs) -join ', ')"
+if ($null -ne $prebuildWorkspaceSnapshot -and
+    $null -ne $prebuildManifest -and
+    $prebuildWorkspaceSnapshot.snapshot_id -ceq $initialWorkspaceSnapshot.snapshot_id) {
+    $impactManifest = $prebuildManifest
+} else {
+    $impactManifest = Read-RSValidationImpactManifest `
+        -Path (Join-Path $repoRoot 'Tools\validation-impact.json') `
+        -SchemaPath (Join-Path $repoRoot 'Specs\Testing\ValidationImpact.schema.json') `
+        -RepoRoot $repoRoot
+    $trackedGraphInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+    $impactGovernance = Test-RSValidationImpactGovernance -Manifest $impactManifest -TrackedPaths $trackedGraphInputs -RepoRoot $repoRoot
+    if (-not $impactGovernance.IsValid) {
+        Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete: $(@($impactGovernance.UnmappedBuildInputs) -join ', ')"
+    }
 }
 $durationEstimates = Get-RSValidationDurationEstimates `
     -EvidenceRoot $validationEvidenceRoot `

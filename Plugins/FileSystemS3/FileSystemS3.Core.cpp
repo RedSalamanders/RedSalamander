@@ -653,7 +653,8 @@ HRESULT FileSystemS3::BuildFileSystemRouteDescriptor(const wchar_t* path,
         }
         descriptor.providerWatchdogTimeoutMs = FsS3::S3ProviderWatchdogTimeoutMs(connectTimeoutMs, requestTimeoutMs);
     }
-    descriptor.proofFlags = FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST; // R3-2: full-object CRC-64/NVME of the published object
+    descriptor.proofFlags =
+        standardS3 ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE; // R3-2: full-object CRC-64/NVME of the published object
     return S_OK;
 }
 

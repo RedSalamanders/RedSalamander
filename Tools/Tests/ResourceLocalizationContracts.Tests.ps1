@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -1062,6 +1062,96 @@ Describe 'Resource localization contracts' {
 
         if ($findings.Count -ne 0) {
             throw "Static menu access-key violations:`r`n$($findings -join "`r`n")"
+        }
+    }
+
+    It 'keeps solution ProjectDependencies and MSBuild ProjectReference guards in parity for satellite locales' {
+        Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\BuildProjectSelection.psm1') -Force
+        $slnPath = Join-Path $repoRoot 'RedSalamander.sln'
+        $slnText = [IO.File]::ReadAllText($slnPath)
+
+        $projectDeclPattern = [regex]'Project\("\{[^}]+\}"\)\s*=\s*"([^"]+)",\s*"([^"]+)",\s*"(\{[0-9A-Fa-f-]+\})"(.*?)EndProject'
+        $declMatches = [regex]::Matches($slnText, '(?s)Project\("\{[^}]+\}"\)\s*=\s*"([^"]+)",\s*"([^"]+)",\s*"(\{[0-9A-Fa-f-]+\})"(.*?)EndProject')
+        $projectsByGuid = @{}
+        $depsByPath = @{}
+        foreach ($m in $declMatches) {
+            $guid = $m.Groups[3].Value.ToUpperInvariant()
+            $relPath = $m.Groups[2].Value.Replace('\', '/')
+            $body = $m.Groups[4].Value
+            $projectsByGuid[$guid] = $relPath
+            $depGuids = [System.Collections.Generic.List[string]]::new()
+            foreach ($d in [regex]::Matches($body, '(?m)^\s*(\{[0-9A-Fa-f-]+\})\s*=\s*\1\s*$')) {
+                $depGuids.Add($d.Groups[1].Value.ToUpperInvariant())
+            }
+            $depsByPath[$relPath] = @($depGuids)
+        }
+
+        $satelliteGuids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($kvp in $projectsByGuid.GetEnumerator()) {
+            if ($kvp.Value -match '/Lang/') {
+                [void]$satelliteGuids.Add($kvp.Key)
+            }
+        }
+
+        $violations = [System.Collections.Generic.List[string]]::new()
+        foreach ($relPath in @($projectsByGuid.Values | Where-Object { $_ -match '\.vcxproj$' -and $_ -notmatch '/Lang/' })) {
+            $vcxprojPath = Join-Path $repoRoot ($relPath.Replace('/', '\'))
+            [xml]$doc = Get-Content -LiteralPath $vcxprojPath -Raw
+            $ns = [System.Xml.XmlNamespaceManager]::new($doc.NameTable)
+            $ns.AddNamespace('msb', 'http://schemas.microsoft.com/developer/msbuild/2003')
+            $satRefs = @($doc.SelectNodes('//msb:ProjectReference', $ns) | Where-Object { $_.Include -match 'Lang\\' })
+            if ($satRefs.Count -eq 0) { continue }
+
+            $expectedGuids = [System.Collections.Generic.List[string]]::new()
+            foreach ($ref in $satRefs) {
+                $cond = [string]$ref.GetAttribute('Condition')
+                if ($cond -cne "'`$(CurrentSolutionConfigurationContents)' == ''") {
+                    $violations.Add("${relPath}: satellite ProjectReference '$($ref.Include)' missing standalone Condition (actual: '$cond')")
+                }
+                $projNode = $ref.SelectSingleNode('msb:Project', $ns)
+                if ($null -eq $projNode -or [string]::IsNullOrWhiteSpace($projNode.InnerText)) {
+                    $violations.Add("${relPath}: satellite ProjectReference '$($ref.Include)' missing <Project> GUID")
+                } else {
+                    $expectedGuids.Add($projNode.InnerText.Trim().ToUpperInvariant())
+                }
+            }
+
+            $actualDeps = @($depsByPath[$relPath] | Where-Object { $satelliteGuids.Contains($_) } | Sort-Object)
+            $expectedSorted = @($expectedGuids | Sort-Object)
+            if ($relPath -ceq 'RedSalamander/RedSalamander.vcxproj') {
+                foreach ($guid in $expectedSorted) {
+                    if ($actualDeps -notcontains $guid) {
+                        $violations.Add("${relPath}: RedSalamander.sln ProjectDependencies missing own satellite ProjectReference $guid")
+                    }
+                }
+            } elseif (($actualDeps -join '|') -cne ($expectedSorted -join '|')) {
+                $violations.Add("${relPath}: RedSalamander.sln ProjectDependencies [$($actualDeps -join ', ')] != satellite ProjectReferences [$($expectedSorted -join ', ')]")
+            }
+        }
+        if ($violations.Count -ne 0) {
+            throw "Solution/project satellite dependency parity violations:`r`n$($violations -join "`r`n")"
+        }
+
+        $union = Get-RSBuildProjectUnion -SolutionPath $slnPath -ProjectNames @('RedSalamander', 'RedConfigure', 'LocalizationTests')
+        $union.MSBuildTarget | Should Match '\bRedSalamander\b'
+        $union.MSBuildTarget | Should Match '\bRedConfigure\b'
+        $union.MSBuildTarget | Should Match '\bLocalizationTests\b'
+    }
+
+    It 'uses move terminology rather than copy terminology in ja-JP FileOps move-conflict strings' {
+        $jaRc = Get-Item -LiteralPath (Join-Path $repoRoot 'RedSalamander\Lang\ja-JP\RedSalamander-ja-JP.rc')
+        $entries = @{}
+        foreach ($entry in @(Get-RSResourceStringEntries -File $jaRc)) {
+            $entries[$entry.Id] = $entry.Text
+        }
+        foreach ($id in @(
+                'IDS_FILEOPS_CONFLICT_BTN_DISCARD_SOURCE',
+                'IDS_FILEOPS_RESULT_ALREADY_THERE_SOURCE_REMOVED',
+                'IDS_FMT_FILEOPS_TERMINAL_ALREADY_THERE',
+                'IDS_FILEOPS_NOTE_DISCARD_SOURCE_NO_RECYCLE_BIN')) {
+            $entries.ContainsKey($id) | Should Be $true
+            $entries[$id] | Should Not Match 'コピー'
+            $entries[$id] | Should Match '移動'
         }
     }
 }

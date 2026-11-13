@@ -1,0 +1,82 @@
+# I65 10-day audit remediation and evidence ledger
+
+Status: ACTIVE
+Priority: User-authorized multi-domain correctness/governance remediation; ordering follows current-source validation.
+Planned-at commit: `78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e` (`origin/main` at plan start).
+Audit scope: user-supplied report `2ffe09a70..78a8a75c4`, covering 354 files over 10 days.
+Starting worktree identity: 25 tracked dirty files; captured normalized `git diff --binary` SHA-256 `C8E670ED82A34C151B322E5FD9F86F6D670D2EE7552D6065B7259D185D061E29`.
+Drift check: inspect `git status --short --branch`, resolve the current base/merge base, and compare each report finding against current source, callers, tests and contracts. Keep the starting worktree identity distinct from subsequent worker changes.
+
+## Ownership and boundaries
+
+Runtime and tooling workers own implementation in their assigned source/test surfaces. The integration owner maintains this ledger, its WIP index entry, and one dated `Changes/` fragment. I60 and I62 remain their existing roadmap owners; this plan may reconcile their status/anchors but cannot claim broader implementation complete. I64 remains the File Operations collected-collisions roadmap; mapped audit findings that overlap its code remain in scope without taking over its product decisions.
+
+## Finding ledger
+
+Status terminology: **validated** means current source review supports the defect; **implemented** describes candidate changes only; **executed/pass** is limited to the exact tests listed below. A Pester pass does not qualify native behavior.
+
+| Report ID | Disposition / candidate status | Current evidence and validation state |
+|---|---|---|
+| BUG-01 | Rejected | Current File Operations contract/source around `FileSystem_FileOperations.md` section on queued execution holds admitted tasks in Preparing order; queued tasks wait behind earlier Parallel work. No defect reproduced. |
+| BUG-02 | Validated; fix reported | Shared `WithdrawUnstartedTask` wake/remove behavior repaired. Deterministic runtime coverage is pending execution. |
+| BUG-03 | Validated; fix reported | Bounded file replacement keeps mismatch errors deferred and non-mismatch failures separate. Deterministic runtime coverage is pending execution. |
+| BUG-04 | Validated; implemented | Missing solution satellite dependencies under the `CurrentSolutionConfigurationContents` guard repaired; locale/project graph parity test reported **12 passed** in `ResourceLocalizationContracts`. |
+| BUG-05 | Validated; implemented | Filtered Commands exit-2 evidence now requires strict v2 Fresh/promoted `selftest.commands`, actual unique all-passed rows/counts, exact invocation/filter/profile/quarantine/archive hash, and byte-verified source/receipt/executable. Historical 88-pass/2-fail tooling campaign is retained; repaired focused tooling suites passed (see Evidence). |
+| BUG-06 | Partly validated | Overlay/navigation focus and drag paths repaired. Right-click-after-menu allegation rejected: current handler focuses the target first. Runtime execution remains pending. |
+| BUG-07 | Validated; fix reported | Quarter-wheel input clamp corrected. Runtime execution remains pending. |
+| BUG-08 | Validated; implemented | Japanese Move wording now reflects the destructive move-only discard-source action; placeholders remain unchanged. The historical localization run predates the newly added runtime strings, so final current-resource validation remains pending. |
+| BUG-09 | Validated cross-root namespace defect; fix implemented and parent-reviewed | Local directory `FileIdInfo` includes RSLFID2, volume serial, and file ID, but does not prove IDs are comparable across redirector/export/WSL namespaces; UNC root IDs encode server/share while Local roots encode volume GUID. Ready traversed Local directory transfers across qualified roots now run typed `LocalDirectoryAncestryProbeResult` marker proof after positive identity checks. The generic identity-domain helper is unchanged. The overbroad allegation that every differing `rootId` proves incomparability remains rejected. Same-path unsupported/bound Copy remains a duplicate and Move remains `ERROR_ALREADY_EXISTS`. The ancestry matrix is mapped to the existing no-activation `FileOps_ReviewRemediationContracts` after its activation blocker and before prerequisite skips. Native execution and paired evidence remain pending. |
+| BUG-10 | Validated; fix reported | Extended distinct opens corrected. Runtime execution remains pending. |
+| BUG-11 | Partly validated | Microsoft Drive rollback retry no longer mutates the fresh rollback leaf after collision; fake-Graph collision/exhaustion coverage is implemented, not executed. Explicit max-component length 255 allegation rejected because the descriptor default already provides 255; the boundary contract remains covered. |
+| BUG-12 | Validated; implemented | Artifact-registry ASCII case-insensitive marker/extension checks use the canonical helper and fixed-width MTP suffix location. `FileOps_IdentityLessGuardPartition` coverage is implemented, not executed. |
+| BUG-13 | Validated; fix reported | Shared reserved-device-name policy now trims before extension handling and covers COM/LPT superscript aliases; duplicate bridge policy removed. Runtime execution remains pending. |
+| BUG-14 | Validated; fix reported | DPI pixel state, footer restoration and exact-ceiling growth corrected. UI/runtime execution remains pending; focus-taking acceptance has no time authorization. |
+| BUG-15 | Validated; fix reported | Completed-group reveal and Issues-pane copied facts corrected. Runtime execution remains pending. |
+| BUG-16 | Validated; fix reported | Queue reorder under lock corrected. Runtime execution remains pending. |
+| BUG-17 | Validated; implemented | Historical-tree hashing now batches through the 64 MiB caller; meaningful batch-byte tests reported passed. No native builds/tests are claimed. |
+| BUG-18 | Validated; implemented, subclaims 18.1–18.4 | Shared workflow/PATH MSBuild selection and vcpkg alignment; sanitized/contained SDK invocation; current-process PowerShell and no-optional-locks Git reads with deeper JSON identity; fail-closed single Clean before Rebuild. Initial PATH-only VS selection issue also fixed. Focused tooling passes are listed below; native acceptance is pending. |
+| BUG-19 | Validated; fix reported | Managed ABI/thread exception boundaries retain justified broad catches, propagate errors after retirement, and aggregate action/display restoration failures. Focus-taking behavior unchanged. Native/runtime execution remains pending. |
+| BUG-20 | Validated; implemented and parent-reviewed | Power request reason/writability are cached before the leaf mutex; exact last-error is preserved and failed-clear handles are retired before reacquisition; conflict waits use scoped cancellation/decision/progress events and a monotonic quiet deadline instead of 50 ms polling. Six private scenarios cover pre-answer, pre-cancel, quiet cancellation, resume/answer, stop-only, and spurious wakes. Candidate source/tests are implemented; native execution is pending. |
+| BUG-21 | Validated; implementation reported, subclaims 21.1–21.6 | Expected-occupant `NOT_SUPPORTED` prompts from fresh observed facts; S3 Table advertises no writer proof; retention reasons localized in five locales; dynamic NT buffer; debug delete-pending behavior; unused constant/stale “More” documentation fixed. Native/runtime execution remains pending. |
+| GOV-01 | Live merge verified; W5 qualification unresolved | GitHub and local history confirm PR #201 merged 2026-11-08 as `a9e366240d2083484a12aa6177c5864d8e617164`. I60 Rule 3 required W5.1–W5.4 implementation and local + physical NAS verification before merge. The archive `Specs/TestRuns/4cb089111a23/Validation/2026-11-07_055500_managed-controls/README.md` records a preceding PR201 head `73d562a6` scale-3 Full pass, but its `Delete_IdentityLessPinnedTreeScale` took 398,235 ms, and the README states default NAS deadline failures and current-head qualification remained pending. The live merged-PR check rollup shows tooling/format/CodeQL and `ci-gate`, not a native W5 NAS gate. This evidence does not meet W5.1's <60 s target or prove all W5 gates on the final merged head. The merge does not prove or waive those gates; keep I60 ACTIVE pending exact per-wave evidence. |
+
+### Additional report categories
+
+| ID | Disposition / candidate status | Current evidence and validation state |
+|---|---|---|
+| PERF-01 | Partly implemented; one proposal deferred | Temporary queue vector/sort removed. No total O(N) improvement claim. Popup formatting cache optimization is unproven and deferred. |
+| PERF-02 | Implemented; bounded component evidence executed | Historical tree cache, one-scan archive path, and governance reuse by identical snapshot are implemented. `Specs/TestRuns/4cb089111a23/Validation/2026-11-13_150237_ToolingComponents/` contains the archive-validated six-file packet with 32 counterbalanced component observations, bound to baseline `78a8a75c4` and the exact candidate target hashes. It records tree queries 2→1; index queries 2→2 with staged addition observed (256→257 rows); fresh inventory calls 5→4; recovery 2→2; same-snapshot governance 1→0 and changed-snapshot governance 1→1 over 126 graph inputs. This is bounded component evidence only; no whole-planner or native performance claim is made. |
+| ARCH-01.1 | Implemented | Windows helper unified. Runtime validation remains pending where applicable. |
+| ARCH-01.2 | Rejected | No current duplicate prefix helper found; canonical helper remains authoritative. |
+| ARCH-01.3 | Implemented | Dead scoped receipt/source/artifact/run/environment functions and stale exports/metadata removed; test migrated to obsolete-export absence and canonical runner capability guard. `ScopedTesting` and tool inventory checks passed. |
+| UX-01 | Intentional restriction; explanation improved | Broker capability restriction is by design; tooltip/UIA help now explains limited Delete Source repeat. UI/interaction acceptance is pending. |
+| TEST-01 | Coverage map expanded; execution pending | The no-activation `FileOps_ReviewRemediationContracts` case runs the ancestry matrix after its activation blocker and before prerequisite skips. It covers Ready plus two bound handles for the same physical directory with a test-only reported-namespace difference, same-object stability and revalidation; an actual task refuses a nested alias before creating its parent, while an ordinary distinct cross-root Copy verifies exact bytes. Native test execution remains pending. |
+
+### Tooling evidence (not native qualification)
+
+All paths below are beneath the canonically marker-verified `Z:\RedSalamander.Perf`. The tooling worker reports:
+
+- `ResourceLocalizationContracts`: 12 passed with the added runtime resource strings in `Z:\RedSalamander.Perf\runs\20261113T150840Z-63848-c94ed3ab9d3c414cada0faa67490e1a6`.
+- `ValidationFingerprint`: 29 passed; `ScopedTesting`: 11 passed; `MSBuildInvocation`: final 37 passed (earlier 33-pass result superseded); run folder `Z:\RedSalamander.Perf\runs\20261113T143855Z-75772-6701fa32993a4d98bd9440f874c68375` for the first two and `Z:\RedSalamander.Perf\runs\20261113T144432Z-60240-a35ed74c094645bcabb310a66a063518` for the final invocation result.
+- `TestRunEvidenceArchive`: 26 passed; `ToolInventory`: 17 passed; `ToolingGovernance`: 12 passed in `Z:\RedSalamander.Perf\runs\20261113T144032Z-46488-f3b6a1584b434d6b96c66b4f692a4c01`. This run's combined Pester log records 103 passed/1 failed, including `HostedTestDesktop` 48 passed/1 failed; retain as a failed run.
+- Directed `HostedTestDesktop` aggregate-exception/filtered-case check: 2 passed/0 failed in `Z:\RedSalamander.Perf\runs\20261113T144200Z-50748-6a44f065b919437b850ae16030753622`; this is not a full suite. The later complete `HostedTestDesktop` run passed 49/0/0 in `Z:\RedSalamander.Perf\runs\20261113T144531Z-2400-30bda3c35b234ddd8464a5ec3e1112f0`.
+- vcpkg default-toolset/hosted parity: 9 passed, 0 failed, 1 skipped because the existing pinned-DxUi mirror prerequisite was absent, in the same `144531` run. The initial broad campaign's 88 passed/2 failed remain preserved in `Z:\RedSalamander.Perf\runs\20261113T143534Z-82584-3dbf6733d6cd4639ac3794d4b1ad496b\tooling-pester.log`; these distinct run results are not an overall green.
+- The final compiler-free Pester campaign reports 263 passed, 1 failed, 0 skipped in `Z:\RedSalamander.Perf\runs\20261113T150840Z-63848-c94ed3ab9d3c414cada0faa67490e1a6`; the failure was a stale BUG-06 source-guard assertion. Its repaired affected describe reports 190 passed, 0 failed, 0 skipped in `Z:\RedSalamander.Perf\runs\20261113T151140Z-81084-91f0fb47fbb8418da6179ae8c7fc634b`; this rerun covers the targeted describe, not all 223 original source-contract cases. The 150840 run also records `ToolInventory` 17 passed and `ToolingGovernance` 12 passed. Spec inventory reports zero blocking and 60 nonblocking findings; `Test-Changelog.ps1 -Base origin/main` reports 156 pending fragments. Tool inventory: 230/230, zero findings; modified PowerShell parser and scoped `git diff --check` reported pass. Native builds/tests, overall Full, focus-taking acceptance, and broader native/full-planner performance qualification remain pending.
+
+## Contracts and validation
+
+Confirmed/likely normative owners to reconcile per report row include `Specs/Core/Core_SharedHelpers.md`, `Specs/Core/Core_FileSystemBridge.md`, `Specs/FileSystem/FileSystem_FileOperations.md`, `Specs/FileSystem/FileSystem_MicrosoftDrive.md`, `Specs/FileSystem/FileSystem_S3.md`, `Specs/Plugins/Plugins_VirtualFileSystem.md`, `Specs/Testing/Testing_ValidationEvidence.md`, `Testing_SelfTests.md`, `Testing_ToolingGovernance.md`, `Specs/Build/Build_Toolchain.md`, `Build_UnifiedCI.md`, and relevant UI contracts. Runtime/tooling owners report these candidate updates; this ledger does not claim every spec closeout is complete.
+
+Use `Test-Changes.ps1 -Explain`, then the derived affected scope and `Test-Changes.ps1 -Mode PrePush` under `Specs/Testing/Testing_ValidationEvidence.md`; run Full only where the owning contract requires it. Keep compile, focused execution, broader qualification, performance evidence, and hosted CI as separate states. No build or native test has run in this continuation. BUG-09 paired evidence and broader native/full-planner performance qualification remain pending; the bounded PERF-02 component packet is not a whole-planner speedup claim. Focus-taking acceptance remains pending until time-specific authorization is established.
+
+## Done criteria
+
+- Every report ID has an explicit current-source disposition and validated defects have a repair, meaningful regression coverage, and owning-spec update.
+- I60/I62 status and anchors are reconciled without claiming unrelated roadmap items complete or waiving outstanding release gates.
+- Required affected, PrePush, build/runtime/platform/performance, focus-taking, and hosted gates are completed or remain explicitly pending/blocked with evidence.
+- One valid dated change fragment remains in the single authorized feature PR; `CHANGELOG.md` remains unmodified and no separate changelog PR is opened.
+
+## Stop conditions
+
+- Stop only the dependent slice when report and current contracts cannot resolve a product/compatibility decision, the exact sandbox marker cannot be verified, output ownership changes unexpectedly, or focus-taking acceptance lacks time-specific authorization.
+- Keep independent fixes moving and record failed attempts, skips, and unexecuted gates plainly.

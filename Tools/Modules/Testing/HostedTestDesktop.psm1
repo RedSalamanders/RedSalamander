@@ -213,8 +213,9 @@ namespace RedSalamander.Testing {
                             }
                         }
                     }
-                } catch (Win32Exception error) { hotkeyCallbackFailure = error; }
-                  catch (InvalidOperationException error) { hotkeyCallbackFailure = error; }
+                // Native callback boundary: retain every managed failure for the owning thread;
+                // none may unwind through the unmanaged window procedure.
+                } catch (Exception error) { hotkeyCallbackFailure = error; }
                 return IntPtr.Zero;
             }
             return DefSubclassProc(window, message, wParam, lParam);
@@ -453,12 +454,12 @@ namespace RedSalamander.Testing {
                                 DispatchMessageW(ref message);
                             }
                         }
-                    } catch (Win32Exception error) { actionFailure = error; }
-                      catch (InvalidOperationException error) { actionFailure = error; }
+                    // Owner-thread boundary: retire the fixture even for an unexpected managed
+                    // failure, then propagate it together with any restoration failure.
+                    } catch (Exception error) { actionFailure = error; }
                     finally {
                         try { RestoreForeground(handle, original, originalThread, originalProcess, originalFocus); }
-                        catch (Win32Exception error) { restoreFailure = error; }
-                        catch (InvalidOperationException error) { restoreFailure = error; }
+                        catch (Exception error) { restoreFailure = error; }
                     }
                 }
                 var failures = new System.Collections.Generic.List<Exception>();
@@ -469,9 +470,7 @@ namespace RedSalamander.Testing {
                     throw new AggregateException("Hosted boundary operation or retirement failed.", failures);
                 Restored = GetForegroundWindow() == original;
                 if (!Restored) throw new InvalidOperationException("The hosted foreground restoration did not match its original window.");
-            } catch (Win32Exception error) { failure = error; }
-              catch (InvalidOperationException error) { failure = error; }
-              catch (AggregateException error) { failure = error; }
+            } catch (Exception error) { failure = error; }
             finally { ready.Set(); }
         }
         public void Dispose() {
@@ -1218,6 +1217,8 @@ function Invoke-RSWithHostedTestDesktop {
     $before = Get-RSHostedDesktopState
     Write-Host ('Hosted desktop before: ' + ($before | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
     $changed = $false
+    $actionError = $null
+    $restoreError = $null
     try {
         $minimumWidth = [Math]::Ceiling(1920 * $before.CoordinateScale)
         $minimumHeight = [Math]::Ceiling(1080 * $before.CoordinateScale)
@@ -1239,14 +1240,25 @@ function Invoke-RSWithHostedTestDesktop {
         Write-Host ('Hosted desktop ready: ' + ($ready | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
         if ($ready.WorkWidth -lt 1800 -or $ready.WorkHeight -lt 1000) { throw 'The hosted desktop work area cannot contain the required native UI fixtures.' }
         & $Action
+    } catch {
+        $actionError = $_
     } finally {
         if ($changed) {
-            Set-RSHostedDisplayMode -Mode $before.Mode
-            $restored = Get-RSHostedDesktopState
-            if ($restored.Width -ne $before.Width -or $restored.Height -ne $before.Height) { throw 'Hosted desktop display restoration did not converge.' }
-            Write-Host ('Hosted desktop restored: ' + ($restored | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
+            try {
+                Set-RSHostedDisplayMode -Mode $before.Mode
+                $restored = Get-RSHostedDesktopState
+                if ($restored.Width -ne $before.Width -or $restored.Height -ne $before.Height) { throw 'Hosted desktop display restoration did not converge.' }
+                Write-Host ('Hosted desktop restored: ' + ($restored | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
+            } catch {
+                $restoreError = $_
+            }
         }
     }
+    if ($null -ne $actionError -and $null -ne $restoreError) {
+        throw [System.AggregateException]::new('Hosted desktop action and display restoration both failed.', @($actionError.Exception, $restoreError.Exception))
+    }
+    if ($null -ne $actionError) { throw $actionError }
+    if ($null -ne $restoreError) { throw $restoreError }
 }
 
 Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest

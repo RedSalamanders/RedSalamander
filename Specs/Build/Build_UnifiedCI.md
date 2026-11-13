@@ -175,3 +175,20 @@ imports and installed paths but omit the helper's synthetic `CL` include overrid
 Source and manual qualification keep their existing environment. Never clear an
 inherited caller compiler override: the SDK ABI reader must independently reject
 unsupported overrides rather than accepting a different compiler environment.
+## Filtered Ghostty product evidence
+
+The manual Ghostty product qualification's Commands filters accept the canonical
+runner's exit 2 only as directed evidence with repository coverage NOT_EVALUATED.
+`Assert-RSHostedFilteredCaseRun` requires a Fresh filtered promoted Commands entry,
+strict current aggregate schema, matching v1 invocation window/filter/profile and
+clean quarantine. The native Commands payload must match its completed archive
+inventory hash and length, contain unique passing cases selected by the exact name
+or trailing-underscore prefix, and agree with both aggregate counts. The current
+source snapshot, executable path and byte-verified build receipt must match the v2
+record. The exact application project-union receipt remains admissible under the
+ordinary filtered-run contract; these checks grant no Full or release acceptance.
+
+Current runners write v2 at `run-all-tests-results.json` and retain v1 at
+`run-all-tests-results-v1.json`. Fixed diagnostic readers select that v1 sibling;
+they continue verifying native result bytes against archive inventory. Aggregates
+are generated after the native archive transaction and are not inventory members.

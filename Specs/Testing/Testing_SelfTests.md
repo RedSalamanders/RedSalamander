@@ -2921,3 +2921,16 @@ initialization. Automatic drive discovery must reject unmarked/missing roots wit
 writing to them. First initialization is a separate exact-path-authorized action.
 An explicitly configured unauthorized alternate root fails visibly; it does not
 silently choose another drive. This does not change the separate owned-VHDX contract.
+## Hosted retirement and archive verification
+
+Hosted managed callback and worker boundaries retain unexpected managed exceptions
+and propagate them through the existing owner after retirement. The display wrapper
+must retain both the primary action/setup failure and a display-restoration failure;
+restoration must never replace the original cause. This changes no foreground or
+desktop-admission policy.
+
+A fresh native evidence archive may use its freshly acquired stable inventory without
+an additional pre-move content scan, but must still verify the complete destination
+inventory before publishing completion. Recovery with a pre-existing intent must
+also compare the current source inventory before moving it. The same-volume,
+no-overwrite, reparse and owned-disk checks remain mandatory.

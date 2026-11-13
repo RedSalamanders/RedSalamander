@@ -99,6 +99,9 @@ constexpr std::wstring_view kStageIdentityUnsupportedFiredEnvVar = L"REDSALAMAND
 // below the configured root. Unlike the one-shot injections it stays set until the test clears it.
 constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar          = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
 constexpr std::wstring_view kBindDirectoryIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DIRECTORY_IDENTITY_UNSUPPORTED_PATH";
+// A fixture view can report persistent IDs in a different namespace while retaining
+// real handles and physical identity for every native operation.
+constexpr std::wstring_view kBindIdentityNamespaceRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_NAMESPACE_PATH";
 // I35 R7.1: the no-follow open of exactly this path fails with ERROR_NOT_SUPPORTED (a redirector that
 // refuses the open itself); it stays set until the test clears it.
 constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar   = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
@@ -3586,6 +3589,23 @@ public:
                                  grantedFlags == static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA)),
           _path(std::move(path))
     {
+#if defined(ENABLE_TESTS)
+        _reportedIdentity     = _identity;
+        const auto configured = EnvironmentVariables::Read(kBindIdentityNamespaceRootEnvVar);
+        if (configured.has_value())
+        {
+            std::wstring root = FileSystemInternal::ToExtendedPath(configured.value());
+            while (! root.empty() && (root.back() == L'\\' || root.back() == L'/'))
+                root.pop_back();
+            const std::wstring actual = FileSystemInternal::ToExtendedPath(_path);
+            if (! root.empty() && Common::Paths::IsSameOrDescendantNormalizedWindowsPath(root, actual))
+            {
+                // Snapshot-only fixture namespace: bound comparisons and fresh binds in
+                // this view agree, while retained-handle native checks stay physical.
+                _reportedIdentity.volumeSerialNumber ^= 0xA17E5C0FFEE01234ull;
+            }
+        }
+#endif
     }
 
     LocalBoundObject(const LocalBoundObject&)            = delete;
@@ -3669,8 +3689,12 @@ public:
             }
         }
 
-        snapshot->kind               = static_cast<uint32_t>(_kind);
-        snapshot->objectId           = &_identity;
+        snapshot->kind = static_cast<uint32_t>(_kind);
+#if defined(ENABLE_TESTS)
+        snapshot->objectId = &_reportedIdentity;
+#else
+        snapshot->objectId = &_identity;
+#endif
         snapshot->objectIdBytes      = sizeof(_identity);
         snapshot->revisionId         = nullptr;
         snapshot->revisionIdBytes    = 0u;
@@ -3703,7 +3727,11 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
+#if defined(ENABLE_TESTS)
+        *same = std::memcmp(otherSnapshot.objectId, &_reportedIdentity, sizeof(_reportedIdentity)) == 0 ? TRUE : FALSE;
+#else
         *same = std::memcmp(otherSnapshot.objectId, &_identity, sizeof(_identity)) == 0 ? TRUE : FALSE;
+#endif
         return S_OK;
     }
 
@@ -5193,6 +5221,9 @@ private:
     std::atomic_ulong _refCount{1u};
     wil::unique_handle _file;
     LocalObjectIdentityPayload _identity{};
+#if defined(ENABLE_TESTS)
+    LocalObjectIdentityPayload _reportedIdentity{};
+#endif
     FileSystemBoundObjectKind _kind   = FILESYSTEM_BOUND_OTHER;
     uint64_t _committedSizeBytes      = std::numeric_limits<uint64_t>::max();
     FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;

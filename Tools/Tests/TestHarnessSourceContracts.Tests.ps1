@@ -5275,11 +5275,22 @@ Specs\TestRuns\local_scratch
         $interaction | Should Match '!\s*_items\[hitIndex\]\.selected[\s\S]{0,100}SelectSingle\(hitIndex\)'
         $leftButtonDown = [regex]::Match(
             $interaction,
-            '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::OnLButtonDblClk\()').Value
+            '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::)').Value
         $leftButtonDown.Length | Should BeGreaterThan 0
+        $leftButtonDown | Should Not Match 'void\s+FolderView::OnMButtonDown'
         # I63 slice A: the pane state is read before the press takes the focus, and a press in the pane
         # that was not active keeps its selection (no SelectSingle, no ClearSelection).
-        $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*const\s+auto\s+hit\s*=\s*HitTest\(pt\)'
+        $focusCapture = [regex]::Match($leftButtonDown,
+            'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);')
+        $blockingOverlayReturn = [regex]::Match($leftButtonDown, 'if\s*\(hasOverlay\s*&&\s*overlay\.blocksInput\)\s*return;')
+        $itemHit = [regex]::Match($leftButtonDown, 'const\s+auto\s+hit\s*=\s*HitTest\(pt\);')
+        $focusCapture.Success | Should Be $true
+        $blockingOverlayReturn.Success | Should Be $true
+        $itemHit.Success | Should Be $true
+        # BUG06 keeps the reviewed overlay close/cancel path ahead of item input.
+        # Focus state is captured first; a blocking overlay must return before hit testing.
+        ($focusCapture.Index + $focusCapture.Length) | Should BeLessThan $blockingOverlayReturn.Index
+        ($blockingOverlayReturn.Index + $blockingOverlayReturn.Length) | Should BeLessThan $itemHit.Index
         # The index is read once through value(); the optional is not dereferenced with '*'.
         $leftButtonDown | Should Match 'if\s*\(hit\.has_value\(\)\)\s*\{\s*const\s+size_t\s+hitIndex\s*=\s*hit\.value\(\);'
         $leftButtonDown | Should Not Match '\*hit\b'

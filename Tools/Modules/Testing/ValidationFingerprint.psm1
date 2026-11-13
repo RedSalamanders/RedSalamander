@@ -359,13 +359,21 @@ function ConvertFrom-RSValidationGitNullList {
     return @($script:Utf8NoBomStrict.GetString($Bytes).Split([char]0, [StringSplitOptions]::RemoveEmptyEntries))
 }
 
+$script:HistoricalTreeMapCache = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+
 function Get-RSValidationGitObjectMap {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [AllowEmptyString()][string]$Tree = ''
     )
 
-    $arguments = if ([string]::IsNullOrEmpty($Tree)) {
+    $isTreeQuery = -not [string]::IsNullOrEmpty($Tree)
+    $cacheKey = if ($isTreeQuery) { "$RepoRoot|$Tree" } else { '' }
+    if ($isTreeQuery -and $script:HistoricalTreeMapCache.ContainsKey($cacheKey)) {
+        return ,$script:HistoricalTreeMapCache[$cacheKey]
+    }
+
+    $arguments = if (-not $isTreeQuery) {
         @('ls-files', '--stage', '-z', '--', '.')
     } else {
         @('ls-tree', '-r', '-z', $Tree, '--', '.')
@@ -374,23 +382,47 @@ function Get-RSValidationGitObjectMap {
         Invoke-RSValidationGitBinary -RepoRoot $RepoRoot -Argument $arguments)
     $map = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
     foreach ($record in $records) {
-        $match = if ([string]::IsNullOrEmpty($Tree)) {
-            [regex]::Match($record, '^(?<mode>[0-7]{6}) (?<oid>[0-9a-fA-F]{40,64}) (?<stage>[0-3])\t(?<path>[\s\S]+)$')
+        $tabIndex = $record.IndexOf([char]9)
+        if ($tabIndex -le 0 -or $tabIndex -ge ($record.Length - 1)) {
+            throw "Unable to parse Git object record for workspace snapshot: $record"
+        }
+        $header = $record.Substring(0, $tabIndex)
+        $rawPath = $record.Substring($tabIndex + 1)
+        $parts = $header.Split([char]' ')
+        if ($parts.Length -ne 3 -or $parts[0].Length -ne 6 -or $parts[0] -cnotmatch '^[0-7]{6}$') {
+            throw "Unable to parse Git object record for workspace snapshot: $record"
+        }
+        $mode = $parts[0]
+        if (-not $isTreeQuery) {
+            $oid = $parts[1]
+            $stage = $parts[2]
+            if ($oid.Length -lt 40 -or $oid.Length -gt 64 -or $oid -cnotmatch '^[0-9a-fA-F]+$' -or
+                $stage.Length -ne 1 -or $stage -cnotmatch '^[0-3]$') {
+                throw "Unable to parse Git object record for workspace snapshot: $record"
+            }
+            if ($stage -cne '0') {
+                throw "Workspace snapshot refuses an unresolved Git index stage for '$rawPath'."
+            }
+            $type = 'blob'
         } else {
-            [regex]::Match($record, '^(?<mode>[0-7]{6}) (?<type>blob|commit) (?<oid>[0-9a-fA-F]{40,64})\t(?<path>[\s\S]+)$')
+            $type = $parts[1]
+            $oid = $parts[2]
+            if (($type -cne 'blob' -and $type -cne 'commit') -or
+                $oid.Length -lt 40 -or $oid.Length -gt 64 -or $oid -cnotmatch '^[0-9a-fA-F]+$') {
+                throw "Unable to parse Git object record for workspace snapshot: $record"
+            }
         }
-        if (-not $match.Success) { throw "Unable to parse Git object record for workspace snapshot: $record" }
-        if ([string]::IsNullOrEmpty($Tree) -and $match.Groups['stage'].Value -ne '0') {
-            throw "Workspace snapshot refuses an unresolved Git index stage for '$($match.Groups['path'].Value)'."
-        }
-        $path = $match.Groups['path'].Value.Replace('\', '/')
+        $path = $rawPath.Replace('\', '/')
         if (-not (Test-RSValidationWorkspacePathIncluded -Path $path)) { continue }
         if ($map.ContainsKey($path)) { throw "Duplicate Git object path '$path'." }
         $map.Add($path, [pscustomobject]@{
-                Mode = $match.Groups['mode'].Value
-                Oid = $match.Groups['oid'].Value.ToLowerInvariant()
-                Type = if ([string]::IsNullOrEmpty($Tree)) { 'blob' } else { $match.Groups['type'].Value }
+                Mode = $mode
+                Oid = $oid.ToLowerInvariant()
+                Type = $type
             })
+    }
+    if ($isTreeQuery) {
+        $script:HistoricalTreeMapCache[$cacheKey] = $map
     }
     return ,$map
 }
@@ -779,7 +811,7 @@ function Get-RSWorkspaceSnapshotOnce {
         if ($baseMap.ContainsKey($basePath)) { $baseMap[$basePath] }
         if ($indexMap.ContainsKey($path)) { $indexMap[$path] }
     }
-    Add-RSValidationGitBlobSha256Batch -RepoRoot $root -Object @($objectsToHash) -Cache $blobCache
+    $null = Add-RSValidationGitBlobSha256Batches -RepoRoot $root -Object @($objectsToHash) -Cache $blobCache
     $files = foreach ($path in $paths) {
         $oldPath = if ($renameByNewPath.ContainsKey($path)) { $renameByNewPath[$path] } else { $null }
         $basePath = if ($null -eq $oldPath) { $path } else { $oldPath }

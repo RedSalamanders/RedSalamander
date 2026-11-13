@@ -452,6 +452,7 @@ struct PopupLayoutDebugSnapshot
     bool conflictApplyToAllVisible                 = false;
     bool conflictApplyToAllIsCheckbox              = false;
     bool conflictApplyToAllChecked                 = false;
+    bool conflictApplyToAllHasDiscardSourceHelp    = false;
     bool conflictMoreVisible                       = false;
     bool completedDiagnosticsMoreVisible           = false;
     bool completedDiagnosticsMoreButtonRectVisible = false;
@@ -550,7 +551,9 @@ struct PopupLayoutDebugSnapshot
     bool reducedMotionEnabled                    = false;
     bool layoutMotionActive                      = false;
     bool autoResizeMotionActive                  = false;
-    bool selectedTaskHeightMotionActive          = false;
+    bool expandedPlacementRestorePending         = false;
+    RECT expandedPlacementRestoreRect{};
+    bool selectedTaskHeightMotionActive = false;
     // I63 slice F: the stream rows the task's card reserves (painted or blank) and the card list's scrollbar decision.
     size_t taskReservedStreamRows                   = 0u;
     bool scrollBarVisible                           = false;
@@ -1032,6 +1035,23 @@ public:
     {
         _autoResizePending        = true;
         _autoResizePendingDueTick = GetTickCount64();
+    }
+    // Reproduce a model offset while a pending resize withholds the native range.
+    void DebugWithholdScrollBarForSelfTest(HWND hwnd, int position) noexcept
+    {
+        _scrollBarVisible = false;
+        _scrollPos        = position;
+        _scrollY          = static_cast<float>(position);
+        SCROLLINFO info{};
+        info.cbSize = sizeof(info);
+        info.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+        SetScrollInfo(hwnd, SB_VERT, &info, FALSE);
+    }
+    // Exercise production rounding/resize, using client pixels so a one-pixel
+    // growth can be asserted without deriving the private footer height in tests.
+    void DebugAutoResizeClientHeightForSelfTest(HWND hwnd, int clientHeight) noexcept
+    {
+        AutoResizeWindow(hwnd, static_cast<float>(clientHeight) - FooterHeightPixels(), 1u, false, true);
     }
     [[nodiscard]] PopupTelemetryDebugSnapshot DebugTelemetrySnapshot() const noexcept
     {

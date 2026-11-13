@@ -1,5 +1,18 @@
 # Repository tooling
 
+Build and SDK reopen share host-ordered MSBuild discovery through
+`Modules/Build/MSBuildInvocation.psm1`. Explicit Clean failure stops the build;
+combined Clean/Rebuild performs the Rebuild clean once. DxUi restore preserves the
+current PowerShell host and complete nested policy identity.
+In GitHub Actions, build and SDK reopen share explicit workflow selection validation
+and the PATH-only fallback. Dependency installation uses that same PATH-selected
+installation; a newer registered installation cannot silently replace it.
+
+Filtered Ghostty Commands qualification verifies archived native case bytes and
+selection, current source/artifact receipt, both aggregate summaries and invocation
+identity before accepting directed exit 2. Repository coverage remains NOT_EVALUATED.
+ScopedTesting retains planning/delegation only; canonical Startrail owns receipts.
+
 Native startup diagnostics print the start and elapsed time of File Operations
 profile/volume setup, the existing interactive lease wait, and contained process
 launch. Keep the parent console log when investigating a delay. The rows do not

@@ -1,5 +1,33 @@
 # Official Build Toolchain Identity
 
+## Build discovery and preparation failures
+
+Every guarded standalone resource-satellite ProjectReference must have the same
+satellite in its owning solution project's ProjectDependencies. Solution builds
+disable those references when CurrentSolutionConfigurationContents is populated,
+so the explicit solution graph must preserve all locales for selected application,
+configuration, plugin and test builds.
+
+Host-ordered MSBuild executable discovery is shared by the ordinary build and DxUi
+SDK artifact reopener. Within one selected installation it prefers native 64-bit,
+then runnable 64-bit emulation, then x86; x64 hosts never select ARM64 executables.
+Explicit GitHub workflow-selected MSBuild remains independently validated and bound
+to its original receipt hash. SDK consumer preflight uses the same sanitized,
+contained, dependency-scoped invocation and `/nr:false` policy as compilation.
+The shared workflow-selection helper gives an explicit `MSBUILD_EXE_PATH` priority
+and refuses invalid selections without fallback. With that variable absent, a valid
+PATH-selected MSBuild chooses its own installation and host-ordered executable before
+latest-instance discovery. Build, SDK reopen and vcpkg dependency installation preserve
+that same PATH-only installation even when another registered instance is newer.
+Direct vcpkg callers retain their existing explicit-path installation parser; executable
+admission for builds and SDK artifacts remains subject to the stricter shared helper.
+
+Pinned DxUi restoration uses the current PowerShell executable, performs read-only
+Git status checks without optional index locks, and serializes the complete native
+policy identity without truncating its nested fields. A failed explicit Clean stops
+the build before compilation and receipt publication. Rebuild already cleans its
+selected graph and must not receive a second preceding Clean pass.
+
 ## Explicit local SDK application builds
 
 `Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin

@@ -1578,6 +1578,159 @@ FileOperations::ObjectRevalidationResult FileOperations::RevalidateObjectAuthori
     return finish(sameObject && sameRevision && expected.kind == result.current.kind ? ObjectRevalidationState::Same : ObjectRevalidationState::Changed, S_OK);
 }
 
+FileOperations::LocalDirectoryAncestryProbeResult FileOperations::ProbeLocalDirectoryTransferAncestry(std::wstring_view sourcePath,
+                                                                                                      std::wstring_view destinationPath,
+                                                                                                      const FileSystemPathIdentity& pathIdentity,
+                                                                                                      const std::function<bool()>& cancelled) noexcept
+{
+    Debug::Perf::Scope perf(L"FileOps.Transfer.InsideSourceProbeUs");
+    uint64_t lookups         = 0u;
+    uint64_t candidateProbes = 0u;
+    HRESULT result           = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    const auto measured      = wil::scope_exit([&]() noexcept
+    {
+        perf.SetValue0(lookups);
+        perf.SetValue1(candidateProbes);
+        perf.SetHr(result);
+    });
+    const auto finish        = [&](HRESULT hr, bool destinationInsideSource = false) noexcept -> LocalDirectoryAncestryProbeResult
+    {
+        result = hr;
+        return {.status = hr, .destinationInsideSource = destinationInsideSource};
+    };
+    if (! Common::Paths::IsSupportedLocalFileOperationPath(sourcePath) || ! Common::Paths::IsSupportedLocalFileOperationPath(destinationPath))
+        return finish(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+    if (cancelled())
+        return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+    const std::wstring extendedSource = Common::Paths::ToExtendedWin32Path(sourcePath);
+    const DWORD sourceAttributes      = GetFileAttributesW(extendedSource.c_str());
+    const DWORD sourceError           = sourceAttributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+    ++lookups;
+    if (sourceAttributes == INVALID_FILE_ATTRIBUTES)
+        return finish(HRESULT_FROM_WIN32(sourceError));
+    if ((sourceAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u)
+        return finish(HRESULT_FROM_WIN32(ERROR_DIRECTORY));
+    std::wstring destinationFolder;
+    const std::wstring extendedDestination = Common::Paths::ToExtendedWin32Path(destinationPath);
+    const DWORD destinationAttributes      = GetFileAttributesW(extendedDestination.c_str());
+    ++lookups;
+    if (destinationAttributes != INVALID_FILE_ATTRIBUTES && (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u &&
+        (destinationAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u)
+        destinationFolder = destinationPath;
+    else if (! TryGetFileSystemParentPath(pathIdentity, destinationPath, destinationFolder))
+        return finish(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+    // A missing destination leaf or parent still has an existing ancestor. Probe there before
+    // ensureResolvedDestinationParent creates any part of the requested destination tree.
+    bool foundParent = false;
+    for (size_t depth = 0u; depth < 1024u && ! destinationFolder.empty(); ++depth)
+    {
+        if (cancelled())
+            return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        const std::wstring extendedFolder = Common::Paths::ToExtendedWin32Path(destinationFolder);
+        const DWORD attributes            = GetFileAttributesW(extendedFolder.c_str());
+        ++lookups;
+        if (attributes != INVALID_FILE_ATTRIBUTES)
+        {
+            if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u)
+                return finish(HRESULT_FROM_WIN32(ERROR_DIRECTORY));
+            foundParent = true;
+            break;
+        }
+        const DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND)
+            return finish(HRESULT_FROM_WIN32(error));
+        std::wstring parent;
+        if (! TryGetFileSystemParentPath(pathIdentity, destinationFolder, parent) || parent.empty() || EquivalentPath(pathIdentity, parent, destinationFolder))
+            break;
+        destinationFolder = std::move(parent);
+    }
+    if (! foundParent)
+        return finish(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+
+    const Common::Paths::UniqueSiblingFileOptions options{.prefix             = L"inside-source-check.",
+                                                          .suffix             = L".rs-tmp",
+                                                          .desiredAccess      = DELETE,
+                                                          .shareMode          = FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                          .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE};
+    wil::unique_hfile marker;
+    std::wstring markerPath;
+    const HRESULT createHr = Common::Paths::CreateUniqueFileInDirectory(Common::Paths::ToExtendedWin32Path(destinationFolder), options, markerPath, marker);
+    if (FAILED(createHr))
+        return finish(createHr);
+    const auto markerLeaf = std::filesystem::path(markerPath).filename().native();
+    const DWORD control   = GetFileAttributesW(markerPath.c_str());
+    ++lookups;
+    if (control == INVALID_FILE_ATTRIBUTES)
+        return finish(HRESULT_FROM_WIN32(GetLastError()));
+
+    std::vector<std::wstring> belowReversed;
+    std::wstring candidate = destinationFolder;
+    for (size_t depth = 0u; depth < 1024u; ++depth)
+    {
+        if (cancelled())
+            return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        std::filesystem::path throughSource(Common::Paths::ToExtendedWin32Path(sourcePath));
+        for (auto part = belowReversed.rbegin(); part != belowReversed.rend(); ++part)
+            throughSource /= *part;
+        const std::filesystem::path markerThroughSource = throughSource / markerLeaf;
+        const DWORD markerAttributes                    = GetFileAttributesW(markerThroughSource.c_str());
+        const DWORD probeError                          = markerAttributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+        ++lookups;
+        ++candidateProbes;
+        bool traversable = true;
+        // The selected source itself may be an alias. Only interior reparses are excluded:
+        // the non-follow transfer skips those entries rather than entering their targets.
+        // Ordinary outside candidates need one marker lookup. Only a found marker or an
+        // inconclusive lookup needs the more expensive non-follow interior validation.
+        if (markerAttributes != INVALID_FILE_ATTRIBUTES || (probeError != ERROR_FILE_NOT_FOUND && probeError != ERROR_PATH_NOT_FOUND))
+        {
+            throughSource = Common::Paths::ToExtendedWin32Path(sourcePath);
+            for (auto part = belowReversed.rbegin(); part != belowReversed.rend(); ++part)
+            {
+                if (cancelled())
+                    return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                throughSource /= *part;
+                const DWORD attributes = GetFileAttributesW(throughSource.c_str());
+                ++lookups;
+                if (attributes == INVALID_FILE_ATTRIBUTES)
+                {
+                    const DWORD error = GetLastError();
+                    return finish(HRESULT_FROM_WIN32(error));
+                }
+                if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+                {
+                    traversable = false;
+                    break;
+                }
+                if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u)
+                    return finish(HRESULT_FROM_WIN32(ERROR_DIRECTORY));
+            }
+            if (traversable && markerAttributes != INVALID_FILE_ATTRIBUTES)
+                return finish(HRESULT_FROM_WIN32(ERROR_INVALID_NAME), true);
+            if (traversable)
+                return finish(HRESULT_FROM_WIN32(probeError));
+        }
+        std::wstring parent;
+        if (! TryGetFileSystemParentPath(pathIdentity, candidate, parent) || parent.empty() || EquivalentPath(pathIdentity, candidate, parent))
+        {
+            if (cancelled())
+                return finish(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+            // The held marker denies file deletion/rename. Re-read its original control
+            // path as well: a moved/disappeared ancestor cannot turn absence into proof.
+            const DWORD finalControl = GetFileAttributesW(markerPath.c_str());
+            const DWORD finalError   = finalControl == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+            ++lookups;
+            return finish(finalControl == INVALID_FILE_ATTRIBUTES ? HRESULT_FROM_WIN32(finalError) : S_OK);
+        }
+        std::wstring leaf;
+        if (! TryGetFileSystemLeafName(pathIdentity, candidate, leaf) || leaf.empty())
+            return finish(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+        belowReversed.push_back(std::move(leaf));
+        candidate = std::move(parent);
+    }
+    return finish(HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE));
+}
+
 FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGuard(IFileSystem* sourceFileSystem,
                                                                                    IFileSystem* destinationFileSystem,
                                                                                    const QualifiedEndpoint& sourceEndpoint,
@@ -3168,12 +3321,7 @@ HRESULT FolderWindow::FileOperationState::AdmitScheduledRename(
     catch (const std::system_error& error)
     {
         Debug::Error(L"File Operations could not create the Batch Rename admission worker (taskId={}, code={}).", admittedTaskId, error.code().value());
-        std::scoped_lock lock(_mutex);
-        const auto taskIt = std::ranges::find_if(_tasks, [rawTask](const auto& candidate) noexcept { return candidate.get() == rawTask; });
-        if (taskIt != _tasks.end())
-        {
-            _tasks.erase(taskIt);
-        }
+        WithdrawUnstartedTask(rawTask);
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
     }
 

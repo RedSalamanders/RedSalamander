@@ -1,4 +1,5 @@
 # Private build module; import through its reviewed callers.
+Import-Module (Join-Path $PSScriptRoot 'MSBuildInvocation.psm1') -Scope Local -ErrorAction Stop
 function Assert-RSVcpkgTripletLeafName {
     [CmdletBinding()]
     param(
@@ -420,7 +421,8 @@ function Get-RSVcpkgVisualStudioInstallation {
         The Visual Studio installation the build compiles with.
 
     .DESCRIPTION
-        The one build.ps1 selects. In GitHub Actions that is the workflow-selected MSBuild (MSBUILD_EXE_PATH). Everywhere else it
+        The one build.ps1 selects. In GitHub Actions that is the explicit workflow-selected MSBuild (MSBUILD_EXE_PATH),
+        or the validated PATH-only compatibility selection when that variable is absent. Everywhere else it
         is the newest installation, prereleases included, that has MSBuild, as vswhere reports it (the query Tools\Restore-DxUi.ps1
         and DxUi use). Nothing here installs or writes anything, and no developer installation is named.
     #>
@@ -435,6 +437,12 @@ function Get-RSVcpkgVisualStudioInstallation {
         }
         return $match.Groups['root'].Value
     }
+
+    # Preserve explicit-path installation parsing above for direct vcpkg callers.
+    # PATH-only workflows must use the same selected installation as the build and
+    # SDK reopener, even when a newer registered instance is available.
+    $selected = Get-RSWorkflowSelectedMSBuild
+    if ($null -ne $selected) { return $selected.InstallationPath }
 
     $vswhere = @(${env:ProgramFiles(x86)}, $env:ProgramFiles | Where-Object { $_ } |
             ForEach-Object { Join-Path $_ 'Microsoft Visual Studio\Installer\vswhere.exe' }) |

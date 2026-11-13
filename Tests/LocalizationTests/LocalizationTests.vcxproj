@@ -114,7 +114,7 @@
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
-    <ProjectReference Include="Lang\fr-FR\LocalizationTests-fr-FR.vcxproj">
+    <ProjectReference Include="Lang\fr-FR\LocalizationTests-fr-FR.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{19c8e67e-b46a-45b4-939e-c35e49f13719}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>

@@ -27,6 +27,7 @@
 #include "DeleteOnCloseTemporaryFile.h"
 #include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
+#include "FileSystemRouteProviderBase.h"
 #include "Helpers.h"
 #include "LocalFileTransaction.h"
 #include "LocalizationManager.h"
@@ -2949,6 +2950,24 @@ bool TestCapabilities(std::wstring_view relPath, bool runProviderMutationProofs,
             }
             if (std::wstring_view(pluginId) == L"builtin/file-system" && typed.snapshot.pathIdentity.has_value())
             {
+                for (const std::wstring_view reserved :
+                     {L"con", L"NUL.txt", L"con .txt", L"COM0", L"LPT9", L"COM\u00B9", L"lpt\u00B2.log", L"COM\u00B3.", L"conin$ ", L"CONOUT$..."})
+                {
+                    Check(FileSystemRouteCapabilitiesBase::IsReservedWindowsLeaf(reserved),
+                          std::format(L"Shared Windows device policy rejects '{}' including normalized and superscript aliases", reserved).c_str(),
+                          success);
+                    FileSystemChildNameValidation validation{.sizeBytes = sizeof(validation)};
+                    const HRESULT validationHr = routeCapabilities->ValidateChildName(L"/", reserved.data(), FILESYSTEM_COPY, &validation);
+                    Check(validationHr == S_OK && validation.status == FILESYSTEM_CHILD_NAME_INVALID && FAILED(validation.failureStatus),
+                          L"Local proposed-name validation rejects every shared reserved-device alias before mutation",
+                          success);
+                }
+                for (const std::wstring_view ordinary : {L"console.txt", L"COM10", L"LPT12", L"NULs.txt", L"report.txt"})
+                {
+                    Check(! FileSystemRouteCapabilitiesBase::IsReservedWindowsLeaf(ordinary),
+                          L"Shared Windows device policy preserves ordinary near misses",
+                          success);
+                }
                 const FileSystemPathIdentity& identity = typed.snapshot.pathIdentity.value();
                 constexpr std::array<wchar_t, 5> pathKeyAlphabet{L'a', L'A', L'b', L'\\', L'/'};
                 CheckOrdinalComponentKeyUnitParity(identity, success);
@@ -2971,6 +2990,31 @@ bool TestCapabilities(std::wstring_view relPath, bool runProviderMutationProofs,
                           CompareFileSystemPathKeys(identity, localDirectoryKey.value(), localFileKey.value()) == FileSystemPathKeyRelation::LeftAncestor &&
                           IsStrictDescendantPath(identity, LR"(C:\foo\)", LR"(C:\foo\bar)"),
                       L"Canonical keys preserve the raw predicate's separator-completed directory-root ancestry",
+                      success);
+            }
+
+            if (std::wstring_view(pluginId) == L"builtin/file-system-onedrive-personal" ||
+                std::wstring_view(pluginId) == L"builtin/file-system-onedrive-business" || std::wstring_view(pluginId) == L"builtin/file-system-sharepoint")
+            {
+                Check(typed.snapshot.maxComponentUtf16 == 255u, L"Microsoft Drive typed names enforce the 255 UTF-16 component limit", success);
+                for (const size_t length : {255u, 256u})
+                {
+                    const std::wstring leaf(length, L'a');
+                    FileSystemChildNameValidation validation{.sizeBytes = sizeof(validation)};
+                    const HRESULT validationHr = routeCapabilities->ValidateChildName(L"/", leaf.c_str(), FILESYSTEM_COPY, &validation);
+                    Check(validationHr == S_OK && (length == 255u ? validation.status == FILESYSTEM_CHILD_NAME_VALID && validation.failureStatus == S_OK
+                                                                  : validation.status == FILESYSTEM_CHILD_NAME_INVALID &&
+                                                                        validation.failureStatus == HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE)),
+                          L"Microsoft Drive proposed-name validation admits 255 units and rejects 256 units",
+                          success);
+                }
+            }
+            if (std::wstring_view(pluginId) == L"builtin/file-system-s3" || std::wstring_view(pluginId) == L"builtin/file-system-s3table")
+            {
+                const unsigned long expectedProof =
+                    std::wstring_view(pluginId) == L"builtin/file-system-s3" ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE;
+                Check(typed.snapshot.proofFlags == expectedProof,
+                      L"Standard S3 advertises its writer digest while read-only S3 Table advertises no writer proof",
                       success);
             }
 

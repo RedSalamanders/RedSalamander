@@ -727,10 +727,9 @@ float PixelsToDips(float px, UINT dpi) noexcept
     return t * t * (3.0f - 2.0f * t);
 }
 
-[[nodiscard]] bool RectsNearEqual(const RECT& lhs, const RECT& rhs, int tolerancePx = 1) noexcept
+[[nodiscard]] bool RectsEqual(const RECT& lhs, const RECT& rhs) noexcept
 {
-    return std::abs(lhs.left - rhs.left) <= tolerancePx && std::abs(lhs.top - rhs.top) <= tolerancePx && std::abs(lhs.right - rhs.right) <= tolerancePx &&
-           std::abs(lhs.bottom - rhs.bottom) <= tolerancePx;
+    return lhs.left == rhs.left && lhs.top == rhs.top && lhs.right == rhs.right && lhs.bottom == rhs.bottom;
 }
 
 [[nodiscard]] LONG LerpLong(LONG from, LONG to, float fraction) noexcept
@@ -6815,9 +6814,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
     }
 
     // Only auto-resize if task count or content height changed
-    const bool taskCountChanged     = taskCount != _lastTaskCount;
-    const bool contentHeightChanged = std::abs(desiredContentHeight - _lastAutoSizedContentHeight) > 1.0f;
-    const bool footerHeightChanged  = std::abs(_footerHeightDip - _lastAutoSizedFooterHeight) > 0.5f;
+    const bool taskCountChanged = taskCount != _lastTaskCount;
+    // Compare the same rounded client height that AdjustWindowRectExForDpi
+    // consumes, including fractional footer pixels at the current monitor DPI.
+    const bool contentHeightChanged =
+        std::ceil(desiredContentHeight + FooterHeightPixels()) != std::ceil(_lastAutoSizedContentHeight + DipsToPixels(_lastAutoSizedFooterHeight, _dpi));
+    const bool footerHeightChanged = std::abs(_footerHeightDip - _lastAutoSizedFooterHeight) > 0.5f;
 
     if (! taskCountChanged && ! contentHeightChanged && ! footerHeightChanged && ! _autoResizePending && ! _autoResizeAnimating && ! _footerOnlyRestorePending)
     {
@@ -6896,7 +6898,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
     }
 
     const RECT targetRect{windowRc.left, newTop, windowRc.right, newBottom};
-    if (RectsNearEqual(windowRc, targetRect))
+    if (RectsEqual(windowRc, targetRect))
     {
         _autoResizePending        = false;
         _autoResizeAnimating      = false;
@@ -6941,7 +6943,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
 
     if (! _autoResizeAnimating)
     {
-        if (! _autoResizePending || ! RectsNearEqual(_autoResizePendingTargetRect, targetRect))
+        if (! _autoResizePending || ! RectsEqual(_autoResizePendingTargetRect, targetRect))
         {
             _autoResizePending           = true;
             _autoResizePendingTargetRect = targetRect;
@@ -6961,7 +6963,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(
         _autoResizeAnimationStartTick  = nowTick;
         Debug::Perf::EmitCounter(L"FileOps.Popup.WindowResizes");
     }
-    else if (! RectsNearEqual(_autoResizeAnimationTargetRect, targetRect))
+    else if (! RectsEqual(_autoResizeAnimationTargetRect, targetRect))
     {
         _autoResizeAnimationStartRect  = windowRc;
         _autoResizeAnimationTargetRect = targetRect;
@@ -9124,6 +9126,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
             auto* const checkbox = static_cast<DxUi::Checkbox*>(button);
             checkbox->SetChecked(task != snapshot.end() && task->conflict.applyToAllChecked);
             checkbox->SetEnabled(task != snapshot.end() && task->conflict.buttonsPublishable && task->conflict.applyToAllEligible);
+            std::wstring scopeHelp;
+            if (task != snapshot.end() && task->operation == FILESYSTEM_MOVE &&
+                std::find(task->conflict.actions.begin(),
+                          task->conflict.actions.begin() + std::min(task->conflict.actionCount, task->conflict.actions.size()),
+                          static_cast<uint8_t>(ConflictAction::DiscardSource)) !=
+                    task->conflict.actions.begin() + std::min(task->conflict.actionCount, task->conflict.actions.size()))
+                scopeHelp = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP);
+            if (checkbox->GetTooltipText() != scopeHelp)
+                checkbox->SetTooltipText(scopeHelp);
+            if (checkbox->GetAccessibleHelpText() != scopeHelp)
+                checkbox->SetAccessibleHelpText(std::move(scopeHelp));
         }
 
         if (hit.kind == PopupHitTest::Kind::TaskConflictInspectSource || hit.kind == PopupHitTest::Kind::TaskConflictInspectDestination)
@@ -14442,7 +14455,9 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::TryAttachHost(HWND h
         {
             const auto found   = std::ranges::find(_hostedButtons, control);
             const size_t index = static_cast<size_t>(std::distance(_hostedButtons.begin(), found));
-            if (index < _hostedButtonHits.size() && _hostedButtonHits[index].taskId != 0u)
+            if (index < _hostedButtonHits.size() &&
+                (_hostedButtonHits[index].taskId != 0u || _hostedButtonHits[index].kind == PopupHitTest::Kind::CompletedGroupToggle ||
+                 _hostedButtonHits[index].kind == PopupHitTest::Kind::CompletedGroupClear))
                 _pendingFocusReveal = _hostedButtonHits[index];
         }
         EnsureHostedFocusVisible(hwnd, control);
@@ -14711,7 +14726,35 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSize(HWND hwnd,
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnDpiChanged(HWND hwnd, UINT newDpi, const RECT& suggested) noexcept
 {
+    const UINT previousDpi = _dpi;
+    if (previousDpi != 0u && _footerOnlyRestoreWindowRect.has_value())
+    {
+        RECT previousWindow{};
+        if (GetWindowRect(hwnd, &previousWindow) != FALSE)
+        {
+            const RECT saved = _footerOnlyRestoreWindowRect.value();
+            const auto scale = [newDpi, previousDpi](LONG value) noexcept { return MulDiv(value, static_cast<int>(newDpi), static_cast<int>(previousDpi)); };
+            const LONG left  = suggested.left + scale(saved.left - previousWindow.left);
+            const LONG top   = suggested.top + scale(saved.top - previousWindow.top);
+            _footerOnlyRestoreWindowRect = RECT{left, top, left + scale(saved.right - saved.left), top + scale(saved.bottom - saved.top)};
+        }
+    }
     _dpi = newDpi;
+    // Resize targets, card heights and note reservations are physical pixels. A new
+    // monitor must measure them afresh instead of easing toward the old monitor's rect.
+    _autoResizePending             = false;
+    _autoResizeAnimating           = false;
+    _footerOnlyRestorePending      = false;
+    _autoResizePendingTargetRect   = {};
+    _autoResizeAnimationStartRect  = {};
+    _autoResizeAnimationTargetRect = {};
+    _lastAutoSizedContentHeight    = -1.0f;
+    _lastAutoSizedFooterHeight     = -1.0f;
+    _taskHeightAnimations.clear();
+    _taskLayoutStability.clear();
+    if (previousDpi != 0u)
+        _scrollPos = MulDiv(_scrollPos, static_cast<int>(newDpi), static_cast<int>(previousDpi));
+    _scrollY = static_cast<float>(_scrollPos);
 
     bool hostedHandled = false;
     static_cast<void>(_controlsHost.HandleMessage(hwnd, WM_DPICHANGED, MAKEWPARAM(newDpi, newDpi), reinterpret_cast<LPARAM>(&suggested), hostedHandled));
@@ -15635,6 +15678,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     const auto scalarAnimationActive               = [](const ScalarAnimation& animation) noexcept
     { return animation.initialized && std::abs(animation.displayed - animation.target) > 0.01; };
     result.autoResizeMotionActive                 = _autoResizePending || _autoResizeAnimating;
+    result.expandedPlacementRestorePending        = _footerOnlyRestorePending;
+    result.expandedPlacementRestoreRect           = _footerOnlyRestoreWindowRect.value_or(RECT{});
     result.completedGroupLayoutMotionActive       = completedGroupVisible && scalarAnimationActive(_completedGroupVisibilityAnimation);
     result.layoutMotionActive                     = result.autoResizeMotionActive || result.completedGroupLayoutMotionActive;
     result.autoResizeAnimationEnabled             = ! reducedMotion;
@@ -16397,10 +16442,14 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                     {
                         if (const auto* checkbox = dynamic_cast<const DxUi::Checkbox*>(_hostedButtons[i]))
                         {
-                            result.conflictApplyToAllIsCheckbox = true;
-                            result.conflictApplyToAllChecked    = checkbox->IsChecked();
-                            result.conflictScopeLabelFits       = hostedLabelFits(*checkbox, button.bounds, true) &&
-                                                                  checkbox->GetText() == LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
+                            result.conflictApplyToAllIsCheckbox           = true;
+                            result.conflictApplyToAllChecked              = checkbox->IsChecked();
+                            const std::wstring discardSourceScopeHelp     = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP);
+                            result.conflictApplyToAllHasDiscardSourceHelp = ! discardSourceScopeHelp.empty() &&
+                                                                            checkbox->GetTooltipText() == discardSourceScopeHelp &&
+                                                                            checkbox->GetAccessibleHelpText() == discardSourceScopeHelp;
+                            result.conflictScopeLabelFits = hostedLabelFits(*checkbox, button.bounds, true) &&
+                                                            checkbox->GetText() == LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
                         }
                     }
                 }
@@ -16672,11 +16721,11 @@ FileOperationsPopupInternal::PopupPointerDebugSnapshot FileOperationsPopupIntern
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnMouseWheel(HWND hwnd, int delta, POINT screenPoint) noexcept
 {
-    _pendingFocusReveal.reset();
     POINT point = screenPoint;
     ScreenToClient(hwnd, &point);
     if (! _pathDetailId.empty())
     {
+        _pendingFocusReveal.reset();
         if (_pathDetailField)
             static_cast<void>(_pathDetailField->OnMouseWheel(
                 _controlsHost,
@@ -16693,7 +16742,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnMouseWheel(HWND
         const float previous = body.offsetDip;
         body.panel->SetScrollOffset(previous - static_cast<float>(delta) / static_cast<float>(WHEEL_DELTA) * 36.0f);
         if (body.offsetDip != previous)
+        {
+            _pendingFocusReveal.reset();
             return 0;
+        }
         break; // At the inner boundary, continue normal outer-list scrolling.
     }
     const int step = std::max(1, DipsToPixels(36, _dpi));
@@ -16701,6 +16753,11 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnMouseWheel(HWND
 
     const int steps      = _mouseWheelRemainder / WHEEL_DELTA;
     _mouseWheelRemainder = _mouseWheelRemainder % WHEEL_DELTA;
+    // A subdetent is accumulation only. In particular, a withheld native range
+    // must not clamp the existing model offset or cancel a pending focus reveal.
+    if (steps == 0)
+        return 0;
+    _pendingFocusReveal.reset();
 
     SCROLLINFO si{};
     si.cbSize = sizeof(si);
