@@ -510,11 +510,20 @@ Describe 'Release workflow source contracts' {
     It 'selects and restores the hosted request inside all three actual direct workflow actions' {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
         $saved = @{}
-        foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY','REDSALAMANDER_HOSTED_TEST_DESKTOP')) {
+        foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY','GITHUB_WORKSPACE','REDSALAMANDER_HOSTED_TEST_DESKTOP')) {
             $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         $priorExit = Get-Variable LASTEXITCODE -Scope Global -ValueOnly -ErrorAction SilentlyContinue
         function Invoke-RSWithHostedTestDesktop { param([scriptblock]$Action) & $Action }
+        # This fixture checks workflow wiring; real archived-proof validation and
+        # tamper/freshness controls remain in HostedTestDesktop.Tests.ps1.
+        function Assert-RSHostedFilteredCaseRun {
+            param($ExitCode, $Output, $TestRoot, $RepoRoot, $Suite, $CaseFilter, $Platform, $Configuration,
+                [DateTimeOffset]$InvocationStartedUtc, [DateTimeOffset]$InvocationEndedUtc)
+            $verified.Add(@{ ExitCode=$ExitCode; Output=$Output; TestRoot=$TestRoot; RepoRoot=$RepoRoot; Suite=$Suite;
+                CaseFilter=$CaseFilter; Platform=$Platform; Configuration=$Configuration;
+                Started=$InvocationStartedUtc; Ended=$InvocationEndedUtc })
+        }
         try {
             foreach ($relative in @('.github/workflows/nightly-flake.yml', '.github/workflows/build-reusable.yml', '.github/workflows/ghostty-runtime-product-qualification.yml')) {
                 $text = Get-Content -LiteralPath (Join-Path $repoRoot $relative) -Raw
@@ -539,12 +548,16 @@ Describe 'Release workflow source contracts' {
                         $env:GITHUB_ACTIONS = 'true'
                         $env:RUNNER_ENVIRONMENT = if ($hosted) { 'github-hosted' } else { 'self-hosted' }
                         $env:GITHUB_REPOSITORY = 'RedSalamanders/RedSalamander'
+                        $env:GITHUB_WORKSPACE = $repoRoot
                         [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $(if ($prior) { $prior } else { $null }), 'Process')
                         $observed = [Collections.Generic.List[string]]::new()
+                        $verified = [Collections.Generic.List[hashtable]]::new()
+                        $started = [DateTimeOffset]::UtcNow
                         $fakeNative = {
                             $observed.Add([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process'))
                             if ($fail) { $global:LASTEXITCODE = 9; throw 'seeded native failure' }
-                            $global:LASTEXITCODE = 0
+                            $global:LASTEXITCODE = if ($relative -like '*ghostty*') { 2 } else { 0 }
+                            'synthetic runner output for workflow wiring only'
                         }
                         $runTests = $fakeNative
                         $result = Invoke-RSTestBlock { & $action }
@@ -552,6 +565,20 @@ Describe 'Release workflow source contracts' {
                         if ($fail) { $result.Error.Exception.Message | Should Match 'seeded native failure' }
                         $expectedCount = if ($relative -like '*ghostty*' -and -not $fail) { 3 } else { 1 }
                         $observed.Count | Should Be $expectedCount
+                        $expectedFilters = @('terminal_', 'cmd_pane_embedded_terminal_', 'cmd_pane_open_command_shell_prefers_windows_terminal')
+                        $verified.Count | Should Be $(if ($relative -like '*ghostty*' -and -not $fail) { 3 } else { 0 })
+                        for ($index = 0; $index -lt $verified.Count; $index++) {
+                            $call = $verified[$index]
+                            $call.ExitCode | Should Be 2
+                            $call.Output | Should Be 'synthetic runner output for workflow wiring only'
+                            $call.TestRoot | Should Be $env:REDSALAMANDER_TEST_ROOT
+                            $call.RepoRoot | Should Be $repoRoot
+                            $call.Suite | Should Be 'Commands'
+                            $call.CaseFilter | Should Be $expectedFilters[$index]
+                            $call.Platform | Should Be 'ARM64'
+                            $call.Configuration | Should Be 'Debug'
+                            ($call.Started -ge $started -and $call.Ended -ge $call.Started -and $call.Ended -le [DateTimeOffset]::UtcNow) | Should Be $true
+                        }
                         foreach ($actual in $observed) { $actual | Should Be $(if ($hosted) { 'default' } else { '' }) }
                         ([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')) | Should Be $prior
                       }
@@ -617,19 +644,24 @@ Describe 'Release workflow source contracts' {
         # build.ps1 routes every discovery strategy (vswhere, common installation roots,
         # VSINSTALLDIR) through one host-ordered candidate list.
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $buildScript | Should Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
+        $buildScript | Should Match 'Import-Module \$MSBuildInvocationModule -Force -ErrorAction Stop'
+        $buildScript | Should Match '\$workflowSelected = Get-RSWorkflowSelectedMSBuild'
+        $buildScript | Should Not Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
+        $msbuildModulePath = Join-Path $repoRoot 'Tools/Modules/Build/MSBuildInvocation.psm1'
+        $msbuildModule = Get-Content -LiteralPath $msbuildModulePath -Raw
         # ARM64 hosts also accept the emulated amd64 executable; x64 hosts cannot run arm64\, so it
         # is never a candidate there. Every runnable 64-bit executable, including the legacy 15.0
         # layout, outranks both x86 executables.
-        $buildScript | Should Match "if \(\`$isArm64Host\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)\s*\r?\n\s*\} else \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
-        $buildScript | Should Match "return \`$candidates \+ \[string\[\]\]@\(\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\Current\\Bin\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\MSBuild\.exe'\s*\r?\n\s*\)"
-        $buildScript | Should Not Match '\$other'
+        $msbuildModule | Should Match "if \(\`$isArm64Host\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)\s*\r?\n\s*\} else \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $msbuildModule | Should Match "return \`$candidates \+ \[string\[\]\]@\(\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\Current\\Bin\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\MSBuild\.exe'\s*\r?\n\s*\)"
+        $msbuildModule | Should Not Match '\$other'
         # A PATH hit (developer prompts expose the x86 MSBuild\Current\Bin) is mapped to the best
         # host-ordered executable of the same installation before it is returned.
-        ([regex]::Matches($buildScript, 'Resolve-RSHostOrderedMSBuildPath -Path \$msbuildInPath\.Source')).Count | Should Be 2
+        ([regex]::Matches($buildScript, 'Resolve-RSHostOrderedMSBuildPath -Path \$msbuildInPath\.Source')).Count | Should Be 1
+        $msbuildModule | Should Match 'Resolve-RSHostOrderedMSBuildPath -Path \$command\.Source'
         $buildScript | Should Not Match 'Path = \$msbuildInPath\.Source'
         $tokens = $null; $parseErrors = $null
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'), [ref]$tokens, [ref]$parseErrors)
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($msbuildModulePath, [ref]$tokens, [ref]$parseErrors)
         @($parseErrors).Count | Should Be 0
         $helpers = @($ast.FindAll({ param($node)
                     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and

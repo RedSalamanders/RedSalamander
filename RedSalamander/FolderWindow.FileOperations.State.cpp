@@ -16344,6 +16344,9 @@ struct CrossFileSystemBridge
     std::wstring rootDestinationPath;
     FileSystemPathIdentity sourcePathIdentity;
     FileSystemPathIdentity destinationPathIdentity;
+    // Local cross-root IDs can be valid in separate namespaces. A negative comparison
+    // cannot authorize deleting a file that may be the destination under another view.
+    const bool localCrossRootDistinctnessUnproved;
 
     std::mutex traversalBudgetMutex;
     uint64_t traversalRetainedEntries       = 0;
@@ -16634,6 +16637,7 @@ struct CrossFileSystemBridge
                           std::wstring_view destinationRootIdIn,
                           const FileSystemPathIdentity& sourcePathIdentityIn,
                           const FileSystemPathIdentity& destinationPathIdentityIn,
+                          bool localCrossRootDistinctnessUnprovedIn,
                           bool sourceCleanupPermittedIn,
                           bool verificationRequestedIn,
                           bool verificationHostReadbackIn,
@@ -16662,6 +16666,7 @@ struct CrossFileSystemBridge
           rootDestinationPath(rootDestinationPathIn ? rootDestinationPathIn : L""),
           sourcePathIdentity(sourcePathIdentityIn),
           destinationPathIdentity(destinationPathIdentityIn),
+          localCrossRootDistinctnessUnproved(localCrossRootDistinctnessUnprovedIn),
           sourceCleanupPermitted(sourceCleanupPermittedIn),
           verificationRequested(verificationRequestedIn),
           verificationHostReadback(verificationHostReadbackIn),
@@ -18118,14 +18123,17 @@ struct CrossFileSystemBridge
     }
 
     // I63 B4, B8: Delete source is offered only when the existing destination is provably another file than the
-    // source. Two bound objects answer by identity. Where the destination's location opens the file and cannot
-    // identify it, the location is asked another way: the destination is held denying all sharing and the
+    // source. Two bound objects answer by identity within the admitted qualification. Differing qualified Local
+    // roots can report different namespaces for the same file: neither negative IDs nor the same-view sharing
+    // control below proves cross-view distinctness, so those pairs withhold destructive cleanup. Where an
+    // eligible destination's location opens the file and cannot identify it, the location is asked another
+    // way: the destination is held denying all sharing and the
     // source's own name is then opened for reading. A sharing refusal means one file reached by two names;
     // success means two files. That holds only where the location enforces sharing, so it is measured first: a
     // second open of the held destination must be refused. Both handles must be regular files. Any doubt withholds
     // the action. The cost is two binds, and three opens at a destination without identity, per collision of a
-    // Move that may remove its source. Not covered: one file reached through two different systems (a local disk
-    // and a network or virtual path to that same disk), which no identity and no sharing rule relates.
+    // Move that may remove its source. Other providers retain their own identity/sharing contracts;
+    // this Local qualification does not assert cross-system sharing coherence.
     // I63 B7: with sourceMayBeUnbound, a source its location opens and cannot identify is asked the same way.
     [[nodiscard]] bool SourceAndDestinationAreDistinctFiles(const std::wstring& sourcePath,
                                                             const std::wstring& destinationPath,
@@ -18149,7 +18157,15 @@ struct CrossFileSystemBridge
         if (source && destinationBound)
         {
             BOOL same = TRUE;
-            return SUCCEEDED(source->IsSameObject(destination.get(), &same)) && same == FALSE;
+            if (FAILED(source->IsSameObject(destination.get(), &same)) || same != FALSE)
+                return false;
+            if (! localCrossRootDistinctnessUnproved)
+                return true;
+        }
+        if (localCrossRootDistinctnessUnproved)
+        {
+            Debug::Perf::EmitCounter(L"FileOps.Conflict.LocalDistinctnessUnproved");
+            return false;
         }
         if ((! destinationBound && destinationHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)) ||
             ! NavigationLocation::LooksLikeWindowsAbsolutePath(sourcePath) || ! NavigationLocation::LooksLikeWindowsAbsolutePath(destinationPath))
@@ -26483,6 +26499,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
             const bool copyOnlyMove = _operation == FILESYSTEM_MOVE && transferPlan != nullptr && itemStrategy == FileOperations::OperationStrategy::CopyOnly;
             const bool managedMove  = _operation == FILESYSTEM_MOVE && transferPlan != nullptr && itemStrategy == FileOperations::OperationStrategy::Managed;
+            const bool localCrossRootDistinctnessUnproved =
+                transferPlan != nullptr && FileOperations::IsLocalFileSystemEndpoint(transferPlan->sourceEndpoint) &&
+                FileOperations::IsLocalFileSystemEndpoint(transferPlan->destinationEndpoint) &&
+                ! FileOperations::QualifiedEndpointsReferToSameRoot(transferPlan->sourceEndpoint, transferPlan->destinationEndpoint);
             if (_operation == FILESYSTEM_COPY || copyOnlyMove || managedMove)
             {
                 if (transferPlan == nullptr)
@@ -26518,6 +26538,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                      transferPlan->destinationEndpoint.rootId,
                                                      transferPlan->sourceEndpoint.pathIdentity.value(),
                                                      transferPlan->destinationEndpoint.pathIdentity.value(),
+                                                     localCrossRootDistinctnessUnproved,
                                                      managedMove,
                                                      transferPlan->options.verifyAfterCopy,
                                                      transferPlan->destinationEndpoint.verificationHostReadback,
@@ -26677,6 +26698,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                       transferPlan->destinationEndpoint.rootId,
                                                       transferPlan->sourceEndpoint.pathIdentity.value(),
                                                       transferPlan->destinationEndpoint.pathIdentity.value(),
+                                                      localCrossRootDistinctnessUnproved,
                                                       true,
                                                       false,
                                                       false,

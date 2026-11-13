@@ -249,6 +249,148 @@
         passed = passed && nestedHr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) && ! nestedParentExists && ! nestedExistsError && distinctHr == S_OK &&
                  ReadFileTextFsIo(io, viewSource / L"track.bin", sourceBytes) && sourceBytes == kViewBytes &&
                  ReadFileTextFsIo(io, distinctParent / L"album" / L"track.bin", distinctBytes) && distinctBytes == kViewBytes;
+
+        // Differing Local roots do not turn negative namespace IDs into destructive
+        // distinctness. Exercise the real Managed admission/prompt, never a copied predicate.
+        const auto distinctFileParent = distinctParent / L"file-collision";
+        if (! RecreateEmptyDirectory(distinctFileParent) || ! WriteFileTextFsIo(io, distinctFileParent / L"track.bin", "existing-destination"))
+            return false;
+        for (const unsigned int control : {0u, 1u, 2u})
+        {
+            const bool sameEntry           = control == 0u;
+            const bool identitylessCleanup = control == 2u;
+            const auto selectedFile        = viewSource / L"track.bin";
+            const auto targetParent        = sameEntry ? realView / L"album" : distinctFileParent;
+            const auto targetFile          = targetParent / selectedFile.filename();
+            RedSalamander::TestSupport::ScopedEnvironmentVariable sourceIdentity(
+                kSelfTestEnvBindIdentityUnsupportedPath, identitylessCleanup ? std::optional<std::wstring_view>(selectedFile.native()) : std::nullopt);
+            if (sameEntry)
+            {
+                RedSalamander::TestSupport::ScopedEnvironmentVariable comparableIds(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_NAMESPACE_PATH", std::nullopt);
+                const auto positive = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                                   state.fsLocal.get(),
+                                                                                   sourceEndpoint,
+                                                                                   destinationEndpoint,
+                                                                                   FileOperations::TransferIntent::Move,
+                                                                                   selectedFile.native(),
+                                                                                   targetFile.native());
+                if (positive.state != FileOperations::TransferSafetyState::SameObject)
+                    return false;
+            }
+            auto fileGuard        = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                                 state.fsLocal.get(),
+                                                                                 sourceEndpoint,
+                                                                                 destinationEndpoint,
+                                                                                 FileOperations::TransferIntent::Move,
+                                                                                 selectedFile.native(),
+                                                                                 targetFile.native());
+            bool sameFileObject   = true;
+            bool sameFileRevision = false;
+            const HRESULT fileCheck =
+                fileGuard.destination.has_value()
+                    ? FileOperations::CrossCheckBoundObjectIdentity(fileGuard.source, fileGuard.destination.value().authority, sameFileObject, sameFileRevision)
+                    : E_UNEXPECTED;
+            if (identitylessCleanup ? fileGuard.state != FileOperations::TransferSafetyState::Unsupported || fileGuard.source.boundObject
+                                    : fileGuard.state != FileOperations::TransferSafetyState::Ready || ! fileGuard.source.boundObject ||
+                                          ! fileGuard.destination.has_value() || FAILED(fileCheck) || sameFileObject)
+                return false;
+            fileGuard = {};
+
+            FileOperations::TransferPlan filePlan{};
+            filePlan.intent                         = FileOperations::TransferIntent::Move;
+            filePlan.strategy                       = FileOperations::OperationStrategy::Managed;
+            filePlan.sourceEndpoint                 = sourceEndpoint;
+            filePlan.destinationEndpoint            = destinationEndpoint;
+            filePlan.selectedItems                  = {{.providerPath = selectedFile.native()}};
+            filePlan.destination.providerFolderPath = targetParent.native();
+            State::Task fileTask(*state.fileOps);
+            fileTask._operation                = FILESYSTEM_MOVE;
+            fileTask._executionMode            = State::ExecutionMode::PerItem;
+            fileTask._fileSystem               = state.fsLocal;
+            fileTask._sourcePaths              = {selectedFile};
+            fileTask._sourcePluginId           = sourceEndpoint.pluginId;
+            fileTask._sourcePluginShortId      = L"file";
+            fileTask._sourceInstanceContext    = sourceEndpoint.instanceId;
+            fileTask._sourcePathAttributesHint = {FILE_ATTRIBUTE_NORMAL};
+            fileTask._perItemMaxConcurrency    = 1u;
+            fileTask.InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+                                                   FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(filePlan)}}),
+                                               {.fileSystem      = state.fsLocal,
+                                                .folder          = targetParent,
+                                                .pluginId        = destinationEndpoint.pluginId,
+                                                .pluginShortId   = L"file",
+                                                .instanceContext = destinationEndpoint.instanceId});
+            fileTask.InitializeSourceItemResultBuilders();
+            const auto fileDiagnostics = wil::scope_exit([&]() noexcept { state.fileOps->DebugRemoveDiagnosticsForTask(fileTask._taskId); });
+            if (FAILED(fileTask.PrepareMutationInterlockScopes()))
+                return false;
+            using Action = State::Task::ConflictAction;
+            std::atomic<uint32_t> promptCount{0u};
+            std::atomic<bool> discardOffered{false};
+            std::atomic<bool> ordinaryActions{true};
+            HRESULT fileHr               = E_PENDING;
+            const uint64_t fileStartedUs = PerfNowUs();
+            {
+                const std::jthread responder([&](std::stop_token stop) noexcept
+                {
+                    uint64_t answeredGeneration = 0u;
+                    const auto deadline         = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(5));
+                    while (! stop.stop_requested() && std::chrono::steady_clock::now() < deadline)
+                    {
+                        if (const auto prompt = TryGetConflictPromptCopy(&fileTask);
+                            prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                        {
+                            const auto end     = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                            const auto offered = [&](Action action) noexcept { return std::find(prompt->actions.begin(), end, action) != end; };
+                            discardOffered.store(offered(Action::DiscardSource), std::memory_order_release);
+                            ordinaryActions.store(offered(Action::Overwrite) && offered(Action::KeepBoth) && offered(Action::Skip) && offered(Action::Cancel),
+                                                  std::memory_order_release);
+                            // Alias controls always Cancel, even on a vulnerable baseline. Only the distinct-file
+                            // identityless control replaces bytes, then exercises the actual cleanup helper.
+                            if (fileTask.SubmitConflictDecision(prompt->generation, identitylessCleanup ? Action::Overwrite : Action::Cancel, false))
+                            {
+                                answeredGeneration = prompt->generation;
+                                promptCount.fetch_add(1u, std::memory_order_release);
+                            }
+                        }
+                        Sleep(2);
+                    }
+                    if (! stop.stop_requested())
+                        fileTask.RequestCancel();
+                });
+                fileHr = fileTask.ExecuteOperation();
+            }
+            const uint64_t fileElapsedUs  = PerfElapsedUs(fileStartedUs);
+            bool retainedAfterPublication = true;
+            if (identitylessCleanup)
+            {
+                static_cast<void>(fileTask.FinalizeTypedItemResults(fileHr));
+                const std::scoped_lock resultsLock(fileTask._sourceItemStatusMutex);
+                retainedAfterPublication = fileTask._sourceItemResultBuilders.size() == 1u && fileTask._sourceItemResultBuilders.front().terminal.has_value();
+                if (retainedAfterPublication)
+                {
+                    const auto& terminal     = fileTask._sourceItemResultBuilders.front().terminal.value();
+                    retainedAfterPublication = terminal.publication == FileOperations::PublicationState::Published &&
+                                               terminal.sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                                               terminal.completion == FileOperations::ItemCompletion::Completed && SUCCEEDED(terminal.status);
+                }
+            }
+            std::string retainedSource;
+            std::string retainedDestination;
+            const bool filePassed =
+                (identitylessCleanup ? SUCCEEDED(fileHr) : fileHr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) && retainedAfterPublication &&
+                promptCount.load(std::memory_order_acquire) == 1u && ! discardOffered.load(std::memory_order_acquire) &&
+                ordinaryActions.load(std::memory_order_acquire) && fileTask._alreadyThereSourceRemovedCount.load(std::memory_order_acquire) == 0u &&
+                ReadFileTextFsIo(io, selectedFile, retainedSource) && retainedSource == kViewBytes && ReadFileTextFsIo(io, targetFile, retainedDestination) &&
+                retainedDestination == (sameEntry || identitylessCleanup ? kViewBytes : std::string_view("existing-destination"));
+            Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.LocalCrossRootDistinctness",
+                                        identitylessCleanup ? L"identityless-replace" : (sameEntry ? L"same-entry" : L"different-entry"),
+                                        fileElapsedUs,
+                                        promptCount.load(std::memory_order_acquire),
+                                        discardOffered.load(std::memory_order_acquire) ? 1u : 0u,
+                                        filePassed ? S_OK : E_FAIL);
+            passed = filePassed && passed;
+        }
     }
     for (const bool unsupported : {true, false})
     {

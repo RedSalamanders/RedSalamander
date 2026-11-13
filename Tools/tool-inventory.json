@@ -141,7 +141,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify pinned vcpkg safety, platform-private overlay/toolset selection, and the source/compiler/architecture scope of the MSVC 14.52 ARM64 AWS hash inlining workaround.",
+      "purpose": "Verify pinned vcpkg safety, platform-private overlay/toolset selection, immutable baseline data through a verified existing consumer object store, and the source/compiler/architecture scope of the MSVC 14.52 ARM64 AWS hash inlining workaround.",
       "usage": "Run in the current tooling Pester profile after installer, toolset or overlay changes. Restore pinned DxUi source for the module mirror check; data-only floor/override and ARM64 overlay assertions materialize selected files from immutable builtin-baseline Git objects into marked TestSandbox scratch.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -2015,7 +2015,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
+      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process/MSBuild helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
       "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
       "consumerClosure": "derived-references",
       "usedBy": [

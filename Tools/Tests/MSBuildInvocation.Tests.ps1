@@ -9,7 +9,9 @@ Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') 
 Describe 'Workflow-selected MSBuild identity' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop
-        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -ErrorAction Stop
+        # Rebind the consumer after replacing the shared module, so its nested
+        # commands and Pester's module mocks use the same module instance.
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Force -ErrorAction Stop
         $tokens=$null;$errors=$null
         $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'),[ref]$tokens,[ref]$errors)
         $function=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Find-MSBuild'},$true)
@@ -36,6 +38,8 @@ Describe 'Workflow-selected MSBuild identity' {
         Remove-Variable rsMsbuildSelectionFixture -Scope Global -ErrorAction SilentlyContinue
     }
     It 'keeps PATH-only build and dependency selection in the selected installation despite a competitor' {
+        $nestedHelper = & (Get-Module VcpkgInstallSafety) { (Get-Command Get-RSWorkflowSelectedMSBuild).Module }
+        [object]::ReferenceEquals((Get-Command Get-RSWorkflowSelectedMSBuild).Module, $nestedHelper) | Should Be $true
         $expected=Join-Path $global:rsMsbuildSelectionFixture.A @(Get-RSHostOrderedMSBuildRelativePaths)[0]
         $selected=Get-RSWorkflowSelectedMSBuild
         $selected.Path | Should Be $expected

@@ -314,7 +314,8 @@ Ghostty lifecycle module and its complete direct/indirect helper closure, the
 canonical Ghostty product lock and schema, the current private-runtime patch, the
 complete notice-input set, and `RuntimeDependencies.props`.
 This includes `ArtifactOperationLock.psm1` for closed-package path guards and
-`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation.
+`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation,
+and `MSBuildInvocation.psm1` imported by the dependency owner.
 `Get-RSGhosttyRuntimeIdentityInputPaths` owns that exact closure and
 `ReleaseWorkflowPolicy.Tests.ps1` compares it with the workflow key; adding or
 removing a behavioral input
@@ -761,6 +762,10 @@ Updating vcpkg dependencies is therefore a manual, single reviewed change:
 3. Prove availability with the governed installer gate: `vcpkg-install.ps1` against the new tool and baseline on a clean
    restore, and the offline pin contract (`Tools/Tests/VcpkgInstallSafety.Tests.ps1`), which checks each floor and
    override against the immutable builtin-baseline version database; those data checks do not attest a live executable checkout.
+   Their offline object reader may reuse the existing DxUi consumer output's vcpkg object store through the
+   canonical resolved-output helper after checking the complete dependency source pin, output identity and pinned
+   microsoft/vcpkg origin. The store's active checkout is not the baseline authority: the exact requested
+   RedSalamander baseline, tree and blob IDs must be present and verified without fetching or moving refs.
 4. Merge only with a green CI build.
 
 The governed installer pins every triplet it builds to the Visual Studio installation and the default MSVC toolset the

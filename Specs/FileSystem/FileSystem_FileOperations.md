@@ -66,15 +66,24 @@ directory object.
     Local provider, the one provider whose Delete either uses the Recycle Bin or refuses before any
     change; the destination is a regular file, not a link or a folder; and the destination is
     provably another file than the source. That last fact comes from the two bound objects'
-    identities, or, where the destination's location opens the file and cannot identify it, from the
+    identities within the admitted qualification below, or, where an eligible destination's location
+    opens the file and cannot identify it, from the
     location itself: the destination is held denying all sharing and the source's own name is then
     opened for reading; a sharing refusal means one file reached by two names. The location is
     first checked for the rule this relies on: a second open of the held destination must be
     refused, and a location that admits it cannot answer. Both names must be regular files, not
     links or folders. A destination another reader holds for a moment is tried five times, 25 ms
-    apart. Any doubt withholds the action. One file reached through two different systems (a
-    local disk and a network or virtual path to that same disk) is not detected: no identity and
-    no sharing rule relates the two paths, as in Explorer. The removal is by name through the provider's Recycle route, immediately
+    apart. Any doubt withholds the action. When both admitted endpoints are Local and their qualified
+    roots differ (including a differing instance or path profile), negative bound IDs cannot prove
+    distinctness: overlapping export/transport views may report valid IDs in different namespaces.
+    The bridge withholds `Delete source` for that pair and does not substitute the sharing fallback,
+    whose same-destination control does not establish cross-view sharing coherence. This includes
+    roots that happen to encode different native volume GUIDs: root IDs remain opaque and may also
+    be lexical fallbacks, so this repair parses no root text and adds no storage probe. Equal qualified
+    Local roots and other providers retain their existing behavior; positive equality still rejects
+    aliases before destructive admission. The conservative cost is that even distinct files across
+    differing Local roots cannot use `Delete source`; normal Replace, Keep both, Skip and Cancel remain
+    governed by their existing capabilities. The removal is by name through the provider's Recycle route, immediately
     after the answer; a source changed in between is still recycled and can be restored. Where the
     source's location has no Recycle Bin, the provider refuses the Recycle before any change and the
     task asks one question on the card (D-5): `This location has no Recycle Bin. Delete the source
@@ -200,7 +209,11 @@ directory object.
     cloud placeholder. When an existing destination item was replaced, the location is first asked
     whether the source and the published file are two files (the same-file probe of 13a, here
     without a source binding), because a copy published over the source itself under another
-    spelling has the source's facts; unless they are distinct, the source is kept. A source folder
+    spelling has the source's facts; unless they are distinct, the source is kept. Differing qualified
+    Local roots withhold that destructive distinctness proof as in 13a: replacement may succeed, but
+    the identityless source is retained with the existing localized reason. This does not disable
+    ordinary bound Managed cleanup, which consumes its separate exact source/publication authority.
+    A source folder
     is removed only when the Move emptied it, through the provider's empty-folder removal by name,
     which fails on a folder that still holds anything; a link source is copied and kept. Nothing is
     asked beyond the Move itself; this is not Permanent Delete by name, whose confirmation is
@@ -2298,6 +2311,12 @@ withdraw the unpublished task under the queue predicate mutex and wake immediate
 head selection chooses the least eligible `(orderKey, taskId)` directly without allocating or
 sorting a temporary collection on each wake. Reordering takes its eligibility, ordering,
 adjacency and overlap-edge observations under that same queue mutex before swapping keys.
+`FileOps_IdentityInterlockWaiting` additionally runs the named `queue_head_selector_v1`
+same-binary component A/B: the actual locked production helper versus the frozen prior selector,
+with identical bounded private fixtures and independent correctness expectations. Its owning
+protocol in `Specs/Testing/Testing_PerformanceValidation.md` defines counterbalanced timing,
+actual temporary collection capacity, baseline provenance and source/receipt-bound archival.
+This component evidence does not establish historical whole-application or queue-start speedup.
 
 For a Local directory transfer whose provider cannot prove ancestry by object IDs, whose
 endpoint identity domains are incomparable, or whose qualified Local roots differ, qualify containment before creating missing
@@ -2327,6 +2346,17 @@ candidate-marker lookup count and status. Outside candidates normally require on
 only found or inconclusive marker observations validate the interior non-follow components.
 Path construction remains proportional to each candidate's path length; there is no total linear
 time claim for arbitrary depth.
+Regular-file destructive distinctness is a separate qualification owned by invariant 13a.
+`FileOps.Conflict.LocalDistinctnessUnproved` counts an uncertain Local pair refused by that helper,
+including its post-replacement identityless-cleanup call; it is not a SameObject finding or a provider
+identity-domain change. The early no-activation cross-view controls in `FileOps_ReviewRemediationContracts`
+execute real private Managed file admissions: different reported IDs for one physical entry and an
+ordinary distinct-file control both withhold `Delete source`, retain the other collision actions,
+and are answered Cancel before any recycle. Comparable positive identity still refuses the alias.
+`FileOps.SelfTest.LocalCrossRootDistinctness` retains per-control diagnostic duration, actual prompt
+count and whether `Delete source` was offered. A third early control executes an uncertain cross-root
+identityless-source replacement and requires the typed result to report publication plus retained source,
+not Error. All three controls precede the case's existing queued-admission prerequisite skips.
 The established same-path case runs before this cross-alias probe: within one qualified root,
 unsupported identity still makes Copy select its normal distinct sibling and Move return
 `ERROR_ALREADY_EXISTS`. Comparable SameObject handling remains unchanged.

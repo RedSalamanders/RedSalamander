@@ -3118,7 +3118,10 @@ struct FolderWindow::FileOperationState
 #endif
 
 private:
+    // _queueMutex is held by the caller; selector nests _mutex for task lifetime.
+    [[nodiscard]] uint64_t FirstUnblockedQueuedTaskIdLocked() noexcept;
 #ifdef ENABLE_TESTS
+    [[nodiscard]] uint64_t DebugBaselineQueueHeadLocked(uint64_t& scratchCapacityBytes) noexcept;
     friend bool FolderWindowFileOperationsStateInternal::RunQueueWaitCancelLostWakeSelfTest(FileOperationState& state) noexcept;
 #endif
 
