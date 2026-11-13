@@ -1571,21 +1571,80 @@
     terminal.completedBytes = terminal.totalBytes;
     terminal.completedItems = terminal.totalItems;
     cards.push_back(terminal);
-    popupState->DebugSetVisualScenario(cards, false, true);
+    TaskSnapshot secondTerminal           = terminal;
+    secondTerminal.taskId                 = copyId + 7u;
+    secondTerminal.currentSourcePath      = L"C:\\Stable\\FinishedAgain\\Source\\first.bin";
+    secondTerminal.currentDestinationPath = L"C:\\Stable\\FinishedAgain\\Destination\\first.bin";
+    secondTerminal.destinationFolder      = L"C:\\Stable\\FinishedAgain\\Destination";
+    cards.push_back(std::move(secondTerminal));
+    // The real completed group requires two records. Keep it collapsed so its
+    // header is the final row, then use normal scrolling to host its controls.
+    popupState->DebugSetVisualScenario(cards, false, false);
     paint();
     paint();
-    const std::wstring completedToggleId = actionId(PopupHitTest::Kind::CompletedGroupToggle, 0u);
-    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), completedToggleId) || ! layoutFor(firstCardId).pendingFocusReveal)
-        fail(L"completed-group focus did not queue its list reveal");
+    SendMessageW(popup.get(), WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), 0);
+    paint();
+    paint();
+    const auto groupLayout = layoutFor(firstCardId);
+    if (! groupLayout.found || ! groupLayout.completedGroupVisible || groupLayout.completedGroupCount != 2u || groupLayout.completedGroupExpanded ||
+        ! groupLayout.completedGroupToggleVisible || ! groupLayout.completedGroupClearVisible)
+    {
+        fail(std::format(L"completed-group fixture unavailable: found={} visible={} count={} expanded={} toggle={} clear={}; "
+                         L"focus and quarter-detent checks were not executed",
+                         groupLayout.found,
+                         groupLayout.completedGroupVisible,
+                         groupLayout.completedGroupCount,
+                         groupLayout.completedGroupExpanded,
+                         groupLayout.completedGroupToggleVisible,
+                         groupLayout.completedGroupClearVisible));
+        return false;
+    }
+    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), {}))
+    {
+        fail(L"completed-group fixture could not clear the earlier logical focus; focus and quarter-detent checks were not executed");
+        return false;
+    }
+    const auto focusCompletedGroup = [&](PopupHitTest::Kind kind) noexcept
+    {
+        const std::wstring target = actionId(kind, 0u);
+        const auto beforeFocus    = layoutFor(firstCardId);
+        const bool focused        = popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), target);
+        const auto afterFocus     = layoutFor(firstCardId);
+        if (! focused || beforeFocus.hostedFocusedAutomationId == target || afterFocus.hostedFocusedAutomationId != target || ! afterFocus.pendingFocusReveal)
+        {
+            fail(std::format(L"completed-group focus prerequisite: target='{}' accepted={} before='{}' after='{}' pending={}; "
+                             L"quarter-detent checks were not executed",
+                             target,
+                             focused,
+                             beforeFocus.hostedFocusedAutomationId,
+                             afterFocus.hostedFocusedAutomationId,
+                             afterFocus.pendingFocusReveal));
+            return false;
+        }
+        return true;
+    };
+    if (! focusCompletedGroup(PopupHitTest::Kind::CompletedGroupClear) || ! focusCompletedGroup(PopupHitTest::Kind::CompletedGroupToggle))
+        return false;
     popupState->DebugWithholdScrollBarForSelfTest(popup.get(), 72);
-    const auto beforeQuarterDetents  = layoutFor(firstCardId);
+    const auto beforeQuarterDetents = layoutFor(firstCardId);
+    if (beforeQuarterDetents.scrollPosition != 72 || ! beforeQuarterDetents.pendingFocusReveal)
+    {
+        fail(std::format(L"withheld-range fixture prerequisite: offset={} pending={}; quarter-detent checks were not executed",
+                         beforeQuarterDetents.scrollPosition,
+                         beforeQuarterDetents.pendingFocusReveal));
+        return false;
+    }
     const auto quarterDetentsStarted = std::chrono::steady_clock::now();
     for (size_t quarter = 0u; quarter < 3u; ++quarter)
     {
         SendMessageW(popup.get(), WM_MOUSEWHEEL, MAKEWPARAM(0, 30), 0);
         const auto observed = layoutFor(firstCardId);
         if (observed.scrollPosition != beforeQuarterDetents.scrollPosition || ! observed.pendingFocusReveal)
-            fail(L"a quarter-detent changed the offset or consumed the deferred reveal while the native range was withheld");
+            fail(std::format(L"quarter-detent {} changed withheld-range state: offset={} expected={} pending={}",
+                             quarter + 1u,
+                             observed.scrollPosition,
+                             beforeQuarterDetents.scrollPosition,
+                             observed.pendingFocusReveal));
     }
     SendMessageW(popup.get(), WM_MOUSEWHEEL, MAKEWPARAM(0, 30), 0);
     const auto afterDetent          = layoutFor(firstCardId);
@@ -1596,7 +1655,7 @@
     const auto quarterDetentsUs =
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - quarterDetentsStarted).count());
     Debug::Perf::Emit(L"FileOps.Popup.StableTree.QuarterDetentSyncUs",
-                      L"3 running cards plus completed group; four delta-30 messages; withheld native range",
+                      L"3 running cards and 2 finished records in a collapsed completed group; four delta-30 messages; withheld native range",
                       quarterDetentsUs,
                       4u,
                       static_cast<uint64_t>(afterDetent.scrollPosition));
@@ -1645,17 +1704,62 @@
     scopePrompt.conflict.bucket                        = static_cast<uint8_t>(FileOperations::ConflictClass::RegularFileExists);
     scopePrompt.conflict.status                        = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
     scopePrompt.conflict.destinationMetadata.available = true;
-    popupState->DebugSetVisualScenario({scopePrompt}, false, true);
-    paint();
-    paint();
-    if (! layoutFor(scopePrompt.taskId).conflictApplyToAllHasDiscardSourceHelp)
-        fail(L"Move's repeat checkbox omitted Delete source's limited size/date scope from tooltip or accessible help");
+    const std::wstring expectedScopeHelp               = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP);
+    if (expectedScopeHelp.empty())
+    {
+        fail(L"the owning localized Delete source scope-help resource is empty; scope-help controls were not executed");
+        return false;
+    }
+    const auto checkScopeHelp = [&](bool allowDiscardSource, bool expectedOffer, std::wstring_view label) noexcept
+    {
+        if (allowDiscardSource)
+            popupState->DebugSetVisualScenario({scopePrompt}, false, true, true);
+        else
+            popupState->DebugSetVisualScenario({scopePrompt}, false, true); // Exercise the default-false fixture capability.
+        paint();
+        paint();
+        const auto layout = layoutFor(scopePrompt.taskId);
+        const std::span<const uint8_t> primary(layout.conflictPrimaryActions.data(),
+                                               std::min(layout.conflictPrimaryActionCount, layout.conflictPrimaryActions.size()));
+        const std::span<const uint8_t> overflow(layout.conflictOverflowActions.data(),
+                                                std::min(layout.conflictOverflowActionCount, layout.conflictOverflowActions.size()));
+        const uint8_t discard = static_cast<uint8_t>(FileOperations::ConflictAction::DiscardSource);
+        const bool offered    = std::ranges::find(primary, discard) != primary.end() || std::ranges::find(overflow, discard) != overflow.end();
+        if (! layout.found || ! layout.conflictButtonsPublishable || ! layout.conflictApplyToAllVisible || ! layout.conflictApplyToAllIsCheckbox ||
+            offered != expectedOffer)
+        {
+            fail(std::format(L"{} scope fixture prerequisite: found={} publishable={} checkboxVisible={} isCheckbox={} discardOffered={} expected={} "
+                             L"primary={} overflow={}; tooltip/help assertion was not executed",
+                             label,
+                             layout.found,
+                             layout.conflictButtonsPublishable,
+                             layout.conflictApplyToAllVisible,
+                             layout.conflictApplyToAllIsCheckbox,
+                             offered,
+                             expectedOffer,
+                             primary.size(),
+                             overflow.size()));
+            return false;
+        }
+        const bool helpMatches = expectedOffer ? layout.conflictApplyToAllHasDiscardSourceHelp : layout.conflictApplyToAllScopeHelpEmpty;
+        if (! helpMatches)
+        {
+            fail(std::format(L"{} scope tooltip/accessible-help mismatch: discardOffered={} localizedResource={} expectedHelp='{}' actualMatch={} bothEmpty={}",
+                             label,
+                             offered,
+                             IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP,
+                             expectedScopeHelp,
+                             layout.conflictApplyToAllHasDiscardSourceHelp,
+                             layout.conflictApplyToAllScopeHelpEmpty));
+            return false;
+        }
+        return true;
+    };
+    if (! checkScopeHelp(true, true, L"prequalified Move") || ! checkScopeHelp(false, false, L"default unqualified Move"))
+        return false;
     scopePrompt.operation = FILESYSTEM_COPY;
-    popupState->DebugSetVisualScenario({scopePrompt}, false, true);
-    paint();
-    paint();
-    if (layoutFor(scopePrompt.taskId).conflictApplyToAllHasDiscardSourceHelp)
-        fail(L"Copy's repeat checkbox retained stale Delete source scope help");
+    if (! checkScopeHelp(true, false, L"Copy with a synthetic source-removal request"))
+        return false;
 
     // 3. popup-b#5: a visible conflict body with no comparison children (no paths, no last note)
     // reaches a stable hosted tree; repainting it changes nothing.

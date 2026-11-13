@@ -3560,7 +3560,8 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept;
 void DebugBuildFileOpsVisualConflictPolicyForSelfTest(FolderWindow::FileOperationState::Task::ConflictPromptState& prompt,
                                                       bool allowReplacement,
                                                       bool allowReadOnlyDelete      = false,
-                                                      FileSystemOperation operation = FILESYSTEM_COPY) noexcept;
+                                                      FileSystemOperation operation = FILESYSTEM_COPY,
+                                                      bool allowDiscardSource       = false) noexcept;
 bool RunFileOpsPerItemSchedulerShutdownQuietPointSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
 bool RunFileOpsPerItemSchedulerNestedSaturationSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
 bool RunFileOpsPerItemSchedulerFailurePolicySelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;

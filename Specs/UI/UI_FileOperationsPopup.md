@@ -2220,9 +2220,16 @@ automatic window resize: an immediate one (reduced motion, footer-only), an ease
 and a new target while one eases. A user's own resize is not counted. No self-test reads these
 counters yet. The `PopupStableHostedTree` selftest additionally records
 `FileOps.Popup.StableTree.QuarterDetentSyncUs` for four delta-30 messages and the resulting frame
-with three running cards and a completed group while the native range is withheld. It checks
-subdetent state preservation, completed-group focus reveal, DPI-handler invalidation and one-pixel
-automatic growth. Its same-physical-DPI handler injection does not qualify native mixed-monitor
+with three running cards and two finished records in a collapsed completed group while the native
+range is withheld. The fixture must scroll the real group controls into view and prove actual
+logical focus transitions plus a pending reveal before testing quarter-detents; an unmet fixture
+prerequisite fails explicitly without claiming the dependent assertions ran. It checks subdetent
+state preservation, completed-group focus reveal, DPI-handler invalidation and one-pixel automatic
+growth. Scope-help controls use an explicit default-false, test-only source-removal capability routed
+through the real policy builder on unadmitted snapshots. They first verify the published action and
+checkbox, then compare tooltip and accessible help with the owning localized resource. Default Move
+and Copy controls must withhold that action/help; this fixture grants no live mutation authority.
+Its same-physical-DPI handler injection does not qualify native mixed-monitor
 transitions. Archive paired same-machine baseline/candidate runs and the existing resize/card-height/
 scrollbar counters before claiming responsiveness or layout-churn improvements.
 

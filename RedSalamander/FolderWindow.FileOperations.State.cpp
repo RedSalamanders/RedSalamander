@@ -9321,16 +9321,18 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
            ! loading.skipAllEligible && ! loading.buttonsPublishable;
 }
 
-void DebugBuildFileOpsVisualConflictPolicyForSelfTest(Task::ConflictPromptState& prompt,
-                                                      bool allowReplacement,
-                                                      bool allowReadOnlyDelete,
-                                                      FileSystemOperation operation) noexcept
+void DebugBuildFileOpsVisualConflictPolicyForSelfTest(
+    Task::ConflictPromptState& prompt, bool allowReplacement, bool allowReadOnlyDelete, FileSystemOperation operation, bool allowDiscardSource) noexcept
 {
     const bool collision         = prompt.bucket == ConflictBucket::RegularFileExists || prompt.bucket == ConflictBucket::ReadOnlyRegularFileExists ||
                                    prompt.bucket == ConflictBucket::DestinationLink;
     const bool hasRepeatCapacity = prompt.repeatUnavailableReason == FileOperations::ConflictRepeatUnavailableReason::None;
-    const auto policy =
-        BuildConflictActionPolicy(prompt.bucket, ! collision, collision, hasRepeatCapacity, allowReplacement, true, true, allowReadOnlyDelete, operation);
+    // Synthetic snapshots have no admitted source-removal capability. Only an
+    // explicit test request on a Move models that prequalification; real tasks
+    // still obtain authority through their normal admission and producer path.
+    const bool offerDiscardSource = allowDiscardSource && operation == FILESYSTEM_MOVE;
+    const auto policy             = BuildConflictActionPolicy(
+        prompt.bucket, ! collision, collision, hasRepeatCapacity, allowReplacement, true, true, allowReadOnlyDelete, operation, offerDiscardSource);
     prompt.actions             = policy.actions;
     prompt.actionCount         = policy.actionCount;
     prompt.primaryActions      = policy.primaryActions;

@@ -6042,7 +6042,10 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 }
 
 #ifdef ENABLE_TESTS
-void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded)
+void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenario(std::vector<TaskSnapshot> tasks,
+                                                                                   bool collapsed,
+                                                                                   bool completedGroupExpanded,
+                                                                                   bool allowDiscardSource)
 {
     _collapsedTasks.clear();
     _compactExpandedTasks.clear();
@@ -6067,7 +6070,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
             prompt.decisionScope.sourceKind =
                 prompt.sourceMetadata.isDirectory ? FileOperations::ConflictItemKind::Directory : FileOperations::ConflictItemKind::RegularFile;
             const bool readOnlyDelete = task.operation == FILESYSTEM_DELETE && prompt.bucket == FileOperations::ConflictClass::ReadOnlyRegularFile;
-            DebugBuildFileOpsVisualConflictPolicyForSelfTest(prompt, task.conflict.destinationMetadata.available, readOnlyDelete, task.operation);
+            DebugBuildFileOpsVisualConflictPolicyForSelfTest(
+                prompt, task.conflict.destinationMetadata.available, readOnlyDelete, task.operation, allowDiscardSource);
             CopyPublishedConflictPolicy(prompt, task.conflict);
             // A synthetic scene has no engine prompt: compare its two items as the engine would.
             if ((prompt.bucket == FileOperations::ConflictClass::RegularFileExists ||
@@ -16448,6 +16452,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                             result.conflictApplyToAllHasDiscardSourceHelp = ! discardSourceScopeHelp.empty() &&
                                                                             checkbox->GetTooltipText() == discardSourceScopeHelp &&
                                                                             checkbox->GetAccessibleHelpText() == discardSourceScopeHelp;
+                            result.conflictApplyToAllScopeHelpEmpty       = checkbox->GetTooltipText().empty() && checkbox->GetAccessibleHelpText().empty();
                             result.conflictScopeLabelFits = hostedLabelFits(*checkbox, button.bounds, true) &&
                                                             checkbox->GetText() == LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
                         }

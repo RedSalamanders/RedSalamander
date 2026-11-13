@@ -453,6 +453,7 @@ struct PopupLayoutDebugSnapshot
     bool conflictApplyToAllIsCheckbox              = false;
     bool conflictApplyToAllChecked                 = false;
     bool conflictApplyToAllHasDiscardSourceHelp    = false;
+    bool conflictApplyToAllScopeHelpEmpty          = true;
     bool conflictMoreVisible                       = false;
     bool completedDiagnosticsMoreVisible           = false;
     bool completedDiagnosticsMoreButtonRectVisible = false;
@@ -1067,8 +1068,9 @@ public:
                 _snapshotCallSites,
                 _unattributedTaskSnapshots};
     }
-    // UI-thread-only documentation fixture; never starts workers or admits operations.
-    void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded);
+    // UI-thread-only unadmitted fixture; never starts workers or grants mutation authority.
+    // DiscardSource models a separately qualified Move capability, not an inference from operation.
+    void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded, bool allowDiscardSource = false);
     // A live fixture transition keeps geometry/choices. Publish its text immediately so a deferred
     // accessibility-text timer cannot accidentally supply the missing height-animation frames.
     void DebugUpdateLiveVisualScenario(std::vector<TaskSnapshot> tasks)
