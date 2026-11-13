@@ -124,6 +124,9 @@ launches, or destructive cleanup. Exit codes and machine-readable output are
 part of the public contract.
 
 Environment variables and command-line paths are inputs, not authorization.
+Tooling fixtures that pass paths through filesystem cmdlets must derive them from
+their owned test workspace, rather than assuming a developer-specific drive is
+mounted. Synthetic text-only diagnostic examples do not authorize filesystem access.
 Test tooling must use exact `X:\RedSalamander.Perf` on a fixed local drive, reject
 drive roots, UNC roots, arbitrary absolute paths, descendants, alternate names,
 sibling-prefix tricks, alternate-data-stream syntax, and reparse-point components,

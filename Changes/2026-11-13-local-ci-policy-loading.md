@@ -1,0 +1,1 @@
+- Refresh a cached shared process policy after restoring the pinned CI engine in the same PowerShell session, retain unchanged imports, and explain missing engine preparation before starting a child process.

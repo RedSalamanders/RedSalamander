@@ -37,6 +37,25 @@ including Source builds. CI restores this pinned dependency automatically. Share
 component controls and focused local process tests remain distinct from native
 product, ARM64 and sanitizer qualification.
 
+Before a first local build, clone `https://github.com/RedSalamanders/.github.git`
+into `.ci-engine` if that directory is absent. For an existing ordinary independent
+clone, inspect `git -C .ci-engine status --short` and preserve any local changes.
+On a clean checkout, restore the manifest pin explicitly:
+
+```powershell
+$enginePin = (Get-Content .ci/project.json -Raw | ConvertFrom-Json).engine.ref
+git -C .ci-engine fetch origin $enginePin
+git -C .ci-engine checkout --detach $enginePin
+```
+
+Read-only environment helpers do not restore or import that dependency. Child
+creation refuses a missing policy/API with these preparation instructions before
+launching a process. In an existing PowerShell session, the process factory compares
+the loaded policy definition with its current file and reloads that policy only when
+the definitions differ. Restoring engine files must not leave an older cached policy
+in use, and unchanged policy imports must retain their module lifetime. This does not
+weaken exact-pin, clean-engine or build-evidence verification.
+
 Organization CI routing and artifact promotion are owned by [Build_UnifiedCI.md](Build_UnifiedCI.md). The project-local reusable builder below remains available to explicit domain qualification workflows. Native PR matrices, scheduled native builds and release-time rebuilds are retired.
 
 ## External RedMonitor build boundary

@@ -64,6 +64,10 @@ private compiler metadata-service endpoint to each child without changing its
 parent. Restore `.ci-engine` at `.ci/project.json`'s exact commit before local
 process/build tooling. Both direct and streaming routes keep their existing
 contained ownership and environment transport.
+Missing policy/API preparation now reports the recovery instructions in
+`Specs/Build/Build_Toolchain.md`. After restoration in the same PowerShell session,
+the factory refreshes changed cached policy definitions and retains unchanged
+imports; read-only environment helpers do not prepare that dependency.
 
 Validation rejections retain a `validation_acceptance` failure with the rejected
 contract's reason codes. Unallowed skips name the missing cases; successful

@@ -1112,8 +1112,23 @@ function New-RSProcessStartInfo {
     # aliases through the shared policy instead of duplicating its generation.
     # Load only for child creation so read-only environment helpers retain their
     # compatibility surface without requiring a restored native CI dependency.
-    Import-Module (Join-Path $PSScriptRoot '../../../.ci-engine/Tools/Modules/Ci.Policy.psm1') -Scope Local -ErrorAction Stop
-    $null = Set-CiNativeProcessEnvironment -ProcessStartInfo $psi
+    $policyPath = Join-Path $PSScriptRoot '../../../.ci-engine/Tools/Modules/Ci.Policy.psm1'
+    $dependencyError = "The shared CI process policy is unavailable at '$policyPath'. Restore .ci-engine to the exact .ci/project.json engine.ref before building; see Specs/Build/Build_Toolchain.md."
+    if (-not (Test-Path -LiteralPath $policyPath -PathType Leaf)) {
+        throw $dependencyError
+    }
+    $policyModule = Import-Module $policyPath -Scope Local -PassThru -ErrorAction Stop
+    # Import-Module otherwise retains an older definition after the generated
+    # engine is restored in this PowerShell session. Reload only changed code;
+    # forcing the parent module does not refresh its cached policy dependency.
+    if ($policyModule.Definition -cne [IO.File]::ReadAllText($policyPath)) {
+        $policyModule = Import-Module $policyPath -Scope Local -PassThru -Force -ErrorAction Stop
+    }
+    $setEnvironment = $policyModule.ExportedFunctions['Set-CiNativeProcessEnvironment']
+    if ($null -eq $setEnvironment) {
+        throw $dependencyError
+    }
+    $null = & $setEnvironment -ProcessStartInfo $psi
     return $psi
 }
 
