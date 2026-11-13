@@ -1,0 +1,1 @@
+- Keep SDK preparation routing fixtures beneath their owned test workspace so hosted machines without a developer Z: drive execute the same sixty combinations and inherited-override checks.

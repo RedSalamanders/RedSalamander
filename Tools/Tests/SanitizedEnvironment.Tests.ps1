@@ -4,6 +4,75 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $helperModule = Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1'
 
+Describe 'Shared process policy dependency loading' {
+    It 'reports an unprepared engine clearly (policy file present: <PolicyPresent>)' -TestCases @(
+        @{ PolicyPresent = $false }, @{ PolicyPresent = $true }
+    ) {
+        param($PolicyPresent)
+        $fixtureRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+        $fixturePath = Join-Path $fixtureRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+        $policyPath = Join-Path $fixtureRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1'
+        [void][IO.Directory]::CreateDirectory((Split-Path $fixturePath -Parent))
+        Copy-Item -LiteralPath $helperModule -Destination $fixturePath
+        if ($PolicyPresent) {
+            [void][IO.Directory]::CreateDirectory((Split-Path $policyPath -Parent))
+            [IO.File]::WriteAllText($policyPath, 'Export-ModuleMember -Function @()')
+        }
+        $fixture = Import-Module $fixturePath -Scope Local -PassThru -Force
+        try {
+            $map = & $fixture { Get-RSNormalizedEnvironmentMap }
+            ($null -ne $map) | Should Be $true
+            $failure = $null
+            try { & $fixture { New-RSProcessStartInfo -FilePath 'cmd.exe' } | Out-Null }
+            catch { $failure = $_.Exception.Message }
+            ($null -ne $failure) | Should Be $true
+            $failure | Should Match 'Restore .ci-engine to the exact .ci/project.json engine.ref'
+            if (-not $PolicyPresent) { (Test-Path $policyPath) | Should Be $false }
+        } finally {
+            Remove-Module -ModuleInfo $fixture
+        }
+    }
+
+    It 'uses restored policy bytes in the same session and reuses unchanged policy (old API present: <ApiPresent>)' -TestCases @(
+        @{ ApiPresent = $false }, @{ ApiPresent = $true }
+    ) {
+        param($ApiPresent)
+        $fixtureRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+        $fixturePath = Join-Path $fixtureRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+        $policyPath = Join-Path $fixtureRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1'
+        [void][IO.Directory]::CreateDirectory((Split-Path $fixturePath -Parent))
+        [void][IO.Directory]::CreateDirectory((Split-Path $policyPath -Parent))
+        Copy-Item -LiteralPath $helperModule -Destination $fixturePath
+        $priorLog = [Environment]::GetEnvironmentVariable('RS_POLICY_LOADER_IMPORT_LOG', 'Process')
+        $env:RS_POLICY_LOADER_IMPORT_LOG = Join-Path $fixtureRoot 'imports.log'
+        $current = @'
+Add-Content -LiteralPath $env:RS_POLICY_LOADER_IMPORT_LOG -Value 'loaded'
+function Set-CiNativeProcessEnvironment {
+    param([Diagnostics.ProcessStartInfo]$ProcessStartInfo)
+    $ProcessStartInfo.Environment['_MSPDBSRV_ENDPOINT_'] = 'fixture-current'
+}
+Export-ModuleMember -Function Set-CiNativeProcessEnvironment
+'@
+        $old = if ($ApiPresent) { $current.Replace('fixture-current', 'fixture-stale') }
+               else { "Add-Content -LiteralPath `$env:RS_POLICY_LOADER_IMPORT_LOG -Value 'loaded'`nExport-ModuleMember -Function @()" }
+        $fixture = $null
+        try {
+            [IO.File]::WriteAllText($policyPath, $old)
+            $null = Import-Module $policyPath -Scope Local -PassThru
+            [IO.File]::WriteAllText($policyPath, $current)
+            $fixture = Import-Module $fixturePath -Scope Local -PassThru -Force
+            $first = & $fixture { New-RSProcessStartInfo -FilePath 'cmd.exe' }
+            $first.Environment['_MSPDBSRV_ENDPOINT_'] | Should Be 'fixture-current'
+            $second = & $fixture { New-RSProcessStartInfo -FilePath 'cmd.exe' }
+            $second.Environment['_MSPDBSRV_ENDPOINT_'] | Should Be 'fixture-current'
+            @(Get-Content -LiteralPath $env:RS_POLICY_LOADER_IMPORT_LOG).Count | Should Be 2
+        } finally {
+            if ($null -ne $fixture) { Remove-Module -ModuleInfo $fixture }
+            [Environment]::SetEnvironmentVariable('RS_POLICY_LOADER_IMPORT_LOG', $priorLog, 'Process')
+        }
+    }
+}
+
 Describe 'Hosted Default process desktop scopes' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop

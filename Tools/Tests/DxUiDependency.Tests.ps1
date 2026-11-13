@@ -502,11 +502,11 @@ Describe 'Qualified SDK CI preparation routing' {
         $production.Count | Should Be 1
         $testBuild.Count | Should Be 1
         $stage=[scriptblock]::Create(@'
-param($Phase,$Configuration,$Platform,$Available,$Probe,$Pin)
-$root='Z:/Synthetic workspace';$EngineRoot='Z:/Controlled engine';$context=@{fixture=$true};$number='123'
+param($Phase,$Configuration,$Platform,$Available,$Probe,$Pin,$FixtureRoot)
+$root=Join-Path $FixtureRoot 'Synthetic workspace';$EngineRoot=Join-Path $FixtureRoot 'Controlled engine';$context=@{fixture=$true};$number='123'
 function Import-Module {param($Name) if(-not($Name.EndsWith('Ci.SdkPreparation.psm1') -or $Name.EndsWith('DxUiDependency.psm1'))){throw 'Unexpected SDK module'};$Probe.imports++}
 function Get-RSDxUiPin {param($RepoRoot) return $Pin}
-function Initialize-CiPinnedSdkInput {param($Context,$SourceCommit,$ApiRevision) $Probe.prepares++;$Probe.source=$SourceCommit;$Probe.api=$ApiRevision;if($Available){'Z:/Synthetic workspace/.build/input descriptor.json'}}
+function Initialize-CiPinnedSdkInput {param($Context,$SourceCommit,$ApiRevision) $Probe.prepares++;$Probe.source=$SourceCommit;$Probe.api=$ApiRevision;if($Available){Join-Path $root '.build/input descriptor.json'}}
 function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Script;arguments=@($CommandArguments)})}
 '@ + "`n" + $normalize[0].Extent.Text + "`n" + '$profile=@(''-Platform'',$Platform,''-Configuration'',$Configuration);$sdkBuildArguments=@()' + "`n" + $prepare[0].Extent.Text + "`n" +
             'if($Phase -ceq ''Production''){' + $production[0].Extent.Text + '}' + "`n" +
@@ -518,7 +518,7 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
         foreach($phase in @('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')){
             foreach($configuration in @('Debug','Release','ASan Debug')){foreach($platform in @('x64','ARM64')){foreach($available in @($true,$false)){
                 $probe=@{imports=0;prepares=0;source='';api=0;commands=[Collections.Generic.List[object]]::new()}
-                & $stage $phase $configuration $platform $available $probe $pin
+                & $stage $phase $configuration $platform $available $probe $pin $TestDrive
                 $eligible=$phase -cin @('ReleaseTestBuild','Production')
                 $probe.prepares | Should Be ([int]$eligible)
                 $probe.imports | Should Be $(if($eligible){2}else{0})
@@ -527,7 +527,7 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
                 foreach($command in $probe.commands){
                     $hasDescriptor='-DxUiSdkInputDescriptor' -cin $command.arguments
                     $hasDescriptor | Should Be ($eligible -and $available)
-                    if($hasDescriptor){('Z:/Synthetic workspace/.build/input descriptor.json' -cin $command.arguments)|Should Be $true}
+                    if($hasDescriptor){((Join-Path (Join-Path $TestDrive 'Synthetic workspace') '.build/input descriptor.json') -cin $command.arguments)|Should Be $true}
                     $effective=if($phase -ceq 'Qualification'){$configuration}else{'Release'}
                     ($command.arguments[0..3] -join '|')|Should Be ("-Platform|$platform|-Configuration|$effective")
                     ('-ProductionOnly' -cin $command.arguments)|Should Be ($phase -ceq 'Production')
@@ -558,14 +558,14 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
             foreach($phase in @('ReleaseTestBuild','ReleaseTest','Production','Qualification')){
                 foreach($sdk in @($false,$true)){foreach($record in @($false,$true)){
                     $result=& {
-                        param($Body,$Phase,$Sdk,$Record)
-                        $root='Z:/Recording fixture';$Platform='x64';$Configuration='Release'
+                        param($Body,$Phase,$Sdk,$Record,$FixtureRoot)
+                        $root=Join-Path $FixtureRoot 'Recording fixture';$Platform='x64';$Configuration='Release'
                         $sdkBuildArguments=@(if($Sdk){'-DxUiSdkInputDescriptor';'fixture.json'})
                         $environment=[ordered]@{CL='synthetic vcpkg include';LINK='original libraries';ForceImportBeforeCppTargets='canonical.props'}
                         function Test-Path {param($LiteralPath,$PathType) return $Record}
                         . $Body
                         return $environment
-                    } $body $phase $sdk $record
+                    } $body $phase $sdk $record $TestDrive
                     $result.Contains('CL')|Should Be (-not($sdk -or ($phase -ceq 'ReleaseTest' -and $record)))
                     $result.LINK|Should Be 'original libraries'
                     $result.ForceImportBeforeCppTargets|Should Be 'canonical.props'

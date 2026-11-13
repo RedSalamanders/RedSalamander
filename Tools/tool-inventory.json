@@ -2133,7 +2133,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Normalize duplicate process-environment keys, preserve distinct null-removal and present-empty child overrides, construct kill-on-close contained child-process environments whose job also ends a crash without a Windows Error Reporting dialog, and expose local current-parent identity for delegation checks.",
-      "usage": "Import from build and process-launch helpers; request delegation only while the optional artifact-lock module owns the caller thread. The project GitHub-hosted interactive-entry fixture scopes contained children explicitly to the rendered Default desktop; scope retirement is thread-bound and reverse-ordered. Historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
+      "usage": "Import from build and process-launch helpers; child creation requires the prepared pinned CI engine and reports missing policy/API preparation clearly. Reload a cached process-policy module only when its definition differs from the file restored on disk. Read-only environment helpers do not require engine preparation. Request delegation only while the optional artifact-lock module owns the caller thread. The project GitHub-hosted interactive-entry fixture scopes contained children explicitly to the rendered Default desktop; scope retirement is thread-bound and reverse-ordered. Historical consumers may reach it through Tools/SanitizedEnvironment.ps1.",
       "usedBy": [
         "build.ps1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
