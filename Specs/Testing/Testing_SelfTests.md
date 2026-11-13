@@ -2190,6 +2190,13 @@ navigation, but each `Commands.SelfTest.Preferences.*.cpp` chunk must own a
 complete anonymous namespace wrapper. A chunk must not close a namespace opened
 by the coordinator or leave a namespace open for the next family include.
 
+Source-contract guards for localized diagnostics must resolve the stable resource
+ID inside the owning function or branch and check its associated control flow.
+A resource ID found elsewhere in the file, or an English display literal, does
+not prove that the intended path uses that diagnostic. Lexical source guards can
+protect routing and branch structure, but they do not establish runtime behavior;
+behavioral claims still require the relevant native execution evidence.
+
 
 Stale-run cleanup given a synthetic process snapshot must also receive an explicit `CandidateRunIds`
 allowlist. Tests may remove only their own uniquely named run directories; injected PIDs never
