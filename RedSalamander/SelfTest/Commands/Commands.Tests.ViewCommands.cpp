@@ -30010,7 +30010,7 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
             SendMessageW(fixture.rightView, WM_MOUSEMOVE, MK_LBUTTON, background);
             state.Require(fixture.Snapshot().potentialDragSourceCount == 0u && GetCapture() != fixture.rightView,
                           L"An overlay retained an earlier armed drag or capture after pointer movement.");
-            state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, fixture.leftView, SelfTest::Scale(2000ms)),
+            state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, fixture.leftView, SelfTest::Scale(std::chrono::milliseconds{2000})),
                           L"The left pane did not regain focus before the blocked-overlay activation press.");
             SendMessageW(fixture.rightView, WM_LBUTTONDOWN, MK_LBUTTON, background);
             SendMessageW(fixture.rightView, WM_LBUTTONUP, 0, background);

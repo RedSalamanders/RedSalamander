@@ -15580,6 +15580,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Local directory ancestry, bound cross-view or same-path folder contracts failed.");
                 return true;
             }
+            if (! RunFileOperationKeepAwakeSelfTest(*state.fileOps))
+            {
+                Fail(L"Keep-awake ownership and private conflict-wait controls failed.");
+                return true;
+            }
             // These ownership/alias controls need no mounted disk or desktop
             // input; run them in the ordinary remediation case as well as F7.
             std::wstring ownedVolumeFailure;
@@ -15629,7 +15634,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 ! RunFileOperationIdentityLessFolderMergeSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationIdentityLessSourceMoveSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationDiscardSourceSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
-                ! RunFileOperationBulkCollisionPoliciesSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) || ! RunFileOperationKeepAwakeSelfTest(*state.fileOps) ||
+                ! RunFileOperationBulkCollisionPoliciesSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationDiscardSourceWithoutRecycleBinSelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationPresetCollisionPolicySelfTest(*state.fileOps, state.fsLocal, state.tempRoot) ||
                 ! RunFileOperationConflictObservedFactsSelfTest() || ! RunFileOperationStreamSlotSelfTest(*state.fileOps) ||

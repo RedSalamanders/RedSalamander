@@ -9127,12 +9127,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
             checkbox->SetChecked(task != snapshot.end() && task->conflict.applyToAllChecked);
             checkbox->SetEnabled(task != snapshot.end() && task->conflict.buttonsPublishable && task->conflict.applyToAllEligible);
             std::wstring scopeHelp;
-            if (task != snapshot.end() && task->operation == FILESYSTEM_MOVE &&
-                std::find(task->conflict.actions.begin(),
-                          task->conflict.actions.begin() + std::min(task->conflict.actionCount, task->conflict.actions.size()),
-                          static_cast<uint8_t>(ConflictAction::DiscardSource)) !=
-                    task->conflict.actions.begin() + std::min(task->conflict.actionCount, task->conflict.actions.size()))
-                scopeHelp = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP);
+            if (task != snapshot.end() && task->operation == FILESYSTEM_MOVE)
+            {
+                const std::span<const uint8_t> actions(task->conflict.actions.data(), std::min(task->conflict.actionCount, task->conflict.actions.size()));
+                if (std::ranges::find(actions, static_cast<uint8_t>(ConflictAction::DiscardSource)) != actions.end())
+                    scopeHelp = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP);
+            }
             if (checkbox->GetTooltipText() != scopeHelp)
                 checkbox->SetTooltipText(scopeHelp);
             if (checkbox->GetAccessibleHelpText() != scopeHelp)

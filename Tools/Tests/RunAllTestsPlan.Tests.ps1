@@ -877,7 +877,18 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')
+        # Bind the two normative lists to the same exact admissions exercised below.
+        foreach ($contract in @(
+                @{ Path = 'Specs/Testing/Testing_ValidationEvidence.md'; Pattern = 'Only `-Suite FileOps` with one exact, case-sensitive filter from (?<cases>.*?) is admitted without that desktop lease\.' },
+                @{ Path = 'Specs/Testing/Testing_SelfTests.md'; Pattern = 'exceptions are `-Suite FileOps` with the exact, case-sensitive\s+(?<cases>.*?) case filter and no flaky/order proof injection\.' })) {
+            $text = Get-Content -LiteralPath (Join-Path $repoRoot $contract.Path) -Raw
+            $list = [regex]::Match($text, $contract.Pattern, [Text.RegularExpressions.RegexOptions]::Singleline)
+            $list.Success | Should Be $true
+            $documentedCases = @([regex]::Matches($list.Groups['cases'].Value, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value })
+            (($documentedCases -join '|') -ceq ($reviewedCases -join '|')) | Should Be $true
+        }
+        foreach ($case in $reviewedCases) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                 -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
             $plan.Count | Should Be 1
