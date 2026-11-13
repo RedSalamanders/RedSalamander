@@ -887,7 +887,7 @@ void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int
     constexpr std::wstring_view prefix = L".redsalamander-upload-";
     // Producer-test grammar, narrower than the shared builder: this route has a fixed
     // marker and no readable prefix/suffix. Valid random hex may contain decimal PID digits.
-    const auto hasExpectedGrammar = [prefix](std::wstring_view leaf) noexcept
+    const auto hasExpectedGrammar = [](std::wstring_view leaf) noexcept
     { return leaf.starts_with(prefix) && leaf.size() == prefix.size() + 32u && IsHexToken(leaf.substr(prefix.size())); };
 
     constexpr std::wstring_view fictionalPid       = L"1234";
