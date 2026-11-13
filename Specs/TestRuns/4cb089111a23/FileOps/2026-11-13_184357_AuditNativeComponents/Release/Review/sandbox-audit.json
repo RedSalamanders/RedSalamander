@@ -1,0 +1,512 @@
+{
+  "schema": "red-salamander.test-sandbox-disk-audit.v1",
+  "is_clean": false,
+  "issue_count": 100,
+  "test_root": "Z:\\RedSalamander.Perf",
+  "run_id": "20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03",
+  "allowed_run_ids": [
+    "20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03"
+  ],
+  "issues": [
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-6099756579c9434d8dc784e162a3b064",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-66c3e3d626294985b2cfbed682ed5e84",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-71476cab359f4069b086765aa60a2280",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-726889b5527840daac4b9b0f8265bf95",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-98c6f85582bc4aa0a126ac135f15c423",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-9a8263a0a42543a681d9f2e9e83949e9",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-b6855df12f6a40d08db96a00d6931b7d",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-f6c8f11afe2d4090b2f3a24cc6e8e24c",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\dxui-sdk-store-client-a9911c27637645dea383353b5f8964d6",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\temp",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\unified-ci",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\arm64-compiler-scope.xml",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.log",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-client-controls.xml",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.log",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts-r2.xml",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.log",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-header-contracts.xml",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "unexpected-test-root-child",
+      "path": "Z:\\RedSalamander.Perf\\redmonitor-header-explain.log",
+      "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261102T191623Z-50660-3b7fcb392a6c41eab9e1a415a7ee4f97",
+      "reason": "The owning process 50660 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261102T200812Z-3128-04a8a1ba969b4438967100a09acf61a7",
+      "reason": "The owning process 3128 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261102T200812Z-3128-4c64fe70363640a58a4879a74ac814ae",
+      "reason": "The owning process 3128 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261102T200812Z-3128-58487ba988e348eaa75a93b6101ab655",
+      "reason": "The owning process 3128 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261102T200812Z-3128-719dabe565c1469599840f9a8360efc6",
+      "reason": "The owning process 3128 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261102T200812Z-3128-ef3aaee0d1dd4d4699db393efddb167d",
+      "reason": "The owning process 3128 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261107T011010Z-47716-ea0dc1da50794fec8d7f4e7da0c621bb",
+      "reason": "The owning process 47716 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "stale-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\20261107T031539Z-50060-4896953730444744bc26bb8694922299",
+      "reason": "The owning process 50060 is no longer live (or its PID has been reused by a newer process); the sibling TestSandbox run directory can be swept before this run starts."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ar31-14a0af16",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\audit31-ca2fe848",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ci-policy-integration-20261113-3596b9270ecb401a91b03ffd89c230fb",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ci-policy-loader-20261113-a5d0721008d4497cb9a8a69a5023054f",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ci-sdk-routing-20261113-29fdb12e474a4a36bba9ff1ef42d86fc",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ck31-00ec6a71",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ck31-6258a474",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ck31-ee447f66",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-009411e7d2e94c16957c6ba58aabfd60",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-040e34748387446fa11633ecee953c86",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-05ed77f9b5a34469a10b33ce115c39f8",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-063857da20684237a42f197483470d0b",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-1356963c4f60422d97ca0dfd2f99d1be",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-1493938d7a9046f8bfcc4a704ad26080",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-18a73547ce724c2fac28c8eeb016d74a",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-19d4494c49a94862884c434586dae9ff",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-305c58266d8d4d019fb8eb0a529b5313",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-37f258135e30425699efbcdcd329b9a7",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-38f4248c31e94b41b98f72c85563af7d",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-3ab42abeaba9460ca11a074f749ac8ff",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-3d09abcb11b241028e914e7e5ba2cb84",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-3e7cefff821d4f71b3a3e4dc769991a1",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-423dc2cb59d64e8a9a339e25af588936",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-52eb92dc14734d89b21d6a53d53627bf",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-5439073073f6453bb824f4d7de005791",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-587bf6aaa8654ba1b0833f3e24e0ae0f",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-5d3572e630194f8884f887edac0e58c2",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-60d288f7d6874c1aa4f456bbad172dc3",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-66d353eaef6a406e898fa96a275f7608",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-6ad23a4d43bd4125a13bad3e97760552",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-6da084b1c1544846903987b71ffb32d0",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-70cb4bb829474302b6731a00f83241c7",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-734d9e4ea5394c0fbb7c1326fee77998",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-73656e37b14c46eaba2f2db937feaf89",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-784afc30391a4df1b73285e45abdc87c",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-7e37e777d1394a1d859a4617257d1820",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-87c6eededa674c58a60dbbd166777b67",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-8998ab9ebdb6459f9d30ea76fa967794",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-99c28b94a2a048b1935ffcb660ea499d",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-9aecab60dcb64238bc8fe4e2f79c973b",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-a1c963a69fcf44328a98f9ee7169a062",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-a6c2db912eae444e9b92394faf31c390",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-a6ccfe9c0b204ae6a427fa6bf5add554",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-a783f4b22cea438fbe7ea89e1fb50df8",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-a8be948dfc8947388ab88a039d2393c4",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-ad093ada91004bf1828633e41ea6ef33",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-b009747158a6470497e78646fd2d346a",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-b56559d4b0a74ce08da14422d22542bd",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-b607e2855f2943239cb605f1aab651f2",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-c67321c0acd54ad0abe0f04d76376d7b",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-d7f4736409b5439487c70341bf9adecc",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-d8a4336b7d3f4c35a13b73efa303012f",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-dbf0f28300a14eb8b203c620f3b1a6bc",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-de3a7053754c45b5b10625c748d80e06",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-e2f54d7e93c74f96a161824c0bfc4ad7",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-e3e28c87b13c4000a528be948bdf55c6",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-e8363dcbfa254c07a37c87a6beddca33",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-f32639dc1ef9407b8e519848d25e7413",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-f442a9f4f7ba4e9ca4bf16d234b58fc8",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\console-fdd6a141b15d4d2b804232873d7b3119",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\i61-ghostty-downloads-0fd6a9fb6f3c4adaa239e4372094feca",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\i61-ghostty-downloads-42444338d50b4f2b8acf553f824140c1",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\i61-ghostty-lifecycle-followup-200355d1fe3c43dc899088c46a4d0ccf",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\ia31-47156475",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083308",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083544",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\manual-arm64-zig-20261030T083656",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\pathmap31-63848",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\pr200-8efd-metadata-20261102",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-extraction-20261021T213312",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\redmonitor-probes-b00db1bb2b6948ed891c1f3a7ae31bb3",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\review-tooling-739d6d32b82746fe8aae96d392b6d33c",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    },
+    {
+      "category": "unexpected-test-run-dir",
+      "path": "Z:\\RedSalamander.Perf\\runs\\review-tooling-ff1d4a1b7df04bf282015fa1f9cd5cce",
+      "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+    }
+  ]
+}

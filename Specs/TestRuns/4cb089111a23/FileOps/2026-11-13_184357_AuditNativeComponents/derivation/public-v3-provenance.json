@@ -1,0 +1,9 @@
+{
+  "source_public_packet": "Z:\\RedSalamander.Perf\\runs\\20261113T185724Z-59540-f07535de95f74a3b98613c045028ef71\\scratch\\NativeComponentEvidence\\packet-public-v2",
+  "source_public_manifest_sha256": "4aa657a5ca47d01785d282db0bd89eb61a97334c200ee3e6acce921d51931de4",
+  "modified_existing_paths": [
+    "recipe.txt"
+  ],
+  "added_historical_reference": "derivation/private-reference-public-v1-recipe.txt",
+  "reason": "Explicit recipe-chain locations after successive create-only scratch derivations; no raw/claim/proof/analysis/projection bytes changed."
+}

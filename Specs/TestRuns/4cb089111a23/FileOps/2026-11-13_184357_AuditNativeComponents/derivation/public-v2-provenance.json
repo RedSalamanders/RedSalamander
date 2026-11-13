@@ -1,0 +1,9 @@
+{
+  "source_public_packet": "Z:\\RedSalamander.Perf\\runs\\20261113T185637Z-83324-35713d6f9fd34b6fb019b7c911cf7426\\scratch\\NativeComponentEvidence\\packet-public-v1",
+  "source_public_manifest_sha256": "5a31434cbed95ab6998052fb687c124151fb2c711c22784cd8e63bf877efa19b",
+  "modified_existing_paths": [
+    "privacy-review.json"
+  ],
+  "reason": "Describe actual BOM-aware review and distinguish local private original manifests from labeled public historical-reference copies. No evidence or projection bytes changed.",
+  "source_private_manifest_sha256": "2dd9b84dddd621e7d066a5d74fbdcbece4264176b3d3d23dd6610e353c26e887"
+}

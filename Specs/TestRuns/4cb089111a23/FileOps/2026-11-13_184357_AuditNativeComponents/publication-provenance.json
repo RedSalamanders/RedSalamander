@@ -1,0 +1,16 @@
+{
+  "kind": "Authored publication README derivative; exact evidence custody preserved",
+  "reviewed_public_packet": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T185803Z-86892-9df18376a4b14f46945837ab48ba592d\\scratch\\NativeComponentEvidence\\packet-public-v3",
+  "reviewed_manifest_sha256": "a09d50bcd2f33e7d3b50c97457740c523447722f8fc7236a8517ba7e1d59a749",
+  "publication_target": "Specs/TestRuns/4cb089111a23/FileOps/2026-11-13_184357_AuditNativeComponents",
+  "publication_context": "Z:\\RedSalamander.Perf\\runs\\20261113T192527Z-63900-d2d119904a52492e810b397e3b8d8a30\\scratch\\NativeComponentPublication",
+  "authored_existing_paths": [
+    "README.md"
+  ],
+  "source_readme_sha256": "f1a9322bd86c6efa6dfcabada687725bd3d57ba1e10b2f8cadbd940ecaedafff",
+  "publication_readme_sha256": "db4d77eaf61d6692f9aee1c1d899fd6580dc431ffc094ab2176831688077260c",
+  "evidence_payload_bytes_changed": false,
+  "public_raw_intents_omitted": 5,
+  "projection_semantics": "Independently checked against immutable private intents by retained recipe and peer review; not schema-validated by generic archive gates.",
+  "gate_results_location": "Z:\\RedSalamander.Perf\\runs\\20261113T192527Z-63900-d2d119904a52492e810b397e3b8d8a30\\scratch\\NativeComponentPublication\\archive-gates.json"
+}
