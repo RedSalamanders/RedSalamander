@@ -3553,6 +3553,12 @@ bool FolderWindow::FileOperationState::DebugValidateQueueStartOrderForSelfTest(s
     constexpr size_t kCallsPerSample = 16u;
     struct SelectorSample final
     {
+        SelectorSample() noexcept                        = default;
+        SelectorSample(const SelectorSample&)            = delete;
+        SelectorSample(SelectorSample&&)                 = delete;
+        SelectorSample& operator=(const SelectorSample&) = delete;
+        SelectorSample& operator=(SelectorSample&&)      = delete;
+
         uint64_t baselineUs  = 0u;
         uint64_t candidateUs = 0u;
         std::array<uint64_t, kCallsPerSample> baselineIds{};

@@ -328,8 +328,8 @@
             std::atomic<uint32_t> promptCount{0u};
             std::atomic<bool> discardOffered{false};
             std::atomic<bool> ordinaryActions{true};
-            HRESULT fileHr               = E_PENDING;
-            const uint64_t fileStartedUs = PerfNowUs();
+            HRESULT fileHr           = E_PENDING;
+            const auto fileStartedAt = std::chrono::steady_clock::now();
             {
                 const std::jthread responder([&](std::stop_token stop) noexcept
                 {
@@ -360,7 +360,7 @@
                 });
                 fileHr = fileTask.ExecuteOperation();
             }
-            const uint64_t fileElapsedUs  = PerfElapsedUs(fileStartedUs);
+            const uint64_t fileElapsedUs  = Debug::Perf::ElapsedUs(fileStartedAt);
             bool retainedAfterPublication = true;
             if (identitylessCleanup)
             {
