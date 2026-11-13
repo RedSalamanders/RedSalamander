@@ -179,16 +179,28 @@ unsupported overrides rather than accepting a different compiler environment.
 
 The manual Ghostty product qualification's Commands filters accept the canonical
 runner's exit 2 only as directed evidence with repository coverage NOT_EVALUATED.
-`Assert-RSHostedFilteredCaseRun` requires a Fresh filtered promoted Commands entry,
-strict current aggregate schema, matching v1 invocation window/filter/profile and
-clean quarantine. The native Commands payload must match its completed archive
+`Assert-RSHostedFilteredCaseRun` dispatches by the actual runner summary schema.
+Durable PR/CI/Full runs write v2 with a v1 sibling and retain strict promoted-entry
+validation. Single-suite Commands, FileOps and Compare runs write only v1 at the
+stable summary path. A filtered Commands v1 result requires one archive-bound
+prelaunch fingerprint/plan/decision proof (including native rotation to `previous_run`),
+matching initial/post-entry/final source snapshots, the exact current byte-verified
+receipt and filtered plan, one successful owned native PID/exit and matching timed
+raw metrics. Missing, stale, ambiguous or malformed proof fails; v1 does not acquire
+v2 promotion. Both paths require matching invocation window/filter/profile and
+clean quarantine. The nonblocking sandbox audit remains visible without requiring
+an unrelated globally clean root. The native Commands payload must match its completed archive
 inventory hash and length, contain unique passing cases selected by the exact name
 or trailing-underscore prefix, and agree with both aggregate counts. The current
-source snapshot, executable path and byte-verified build receipt must match the v2
-record. The exact application project-union receipt remains admissible under the
+source snapshot, executable path and byte-verified build receipt must match the durable v2
+record or the validated v1 prelaunch proof, respectively. The exact application project-union receipt remains admissible under the
 ordinary filtered-run contract; these checks grant no Full or release acceptance.
+In-process hosted callers must capture information stream 6 alongside success output
+because the runner-owned `Run id:` line is emitted by `Write-Host`; capturing that line
+does not replace the exact source, profile, receipt and archived-case checks above.
 
-Current runners write v2 at `run-all-tests-results.json` and retain v1 at
-`run-all-tests-results-v1.json`. Fixed diagnostic readers select that v1 sibling;
+Durable runners write v2 at `run-all-tests-results.json` and retain v1 at
+`run-all-tests-results-v1.json`; single-suite runners keep v1 at the stable path.
+Fixed diagnostic readers select the v1 sibling only when the stable summary is v2;
 they continue verifying native result bytes against archive inventory. Aggregates
 are generated after the native archive transaction and are not inventory members.

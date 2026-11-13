@@ -200,7 +200,7 @@ jobs:
                   -Configuration Debug `
                   -Platform ARM64 `
                   -AllowExternalTestRoot `
-                  -BuildNumber ([int]$env:RS_BUILD_NUMBER) |
+                  -BuildNumber ([int]$env:RS_BUILD_NUMBER) 6>&1 |
                   ForEach-Object {
                     $line = [string]$_
                     $capturedLines.Add($line)

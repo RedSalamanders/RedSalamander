@@ -4100,10 +4100,13 @@ Specs\TestRuns\local_scratch
         $source | Should Match 'copyOnlyMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::CopyOnly'
         $source | Should Match 'managedMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::Managed'
         # Match the constructor statement, not a formatting-dependent character window. The
-        # admitted endpoint identities precede the one cleanup-permission argument.
+        # admitted endpoint identities and immutable Local guard precede the one cleanup-permission argument.
         $bridgeCall = [regex]::Match($source, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
         $bridgeCall.Success | Should Be $true
-        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*localCrossRootDistinctnessUnproved,\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $source | Should Match 'const\s+bool\s+localCrossRootDistinctnessUnproved\s*=\s*transferPlan\s*!=\s*nullptr\s*&&\s*FileOperations::IsLocalFileSystemEndpoint\(transferPlan->sourceEndpoint\)\s*&&\s*FileOperations::IsLocalFileSystemEndpoint\(transferPlan->destinationEndpoint\)\s*&&\s*!\s*FileOperations::QualifiedEndpointsReferToSameRoot\(transferPlan->sourceEndpoint,\s*transferPlan->destinationEndpoint\);'
+        $source | Should Match 'const\s+bool\s+localCrossRootDistinctnessUnproved;'
+        $source | Should Match 'destinationPathIdentity\(destinationPathIdentityIn\),\s*localCrossRootDistinctnessUnproved\(localCrossRootDistinctnessUnprovedIn\),\s*sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
         $source | Should Match 'sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
         # I35 R5.6: the message is one constant shared by the disclosed note and the undisclosed Warning.
         $source | Should Match 'kCopyOnlyMessage\s*=\s*L"Copied; source kept[\s\S]{0,900}L"move\.copyOnly\.sourceKept",\s*kCopyOnlyMessage'
@@ -4610,7 +4613,7 @@ Specs\TestRuns\local_scratch
         ([regex]::Matches($bridge, 'CrossFileSystemBridge\s+bridge\(')).Count | Should Be 1
         $bridgeCall = [regex]::Match($bridge, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
         $bridgeCall.Success | Should Be $true
-        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*localCrossRootDistinctnessUnproved,\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
         $bridge | Should Not Match 'moveBridge->cookie\s*=\s*static_cast<void\*>\(&cookie\);'
         $bridge | Should Match 'hasManagedMovePlans\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,420}OperationStrategy::Managed'
         $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\s*\|\|\s*\(selectedAdmission->interlock\s*&&\s*selectedAdmission->interlock->parallelNewFiles\)\)\s*&&'

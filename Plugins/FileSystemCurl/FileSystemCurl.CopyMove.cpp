@@ -1,5 +1,5 @@
-#include "FileSystemCurl.Internal.h"
 #include "FileOperationTraversalPolicy.h"
+#include "FileSystemCurl.Internal.h"
 
 #include <array>
 #include <atomic>
@@ -596,7 +596,7 @@ using SourceTreePathSet       = SourceTreeDigestSet;
                                           ConnectionConcurrencyLimiter::Kind kind,
                                           unsigned int requestedConcurrency,
                                           FileOperationProgress& progress,
-                                          std::atomic_bool* mutationAttempted       = nullptr,
+                                          std::atomic_bool* mutationAttempted     = nullptr,
                                           const SourceTreePathSet* allowedMembers = nullptr) noexcept;
 
 } // namespace
@@ -760,7 +760,6 @@ namespace
     return RemoteRemoveDirectory(conn, remotePath);
 }
 
-
 [[nodiscard]] bool CanServerSideRename(const ConnectionInfo& sourceConn, const ConnectionInfo& destinationConn) noexcept
 {
     if (sourceConn.protocol != destinationConn.protocol)
@@ -886,6 +885,25 @@ constexpr Common::DebugSelfTest::Check DebugCheck{L"FileSystemCurl"};
 void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int& failed)
 {
     constexpr std::wstring_view prefix = L".redsalamander-upload-";
+    // Producer-test grammar, narrower than the shared builder: this route has a fixed
+    // marker and no readable prefix/suffix. Valid random hex may contain decimal PID digits.
+    const auto hasExpectedGrammar = [prefix](std::wstring_view leaf) noexcept
+    { return leaf.starts_with(prefix) && leaf.size() == prefix.size() + 32u && IsHexToken(leaf.substr(prefix.size())); };
+
+    constexpr std::wstring_view fictionalPid       = L"1234";
+    constexpr std::wstring_view tokenWithPidDigits = L"0123456789abcdef0123456789abcdef";
+    const std::wstring validPidDigits              = std::format(L"{}{}", prefix, tokenWithPidDigits);
+    DebugCheck(validPidDigits.find(fictionalPid) != std::wstring::npos && hasExpectedGrammar(validPidDigits),
+               L"valid remote sibling entropy may incidentally contain decimal PID digits",
+               passed,
+               failed);
+    DebugCheck(
+        ! hasExpectedGrammar(validPidDigits.substr(0u, validPidDigits.size() - 1u)), L"remote sibling grammar rejects a short entropy token", passed, failed);
+    std::wstring nonHex   = validPidDigits;
+    nonHex[prefix.size()] = L'g';
+    DebugCheck(! hasExpectedGrammar(nonHex), L"remote sibling grammar rejects a non-hex entropy token", passed, failed);
+    const std::wstring extraField = std::format(L"{}{}-{}", prefix, fictionalPid, tokenWithPidDigits);
+    DebugCheck(! hasExpectedGrammar(extraField), L"remote sibling grammar rejects an extra PID-shaped component", passed, failed);
 
     std::vector<std::wstring> leaves;
     leaves.reserve(8u);
@@ -901,11 +919,10 @@ void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int
         }
     }
 
-    const std::wstring processIdText = std::to_wstring(GetCurrentProcessId());
     for (const std::wstring& leaf : leaves)
     {
         DebugCheck(leaf.starts_with(prefix), L"remote sibling leaf should keep the staging prefix", passed, failed);
-        DebugCheck(leaf.find(processIdText) == std::wstring::npos, L"remote sibling leaf should not contain the process id", passed, failed);
+        DebugCheck(hasExpectedGrammar(leaf), L"remote sibling leaf should use exactly the fixed marker and 128-bit hex token", passed, failed);
 
         if (leaf.starts_with(prefix) && leaf.size() >= prefix.size())
         {
@@ -930,8 +947,8 @@ void RunDebugOverwriteCleanupContractSelfTest(unsigned int& passed, unsigned int
     committedCleanupDebt.primaryCommitted = true;
     committedCleanupDebt.RecordCleanupDebt(CurlCleanupDebtKind::RetainedRollbackSibling, HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
     DebugCheck(committedCleanupDebt.OperationResult() == S_OK && committedCleanupDebt.primaryMutationHr == S_OK &&
-                   committedCleanupDebt.cleanupHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) &&
-                   committedCleanupDebt.sourceDeletionHr == S_OK && committedCleanupDebt.cleanupDebtCount == 1u,
+                   committedCleanupDebt.cleanupHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) && committedCleanupDebt.sourceDeletionHr == S_OK &&
+                   committedCleanupDebt.cleanupDebtCount == 1u,
                L"structured publication result should preserve committed success while exposing cleanup debt",
                passed,
                failed);
@@ -1071,8 +1088,7 @@ void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& 
     return FinalizeOverwriteTarget(conn, backupPath);
 }
 
-[[nodiscard]] CurlPublicationResult PreserveMovedFileDestinationAfterSourceDeleteFailure(HRESULT sourceDeleteHr,
-                                                                                          std::wstring_view backupPath) noexcept
+[[nodiscard]] CurlPublicationResult PreserveMovedFileDestinationAfterSourceDeleteFailure(HRESULT sourceDeleteHr, std::wstring_view backupPath) noexcept
 {
     CurlPublicationResult result{};
     result.primaryCommitted = true;
@@ -1117,10 +1133,10 @@ void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& 
 }
 
 [[nodiscard]] CurlPublicationResult PromoteStagedFileToDestination(const ConnectionInfo& destinationConn,
-                                                                    std::wstring_view stagedRemotePath,
-                                                                    std::wstring_view destinationRemotePath,
-                                                                    bool allowOverwrite,
-                                                                    std::wstring* backupPathOut) noexcept
+                                                                   std::wstring_view stagedRemotePath,
+                                                                   std::wstring_view destinationRemotePath,
+                                                                   bool allowOverwrite,
+                                                                   std::wstring* backupPathOut) noexcept
 {
     std::wstring backupPath;
     HRESULT hr = PrepareOverwriteTargetForRename(destinationConn, destinationRemotePath, allowOverwrite, backupPath);
@@ -1140,7 +1156,7 @@ void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& 
     if (FAILED(hr))
     {
         CurlPublicationResult result = PreserveOverwriteArtifactsAfterFailure(hr, backupPath);
-        const HRESULT cleanupHr       = RemoteDeleteFile(destinationConn, stagedRemotePath);
+        const HRESULT cleanupHr      = RemoteDeleteFile(destinationConn, stagedRemotePath);
         if (FAILED(cleanupHr))
         {
             result.RecordCleanupDebt(CurlCleanupDebtKind::RetainedStagingSibling, cleanupHr);
@@ -1295,7 +1311,7 @@ void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& 
         {
             if (! frame.pendingDirectories.empty())
             {
-                std::wstring child = std::move(frame.pendingDirectories.front());
+                std::wstring child          = std::move(frame.pendingDirectories.front());
                 const uint64_t pendingBytes = static_cast<uint64_t>(child.capacity() + 1u) * sizeof(wchar_t);
                 frame.pendingDirectories.erase(frame.pendingDirectories.begin());
                 if (pendingBytes > frame.pathBytes || pendingBytes > retainedPathBytes)
@@ -1920,8 +1936,8 @@ struct CopyFilePhaseTimings final
             }
             if (! frame.pendingDirectories.empty())
             {
-                CopyFileWorkItem child         = std::move(frame.pendingDirectories.front());
-                const uint64_t pendingBytes    = child.PathBytes();
+                CopyFileWorkItem child      = std::move(frame.pendingDirectories.front());
+                const uint64_t pendingBytes = child.PathBytes();
                 frame.pendingDirectories.erase(frame.pendingDirectories.begin());
                 if (pendingBytes > frame.pathBytes || pendingBytes > framePathBytes)
                 {
@@ -2246,8 +2262,8 @@ struct DeleteTreeWorkItem final
             }
             if (! frame.pendingDirectories.empty())
             {
-                DeleteTreeWorkItem child     = std::move(frame.pendingDirectories.front());
-                const uint64_t pendingBytes  = static_cast<uint64_t>(child.remotePath.capacity() + child.displayPath.capacity() + 2u) * sizeof(wchar_t);
+                DeleteTreeWorkItem child    = std::move(frame.pendingDirectories.front());
+                const uint64_t pendingBytes = static_cast<uint64_t>(child.remotePath.capacity() + child.displayPath.capacity() + 2u) * sizeof(wchar_t);
                 frame.pendingDirectories.erase(frame.pendingDirectories.begin());
                 if (pendingBytes > frame.pathBytes || pendingBytes > framePathBytes)
                 {
@@ -2399,12 +2415,12 @@ namespace
 } // namespace
 
 CurlPublicationResult FileSystemCurlInternal::PublishCurlWriterTransaction(const ConnectionInfo& conn,
-                                                                            std::wstring_view destinationPath,
-                                                                            HANDLE file,
-                                                                            uint64_t sizeBytes,
-                                                                            bool allowOverwrite,
-                                                                            const CurlReplaceExpectation* replaceExpectation,
-                                                                            CurlWriterPublicationMetrics& metrics) noexcept
+                                                                           std::wstring_view destinationPath,
+                                                                           HANDLE file,
+                                                                           uint64_t sizeBytes,
+                                                                           bool allowOverwrite,
+                                                                           const CurlReplaceExpectation* replaceExpectation,
+                                                                           CurlWriterPublicationMetrics& metrics) noexcept
 {
     metrics                   = {};
     const auto started        = std::chrono::steady_clock::now();
@@ -2593,18 +2609,18 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
             if (SUCCEEDED(hr))
             {
                 hr = CopyDirectoryTree(sourceResolved.connection,
-                                            EnsureTrailingSlash(sourceResolved.remotePath),
-                                            EnsureTrailingSlashDisplay(sourceDisplay),
-                                            destinationResolved.connection,
-                                            EnsureTrailingSlash(destinationResolved.remotePath),
-                                            EnsureTrailingSlashDisplay(destinationDisplay),
-                                            flags,
-                                            requestedConcurrency,
-                                            progress,
-                                            nullptr,
-                                            false,
-                                            nullptr,
-                                            &publicationAccumulator);
+                                       EnsureTrailingSlash(sourceResolved.remotePath),
+                                       EnsureTrailingSlashDisplay(sourceDisplay),
+                                       destinationResolved.connection,
+                                       EnsureTrailingSlash(destinationResolved.remotePath),
+                                       EnsureTrailingSlashDisplay(destinationDisplay),
+                                       flags,
+                                       requestedConcurrency,
+                                       progress,
+                                       nullptr,
+                                       false,
+                                       nullptr,
+                                       &publicationAccumulator);
                 if (FAILED(hr) && ! destinationExisted)
                 {
                     const CurlPublicationResult recoveryResult = PreserveCopiedDirectoryAfterFailure(hr);
@@ -2774,11 +2790,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                     SourceSizeCommitmentMap sourceSizeCommitments;
                     SourceTreePathSet sourceTreeMembers;
                     bool destinationExisted = false;
-                    hr                      = PreflightDirectorySourceSizes(sourceResolved.connection,
-                                                                           EnsureTrailingSlash(sourceResolved.remotePath),
-                                                                           progress,
-                                                                           sourceSizeCommitments,
-                                                                           sourceTreeMembers);
+                    hr                      = PreflightDirectorySourceSizes(
+                        sourceResolved.connection, EnsureTrailingSlash(sourceResolved.remotePath), progress, sourceSizeCommitments, sourceTreeMembers);
                     if (SUCCEEDED(hr))
                     {
                         hr = QueryPathExists(destinationResolved.connection, destinationResolved.remotePath, destinationExisted);
@@ -2787,18 +2800,18 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                     {
                         sourceObservedWithoutMutation = false; // Copy may create staging or destination objects before failing.
                         hr                            = CopyDirectoryTree(sourceResolved.connection,
-                                                                               EnsureTrailingSlash(sourceResolved.remotePath),
-                                                                               EnsureTrailingSlashDisplay(sourceDisplay),
-                                                                               destinationResolved.connection,
-                                                                               EnsureTrailingSlash(destinationResolved.remotePath),
-                                                                               EnsureTrailingSlashDisplay(destinationDisplay),
-                                                                               flags,
-                                                                               requestedConcurrency,
-                                                                               progress,
-                                                                               nullptr,
-                                                                               true,
-                                                                               &sourceSizeCommitments,
-                                                                               &publicationAccumulator);
+                                                                          EnsureTrailingSlash(sourceResolved.remotePath),
+                                                                          EnsureTrailingSlashDisplay(sourceDisplay),
+                                                                          destinationResolved.connection,
+                                                                          EnsureTrailingSlash(destinationResolved.remotePath),
+                                                                          EnsureTrailingSlashDisplay(destinationDisplay),
+                                                                          flags,
+                                                                          requestedConcurrency,
+                                                                          progress,
+                                                                          nullptr,
+                                                                          true,
+                                                                          &sourceSizeCommitments,
+                                                                          &publicationAccumulator);
                         if (FAILED(hr) && ! destinationExisted)
                         {
                             const CurlPublicationResult recoveryResult = PreserveCopiedDirectoryAfterFailure(hr);
@@ -3301,18 +3314,18 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
                     if (SUCCEEDED(itemHr))
                     {
                         itemHr = CopyDirectoryTree(task.sourceConn,
-                                                        EnsureTrailingSlash(task.sourceRemotePath),
-                                                        EnsureTrailingSlashDisplay(task.sourceDisplayPath),
-                                                        destinationResolved.connection,
-                                                        EnsureTrailingSlash(task.destinationRemotePath),
-                                                        EnsureTrailingSlashDisplay(task.destinationDisplayPath),
-                                                        flags,
-                                                        directoryConcurrency,
-                                                        progress,
-                                                        &overallBytes,
-                                                        false,
-                                                        nullptr,
-                                                        &publicationAccumulator);
+                                                   EnsureTrailingSlash(task.sourceRemotePath),
+                                                   EnsureTrailingSlashDisplay(task.sourceDisplayPath),
+                                                   destinationResolved.connection,
+                                                   EnsureTrailingSlash(task.destinationRemotePath),
+                                                   EnsureTrailingSlashDisplay(task.destinationDisplayPath),
+                                                   flags,
+                                                   directoryConcurrency,
+                                                   progress,
+                                                   &overallBytes,
+                                                   false,
+                                                   nullptr,
+                                                   &publicationAccumulator);
                         if (FAILED(itemHr) && ! destinationExisted)
                         {
                             const CurlPublicationResult recoveryResult = PreserveCopiedDirectoryAfterFailure(itemHr);
@@ -3503,7 +3516,6 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         static_cast<void>(firstFailure.compare_exchange_strong(expected, static_cast<long>(failureHr), std::memory_order_acq_rel));
     };
 
-
     for (unsigned long index = 0; index < count; ++index)
     {
         if (! sourcePaths[index] || sourcePaths[index][0] == L'\0')
@@ -3655,11 +3667,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
                     SourceSizeCommitmentMap sourceSizeCommitments;
                     SourceTreePathSet sourceTreeMembers;
                     bool destinationExisted = false;
-                    itemHr                  = PreflightDirectorySourceSizes(task.sourceConn,
-                                                                            EnsureTrailingSlash(task.sourceRemotePath),
-                                                                            progress,
-                                                                            sourceSizeCommitments,
-                                                                            sourceTreeMembers);
+                    itemHr                  = PreflightDirectorySourceSizes(
+                        task.sourceConn, EnsureTrailingSlash(task.sourceRemotePath), progress, sourceSizeCommitments, sourceTreeMembers);
                     if (SUCCEEDED(itemHr))
                     {
                         itemHr = QueryPathExists(destinationResolved.connection, task.destinationRemotePath, destinationExisted);
@@ -3669,18 +3678,18 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
                     {
                         sourceObservedWithoutMutation = false;
                         itemHr                        = CopyDirectoryTree(task.sourceConn,
-                                                                               EnsureTrailingSlash(task.sourceRemotePath),
-                                                                               EnsureTrailingSlashDisplay(task.sourceDisplayPath),
-                                                                               destinationResolved.connection,
-                                                                               EnsureTrailingSlash(task.destinationRemotePath),
-                                                                               EnsureTrailingSlashDisplay(task.destinationDisplayPath),
-                                                                               flags,
-                                                                               directoryConcurrency,
-                                                                               progress,
-                                                                               &overallBytes,
-                                                                               true,
-                                                                               &sourceSizeCommitments,
-                                                                               &publicationAccumulator);
+                                                                          EnsureTrailingSlash(task.sourceRemotePath),
+                                                                          EnsureTrailingSlashDisplay(task.sourceDisplayPath),
+                                                                          destinationResolved.connection,
+                                                                          EnsureTrailingSlash(task.destinationRemotePath),
+                                                                          EnsureTrailingSlashDisplay(task.destinationDisplayPath),
+                                                                          flags,
+                                                                          directoryConcurrency,
+                                                                          progress,
+                                                                          &overallBytes,
+                                                                          true,
+                                                                          &sourceSizeCommitments,
+                                                                          &publicationAccumulator);
                         if (FAILED(itemHr) && ! destinationExisted)
                         {
                             const CurlPublicationResult recoveryResult = PreserveCopiedDirectoryAfterFailure(itemHr);
@@ -3854,7 +3863,6 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
         return hr;
     }
 
-
     std::atomic<unsigned long> completedCount{0};
     std::atomic_bool hadFailure{false};
     std::atomic<HRESULT> firstFailure{S_OK};
@@ -3915,8 +3923,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
         if (SUCCEEDED(itemHr))
         {
             FilesInformationCurl::Entry info{};
-            itemHr = resolved.remotePath == L"/" ? HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)
-                                                 : GetEntryInfo(resolved.connection, resolved.remotePath, info);
+            itemHr = resolved.remotePath == L"/" ? HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) : GetEntryInfo(resolved.connection, resolved.remotePath, info);
             if (SUCCEEDED(itemHr))
             {
                 // The selected root; a recursive walk later adds whatever it finds underneath.

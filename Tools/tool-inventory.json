@@ -67,14 +67,14 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate exact filtered hosted diagnostic cases and archived filtered case runs without promoting repository coverage.",
+      "purpose": "Validate exact filtered hosted diagnostic cases and schema-dispatched archived Commands runs, binding single-suite v1 to rotated prelaunch source/receipt/plan proof and owned native PID/time evidence without inventing durable promotion or promoting repository coverage.",
       "usage": "Imported by the project CI adapter and filtered hosted product qualification workflows for fixed explicit diagnostic scopes and immutable paired-dispatch admission.",
       "usedBy": ["Tools/Invoke-ProjectCi.ps1", ".github/workflows/ghostty-runtime-product-qualification.yml"],
       "prerequisites": ["PowerShell 7", "marked TestSandbox", "verified full-solution or exact selected application-closure receipt as required by the diagnostic contract"],
       "sideEffects": ["Reads exact archived runner and native case evidence"],
       "outputs": ["Validated filtered diagnostic selection and evidence"],
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
-      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1", "Tools/Tests/HostedTestDesktop.Tests.ps1"],
+      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1", "Tools/Tests/HostedTestDesktop.Tests.ps1", "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"],
       "replacement": null
     },
     {
@@ -2553,6 +2553,7 @@
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Modules/Testing/TestSandbox.psm1",
         "Tools/Modules/Testing/TestSuitePlan.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
         "Tools/Run-AllTests.ps1"
       ],
       "prerequisites": [
@@ -2908,7 +2909,8 @@
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Run-AllTests.ps1",
-        "Tools/Modules/Testing/TestInventory.psm1"
+        "Tools/Modules/Testing/TestInventory.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
       ],
       "prerequisites": [],
       "sideEffects": [],

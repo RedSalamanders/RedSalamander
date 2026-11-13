@@ -509,6 +509,7 @@ Describe 'Release workflow source contracts' {
 
     It 'selects and restores the hosted request inside all three actual direct workflow actions' {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
         $saved = @{}
         foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY','GITHUB_WORKSPACE','REDSALAMANDER_HOSTED_TEST_DESKTOP')) {
             $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
@@ -557,7 +558,10 @@ Describe 'Release workflow source contracts' {
                             $observed.Add([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process'))
                             if ($fail) { $global:LASTEXITCODE = 9; throw 'seeded native failure' }
                             $global:LASTEXITCODE = if ($relative -like '*ghostty*') { 2 } else { 0 }
-                            'synthetic runner output for workflow wiring only'
+                            # Match Run-AllTests: the authoritative ID is host output
+                            # (information stream 6), not success-pipeline data.
+                            $fakeRunId = '20000101T000000Z-1-' + $observed.Count.ToString('x32')
+                            Write-Host "  Run id:    $fakeRunId"
                         }
                         $runTests = $fakeNative
                         $result = Invoke-RSTestBlock { & $action }
@@ -570,7 +574,9 @@ Describe 'Release workflow source contracts' {
                         for ($index = 0; $index -lt $verified.Count; $index++) {
                             $call = $verified[$index]
                             $call.ExitCode | Should Be 2
-                            $call.Output | Should Be 'synthetic runner output for workflow wiring only'
+                            $expectedRunId = '20000101T000000Z-1-' + ($index + 1).ToString('x32')
+                            $call.Output | Should Be "  Run id:    $expectedRunId"
+                            (Get-RSHostedDiagnosticRunId -Output $call.Output) | Should Be $expectedRunId
                             $call.TestRoot | Should Be $env:REDSALAMANDER_TEST_ROOT
                             $call.RepoRoot | Should Be $repoRoot
                             $call.Suite | Should Be 'Commands'

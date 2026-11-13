@@ -714,9 +714,124 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         }
     }
 
+    It 'validates writer-faithful v1 Commands proof and rejects stale ambiguous or mismatched joins' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSuitePlan.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.Common.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+        Mock Read-RSBuildReceipt { [pscustomobject]@{
+            receipt_id=('b'*64);repo_identity=('c'*64);source_snapshot_id=('a'*64)
+            platform='ARM64';configuration='Debug';target='Build';tests_enabled=$true
+            toolchain_identity_digest=('e'*64);vcpkg_identity_digest=('e'*64);ghostty_runtime_identity=('e'*64)
+            project_graph_digest=('e'*64);runtime_dependency_digest=('e'*64);outputs=@()
+        } } -ModuleName HostedDiagnosticEvidence
+        Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64);GitHead=('d'*40)} } -ModuleName HostedDiagnosticEvidence
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        Mock Assert-RSTestSandboxContainedPath { param($TestRoot,$Path,[switch]$RequireDescendant) [IO.Path]::GetFullPath($Path) } -ModuleName HostedDiagnosticEvidence
+        $sandbox = Join-Path $TestDrive 'v1-proof'
+        $runId = '20261113T120000Z-1234-' + ('a'*32)
+        $run = Join-Path $sandbox "evidence/completed-runs/$runId"
+        $last = Join-Path $run 'artifacts/selftest/last_run'
+        $pre = Join-Path $run 'artifacts/selftest/previous_run'
+        $records = Join-Path $sandbox "evidence/run-archive-records/$runId"
+        [void][IO.Directory]::CreateDirectory($pre)
+        [void][IO.Directory]::CreateDirectory((Join-Path $last 'commands'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $last 'perf'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $run 'artifacts/native-process-exits'))
+        [void][IO.Directory]::CreateDirectory($records)
+        $exe = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
+        $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Commands -ValidationMode Fresh -CoverageScope filtered `
+            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter terminal_)
+        $fixtureReceipt = & (Get-Module HostedDiagnosticEvidence) { Read-RSBuildReceipt -BuildOutputDir 'synthetic' -SchemaPath 'synthetic' }
+        $row = Get-RSValidationEntryFingerprint -EntryContract $plan.entries[0] -CoveragePlanDigest $plan.coverage_plan_digest `
+            -WorkspaceSnapshot @{snapshot_id=('a'*64)} -BuildReceipt $fixtureReceipt
+        $fp = [ordered]@{schema='red-salamander.validation-entry-fingerprints.v1';canonicalization='rs-canonical-json-v1';
+            plan_digest=$plan.plan_digest;coverage_plan_digest=$plan.coverage_plan_digest;snapshot_id=('a'*64);build_receipt_id=('b'*64);artifact_epoch=0;
+            entries=@(@{id='selftest.commands';fingerprint=$row.Fingerprint;component_digest_version=$row.ComponentDigestVersion;component_digests=$row.ComponentDigests;computation_ms=0})}
+        $fp.fingerprints_digest=Get-RSCanonicalJsonDigest $fp
+        $fp.computation_ms=0
+        $decision=[ordered]@{schema='red-salamander.validation-plan-decision.v1';canonicalization='rs-canonical-json-v1';planner_mode='shadow';
+            snapshot_id=('a'*64);plan_digest=$plan.plan_digest;changed_paths=@();matched_impact_rules=@();advisory_build_action='none';
+            entries=@(@{id='selftest.commands';ordinal=0;affected=$true;matched_impact_tags=@();decision='EXECUTE';reason_codes=@('FORCED');expected_fingerprint=$row.Fingerprint;origin_run_id=$null;origin_evidence_digest=$null});
+            estimated_fresh_duration_ms=0;estimated_executed_duration_ms=0;estimated_avoided_duration_ms=0}
+        $decision.decision_digest=Get-RSCanonicalJsonDigest $decision
+        function Write-CanonicalProof($Path,$Value,$Schema) {
+            Write-RSAtomicCanonicalJsonFile -LiteralPath $Path -InputObject $Value -AllowedRoot $sandbox -SchemaPath (Join-Path $repoRoot "Specs/Testing/$Schema")
+        }
+        Write-CanonicalProof (Join-Path $pre 'entry-fingerprints.json') $fp 'ValidationEntryFingerprints.schema.json'
+        Write-CanonicalProof (Join-Path $pre 'validation-plan.json') $plan 'ValidationPlan.schema.json'
+        Write-CanonicalProof (Join-Path $pre 'validation-plan-decision.json') $decision 'ValidationPlanDecision.schema.json'
+        $snap=[ordered]@{schema='red-salamander.workspace-snapshot.v1';canonicalization='rs-canonical-json-v1';snapshot_id=('a'*64);repo_identity=('c'*64);git_head=('d'*40);base=('d'*40);files=@();
+            acquisition_before=('a'*64);acquisition_after=('a'*64);acquisition_attempts=1;git_discovery_ms=0;content_hashing_ms=0;canonicalization_ms=0;computation_ms=0;created_utc='2026-11-13T12:00:02Z'}
+        Write-CanonicalProof (Join-Path $pre 'workspace-initial.json') $snap 'WorkspaceSnapshot.schema.json'
+        $snap.created_utc='2026-11-13T12:00:54.500Z'
+        Write-CanonicalProof (Join-Path $last 'workspace-after-selftest.commands.json') $snap 'WorkspaceSnapshot.schema.json'
+        $snap.created_utc='2026-11-13T12:00:54.800Z'
+        Write-CanonicalProof (Join-Path $last 'workspace-final.json') $snap 'WorkspaceSnapshot.schema.json'
+        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';passed=2;failed=0;skipped=0;cases=@(@{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'})}
+        $nativePath=Join-Path $last 'commands/results.json'
+        $native|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $nativePath
+        $exitPath=Join-Path $run ('artifacts/native-process-exits/'+('f'*32)+'.json')
+        @{schema='red-salamander.native-process-exit.v1';process_id=42;executable=$exe;observed_utc='2026-11-13T12:00:54Z';exit_code=0}|ConvertTo-Json|Set-Content -LiteralPath $exitPath
+        $metricPath=Join-Path $last 'perf/perf_metrics.jsonl'
+        '{"process":42,"timestamp":"2026-11-13T12:00:50Z"}'|Set-Content -LiteralPath $metricPath
+        $summary=@{schema='red-salamander.run-all-tests.v1';run_id=$runId;suite='Commands';case_filter='terminal_';platform='ARM64';configuration='Debug';executable=$exe;
+            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';exit_code=2;total=2;passed=2;failed=0;skipped=0;
+            quarantine=@{is_valid=$true;has_blocking_entries=$false;active_count=0;active_entries=@();invalid_count=0;invalid_entries=@();errors=@()};
+            test_sandbox_audit=@{is_clean=$false;issue_count=1};suites=@(@{suite='Commands';kind='SelfTest';classification='PASSED';exit_code=0;passed=2;failed=0;skipped=0;retry_attempts=@()})}
+        $summaryPath=Join-Path $last 'run-all-tests-results.json'
+        $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
+        function Seal-Proof {
+            $inventory=@(Get-ChildItem -LiteralPath $run -File -Recurse|Where-Object FullName -ne $summaryPath|ForEach-Object {
+                @{path=[IO.Path]::GetRelativePath($run,$_.FullName);directory=$false;length=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+            })
+            $intent=@{schema='red-salamander.run-archive.v1';run_id=$runId;disposition='completed';source=(Join-Path $sandbox "runs/$runId");destination=$run;inventory=$inventory}
+            $intentPath=Join-Path $records 'intent.json';$intent|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $intentPath
+            @{schema='red-salamander.run-archive-complete.v1';source=$intent.source;destination=$run;intent_sha256=(Get-FileHash $intentPath).Hash}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $records 'complete.json')
+        }
+        $invoke={Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output "Run id: $runId" -TestRoot $sandbox -RepoRoot $repoRoot -Suite Commands -CaseFilter terminal_ -Platform ARM64 -Configuration Debug -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z')}
+        Seal-Proof
+        (& $invoke).RepositoryVerdict | Should Be 'NOT_EVALUATED'
+        # Mutations are resealed where appropriate so semantic joins, not just byte checks, must reject them.
+        $original=[IO.File]::ReadAllText($metricPath)
+        foreach($control in @(
+            @('{"process":43,"timestamp":"2026-11-13T12:00:50Z"}','PID'),
+            @('{"process":42,"timestamp":"2026-11-13T12:00:56Z"}','outside the invocation window'),
+            @('not json','JSON'), @('','empty'))) {
+            [IO.File]::WriteAllText($metricPath,$control[0]);Seal-Proof;{& $invoke}|Should Throw $control[1]
+        }
+        [IO.File]::WriteAllText($metricPath,$original)
+        $exitText=[IO.File]::ReadAllText($exitPath)
+        [IO.File]::WriteAllText($exitPath,$exitText.Replace('"exit_code": 0','"exit_code": 9'));Seal-Proof;{& $invoke}|Should Throw 'exit code'
+        [IO.File]::WriteAllText($exitPath,$exitText)
+        $fpPath=Join-Path $pre 'entry-fingerprints.json';$fpText=[IO.File]::ReadAllText($fpPath)
+        foreach($bad in @($fpText.Replace(('a'*64),('9'*64)),$fpText.Replace(('b'*64),('8'*64)))) {
+            [IO.File]::WriteAllText($fpPath,$bad);Seal-Proof;{& $invoke}|Should Throw 'source or receipt'
+        }
+        [IO.File]::WriteAllText($fpPath,$fpText)
+        Remove-Item -LiteralPath $fpPath;Seal-Proof;{& $invoke}|Should Throw 'Missing'
+        [IO.File]::WriteAllText($fpPath,$fpText)
+        Copy-Item -LiteralPath $fpPath -Destination (Join-Path $last 'entry-fingerprints.json');Seal-Proof;{& $invoke}|Should Throw 'ambiguous'
+        Remove-Item -LiteralPath (Join-Path $last 'entry-fingerprints.json')
+        $planPath=Join-Path $pre 'validation-plan.json';$planText=[IO.File]::ReadAllText($planPath)
+        [IO.File]::WriteAllText($planPath,$planText.Replace('terminal_','other_'));Seal-Proof;{& $invoke}|Should Throw 'plan, profile'
+        [IO.File]::WriteAllText($planPath,$planText)
+        $summary.configuration='Release';$summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath;{& $invoke}|Should Throw 'does not match'
+        $summary.configuration='Debug';$summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath
+        $postPath=Join-Path $last 'workspace-final.json';$postText=[IO.File]::ReadAllText($postPath)
+        [IO.File]::WriteAllText($postPath,$postText.Replace(('a'*64),('9'*64)));Seal-Proof;{& $invoke}|Should Throw 'source identity changed'
+        [IO.File]::WriteAllText($postPath,$postText)
+        $native.cases[0].name='outside_terminal_suffix';$native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof;{& $invoke}|Should Throw 'unexpected'
+        $native.cases[0].name='terminal_one';$native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+        Mock Test-RSBuildReceiptForArtifactUse { $false } -ModuleName HostedDiagnosticEvidence
+        {& $invoke}|Should Throw 'artifact receipt mismatch'
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        (& $invoke).Passed | Should Be 2
+    }
+
     It 'validates archived filtered case runs in Assert-RSHostedFilteredCaseRun for exit 2 NOT_EVALUATED and rejects failures' {
-        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
-        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
         Mock Read-RSBuildReceipt { [pscustomobject]@{receipt_id=('b'*64)} } -ModuleName HostedDiagnosticEvidence
         Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64)} } -ModuleName HostedDiagnosticEvidence
