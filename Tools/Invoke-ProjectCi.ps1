@@ -196,15 +196,17 @@ Invoke-RSWithHostedTestDesktop -Action {
         Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1')
         $runner = Assert-CiContainedPath $root (Join-Path $root 'Tools/Run-AllTests.ps1')
         $hostPath = (Get-Process -Id $PID).Path
+        $diagnosticTimeoutMultiplier = 2.0
         $runCase = {
             param([string]$CaseFilter)
             $runnerArguments = @('-NoProfile','-NonInteractive','-File',$runner) + $profile +
                 @('-Suite','Commands','-CaseFilter',$CaseFilter,'-ValidationMode','Fresh','-SkipBuild',
-                    '-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,'-TimeoutMultiplier','2.0','-RequireCleanQuarantine')
+                    '-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,
+                    '-TimeoutMultiplier',$diagnosticTimeoutMultiplier.ToString('g',[Globalization.CultureInfo]::InvariantCulture),'-RequireCleanQuarantine')
             Invoke-CiProcess -FilePath $hostPath -Arguments $runnerArguments -WorkingDirectory $root -TimeoutSeconds 18000 -Stream -AllowFailure
         }
         [void](Invoke-RSHostedCommandsUiAttribution -RepoRoot $root -TestRoot $env:REDSALAMANDER_TEST_ROOT `
-            -Platform $Platform -Configuration $Configuration -RunCase $runCase)
+            -Platform $Platform -Configuration $Configuration -TimeoutMultiplier $diagnosticTimeoutMultiplier -RunCase $runCase)
         Write-Host 'Commands UI attribution passed its observer controls and three selected UI cases; repository coverage remains NOT_EVALUATED.'
         return
     }

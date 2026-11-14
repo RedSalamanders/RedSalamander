@@ -3567,7 +3567,7 @@ Describe 'Hosted attribution ordinary failure proof' {
         [void][IO.Directory]::CreateDirectory($records)
         $exe = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
         $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Commands -ValidationMode Fresh -CoverageScope filtered `
-            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter red_salamander_help_lists_diagnostics_options)
+            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter red_salamander_help_lists_diagnostics_options -TimeoutMultiplier 2.0)
         $fixtureReceipt = & (Get-Module HostedDiagnosticEvidence) { Read-RSBuildReceipt -BuildOutputDir 'synthetic' -SchemaPath 'synthetic' }
         $row = Get-RSValidationEntryFingerprint -EntryContract $plan.entries[0] -CoveragePlanDigest $plan.coverage_plan_digest `
             -WorkspaceSnapshot @{snapshot_id=('a'*64)} -BuildReceipt $fixtureReceipt
@@ -3594,7 +3594,7 @@ Describe 'Hosted attribution ordinary failure proof' {
         Write-CanonicalProof (Join-Path $last 'workspace-after-selftest.commands.json') $snap 'WorkspaceSnapshot.schema.json'
         $snap.created_utc='2026-11-13T12:00:54.800Z'
         Write-CanonicalProof (Join-Path $last 'workspace-final.json') $snap 'WorkspaceSnapshot.schema.json'
-        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';passed=0;failed=1;skipped=0;cases=@(@{name='red_salamander_help_lists_diagnostics_options';status='failed'})}
+        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';timeout_scale=2.0;passed=0;failed=1;skipped=0;cases=@(@{name='red_salamander_help_lists_diagnostics_options';status='failed'})}
         $nativePath=Join-Path $last 'commands/results.json'
         $native|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $nativePath
         $exitPath=Join-Path $run ('artifacts/native-process-exits/'+('f'*32)+'.json')
@@ -3602,7 +3602,7 @@ Describe 'Hosted attribution ordinary failure proof' {
         $metricPath=Join-Path $last 'perf/perf_metrics.jsonl'
         '{"process":42,"timestamp":"2026-11-13T12:00:50Z"}'|Set-Content -LiteralPath $metricPath
         $summary=@{schema='red-salamander.run-all-tests.v1';run_id=$runId;suite='Commands';case_filter='red_salamander_help_lists_diagnostics_options';platform='ARM64';configuration='Debug';executable=$exe;
-            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';exit_code=1;total=1;passed=0;failed=1;skipped=0;
+            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';timeout_scale=2.0;exit_code=1;total=1;passed=0;failed=1;skipped=0;
             quarantine=@{is_valid=$true;has_blocking_entries=$false;active_count=0;active_entries=@();invalid_count=0;invalid_entries=@();errors=@();repair_attempt_count=0;repair_attempts=@()};
             test_sandbox_audit=@{is_clean=$false;issue_count=1};suites=@(@{suite='Commands';kind='SelfTest';classification='UNCLASSIFIED_FAILURE';exit_code=1;passed=0;failed=1;skipped=0;retry_attempts=@()})}
         $summaryPath=Join-Path $last 'run-all-tests-results.json'
@@ -3617,14 +3617,17 @@ Describe 'Hosted attribution ordinary failure proof' {
         }
 
         $readFailure = {
+            param([double]$ExpectedTimeout=2.0)
             & (Get-Module HostedDiagnosticEvidence) {
-                param($Sandbox,$Root,$Id)
-                Read-RSHostedFilteredCaseRun -ExitCode 1 -Output "Run id: $Id" -TestRoot $Sandbox -RepoRoot $Root -Suite Commands -CaseFilter red_salamander_help_lists_diagnostics_options -Platform ARM64 -Configuration Debug -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z') -AllowRecordedFailure
-            } $sandbox $repoRoot $runId
+                param($Sandbox,$Root,$Id,$ExpectedTimeout)
+                Read-RSHostedFilteredCaseRun -ExitCode 1 -Output "Run id: $Id" -TestRoot $Sandbox -RepoRoot $Root -Suite Commands -CaseFilter red_salamander_help_lists_diagnostics_options -Platform ARM64 -Configuration Debug -TimeoutMultiplier $ExpectedTimeout -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z') -AllowRecordedFailure
+            } $sandbox $repoRoot $runId $ExpectedTimeout
         }
         Seal-Proof
         (& $readFailure).ChangeVerdict | Should Be 'FAILED'
         (& $readFailure).Failed | Should Be 1
+        { & $readFailure 1.0 } | Should Throw 'trusted invocation'
+        { & $readFailure 3.0 } | Should Throw 'trusted invocation'
         { Assert-RSHostedFilteredCaseRun -ExitCode 1 -Output "Run id: $runId" -TestRoot $sandbox -RepoRoot $repoRoot -Suite Commands -CaseFilter red_salamander_help_lists_diagnostics_options -Platform ARM64 -Configuration Debug -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z') } | Should Throw 'failed with exit code 1'
         $summary.quarantine.repair_attempt_count=1
         $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
@@ -3655,7 +3658,8 @@ Describe 'Hosted Commands UI attribution campaign' {
         $script:attributionModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force -PassThru
         $script:attributionDirectory = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('attribution-' + [guid]::NewGuid().ToString('N'))
         $script:attributionState = @{calls=[Collections.Generic.List[string]]::new();identityCalls=0;changeAt=0;
-            unsafeAt=0;failureAt=0;duplicate=$false;noRepairs=$true;exit=2;quarantineCalls=0;quarantineChangeAt=0;quarantineErrorAt=0}
+            unsafeAt=0;failureAt=0;duplicate=$false;noRepairs=$true;exit=2;quarantineCalls=0;quarantineChangeAt=0;quarantineErrorAt=0;
+            proofs=[Collections.Generic.List[object]]::new()}
         & $script:attributionModule {
             param($State)
             $script:attributionFake = $State
@@ -3670,14 +3674,16 @@ Describe 'Hosted Commands UI attribution campaign' {
                 return $(if($script:attributionFake.quarantineCalls -eq $script:attributionFake.quarantineChangeAt){'changed'}else{'absent'})
             }
             function script:Assert-RSHostedFilteredCaseRun {
-                param($ExitCode,$Output,$TestRoot,$RepoRoot,$Suite,$CaseFilter,$Platform,$Configuration,$InvocationStartedUtc,$InvocationEndedUtc)
+                param($ExitCode,$Output,$TestRoot,$RepoRoot,$Suite,$CaseFilter,$Platform,$Configuration,$InvocationStartedUtc,$InvocationEndedUtc,$TimeoutMultiplier)
+                $script:attributionFake.proofs.Add(@{kind='passing';timeout=$TimeoutMultiplier})
                 if ($script:attributionFake.calls.Count -eq $script:attributionFake.unsafeAt) { throw 'unsafe normal-teardown proof' }
                 return [pscustomobject]@{RunId=(Get-RSHostedDiagnosticRunId $Output);ChangeVerdict='PASSED';RepositoryVerdict='NOT_EVALUATED';
                     Passed=1;Failed=0;Skipped=0;SummarySchema='red-salamander.run-all-tests.v1';NativeCaseCount=1;
                     HasNoRepairAttempts=$script:attributionFake.noRepairs;ArchiveIntentSha256=('a'*64)}
             }
             function script:Read-RSHostedFilteredCaseRun {
-                param($ExitCode,$Output,$TestRoot,$RepoRoot,$Suite,$CaseFilter,$Platform,$Configuration,$InvocationStartedUtc,$InvocationEndedUtc,[switch]$AllowRecordedFailure)
+                param($ExitCode,$Output,$TestRoot,$RepoRoot,$Suite,$CaseFilter,$Platform,$Configuration,$InvocationStartedUtc,$InvocationEndedUtc,$TimeoutMultiplier,[switch]$AllowRecordedFailure)
+                $script:attributionFake.proofs.Add(@{kind='failure';timeout=$TimeoutMultiplier})
                 if (-not $AllowRecordedFailure -or $ExitCode -ne 1) { throw 'unexpected failure-reader boundary' }
                 return [pscustomobject]@{RunId=(Get-RSHostedDiagnosticRunId $Output);ChangeVerdict='FAILED';RepositoryVerdict='NOT_EVALUATED';
                     Passed=0;Failed=1;Skipped=0;ArchiveIntentSha256=('b'*64)}
@@ -3693,7 +3699,7 @@ Describe 'Hosted Commands UI attribution campaign' {
         }
         $script:invokeAttribution = {
             $arguments=@{RepoRoot=$repoRoot;TestRoot=$env:REDSALAMANDER_TEST_ROOT;Platform='ARM64';Configuration='Release';
-                EvidenceRunId=$env:REDSALAMANDER_TEST_RUN_ID;EvidenceDirectory=$script:attributionDirectory;RunCase=$script:attributionRunner}
+                TimeoutMultiplier=2.0;EvidenceRunId=$env:REDSALAMANDER_TEST_RUN_ID;EvidenceDirectory=$script:attributionDirectory;RunCase=$script:attributionRunner}
             & $script:attributionModule {param($Arguments) Invoke-RSHostedCommandsUiAttributionCore @Arguments} $arguments
         }
     }
@@ -3708,6 +3714,8 @@ Describe 'Hosted Commands UI attribution campaign' {
         @($index.entries|Where-Object status -ne passed).Count | Should Be 0
         @($index.entries.run_id|Select-Object -Unique).Count | Should Be 4
         $index.repository_verdict | Should Be 'NOT_EVALUATED'
+        $script:attributionState.proofs.Count | Should Be 4
+        @($script:attributionState.proofs|Where-Object {$_.kind -ne 'passing' -or $_.timeout -ne 2.0}).Count | Should Be 0
         foreach ($ordinal in 1..4) {
             $caseRoot = Join-Path $script:attributionDirectory "case-$ordinal"
             (Get-Content -LiteralPath (Join-Path $caseRoot 'runner.stderr.log') -Raw) | Should Be "independent stderr $ordinal"
@@ -3721,6 +3729,8 @@ Describe 'Hosted Commands UI attribution campaign' {
         ($index.entries.status -join ',') | Should Be 'failed,passed,passed,passed'
         $script:attributionState.calls.Count | Should Be 4
         $index.status | Should Be 'failed'
+        ($script:attributionState.proofs.kind -join ',') | Should Be 'failure,passing,passing,passing'
+        @($script:attributionState.proofs|Where-Object timeout -ne 2.0).Count | Should Be 0
     }
     It 'stops after unsafe teardown proof and explicitly leaves later selections unexecuted' {
         $script:attributionState.unsafeAt=2
@@ -3775,15 +3785,16 @@ Describe 'Hosted Commands UI attribution campaign' {
     It 'resolves the index through real canonical archival rather than a stale live scratch path' {
         & $script:attributionModule {
             function script:Invoke-RSHostedCommandsUiAttributionCore {
-                param($RepoRoot,$TestRoot,$Platform,$Configuration,$EvidenceRunId,$EvidenceDirectory,$RunCase)
+                param($RepoRoot,$TestRoot,$Platform,$Configuration,$TimeoutMultiplier,$EvidenceRunId,$EvidenceDirectory,$RunCase)
                 $index=[pscustomobject]@{status='passed';repository_verdict='NOT_EVALUATED';evidence_run_id=$EvidenceRunId;
-                    evidence_member='scratch/UnifiedCI/CommandsUiAttribution/commands-ui-attribution.json'}
+                    timeout=$TimeoutMultiplier;evidence_member='scratch/UnifiedCI/CommandsUiAttribution/commands-ui-attribution.json'}
                 $index|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'commands-ui-attribution.json') -Encoding utf8
                 return $index
             }
         }
         $index=Invoke-RSHostedCommandsUiAttribution -RepoRoot $repoRoot -TestRoot $env:REDSALAMANDER_TEST_ROOT `
-            -Platform ARM64 -Configuration Release -RunCase {throw 'The archival fixture must not launch a child'}
+            -Platform ARM64 -Configuration Release -TimeoutMultiplier 2.0 -RunCase {throw 'The archival fixture must not launch a child'}
+        $index.timeout | Should Be 2.0
         $live=Join-Path $env:REDSALAMANDER_TEST_ROOT "runs/$($index.evidence_run_id)"
         $final=Join-Path $env:REDSALAMANDER_TEST_ROOT "evidence/completed-runs/$($index.evidence_run_id)"
         Test-Path -LiteralPath $live | Should Be $false

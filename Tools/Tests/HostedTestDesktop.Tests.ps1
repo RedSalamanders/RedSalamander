@@ -793,6 +793,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
     }
 
     It 'validates writer-faithful v1 Commands proof and rejects stale ambiguous or mismatched joins' {
+        foreach ($fixtureTimeout in @(1.0,2.0)) {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSuitePlan.psm1') -ErrorAction Stop
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.Common.psm1') -ErrorAction Stop
@@ -806,7 +807,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64);GitHead=('d'*40)} } -ModuleName HostedDiagnosticEvidence
         Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
         Mock Assert-RSTestSandboxContainedPath { param($TestRoot,$Path,[switch]$RequireDescendant) [IO.Path]::GetFullPath($Path) } -ModuleName HostedDiagnosticEvidence
-        $sandbox = Join-Path $TestDrive 'v1-proof'
+        $sandbox = Join-Path $TestDrive ('v1-proof-' + $fixtureTimeout)
         $runId = '20261113T120000Z-1234-' + ('a'*32)
         $run = Join-Path $sandbox "evidence/completed-runs/$runId"
         $last = Join-Path $run 'artifacts/selftest/last_run'
@@ -819,7 +820,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         [void][IO.Directory]::CreateDirectory($records)
         $exe = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
         $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Commands -ValidationMode Fresh -CoverageScope filtered `
-            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter terminal_)
+            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter terminal_ -TimeoutMultiplier $fixtureTimeout)
         $fixtureReceipt = & (Get-Module HostedDiagnosticEvidence) { Read-RSBuildReceipt -BuildOutputDir 'synthetic' -SchemaPath 'synthetic' }
         $row = Get-RSValidationEntryFingerprint -EntryContract $plan.entries[0] -CoveragePlanDigest $plan.coverage_plan_digest `
             -WorkspaceSnapshot @{snapshot_id=('a'*64)} -BuildReceipt $fixtureReceipt
@@ -846,7 +847,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         Write-CanonicalProof (Join-Path $last 'workspace-after-selftest.commands.json') $snap 'WorkspaceSnapshot.schema.json'
         $snap.created_utc='2026-11-13T12:00:54.800Z'
         Write-CanonicalProof (Join-Path $last 'workspace-final.json') $snap 'WorkspaceSnapshot.schema.json'
-        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';passed=2;failed=0;skipped=0;cases=@(@{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'})}
+        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';timeout_scale=$fixtureTimeout;passed=2;failed=0;skipped=0;cases=@(@{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'})}
         $nativePath=Join-Path $last 'commands/results.json'
         $native|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $nativePath
         $exitPath=Join-Path $run ('artifacts/native-process-exits/'+('f'*32)+'.json')
@@ -854,7 +855,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         $metricPath=Join-Path $last 'perf/perf_metrics.jsonl'
         '{"process":42,"timestamp":"2026-11-13T12:00:50Z"}'|Set-Content -LiteralPath $metricPath
         $summary=@{schema='red-salamander.run-all-tests.v1';run_id=$runId;suite='Commands';case_filter='terminal_';platform='ARM64';configuration='Debug';executable=$exe;
-            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';exit_code=2;total=2;passed=2;failed=0;skipped=0;
+            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';timeout_scale=$fixtureTimeout;exit_code=2;total=2;passed=2;failed=0;skipped=0;
             quarantine=@{is_valid=$true;has_blocking_entries=$false;active_count=0;active_entries=@();invalid_count=0;invalid_entries=@();errors=@()};
             test_sandbox_audit=@{is_clean=$false;issue_count=1};suites=@(@{suite='Commands';kind='SelfTest';classification='PASSED';exit_code=0;passed=2;failed=0;skipped=0;retry_attempts=@()})}
         $summaryPath=Join-Path $last 'run-all-tests-results.json'
@@ -867,9 +868,34 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
             $intentPath=Join-Path $records 'intent.json';$intent|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $intentPath
             @{schema='red-salamander.run-archive-complete.v1';source=$intent.source;destination=$run;intent_sha256=(Get-FileHash $intentPath).Hash}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $records 'complete.json')
         }
-        $invoke={Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output "Run id: $runId" -TestRoot $sandbox -RepoRoot $repoRoot -Suite Commands -CaseFilter terminal_ -Platform ARM64 -Configuration Debug -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z')}
+        $invoke={
+            param($ExpectedTimeout=$fixtureTimeout)
+            $arguments=@{ExitCode=2;Output="Run id: $runId";TestRoot=$sandbox;RepoRoot=$repoRoot;Suite='Commands';CaseFilter='terminal_';Platform='ARM64';Configuration='Debug';
+                InvocationStartedUtc=([DateTimeOffset]'2026-11-13T12:00:00Z');InvocationEndedUtc=([DateTimeOffset]'2026-11-13T12:01:00Z')}
+            if($null -ne $ExpectedTimeout){$arguments.TimeoutMultiplier=$ExpectedTimeout}
+            Assert-RSHostedFilteredCaseRun @arguments
+        }
         Seal-Proof
         (& $invoke).RepositoryVerdict | Should Be 'NOT_EVALUATED'
+        if($fixtureTimeout -eq 1.0){(& $invoke $null).Passed | Should Be 2}
+        else {
+            {& $invoke $null}|Should Throw 'trusted invocation'
+            {& $invoke 1.0}|Should Throw 'trusted invocation'
+            {& $invoke 3.0}|Should Throw 'trusted invocation'
+            # Untrusted matching summary/native claims cannot authorize a different archived plan.
+            $summary.timeout_scale=3.0;$native.timeout_scale=3.0
+            $summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath
+            $native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+            {& $invoke 3.0}|Should Throw 'plan, profile'
+            $summary.timeout_scale=2.0;$native.timeout_scale=1.0
+            $summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath
+            $native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+            {& $invoke}|Should Throw 'trusted invocation'
+            $native.timeout_scale=2.0;$native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+            foreach($bad in @(0.0,101.0,[double]::NaN,[double]::PositiveInfinity)){
+                {& $invoke $bad}|Should Throw 'TimeoutMultiplier'
+            }
+        }
         # Mutations are resealed where appropriate so semantic joins, not just byte checks, must reject them.
         $original=[IO.File]::ReadAllText($metricPath)
         foreach($control in @(
@@ -905,6 +931,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         {& $invoke}|Should Throw 'artifact receipt mismatch'
         Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
         (& $invoke).Passed | Should Be 2
+        }
     }
 
     It 'validates archived filtered case runs in Assert-RSHostedFilteredCaseRun for exit 2 NOT_EVALUATED and rejects failures' {
@@ -958,6 +985,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
             case_filter = 'terminal_'
             platform = 'ARM64'
             configuration = 'Debug'
+            timeout_scale = 1.0
             exit_code = 2
             executable = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
             total = 3
@@ -974,7 +1002,7 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         [IO.File]::WriteAllText((Join-Path $lastRunDir 'run-all-tests-results-v1.json'), ($v1 | ConvertTo-Json -Depth 10))
         [void][IO.Directory]::CreateDirectory((Join-Path $lastRunDir 'commands'))
         $nativePath = Join-Path $lastRunDir 'commands/results.json'
-        $native = @{suite='Commands';passed=3;failed=0;skipped=0;cases=@(
+        $native = @{suite='Commands';timeout_scale=1.0;passed=3;failed=0;skipped=0;cases=@(
             @{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'},@{name='terminal_three';status='passed'})}
         [IO.File]::WriteAllText($nativePath, ($native | ConvertTo-Json -Depth 10))
 

@@ -34,6 +34,13 @@ to the existing repair behavior. No alternate quarantine store is substituted.
 Do not select classification, repeat, shuffle, proof hooks or repair attempts.
 Each passing child must satisfy `Assert-RSHostedFilteredCaseRun` with actual v1 evidence,
 exactly one passed case, no skips, no retries and no active or repaired quarantine.
+The trusted adapter's one timeout-multiplier value `2.0` feeds both the child CLI
+and expected verifier plan. The verifier's optional `TimeoutMultiplier` defaults
+to `1.0` for existing callers, accepts the native supported range `[0.1,100]`, and
+requires both runner/native observed timeout scales and the complete archived
+plan to match the trusted value. Never infer expected parameters from an
+untrusted summary or plan; all other fixed campaign planner controls retain
+their defaults.
 An ordinary selected-case failure stays failed and may proceed to the next selection
 only after the same strict archived v1 source/receipt/plan/native PID/exit/time proof,
 normal after/final snapshots and clean quarantine establish safe completion. A refused

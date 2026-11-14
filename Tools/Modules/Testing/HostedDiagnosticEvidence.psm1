@@ -210,6 +210,7 @@ function Assert-RSHostedV1CommandsProof {
     param($Archive, [string]$TestRoot, [string]$RepoRoot, [string]$CaseFilter,
         [string]$Platform, [string]$Configuration, $Summary, $Receipt, $Snapshot,
         [DateTimeOffset]$InvocationStartedUtc, [DateTimeOffset]$InvocationEndedUtc,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
         [switch]$RecordedFailure)
 
     $candidates = @($Archive.Intent.inventory | Where-Object {
@@ -229,7 +230,7 @@ function Assert-RSHostedV1CommandsProof {
     $fp = $records.fingerprints; $plan = $records.plan; $decision = $records.decision
     $exe = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".build/$Platform/$Configuration/RedSalamander.exe"))
     $entries = @(Get-RSTestRunPlan -Suite Commands -RepoRoot $RepoRoot -Platform $Platform -Configuration $Configuration `
-        -RedSalamanderExePath $exe -CaseFilter $CaseFilter)
+        -RedSalamanderExePath $exe -CaseFilter $CaseFilter -TimeoutMultiplier $TimeoutMultiplier)
     $expectedPlan = New-RSValidationPlan -RepoRoot $RepoRoot -RequestedSuite Commands -Entries $entries -ValidationMode Fresh -CoverageScope filtered
     if ((Get-RSCanonicalJsonDigest -InputObject $plan) -cne (Get-RSCanonicalJsonDigest -InputObject $expectedPlan) -or
         $plan.plan_digest -cne $expectedPlan.plan_digest -or $plan.coverage_plan_digest -cne $expectedPlan.coverage_plan_digest -or
@@ -337,6 +338,7 @@ function Read-RSHostedFilteredCaseRun {
         [Parameter(Mandatory)][string]$Configuration,
         [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
         [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
         [switch]$AllowRecordedFailure
     )
 
@@ -411,6 +413,13 @@ function Read-RSHostedFilteredCaseRun {
     }
     $native = Get-Content -LiteralPath $nativePath -Raw | ConvertFrom-Json -AsHashtable
     if ($native.suite -cne 'Commands') { throw 'Native filtered suite mismatch.' }
+    foreach ($record in @($v1, $native)) {
+        $observed = $record['timeout_scale']
+        if (($observed -isnot [long] -and $observed -isnot [int] -and $observed -isnot [double] -and $observed -isnot [decimal]) -or
+            [double]$observed -ne $TimeoutMultiplier) {
+            throw 'Filtered runner and native timeout scales do not match the trusted invocation.'
+        }
+    }
     if ($null -eq $v2) {
         Test-RSHostedTimeWindow -Summary @{run_started_utc=$native.run_started_utc;run_ended_utc=$native.run_started_utc} `
             -InvocationStartedUtc ([DateTimeOffset]$v1.run_started_utc) -InvocationEndedUtc ([DateTimeOffset]$v1.run_ended_utc)
@@ -447,6 +456,7 @@ function Read-RSHostedFilteredCaseRun {
     if ($null -eq $v2) {
         Assert-RSHostedV1CommandsProof -Archive $archive -TestRoot $TestRoot -RepoRoot $RepoRoot -CaseFilter $CaseFilter `
             -Platform $Platform -Configuration $Configuration -Summary $v1 -Receipt $receipt -Snapshot $snapshot `
+            -TimeoutMultiplier $TimeoutMultiplier `
             -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc -RecordedFailure:$recordedFailure
     }
 
@@ -469,6 +479,10 @@ function Read-RSHostedFilteredCaseRun {
 function Assert-RSHostedFilteredCaseRun {
     <# .SYNOPSIS
     Requires passing archived filtered Commands evidence; exit 2 never grants Full coverage.
+    .PARAMETER TimeoutMultiplier
+    Trusted invocation multiplier in the native supported range [0.1,100], default 1.
+    It must match both observed timeout scales and the complete archived plan; it is
+    never inferred from untrusted evidence.
     #>
     [CmdletBinding()]
     param(
@@ -478,7 +492,8 @@ function Assert-RSHostedFilteredCaseRun {
         [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_]+$')][string]$CaseFilter,
         [Parameter(Mandatory)][string]$Platform, [Parameter(Mandatory)][string]$Configuration,
         [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
-        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0
     )
     Read-RSHostedFilteredCaseRun @PSBoundParameters
 }
@@ -521,6 +536,7 @@ function Invoke-RSHostedCommandsUiAttributionCore {
         [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$TestRoot,
         [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
         [Parameter(Mandatory)][ValidateSet('Debug','Release','ASan Debug')][string]$Configuration,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
         [Parameter(Mandatory)][ValidatePattern('^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$')][string]$EvidenceRunId,
         [Parameter(Mandatory)][string]$EvidenceDirectory,
         [Parameter(Mandatory)][scriptblock]$RunCase
@@ -577,6 +593,7 @@ function Invoke-RSHostedCommandsUiAttributionCore {
                 }
                 $arguments = @{ExitCode=$row.exit_code;Output=$process.stdout;TestRoot=$TestRoot;RepoRoot=$RepoRoot;
                     Suite='Commands';CaseFilter=$row.case;Platform=$Platform;Configuration=$Configuration;
+                    TimeoutMultiplier=$TimeoutMultiplier;
                     InvocationStartedUtc=$started;InvocationEndedUtc=$ended}
                 if ($row.exit_code -eq 2) {
                     $row.proof = Assert-RSHostedFilteredCaseRun @arguments
@@ -615,12 +632,16 @@ function Invoke-RSHostedCommandsUiAttribution {
     .SYNOPSIS
     Owns and archives a marked-sandbox run for one observer-control case and three
     exact hosted UI selections. It grants no repository or production acceptance.
+    .PARAMETER TimeoutMultiplier
+    Trusted multiplier used by the caller's child invocation and evidence verifier,
+    default 1. The hosted adapter supplies the same explicit 2 to both paths.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$TestRoot,
         [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
         [Parameter(Mandatory)][ValidateSet('Debug','Release','ASan Debug')][string]$Configuration,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
         [Parameter(Mandatory)][scriptblock]$RunCase
     )
     $context = New-RSTestRunContext -RepoRoot $RepoRoot -TestRootOverride $TestRoot
@@ -633,7 +654,8 @@ function Invoke-RSHostedCommandsUiAttribution {
     $result = $null; $failure = $null; $archiveFailure = $null
     try {
         $result = Invoke-RSHostedCommandsUiAttributionCore -RepoRoot $RepoRoot -TestRoot $TestRoot `
-            -Platform $Platform -Configuration $Configuration -EvidenceRunId $context.RunId -EvidenceDirectory $directory -RunCase $RunCase
+            -Platform $Platform -Configuration $Configuration -TimeoutMultiplier $TimeoutMultiplier `
+            -EvidenceRunId $context.RunId -EvidenceDirectory $directory -RunCase $RunCase
     } catch { $failure = $_ }
     try { Save-RSTestSandboxRunEvidence -TestRoot $context.TestRoot -RunId $context.RunId -Disposition completed | Out-Null }
     catch { $archiveFailure = $_ }

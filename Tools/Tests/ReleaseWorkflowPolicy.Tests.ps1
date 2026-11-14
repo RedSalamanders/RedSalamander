@@ -58,7 +58,8 @@ Describe 'Commands UI attribution adapter wiring' {
             return [pscustomobject]@{exitCode=2;stdout='recorded child';stderr='recorded stderr'}
         }
         function Invoke-RSHostedCommandsUiAttribution {
-            param($RepoRoot,$TestRoot,$Platform,$Configuration,[scriptblock]$RunCase)
+            param($RepoRoot,$TestRoot,$Platform,$Configuration,$TimeoutMultiplier,[scriptblock]$RunCase)
+            $TimeoutMultiplier | Should Be 2.0
             foreach($case in @('red_salamander_help_lists_diagnostics_options','cmd_preferences_dialog_keyboard_reset_live_dx_interaction',
                 'cmd_pane_fileops_popup_throughput_disclosure','cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup')){
                 $observed=@(& $RunCase $case)
@@ -78,6 +79,9 @@ Describe 'Commands UI attribution adapter wiring' {
             ($arguments -join ' ') | Should Not Match 'ClassifyFailures|Repeat|Shuffle|Proof|AllowAlternateVolume|ResultReference'
             @($arguments|Where-Object{$_ -eq '-CaseFilter'}).Count | Should Be 1
             @($arguments|Where-Object{$_ -eq '-RequireCleanQuarantine'}).Count | Should Be 1
+            @($arguments|Where-Object{$_ -eq '-TimeoutMultiplier'}).Count | Should Be 1
+            $timeoutIndex=[array]::IndexOf($arguments,'-TimeoutMultiplier')
+            $arguments[$timeoutIndex+1] | Should Be '2'
         }
         $adapter=[IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'))
         $adapter | Should Match "(?s)if \(\`$Phase -in @\('ReleaseTestBuild','Qualification'\)\).*?Run 'build.ps1'.*?Invoke-RSWithHostedTestDesktop -Action"

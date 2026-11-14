@@ -68,7 +68,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Validate exact filtered hosted diagnostic cases and schema-dispatched archived Commands runs, binding single-suite v1 to rotated prelaunch source/receipt/plan proof and owned native PID/time evidence without inventing durable promotion or promoting repository coverage. Own the fixed observer-help plus three UI attribution selections with clean-quarantine admission, unchanged receipt bytes, unique child IDs, safe-teardown proof and canonical archive-relative evidence.",
-      "usage": "Imported by the project CI adapter and filtered hosted product qualification workflows for fixed explicit diagnostic scopes and immutable paired-dispatch admission.",
+      "usage": "Imported by the project CI adapter and filtered hosted product qualification workflows for fixed explicit diagnostic scopes and immutable paired-dispatch admission. Optional TimeoutMultiplier defaults to 1 and comes from the trusted invocation; the hosted attribution producer supplies the same explicit 2 to its child and verifier, never inferring it from evidence.",
       "usedBy": [
         "Tools/Invoke-ProjectCi.ps1",
         ".github/workflows/ghostty-runtime-product-qualification.yml"
