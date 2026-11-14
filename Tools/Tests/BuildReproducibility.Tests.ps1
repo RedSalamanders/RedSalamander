@@ -751,7 +751,17 @@ Describe 'Pinned build-tool and CI identity' {
         $adapter | Should Match 'Import-Module.*HostedTestDesktop'
         $nightly = Get-Content (Join-Path $repoRoot '.github/workflows/nightly-ci.yml') -Raw
         $nightly | Should Match 'workflow_dispatch:'
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $scopeInput = '(?m-i)^      scope:\r?\n        description:[^\r\n]+\r?\n        type: choice\r?\n        options: \[Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]\r?\n        default: Full\s*$'
+        $platformInput = '(?m-i)^      platform:\r?\n        description:[^\r\n]+\r?\n        type: choice\r?\n        options: \[All, x64, ARM64\]\r?\n        default: All\s*$'
+        $platformForward = '(?m-i)^      platform: \$\{\{ inputs\.platform \}\}\s*$'
+        $nightly | Should Match $scopeInput
+        $nightly | Should Match $platformInput
+        $nightly | Should Match $platformForward
+        $nightly.Replace(', CommandsUiAttribution', '') | Should Not Match $scopeInput
+        $nightly.Replace('DesktopProbe]', 'DesktopProbe, UnreviewedScope]') | Should Not Match $scopeInput
+        $nightly.Replace('All, x64, ARM64]', 'All, x64, ARM64, Win32]') | Should Not Match $platformInput
+        $nightly.Replace('default: All', 'default: ARM64') | Should Not Match $platformInput
+        $nightly.Replace('platform: '+[char]36+'{{ inputs.platform }}', 'platform: ARM64') | Should Not Match $platformForward
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'

@@ -967,13 +967,12 @@ DxUi is public: exact-pin HTTPS source restore requires no PAT or Actions secret
 public Actions API access were verified on 2026-09-09. CI can use its automatic read-only job token
 for advisory API rate limits; unavailable/rate-limited advisory queries never change or reject the pin.
 
-The native matrix is selected per event: pull requests build x64 Debug and ARM64 Debug,
-pushes to `main` add both Release profiles, and ASan Debug runs from `asan.yml`. Each
-job builds the test-enabled solution, verifies the ASAN defect probe where selected,
-then uses the receipt-gated runner in that same job with the suite named by the
-reusable workflow's `test_suite` input (`PR` on pull requests and pushes to `main`;
-`CI` on the nightly `nightly-ci.yml` matrix and the weekly ASan lane, which never runs
-on pull requests; `Full` remains the local closeout gate). Cross-job nightly/package handoffs still require portable attestation.
+Hosted scheduling and scope selection follow [Build_UnifiedCI.md](Build_UnifiedCI.md).
+Pull requests run compiler-free checks; admitted main native Release regression runs on
+x64 and ARM64 before production. Explicit manual native and ASan qualification use
+their configured profiles and architectures without advancing main qualification.
+In-product tests require test-enabled receipt-bound artifacts; ASan retains its
+seeded detector requirement. Cross-job/package handoffs still require portable attestation.
 Runtime execution is rejected if host architecture differs from the selected target.
 No custom DxUi secret is required; the public pin restores through HTTPS.
 

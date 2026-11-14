@@ -5216,7 +5216,7 @@
       "lifecycle": "active",
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
       "visibility": "public",
-      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification alone permits fixed CommandsHandoff, FileOpsVolumes and ViewerSpaceCapture filtered diagnostics, the manual Release R0ePaired study and the read-only DesktopProbe; none publishes regression receipts. Native local work uses canonical build/test entry points.",
+      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification diagnostic scopes and architecture choices follow Specs/Build/Build_UnifiedCI.md and publish no regression receipts. Native local work uses canonical build/test entry points.",
       "tests": [
         "Tools/Tests/ToolingGovernance.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
