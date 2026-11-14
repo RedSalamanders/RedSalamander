@@ -1,0 +1,124 @@
+{
+  "schema": "red-salamander.hosted-stock-component-source.v1",
+  "source_base": "c55d6e75af53d02928d1a7f5a1f4ac0ddedcddb8",
+  "workspace": "dirty follow-up; not committed native or hosted acceptance",
+  "measured_context": "20261114T181221Z-106388-bcb8bdefe1754f749767db431e92cd3a",
+  "measured_targets": [
+    {
+      "path": ".gitattributes",
+      "sha256": "AD08A840463FD485FEA7BE20A502A61B57C27C2C06FE2BE2C4590E83945EE242"
+    },
+    {
+      "path": ".github/workflows/build-reusable.yml",
+      "sha256": "2D2BA7C0AC645154B49F816AB6F84D8B3CF3154F616897AF666791CB624742C9"
+    },
+    {
+      "path": "Changes/2026-11-13-10-day-audit-remediation.md",
+      "sha256": "BE606C8C42BE68883290F24EC5BD24B01D44E1D3D99CB9B32709420F78F37432"
+    },
+    {
+      "path": "Specs/Build/Build_Toolchain.md",
+      "sha256": "F69279E2341013EB5216A9B2EF74CC91E5336B8DC316975A965F66571F4D9528"
+    },
+    {
+      "path": "Specs/Core/Core_SharedHelpers.md",
+      "sha256": "A3974A519766D7984DA7860D2052149E531B8393DBA41421720FFA458E553321"
+    },
+    {
+      "path": "Specs/Testing/Testing_SelfTests.md",
+      "sha256": "3E4E480DF15AFF962574F02FB1E8FA3453C35E1A7E1CCC20BEFB662DF98B4A45"
+    },
+    {
+      "path": "Tools/Invoke-SanitizedMsbuild.ps1",
+      "sha256": "F401B1780C5319172D86C3A69696196C17DBE5724E2E25842A13594503498328"
+    },
+    {
+      "path": "Tools/Modules/Build/BuildEvidence.psm1",
+      "sha256": "F742CB2BCE696A7BD514446160AE288FE317813934DCE2F9A884AA10AD41C9A1"
+    },
+    {
+      "path": "Tools/Modules/Testing/HostedTestDesktop.psm1",
+      "sha256": "2CE7EAF39ECC72302101946C36D32BA9710FD717552134E5063ED19934844DBF"
+    },
+    {
+      "path": "Tools/README.md",
+      "sha256": "67F02414763B277B7D93DEF34A7E66CEEEF2E172A1AFC766F605F3A251C01A7F"
+    },
+    {
+      "path": "Tools/Tests/BuildReproducibility.Tests.ps1",
+      "sha256": "B7C8C3D6BFF05CEB3002E604AD1D07F6D4769AD3AB36128A6D6702EC2AA7C93C"
+    },
+    {
+      "path": "Tools/Tests/HostedTestDesktop.Tests.ps1",
+      "sha256": "B8ABCDDAE15299B55BA412FDA259AEAB1C5382F5906298119111D850A3A8EE4A"
+    },
+    {
+      "path": "Tools/Tests/ProcessStreaming.Tests.ps1",
+      "sha256": "E8B89D3B04510A2F48424B4C1389D249D2A850206DF69DA321E56725953FEB11"
+    },
+    {
+      "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+      "sha256": "C1A8D6B72B40FB72D6FF50AE548E89538E864097C4E9E38C9C9F2388C1F4D4A2"
+    },
+    {
+      "path": "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
+      "sha256": "7A8B16EFB71DDF3E16526144AA88017EF913C64157387179F1F362412142609F"
+    },
+    {
+      "path": "Tools/tool-inventory.json",
+      "sha256": "93715D15DC6D1473A635778D17AB0F6AC0FABA1EF45FC35FB386BF0C6975B559"
+    },
+    {
+      "path": "vcpkg-install.ps1",
+      "sha256": "4771DC538AFE13E7095FAADB7BE2CB7BDA67866153E73141B1423A3E32879EF7"
+    }
+  ],
+  "reporting_delta": "I65 status and publication metadata are outside this measured target set",
+  "focused_controls": {
+    "passed": 440,
+    "failed": 0,
+    "skipped": 0,
+    "elapsed_seconds": 140.3114501,
+    "excluded_tags": [
+      "RequiresBuildToolchain"
+    ],
+    "scripts": [
+      "HostedTestDesktop",
+      "TestHarnessSourceContracts",
+      "ToolInventory",
+      "ToolingGovernance",
+      "DocumentationDriftContracts",
+      "ProcessStreaming",
+      "VcpkgInstallSafety",
+      "BuildReproducibility"
+    ]
+  },
+  "original_archive": {
+    "intent_sha256": "d9e3f8c6a9d22e36c8d1c19ebbfe63a779522c41d1c49d51a8710514011ba0c7",
+    "completion_sha256": "796ca68edc6a5ad17b35deb93eaefaa6a3d5a38cc5b3a17bf337cdd4124c749b",
+    "members": [
+      {
+        "member": "scratch/tooling/stock-observer-final/summary.json",
+        "length": 6016,
+        "sha256": "2ef4de4c2b5ca5a5264395f1c0e047de0f48a3638144574843f44a0d2b80747b"
+      },
+      {
+        "member": "scratch/tools-pester/hosted-stock-work-counts/work-counts.json",
+        "length": 10117,
+        "sha256": "fe3b98a927657f5c23f778252c0416d1ec9493b958922cca60dd1e8f9d316031"
+      },
+      {
+        "member": "scratch/tooling/stock-observer-final/pester.xml",
+        "length": 151696,
+        "sha256": "518b8c11a2222c5e3d6b4f7687a2a32eebf3c0a83c25661357c8640d37bd0689"
+      }
+    ]
+  },
+  "measurement_copy": {
+    "source_member": "scratch/tools-pester/hosted-stock-work-counts/work-counts.json",
+    "published_member": "measurements.json",
+    "sha256": "fe3b98a927657f5c23f778252c0416d1ec9493b958922cca60dd1e8f9d316031",
+    "transform": "none; exact original bytes"
+  },
+  "qualification": "Stock rows use managed fake readers only. The compiler-free campaign also covers source/governance and owned child controls that create no UI. No product native UI, native-query latency, creator, pipeline speedup, receipt portability or Full qualification."
+}

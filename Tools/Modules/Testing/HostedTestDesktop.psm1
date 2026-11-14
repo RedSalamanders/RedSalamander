@@ -765,6 +765,41 @@ namespace RedSalamander.Testing {
             } else if (result.ParentStatus >= 0) result.ParentError = 13;
             return result;
         }
+        // Synchronous bridge for stock preparation: the caller owns the captured
+        // query-only lease. Never reopen the captured PID or select another HWND.
+        public static string DescribeHeldProcess(IntPtr window, uint thread, uint process, SafeProcessHandle lease,
+            long capturedCreation, bool extended) {
+            SafeProcessHandle parentLease = null;
+            try {
+                Func<SafeProcessHandle, uint, bool, HostedProcessFacts> readHeld = (held, pid, full) => ReadProcessFacts(held, pid, full, 0);
+                Func<uint, bool, HostedProcessFacts> readParent = (pid, full) => {
+                    parentLease = OpenProcess(0x1000, false, pid);
+                    int error = parentLease == null || parentLease.IsInvalid ? Marshal.GetLastWin32Error() : 0;
+                    return ReadProcessFacts(parentLease, pid, full, error);
+                };
+                return ObserveHeldProcessForWindow(window, thread, process, lease, capturedCreation, extended, readHeld, readParent, ReadWindowProcessIdentity);
+            } finally {
+                if (parentLease != null) parentLease.Dispose();
+            }
+        }
+        // Fake readers exercise the real borrowed-lease path without live desktop calls.
+        internal static string ObserveHeldProcessForWindow(IntPtr window, uint thread, uint process, SafeProcessHandle lease,
+            long capturedCreation, bool extended, Func<SafeProcessHandle,uint,bool,HostedProcessFacts> readHeld,
+            Func<uint,bool,HostedProcessFacts> readParent, Func<IntPtr,Tuple<uint,uint,int>> readWindow) {
+            bool borrowed = false;
+            try {
+                if (lease != null && !lease.IsInvalid) lease.DangerousAddRef(ref borrowed);
+                int reads = 0;
+                Func<uint,bool,HostedProcessFacts> read = (pid, full) => {
+                    if (++reads == 1) {
+                        if (pid != process) throw new InvalidOperationException("Captured process query mismatch.");
+                        return readHeld(lease, pid, full);
+                    }
+                    return readParent(pid, full);
+                };
+                return ObserveCapturedProcessForWindow(window, thread, process, capturedCreation, extended, read, readWindow);
+            } finally { if (borrowed) lease.DangerousRelease(); }
+        }
         private static Tuple<uint, uint, int> ReadWindowProcessIdentity(IntPtr window) {
             uint process; uint thread = GetWindowThreadProcessId(window, out process);
             return Tuple.Create(thread, process, thread == 0 ? Marshal.GetLastWin32Error() : 0);
@@ -790,10 +825,16 @@ namespace RedSalamander.Testing {
         // Fake readers exercise the actual orchestration; this is not a process-control seam.
         internal static string ObserveProcessForWindow(IntPtr window, uint thread, uint process, bool extended,
             Func<uint, bool, HostedProcessFacts> readProcess, Func<IntPtr, Tuple<uint, uint, int>> readWindow) {
+            return ObserveCapturedProcessForWindow(window, thread, process, 0, extended, readProcess, readWindow);
+        }
+        internal static string ObserveCapturedProcessForWindow(IntPtr window, uint thread, uint process, long capturedCreation, bool extended,
+            Func<uint, bool, HostedProcessFacts> readProcess, Func<IntPtr, Tuple<uint, uint, int>> readWindow) {
             DateTimeOffset observedUtc = DateTimeOffset.UtcNow;
             if (thread == 0 || process == 0) return "instanceAvailable=False; unavailable=InvalidWindowIdentity";
             HostedProcessFacts child = readProcess(process, extended);
             bool instance = child.Opened && child.HandleProcess == process && child.CreationAvailable && child.CreationTime > 0;
+            bool creationMatch = capturedCreation > 0 && instance && child.CreationTime == capturedCreation;
+            if (capturedCreation != 0) instance = instance && creationMatch;
             HostedProcessFacts parent = new HostedProcessFacts(); bool parentQueried = false, compatible = false;
             if (extended && instance && child.ParentAvailable && child.ParentProcess != 0 && child.ParentProcess != process) {
                 parentQueried = true; parent = readProcess(child.ParentProcess, false);
@@ -804,9 +845,10 @@ namespace RedSalamander.Testing {
             bool stable = final.Item1 != 0 && final.Item1 == thread && final.Item2 == process;
             return String.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "observedUtc={0:o}; extended={1}; instanceAvailable={2}; {3}; parentQueried={4}; parent={{{5}}}; parentCreationCompatible={6}; " +
-                "relationStable={7}; finalPid={8}; finalThread={9}; relationError={10}; sequential observations only; parent compatibility is not creator/ownership proof",
+                "relationStable={7}; finalPid={8}; finalThread={9}; relationError={10}; capturedCreationFileTime100ns={11}; creationMatchesCapture={12}; " +
+                "childReads=1; parentReads={13}; relationReads=1; sequential observations only; parent compatibility is not creator/ownership proof",
                 observedUtc, extended, instance, FormatProcessFacts(child, extended), parentQueried, FormatProcessFacts(parent, false), compatible,
-                stable, final.Item2, final.Item1, final.Item3);
+                stable, final.Item2, final.Item1, final.Item3, capturedCreation, creationMatch, parentQueried ? 1 : 0);
         }
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -876,6 +918,10 @@ namespace RedSalamander.Testing {
         private readonly IntPtr window;
         private bool closed, wslAuthorized;
         private long wslCreationFileTime;
+        public string CapturedUtc { get; private set; }
+        public bool CreationKnown { get; private set; }
+        public long CreationFileTime100ns { get; private set; }
+        public int CreationError { get; private set; }
         public bool CloseRequested { get { return closed; } }
         public int WslArgumentCount { get; private set; }
         public bool WslArgumentMatch { get; private set; }
@@ -895,6 +941,14 @@ namespace RedSalamander.Testing {
         public int ForegroundDesktopError { get; private set; }
         private HostedStockSurface(IntPtr h,uint tid,uint pid,uint session,SafeProcessHandle p,string title,string cls,string image,string app,string kind) {
             window=h;Thread=tid;Process=pid;Session=session;process=p;Title=title;Class=cls;Image=image;ApplicationId=app;Kind=kind;
+        }
+        // This bridge borrows the original lease synchronously; only the canonical
+        // observer may interpret process facts. Diagnostics never change classification.
+        public string DescribeCapturedProcess(Func<IntPtr,uint,uint,SafeProcessHandle,long,bool,string> observe) {
+            try { return observe(window,Thread,Process,process,CreationKnown && CreationFileTime100ns > 0 ? CreationFileTime100ns : -1,true); }
+            catch(Exception error) when (!(error is OutOfMemoryException) && !(error is StackOverflowException) && !(error is AccessViolationException)) {
+                return "instanceAvailable=False; unavailable="+error.GetType().Name;
+            }
         }
         private static void RequireHostedArm64() {
             if(Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION")!="1" ||
@@ -975,11 +1029,19 @@ namespace RedSalamander.Testing {
             bool transferred=false;
             try {
                 int appStatus;string title=ReadTitle(h),cls=ReadClass(h),image=ReadImage(p),app=ReadApp(p,out appStatus);
+                string capturedUtc=DateTimeOffset.UtcNow.ToString("o",System.Globalization.CultureInfo.InvariantCulture);
+                long created,exited,kernel,user;
+                bool creationKnown=GetProcessTimes(p,out created,out exited,out kernel,out user);
+                int creationError=creationKnown ? 0 : Marshal.GetLastWin32Error();
                 uint currentPid;uint currentTid=GetWindowThreadProcessId(h,out currentPid);
                 if(GetProcessId(p)!=pid || GetForegroundWindow()!=h || currentPid!=pid || currentTid!=tid)throw new InvalidOperationException("Foreground changed while captured.");
                 string kind=Classify(h,title,cls,image,app,appStatus);
                 if(kind=="WslStartup" && !IsWindowVisible(h))throw new InvalidOperationException("WSL startup console is not visible.");
                 var result=new HostedStockSurface(h,tid,pid,session,p,title,cls,image,app,kind);result.ApplicationIdStatus=appStatus;
+                result.CapturedUtc=capturedUtc;
+                result.CreationKnown=creationKnown;
+                result.CreationFileTime100ns=created;
+                result.CreationError=creationError;
                 // Foreign thread desktop access is often denied by hosted Windows. It is
                 // diagnostic only; WinSta0, caller/input Default and session are required.
                 IntPtr foregroundDesktop=GetThreadDesktop(tid);
@@ -1212,7 +1274,7 @@ function Invoke-RSHostedArm64StockPreparation {
 # the guarded entry above always supplies the fixed five-second observation window.
 function Invoke-RSHostedStockPreparationCore {
     param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$SourceHead,[int]$ObservationMilliseconds=5000)
-    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$failure=$null;$wslCloseRequested=$false
+    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$firstObservation=$null;$observationCount=0;$extendedCount=0;$failure=$null;$wslCloseRequested=$false
     $start=[ordered]@{schema='red-salamander.hosted-stock-preparation.v1';source_head=$SourceHead;started_utc=[DateTimeOffset]::UtcNow.ToString('o')}
     $startBytes=[Text.UTF8Encoding]::new($false).GetBytes(($start|ConvertTo-Json));$startStream=[IO.File]::Open((Join-Path $directory 'start.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
     try{$startStream.Write($startBytes,0,$startBytes.Length);$startStream.Flush($true)}finally{$startStream.Dispose()}
@@ -1220,7 +1282,25 @@ function Invoke-RSHostedStockPreparationCore {
         $surface=Get-RSHostedStockSurface
         try {
             $lastObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;title=$surface.Title;class=$surface.Class;image=$surface.Image;application_id=$surface.ApplicationId;foreground_desktop=$surface.ForegroundDesktop;foreground_desktop_error=$surface.ForegroundDesktopError}
-            if($surface.Kind -cnotin @('Empty','Shell','RunnerConsole','Account','Search','WslStartup')){throw 'An unapproved foreground surface prevents hosted preparation.'}
+            $lastObservation['captured_utc']=$surface.CapturedUtc
+            $lastObservation['creation_known']=$surface.CreationKnown
+            $lastObservation['creation_file_time_100ns']=$surface.CreationFileTime100ns
+            $lastObservation['creation_error']=$surface.CreationError
+            $observationCount++
+            if($null -eq $firstObservation){
+                $firstObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;
+                    captured_utc=$surface.CapturedUtc;creation_known=$surface.CreationKnown;creation_file_time_100ns=$surface.CreationFileTime100ns;creation_error=$surface.CreationError}
+            }
+            if($surface.Kind -cnotin @('Empty','Shell','RunnerConsole','Account','Search','WslStartup')){
+                # The direct managed delegate preserves fatal CLR propagation. It borrows
+                # the captured lease; no current-foreground/PID lookup selects a new target.
+                Initialize-RSHostedDesktopNative
+                $observer=[RedSalamander.Testing.HostedDesktopNative].GetMethod('DescribeHeldProcess').CreateDelegate(
+                    [Func[IntPtr,uint32,uint32,Microsoft.Win32.SafeHandles.SafeProcessHandle,long,bool,string]])
+                $extendedCount++
+                $lastObservation['process_diagnostic']=$surface.DescribeCapturedProcess($observer)
+                throw 'An unapproved foreground surface prevents hosted preparation.'
+            }
             if($surface.Kind -cin @('Account','Search','WslStartup')){
                 if($seen.ContainsKey($surface.Kind)){throw 'An approved stock surface reappeared after its one permitted close.'}
                 $seen[$surface.Kind]=$true
@@ -1265,7 +1345,9 @@ function Invoke-RSHostedStockPreparationCore {
     };$completed=$true } catch {$failure=$_;$preparationError=$_.Exception.Message}
     try {
         $completion=[ordered]@{schema='red-salamander.hosted-stock-preparation-result.v1';completed=$completed;error=$preparationError;
-            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');wsl_startup_close_requested=$wslCloseRequested;last_observation=$lastObservation;finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');wsl_startup_close_requested=$wslCloseRequested;
+            first_observation=$firstObservation;last_observation=$lastObservation;observation_count=$observationCount;extended_observations=$extendedCount;
+            observation_limit='foreground snapshots only; absence is not background-process absence or creator proof';finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
         $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($completion|ConvertTo-Json -Depth 5));$stream=[IO.File]::Open((Join-Path $directory 'completion.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
         try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
     } catch {
@@ -1323,6 +1405,11 @@ function Invoke-RSWithHostedDefaultDesktop {
         hooks and foreground-lock settings are unchanged.
         Foreign-foreground refusal reports current, saved/original and boundary window
         identities with capture times. Diagnostic failure never grants restoration authority.
+        Stock preparation records first/last minimal captured process identities. Unknown
+        refusal enriches the exact held process instance through the canonical observer,
+        without reopening its PID or selecting another foreground target. Query errors
+        and nonpositive captured creation remain unavailable; snapshots do not establish
+        creator or background absence.
     .EXAMPLE
         Invoke-RSWithHostedDefaultDesktop -Action { Invoke-OwnedNativeTestEntry }
     #>

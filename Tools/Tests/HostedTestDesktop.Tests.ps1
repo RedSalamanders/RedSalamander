@@ -333,11 +333,20 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
         $global:stockObservations=[Collections.Generic.Queue[object]]::new()
         $global:stockCloses=[Collections.Generic.List[string]]::new()
-        Mock Get-RSHostedStockSurface { $global:stockObservations.Dequeue() } -ModuleName HostedTestDesktop
+        $global:stockDiagnostic='instanceAvailable=True; creationMatchesCapture=True; childReads=1; parentReads=0; relationReads=1'
+        Mock Get-RSHostedStockSurface {
+            $surface=$global:stockObservations.Dequeue()
+            $surface | Add-Member NoteProperty CapturedUtc '2026-11-14T00:00:00.0000000Z' -Force
+            $surface | Add-Member NoteProperty CreationKnown $true -Force
+            $surface | Add-Member NoteProperty CreationFileTime100ns 200 -Force
+            $surface | Add-Member NoteProperty CreationError 0 -Force
+            $surface | Add-Member ScriptMethod DescribeCapturedProcess { param($observer) $global:stockDiagnostic } -Force
+            $surface
+        } -ModuleName HostedTestDesktop
     }
     AfterEach {
         $env:GITHUB_ACTIONS=$script:savedActions; $env:RUNNER_ENVIRONMENT=$script:savedRunner; $env:GITHUB_REPOSITORY=$script:savedRepo
-        Remove-Variable stockObservations,stockCloses -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable stockObservations,stockCloses,stockDiagnostic -Scope Global -ErrorAction SilentlyContinue
     }
     It 'limits opt-in to native ARM64 hosted project roles' {
         $p=@{Phase='ReleaseTest';Platform='ARM64';QualificationScope='Normal';OsArchitecture='Arm64';ProcessArchitecture='Arm64'}
@@ -443,6 +452,31 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $completion.completed | Should Be $false
         $completion.last_observation.kind | Should Be 'Unknown'
         $completion.last_observation.foreground_desktop_error | Should Be 5
+        $completion.first_observation.kind | Should Be 'Account'
+        $completion.observation_count | Should Be 3
+        $completion.extended_observations | Should Be 1
+    }
+    It 'preserves the primary Unknown refusal with unavailable enrichment and zero close requests' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1')
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-unknown-observation-'+[guid]::NewGuid().ToString('N'))
+        $global:stockDiagnostic='instanceAvailable=False; unavailable=InvalidOperationException'
+        $surface=[pscustomobject]@{Kind='Unknown';Window=123;Thread=1;Process=2;Session=3;Title='fixture';Class='fixture';Image='fixture';ApplicationId='';ForegroundDesktop='Default';ForegroundDesktopError=0}
+        $surface | Add-Member ScriptMethod RequestClose { $global:stockCloses.Add($this.Kind);throw 'Unknown must never close.' }
+        $surface | Add-Member ScriptMethod Dispose { }
+        $global:stockObservations.Enqueue($surface)
+        $attempt=Invoke-RSTestBlock { & (Get-Module HostedTestDesktop) {param($d) Invoke-RSHostedStockPreparationCore -Directory $d -SourceHead ('a'*40) -ObservationMilliseconds 0} $dir }
+        $attempt.Succeeded | Should Be $false
+        $attempt.Error.Exception.Message | Should Be 'An unapproved foreground surface prevents hosted preparation.'
+        $completion=Get-Content (Join-Path $dir 'completion.json') -Raw | ConvertFrom-Json
+        $completion.error | Should Be 'An unapproved foreground surface prevents hosted preparation.'
+        $completion.last_observation.process_diagnostic | Should Be $global:stockDiagnostic
+        @($completion.first_observation.PSObject.Properties.Name) -ccontains 'process_diagnostic' | Should Be $false
+        $completion.first_observation.creation_file_time_100ns | Should Be 200
+        $completion.last_observation.creation_file_time_100ns | Should Be 200
+        $completion.observation_count | Should Be 1;$completion.extended_observations | Should Be 1
+        $completion.observation_limit | Should Match 'absence is not background-process absence or creator proof'
+        $global:stockCloses.Count | Should Be 0
+        @(Get-ChildItem $dir -Filter '*-intent.json').Count | Should Be 0
     }
 }
 
@@ -703,7 +737,14 @@ Describe 'Hosted WSL startup audit' {
         $global:rsWslSurfaceQueue=[Collections.Generic.Queue[object]]::new()
         $global:rsWslCloseCount=0
         $global:rsWslQuery=[pscustomobject]@{ProcessId=42;CreationDate=[DateTime]::UtcNow;ExecutablePath='C:\Windows\System32\wsl.exe';CommandLine='fixture'}
-        Mock Get-RSHostedStockSurface { $global:rsWslSurfaceQueue.Dequeue() } -ModuleName HostedTestDesktop
+        Mock Get-RSHostedStockSurface {
+            $surface=$global:rsWslSurfaceQueue.Dequeue()
+            $surface | Add-Member NoteProperty CapturedUtc '2026-11-14T00:00:00.0000000Z' -Force
+            $surface | Add-Member NoteProperty CreationKnown $true -Force
+            $surface | Add-Member NoteProperty CreationFileTime100ns 200 -Force
+            $surface | Add-Member NoteProperty CreationError 0 -Force
+            $surface
+        } -ModuleName HostedTestDesktop
         Mock Get-RSHostedWslProcess { $global:rsWslQuery } -ModuleName HostedTestDesktop
     }
     AfterEach {Remove-Variable rsWslSurfaceQueue,rsWslCloseCount,rsWslQuery -Scope Global -ErrorAction SilentlyContinue}
@@ -1069,6 +1110,221 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         $complete.intent_sha256 = (Get-FileHash $intentPath).Hash
         [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 10))
         { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match the archive'
+    }
+}
+
+Describe 'Hosted stock captured-instance diagnostics' {
+    BeforeEach {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedStockSurfaceNative }
+        $script:stockType='RedSalamander.Testing.HostedStockSurface' -as [type]
+        $script:observerType='RedSalamander.Testing.HostedDesktopNative' -as [type]
+        $script:nonpublic=[Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+    }
+    function New-HeldObservationFixture {
+        $child=[RedSalamander.Testing.HostedProcessFacts]::new()
+        $child.Opened=$true;$child.HandleProcess=42;$child.CreationAvailable=$true;$child.CreationTime=200;$child.ParentAvailable=$true;$child.ParentProcess=41
+        $parent=[RedSalamander.Testing.HostedProcessFacts]::new()
+        $parent.Opened=$true;$parent.HandleProcess=41;$parent.CreationAvailable=$true;$parent.CreationTime=100
+        [pscustomobject]@{Lease=[Microsoft.Win32.SafeHandles.SafeProcessHandle]::new([IntPtr]123,$false);Child=$child;Parent=$parent;
+            Creation=200;FinalThread=[uint32]7;FinalPid=[uint32]42;RelationError=0;HeldReads=0;ParentReads=0;WindowReads=0;SameLease=$true;LeaseLive=$true}
+    }
+    function Invoke-HeldObservationFixture($f, $StockSurface=$null) {
+        $held=[Func[Microsoft.Win32.SafeHandles.SafeProcessHandle,uint32,bool,RedSalamander.Testing.HostedProcessFacts]] {
+            param($lease,$pidValue,$extended)
+            $f.HeldReads++;$f.SameLease=$f.SameLease -and [object]::ReferenceEquals($lease,$f.Lease)
+            $f.LeaseLive=$f.LeaseLive -and -not $lease.IsClosed
+            if($pidValue -ne 42 -or -not $extended){throw 'Wrong captured child query.'};$f.Child
+        }.GetNewClosure()
+        $parent=[Func[uint32,bool,RedSalamander.Testing.HostedProcessFacts]] {
+            param($pidValue,$extended)
+            $f.ParentReads++;if($pidValue -ne 41 -or $extended){throw 'Wrong parent query.'};$f.Parent
+        }.GetNewClosure()
+        $window=[Func[IntPtr,Tuple[uint32,uint32,int]]] {
+            param($windowValue)
+            $f.WindowReads++;if($windowValue.ToInt64() -ne 291){throw 'Wrong captured window.'}
+            $f.LeaseLive=$f.LeaseLive -and -not $f.Lease.IsClosed
+            [Tuple[uint32,uint32,int]]::new($f.FinalThread,$f.FinalPid,$f.RelationError)
+        }.GetNewClosure()
+        $method=$script:observerType.GetMethod('ObserveHeldProcessForWindow',$script:nonpublic)
+        $arguments=[object[]]@([IntPtr]291,[uint32]7,[uint32]42,$f.Lease,[long]$f.Creation,$true,$held,$parent,$window)
+        if($null -ne $StockSurface) {
+            $callback=[Func[IntPtr,uint32,uint32,Microsoft.Win32.SafeHandles.SafeProcessHandle,long,bool,string]] {
+                param($windowValue,$threadValue,$pidValue,$lease,$creation,$extended)
+                if($windowValue.ToInt64() -ne 291 -or $threadValue -ne 7 -or $pidValue -ne 42 -or -not [object]::ReferenceEquals($lease,$f.Lease)){throw 'Captured identity changed.'}
+                $arguments[4]=[long]$creation
+                $method.Invoke($null,$arguments)
+            }.GetNewClosure()
+            return $StockSurface.DescribeCapturedProcess($callback)
+        }
+        $method.Invoke($null,$arguments)
+    }
+    function New-FakeCapturedStock($lease) {
+        $ctor=$script:stockType.GetConstructors([Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic)[0]
+        $surface=$ctor.Invoke([object[]]@([IntPtr]291,[uint32]7,[uint32]42,[uint32]3,$lease,'private title','fixture','private path','private app','Unknown'))
+        $script:stockType.GetProperty('CreationKnown').SetValue($surface,$true)
+        $script:stockType.GetProperty('CreationFileTime100ns').SetValue($surface,[long]200)
+        $surface
+    }
+    It 'borrows the exact capture lease through one child parent and final-window query without disposing it' {
+        $f=New-HeldObservationFixture
+        try {
+            $text=Invoke-HeldObservationFixture $f
+            $text | Should Match 'instanceAvailable=True.*parentCreationCompatible=True.*relationStable=True'
+            $text | Should Match 'capturedCreationFileTime100ns=200; creationMatchesCapture=True; childReads=1; parentReads=1; relationReads=1'
+            $f.SameLease | Should Be $true;$f.LeaseLive | Should Be $true;$f.Lease.IsClosed | Should Be $false
+            "$($f.HeldReads)/$($f.ParentReads)/$($f.WindowReads)" | Should Be '1/1/1'
+        } finally {$f.Lease.Dispose()}
+    }
+    It 'rejects changed creation or PID and unavailable baseline identity before any parent query' {
+        foreach($mode in @('creation','pid','missing-baseline','creation-denied')) {
+            $f=New-HeldObservationFixture
+            try {
+                if($mode -eq 'creation'){$f.Child.CreationTime=201}
+                if($mode -eq 'pid'){$f.Child.HandleProcess=99}
+                if($mode -eq 'missing-baseline'){$f.Creation=-1}
+                if($mode -eq 'creation-denied'){$f.Child.CreationAvailable=$false;$f.Child.CreationError=5}
+                $text=Invoke-HeldObservationFixture $f
+                $text | Should Match 'instanceAvailable=False.*parentQueried=False.*creationMatchesCapture=False'
+                "$($f.HeldReads)/$($f.ParentReads)/$($f.WindowReads)" | Should Be '1/0/1'
+            } finally {$f.Lease.Dispose()}
+        }
+    }
+    It 'retains changed-window denial and newer-parent facts without upgrading them into authority' {
+        $f=New-HeldObservationFixture
+        try {
+            $f.FinalPid=99;$f.Parent.CreationTime=300;$f.Child.AnyJobAvailable=$true;$f.Child.AnyJob=$true
+            $f.Child.ImageError=5;$f.Child.SessionError=87
+            $text=Invoke-HeldObservationFixture $f
+            $text | Should Match 'imageKnown=False; imageError=5'
+            $text | Should Match 'sessionKnown=False; session=0; sessionError=87; anyJobKnown=True; anyJob=True; jobError=0; exactTestJob=unavailable'
+            $text | Should Match 'parentCreationCompatible=False; relationStable=False; finalPid=99'
+            $text | Should Match 'not creator/ownership proof'
+        } finally {$f.Lease.Dispose()}
+    }
+    It 'passes the captured tuple lease and creation through the actual stock bridge without leaking classification fields' {
+        $lease=[Microsoft.Win32.SafeHandles.SafeProcessHandle]::new([IntPtr]123,$false)
+        $surface=New-FakeCapturedStock $lease
+        try {
+            $seen=[Collections.Generic.List[string]]::new()
+            $callback=[Func[IntPtr,uint32,uint32,Microsoft.Win32.SafeHandles.SafeProcessHandle,long,bool,string]] {
+                param($window,$threadValue,$pidValue,$held,$creation,$extended)
+                $seen.Add("$($window.ToInt64())/$threadValue/$pidValue/$creation/$extended/$([object]::ReferenceEquals($held,$lease))")
+                'safe metadata'
+            }.GetNewClosure()
+            $surface.DescribeCapturedProcess($callback) | Should Be 'safe metadata'
+            ($seen -join ',') | Should Be '291/7/42/200/True/True'
+            $script:stockType.GetProperty('CreationFileTime100ns').SetValue($surface,[long]0)
+            $surface.DescribeCapturedProcess($callback) | Should Be 'safe metadata'
+            $seen[1] | Should Be '291/7/42/-1/True/True'
+            $script:stockType.GetProperty('CreationFileTime100ns').SetValue($surface,[long]200)
+            $script:stockType.GetProperty('CreationKnown').SetValue($surface,$false)
+            $surface.DescribeCapturedProcess($callback) | Should Be 'safe metadata'
+            $seen[2] | Should Be '291/7/42/-1/True/True'
+            $surface.Kind | Should Be 'Unknown';$surface.CloseRequested | Should Be $false
+            $lease.IsClosed | Should Be $false
+        } finally {$surface.Dispose()}
+    }
+    It 'keeps denial errors and untrusted image fields private through the borrowed-lease observer' {
+        $f=New-HeldObservationFixture
+        try {
+            $f.Child.Opened=$false;$f.Child.OpenError=5;$f.Child.CreationAvailable=$false;$f.Child.CreationError=87
+            $f.Child.ImageAvailable=$true;$f.Child.ImageKind='private-image.exe';$f.Child.DigestAvailable=$true;$f.Child.ImageDigest='private path'
+            $text=Invoke-HeldObservationFixture $f
+            $text | Should Match 'instanceAvailable=False; opened=False; openError=5'
+            $text | Should Match 'creationKnown=False; creationFileTime100ns=200; creationError=87'
+            $text | Should Match 'imageKind=other; pathDigestAlgorithm=SHA256-UTF16LE; pathDigestKnown=False; pathDigest=unavailable'
+            $text | Should Not Match 'private-image|private path'
+            $f.ParentReads | Should Be 0;$f.WindowReads | Should Be 1
+        } finally {$f.Lease.Dispose()}
+    }
+    It 'rejects zero and missing stock creation through the real bridge and canonical fake-reader observer' {
+        $f=New-HeldObservationFixture;$surface=New-FakeCapturedStock $f.Lease
+        try {
+            foreach($mode in @('zero','missing')) {
+                $f.HeldReads=0;$f.ParentReads=0;$f.WindowReads=0
+                $script:stockType.GetProperty('CreationKnown').SetValue($surface,($mode -eq 'zero'))
+                $script:stockType.GetProperty('CreationFileTime100ns').SetValue($surface,[long]0)
+                $text=Invoke-HeldObservationFixture $f $surface
+                $text | Should Match 'instanceAvailable=False.*parentQueried=False.*capturedCreationFileTime100ns=-1; creationMatchesCapture=False'
+                "$($f.HeldReads)/$($f.ParentReads)/$($f.WindowReads)" | Should Be '1/0/1'
+                $surface.Kind | Should Be 'Unknown';$surface.CloseRequested | Should Be $false
+            }
+        } finally {$surface.Dispose()}
+    }
+    It 'keeps unavailable diagnostic errors private and preserves direct fatal propagation' {
+        $lease=[Microsoft.Win32.SafeHandles.SafeProcessHandle]::new([IntPtr]123,$false)
+        $surface=New-FakeCapturedStock $lease
+        try {
+            foreach($exceptionType in @([InvalidOperationException],[OutOfMemoryException])) {
+                $delegateType=[Func[IntPtr,uint32,uint32,Microsoft.Win32.SafeHandles.SafeProcessHandle,long,bool,string]]
+                $method=[Reflection.Emit.DynamicMethod]::new('CapturedStockQueryFailure',[string],[Type[]]@([IntPtr],[uint32],[uint32],[Microsoft.Win32.SafeHandles.SafeProcessHandle],[long],[bool]))
+                $il=$method.GetILGenerator();$il.Emit([Reflection.Emit.OpCodes]::Newobj,$exceptionType.GetConstructor([Type]::EmptyTypes));$il.Emit([Reflection.Emit.OpCodes]::Throw)
+                $callback=$method.CreateDelegate($delegateType)
+                if($exceptionType -eq [InvalidOperationException]) {
+                    $surface.DescribeCapturedProcess($callback) | Should Be 'instanceAvailable=False; unavailable=InvalidOperationException'
+                } else {
+                    $caught=$null;try{[void]$surface.DescribeCapturedProcess($callback)}catch{$caught=$_.Exception.GetBaseException()}
+                    $caught.GetType() | Should Be ([OutOfMemoryException])
+                }
+                $surface.CloseRequested | Should Be $false
+            }
+        } finally {$surface.Dispose()}
+    }
+    It 'initializes both real managed types and their exact direct delegate in a fresh noninteractive PowerShell' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1')
+        $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-stock-import-'+[guid]::NewGuid().ToString('N'))
+        $childScript=Join-Path $scratch 'import-bridge.ps1'
+        [IO.File]::WriteAllText($childScript,@'
+param($Repo)
+$ErrorActionPreference='Stop'
+Import-Module (Join-Path $Repo 'Tools/Modules/Testing/HostedTestDesktop.psm1')
+& (Get-Module HostedTestDesktop) { Initialize-RSHostedStockSurfaceNative }
+$type=[Func[IntPtr,uint32,uint32,Microsoft.Win32.SafeHandles.SafeProcessHandle,long,bool,string]]
+$callback=[RedSalamander.Testing.HostedDesktopNative].GetMethod('DescribeHeldProcess').CreateDelegate($type)
+if($callback.Method.Name -cne 'DescribeHeldProcess'){throw 'Wrong managed bridge.'}
+$ctor=[RedSalamander.Testing.HostedStockSurface].GetConstructors([Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic)[0]
+$surface=$ctor.Invoke([object[]]@([IntPtr]0,[uint32]0,[uint32]0,[uint32]0,$null,'','','','','Empty'))
+try {
+    $result=$surface.DescribeCapturedProcess($callback)
+    if($result -cne 'instanceAvailable=False; unavailable=InvalidWindowIdentity'){throw 'Unexpected unavailable identity.'}
+} finally {$surface.Dispose()}
+'fresh-managed-bridge-passed'
+'@,[Text.UTF8Encoding]::new($false))
+        $start=[Diagnostics.ProcessStartInfo]::new();$start.FileName=(Get-Process -Id $PID).Path
+        $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+        foreach($arg in @('-NoProfile','-NonInteractive','-File',$childScript,$repoRoot)){[void]$start.ArgumentList.Add($arg)}
+        $child=[Diagnostics.Process]::new();$child.StartInfo=$start
+        try {
+            [void]$child.Start();$stdout=$child.StandardOutput.ReadToEndAsync();$stderr=$child.StandardError.ReadToEndAsync()
+            $child.WaitForExit();$output=$stdout.GetAwaiter().GetResult();$errorText=$stderr.GetAwaiter().GetResult()
+            [IO.File]::WriteAllText((Join-Path $scratch 'stdout.txt'),$output);[IO.File]::WriteAllText((Join-Path $scratch 'stderr.txt'),$errorText)
+            $child.ExitCode | Should Be 0;$output | Should Match 'fresh-managed-bridge-passed';$errorText | Should BeNullOrEmpty
+        } finally {$child.Dispose()}
+    }
+    It 'records bounded synthetic work counts without treating fake timings as native-query performance' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1')
+        $scratch=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case 'hosted-stock-work-counts'
+        $rows=[Collections.Generic.List[object]]::new()
+        foreach($scenario in @('matching','changed-creation','changed-window','newer-parent','denied')) {
+            for($iteration=1;$iteration -le 8;$iteration++) {
+                $f=New-HeldObservationFixture
+                try {
+                    if($scenario -eq 'changed-creation'){$f.Child.CreationTime=201}
+                    if($scenario -eq 'changed-window'){$f.FinalPid=99}
+                    if($scenario -eq 'newer-parent'){$f.Parent.CreationTime=300}
+                    if($scenario -eq 'denied'){$f.Child.Opened=$false;$f.Child.OpenError=5;$f.Child.CreationAvailable=$false}
+                    $timer=[Diagnostics.Stopwatch]::StartNew();$text=Invoke-HeldObservationFixture $f;$timer.Stop()
+                    $expectedParents=if($scenario -in @('changed-creation','denied')){0}else{1}
+                    "$($f.HeldReads)/$($f.ParentReads)/$($f.WindowReads)" | Should Be "1/$expectedParents/1"
+                    $f.SameLease | Should Be $true;$f.LeaseLive | Should Be $true
+                    $rows.Add([ordered]@{scenario=$scenario;iteration=$iteration;held_child_reads=$f.HeldReads;parent_reads=$f.ParentReads;
+                        final_relation_reads=$f.WindowReads;same_lease=$f.SameLease;lease_live=$f.LeaseLive;elapsed_ticks=$timer.ElapsedTicks})
+                } finally {$f.Lease.Dispose()}
+            }
+        }
+        [ordered]@{schema='red-salamander.hosted-stock-fake-work.v1';run_id=$env:REDSALAMANDER_TEST_RUN_ID;
+            clock_frequency=[Diagnostics.Stopwatch]::Frequency;scope='managed fake readers only; not native-query or pipeline performance';rows=@($rows)} |
+            ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $scratch 'work-counts.json') -Encoding utf8NoBOM
     }
 }
 

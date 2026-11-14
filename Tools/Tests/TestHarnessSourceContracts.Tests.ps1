@@ -271,6 +271,39 @@ Describe 'Commands attribution and UI prerequisite source contracts' {
         $source|Should Match 'exactTestJob=unavailable'
         $body.Value|Should Not Match 'Process\.GetProcesses|MainWindowTitle|GetWindowText|CommandLine|SetForegroundWindow|SendInput|\.Kill\('
     }
+    It 'borrows the stock capture lease without reopening its PID and rejects changed creation before parent enrichment' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $held=[regex]::Match($source,'(?ms)^        internal static string ObserveHeldProcessForWindow\(.*?^        \}')
+        $held.Success|Should Be $true
+        $valid={param($text)
+            $text -cmatch '(?s)lease\.DangerousAddRef\(ref borrowed\).*return readHeld\(lease, pid, full\).*ObserveCapturedProcessForWindow\(window, thread, process, capturedCreation.*finally.*lease\.DangerousRelease\(\)' -and
+            $text -cnotmatch '\bOpenProcess\s*\(|GetForegroundWindow\s*\('
+        }
+        (& $valid $held.Value)|Should Be $true
+        (& $valid ($held.Value.Replace('return readHeld(lease, pid, full)','return readHeld(null, pid, full)')))|Should Be $false
+        (& $valid ($held.Value.Replace('lease.DangerousRelease()','OpenProcess(0x1000, false, process)')))|Should Be $false
+        $core=[regex]::Match($source,'(?ms)^        internal static string ObserveCapturedProcessForWindow\(.*?^        \}')
+        $core.Value|Should Match '(?s)child\.CreationTime == capturedCreation;.*if \(capturedCreation != 0\) instance = instance && creationMatch;.*if \(extended && instance && child\.ParentAvailable'
+        $bridge=[regex]::Match($source,'(?ms)^        public string DescribeCapturedProcess\(.*?^        \}')
+        $bridge.Value|Should Match 'observe\(window,Thread,Process,process,CreationKnown && CreationFileTime100ns > 0 \? CreationFileTime100ns : -1,true\)'
+        $bridge.Value|Should Not Match 'GetForegroundWindow|OpenProcess|Title|Image|ApplicationId|RequestClose|PostMessage|SetForeground|SendInput'
+        $bridge.Value|Should Match 'unavailable="\+error.GetType\(\).Name'
+    }
+    It 'keeps stock baseline snapshots minimal and enriches only the captured Unknown refusal with unchanged authority' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $capture=[regex]::Match($source,'(?ms)^        public static HostedStockSurface Capture\(\).*?^        \}')
+        $capture.Value|Should Match '(?s)GetProcessTimes\(p,out created.*GetWindowThreadProcessId\(h,out currentPid\).*GetProcessId\(p\)!=pid.*GetForegroundWindow\(\)!=h'
+        $first=[regex]::Match($source,'(?ms)^            if\(\$null -eq \$firstObservation\).*?^            \}')
+        $first.Value|Should Match 'creation_file_time_100ns=\$surface.CreationFileTime100ns'
+        $first.Value|Should Not Match '\b(?:title|image|application_id|process_diagnostic)='
+        $unknown=[regex]::Match($source,'(?ms)^            if\(\$surface.Kind -cnotin.*?^            \}')
+        $unknown.Value|Should Match '\$surface.Kind -cnotin @\(''Empty'',''Shell'',''RunnerConsole'',''Account'',''Search'',''WslStartup''\)'
+        $unknown.Value|Should Match '(?s)CreateDelegate\(.*?\$extendedCount\+\+.*DescribeCapturedProcess\(\$observer\).*throw ''An unapproved foreground surface prevents hosted preparation\.'''
+        $unknown.Value|Should Not Match 'RequestClose|Start-Sleep|SetForeground|SendInput|GetForegroundWindow|Process\.GetProcesses|Get-CimInstance'
+        $source|Should Match 'absence is not background-process absence or creator proof'
+        $source|Should Match '\$timer=\[Diagnostics.Stopwatch\]::StartNew\(\)'
+        $source|Should Match 'Start-Sleep -Milliseconds 100'
+    }
     It 'fails the exact path-detail positive prerequisite before Enter while preserving text and focus assertions' {
         $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp'
         $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestFileOperationsPopupThroughputDisclosure\([^\r\n]+\) noexcept\s*\{.*?^\}')
@@ -5512,12 +5545,17 @@ Specs\TestRuns\local_scratch
         $streaming | Should Match 'Close-RSContainedProcess -Process \$process'
         $runner | Should Match 'function Invoke-RSSelfTestCaseList[\s\S]*?Start-RSContainedProcess -ProcessStartInfo \$startInfo'
         $runner | Should Match 'function Invoke-RSSelfTestProcess[\s\S]*?Start-RSContainedProcess -ProcessStartInfo \$startInfo'
-        $sanitizedMsbuild | Should Match '\$exitCode = Invoke-RSProcess'
+        $sanitizedMsbuild | Should Match '(?s)\$exitCode = Invoke-RSStreamingProcess\s+`\s*-FilePath \$resolvedMsbuildPath\s+`\s*-Arguments \$MSBuildArguments\s+`\s*-DelegateArtifactOperation\s+`\s*-WorkingDirectory \$repoRoot'
+        $sanitizedMsbuild | Should Match 'Modules\\Build\\ProcessStreaming\.psm1'
+        $sanitizedMsbuild | Should Match 'Import-Module \$processStreamingModule -ErrorAction Stop'
+        $sanitizedMsbuild | Should Not Match '\$exitCode = Invoke-RSProcess\b'
         $sanitizedMsbuild | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?finally\s*\{\s*Exit-RSArtifactOperationLock'
         $sanitizedMsbuild | Should Match 'coordination''\] = ''shared-dependency'''
         $sanitizedMsbuild | Should Match 'Get-RSMSBuildPropertyValue[\s\S]*?-Name ''Configuration'''
         $sanitizedMsbuild | Should Match 'Get-RSMSBuildPropertyValue[\s\S]*?-Name ''Platform'''
-        $vcpkgInstall | Should Match 'Invoke-RSProcess[\s\S]*?-FilePath \$vcpkgExePath'
+        $vcpkgInstall | Should Match '(?s)\$vcpkgExitCode = Invoke-RSStreamingProcess\s+`\s*-FilePath \$vcpkgExePath\s+`\s*-Arguments \$vcpkgArguments\.ToArray\(\)\s+`\s*-DelegateArtifactOperation\s+`\s*-WorkingDirectory \$repoRoot'
+        $vcpkgInstall | Should Match 'Import-Module \(Join-Path \$PSScriptRoot "Tools\\Modules\\Build\\ProcessStreaming\.psm1"\) -ErrorAction Stop'
+        $vcpkgInstall | Should Not Match '\$vcpkgExitCode = Invoke-RSProcess\b'
         $vcpkgInstall | Should Match "coordination = 'shared-dependency'"
         $vcpkgInstall | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
         $vcpkgInstall | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$sharedDependencyScope'
@@ -5526,6 +5564,28 @@ Specs\TestRuns\local_scratch
         $deploymentTest | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentTest | Should Not Match 'ReadToEndAsync|\.Result'
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'
+    }
+
+    It 'keeps the background console probe read-only and preflights windowless captured flags before launch' {
+        $source=Get-RSText 'Tools/Tests/ProcessStreaming.Tests.ps1'
+        $type=[regex]::Match($source,'(?ms)^public static class BackgroundBuildConsoleObservation\s*\{.*?^\}')
+        $type.Success|Should Be $true
+        $valid={param($body)
+            $calls=@([regex]::Matches($body,'\b(?<name>[A-Za-z_]\w*)\s*\(')|ForEach-Object{$_.Groups['name'].Value})
+            @($calls|Where-Object{$_ -cnotin @('DllImport','GetConsoleWindow','GetConsoleProcessList','GetStdHandle','GetFileType')}).Count -eq 0 -and
+            ([regex]::Matches($body,'DllImport\("kernel32\.dll"').Count -eq 4) -and
+            ([regex]::Matches($body,'public static extern').Count -eq 4)
+        }
+        (& $valid $type.Value)|Should Be $true
+        (& $valid ($type.Value.Replace('GetFileType','AllocConsole')))|Should Be $false
+        (& $valid ($type.Value.Replace('GetFileType','SetForegroundWindow')))|Should Be $false
+        $preflight=[regex]::Match($source,'(?s)if \(\$ProcessStartInfo.UseShellExecute -or -not \$ProcessStartInfo.CreateNoWindow -or\s*-not \$ProcessStartInfo.RedirectStandardOutput -or -not \$ProcessStartInfo.RedirectStandardError\)\s*\{\s*throw ''Refusing unsafe console-policy fixture launch\.'';?\s*\}')
+        $preflight.Success|Should Be $true
+        $launch=$source.IndexOf('$owned = & $starter -ProcessStartInfo $ProcessStartInfo -DelegateArtifactOperation:$DelegateArtifactOperation',[StringComparison]::Ordinal)
+        $launch|Should BeGreaterThan ($preflight.Index+$preflight.Length)
+        $source|Should Match '\$canonical.ExportedFunctions\[''Start-RSContainedProcess''\]'
+        $source|Should Match 'console_window \| Should Be 0'
+        $source|Should Not Match 'console_process_count \| Should Be 0'
     }
 
     It 'keeps IronLedger FolderView data-integrity guards wired' {

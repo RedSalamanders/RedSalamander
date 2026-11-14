@@ -10,6 +10,8 @@
     Staging roots are created under:
       .build\vcpkg_install_staging\
 
+    The contained installer captures stdout/stderr without creating a secondary console window/default-terminal UX for background callers.
+
     This matches the MSBuild/CI layout (see Directory.Build.props) so builds never create
     a top-level `vcpkg_installed\` folder.
 
@@ -139,7 +141,7 @@ if ($Help) {
 Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\VcpkgInstallSafety.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\VcpkgToolIdentity.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\ArtifactOperationLock.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\SanitizedEnvironment.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\ProcessStreaming.psm1") -ErrorAction Stop
 
 $validPlatforms = @('x64', 'ARM64', 'All')
 if ($Platform -notin $validPlatforms) {
@@ -408,9 +410,10 @@ foreach ($triplet in $tripletsToInstall) {
         [void]$vcpkgArguments.Add("--vcpkg-root=$vcpkgRootPath")
     }
 
-    $vcpkgExitCode = Invoke-RSProcess `
+    $vcpkgExitCode = Invoke-RSStreamingProcess `
         -FilePath $vcpkgExePath `
         -Arguments $vcpkgArguments.ToArray() `
+        -DelegateArtifactOperation `
         -WorkingDirectory $repoRoot
 
     if ($vcpkgExitCode -ne 0) {

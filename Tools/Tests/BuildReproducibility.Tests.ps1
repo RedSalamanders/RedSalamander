@@ -10,6 +10,7 @@ Import-Module (Join-Path $repoRoot 'Tools\Tests\TestSupport.psm1') -Force -Error
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1') -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\ProcessStreaming.psm1') -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\MSBuildInvocation.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\BuildEvidence.psm1') -ErrorAction Stop
 
 function Assert-RSThrowsMatching {
     param(
@@ -660,7 +661,7 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '''--x-install-root'',\s*\$env:VCPKG_INSTALLED_DIR'
         $ci | Should Match '&\s+"\$env:VCPKG_ROOT\\vcpkg\.exe"\s+@vcpkgArguments'
         $ci | Should Match '\$vcpkgRoot\s*=\s*Join-Path \$env:VCPKG_INSTALLED_DIR \$triplet'
-        $ci | Should Match "hashFiles\('vcpkg\.json', 'vcpkg-tool\.json', 'vcpkg-install\.ps1', 'Tools/Modules/Build/VcpkgInstallSafety\.psm1', 'Tools/Modules/Build/MSBuildInvocation\.psm1', 'Build/vcpkg-ports/\*\*'\)"
+        $ci | Should Match "hashFiles\('vcpkg\.json',\ 'vcpkg-configuration\.json',\ 'vcpkg-tool\.json',\ 'vcpkg-install\.ps1',\ 'Tools/Modules/Build/VcpkgInstallSafety\.psm1',\ 'Tools/Modules/Build/VcpkgToolIdentity\.psm1',\ 'Tools/Modules/Build/MSBuildInvocation\.psm1',\ 'Tools/Modules/Build/ArtifactOperationLock\.psm1',\ 'Tools/Modules/Build/ProcessStreaming\.psm1',\ 'Tools/Modules/Build/SanitizedEnvironment\.psm1',\ '\.ci/project\.json',\ 'Build/vcpkg-ports/\*\*'\)"
         $ci | Should Match 'id:\s*toolchain_identity'
         $ci | Should Match 'Get-RSBuildToolchainIdentity'
         @($ci | Select-String -Pattern 'steps\.toolchain_identity\.outputs\.digest' -AllMatches).Matches.Count | Should Be 2
@@ -884,5 +885,73 @@ Describe 'Workflow-selected MSBuild identity' {
             $env:GITHUB_ACTIONS = $savedActions
             $env:MSBUILD_EXE_PATH = $savedMsbuild
         }
+    }
+}
+
+Describe 'Vcpkg captured-launch cache closure' {
+    BeforeAll {
+        $script:vcpkgCommonInputs = @(
+            'vcpkg.json'
+            'vcpkg-configuration.json'
+            'vcpkg-tool.json'
+            'vcpkg-install.ps1'
+            'Tools/Modules/Build/VcpkgInstallSafety.psm1'
+            'Tools/Modules/Build/VcpkgToolIdentity.psm1'
+            'Tools/Modules/Build/MSBuildInvocation.psm1'
+            'Tools/Modules/Build/ArtifactOperationLock.psm1'
+            'Tools/Modules/Build/ProcessStreaming.psm1'
+            'Tools/Modules/Build/SanitizedEnvironment.psm1'
+            '.ci/project.json'
+        )
+    }
+    BeforeEach {
+        Mock Get-RSBuildToolchainIdentity -ModuleName BuildEvidence { [pscustomobject]@{ Record=@{}; Digest=('0' * 64) } }
+        Mock Get-RSGitSourcePaths -ModuleName BuildEvidence { @() }
+        Mock Get-RSGhosttyRuntimeIdentityDigest -ModuleName BuildEvidence { '0' * 64 }
+    }
+
+    It 'keeps the local common inputs and workflow cache bound to the full installer import closure' {
+        $tokens=$null; $errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Modules/Build/BuildEvidence.psm1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $function=$ast.Find({param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Get-RSBuildIdentityBundle'
+        },$true)
+        $assignment=$function.Find({param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+            $node.Left.VariablePath.UserPath -ceq 'vcpkgInputs' -and $node.Operator -eq 'Equals'
+        },$true)
+        $actual=@($assignment.Right.FindAll({param($node)
+            $node -is [Management.Automation.Language.StringConstantExpressionAst]
+        },$true) | ForEach-Object Value)
+        ($actual -join '|') | Should Be ($script:vcpkgCommonInputs -join '|')
+        $workflow=[IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/build-reusable.yml'))
+        $cache=[regex]::Match($workflow,'(?m)^\s*key:.*-vcpkg-.*hashFiles\((?<inputs>[^\r\n]+?)\)')
+        $cache.Success | Should Be $true
+        $cacheInputs=@([regex]::Matches($cache.Groups['inputs'].Value,"'(?<path>[^']+)'") | ForEach-Object { $_.Groups['path'].Value })
+        ($cacheInputs -join '|') | Should Be ((@($script:vcpkgCommonInputs)+@('Build/vcpkg-ports/**')) -join '|')
+    }
+
+    It 'changes the actual vcpkg identity when any installer launcher dependency or pin changes' {
+        $fixture=Join-Path $TestDrive 'vcpkg-launch-closure'
+        foreach($relative in $script:vcpkgCommonInputs) {
+            $path=Join-Path $fixture $relative
+            [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
+            [IO.File]::WriteAllText($path,'initial fixture input')
+        }
+        $baseline=(Get-RSBuildIdentityBundle -RepoRoot $fixture -MSBuildPath 'fixture-not-executed.exe' -Platform x64 -Configuration Debug).VcpkgIdentityDigest
+        foreach($relative in $script:vcpkgCommonInputs) {
+            $path=Join-Path $fixture $relative
+            try {
+                [IO.File]::WriteAllText($path,'changed fixture input')
+                $changed=(Get-RSBuildIdentityBundle -RepoRoot $fixture -MSBuildPath 'fixture-not-executed.exe' -Platform x64 -Configuration Debug).VcpkgIdentityDigest
+                $changed | Should Not Be $baseline
+            } finally {
+                [IO.File]::WriteAllText($path,'initial fixture input')
+            }
+        }
+        (Get-RSBuildIdentityBundle -RepoRoot $fixture -MSBuildPath 'fixture-not-executed.exe' -Platform x64 -Configuration Debug).VcpkgIdentityDigest | Should Be $baseline
+        Assert-MockCalled Get-RSBuildToolchainIdentity -ModuleName BuildEvidence -Times 13 -Exactly -Scope It
     }
 }

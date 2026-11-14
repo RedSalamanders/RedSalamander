@@ -60,6 +60,21 @@ The existing contained-process environment block transports that endpoint withou
 changing native arguments, flags, process identity or ownership/cleanup rules.
 Low-level controlled service-lifetime probes retain their explicit fixture PSI.
 
+Background dependency installation and the sanitized SDK/MSBuild wrapper use the
+existing `Invoke-RSStreamingProcess` route with both streams captured and
+`CreateNoWindow=true`, retaining artifact-operation delegation, dependency/profile
+locks, literal arguments, child environment and exact exit status. Do not send
+these callers through the uncaptured interactive `Invoke-RSProcess` route: a
+console child of a no-console parent can otherwise create a secondary console
+window/default-terminal UX. A hidden inbox console-server association may remain
+with a no-window launch; its process count is diagnostic, not a zero-count gate. The
+ordinary interactive `build.ps1` path and shared helper defaults remain unchanged.
+Receipt vcpkg identity and hosted cache keys cover the complete installer/manifest,
+safety/tool/discovery/lock/streaming/environment and pinned-engine policy dependency
+closure; source mutation controls and the workflow parity guard keep those sets
+aligned. The launch suppresses that secondary window/handoff path, but does not identify
+the creator or payload of a historical foreign terminal or grant cleanup rights.
+
 Local tools require `.ci-engine` restored at the exact `.ci/project.json` commit,
 including Source builds. CI restores this pinned dependency automatically. Shared
 component controls and focused local process tests remain distinct from native

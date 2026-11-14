@@ -77,6 +77,10 @@ private compiler metadata-service endpoint to each child without changing its
 parent. Restore `.ci-engine` at `.ci/project.json`'s exact commit before local
 process/build tooling. Both direct and streaming routes keep their existing
 contained ownership and environment transport.
+Background dependency and sanitized SDK/MSBuild invocations use the canonical
+captured streaming route with no console window and the same operation delegation,
+locks, arguments and exit status. Interactive builds retain their existing route.
+See `Specs/Build/Build_Toolchain.md` for the caller policy and complete identity/cache closure.
 Missing policy/API preparation now reports the recovery instructions in
 `Specs/Build/Build_Toolchain.md`. After restoration in the same PowerShell session,
 the factory refreshes changed cached policy definitions and retains unchanged
@@ -135,6 +139,14 @@ retirement. The exact same-session GitHub compute-agent console may be observed 
 request; it remains subject to the owned boundary's foreground, focus and restoration checks.
 Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
 studies do not perform these actions. Native focus, input and capture assertions are unchanged.
+Stock audit completion retains first/last foreground-instance snapshots and observation counts.
+Minimal creation identity comes from the original held query lease. Unknown refusal adds
+failure-only canonical process facts on that exact captured tuple and borrowed lease, with
+creation matching and a final relation recheck; it never reopens the captured PID.
+Unavailable facts, parent compatibility and any-job membership grant no ownership or close
+authority. Foreground snapshots cannot prove background absence or creator identity.
+No new raw image-path, title or command-line diagnostics are added; existing private stock
+records retain their original fields. Observation errors cannot replace the primary refusal.
 
 When direct foreground acquisition is refused, the selected hosted native x64 role or the opted-in native ARM64 role may use one
 registered Alt+F24 handoff to the owned neutral fixture window within 500 ms. The inline

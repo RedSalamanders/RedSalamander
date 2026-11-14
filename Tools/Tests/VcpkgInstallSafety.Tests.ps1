@@ -45,10 +45,11 @@ Describe 'Vcpkg install safety helper' {
         $source = Get-Content -LiteralPath $scriptPath -Raw
 
         $source | Should Match "Import-Module .*ArtifactOperationLock\.psm1"
-        $source | Should Match "Import-Module .*SanitizedEnvironment\.psm1"
+        $source | Should Match "Import-Module .*ProcessStreaming\.psm1"
         $source | Should Match "coordination = 'shared-dependency'"
         $source | Should Match 'Sort-Object \{ if \(\$_ -eq ''x64''\) \{ 0 \} else \{ 1 \} \} -Unique'
-        $source | Should Match 'Invoke-RSProcess\s+`\r?\n\s+-FilePath \$vcpkgExePath'
+        $source | Should Match 'Invoke-RSStreamingProcess\s+`\r?\n\s+-FilePath \$vcpkgExePath'
+        $source | Should Match '(?s)Invoke-RSStreamingProcess.+?-DelegateArtifactOperation'
         $source | Should Not Match '& \$vcpkgExePath\s+install'
         $source | Should Match '\[string\]\$VcpkgRoot\s*=\s*\$null'
         $source | Should Match 'foreach \(\$requiredDirectory in @\(''ports'', ''versions''\)\)'

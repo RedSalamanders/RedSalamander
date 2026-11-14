@@ -93,8 +93,40 @@ exit 17
     }
 
     It 'waits for the hosted MSVC GUI bootstrapper and handles its actual success reboot and failure exits' {
-        $source = Join-Path $TestDrive 'GuiBootstrapper.cs'
-        $gui = Join-Path $TestDrive 'GUI bootstrapper.exe'
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($env:REDSALAMANDER_TEST_RUN_ID)) {
+            throw 'The managed bootstrapper control requires an existing governed run ID.'
+        }
+        # The legacy managed WinApp loader has a smaller path budget than the product.
+        # Keep its fixture in a unique retained child, not the arbitrarily deep Pester drive.
+        # The historical exit -1 had no retained iteration; this budget does not prove its cause.
+        $fixtureBase = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'ps' -Case ('m-' + [guid]::NewGuid().ToString('N'))
+        $source = Join-Path $fixtureBase 'GuiBootstrapper.cs'
+        $gui = Join-Path $fixtureBase 'GUI bootstrapper.exe'
+        $compile = Join-Path $fixtureBase 'CompileGui.ps1'
+        $fixturePathLimit = 240
+        $plannedPaths = @($source, $gui, ($gui + '.config'), $compile, (Join-Path $fixtureBase 'compile.stdout.log'), (Join-Path $fixtureBase 'compile.stderr.log'))
+        foreach ($fixtureExit in @(0,3010,17)) {
+            $iterationRoot = Join-Path $fixtureBase ("hosted $fixtureExit é日")
+            $plannedScratch = Join-Path $iterationRoot ('msvc-14.52-' + ('0' * 32))
+            $plannedPaths += @(
+                (Join-Path $plannedScratch 'vs_BuildTools.exe'),
+                ((Join-Path $plannedScratch 'vs_BuildTools.exe') + '.config'),
+                (Join-Path $plannedScratch 'bootstrapper.stdout.log'),
+                (Join-Path $plannedScratch 'bootstrapper.stderr.log'),
+                (Join-Path $iterationRoot 'VS-Msvc-14.52/installed.args')
+            )
+        }
+        foreach ($path in $plannedPaths) {
+            if ($path.Length -ge $fixturePathLimit) { throw "Managed bootstrapper fixture exceeds its conservative path budget: $($path.Length)." }
+        }
+        $fixtureRecord = [ordered]@{
+            schema='red-salamander.managed-bootstrapper-fixture.v1'
+            path_limit=$fixturePathLimit
+            planned_path_lengths=@($plannedPaths | ForEach-Object { $_.Length })
+            phase='before-compile'
+        }
+        $fixtureRecord | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $fixtureBase 'fixture.json') -Encoding UTF8
         @'
 using System;
 using System.IO;
@@ -109,10 +141,15 @@ class GuiBootstrapper {
     }
 }
 '@ | Set-Content -LiteralPath $source -Encoding UTF8
-        $compile = Join-Path $TestDrive 'CompileGui.ps1'
         'param($SourcePath,$OutputPath); Add-Type -Path $SourcePath -OutputAssembly $OutputPath -OutputType WindowsApplication' |
             Set-Content -LiteralPath $compile -Encoding UTF8
-        (Invoke-RSStreamingProcess -FilePath 'powershell.exe' -Arguments @('-NoProfile','-File',$compile,$source,$gui) -WorkingDirectory $TestDrive) | Should Be 0
+        $compileExit = Invoke-RSStreamingProcess -FilePath 'powershell.exe' -Arguments @('-NoProfile','-File',$compile,$source,$gui) -WorkingDirectory $fixtureBase -LogPath (Join-Path $fixtureBase 'compile.stdout.log') -ErrorLogPath (Join-Path $fixtureBase 'compile.stderr.log')
+        $fixtureRecord.compile_exit = $compileExit
+        $fixtureRecord.source_sha256 = (Get-FileHash -LiteralPath $source).Hash
+        $fixtureRecord.phase = 'after-compile'
+        if (Test-Path -LiteralPath $gui) { $fixtureRecord.compiled_sha256 = (Get-FileHash -LiteralPath $gui).Hash }
+        $fixtureRecord | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $fixtureBase 'fixture.json') -Encoding UTF8
+        $compileExit | Should Be 0
         $image = [IO.File]::ReadAllBytes($gui)
         $peOffset = [BitConverter]::ToInt32($image, 0x3c)
         [BitConverter]::ToUInt16($image, $peOffset + 24 + 68) | Should Be 2
@@ -132,20 +169,30 @@ class GuiBootstrapper {
         }
         $previousExit = Get-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
         $previousExitValue = if($previousExit){$previousExit.Value}else{$null}
+        $fixtureHasPrimaryFailure = $false
         try {
             $env:GITHUB_ACTIONS = 'true'
             $env:RUNNER_ENVIRONMENT = 'github-hosted'
             foreach($fixtureExit in @(0,3010,17)) {
                 & {
-                    param($fixtureExit,$provision,$gui,$fixtureRoot,$repoRoot)
+                    param($fixtureExit,$provision,$gui,$fixtureRoot,$repoRoot,$fixturePathLimit)
+                    [void][IO.Directory]::CreateDirectory($fixtureRoot)
                     $env:RUNNER_TEMP = $fixtureRoot
                     $env:RS_MsvcFixtureExitCode = [string]$fixtureExit
                     $root = $repoRoot
                     $required = '14.52'
                     $selected = $null
+                    $installerExitCode = $null
+                    $scratch = $null
                     $VerifyOnly = $false
                     $marker = Join-Path $fixtureRoot 'VS-Msvc-14.52/installed.args'
-                    function Invoke-WebRequest { param($Uri,$OutFile); Copy-Item -LiteralPath $gui -Destination $OutFile }
+                    function Invoke-WebRequest {
+                        param($Uri,$OutFile)
+                        foreach ($path in @($OutFile, ($OutFile + '.config'), (Join-Path (Split-Path $OutFile) 'bootstrapper.stdout.log'), (Join-Path (Split-Path $OutFile) 'bootstrapper.stderr.log'), $marker)) {
+                            if ($path.Length -ge $fixturePathLimit) { throw "Actual managed bootstrapper fixture exceeds its path budget: $($path.Length)." }
+                        }
+                        Copy-Item -LiteralPath $gui -Destination $OutFile
+                    }
                     function Get-AuthenticodeSignature { param($LiteralPath); [pscustomobject]@{Status='Valid';SignerCertificate=[pscustomobject]@{Subject='CN=Fixture, O=Microsoft Corporation, C=US'}} }
                     function Get-SelectedTools {
                         if(-not(Test-Path -LiteralPath $marker)){throw 'Compiler verification ran before the GUI installer completed.'}
@@ -153,22 +200,79 @@ class GuiBootstrapper {
                     }
                     Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
                     $message = ''
-                    try { & $provision } catch { $message = $_.Exception.Message }
-                    (Test-Path -LiteralPath $marker) | Should Be $true
-                    if($fixtureExit -eq 17) {
-                        $message | Should Match 'VS provisioning failed: 17'
-                        ($null -eq $selected) | Should Be $true
-                    } else {
-                        $message | Should Be ''
+                    # Evaluate in this already-isolated iteration scope so the real branch's
+                    # actual exit and selected-state locals can be retained before assertions.
+                    try { . $provision } catch { $message = $_.Exception.Message }
+                    if ($message.Length -gt 2048) { $message = $message.Substring(0,2048) }
+                    $markerPresent = Test-Path -LiteralPath $marker
+                    $installedArguments = if ($markerPresent) { [IO.File]::ReadAllLines($marker) } else { @() }
+                    $observed = [ordered]@{
+                        fixture_exit=$fixtureExit
+                        actual_exit=$installerExitCode
+                        marker_present=$markerPresent
+                        inner_message=$message
+                        selected_present=($null -ne $selected)
+                        arguments=@($installedArguments)
+                        compiled_sha256=(Get-FileHash -LiteralPath $gui).Hash
+                        scratch=$scratch
+                        status='observed-before-assertions'
                     }
-                    $installedArguments = [IO.File]::ReadAllLines($marker)
-                    $installedArguments[[Array]::IndexOf($installedArguments,'--installPath') + 1] | Should Be (Join-Path $fixtureRoot 'VS-Msvc-14.52')
-                    ($installedArguments -contains '--wait') | Should Be $true
-                } $fixtureExit $provision $gui (Join-Path $TestDrive ("hosted $fixtureExit é日")) $repoRoot
+                    if ($scratch) {
+                        $observed.installer_path_length = (Join-Path $scratch 'vs_BuildTools.exe').Length
+                        $observed.logs = @(foreach ($name in @('bootstrapper.stdout.log','bootstrapper.stderr.log')) {
+                            $path = Join-Path $scratch $name
+                            if (Test-Path -LiteralPath $path) { [ordered]@{name=$name;sha256=(Get-FileHash -LiteralPath $path).Hash;bytes=(Get-Item -LiteralPath $path).Length} }
+                        })
+                    }
+                    $record = Join-Path $fixtureRoot 'iteration.json'
+                    $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
+                    Write-Host ('Managed bootstrapper iteration: ' + ($observed | ConvertTo-Json -Depth 5 -Compress))
+                    if (-not $markerPresent) {
+                        $observed.status = 'failed'
+                        $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
+                        throw "Managed bootstrapper fixture $fixtureExit returned '$installerExitCode' without its marker. Inner: $message Evidence: $record"
+                    }
+                    try {
+                        $markerPresent | Should Be $true
+                        $installerExitCode | Should Be $fixtureExit
+                        if($fixtureExit -eq 17) {
+                            $message | Should Match 'VS provisioning failed: 17'
+                            ($null -eq $selected) | Should Be $true
+                        } else {
+                            $message | Should Be ''
+                            ($null -ne $selected) | Should Be $true
+                        }
+                        $installedArguments[[Array]::IndexOf($installedArguments,'--installPath') + 1] | Should Be (Join-Path $fixtureRoot 'VS-Msvc-14.52')
+                        ($installedArguments -contains '--wait') | Should Be $true
+                        $observed.status = 'passed'
+                    } finally {
+                        if ($observed.status -ne 'passed') { $observed.status = 'failed' }
+                        $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
+                    }
+                } $fixtureExit $provision $gui (Join-Path $fixtureBase ("hosted $fixtureExit é日")) $repoRoot $fixturePathLimit
             }
+            $fixtureRecord.phase = 'passed-all-three'
+        } catch {
+            $fixtureHasPrimaryFailure = $true
+            $fixtureRecord.phase = 'failed'
+            throw
         } finally {
-            foreach($key in $savedEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$savedEnvironment[$key],'Process')}
-            if($previousExit){$global:LASTEXITCODE=$previousExitValue}else{Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue}
+            try {
+                try {
+                    $fixtureRecord | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $fixtureBase 'fixture.json') -Encoding UTF8 -ErrorAction Stop
+                    Write-Host ("Managed bootstrapper retained evidence: $fixtureBase")
+                } catch [IO.IOException], [UnauthorizedAccessException], [Security.SecurityException] {
+                    # Only file-access retention failures are secondary to an existing primary.
+                    # Fatal or unexpected exceptions propagate; never serialize the ErrorRecord.
+                    if (-not $fixtureHasPrimaryFailure) { throw }
+                    $secondaryMessage = [string]$_.Exception.Message
+                    if ($secondaryMessage.Length -gt 512) { $secondaryMessage = $secondaryMessage.Substring(0,512) }
+                    Write-Warning ("Managed bootstrapper secondary retention failure: $secondaryMessage") -WarningAction Continue
+                }
+            } finally {
+                foreach($key in $savedEnvironment.Keys){[Environment]::SetEnvironmentVariable($key,$savedEnvironment[$key],'Process')}
+                if($previousExit){$global:LASTEXITCODE=$previousExitValue}else{Remove-Variable LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue}
+            }
         }
     }
 
@@ -606,5 +710,143 @@ Write-Output "delegated=$hasDelegation"
         $deploymentSource | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentSource | Should Match 'throw \[System\.InvalidOperationException\]::new\(\$message, \$originalException\)'
         $deploymentSource | Should Not Match 'ReadToEndAsync|\.Result'
+    }
+}
+
+Describe 'Background build console policy' {
+    BeforeAll {
+        Import-Module $artifactOperationLockModule -ErrorAction Stop
+        $script:backgroundStreamingModule = Import-Module $helperModule -Force -PassThru -ErrorAction Stop
+        $script:backgroundStreamingInvoke = $script:backgroundStreamingModule.ExportedFunctions['Invoke-RSStreamingProcess']
+        $script:backgroundSanitizedModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1') -PassThru -ErrorAction Stop
+    }
+
+    It 'uses the delegated captured route at <Path>' -TestCases @(
+        @{ Path = 'vcpkg-install.ps1'; FileVariable = 'vcpkgExePath' },
+        @{ Path = 'Tools/Invoke-SanitizedMsbuild.ps1'; FileVariable = 'resolvedMsbuildPath' }
+    ) {
+        param($Path, $FileVariable)
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot $Path), [ref]$tokens, [ref]$errors)
+        $errors.Count | Should Be 0
+        $calls = @($ast.FindAll({ param($node)
+            $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'Invoke-RSStreamingProcess'
+        }, $true))
+        $calls.Count | Should Be 1
+        $script:backgroundRecordedLaunch = $null
+        Mock Invoke-RSStreamingProcess {
+            param($FilePath, $Arguments, $WorkingDirectory, [switch]$DelegateArtifactOperation)
+            $script:backgroundRecordedLaunch = @{ FilePath=$FilePath; Arguments=@($Arguments); WorkingDirectory=$WorkingDirectory; Delegated=[bool]$DelegateArtifactOperation }
+            return 17
+        }
+        $vcpkgExePath = 'fixed-installer-fixture.exe'
+        $resolvedMsbuildPath = 'fixed-msbuild-fixture.exe'
+        $vcpkgArguments = [Collections.Generic.List[string]]::new()
+        $vcpkgArguments.Add('install'); $vcpkgArguments.Add('literal value')
+        $MSBuildArguments = @('fixture.vcxproj','/p:Configuration=Debug','/p:Platform=x64')
+        $exitCode = & ([scriptblock]::Create($calls[0].Extent.Text))
+        $exitCode | Should Be 17
+        $script:backgroundRecordedLaunch.FilePath | Should Be (Get-Variable -Name $FileVariable -ValueOnly)
+        $script:backgroundRecordedLaunch.WorkingDirectory | Should Be $repoRoot
+        $script:backgroundRecordedLaunch.Delegated | Should Be $true
+        $expected = if ($FileVariable -ceq 'vcpkgExePath') { $vcpkgArguments.ToArray() } else { $MSBuildArguments }
+        ($script:backgroundRecordedLaunch.Arguments -join '|') | Should Be ($expected -join '|')
+    }
+
+    It 'preflights the actual PSI then keeps a background child windowless captured and in its owned job' {
+        Mock Start-RSContainedProcess -ModuleName ProcessStreaming {
+            param($ProcessStartInfo, [switch]$DelegateArtifactOperation)
+            # Refuse before the real starter: never exercise a console-enabled regression
+            # from a console-free parent on the local desktop.
+            if ($ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or
+                -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError) {
+                throw 'Refusing unsafe console-policy fixture launch.'
+            }
+            # Pester's module mock has a different session state. Resolve only the exact
+            # canonical path already carried in this fixture's literal child arguments.
+            $arguments = @($ProcessStartInfo.ArgumentList)
+            if ($arguments.Count -ne 5 -or $arguments[0] -cne '-NoProfile' -or $arguments[1] -cne '-File' -or
+                $arguments[3] -cne '-SanitizedModule') { throw 'Unexpected safe-child argument shape.' }
+            $canonical = Import-Module $arguments[4] -PassThru -ErrorAction Stop
+            if ($canonical.Path -cne $arguments[4] -or -not $canonical.ExportedFunctions.ContainsKey('Start-RSContainedProcess')) {
+                throw 'The exact canonical contained starter is unavailable.'
+            }
+            $starter = $canonical.ExportedFunctions['Start-RSContainedProcess']
+            $owned = & $starter -ProcessStartInfo $ProcessStartInfo -DelegateArtifactOperation:$DelegateArtifactOperation
+            $transferred = $false
+            try {
+                [ordered]@{ process=$owned.Id; exact_job=$owned.IsInContainmentJob; delegated=[bool]$DelegateArtifactOperation;
+                    no_window=$ProcessStartInfo.CreateNoWindow; stdout_redirected=$ProcessStartInfo.RedirectStandardOutput;
+                    stderr_redirected=$ProcessStartInfo.RedirectStandardError } |
+                    ConvertTo-Json -Compress | Set-Content -LiteralPath ([IO.Path]::ChangeExtension($arguments[2], '.launch.json')) -Encoding UTF8
+                $transferred = $true
+                return $owned
+            } finally {
+                if (-not $transferred) { $owned.Dispose() }
+            }
+        }
+        $child = Join-Path $TestDrive 'ConsoleFreeBuildObservation.ps1'
+        @'
+param([string]$SanitizedModule)
+Import-Module $SanitizedModule -ErrorAction Stop
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+// Fixture-local, read-only console/pipe observations: no shared PowerShell helper owns these APIs.
+// Production launch/containment still comes from the canonical module; this type never creates UI or a process.
+public static class BackgroundBuildConsoleObservation {
+    [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+    [DllImport("kernel32.dll", SetLastError=true)] public static extern uint GetConsoleProcessList(uint[] ids, uint count);
+    [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int id);
+    [DllImport("kernel32.dll")] public static extern uint GetFileType(IntPtr handle);
+}
+"@
+$ids = [uint32[]]::new(1)
+$consoleCount = [BackgroundBuildConsoleObservation]::GetConsoleProcessList($ids, 1)
+$consoleError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+[ordered]@{
+    process=$PID
+    parent=[RedSalamander.Tooling.KillOnCloseJob]::GetCurrentParentProcessId()
+    started_utc=(Get-Process -Id $PID).StartTime.ToUniversalTime().ToString('o')
+    console_window=[BackgroundBuildConsoleObservation]::GetConsoleWindow().ToInt64()
+    console_process_count=$consoleCount
+    console_query_error=$consoleError
+    stdout_type=[BackgroundBuildConsoleObservation]::GetFileType([BackgroundBuildConsoleObservation]::GetStdHandle(-11))
+    stderr_type=[BackgroundBuildConsoleObservation]::GetFileType([BackgroundBuildConsoleObservation]::GetStdHandle(-12))
+    any_job=[RedSalamander.Tooling.KillOnCloseJob]::IsCurrentProcessInJob()
+} | ConvertTo-Json -Compress | Write-Output
+Write-Output 'fixed-build-stdout'
+[Console]::Error.WriteLine('fixed-build-stderr')
+exit 17
+'@ | Set-Content -LiteralPath $child -Encoding UTF8
+        $rows = [Collections.Generic.List[object]]::new()
+        $exitCode = & $script:backgroundStreamingInvoke -FilePath (Get-Process -Id $PID).Path -Arguments @(
+            '-NoProfile','-File',$child,'-SanitizedModule',$script:backgroundSanitizedModule.Path
+        ) -WorkingDirectory $TestDrive -DelegateArtifactOperation -TimeoutMilliseconds 15000 -OutputLineCallback {
+            param($Line, $IsError)
+            $rows.Add([pscustomobject]@{ Line=$Line; IsError=$IsError })
+        }
+        $exitCode | Should Be 17
+        $global:LASTEXITCODE | Should Be 17
+        $launch = Get-Content -LiteralPath ([IO.Path]::ChangeExtension($child, '.launch.json')) -Raw | ConvertFrom-Json
+        $launch.delegated | Should Be $true
+        $launch.exact_job | Should Be $true
+        @($rows | Where-Object { $_.Line -ceq 'fixed-build-stdout' -and -not $_.IsError }).Count | Should Be 1
+        @($rows | Where-Object { $_.Line -ceq 'fixed-build-stderr' -and $_.IsError }).Count | Should Be 1
+        $observation = @($rows | Where-Object { $_.Line.StartsWith('{"process":') })
+        $observation.Count | Should Be 1
+        $facts = $observation[0].Line | ConvertFrom-Json
+        $facts.process | Should Be $launch.process
+        $facts.parent | Should Be $PID
+        [string]::IsNullOrWhiteSpace($facts.started_utc) | Should Be $false
+        $facts.console_window | Should Be 0
+        # CREATE_NO_WINDOW suppresses a console window/default Terminal UX, not the
+        # inbox console server association. Keep process-list facts diagnostic.
+        # https://github.com/microsoft/terminal/blob/main/doc/specs/%23492%20-%20Default%20Terminal/spec.md#inbox-console
+        Write-Host ('Background build child observation: ' + ($facts | ConvertTo-Json -Compress))
+        Write-Host ('Background build launch observation: ' + ($launch | ConvertTo-Json -Compress))
+        $facts.stdout_type | Should Be 3
+        $facts.stderr_type | Should Be 3
+        $facts.any_job | Should Be $true
     }
 }
