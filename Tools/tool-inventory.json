@@ -1125,14 +1125,16 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Validate specification information architecture and render derived inventories.",
-      "usage": "Run in documentation governance checks; pass -FailOnFindings to enforce the contract.",
+      "usage": "Validation uses -FailOnFindings -NoReports, retaining the same specification and test-inventory reconciliation without generating files. Default catalog generation remains available to compatible non-validation consumers; -PassThru returns the specification object in either mode.",
       "usedBy": [
         "Specification maintainers",
-        "repository validation workflows"
+        "repository validation workflows",
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Run-AllTests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
-        "Writes derived reports beneath .build/SpecInventory"
+        "Default catalog mode writes four derived reports beneath .build/SpecInventory; -NoReports performs no report writes and rejects explicit -OutputRoot"
       ],
       "outputs": [
         "Specification inventory JSON",
@@ -1142,7 +1144,9 @@
       ],
       "ownerSpec": "Specs/README.md",
       "tests": [
-        "Tools/Tests/SpecInformationArchitecture.Tests.ps1"
+        "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2749,7 +2753,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure.",
+      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure. Foreign-foreground refusal includes current, saved/current-original and boundary HWND/PID/thread/class identities with UTC capture times; unavailable diagnostics never authorize restoration.",
       "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest and Get-RSHostedStockPreparationRequest for pure policy selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. The project adapter opts eligible hosted native ARM64 entries into the wrapper's private stock preparation; paired studies retain the original fixture. Local preparation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
@@ -4922,7 +4926,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. File Operations bridge guards retain the shared new-file transfer route alongside managed and verification routes. Overlap guards enforce serial Copy/Move choices and reject stale concurrent consent. File Operations tick-spanning transfer fixture guards protect runtime budget publication, progress-gate ownership and cleanup order. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics. Physical alternate-volume acquisition refuses missing or unmarked roots without writing to them.",
+      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. File Operations bridge guards retain the shared new-file transfer route alongside managed and verification routes. Overlap guards enforce serial Copy/Move choices and reject stale concurrent consent. File Operations tick-spanning transfer fixture guards protect runtime budget publication, progress-gate ownership and cleanup order. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics. Physical alternate-volume acquisition refuses missing or unmarked roots without writing to them. Commands metadata observations retain privacy and same-captured-HWND comparison/diagnostics; defaulted clipboard setup gates a single product-copy attempt without content logging.",
       "usage": "Run through the current Tools Pester profile and Full; source guards complement native behavioral tests and do not replace them.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -4930,7 +4934,9 @@
       ],
       "prerequisites": [
         "PowerShell with Pester",
-        "Current repository sources"
+        "Current repository sources",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp"
       ],
       "sideEffects": [
         "Reads current repository sources; Pester framework artifacts stay in the test sandbox"

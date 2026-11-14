@@ -9453,6 +9453,67 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     }
 }
 
+// Admission/clipboard failure evidence needs only HWND identity metadata at a named boundary. Unlike
+// DesktopStateSnapshot, this adapter never samples cursor/input or observes events; unlike the existing
+// window descriptions it records PID/thread/class availability and capture time, without window titles.
+// Metadata can disappear between these read-only calls, so availability/errors remain explicit.
+struct CommandsWindowObservation
+{
+    HWND window         = nullptr;
+    DWORD process       = 0u;
+    DWORD thread        = 0u;
+    DWORD identityError = ERROR_SUCCESS;
+    DWORD classError    = ERROR_SUCCESS;
+    bool valid          = false;
+    bool classAvailable = false;
+    std::array<wchar_t, 256u> className{};
+    uint64_t utcFileTime100ns = 0u;
+    ULONGLONG monotonicMs     = 0u;
+};
+
+[[nodiscard]] CommandsWindowObservation CaptureCommandsWindowObservation(HWND window) noexcept
+{
+    CommandsWindowObservation result{};
+    result.window = window;
+    FILETIME utc{};
+    GetSystemTimePreciseAsFileTime(&utc);
+    result.utcFileTime100ns = (static_cast<uint64_t>(utc.dwHighDateTime) << 32u) | utc.dwLowDateTime;
+    result.monotonicMs      = GetTickCount64();
+    result.valid            = window && IsWindow(window) != FALSE;
+    if (! result.valid)
+    {
+        result.identityError = ERROR_INVALID_WINDOW_HANDLE;
+        result.classError    = ERROR_INVALID_WINDOW_HANDLE;
+        return result;
+    }
+    SetLastError(ERROR_SUCCESS);
+    result.thread = GetWindowThreadProcessId(window, &result.process);
+    if (result.thread == 0u)
+        result.identityError = GetLastError();
+    SetLastError(ERROR_SUCCESS);
+    result.classAvailable = GetClassNameW(window, result.className.data(), static_cast<int>(result.className.size())) > 0;
+    if (! result.classAvailable)
+        result.classError = GetLastError();
+    return result;
+}
+
+[[nodiscard]] std::wstring DescribeCommandsWindowObservation(const CommandsWindowObservation& value)
+{
+    return std::format(L"hwnd=0x{:X},pid={},thread={},valid={},identityAvailable={},identityError={},classAvailable={},classError={},class='{}',"
+                       L"utcFileTime100ns={},monotonicMs={}",
+                       reinterpret_cast<UINT_PTR>(value.window),
+                       value.process,
+                       value.thread,
+                       value.valid,
+                       value.thread != 0u,
+                       value.identityError,
+                       value.classAvailable,
+                       value.classError,
+                       value.classAvailable ? value.className.data() : L"<unavailable>",
+                       value.utcFileTime100ns,
+                       value.monotonicMs);
+}
+
 [[nodiscard]] bool PrepareMainWindowForIsolatedUiCase(HWND mainWindow, CaseState& state, std::wstring_view context) noexcept
 {
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
@@ -9480,17 +9541,19 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     DebugHideThemeCycleOverlay();
 
-    const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
-    const HWND inputWindow      = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
-    const HWND foregroundBefore = GetForegroundWindow();
+    const HWND rootWindow                                         = GetAncestor(mainWindow, GA_ROOT);
+    const HWND inputWindow                                        = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
+    const CommandsWindowObservation foregroundBeforeObservation   = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const CommandsWindowObservation expectedForegroundObservation = CaptureCommandsWindowObservation(inputWindow);
+    const HWND foregroundBefore                                   = foregroundBeforeObservation.window;
     DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics admission{};
-    const auto handoffStarted  = std::chrono::steady_clock::now();
-    const bool activated       = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow, false, &admission);
-    const auto handoffElapsed  = std::chrono::steady_clock::now() - handoffStarted;
-    DWORD foregroundProcess    = 0u;
-    const HWND foregroundAfter = GetForegroundWindow();
-    static_cast<void>(GetWindowThreadProcessId(foregroundAfter, &foregroundProcess));
-    if (foregroundBefore != inputWindow)
+    const auto handoffStarted                                  = std::chrono::steady_clock::now();
+    const bool activated                                       = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow, false, &admission);
+    const auto handoffElapsed                                  = std::chrono::steady_clock::now() - handoffStarted;
+    const CommandsWindowObservation foregroundAfterObservation = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const HWND foregroundAfter                                 = foregroundAfterObservation.window;
+    const DWORD foregroundProcess                              = foregroundAfterObservation.process;
+    if (foregroundBefore != inputWindow || ! activated || foregroundAfter != inputWindow)
     {
         Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={} stage={} error={} "
                           L"heldKey={} sent={} requestAccepted={}",
@@ -9505,6 +9568,11 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
                           admission.heldKey,
                           admission.sentInputCount,
                           admission.foregroundRequestAccepted));
+        Trace(std::format(L"Commands foreground observations: context={}; stage=before-admission [{}]; stage=after-admission [{}]; expected [{}].",
+                          context,
+                          DescribeCommandsWindowObservation(foregroundBeforeObservation),
+                          DescribeCommandsWindowObservation(foregroundAfterObservation),
+                          DescribeCommandsWindowObservation(expectedForegroundObservation)));
     }
     if (! activated || foregroundAfter != inputWindow)
     {
@@ -9640,7 +9708,24 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1000))),
                   std::format(L"Main folder view focus was not stable after input settling before {}.", context));
-    state.Require(GetForegroundWindow() == inputWindow, std::format(L"Main foreground ownership changed during input settling before {}.", context));
+    const CommandsWindowObservation settledForeground         = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const CommandsWindowObservation expectedSettledForeground = CaptureCommandsWindowObservation(inputWindow);
+    const bool foregroundOwned                                = settledForeground.window == inputWindow;
+    if (! state.failure.empty() || ! foregroundOwned)
+    {
+        Trace(std::format(L"Commands foreground observations: context={}; stage=before-admission [{}]; stage=after-admission [{}]; "
+                          L"stage=settled-validation [{}]; expected [{}].",
+                          context,
+                          DescribeCommandsWindowObservation(foregroundBeforeObservation),
+                          DescribeCommandsWindowObservation(foregroundAfterObservation),
+                          DescribeCommandsWindowObservation(settledForeground),
+                          DescribeCommandsWindowObservation(expectedSettledForeground)));
+    }
+    state.Require(foregroundOwned,
+                  std::format(L"Main foreground ownership changed during input settling before {}. stage=settled-validation; current [{}]; expected [{}].",
+                              context,
+                              DescribeCommandsWindowObservation(settledForeground),
+                              DescribeCommandsWindowObservation(expectedSettledForeground)));
     return state.failure.empty();
 }
 
@@ -11479,7 +11564,37 @@ struct ClipboardTextReadProbe final
     return clipText;
 }
 
-void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr) noexcept
+struct ClipboardSetupProbe final
+{
+    const wchar_t* stage = L"not-started";
+    DWORD error          = ERROR_SUCCESS;
+    bool cleared         = false;
+    bool quiet           = false;
+    DWORD sequenceBefore = 0u;
+    DWORD sequenceAfter  = 0u;
+};
+
+struct CommandsClipboardObservation
+{
+    DWORD sequence = 0u;
+    CommandsWindowObservation owner;
+    CommandsWindowObservation opener;
+};
+
+[[nodiscard]] CommandsClipboardObservation CaptureCommandsClipboardObservation() noexcept
+{
+    return {GetClipboardSequenceNumber(), CaptureCommandsWindowObservation(GetClipboardOwner()), CaptureCommandsWindowObservation(GetOpenClipboardWindow())};
+}
+
+[[nodiscard]] std::wstring DescribeCommandsClipboardObservation(const CommandsClipboardObservation& value)
+{
+    return std::format(L"sequence={}; owner [{}]; opener [{}]",
+                       value.sequence,
+                       DescribeCommandsWindowObservation(value.owner),
+                       DescribeCommandsWindowObservation(value.opener));
+}
+
+void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr, ClipboardSetupProbe* outProbe = nullptr) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -11488,11 +11603,28 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
         *outClearedAndQuiet = false;
     }
 
+    if (outProbe)
+    {
+        *outProbe                = {};
+        outProbe->sequenceBefore = GetClipboardSequenceNumber();
+    }
+    const auto recordSetup = [&](const wchar_t* stage, DWORD error, bool cleared, bool quiet) noexcept
+    {
+        if (outProbe)
+        {
+            outProbe->stage         = stage;
+            outProbe->error         = error;
+            outProbe->cleared       = cleared;
+            outProbe->quiet         = quiet;
+            outProbe->sequenceAfter = GetClipboardSequenceNumber();
+        }
+    };
     DxUi::DebugClearClipboardFallbackText();
 
     DWORD openError = ERROR_SUCCESS;
     if (! OpenClipboardForSelfTest(ownerWindow, SelfTest::Scale(3000ms), &openError))
     {
+        recordSetup(L"OpenClipboard", openError, false, false);
         Debug::Warning(std::format(L"Commands clipboard fixture could not open clipboard for clear (owner=0x{:X}, openWindow=0x{:X}, error={}, sequence={}).",
                                    reinterpret_cast<UINT_PTR>(ownerWindow),
                                    reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
@@ -11505,7 +11637,8 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
     DWORD clearError = ERROR_SUCCESS;
     {
         const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-        cleared                   = EmptyClipboard();
+        SetLastError(ERROR_SUCCESS);
+        cleared = EmptyClipboard();
         if (cleared == FALSE)
         {
             clearError = GetLastError(); // Diagnostic only; EmptyClipboard's return value controls setup.
@@ -11513,6 +11646,7 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
     }
     if (cleared == FALSE)
     {
+        recordSetup(L"EmptyClipboard", clearError, false, false);
         Debug::Warning(std::format(L"Commands clipboard fixture could not empty clipboard (owner=0x{:X}, openWindow=0x{:X}, error={}, sequence={}).",
                                    reinterpret_cast<UINT_PTR>(ownerWindow),
                                    reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
@@ -11522,12 +11656,14 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
     }
     if (! WaitForClipboardQuietForSelfTest(ownerWindow))
     {
+        recordSetup(L"quiet-point", ERROR_SUCCESS, true, false);
         Debug::Warning(std::format(L"Commands clipboard fixture did not reach a quiet point after clearing (owner=0x{:X}, openWindow=0x{:X}, sequence={}).",
                                    reinterpret_cast<UINT_PTR>(ownerWindow),
                                    reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
                                    GetClipboardSequenceNumber()));
         return;
     }
+    recordSetup(L"cleared-and-quiet", ERROR_SUCCESS, true, true);
     if (outClearedAndQuiet)
     {
         *outClearedAndQuiet = true;

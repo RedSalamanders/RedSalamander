@@ -21,6 +21,31 @@ function New-RSReleasePolicyTestRoot {
 }
 
 Describe 'Project CI engine path resolution' {
+    It 'requests report-free specification validation in the actual Static phase' {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $staticBranch=@($ast.FindAll({param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match "^if \(\`$Phase -eq 'Static'\)"
+        },$true))
+        $staticBranch.Count | Should Be 1
+        $root=New-RSReleasePolicyTestRoot
+        $EngineRoot=Join-Path $root 'engine'
+        [void][IO.Directory]::CreateDirectory((Join-Path $EngineRoot 'Tools'))
+        [IO.File]::WriteAllText((Join-Path $EngineRoot 'Tools/Test-Workflows.ps1'),'param($Root)')
+        $context=@{};$Base='fixture';$Phase='Static'
+        $calls=[Collections.Generic.List[object]]::new()
+        function Test-CiProjectConfiguration {param($Context)}
+        function Resolve-CiCommit {param($Root,$Base) return $Base}
+        function Run {param($Path,$Arguments) $calls.Add([pscustomobject]@{Path=$Path;Arguments=@($Arguments)})}
+        $before=$env:CI_NATIVE_BUILDS_DISABLED
+        try { & ([scriptblock]::Create($staticBranch[0].Extent.Text)) }
+        finally { $env:CI_NATIVE_BUILDS_DISABLED=$before }
+        $spec=@($calls|Where-Object Path -ceq 'Tools/Get-SpecInventory.ps1')
+        $spec.Count | Should Be 1
+        ($spec[0].Arguments -join ',') | Should Be '-FailOnFindings,-NoReports'
+    }
+
     It 'resolves relative engine paths from the PowerShell filesystem location and preserves absolute paths' {
         $scratch = New-RSReleasePolicyTestRoot
         $psLocation = Join-Path $scratch 'powershell'

@@ -768,6 +768,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   foreground window and native focus only while the fixture owns foreground (or verifies an
   already restored original), and is joined before the retained desktop handle closes. Setup or retirement
   failure fails qualification; a setup witness alone does not prove screenshot or input coverage.
+  A foreign-foreground refusal captures current, saved/current-original and owned-boundary
+  HWND/PID/thread/class identities with UTC capture times at the rejection boundary, without
+  window titles. Diagnostic enrichment is best-effort and never changes the refusal,
+  restoration authority, input policy or deadlines. Fatal diagnostic exceptions are not
+  suppressed and follow the existing owner-thread propagation.
   Startup cancellation never waits on an in-flight window API: the worker checks it before each
   subsequent activation step and readiness, while the original API may still complete. A ten-second
   worker-join threshold records a failure, but the mutex-owning caller stays inside the fixture
@@ -890,6 +895,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   partial candidates.
 - A broad command-dispatch smoke case MUST NOT invoke commands whose contract performs a whole-runtime reload from durable or machine-local settings, such as `cmd/app/rereadAssociations`, or begins provider/OS lifecycle preparation before user confirmation, such as `cmd/pane/disconnect`; those commands require dedicated deterministic cases. After a smoke-dispatched command can alter navigation or presentation state, the smoke fixture MUST restore its in-memory settings snapshot, both pane providers and paths, and each pane's live display mode, sort key/direction, and visibility options, then prove both current-folder enumerations have settled before dispatching the next command. Restoring only the settings object does not reapply already-mutated `FolderView` state, and matching path text alone is not quiescence evidence.
 - A Commands case that asserts navigation-shell stability after changing a pane provider/path or focus MUST pump pending messages and observe a bounded quiet baseline across repeated samples before capturing refresh/path/focus counters. A single matching snapshot is not sufficient because queued provider and focus notifications can invalidate it immediately after capture. The Refresh-shell fixture captures its protected counters from the final quiet sample and dispatches Refresh immediately; it must not insert another focus helper/message pump between baseline capture and the command. Timeout diagnostics for this fixture and drive-menu focus restoration are formatted after the wait so their state describes the observed result.
+- The drive-menu navigation-shell case compares copied live provider drive roots, order and value-presence facts before opening, in the full popup snapshot and after dismissal. It does not require a host to expose two drives or compare changing free-space text. A separate exactly-two-row, display-only fixture exercises the actual ContextMenu renderer with different value widths and requires nonempty shared value-column boundaries within 0.5 DIP. It creates no drive or volume and dispatches no navigation. The live menu's owner, ordering, bitmap, dismissal, shell and focus assertions remain mandatory.
+- Commands post-settle foreground diagnostics compare and describe the same captured HWND. The narrow observation adapter records HWND/PID/thread/class, explicit unavailable metadata/errors, UTC FILETIME in 100 ns units and monotonic tick without cursor, physical-input or title sampling. These sequential observations are not atomic ownership proof. A later reacquired HWND/PID cannot identify the owner at an earlier failure. The source-contract guard in `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` preserves this privacy boundary and unchanged admission/refusal behavior.
 - The inspection-selection reentry fixture MUST establish `Selected` for a current
   visit after forcing a new same-folder refresh, immediately before installing its
   reentrant clear callback. Cached matching rows or an earlier successful settlement
@@ -1711,6 +1718,12 @@ the same synchronous reporter and counter path as the pointer overload.
   Setup failure remains a failed test. Confirm the settled selected grid row
   and focus before copying; retain owner, open-window, sequence and focus
   diagnostics without retrying the product operation or relaxing TSV assertions.
+- Batch Rename preview-copy setup uses the defaulted `ClipboardSetupProbe` output of
+  `ClearClipboardContents` to require successful clear and quiet before one product-copy
+  attempt. Metadata records setup stage/error, sequence and owner/opener identities;
+  Boolean command failure is not attributed to a stale Win32 error. Failure stops dependent
+  copy/read actions. Readback reports system/fallback stage, equality and character counts
+  without contents; this does not add a system-read requirement to legacy fallback policy.
 - `cmd_preferences_dialog_viewers_copy_follows_reordered_columns` must likewise
   require successful clear/quiet setup and recheck the selected mapping and grid
   focus after setup message pumping, before its single product copy attempt.
@@ -2638,6 +2651,16 @@ The analysis-visibility, exact lifecycle state, no-activation and complete-layer
 DIP subset of the actual work area for a deterministic small-desktop control; it never changes display settings.
 This keeps the required analysis panel representable at the current DPI. The real work area still bounds the fixture.
 Capture failures record their API stage and actual witness/frame bounds; fresh child failures record the exit code.
+
+The ViewerSpace disposal-close capacity fixture first holds only the retired model until a fresh
+display generation, layout and presented generation publish. It then holds layout callbacks and
+completes one resize publication to establish exactly two retained disposal owners. Preparation,
+cancellation and pre-Close barriers require stable published generations, exact charged bytes and
+no hold completion or expiry. `ViewerSpacePerfDebugSnapshot.refreshDisposeBytes` observes submitted
+and awaiting-submission disposal storage separately from pending `layoutCancellationOwnedBytes`.
+The existing 30-second hold fail-safe, 100 ms Close budget and callback/device lifetime assertions
+remain unchanged. Failed capacity setup or any hold expiry invalidates the Close timing; see
+`Specs/Plugins/Plugins_ViewerSpace.md` for the hook and accounting contract.
 
 Known layered fixtures SHOULD supply `WindowScreenshotColorProbe` witnesses for their distinct
 render layers. Probe rectangles use client pixels mapped against the captured extended-frame bounds;

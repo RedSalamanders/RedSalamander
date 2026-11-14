@@ -89,8 +89,8 @@ Describe 'Actual affected build selection and source barrier' {
         $repoRoot=Join-Path $TestDrive 'compiler-free-recording'
         [void][IO.Directory]::CreateDirectory((Join-Path $repoRoot 'Tools'))
         $recording=@'
-param([switch]$FailOnFindings,[string]$Format)
-[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'calls.txt'),$MyInvocation.MyCommand.Name+'|'+$FailOnFindings+'|'+$Format+"`n")
+param([switch]$FailOnFindings,[string]$Format,[switch]$NoReports)
+[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'calls.txt'),$MyInvocation.MyCommand.Name+'|'+$FailOnFindings+'|'+$Format+'|'+$NoReports+"`n")
 if(Test-Path (Join-Path $PSScriptRoot ($MyInvocation.MyCommand.Name+'.fail'))){$global:LASTEXITCODE=9}else{$global:LASTEXITCODE=0}
 '@
         foreach($name in @('Test-Changelog.ps1','Get-ToolInventory.ps1','Get-SpecInventory.ps1')) {
@@ -99,7 +99,7 @@ if(Test-Path (Join-Path $PSScriptRoot ($MyInvocation.MyCommand.Name+'.fail'))){$
         . ([scriptblock]::Create($script:actualCompilerFreeChecks))
         Invoke-RSRunnerCompilerFreeChecks
         $calls=@(Get-Content (Join-Path $repoRoot 'Tools/calls.txt'))
-        ($calls -join ',') | Should Be 'Test-Changelog.ps1|False|,Get-ToolInventory.ps1|True|Json,Get-SpecInventory.ps1|True|'
+        ($calls -join ',') | Should Be 'Test-Changelog.ps1|False||False,Get-ToolInventory.ps1|True|Json|False,Get-SpecInventory.ps1|True||True'
         [IO.File]::WriteAllText((Join-Path $repoRoot 'Tools/Test-Changelog.ps1.fail'),'fail')
         $attempt=Invoke-RSTestBlock {Invoke-RSRunnerCompilerFreeChecks}
         $attempt.Succeeded | Should Be $false

@@ -520,6 +520,80 @@ Describe 'Hosted foreground chord role policy' {
 }
 
 Describe 'Hosted boundary return policy' {
+    BeforeEach {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        if (-not ('RedSalamander.Testing.HostedIdentityDiagnosticControl' -as [type])) {
+            # Managed-only observers: no windows, desktop queries, activation or input.
+            Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+namespace RedSalamander.Testing {
+    public static class HostedIdentityDiagnosticControl {
+        public static readonly List<long> Seen = new List<long>();
+        public static Func<IntPtr, string> Recorder { get { return Observe; } }
+        public static Func<IntPtr, string> Unavailable { get { return Fail; } }
+        public static Func<IntPtr, string> Fatal { get { return FailFatally; } }
+        private static string Observe(IntPtr window) {
+            Seen.Add(window.ToInt64());
+            return "observed-hwnd=0x" + window.ToInt64().ToString("X");
+        }
+        private static string Fail(IntPtr window) {
+            Seen.Add(window.ToInt64());
+            throw new InvalidOperationException("seeded private diagnostic text");
+        }
+        private static string FailFatally(IntPtr window) { throw new OutOfMemoryException("seeded fatal control"); }
+    }
+}
+'@
+        }
+        [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Seen.Clear()
+    }
+    It 'formats window identities without native calls or title/content fields' {
+        $native = 'RedSalamander.Testing.HostedDesktopNative' -as [type]
+        $format = $native.GetMethod('FormatWindowIdentity', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $captured = [DateTimeOffset]::Parse('2026-11-14T00:00:00+00:00', [Globalization.CultureInfo]::InvariantCulture)
+        $identity = $format.Invoke($null, [object[]]@([IntPtr]0x123, [uint32]12, [uint32]34, "Example`r`nClass", $true, $captured))
+        $identity | Should Match 'hwnd=0x123; thread=12; pid=34; classKnown=True; class="Example\\r\\nClass"; capturedUtc=2026-11-14T00:00:00.0000000\+00:00'
+        $identity | Should Not Match 'title|clipboard|\r|\n'
+    }
+    It 'retains distinct immediate identities and the saved original in the actual refusal builder' {
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $refuse = $boundary.GetMethod('ForeignForegroundRefusal', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $failure = $refuse.Invoke($null, [object[]]@([IntPtr]0x22, [IntPtr]0x11, [IntPtr]0x33, 'saved-original-identity', [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Recorder))
+        ($failure -is [InvalidOperationException]) | Should Be $true
+        $failure.Message.StartsWith('A foreign foreground change must not be replaced by the hosted fixture.') | Should Be $true
+        $failure.Message | Should Match 'capturedUtc=\d{4}-\d{2}-\d{2}T'
+        $failure.Message | Should Match 'current=\{observed-hwnd=0x22\}; originalAtCapture=\{saved-original-identity\}; originalNow=\{observed-hwnd=0x11\}; boundary=\{observed-hwnd=0x33\}'
+        ([RedSalamander.Testing.HostedIdentityDiagnosticControl]::Seen -join ',') | Should Be '34,17,51'
+    }
+    It 'keeps the safety refusal when diagnostic capture fails and omits private exception messages' {
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $flags = [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $capture = $boundary.GetMethod('CaptureIdentityForDiagnostics', $flags)
+        $saved = $capture.Invoke($null, [object[]]@([IntPtr]0x11, [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Unavailable))
+        $failure = $boundary.GetMethod('ForeignForegroundRefusal', $flags).Invoke($null, [object[]]@([IntPtr]0x22, [IntPtr]0x11, [IntPtr]0x33, $saved, [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Unavailable))
+        ($failure -is [InvalidOperationException]) | Should Be $true
+        $failure.Message.StartsWith('A foreign foreground change must not be replaced by the hosted fixture.') | Should Be $true
+        $failure.Message | Should Match 'current=\{hwnd=0x22; capturedUtc=.*unavailable=InvalidOperationException\}'
+        $failure.Message | Should Not Match 'seeded private diagnostic text'
+        ([RedSalamander.Testing.HostedIdentityDiagnosticControl]::Seen -join ',') | Should Be '17,34,17,51'
+    }
+    It 'does not swallow a fatal CLR diagnostic failure' {
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $refuse = $boundary.GetMethod('ForeignForegroundRefusal', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $caught = $null
+        try { [void]$refuse.Invoke($null, [object[]]@([IntPtr]0x22, [IntPtr]0x11, [IntPtr]0x33, 'saved', [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Fatal)) }
+        catch [System.Management.Automation.MethodInvocationException] { $caught = $_.Exception.GetBaseException() }
+        ($caught -is [OutOfMemoryException]) | Should Be $true
+    }
+    It 'uses the identity builder only on the unchanged foreign foreground refusal branch' {
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Raw
+        $source | Should Match 'if \(current != original\)\s+throw ForeignForegroundRefusal\(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity\);'
+        $start = $source.IndexOf('internal static string DescribeWindowIdentity(')
+        $end = $source.IndexOf('[DllImport', $start)
+        $observation = $source.Substring($start, $end - $start)
+        $observation | Should Not Match 'SetForegroundWindow|SetFocus|SendInput|GetWindowText|Sleep|Kill|CloseWindow'
+    }
     It 'waits only for null or owned foreground before the existing deadline' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
         $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)

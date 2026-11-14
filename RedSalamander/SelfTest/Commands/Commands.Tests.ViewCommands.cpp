@@ -24670,66 +24670,145 @@ struct FolderViewDummyPluginHandles
     const std::wstring previousHoldValue = hadPreviousHold ? std::wstring(previousHold.data(), previousHoldChars) : std::wstring{};
     auto restoreHold                     = wil::scope_exit([&]() noexcept
     { SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", hadPreviousHold ? previousHoldValue.c_str() : nullptr); });
-    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", L"1");
+    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", L"model-only");
     const std::uintmax_t metricScan = FolderViewPerfMetricScanOffset();
 
+    const auto disposalDiagnostic = [metricScan](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot)
+    {
+        return std::format(L"display={}, layout={}, presented={}, owners={}, bytes={}, dirty={}, building={}, canceled={}, canceledBytes={}, "
+                           L"modelHeld={}, layoutHeld={}, modelCompleted={}, layoutCompleted={}, modelExpired={}, layoutExpired={}.",
+                           snapshot.displayGeneration,
+                           snapshot.layoutGeneration,
+                           snapshot.presentedLayoutGeneration,
+                           snapshot.refreshDisposePending,
+                           snapshot.refreshDisposeBytes,
+                           snapshot.layoutDirty,
+                           snapshot.layoutBuildActive,
+                           snapshot.layoutCancellationPending,
+                           snapshot.layoutCancellationOwnedBytes,
+                           FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_completed", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_expired", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_expired", metricScan));
+    };
+    const auto modelHoldIntact = [metricScan]() noexcept
+    {
+        return FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan) == 1u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_completed", metricScan) == 0u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_expired", metricScan) == 0u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_expired", metricScan) == 0u;
+    };
+
+    // Let incidental canceled layout candidates finish while retaining the old model.
+    // Holding every callback here can fill both slots before the fresh map publishes.
     SendMessageW(probe.hwnd, WM_COMMAND, MAKEWPARAM(40001u, 0u), 0);
     WndMsg::ViewerSpacePerfDebugSnapshot refreshed{};
-    state.Require(WaitForViewerSpacePerfSnapshot(probe.hwnd,
-                                                 refreshed,
-                                                 [before](const auto& snapshot) noexcept
+    const bool refreshedPublished = WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                                   refreshed,
+                                                                   [before, &modelHoldIntact, metricScan](const auto& snapshot) noexcept
     {
-        return snapshot.displayGeneration != before.displayGeneration && snapshot.refreshDisposePending == 2u &&
-               snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && ! snapshot.layoutDirty && ! snapshot.layoutBuildActive;
+        return snapshot.displayGeneration != before.displayGeneration && snapshot.layoutGeneration > before.layoutGeneration &&
+               snapshot.presentedLayoutGeneration == snapshot.layoutGeneration && snapshot.hasPublishedPositiveGeometry &&
+               snapshot.refreshDisposePending == 1u && snapshot.refreshDisposeBytes > 0u && snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done &&
+               ! snapshot.layoutDirty && ! snapshot.layoutBuildActive && ! snapshot.layoutCancellationPending && modelHoldIntact() &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) == 0u;
     },
-                                                 SelfTest::Scale(20000ms)),
-                  L"ViewerSpace did not publish the refreshed map with one model and one layout disposal held.");
-    const auto heldDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while ((FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan) == 0u ||
-            FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) == 0u) &&
-           std::chrono::steady_clock::now() < heldDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan) > 0u &&
-                      FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) > 0u,
-                  L"One model and one layout disposal callback were not held before closing.");
+                                                                   SelfTest::Scale(20000ms));
+    state.Require(refreshedPublished,
+                  std::format(L"ViewerSpace did not publish the refreshed map with only the model disposal held. {}", disposalDiagnostic(refreshed)));
     if (! state.failure.empty())
     {
         return false;
     }
 
-    // A resize starts a small preparation turn. Cancel it while both disposal slots
-    // are occupied; later resizes must reuse the one pending cancellation slot.
     RECT originalWindow{};
     state.Require(GetWindowRect(probe.hwnd, &originalWindow) != FALSE, L"Could not size the owned disposal-close test window.");
-    const int originalWidth  = originalWindow.right - originalWindow.left;
-    const int originalHeight = originalWindow.bottom - originalWindow.top;
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const int originalWidth                  = originalWindow.right - originalWindow.left;
+    const int originalHeight                 = originalWindow.bottom - originalWindow.top;
+    const uint64_t layoutCompletedBeforeHold = FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan);
+    const auto bothHoldsIntact               = [metricScan, layoutCompletedBeforeHold, &modelHoldIntact]() noexcept
+    {
+        return modelHoldIntact() && FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) == 1u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan) == layoutCompletedBeforeHold;
+    };
+
+    // Establish the second owner from a completed resize of the fresh published map,
+    // rather than from an incidental canceled refresh candidate.
+    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", L"1");
+    SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 12, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    WndMsg::ViewerSpacePerfDebugSnapshot held{};
+    const bool bothOwnersHeld = WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                               held,
+                                                               [refreshed, &bothHoldsIntact](const auto& snapshot) noexcept
+    {
+        return snapshot.displayGeneration == refreshed.displayGeneration && snapshot.layoutGeneration > refreshed.layoutGeneration &&
+               snapshot.presentedLayoutGeneration == snapshot.layoutGeneration && snapshot.hasPublishedPositiveGeometry && ! snapshot.layoutDirty &&
+               ! snapshot.layoutBuildActive && ! snapshot.layoutCancellationPending && snapshot.refreshDisposePending == 2u &&
+               snapshot.refreshDisposeBytes > refreshed.refreshDisposeBytes && bothHoldsIntact();
+    },
+                                                               SelfTest::Scale(5000ms));
+    state.Require(bothOwnersHeld,
+                  std::format(L"ViewerSpace did not hold one model and one completed-layout disposal before cancellation. {}", disposalDiagnostic(held)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto capacityIntact = [held, &bothHoldsIntact](const auto& snapshot) noexcept
+    {
+        return snapshot.displayGeneration == held.displayGeneration && snapshot.layoutGeneration == held.layoutGeneration &&
+               snapshot.presentedLayoutGeneration == held.presentedLayoutGeneration && snapshot.refreshDisposePending == 2u &&
+               snapshot.refreshDisposeBytes == held.refreshDisposeBytes && bothHoldsIntact();
+    };
+    // A resize starts a small preparation turn. Cancel it while both disposal slots
+    // are occupied; later resizes must reuse the one pending cancellation slot.
     SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugSetLayoutWorkUnits, 1u, 0u);
     SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 24, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     WndMsg::ViewerSpacePerfDebugSnapshot preparing{};
-    state.Require(WaitForViewerSpacePerfSnapshot(
-                      probe.hwnd, preparing, [](const auto& snapshot) noexcept { return snapshot.layoutBuildActive; }, SelfTest::Scale(5000ms)),
-                  L"ViewerSpace did not begin the bounded resize preparation.");
+    const bool preparationStarted = WaitForViewerSpacePerfSnapshot(probe.hwnd, preparing, [&capacityIntact](const auto& snapshot) noexcept {
+        return snapshot.layoutBuildActive && capacityIntact(snapshot);
+    }, SelfTest::Scale(5000ms));
+    state.Require(preparationStarted,
+                  std::format(L"ViewerSpace did not begin the bounded resize preparation with both owners held. {}", disposalDiagnostic(preparing)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 48, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 72, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     WndMsg::ViewerSpacePerfDebugSnapshot canceled{};
-    state.Require(WaitForViewerSpacePerfSnapshot(probe.hwnd,
-                                                 canceled,
-                                                 [](const auto& snapshot) noexcept
+    const bool cancellationRetained = WaitForViewerSpacePerfSnapshot(probe.hwnd, canceled, [&capacityIntact](const auto& snapshot) noexcept {
+        return snapshot.layoutCancellationPending && snapshot.layoutCancellationOwnedBytes > 0u && ! snapshot.layoutBuildActive && capacityIntact(snapshot);
+    }, SelfTest::Scale(5000ms));
+    state.Require(cancellationRetained,
+                  std::format(L"ViewerSpace did not retain exactly one charged canceled builder at disposal capacity. {}", disposalDiagnostic(canceled)));
+    if (! state.failure.empty())
     {
-        return snapshot.layoutCancellationPending && snapshot.layoutCancellationOwnedBytes > 0u && ! snapshot.layoutBuildActive &&
-               snapshot.refreshDisposePending == 2u;
-    },
-                                                 SelfTest::Scale(5000ms)),
-                  L"ViewerSpace did not retain exactly one charged canceled builder at disposal capacity.");
+        return false;
+    }
 
     // The next replacement defers at normal capacity; close has one final slot,
     // containing the active model, published names, and canceled preparation.
     SendMessageW(probe.hwnd, WM_COMMAND, MAKEWPARAM(40009u, 0u), 0);
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.refresh.start_deferred", metricScan) > 0u,
                   L"ViewerSpace did not defer a replacement when both normal disposal slots were occupied.");
+    WndMsg::ViewerSpacePerfDebugSnapshot closing{};
+    const bool closingSnapshotRead = SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&closing)) != FALSE;
+    state.Require(closingSnapshotRead && capacityIntact(closing) && closing.layoutCancellationPending && closing.layoutCancellationOwnedBytes > 0u &&
+                      ! closing.layoutBuildActive,
+                  std::format(L"ViewerSpace disposal capacity or charged cancellation changed before Close (snapshotRead={}). {}",
+                              closingSnapshotRead,
+                              disposalDiagnostic(closing)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     const auto closeStartedAt = std::chrono::steady_clock::now();
     const HRESULT closeHr     = probe.viewer->Close();
     const uint64_t closeUs    = Debug::Perf::ElapsedUs(closeStartedAt);
@@ -24742,6 +24821,11 @@ struct FolderViewDummyPluginHandles
                   L"Close must charge exactly one final renderer device to the bounded retirement owner.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.render.retired_device.release_us", metricScan) == 0u,
                   L"The final renderer device must remain owned while the actual disposal callbacks are held.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_expired", metricScan) == 0u &&
+                      FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_expired", metricScan) == 0u &&
+                      FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_completed", metricScan) == 0u &&
+                      FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan) == layoutCompletedBeforeHold,
+                  std::format(L"A disposal hold expired or completed before the explicit post-Close release. {}", disposalDiagnostic(closing)));
     probe.hwnd = nullptr;
     probe.viewer.reset();
 

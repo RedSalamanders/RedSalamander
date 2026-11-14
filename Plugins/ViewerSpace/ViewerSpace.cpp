@@ -3129,6 +3129,7 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->candidateModelBytes     = _workingModel ? _workingModel->AllocatedBytes() : 0u;
             snapshot->displayGeneration       = _displayGeneration;
             snapshot->refreshDisposePending   = static_cast<uint32_t>(std::min<size_t>(_deferredDisposalWorkers.size(), std::numeric_limits<uint32_t>::max()));
+            snapshot->refreshDisposeBytes     = _deferredDisposalBytes.load(std::memory_order_relaxed);
             snapshot->refreshDisposeMaxUs     = _deferredDisposalSubmitMaxUs.load(std::memory_order_relaxed);
             snapshot->retiredRendererDeviceCount       = RetiredRendererDeviceCount();
             snapshot->lastStaticCacheRecordUs          = _staticTreemapCache.lastRecordUs;
@@ -8806,8 +8807,13 @@ VOID CALLBACK ViewerSpace::DeferredDisposalCallback(PTP_CALLBACK_INSTANCE instan
     bool holdEntered              = false;
     for (;;)
     {
-        std::array<wchar_t, 2> hold{};
-        if (GetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", hold.data(), static_cast<DWORD>(hold.size())) == 0u)
+        std::array<wchar_t, 16> hold{};
+        const DWORD holdChars = GetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", hold.data(), static_cast<DWORD>(hold.size()));
+        // Only this explicit test mode lets layout callbacks finish during model replacement.
+        // All other nonempty values retain the existing all-callback hold behavior.
+        const bool modelOnly =
+            holdChars == static_cast<DWORD>(std::wstring_view(L"model-only").size()) && std::wstring_view(hold.data(), holdChars) == L"model-only";
+        if (holdChars == 0u || (modelOnly && layoutOnly))
         {
             break;
         }
@@ -8818,6 +8824,7 @@ VOID CALLBACK ViewerSpace::DeferredDisposalCallback(PTP_CALLBACK_INSTANCE instan
         }
         if (GetTickCount64() - holdStartedAt >= 30000u)
         {
+            Debug::Perf::EmitCounter(layoutOnly ? L"viewer.space.layout.dispose_hold_expired" : L"viewer.space.refresh.dispose_hold_expired");
             Debug::Warning(L"ViewerSpace test disposal hold expired; releasing retired storage.");
             break;
         }

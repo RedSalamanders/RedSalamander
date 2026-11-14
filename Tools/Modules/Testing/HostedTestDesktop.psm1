@@ -358,7 +358,31 @@ namespace RedSalamander.Testing {
                 }
             }
         }
-        private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+        internal static string CaptureIdentityForDiagnostics(IntPtr window, Func<IntPtr, string> observe) {
+            // Identity enrichment cannot replace an ownership refusal. Fatal CLR failures
+            // retain their fatal behavior; neither titles nor exception messages are logged.
+            try { return observe(window) ?? "unavailable"; }
+            catch (Exception error) when (!(error is OutOfMemoryException) && !(error is StackOverflowException) && !(error is AccessViolationException)) {
+                return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "hwnd=0x{0:X}; capturedUtc={1:o}; unavailable={2}", window.ToInt64(), DateTimeOffset.UtcNow, error.GetType().Name);
+            }
+        }
+        internal static InvalidOperationException ForeignForegroundRefusal(IntPtr current, IntPtr original, IntPtr boundary,
+            string originalAtCapture, Func<IntPtr, string> observe) {
+            var refusal = new InvalidOperationException("A foreign foreground change must not be replaced by the hosted fixture.");
+            try {
+                string details = String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    " capturedUtc={0:o}; current={{{1}}}; originalAtCapture={{{2}}}; originalNow={{{3}}}; boundary={{{4}}}",
+                    DateTimeOffset.UtcNow, CaptureIdentityForDiagnostics(current, observe), originalAtCapture ?? "unavailable",
+                    CaptureIdentityForDiagnostics(original, observe), CaptureIdentityForDiagnostics(boundary, observe));
+                return new InvalidOperationException(refusal.Message + details);
+            }
+            catch (Exception error) when (!(error is OutOfMemoryException) && !(error is StackOverflowException) && !(error is AccessViolationException)) {
+                return refusal;
+            }
+        }
+        private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus,
+            string originalAtCapture) {
             if (HostedDesktopNative.InputDesktopName() != "Default")
                 throw new InvalidOperationException("A foreign input-desktop change must not be replaced by the hosted fixture.");
             IntPtr current = GetForegroundWindow();
@@ -389,7 +413,7 @@ namespace RedSalamander.Testing {
             // A previously empty foreground is verified after retiring our HWND.
             if (original == IntPtr.Zero && current == handle) return;
             if (current != original)
-                throw new InvalidOperationException("A foreign foreground change must not be replaced by the hosted fixture.");
+                throw ForeignForegroundRefusal(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity);
             if (original != IntPtr.Zero) {
                 var timer = System.Diagnostics.Stopwatch.StartNew();
                 while (ReadFocus(originalThread).Focus != originalFocus) {
@@ -418,6 +442,7 @@ namespace RedSalamander.Testing {
                 IntPtr original = GetForegroundWindow();
                 uint originalProcess = 0;
                 uint originalThread = original == IntPtr.Zero ? 0 : GetWindowThreadProcessId(original, out originalProcess);
+                string originalAtCapture = CaptureIdentityForDiagnostics(original, HostedDesktopNative.DescribeWindowIdentity);
                 IntPtr originalFocus = original == IntPtr.Zero ? IntPtr.Zero : ReadFocus(originalThread).Focus;
                 if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before window creation.");
                 var window = CreateWindowExW(0x08040080, "STATIC", "RedSalamander hosted test boundary", 0x90000000,
@@ -458,7 +483,7 @@ namespace RedSalamander.Testing {
                     // failure, then propagate it together with any restoration failure.
                     } catch (Exception error) { actionFailure = error; }
                     finally {
-                        try { RestoreForeground(handle, original, originalThread, originalProcess, originalFocus); }
+                        try { RestoreForeground(handle, original, originalThread, originalProcess, originalFocus, originalAtCapture); }
                         catch (Exception error) { restoreFailure = error; }
                     }
                 }
@@ -624,6 +649,21 @@ namespace RedSalamander.Testing {
             if (foregroundThread != 0)
                 result.ForegroundDesktop = ObjectName(GetThreadDesktop(foregroundThread), out result.ForegroundDesktopError);
             return result;
+        }
+        internal static string FormatWindowIdentity(IntPtr window, uint thread, uint process, string className, bool classKnown,
+            DateTimeOffset capturedUtc) {
+            string safeClass = (className ?? "").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\"", "\\\"");
+            return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "hwnd=0x{0:X}; thread={1}; pid={2}; classKnown={3}; class=\"{4}\"; capturedUtc={5:o}",
+                window.ToInt64(), thread, process, classKnown, safeClass, capturedUtc);
+        }
+        internal static string DescribeWindowIdentity(IntPtr window) {
+            DateTimeOffset capturedUtc = DateTimeOffset.UtcNow;
+            uint process = 0;
+            uint thread = window == IntPtr.Zero ? 0 : GetWindowThreadProcessId(window, out process);
+            var className = new StringBuilder(256);
+            bool classKnown = window != IntPtr.Zero && GetClassNameW(window, className, className.Capacity) > 0;
+            return FormatWindowIdentity(window, thread, process, className.ToString(), classKnown, capturedUtc);
         }
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -1138,6 +1178,8 @@ function Invoke-RSWithHostedDefaultDesktop {
         With the project adapter's approved ARM64 opt-in, prepares only the three identified
         stock foreground surfaces before creating the boundary. Other windows, processes,
         hooks and foreground-lock settings are unchanged.
+        Foreign-foreground refusal reports current, saved/original and boundary window
+        identities with capture times. Diagnostic failure never grants restoration authority.
     .EXAMPLE
         Invoke-RSWithHostedDefaultDesktop -Action { Invoke-OwnedNativeTestEntry }
     #>

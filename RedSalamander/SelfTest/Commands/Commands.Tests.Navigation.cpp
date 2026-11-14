@@ -4245,11 +4245,62 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
+    struct DriveRowSnapshot
+    {
+        std::wstring root;
+        bool hasValue                                  = false;
+        bool operator==(const DriveRowSnapshot&) const = default;
+    };
+    const wil::com_ptr<IFileSystem> fileSystem = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
+    wil::com_ptr<INavigationMenu> providerMenu;
+    const HRESULT menuInterfaceHr = fileSystem ? fileSystem->QueryInterface(__uuidof(INavigationMenu), providerMenu.put_void()) : E_POINTER;
+    if (! state.Require(SUCCEEDED(menuInterfaceHr) && providerMenu,
+                        std::format(L"Live drive-menu provider snapshot unavailable. hr=0x{:08X}.", static_cast<unsigned long>(menuInterfaceHr))))
+        return false;
+    // GetMenuItems returns provider-owned storage that the next call rebuilds. Retain only copied
+    // drive identities and value PRESENCE; changing free-space values are not a parity contract.
+    const auto copyProviderDriveRows = [&](std::vector<DriveRowSnapshot>& rows) noexcept -> HRESULT
+    {
+        rows.clear();
+        const NavigationMenuItem* items = nullptr;
+        unsigned int count              = 0u;
+        const HRESULT hr                = providerMenu->GetMenuItems(&items, &count);
+        if (FAILED(hr))
+            return hr;
+        if (! items && count != 0u)
+            return E_UNEXPECTED;
+        for (unsigned int index = 0u; index < count; ++index)
+        {
+            const NavigationMenuItem& item = items[index];
+            const std::wstring_view path   = item.path ? item.path : L"";
+            if ((item.flags & NAV_MENU_ITEM_FLAG_SEPARATOR) != 0 || path.size() != 3u || path[1] != L':' || path[2] != L'\\' ||
+                ! ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z')))
+                continue;
+            const std::wstring_view label = item.label ? item.label : L"";
+            const size_t tab              = label.find(L'\t');
+            const bool hasValue           = tab != std::wstring_view::npos && label.find_first_not_of(L" \t\r\n", tab + 1u) != std::wstring_view::npos;
+            std::wstring root(path);
+            root[0] = static_cast<wchar_t>(std::towupper(root[0]));
+            rows.push_back({std::move(root), hasValue});
+        }
+        return S_OK;
+    };
+    std::vector<DriveRowSnapshot> expectedDriveRows;
+    const HRESULT beforeMenuHr = copyProviderDriveRows(expectedDriveRows);
+    if (! state.Require(SUCCEEDED(beforeMenuHr) && ! expectedDriveRows.empty(),
+                        std::format(L"Capture the live provider drive rows before opening its menu. hr=0x{:08X}, rows={}.",
+                                    static_cast<unsigned long>(beforeMenuHr),
+                                    expectedDriveRows.size())))
+        return false;
+
     struct DriveMenuInspectionResult
     {
-        bool workerStarted                 = true;
-        bool sessionObserved               = false;
-        bool popupOwnerValid               = true;
+        bool workerStarted          = true;
+        bool sessionObserved        = false;
+        bool popupOwnerValid        = true;
+        bool popupSnapshotAvailable = false;
+        bool driveLayoutsAvailable  = true;
+        std::vector<DriveRowSnapshot> driveRows;
         bool sessionClosed                 = false;
         bool goToEntryPresent              = false;
         bool goToEntryHasSubmenu           = false;
@@ -4307,13 +4358,11 @@ struct OwnedMenuSessionEscapeResult
                         std::optional<size_t> connectionsIndex;
                         std::optional<size_t> firstDriveIndex;
                         std::optional<size_t> lastNamedEntryBeforeFirstDrive;
-                        for (size_t itemIndex = 0u; itemIndex < 32u; ++itemIndex)
+                        DxUi::ContextMenuPopupDebugState popupSnapshot{};
+                        menuResult.popupSnapshotAvailable = DxUi::DebugGetContextMenuPopupState(popup, popupSnapshot);
+                        for (size_t itemIndex = 0u; itemIndex < popupSnapshot.itemTexts.size(); ++itemIndex)
                         {
-                            std::wstring itemText;
-                            if (! DxUi::DebugGetContextMenuPopupItemText(popup, itemIndex, itemText))
-                            {
-                                break;
-                            }
+                            const std::wstring& itemText = popupSnapshot.itemTexts[itemIndex];
 
                             if (! itemText.empty())
                             {
@@ -4351,6 +4400,11 @@ struct OwnedMenuSessionEscapeResult
                             if (looksLikeDriveMenuLabel(itemText))
                             {
                                 ++menuResult.driveRowCount;
+                                std::wstring driveRoot{static_cast<wchar_t>(std::towupper(itemText[0])), L':', L'\\'};
+                                const bool hasValue = itemIndex < popupSnapshot.itemAcceleratorTexts.size() &&
+                                                      popupSnapshot.itemAcceleratorTexts[itemIndex].find_first_not_of(L" \t\r\n") != std::wstring::npos;
+                                menuResult.driveRows.push_back({std::move(driveRoot), hasValue});
+                                menuResult.driveLayoutsAvailable = menuResult.driveLayoutsAvailable && hasLayout;
                                 if (! firstDriveIndex.has_value())
                                 {
                                     firstDriveIndex = itemIndex;
@@ -4450,6 +4504,26 @@ struct OwnedMenuSessionEscapeResult
         menuResult.workerStarted = false;
     }
 
+    std::vector<DriveRowSnapshot> afterDriveRows;
+    const HRESULT afterMenuHr    = copyProviderDriveRows(afterDriveRows);
+    const bool enumerationStable = SUCCEEDED(afterMenuHr) && afterDriveRows == expectedDriveRows;
+    const size_t expectedValueRows =
+        static_cast<size_t>(std::ranges::count_if(expectedDriveRows, [](const DriveRowSnapshot& row) noexcept { return row.hasValue; }));
+    Trace(std::format(L"Drive menu enumeration parity: stable={}, beforeHr=0x{:08X}, afterHr=0x{:08X}, expectedRows={}, afterRows={}, observedRows={}, "
+                      L"expectedValueRows={}, observedValueRows={}; labels and changing size text omitted.",
+                      enumerationStable,
+                      static_cast<unsigned long>(beforeMenuHr),
+                      static_cast<unsigned long>(afterMenuHr),
+                      expectedDriveRows.size(),
+                      afterDriveRows.size(),
+                      menuResult.driveRows.size(),
+                      expectedValueRows,
+                      menuResult.driveValueRowCount));
+    state.Require(enumerationStable,
+                  std::format(L"Live provider drive-menu parity prerequisite failed: afterHr=0x{:08X}, snapshotChanged={}; "
+                              L"drive identities and size-field presence must stay stable during inspection.",
+                              static_cast<unsigned long>(afterMenuHr),
+                              SUCCEEDED(afterMenuHr) && afterDriveRows != expectedDriveRows));
     state.Require(menuResult.workerStarted, L"Failed to start the drive-menu closer thread.");
     state.Require(menuResult.sessionObserved, L"Open Left Drive Menu did not open a live DxUI popup or enter menu mode on the active pane.");
     state.Require(menuResult.popupOwnerValid, L"Open Left Drive Menu popup should stay owned by the active pane window hierarchy.");
@@ -4466,8 +4540,12 @@ struct OwnedMenuSessionEscapeResult
                   std::format(L"Navigation menu should place Go To before the drive list. Observed: {}", menuResult.observedOrder));
     state.Require(menuResult.goToLastEntryBeforeFirstDrive,
                   std::format(L"Drive menu should place Go To as the last named entry before the drive list. Observed: {}", menuResult.observedOrder));
-    state.Require(menuResult.driveRowCount >= 2u, L"Drive menu should expose multiple logical drive rows before bitmap-icon validation.");
-    state.Require(menuResult.driveValueRowCount >= 2u, L"Drive menu should expose multiple size rows so their right-aligned value column can be validated.");
+    state.Require(menuResult.popupSnapshotAvailable && menuResult.driveLayoutsAvailable,
+                  L"The live drive popup and every drive-row layout must be observable before parity validation.");
+    state.Require(menuResult.driveRows == expectedDriveRows && menuResult.driveRowCount == expectedDriveRows.size(),
+                  L"The live Navigation popup must preserve every provider drive identity and its size-field presence in order.");
+    state.Require(menuResult.driveValueRowCount == expectedValueRows,
+                  L"Every live provider size field must have a nonempty rendered value column, without assuming multiple available drives.");
     state.Require(menuResult.driveValueColumnAligned, L"Drive menu size rows should share one stable right-aligned value column.");
     state.Require(menuResult.sessionClosed, L"Open Left Drive Menu did not close after Escape dismissal.");
     if (! state.failure.empty())
@@ -4498,6 +4576,73 @@ struct OwnedMenuSessionEscapeResult
     }
 
     state.Require(GetFocus() == folderView, L"Drive menu dismissal should return focus to the active pane folder view.");
+    if (! state.failure.empty())
+        return false;
+
+    // This independent display-only fixture guarantees two unequal values even on a one-drive host.
+    // It exercises the same real ContextMenu renderer/probe, not provider enumeration or navigation.
+    {
+        std::array<DxUi::MenuFlyoutItem, 2u> fixtureItems{};
+        fixtureItems[0].text            = L"Fixture disk Alpha";
+        fixtureItems[0].acceleratorText = L"8 GB";
+        fixtureItems[0].commandId       = 100;
+        fixtureItems[1].text            = L"Fixture disk Beta";
+        fixtureItems[1].acceleratorText = L"123.45 TB";
+        fixtureItems[1].commandId       = 101;
+        struct FixtureCloseResult
+        {
+            bool closed = false;
+            std::optional<int> command;
+        };
+        const auto closed = std::make_shared<FixtureCloseResult>();
+        RECT navigationRect{};
+        if (! state.Require(GetWindowRect(navigationView, &navigationRect) != FALSE, L"Read the owned Navigation anchor for the two-row fixture."))
+            return false;
+        const POINT anchor{navigationRect.left, navigationRect.bottom};
+        const bool shown          = DxUi::ContextMenu::ShowAsync(mainWindow,
+                                                                 anchor,
+                                                                 fixtureItems,
+                                                                 MakeAppThemeDxPalette(g_folderWindow.GetTheme()),
+                                                                 [closed](std::optional<int> command) noexcept
+        {
+            closed->closed  = true;
+            closed->command = command;
+        });
+        const HWND popup          = shown ? FindVisibleOwnedNavigationDxUiContextMenuWindow(navigationView) : nullptr;
+        const auto dismissFixture = wil::scope_exit([&]() noexcept
+        {
+            if (! closed->closed && popup && IsWindow(popup) != FALSE)
+                SendMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+            PumpPendingMessages();
+        });
+        DxUi::ContextMenuPopupDebugState fixtureSnapshot{};
+        DxUi::ContextMenuPopupItemLayoutDebugState first{};
+        DxUi::ContextMenuPopupItemLayoutDebugState second{};
+        const bool observed = shown && popup && DxUi::DebugGetContextMenuPopupState(popup, fixtureSnapshot) &&
+                              fixtureSnapshot.itemTexts.size() == fixtureItems.size() &&
+                              fixtureSnapshot.itemAcceleratorTexts == std::vector<std::wstring>{L"8 GB", L"123.45 TB"} &&
+                              DxUi::DebugGetContextMenuPopupItemLayout(popup, 0u, first) && DxUi::DebugGetContextMenuPopupItemLayout(popup, 1u, second);
+        if (! state.Require(observed, L"The deterministic display fixture must expose exactly two rows with unequal size values and both layouts."))
+            return false;
+        Trace(std::format(L"Drive menu deterministic alignment: rows={}, firstLeft={}, firstRight={}, secondLeft={}, secondRight={}.",
+                          fixtureSnapshot.itemTexts.size(),
+                          first.acceleratorRectDip.left,
+                          first.acceleratorRectDip.right,
+                          second.acceleratorRectDip.left,
+                          second.acceleratorRectDip.right));
+        state.Require(first.acceleratorRectDip.right - first.acceleratorRectDip.left > 0.5f &&
+                          second.acceleratorRectDip.right - second.acceleratorRectDip.left > 0.5f &&
+                          std::fabs(first.acceleratorRectDip.left - second.acceleratorRectDip.left) <= 0.5f &&
+                          std::fabs(first.acceleratorRectDip.right - second.acceleratorRectDip.right) <= 0.5f,
+                      L"The two unequal fixture values must share nonempty left/right value-column boundaries within 0.5 DIP.");
+        SendMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+        PumpPendingMessages();
+        state.Require(closed->closed && ! closed->command.has_value() && IsWindow(popup) == FALSE,
+                      L"Escape must retire the two-row fixture without selecting a display-only command.");
+        if (! state.failure.empty())
+            return false;
+    }
+
     return state.failure.empty();
 }
 

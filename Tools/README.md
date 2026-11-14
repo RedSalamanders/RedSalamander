@@ -476,7 +476,7 @@ cost without invoking the C++ compiler.
 | Freeze and review an exact Ghostty candidate | `./Tools/New-GhosttyTerminalRuntimeCandidateReview.ps1` |
 | Validate a rederived Ghostty candidate overlay | `./Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` |
 | Inspect test coverage | `./Tools/Get-TestInventory.ps1` |
-| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings` |
+| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports` |
 | Validate this inventory | `./Tools/Get-ToolInventory.ps1 -FailOnFindings` |
 | Run raw cloc for solution directories | `./Tools/InvokeSolutionCloc.ps1` |
 | Review archived performance runs | `./Tools/Show-PerfRuns.ps1` |
@@ -503,7 +503,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Fold-Changelog.ps1` | Public changelog command | Folds pending fragments in the checkout it is given: the default branch's fold, normally through `Submit-ChangelogFold.ps1`, never part of a feature change; supports read-only -Check and -WhatIf preview. |
 | `GenerateDebugIcons.ps1` | Internal asset generator | Regenerates checked-in debug-badged icon resources. |
 | `Get-GhosttyTerminalRuntimeStatus.ps1` | Public read-only runtime status command | Validates the lock without network, observes official upstream/advisories, or freezes one explicit candidate; writes only below `.build`. |
-| `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and writes derived reports below `.build`. |
+| `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and test inventory. Validation uses `-NoReports`; default catalog generation retains four reports below `.build`. |
 | `Get-TerminalDependencyStatus.ps1` | Dormant generic lifecycle command | Explicit-lock validation and opt-in advisory checks for a reviewed future upgrade. |
 | `Get-TestInventory.ps1` | Public discovery command | Derives test registrations, projects, Pester cases, and run-plan coverage. |
 | `Get-ToolInventory.ps1` | Public governance command | Validates and renders `tool-inventory.json`. |

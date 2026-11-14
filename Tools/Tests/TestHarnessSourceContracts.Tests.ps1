@@ -181,6 +181,132 @@ Describe 'Product documentation capture fixtures' {
     }
 }
 
+Describe 'Commands boundary observation and clipboard source contracts' {
+    It 'keeps the narrow window observation metadata-only with explicit unavailable identity' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $capture = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] CommandsWindowObservation CaptureCommandsWindowObservation\(HWND window\) noexcept\s*\{.*?^\}')
+        $describe = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsWindowObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $capture.Success | Should Be $true
+        $describe.Success | Should Be $true
+        $capture.Value | Should Match 'result\.window\s*=\s*window;'
+        $capture.Value | Should Match 'GetWindowThreadProcessId\(window,\s*&result\.process\)'
+        $capture.Value | Should Match 'GetClassNameW\(window,\s*result\.className\.data\(\)'
+        $capture.Value | Should Match 'GetSystemTimePreciseAsFileTime\(&utc\)'
+        $capture.Value | Should Match 'result\.monotonicMs\s*=\s*GetTickCount64\(\)'
+        $capture.Value | Should Match '(?s)if \(! result\.valid\).*?result\.identityError\s*=\s*ERROR_INVALID_WINDOW_HANDLE;.*?result\.classError\s*=\s*ERROR_INVALID_WINDOW_HANDLE;.*?return result;'
+        $describe.Value | Should Match 'identityAvailable=\{\}.*classAvailable=\{\}.*classError=\{\}'
+        $describe.Value | Should Match 'value\.thread != 0u'
+        $describe.Value | Should Match 'value\.classAvailable \? value\.className\.data\(\) : L"<unavailable>"'
+        $describe.Value | Should Match 'utcFileTime100ns=\{\},monotonicMs=\{\}'
+
+        # This is the reviewed Commands-local variant: allow only synchronous metadata reads,
+        # diagnostic last-error bookkeeping and control syntax, not the broader desktop sampler.
+        $allowedCalls = @('CaptureCommandsWindowObservation', 'if', 'GetSystemTimePreciseAsFileTime', 'GetTickCount64',
+            'IsWindow', 'SetLastError', 'GetWindowThreadProcessId', 'GetClassNameW', 'GetLastError', 'data', 'size')
+        $callPattern = '(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        # Supported lexical call forms only; this guard does not parse arbitrary C++ syntax.
+        foreach ($counterfactual in @(
+            @{ Source='SomeHelper()'; Name='SomeHelper' },
+            @{ Source='SomeNamespace::SomeHelper()'; Name='SomeNamespace::SomeHelper' },
+            @{ Source='::SomeHelper()'; Name='::SomeHelper' },
+            @{ Source='::SomeNamespace::SomeHelper()'; Name='::SomeNamespace::SomeHelper' },
+            @{ Source='object.SomeHelper()'; Name='SomeHelper' },
+            @{ Source='object->SomeHelper()'; Name='SomeHelper' }
+        )) {
+            $unreviewedCalls = @([regex]::Matches($counterfactual.Source, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+            $unreviewedCalls.Count | Should Be 1
+            $unreviewedCalls[0] | Should Be $counterfactual.Name
+            @($unreviewedCalls | Where-Object { $_ -cnotin $allowedCalls }).Count | Should Be 1
+        }
+        $calls = @([regex]::Matches($capture.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($calls | Where-Object { $_ -cnotin $allowedCalls }).Count | Should Be 0
+        $describeCalls = @([regex]::Matches($describe.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($describeCalls | Where-Object { $_ -cnotin @('DescribeCommandsWindowObservation', 'std::format', 'data') }).Count | Should Be 0
+        $adapter = $capture.Value + $describe.Value
+        $adapter | Should Not Match '\b(?:GetCursorPos|GetPhysicalCursorPos|GetLastInputInfo|GetKeyboardState|GetKeyState|GetAsyncKeyState|GetRawInputData|SetCursorPos|SetPhysicalCursorPos|SendInput|mouse_event|keybd_event|ClipCursor|SetForegroundWindow|RequestForegroundWindow|SetActiveWindow|SetFocus|AttachThreadInput|SetWinEventHook|CaptureDesktopState|GetWindowText[AW]?|GetWindowTextLength[AW]?|SendMessage[AW]?|PostMessage[AW]?)\s*\('
+    }
+
+    It 'compares and reports the same captured foreground HWND at settling refusal' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $start = $source.IndexOf('[[nodiscard]] bool PrepareMainWindowForIsolatedUiCase')
+        $next = $source.IndexOf('void FocusFolderViewPane', $start)
+        $start | Should BeGreaterThan -1
+        $next | Should BeGreaterThan $start
+        $helper = $source.Substring($start, $next - $start)
+        $helper | Should Match 'foregroundBeforeObservation\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'foregroundAfterObservation\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'settledForeground\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'expectedSettledForeground\s*=\s*CaptureCommandsWindowObservation\(inputWindow\)'
+        $helper | Should Match 'const bool foregroundOwned\s*=\s*settledForeground\.window == inputWindow;'
+        $helper | Should Match '(?s)state\.Require\(foregroundOwned,.*?stage=settled-validation; current.*?DescribeCommandsWindowObservation\(settledForeground\).*?DescribeCommandsWindowObservation\(expectedSettledForeground\)'
+        $helper | Should Match 'stage=before-admission.*stage=after-admission'
+        $helper | Should Not Match 'state\.Require\(GetForegroundWindow\(\)\s*=='
+        ([regex]::Matches($helper, 'WaitForFolderViewPaneFocus\(')).Count | Should Be 2
+        $helper | Should Match 'settleAttempt < 3u'
+    }
+
+    It 'requires clear and quiet setup before one copy attempt and stops dependent checks' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $case = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameWindowPreviewContextMenuCopiesRows\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success | Should Be $true
+        $action = [regex]::Match($case.Value, '(?s)const auto expectCopy\s*=.*?\r?\n    \};')
+        $action.Success | Should Be $true
+        $clear = $action.Value.IndexOf('ClearClipboardContents(batchWindow, &clearedAndQuiet, &setup)')
+        $prerequisite = [regex]::Match($action.Value, '(?s)if \(! state\.Require\(clearedAndQuiet,.*?\r?\n\s+return false;')
+        $prerequisite.Success | Should Be $true
+        $clear | Should BeGreaterThan -1
+        $prerequisite.Index | Should BeGreaterThan $clear
+        $copy = $action.Value.IndexOf('DebugCopyBatchRenameWindowPreview(kind, rowIndex)')
+        $copy | Should BeGreaterThan ($prerequisite.Index + $prerequisite.Length)
+        ([regex]::Matches($action.Value, '\bDebugCopyBatchRenameWindowPreview\s*\(')).Count | Should Be 1
+        $action.Value | Should Not Match '\b(?:for|while|do)\s*(?:\(|\{)|\bgoto\b|\bexpectCopy\s*\('
+        $failedCopy = [regex]::Match($action.Value, '(?s)if \(! state\.Require\(commandSucceeded,.*?\r?\n\s+return false;')
+        $failedCopy.Success | Should Be $true
+        $failedCopy.Index | Should BeGreaterThan $copy
+        $action.Value.IndexOf('ReadClipboardUnicodeText(batchWindow, &readProbe)') | Should BeGreaterThan ($failedCopy.Index + $failedCopy.Length)
+        $case.Value | Should Match '(?s)if \(! expectCopy\(BatchRenameDebugPreviewCopyKind::OriginalName,.*?\|\|\s*! expectCopy\(BatchRenameDebugPreviewCopyKind::NewName,.*?\|\|\s*! expectCopy\(BatchRenameDebugPreviewCopyKind::SourcePath,.*?\r?\n\s+return false;'
+        $case.Value | Should Match '(?s)if \(! expectCopy\(BatchRenameDebugPreviewCopyKind::PreviewRows,.*?\r?\n\s+return false;'
+
+        $settings = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $clearHelper = [regex]::Match($settings, '(?ms)^void ClearClipboardContents\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $clearHelper.Success | Should Be $true
+        $clearHelper.Value | Should Match 'bool\* outClearedAndQuiet = nullptr, ClipboardSetupProbe\* outProbe = nullptr'
+        $clearHelper.Value | Should Match '(?s)recordSetup\(L"OpenClipboard", openError, false, false\).*?recordSetup\(L"EmptyClipboard", clearError, false, false\).*?recordSetup\(L"quiet-point", ERROR_SUCCESS, true, false\).*?recordSetup\(L"cleared-and-quiet", ERROR_SUCCESS, true, true\)'
+    }
+
+    It 'keeps clipboard diagnostics content-free and identifies the readback source' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $case = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameWindowPreviewContextMenuCopiesRows\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success | Should Be $true
+        $action = [regex]::Match($case.Value, '(?s)const auto expectCopy\s*=.*?\r?\n    \};')
+        $action.Success | Should Be $true
+        $action.Value | Should Match 'CaptureCommandsClipboardObservation\(\)'
+        $action.Value | Should Match 'DescribeCommandsClipboardObservation\(beforeCopy\)'
+        $action.Value | Should Match 'DescribeCommandsClipboardObservation\(afterCopy\)'
+        $action.Value | Should Match 'readProbe\.readSystemClipboard'
+        $action.Value | Should Match 'readProbe\.usedFallback'
+        $action.Value | Should Match 'state\.Require\(copied == expected,'
+        $action.Value | Should Match 'contents omitted'
+        $action.Value | Should Not Match '\bGetLastError\s*\('
+        $settings = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $clipboardCapture = [regex]::Match($settings, '(?ms)^\[\[nodiscard\]\] CommandsClipboardObservation CaptureCommandsClipboardObservation\(\) noexcept\s*\{.*?^\}')
+        $clipboardDescribe = [regex]::Match($settings, '(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsClipboardObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $clipboardCapture.Success | Should Be $true
+        $clipboardDescribe.Success | Should Be $true
+        $callPattern = '(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $captureCalls = @([regex]::Matches($clipboardCapture.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($captureCalls | Where-Object { $_ -cnotin @('CaptureCommandsClipboardObservation', 'GetClipboardSequenceNumber',
+            'CaptureCommandsWindowObservation', 'GetClipboardOwner', 'GetOpenClipboardWindow') }).Count | Should Be 0
+        $describeCalls = @([regex]::Matches($clipboardDescribe.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($describeCalls | Where-Object { $_ -cnotin @('DescribeCommandsClipboardObservation', 'std::format', 'DescribeCommandsWindowObservation') }).Count | Should Be 0
+        # Permit content only for its declaration, equality Boolean and character counts. A new
+        # logging/formatting argument containing either value must fail this source-only contract.
+        $body = $action.Value.Substring($action.Value.IndexOf('{') + 1)
+        $withoutSafeUses = $body -replace 'const\s+std::wstring\s+copied\s*=', '' -replace 'copied\s*==\s*expected', '' -replace '\b(?:copied|expected)\.size\(\)', ''
+        $withoutSafeUses | Should Not Match '\b(?:copied|expected)\b'
+    }
+}
+
 Describe 'ViewerSpace nonactivating desktop observations' {
     It 'keeps UIA observations and synthetic desktop interference free of physical input writes' {
         $sources = @(

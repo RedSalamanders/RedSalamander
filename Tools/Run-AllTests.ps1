@@ -1484,7 +1484,7 @@ function Invoke-RSRunnerCompilerFreeChecks {
     foreach ($check in @(
         @{Path='Tools/Test-Changelog.ps1';Arguments=@{}},
         @{Path='Tools/Get-ToolInventory.ps1';Arguments=@{FailOnFindings=$true;Format='Json'}},
-        @{Path='Tools/Get-SpecInventory.ps1';Arguments=@{FailOnFindings=$true}}
+        @{Path='Tools/Get-SpecInventory.ps1';Arguments=@{FailOnFindings=$true;NoReports=$true}}
     )) {
         $global:LASTEXITCODE = 0
         $checkArguments = $check.Arguments
