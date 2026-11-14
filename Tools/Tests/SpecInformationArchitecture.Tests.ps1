@@ -555,6 +555,26 @@ $sample = ']('
         (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
     }
 
+    It 'admits only the exact I65 closeout record path and refuses an unreviewed sibling' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/CodeReview_Remediation_2026-11-13.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# I65 closeout admission fixture`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 0
+
+        $unreviewedPath = 'Specs/Plans/Done/CodeReview_Remediation_2026-11-14.md'
+        Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+        (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+    }
+
     It 'admits only the reviewed completed I37 folder-copy progress record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/FileOperations_FolderCopyLiveProgress_2026-10-14.md'

@@ -620,6 +620,8 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/FileOperations_S3MarkerAndResiduals_2026-09-15.md',
             'Specs/Plans/Done/UI_FileOperationsReview_2026-09-16.md',
             'Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01.md',
+            # Reserve only this exact I65 closeout path; admission does not approve its contents or completion.
+            'Specs/Plans/Done/CodeReview_Remediation_2026-11-13.md',
             # Exact reviewed I27 gallery companions; no subtree wildcard admission.
             'Specs/Plans/Done/I27/implementation/g/g1/commands/trace.txt',
             'Specs/Plans/Done/I27/implementation/g/g1/compare/trace.txt',
