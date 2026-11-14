@@ -6136,6 +6136,74 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenar
     debugVisualScenario        = std::move(tasks);
 }
 
+bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVisualRateForSelfTest(uint64_t taskId) noexcept
+{
+    if (! debugVisualScenario.has_value())
+        return false;
+    auto& tasks        = debugVisualScenario.value();
+    const auto task    = std::ranges::find(tasks, taskId, &TaskSnapshot::taskId);
+    const auto history = _rates.find(taskId);
+    if (task == tasks.end() || history == _rates.end() || ! task->started || task->paused || history->second.displayedBytesPerSec <= 0.0)
+        return false;
+    // Consumer-layer synthetic input only: the same reducer used by UpdateRates
+    // clears the published rate; neither history nor the graph control is replaced.
+    RateSnapshot rate{};
+    rate.taskId                   = taskId;
+    rate.operation                = task->operation;
+    rate.started                  = task->started;
+    rate.paused                   = true;
+    rate.discoveryClosed          = task->discoveryClosed;
+    rate.completedBytes           = task->completedBytes;
+    rate.completedItems           = task->completedItems;
+    rate.totalBytes               = task->totalBytes;
+    rate.lastProgressCallbackTick = task->lastProgressCallbackTick;
+    rate.progressStateChangeTick  = GetTickCount64();
+    RateUpdateTotals totals{};
+    AdvanceRateHistory(history->second, rate, rate.progressStateChangeTick, totals);
+    task->paused               = true;
+    _hostedAccessibleTextFlush = true;
+    return history->second.displayedBytesPerSec == 0.0;
+}
+
+void FileOperationsPopupInternal::FileOperationsPopupState::DebugRecordCadenceObservation(PopupCadenceDebugEvent event, UINT message, bool popupTimer) noexcept
+{
+    if (! _debugCadenceEnabled)
+        return;
+    if (_debugCadenceCount == _debugCadenceObservations->size())
+    {
+        ++_debugCadenceLost;
+        return;
+    }
+    auto& row                   = (*_debugCadenceObservations)[_debugCadenceCount++];
+    row                         = {};
+    row.tick                    = GetTickCount64();
+    row.paintGeneration         = _paintGenerationForSelfTest;
+    row.event                   = event;
+    row.message                 = message;
+    row.popupTimer              = popupTimer;
+    row.telemetryIntervalMs     = _telemetryTimerIntervalMs;
+    row.hostInvalidations       = _controlsHost.DebugGetInvalidateCount();
+    row.hostAnimationSubscribed = _controlsHost.DebugHasActiveAnimationSubscription();
+    row.publishedPaused         = _debugCadencePublishedPaused;
+    row.publishedStateKnown     = _debugCadencePublishedStateKnown;
+    // Message reentrancy during Render may see a tree being reconciled. Only
+    // the explicit sync sites may query graphs then; missing is not unknown.
+    if (_failureSurface || (_debugCadenceRendering && event != PopupCadenceDebugEvent::BeforeGraphSync && event != PopupCadenceDebugEvent::AfterGraphSync))
+        return;
+    row.graphQueried = true;
+    for (size_t index = 0u; index < _hostedGraphDescriptors.size() && index < _hostedGraphs.size(); ++index)
+    {
+        const auto* graph = _hostedGraphs[index];
+        if (_hostedGraphDescriptors[index].taskId == _debugCadenceTaskId && graph)
+        {
+            row.graphIdentity = reinterpret_cast<uintptr_t>(graph);
+            row.graphVisible  = graph->IsVisible();
+            row.graph         = graph->GetDebugState();
+            break;
+        }
+    }
+}
+
 void FileOperationsPopupInternal::FileOperationsPopupState::DebugRunIdleTimerTickForSelfTest(HWND hwnd) noexcept
 {
     _hostedAccessibleTextPending = false;
@@ -9246,6 +9314,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
     {
         const HostedGraphDescriptor& descriptor = _hostedGraphDescriptors[index];
         auto* graph                             = _hostedGraphs[index];
+#ifdef ENABLE_TESTS
+        if (_debugCadenceEnabled && descriptor.taskId == _debugCadenceTaskId)
+        {
+            const auto task                  = std::ranges::find(snapshot, descriptor.taskId, &TaskSnapshot::taskId);
+            _debugCadencePublishedStateKnown = task != snapshot.end();
+            _debugCadencePublishedPaused     = task != snapshot.end() && task->paused;
+            DebugRecordCadenceObservation(PopupCadenceDebugEvent::BeforeGraphSync);
+        }
+#endif
         graph->SetBounds(boundsToDip(descriptor.bounds));
         graph->SetSamples(descriptor.samples);
         graph->SetSecondarySamples(descriptor.verificationSamples);
@@ -9260,6 +9337,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
         graph->SetOverlayText(descriptor.overlayText);
         graph->SetRainbowMode(descriptor.rainbowMode);
         graph->SetPerStreamBands(descriptor.perStreamBands);
+#ifdef ENABLE_TESTS
+        if (_debugCadenceEnabled && descriptor.taskId == _debugCadenceTaskId)
+            DebugRecordCadenceObservation(PopupCadenceDebugEvent::AfterGraphSync);
+#endif
         if (index < _hostedGraphStallBands.size() && _hostedGraphStallBands[index])
         {
             // Created only as FileOperationsGraphStallBand (ReconcileHostedControls).
@@ -14604,6 +14685,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnThemeChanged(HW
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy(HWND hwnd) noexcept
 {
+#ifdef ENABLE_TESTS
+    _debugCadenceEnabled = false;
+#endif
     _failureCancelAllEnterArmed = false;
     _inspectionLifetime.reset();
     KillTimer(hwnd, kFileOperationsPopupTimerId);
@@ -14688,6 +14772,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnPaint(HWND hwnd
 {
 #ifdef ENABLE_TESTS
     ++_paintGenerationForSelfTest;
+    DebugRecordCadenceObservation(PopupCadenceDebugEvent::PaintBegin);
+    const bool wasCadenceRendering     = _debugCadenceRendering;
+    _debugCadenceRendering             = true;
+    const auto restoreCadenceRendering = wil::scope_exit([&]() noexcept { _debugCadenceRendering = wasCadenceRendering; });
 #endif
     const bool capturePerf   = Debug::Perf::IsCaptureEnabled();
     const uint64_t startedUs = capturePerf ? PerfNowUs() : 0u;
@@ -14707,6 +14795,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnPaint(HWND hwnd
     RefreshTelemetryTimer(hwnd);
     if (capturePerf)
         Debug::Perf::Emit(L"FileOps.Popup.WmPaintUs", L"", PerfElapsedUs(startedUs), 0u, 0u, S_OK);
+#ifdef ENABLE_TESTS
+    _debugCadenceRendering = wasCadenceRendering;
+    DebugRecordCadenceObservation(PopupCadenceDebugEvent::PaintEnd);
+#endif
     return 0;
 }
 
@@ -16872,6 +16964,13 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcActivate(HWND
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
 #ifdef ENABLE_TESTS
+    // Classify wake/focus/pointer messages before the host may consume them.
+    // Never retain WPARAM/LPARAM, coordinates, keys or text.
+    const bool cadenceMessage = msg == WM_TIMER || msg == WM_MOUSEMOVE || msg == WM_NCMOUSEMOVE || msg == WM_MOUSELEAVE || msg == WM_NCMOUSELEAVE ||
+                                msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_NCACTIVATE || msg == WM_SIZE || msg == WM_DPICHANGED ||
+                                msg == WndMsg::kFileOperationPresentationChanged;
+    if (cadenceMessage)
+        DebugRecordCadenceObservation(PopupCadenceDebugEvent::Message, msg, msg == WM_TIMER && wp == kFileOperationsPopupTimerId);
     if (msg == WM_MOUSEMOVE)
     {
         ++_debugMouseMoveCount;
@@ -16931,6 +17030,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
         const LRESULT hostedResult = _controlsHost.HandleMessage(hwnd, msg, wp, lp, hostedHandled);
         if (hostedHandled)
         {
+#ifdef ENABLE_TESTS
+            if (cadenceMessage)
+                DebugRecordCadenceObservation(PopupCadenceDebugEvent::HostHandledMessage, msg, msg == WM_TIMER && wp == kFileOperationsPopupTimerId);
+#endif
             return hostedResult;
         }
     }

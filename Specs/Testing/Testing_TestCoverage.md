@@ -90,6 +90,17 @@ call boundaries, ordering or forbidden APIs. The File Operations durable-store g
 complete publication call and fail-if-exists/replace policy; native durable-store cases remain the
 authority for atomic publication, rejected paths and recovery behavior.
 
+The explicit hosted UI-attribution campaign is component evidence: one existing help
+case executes the native process-observer fake controls before the three fixed UI cases.
+Compiler-free source/managed controls do not prove their native execution or the cause
+of a historical clipboard or foreign-foreground failure. Its child runner's stricter
+`-RequireCleanQuarantine` uses the canonical shared clean-state assertion before native
+work and at repair dispatch; active, invalid or malformed quarantine cannot trigger a
+repair under that opt-in. Default callers retain their ordinary blocking repair lane.
+The runner's `TestRunPlan.psm1` facade must re-export this assertion. A fresh-process
+control imports that actual facade and invokes the canonical reader/assertion on clean,
+active, invalid and malformed ledgers; isolated function fragments do not prove caller visibility.
+
 Application production foreground requests route through `Common::RequestForegroundWindow`.
 The source contract rejects direct bypasses, and physical-input/activation-write bans recognize
 the wrapper too. Real-input predecessor plus documentation-gallery runs provide the behavioral

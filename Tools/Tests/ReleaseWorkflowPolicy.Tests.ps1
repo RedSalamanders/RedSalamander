@@ -20,6 +20,71 @@ function New-RSReleasePolicyTestRoot {
             -Case "release-policy-$([Guid]::NewGuid().ToString('N'))")
 }
 
+Describe 'Commands UI attribution adapter wiring' {
+    It 'preserves Full and both-architecture defaults while forwarding only the pinned architecture choice' {
+        $workflow=[IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/nightly-ci.yml'))
+        $pin=([IO.File]::ReadAllText((Join-Path $repoRoot '.ci/project.json'))|ConvertFrom-Json).engine.ref
+        $workflow | Should Match ([regex]::Escape("qualification.yml@$pin"))
+        $workflow | Should Match 'options: \[Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $workflow | Should Match '(?m)^        default: Full\s*$'
+        $workflow | Should Match '(?s)platform:\s+description:[^\r\n]+\s+type: choice\s+options: \[All, x64, ARM64\]\s+default: All'
+        $workflow | Should Match '(?m)^      platform: \$\{\{ inputs\.platform \}\}\s*$'
+        $workflow | Should Match '(?m)^  contents: read\s*$'
+        $workflow | Should Not Match 'production|publish|ghostty|run_all_tests|run_full_tests'
+    }
+    It 'uses one governed build then the observer prerequisite and three exact fresh child selections' {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $branches=@($ast.FindAll({param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Extent.Text -match '^if \(\$QualificationScope -ceq ''CommandsUiAttribution''\)'
+        },$true))
+        $branches.Count | Should Be 1
+        $branch=$branches[0].Extent.Text
+        $root=$repoRoot;$profile=@('-Platform','ARM64','-Configuration','Release');$number='42';$Platform='ARM64';$Configuration='Release'
+        $QualificationScope='CommandsUiAttribution'
+        $receiptDirectory=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('attribution-wire-'+[guid]::NewGuid().ToString('N'))
+        $calls=[Collections.Generic.List[object]]::new()
+        function Import-Module { param($Name) if($Name -notlike '*HostedDiagnosticEvidence.psm1'){throw 'Unexpected adapter import'} }
+        function Assert-CiContainedPath { param($Root,$Path) return $Path }
+        function Invoke-CiProcess {
+            param($FilePath,$Arguments,$WorkingDirectory,$TimeoutSeconds,[switch]$Stream,[switch]$AllowFailure)
+            # Record first, assert outside the child success stream. Pester 3's
+            # successful assertions can themselves emit values at this boundary.
+            $calls.Add([pscustomobject]@{arguments=@($Arguments);workingDirectory=$WorkingDirectory;
+                timeout=$TimeoutSeconds;stream=[bool]$Stream;allowFailure=[bool]$AllowFailure})
+            Write-Host 'recorded streamed diagnostic'
+            return [pscustomobject]@{exitCode=2;stdout='recorded child';stderr='recorded stderr'}
+        }
+        function Invoke-RSHostedCommandsUiAttribution {
+            param($RepoRoot,$TestRoot,$Platform,$Configuration,[scriptblock]$RunCase)
+            foreach($case in @('red_salamander_help_lists_diagnostics_options','cmd_preferences_dialog_keyboard_reset_live_dx_interaction',
+                'cmd_pane_fileops_popup_throughput_disclosure','cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup')){
+                $observed=@(& $RunCase $case)
+                $observed.Count | Should Be 1
+                $observed[0].exitCode | Should Be 2
+            }
+        }
+        & ([scriptblock]::Create($branch))
+        $calls.Count | Should Be 4
+        foreach($call in $calls){
+            $call.workingDirectory | Should Be $repoRoot
+            $call.timeout | Should Be 18000
+            $call.stream | Should Be $true
+            $call.allowFailure | Should Be $true
+            $arguments=$call.arguments
+            ($arguments -join ' ') | Should Match '-Suite Commands -CaseFilter [A-Za-z0-9_]+ -ValidationMode Fresh -SkipBuild'
+            ($arguments -join ' ') | Should Not Match 'ClassifyFailures|Repeat|Shuffle|Proof|AllowAlternateVolume|ResultReference'
+            @($arguments|Where-Object{$_ -eq '-CaseFilter'}).Count | Should Be 1
+            @($arguments|Where-Object{$_ -eq '-RequireCleanQuarantine'}).Count | Should Be 1
+        }
+        $adapter=[IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'))
+        $adapter | Should Match "(?s)if \(\`$Phase -in @\('ReleaseTestBuild','Qualification'\)\).*?Run 'build.ps1'.*?Invoke-RSWithHostedTestDesktop -Action"
+        $adapter | Should Match "if \(\`$QualificationScope -in @\('CommandsHandoff','CommandsUiAttribution','FileOpsVolumes','ViewerSpaceCapture','R0ePaired'\)\) \{ return \}"
+    }
+}
+
 Describe 'Project CI engine path resolution' {
     It 'requests report-free specification validation in the actual Static phase' {
         $tokens=$null;$errors=$null

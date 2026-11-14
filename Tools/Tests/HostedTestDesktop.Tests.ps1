@@ -343,6 +343,10 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $p=@{Phase='ReleaseTest';Platform='ARM64';QualificationScope='Normal';OsArchitecture='Arm64';ProcessArchitecture='Arm64'}
         Get-RSHostedStockPreparationRequest @p | Should Be '1'
         $p.Phase='Qualification'; $p.QualificationScope='CommandsHandoff'; Get-RSHostedStockPreparationRequest @p | Should Be '1'
+        $p.QualificationScope='CommandsUiAttribution'; Get-RSHostedStockPreparationRequest @p | Should Be '1'
+        $p.Platform='x64'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.Platform='ARM64';$p.Phase='Static';Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.Phase='Qualification'
         $p.QualificationScope='R0ePaired'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
         $p.QualificationScope='DesktopProbe'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
         $p.QualificationScope='Normal'; $p.Platform='x64'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
@@ -590,7 +594,7 @@ namespace RedSalamander.Testing {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Raw
         $source | Should Match 'if \(current != original\)\s+throw ForeignForegroundRefusal\(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity\);'
         $start = $source.IndexOf('internal static string DescribeWindowIdentity(')
-        $end = $source.IndexOf('[DllImport', $start)
+        $end = $source.IndexOf('// ABI/layer exception:', $start)
         $observation = $source.Substring($start, $end - $start)
         $observation | Should Not Match 'SetForegroundWindow|SetFocus|SendInput|GetWindowText|Sleep|Kill|CloseWindow'
     }
@@ -1037,5 +1041,137 @@ Describe 'HostedTestDesktop AggregateException and filtered case run verificatio
         $complete.intent_sha256 = (Get-FileHash $intentPath).Hash
         [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 10))
         { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match the archive'
+    }
+}
+
+Describe 'Hosted process attribution diagnostics' {
+    BeforeEach {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $script:processObserver = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).GetMethod('ObserveProcessForWindow', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+    }
+    function New-ProcessObservationFixture {
+        $child = [RedSalamander.Testing.HostedProcessFacts]::new()
+        $child.Opened = $true; $child.HandleProcess = 42; $child.CreationAvailable = $true; $child.CreationTime = 200
+        $child.ParentAvailable = $true; $child.ParentProcess = 41
+        $parent = [RedSalamander.Testing.HostedProcessFacts]::new()
+        $parent.Opened = $true; $parent.HandleProcess = 41; $parent.CreationAvailable = $true; $parent.CreationTime = 100
+        [pscustomobject]@{Child=$child;Parent=$parent;FinalPid=[uint32]42;FinalThread=[uint32]7;RelationError=0;Fatal=$false;Unavailable=$false;
+            Reads=[Collections.Generic.List[string]]::new();Windows=[Collections.Generic.List[long]]::new()}
+    }
+    function Invoke-ProcessObservationFixture($fixture, [bool]$extended=$true) {
+        $read = [Func[uint32,bool,RedSalamander.Testing.HostedProcessFacts]] {
+            param($pidValue,$full)
+            $fixture.Reads.Add("$pidValue/$full")
+            if ($fixture.Fatal) { throw [OutOfMemoryException]::new('private fatal text') }
+            if ($fixture.Unavailable) { throw [InvalidOperationException]::new('private query text') }
+            if ($pidValue -eq 42) { return $fixture.Child }
+            if ($pidValue -eq 41 -and -not $full) { return $fixture.Parent }
+            throw 'Unexpected process query.'
+        }.GetNewClosure()
+        $readWindow = [Func[IntPtr,Tuple[uint32,uint32,int]]] {
+            param($window)
+            $fixture.Windows.Add($window.ToInt64())
+            [Tuple[uint32,uint32,int]]::new($fixture.FinalThread,$fixture.FinalPid,$fixture.RelationError)
+        }.GetNewClosure()
+        $script:processObserver.Invoke($null, [object[]]@([IntPtr]0x123,[uint32]7,[uint32]42,$extended,$read,$readWindow))
+    }
+    It 'binds exact child creation and only one minimal parent candidate through the actual observer' {
+        $f=New-ProcessObservationFixture; $text=Invoke-ProcessObservationFixture $f
+        $text | Should Match 'instanceAvailable=True.*handlePid=42.*creationFileTime100ns=200'
+        $text | Should Match 'parentQueried=True.*handlePid=41.*creationFileTime100ns=100.*parentCreationCompatible=True'
+        $text | Should Match 'relationStable=True; finalPid=42; finalThread=7; relationError=0'
+        ($f.Reads -join ',') | Should Be '42/True,41/False'
+        ($f.Windows -join ',') | Should Be '291'
+        $text | Should Match 'not creator/ownership proof'
+    }
+    It 'keeps the entry-time query minimal and distinct from later extended observations' {
+        $f=New-ProcessObservationFixture; $text=Invoke-ProcessObservationFixture $f $false
+        ($f.Reads -join ',') | Should Be '42/False'
+        $text | Should Match 'extended=False; instanceAvailable=True'
+        $text | Should Not Match 'imageKind|pathDigest|anyJobKnown'
+        $source=Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Raw
+        $source | Should Match 'originalAtCapture = CaptureIdentityForDiagnostics\(original, HostedDesktopNative.DescribeEntryWindowIdentity\)'
+        $source | Should Match '(?s)DescribeEntryWindowIdentity\(IntPtr window\)\s*\{\s*return DescribeWindowIdentityCore\(window, false\);'
+    }
+    It 'refuses to join a reused parent PID to an older child creation identity' {
+        $f=New-ProcessObservationFixture; $f.Parent.CreationTime=300
+        (Invoke-ProcessObservationFixture $f) | Should Match 'parentCreationCompatible=False'
+    }
+    It 'never opens zero or self as a parent candidate' {
+        foreach($parent in @(0,42)) {
+            $f=New-ProcessObservationFixture;$f.Child.ParentProcess=$parent
+            (Invoke-ProcessObservationFixture $f) | Should Match 'parentQueried=False'
+            ($f.Reads -join ',') | Should Be '42/True'
+        }
+    }
+    It 'does not query a parent after a mismatched process handle or missing creation identity' {
+        foreach($mode in @('wrong-handle','missing-creation','zero-creation')) {
+            $f=New-ProcessObservationFixture
+            if($mode -eq 'wrong-handle'){$f.Child.HandleProcess=99}
+            if($mode -eq 'missing-creation'){$f.Child.CreationAvailable=$false;$f.Child.CreationError=5}
+            if($mode -eq 'zero-creation'){$f.Child.CreationTime=0}
+            $text=Invoke-ProcessObservationFixture $f
+            $text | Should Match 'instanceAvailable=False'
+            $text | Should Match 'parentQueried=False'
+            ($f.Reads -join ',') | Should Be '42/True'
+        }
+    }
+    It 'retains independent denial and query errors instead of treating missing facts as negative membership' {
+        $f=New-ProcessObservationFixture
+        $f.Child.Opened=$false;$f.Child.OpenError=5;$f.Child.IdentityError=6;$f.Child.CreationAvailable=$false;$f.Child.CreationError=87
+        $f.Child.ImageError=122;$f.Child.SessionError=1168;$f.Child.JobError=50;$f.Child.ParentStatus=-1073741790
+        $text=Invoke-ProcessObservationFixture $f
+        $text | Should Match 'opened=False; openError=5; handlePid=42; identityError=6; creationKnown=False; creationFileTime100ns=200; creationError=87'
+        $text | Should Match 'imageKnown=False; imageError=122'
+        $text | Should Match 'sessionKnown=False; session=0; sessionError=1168; anyJobKnown=False; anyJob=False; jobError=50; exactTestJob=unavailable'
+        $text | Should Match 'parentNtStatus=0xC0000022'
+    }
+    It 'records changed or vanished captured HWND relations without another foreground selection' {
+        foreach($sample in @(@{pid=99;thread=7;error=0},@{pid=0;thread=0;error=1400})) {
+            $f=New-ProcessObservationFixture;$f.FinalPid=$sample.pid;$f.FinalThread=$sample.thread;$f.RelationError=$sample.error
+            $text=Invoke-ProcessObservationFixture $f
+            $text | Should Match 'relationStable=False'
+            $text | Should Match ('relationError='+$sample.error)
+            ($f.Windows -join ',') | Should Be '291'
+        }
+    }
+    It 'never upgrades membership in any Job into exact test containment or authority' {
+        $f=New-ProcessObservationFixture;$f.Child.AnyJobAvailable=$true;$f.Child.AnyJob=$true
+        (Invoke-ProcessObservationFixture $f) | Should Match 'anyJobKnown=True; anyJob=True; jobError=0; exactTestJob=unavailable'
+    }
+    It 'omits arbitrary image paths names and malformed digests even from an injected backend' {
+        $f=New-ProcessObservationFixture;$f.Child.ImageAvailable=$true;$f.Child.DigestAvailable=$true
+        $f.Child.ImageKind='C:\private-fixture\account-secret.exe';$f.Child.ImageDigest='private invalid digest'
+        $text=Invoke-ProcessObservationFixture $f
+        $text | Should Match 'imageKind=other; pathDigestAlgorithm=SHA256-UTF16LE; pathDigestKnown=False; pathDigest=unavailable'
+        $text | Should Not Match 'account-secret|private-fixture|private invalid|title|commandLine|clipboard'
+    }
+    It 'uses SHA256 of exact UTF16LE bytes without exposing the queried path' {
+        $native='RedSalamander.Testing.HostedDesktopNative' -as [type]
+        $flags=[Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $path='C:\private-fixture\WindowsTerminal.exe'
+        $digest=$native.GetMethod('ProcessImageDigest',$flags).Invoke($null,[object[]]@($path))
+        $digest | Should Match '^[0-9a-f]{64}$'
+        $digest | Should Be ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::Unicode.GetBytes($path))).ToLowerInvariant())
+        $native.GetMethod('ProcessImageKind',$flags).Invoke($null,[object[]]@($path)) | Should Be 'WindowsTerminal.exe'
+        $f=New-ProcessObservationFixture;$f.Child.ImageKind='WindowsTerminal.exe';$f.Child.ImageDigest=$digest;$f.Child.DigestAvailable=$true
+        (Invoke-ProcessObservationFixture $f) | Should Not Match 'private-fixture'
+        $unpaired='A'+[char]0xd800+'Z'
+        $expected=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([byte[]]@(0x41,0,0,0xd8,0x5a,0))).ToLowerInvariant()
+        $native.GetMethod('ProcessImageDigest',$flags).Invoke($null,[object[]]@($unpaired)) | Should Be $expected
+    }
+    It 'propagates direct managed reader exceptions without swallowing fatal failures' {
+        foreach($exceptionType in @([InvalidOperationException],[OutOfMemoryException])) {
+            $method=[Reflection.Emit.DynamicMethod]::new('ProcessObservationFailure',[RedSalamander.Testing.HostedProcessFacts],[Type[]]@([uint32],[bool]))
+            $il=$method.GetILGenerator()
+            $il.Emit([Reflection.Emit.OpCodes]::Newobj,$exceptionType.GetConstructor([Type]::EmptyTypes))
+            $il.Emit([Reflection.Emit.OpCodes]::Throw)
+            $read=$method.CreateDelegate([Func[uint32,bool,RedSalamander.Testing.HostedProcessFacts]])
+            $readWindow=[Func[IntPtr,Tuple[uint32,uint32,int]]] { param($window) [Tuple[uint32,uint32,int]]::new(7,42,0) }
+            $caught=$null
+            try{[void]$script:processObserver.Invoke($null,[object[]]@([IntPtr]0x123,[uint32]7,[uint32]42,$true,$read,$readWindow))}catch{$caught=$_.Exception.GetBaseException()}
+            $caught | Should Not BeNullOrEmpty
+            $caught.GetType() | Should Be $exceptionType
+        }
     }
 }

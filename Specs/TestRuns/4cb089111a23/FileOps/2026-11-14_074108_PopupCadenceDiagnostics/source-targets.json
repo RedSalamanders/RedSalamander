@@ -1,0 +1,118 @@
+[
+  {
+    "path": ".github/workflows/nightly-ci.yml",
+    "sha256": "d6e0177cff84825b7fa0adabb18288d8d4a8373565e2d2c197a20bece4b0d272"
+  },
+  {
+    "path": "Changes/2026-11-13-10-day-audit-remediation.md",
+    "sha256": "1c0a0b577e1227bb45dedcd03a464037269e6888d329d134f2e671870a265c10"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+    "sha256": "c525eed3fdec45aadc827b18bb4b7bf77d0ff5edb2bc4bbbe40f71b5a2bf90f1"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.h",
+    "sha256": "fe819121f3d5aa5591047fc0e0dd436f00235ff7993b0b5bb0fc2e33dffb47ec"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp",
+    "sha256": "29f48dcf5dddb5ac31790f9715a97297d5eb45b3077903ceaff306df35bf29b0"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp",
+    "sha256": "dfdf46bbb539ee6a860139460ce7b812dbd0691e8348c7b8d485618b2e3924d4"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp",
+    "sha256": "14c3c25f1bbed4264c6ad176148cdf62e89da0725f064e31e55a968f42aae4da"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+    "sha256": "73743d932873ecd64d544906dfb025bdaf8cf741cc0177ffb52a200bb39621a9"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp",
+    "sha256": "ff336c3265bebddd67bc6ef256458e07d496c7245e457f0b492fa2cc5b8f93c2"
+  },
+  {
+    "path": "Specs/Build/Build_UnifiedCI.md",
+    "sha256": "e2c333a44661a51e5bf92a22d1a514b4e6c0ae175792dc3c05c34a070bc462a5"
+  },
+  {
+    "path": "Specs/Core/Core_SharedHelpers.md",
+    "sha256": "840b0ebbc8010cf404ba683467d64b3977180c64de1c0f021dcd55a591753ef4"
+  },
+  {
+    "path": "Specs/Plans/WIP/CodeReview_Remediation_2026-11-13.md",
+    "sha256": "01ff4cdadea343dc3c387f7ec08aa18219779c255dabc72f95bc65a96c59a5ae"
+  },
+  {
+    "path": "Specs/Testing/Testing_SelfTests.md",
+    "sha256": "f00e447eec0b5bf3e2b7e2a84c6b90b6abd5a1db4fe05f3d7640239dc5faee84"
+  },
+  {
+    "path": "Specs/Testing/Testing_TestCoverage.md",
+    "sha256": "a57c9bb968e7b68d61cd4eefee424456c25cfaaf4ecee5e5b96c94d8f2fa43a3"
+  },
+  {
+    "path": "Specs/Testing/Testing_ValidationEvidence.md",
+    "sha256": "90ece92d27022307b55ffc60f9db9159a9d0c76c8dc742d7c2d49518259b7ceb"
+  },
+  {
+    "path": "Specs/UI/UI_FileOperationsPopup.md",
+    "sha256": "16eaec46cc0ed39821ef2c68ec4aa73e20760f7fe8d6607d03b7ac0218a2cf54"
+  },
+  {
+    "path": "Tools/Invoke-ProjectCi.ps1",
+    "sha256": "fcee27369c155f1f54a197fa1186955aa01b5115ea025cc2e7355c8e6fd3f4ef"
+  },
+  {
+    "path": "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
+    "sha256": "f8f70ad9749ddd951cae49e87b46dbf8b65fbb2d205b4333adb03df581518461"
+  },
+  {
+    "path": "Tools/Modules/Testing/HostedTestDesktop.psm1",
+    "sha256": "124d4962fe612559fb8cc92d83d9413bd89854e3f2d0caefade8716ba0560abe"
+  },
+  {
+    "path": "Tools/Modules/Testing/TestQuarantine.psm1",
+    "sha256": "54e473b54eb9e4f8543c7ab9dc220790da2b0b25af252eed5d05f87cbbe4074a"
+  },
+  {
+    "path": "Tools/Modules/Testing/TestRunPlan.psm1",
+    "sha256": "87aca6079ea4e7f213f490be88ebf5b00080910809137c0e25a215cbe4b90b1d"
+  },
+  {
+    "path": "Tools/Modules/Testing/TestSuitePlan.psm1",
+    "sha256": "509be5eff5359d29e22c2412513b6a4442e2f3ba391a27ee08966a5c5a3d7aa8"
+  },
+  {
+    "path": "Tools/README.md",
+    "sha256": "8655108f127f1598cf901fc5b45968de972ef9a081e985e8b36382eb2d8e52a3"
+  },
+  {
+    "path": "Tools/Run-AllTests.ps1",
+    "sha256": "b83b634d9f0c497cbe41ae824858b1d4e07475e47e62ed6d7c56af377d566017"
+  },
+  {
+    "path": "Tools/Tests/HostedTestDesktop.Tests.ps1",
+    "sha256": "f77823ec656f23e066c216ebbd14212d0222a126b34f710b8599dd2039fc2604"
+  },
+  {
+    "path": "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+    "sha256": "5a2a624652362d7a024277e7fd170c4328e20e401cf707e7875075a79b565588"
+  },
+  {
+    "path": "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+    "sha256": "f0da58b6441a48eb78583bde936c84b0d9a8df40148e3bf21dfe659b0c331bfd"
+  },
+  {
+    "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+    "sha256": "49cdfa27bc57963a20ee488c56a15de07d8d722c909771237888e44608f1db97"
+  },
+  {
+    "path": "Tools/tool-inventory.json",
+    "sha256": "668d34fa49c53f52833d6e04e438bcc617c084aaf93a230b285b3733747777c2"
+  }
+]

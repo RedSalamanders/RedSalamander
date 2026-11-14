@@ -11,8 +11,13 @@ on:
       scope:
         description: Full qualification or an explicitly selected diagnostic
         type: choice
-        options: [Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe]
+        options: [Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe]
         default: Full
+      platform:
+        description: Native hosted architectures for this explicit run
+        type: choice
+        options: [All, x64, ARM64]
+        default: All
       baseline_ref:
         description: Full immutable baseline commit SHA, required only for R0ePaired
         type: string
@@ -29,3 +34,4 @@ jobs:
       engine_ref: a094b2ea66fc6fd7a8933488a71dacda262903a4
       configuration: ${{ inputs.configuration }}
       scope: ${{ inputs.scope }}
+      platform: ${{ inputs.platform }}

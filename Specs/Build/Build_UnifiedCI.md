@@ -9,12 +9,46 @@ identity remain required. See the shared [SDK cache contract](https://github.com
 This compatibility rule grants no native or production acceptance; both main
 regression branches must still pass before production can start.
 
-The manual native suite defaults to Full and may explicitly select CommandsHandoff,
+The manual native suite defaults to Full and platform `All`; explicit platform choices
+`x64` and `ARM64` select the matching existing pinned native runner. It may select CommandsHandoff,
 FileOpsVolumes or ViewerSpaceCapture, each mapped to one fixed diagnostic case. The adapter permits filtered runner
 exit 2 only after validating the exact archived native cases, quarantine state, profile and
 source-bound full-solution receipt. It labels that result filtered and NOT_EVALUATED for
 repository coverage and creates no regression or production receipt. Other phases reject these
 scopes before mutation; the pinned native matrix, desktop lease and build contracts still apply.
+
+`CommandsUiAttribution` is a fixed test-only diagnostic campaign: run
+`red_salamander_help_lists_diagnostics_options` once for the observer prerequisite controls,
+then `cmd_preferences_dialog_keyboard_reset_live_dx_interaction`,
+`cmd_pane_fileops_popup_throughput_disclosure`, and
+`cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup` once each in that order.
+Use one governed test-enabled build and independent canonical Commands/Fresh/SkipBuild
+processes. Reverify unchanged source, receipt identity and receipt bytes before and after
+each child. Preflight the canonical default quarantine before every launch and bind its
+absent/content identity across the campaign. Pass `-RequireCleanQuarantine`: the runner
+uses `Assert-RSTestQuarantineClean` on its own canonical parsed state before native work,
+rechecks at repair planning, and rejects every nonempty plan at the actual repair-dispatch
+boundary. An outer preflight is not an atomic file lock; this runner-owned opt-in prevents
+repair even when the ledger changes before the child reads it. Ordinary callers default
+to the existing repair behavior. No alternate quarantine store is substituted.
+Do not select classification, repeat, shuffle, proof hooks or repair attempts.
+Each passing child must satisfy `Assert-RSHostedFilteredCaseRun` with actual v1 evidence,
+exactly one passed case, no skips, no retries and no active or repaired quarantine.
+An ordinary selected-case failure stays failed and may proceed to the next selection
+only after the same strict archived v1 source/receipt/plan/native PID/exit/time proof,
+normal after/final snapshots and clean quarantine establish safe completion. A refused
+boundary, missing/invalid proof, changed receipt or unsafe teardown aborts the sequence;
+later rows remain explicitly unexecuted. Run IDs must be unique. Any failed or unexecuted
+row fails the job without a replacement launch.
+
+The campaign owns a canonical marked-sandbox run context. Keep each child's stdout,
+stderr and coverage record plus the aggregate diagnostic index inside that context,
+then seal it through canonical archival. Bind its context ID and relative members and
+the child run IDs/archive records; never persist live scratch paths as final references.
+Archive failure remains failure and grants no completion claim. Passing filtered exit 2
+retains repository `NOT_EVALUATED`; this scope returns before the Full assertion probe,
+regression receipt and all production/ZIP/publication continuation. It does not reclassify
+desktop authority or satisfy Full, PR, local-gate or production acceptance.
 
 The manual `DesktopProbe` scope reads desktop and session facts on the same native hosted
 matrix before dependency installation or builds. It records calling window-station and

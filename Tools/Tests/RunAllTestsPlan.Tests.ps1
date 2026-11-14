@@ -864,7 +864,9 @@ Describe 'Run-AllTests plan helper' {
                 'FileOps_RepeatDecisionContracts,DiscoveryScope_FolderLiveProgress',
                 'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'fileops_identityinterlockwaiting', 'FileOps_IdentityInterlockWaiting*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb',
                 'delete_identitylesspinnedtreechangedentry', 'Delete_IdentityLessPinnedTreeChangedEntry*', 'Delete_IdentityLessPinnedTreeChangedEntry ',
-                'Delete_IdentityLessPinnedTreeChangedEntry,DiscoveryScope_LocalDirectApi')) {
+                'Delete_IdentityLessPinnedTreeChangedEntry,DiscoveryScope_LocalDirectApi',
+                'FileOpsFamily_PopupIdleCadence', 'FileOps_PopupIdle', 'FileOps_PopupIdleCadence*', 'fileops_popupidlecadence',
+                'FileOps_PopupIdleCadence ', 'FileOps_PopupIdleCadence,FileOps_ReviewRemediationContracts')) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                 -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
             $interactive = $case -eq 'FileOps_VisualGalleryInteraction'
@@ -877,7 +879,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
-        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')
+        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')
         # Bind the two normative lists to the same exact admissions exercised below.
         foreach ($contract in @(
                 @{ Path = 'Specs/Testing/Testing_ValidationEvidence.md'; Pattern = 'Only `-Suite FileOps` with one exact, case-sensitive filter from (?<cases>.*?) is admitted without that desktop lease\.' },
@@ -901,7 +903,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'retains the FileOps desktop lease for broad suites and proof injections using an exact owned-witness name' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('All', 'CI', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -924,7 +926,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'preserves exact owned-witness activation and desktop markers in quarantine repair' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('FileOps', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -1561,9 +1563,11 @@ Set-StrictMode -Version Latest
         $nightly | Should Match '(?m)^  workflow_dispatch:'
         $nightly | Should Not Match '(?m)^  schedule:'
         $nightly | Should Match ([regex]::Escape("RedSalamanders/.github/.github/workflows/qualification.yml@$engineRef"))
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $nightly | Should Match 'options: \[Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
+        $nightly | Should Match '(?s)platform:\s+description:[^\r\n]+\s+type: choice\s+options: \[All, x64, ARM64\]\s+default: All'
+        $nightly | Should Match '(?m)^      platform: \$\{\{ inputs\.platform \}\}\s*$'
         $nightly | Should Match '(?m)^      baseline_ref:\s*$'
         $nightly | Should Match '(?m)^        required: false\s*$'
         $pin = [regex]::Escape($engineRef)
@@ -3424,5 +3428,367 @@ Describe 'Hosted filtered diagnostic evidence' {
     It 'rejects missing or blocking quarantine evidence' {
         $summary.quarantine=@{}; { & $invoke } | Should Throw 'quarantine state'
         $summary.quarantine=@{is_valid=$true;has_blocking_entries=$true;invalid_count=0;errors=@()}; { & $invoke } | Should Throw 'quarantine state'
+    }
+}
+
+Describe 'Clean quarantine opt-in runner admission' {
+    BeforeAll {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestQuarantine.psm1') -Force
+        $t=$null;$e=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$t,[ref]$e)
+        if($e.Count){throw 'Runner parse failed'}
+        $read=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $n.Left.Extent.Text -ceq '$quarantineStatus' -and $n.Right.Extent.Text -ceq 'Read-RSTestQuarantineFile -Path $QuarantinePath'},$true)|Sort-Object {$_.Extent.StartOffset})[0]
+        $siblings=@($read.Parent.Statements);$readIndex=[array]::IndexOf($siblings,$read)
+        $guard=$siblings[$readIndex+1]
+        if($guard.Extent.Text -notmatch '^if \(\$RequireCleanQuarantine\).*Assert-RSTestQuarantineClean'){throw 'Initial clean admission is not adjacent to the canonical read'}
+        $script:quarantineAdmission=$read.Extent.Text+"`n"+$guard.Extent.Text
+        $dispatch=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $n.Left.Extent.Text -ceq '$attemptResult' -and $n.Right.Extent.Text -like 'Invoke-RSTestQuarantineRepairAttempt*'},$true))
+        if($dispatch.Count -ne 1){throw 'Repair dispatch boundary is ambiguous'}
+        $siblings=@($dispatch[0].Parent.Statements);$dispatchIndex=[array]::IndexOf($siblings,$dispatch[0]);$guard=$siblings[$dispatchIndex-1]
+        if($guard.Extent.Text -notmatch '(?s)^if \(\$RequireCleanQuarantine\).*Assert-RSTestQuarantineClean.*-RepairPlan \$quarantineRepairPlan'){throw 'Actual repair dispatch is unguarded'}
+        $script:quarantineDispatch=$guard.Extent.Text+"`n"+$dispatch[0].Extent.Text
+    }
+    BeforeEach {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('clean-quarantine-'+[guid]::NewGuid().ToString('N'))
+        $QuarantinePath=Join-Path $fixture quarantine.jsonl
+        $RequireCleanQuarantine=$true
+        $today=[DateTime]::UtcNow.Date
+        $active=@{harness='Commands';name='red_salamander_help_lists_diagnostics_options';owner='fixture';opened=$today.ToString('yyyy-MM-dd');
+            expires=$today.AddDays(1).ToString('yyyy-MM-dd');issue='fixture';root_cause_hypothesis='fixture';fix_or_replace_plan='fixture'}
+    }
+    It 'accepts absent and empty canonical ledgers and rejects active invalid and malformed records before native admission' {
+        & ([scriptblock]::Create($script:quarantineAdmission))
+        ''|Set-Content -LiteralPath $QuarantinePath
+        & ([scriptblock]::Create($script:quarantineAdmission))
+        foreach($record in @(($active|ConvertTo-Json -Compress),'{"owner":"incomplete"}','{malformed')){
+            $record|Set-Content -LiteralPath $QuarantinePath
+            { & ([scriptblock]::Create($script:quarantineAdmission)) } | Should Throw 'Clean quarantine is required'
+        }
+        { Assert-RSTestQuarantineClean -Status @{IsValid=$true;HasBlockingEntries=$false;TotalCount=0} } | Should Throw 'Clean quarantine is required'
+    }
+    It 'exports and invokes clean quarantine through the actual facade in a fresh PowerShell process' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -ErrorAction Stop
+        $emptyPath=Join-Path $fixture empty.jsonl
+        ''|Set-Content -LiteralPath $emptyPath
+        $active|ConvertTo-Json -Compress|Set-Content -LiteralPath (Join-Path $fixture active.jsonl)
+        '{"owner":"incomplete"}'|Set-Content -LiteralPath (Join-Path $fixture invalid.jsonl)
+        '{malformed'|Set-Content -LiteralPath (Join-Path $fixture malformed.jsonl)
+        $probe=Join-Path $fixture facade-probe.ps1
+        @'
+param([string]$ModulePath,[string]$FixtureRoot)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+# Import only the runner's real facade: no owning-module import or inherited mocks.
+$facade=Import-Module -Name $ModulePath -PassThru -ErrorAction Stop
+if(-not $facade.ExportedFunctions.ContainsKey('Assert-RSTestQuarantineClean')){throw 'Facade omits clean quarantine export'}
+$command=Get-Command Assert-RSTestQuarantineClean -ErrorAction Stop
+if(-not $command.Parameters.ContainsKey('Status')){throw 'Facade command has no canonical Status parameter'}
+$accepted=0;$refused=0
+foreach($name in @('absent','empty','active','invalid','malformed')){
+    $status=Read-RSTestQuarantineFile -Path (Join-Path $FixtureRoot ($name+'.jsonl'))
+    if($name -in @('absent','empty')){
+        Assert-RSTestQuarantineClean -Status $status
+        ++$accepted
+    }else{
+        if(-not $status.HasBlockingEntries){throw "Canonical reader did not classify $name as blocking"}
+        $rejected=$false
+        try{Assert-RSTestQuarantineClean -Status $status}
+        catch{
+            if($_.Exception.Message -notlike 'Clean quarantine is required:*'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected){throw "Facade admitted $name quarantine"}
+        ++$refused
+    }
+}
+[IO.File]::WriteAllText((Join-Path $FixtureRoot 'facade-result.json'),
+    ([ordered]@{accepted=$accepted;refused=$refused;facade=$facade.Path;command=$command.Name}|ConvertTo-Json -Compress))
+'@|Set-Content -LiteralPath $probe
+        $exit=Invoke-RSStreamingProcess -FilePath (Get-Process -Id $PID).Path -Arguments @(
+            '-NoProfile','-NonInteractive','-File',$probe,'-ModulePath',$helperModule,'-FixtureRoot',$fixture
+        ) -WorkingDirectory $repoRoot -LogPath (Join-Path $fixture child.stdout.log) -ErrorLogPath (Join-Path $fixture child.stderr.log) -TimeoutMilliseconds 30000
+        $exit|Should Be 0
+        $result=Get-Content -LiteralPath (Join-Path $fixture facade-result.json) -Raw|ConvertFrom-Json
+        $result.accepted|Should Be 2
+        $result.refused|Should Be 3
+        $result.facade|Should Be $helperModule
+        $result.command|Should Be 'Assert-RSTestQuarantineClean'
+    }
+    It 'rejects mutation after the outer preflight but before the runner reads its actual ledger' {
+        Assert-RSTestQuarantineClean -Status (Read-RSTestQuarantineFile -Path $QuarantinePath)
+        $active|ConvertTo-Json -Compress|Set-Content -LiteralPath $QuarantinePath
+        $native=[Collections.Generic.List[string]]::new()
+        $launch=[scriptblock]::Create($script:quarantineAdmission+"`n"+'$native.Add("must-not-launch")')
+        { & $launch } | Should Throw 'Clean quarantine is required'
+        $native.Count | Should Be 0
+    }
+    It 'blocks a nonempty actual repair dispatch plan and preserves default-false legacy dispatch' {
+        $quarantineStatus=Read-RSTestQuarantineFile -Path $QuarantinePath
+        $quarantineRepairPlan=[pscustomobject]@{IsValid=$true;HasBlockingEntries=$false;Attempts=@(@{name='seeded'});InvalidEntries=@();Errors=@()}
+        $attempt=@{name='seeded'};$artifactRoot=$fixture
+        $repairs=[Collections.Generic.List[string]]::new()
+        function Invoke-RSTestQuarantineRepairAttempt {param($Attempt,$RepoRoot,$ArtifactRoot) $repairs.Add($Attempt.name);return @{passed=$false}}
+        { & ([scriptblock]::Create($script:quarantineDispatch)) } | Should Throw 'forbids every quarantine repair dispatch'
+        $repairs.Count | Should Be 0
+        $RequireCleanQuarantine=$false
+        & ([scriptblock]::Create($script:quarantineDispatch))
+        $repairs.Count | Should Be 1
+    }
+}
+
+Describe 'Hosted attribution ordinary failure proof' {
+    It 'requires real archived v1 failure counts, clean teardown and no retries without weakening passing assertions' {
+        # Failure observation has a narrower exact-case policy than general passing filters.
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSuitePlan.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.Common.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+        Mock Read-RSBuildReceipt { [pscustomobject]@{
+            receipt_id=('b'*64);repo_identity=('c'*64);source_snapshot_id=('a'*64)
+            platform='ARM64';configuration='Debug';target='Build';tests_enabled=$true
+            toolchain_identity_digest=('e'*64);vcpkg_identity_digest=('e'*64);ghostty_runtime_identity=('e'*64)
+            project_graph_digest=('e'*64);runtime_dependency_digest=('e'*64);outputs=@()
+        } } -ModuleName HostedDiagnosticEvidence
+        Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64);GitHead=('d'*40)} } -ModuleName HostedDiagnosticEvidence
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        Mock Assert-RSTestSandboxContainedPath { param($TestRoot,$Path,[switch]$RequireDescendant) [IO.Path]::GetFullPath($Path) } -ModuleName HostedDiagnosticEvidence
+        $sandbox = Join-Path $TestDrive 'v1-proof'
+        $runId = '20261113T120000Z-1234-' + ('a'*32)
+        $run = Join-Path $sandbox "evidence/completed-runs/$runId"
+        $last = Join-Path $run 'artifacts/selftest/last_run'
+        $pre = Join-Path $run 'artifacts/selftest/previous_run'
+        $records = Join-Path $sandbox "evidence/run-archive-records/$runId"
+        [void][IO.Directory]::CreateDirectory($pre)
+        [void][IO.Directory]::CreateDirectory((Join-Path $last 'commands'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $last 'perf'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $run 'artifacts/native-process-exits'))
+        [void][IO.Directory]::CreateDirectory($records)
+        $exe = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
+        $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Commands -ValidationMode Fresh -CoverageScope filtered `
+            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter red_salamander_help_lists_diagnostics_options)
+        $fixtureReceipt = & (Get-Module HostedDiagnosticEvidence) { Read-RSBuildReceipt -BuildOutputDir 'synthetic' -SchemaPath 'synthetic' }
+        $row = Get-RSValidationEntryFingerprint -EntryContract $plan.entries[0] -CoveragePlanDigest $plan.coverage_plan_digest `
+            -WorkspaceSnapshot @{snapshot_id=('a'*64)} -BuildReceipt $fixtureReceipt
+        $fp = [ordered]@{schema='red-salamander.validation-entry-fingerprints.v1';canonicalization='rs-canonical-json-v1';
+            plan_digest=$plan.plan_digest;coverage_plan_digest=$plan.coverage_plan_digest;snapshot_id=('a'*64);build_receipt_id=('b'*64);artifact_epoch=0;
+            entries=@(@{id='selftest.commands';fingerprint=$row.Fingerprint;component_digest_version=$row.ComponentDigestVersion;component_digests=$row.ComponentDigests;computation_ms=0})}
+        $fp.fingerprints_digest=Get-RSCanonicalJsonDigest $fp
+        $fp.computation_ms=0
+        $decision=[ordered]@{schema='red-salamander.validation-plan-decision.v1';canonicalization='rs-canonical-json-v1';planner_mode='shadow';
+            snapshot_id=('a'*64);plan_digest=$plan.plan_digest;changed_paths=@();matched_impact_rules=@();advisory_build_action='none';
+            entries=@(@{id='selftest.commands';ordinal=0;affected=$true;matched_impact_tags=@();decision='EXECUTE';reason_codes=@('FORCED');expected_fingerprint=$row.Fingerprint;origin_run_id=$null;origin_evidence_digest=$null});
+            estimated_fresh_duration_ms=0;estimated_executed_duration_ms=0;estimated_avoided_duration_ms=0}
+        $decision.decision_digest=Get-RSCanonicalJsonDigest $decision
+        function Write-CanonicalProof($Path,$Value,$Schema) {
+            Write-RSAtomicCanonicalJsonFile -LiteralPath $Path -InputObject $Value -AllowedRoot $sandbox -SchemaPath (Join-Path $repoRoot "Specs/Testing/$Schema")
+        }
+        Write-CanonicalProof (Join-Path $pre 'entry-fingerprints.json') $fp 'ValidationEntryFingerprints.schema.json'
+        Write-CanonicalProof (Join-Path $pre 'validation-plan.json') $plan 'ValidationPlan.schema.json'
+        Write-CanonicalProof (Join-Path $pre 'validation-plan-decision.json') $decision 'ValidationPlanDecision.schema.json'
+        $snap=[ordered]@{schema='red-salamander.workspace-snapshot.v1';canonicalization='rs-canonical-json-v1';snapshot_id=('a'*64);repo_identity=('c'*64);git_head=('d'*40);base=('d'*40);files=@();
+            acquisition_before=('a'*64);acquisition_after=('a'*64);acquisition_attempts=1;git_discovery_ms=0;content_hashing_ms=0;canonicalization_ms=0;computation_ms=0;created_utc='2026-11-13T12:00:02Z'}
+        Write-CanonicalProof (Join-Path $pre 'workspace-initial.json') $snap 'WorkspaceSnapshot.schema.json'
+        $snap.created_utc='2026-11-13T12:00:54.500Z'
+        Write-CanonicalProof (Join-Path $last 'workspace-after-selftest.commands.json') $snap 'WorkspaceSnapshot.schema.json'
+        $snap.created_utc='2026-11-13T12:00:54.800Z'
+        Write-CanonicalProof (Join-Path $last 'workspace-final.json') $snap 'WorkspaceSnapshot.schema.json'
+        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';passed=0;failed=1;skipped=0;cases=@(@{name='red_salamander_help_lists_diagnostics_options';status='failed'})}
+        $nativePath=Join-Path $last 'commands/results.json'
+        $native|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $nativePath
+        $exitPath=Join-Path $run ('artifacts/native-process-exits/'+('f'*32)+'.json')
+        @{schema='red-salamander.native-process-exit.v1';process_id=42;executable=$exe;observed_utc='2026-11-13T12:00:54Z';exit_code=1}|ConvertTo-Json|Set-Content -LiteralPath $exitPath
+        $metricPath=Join-Path $last 'perf/perf_metrics.jsonl'
+        '{"process":42,"timestamp":"2026-11-13T12:00:50Z"}'|Set-Content -LiteralPath $metricPath
+        $summary=@{schema='red-salamander.run-all-tests.v1';run_id=$runId;suite='Commands';case_filter='red_salamander_help_lists_diagnostics_options';platform='ARM64';configuration='Debug';executable=$exe;
+            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';exit_code=1;total=1;passed=0;failed=1;skipped=0;
+            quarantine=@{is_valid=$true;has_blocking_entries=$false;active_count=0;active_entries=@();invalid_count=0;invalid_entries=@();errors=@();repair_attempt_count=0;repair_attempts=@()};
+            test_sandbox_audit=@{is_clean=$false;issue_count=1};suites=@(@{suite='Commands';kind='SelfTest';classification='UNCLASSIFIED_FAILURE';exit_code=1;passed=0;failed=1;skipped=0;retry_attempts=@()})}
+        $summaryPath=Join-Path $last 'run-all-tests-results.json'
+        $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
+        function Seal-Proof {
+            $inventory=@(Get-ChildItem -LiteralPath $run -File -Recurse|Where-Object FullName -ne $summaryPath|ForEach-Object {
+                @{path=[IO.Path]::GetRelativePath($run,$_.FullName);directory=$false;length=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+            })
+            $intent=@{schema='red-salamander.run-archive.v1';run_id=$runId;disposition='completed';source=(Join-Path $sandbox "runs/$runId");destination=$run;inventory=$inventory}
+            $intentPath=Join-Path $records 'intent.json';$intent|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $intentPath
+            @{schema='red-salamander.run-archive-complete.v1';source=$intent.source;destination=$run;intent_sha256=(Get-FileHash $intentPath).Hash}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $records 'complete.json')
+        }
+
+        $readFailure = {
+            & (Get-Module HostedDiagnosticEvidence) {
+                param($Sandbox,$Root,$Id)
+                Read-RSHostedFilteredCaseRun -ExitCode 1 -Output "Run id: $Id" -TestRoot $Sandbox -RepoRoot $Root -Suite Commands -CaseFilter red_salamander_help_lists_diagnostics_options -Platform ARM64 -Configuration Debug -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z') -AllowRecordedFailure
+            } $sandbox $repoRoot $runId
+        }
+        Seal-Proof
+        (& $readFailure).ChangeVerdict | Should Be 'FAILED'
+        (& $readFailure).Failed | Should Be 1
+        { Assert-RSHostedFilteredCaseRun -ExitCode 1 -Output "Run id: $runId" -TestRoot $sandbox -RepoRoot $repoRoot -Suite Commands -CaseFilter red_salamander_help_lists_diagnostics_options -Platform ARM64 -Configuration Debug -InvocationStartedUtc ([DateTimeOffset]'2026-11-13T12:00:00Z') -InvocationEndedUtc ([DateTimeOffset]'2026-11-13T12:01:00Z') } | Should Throw 'failed with exit code 1'
+        $summary.quarantine.repair_attempt_count=1
+        $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
+        { & $readFailure } | Should Throw 'repair attempts'
+        $summary.quarantine.repair_attempt_count=0
+        $summary.suites[0].retry_attempts=@(@{mode='retry'})
+        $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
+        { & $readFailure } | Should Throw 'without retries'
+        $summary.suites[0].retry_attempts=@()
+        $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
+        $exitText=[IO.File]::ReadAllText($exitPath)
+        [IO.File]::WriteAllText($exitPath,$exitText.Replace('"exit_code": 1','"exit_code": 0'));Seal-Proof
+        { & $readFailure } | Should Throw 'exit code'
+        [IO.File]::WriteAllText($exitPath,$exitText)
+        $finalPath=Join-Path $last 'workspace-final.json'
+        $finalText=[IO.File]::ReadAllText($finalPath)
+        Remove-Item -LiteralPath $finalPath;Seal-Proof
+        { & $readFailure } | Should Throw 'does not match its inventory'
+        [IO.File]::WriteAllText($finalPath,$finalText);Seal-Proof
+        $native.cases[0].name='other_case'
+        $native|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $nativePath;Seal-Proof
+        { & $readFailure } | Should Throw 'unexpected'
+    }
+}
+
+Describe 'Hosted Commands UI attribution campaign' {
+    BeforeEach {
+        $script:attributionModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force -PassThru
+        $script:attributionDirectory = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('attribution-' + [guid]::NewGuid().ToString('N'))
+        $script:attributionState = @{calls=[Collections.Generic.List[string]]::new();identityCalls=0;changeAt=0;
+            unsafeAt=0;failureAt=0;duplicate=$false;noRepairs=$true;exit=2;quarantineCalls=0;quarantineChangeAt=0;quarantineErrorAt=0}
+        & $script:attributionModule {
+            param($State)
+            $script:attributionFake = $State
+            function script:Get-RSHostedAttributionBuildIdentity {
+                ++$script:attributionFake.identityCalls
+                $value = if ($script:attributionFake.identityCalls -eq $script:attributionFake.changeAt) { 'changed' } else { 'stable' }
+                return @{snapshot_id=$value;build_receipt_id='receipt';receipt_sha256='hash'}
+            }
+            function script:Get-RSHostedAttributionQuarantineIdentity {
+                ++$script:attributionFake.quarantineCalls
+                if($script:attributionFake.quarantineCalls -eq $script:attributionFake.quarantineErrorAt){throw 'seeded active or invalid quarantine'}
+                return $(if($script:attributionFake.quarantineCalls -eq $script:attributionFake.quarantineChangeAt){'changed'}else{'absent'})
+            }
+            function script:Assert-RSHostedFilteredCaseRun {
+                param($ExitCode,$Output,$TestRoot,$RepoRoot,$Suite,$CaseFilter,$Platform,$Configuration,$InvocationStartedUtc,$InvocationEndedUtc)
+                if ($script:attributionFake.calls.Count -eq $script:attributionFake.unsafeAt) { throw 'unsafe normal-teardown proof' }
+                return [pscustomobject]@{RunId=(Get-RSHostedDiagnosticRunId $Output);ChangeVerdict='PASSED';RepositoryVerdict='NOT_EVALUATED';
+                    Passed=1;Failed=0;Skipped=0;SummarySchema='red-salamander.run-all-tests.v1';NativeCaseCount=1;
+                    HasNoRepairAttempts=$script:attributionFake.noRepairs;ArchiveIntentSha256=('a'*64)}
+            }
+            function script:Read-RSHostedFilteredCaseRun {
+                param($ExitCode,$Output,$TestRoot,$RepoRoot,$Suite,$CaseFilter,$Platform,$Configuration,$InvocationStartedUtc,$InvocationEndedUtc,[switch]$AllowRecordedFailure)
+                if (-not $AllowRecordedFailure -or $ExitCode -ne 1) { throw 'unexpected failure-reader boundary' }
+                return [pscustomobject]@{RunId=(Get-RSHostedDiagnosticRunId $Output);ChangeVerdict='FAILED';RepositoryVerdict='NOT_EVALUATED';
+                    Passed=0;Failed=1;Skipped=0;ArchiveIntentSha256=('b'*64)}
+            }
+        } $script:attributionState
+        $script:attributionRunner = {
+            param($CaseFilter)
+            $script:attributionState.calls.Add($CaseFilter)
+            $ordinal = if ($script:attributionState.duplicate) { 1 } else { $script:attributionState.calls.Count }
+            $id = '20261114T000000Z-' + $ordinal + '-' + ('a'*32)
+            $exit = if ($script:attributionState.calls.Count -eq $script:attributionState.failureAt) { 1 } else { $script:attributionState.exit }
+            return [pscustomobject]@{stdout="Run id: $id";stderr="independent stderr $ordinal";exitCode=$exit}
+        }
+        $script:invokeAttribution = {
+            $arguments=@{RepoRoot=$repoRoot;TestRoot=$env:REDSALAMANDER_TEST_ROOT;Platform='ARM64';Configuration='Release';
+                EvidenceRunId=$env:REDSALAMANDER_TEST_RUN_ID;EvidenceDirectory=$script:attributionDirectory;RunCase=$script:attributionRunner}
+            & $script:attributionModule {param($Arguments) Invoke-RSHostedCommandsUiAttributionCore @Arguments} $arguments
+        }
+    }
+    AfterEach {
+        # Restore the real proof functions for subsequent describes; no desktop or native child ran.
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -Force
+    }
+    It 'runs the observer prerequisite then three ordered UI observations with independent proof and streams' {
+        $index = & $script:invokeAttribution
+        ($script:attributionState.calls -join ',') | Should Be 'red_salamander_help_lists_diagnostics_options,cmd_preferences_dialog_keyboard_reset_live_dx_interaction,cmd_pane_fileops_popup_throughput_disclosure,cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup'
+        $script:attributionState.identityCalls | Should Be 9
+        @($index.entries|Where-Object status -ne passed).Count | Should Be 0
+        @($index.entries.run_id|Select-Object -Unique).Count | Should Be 4
+        $index.repository_verdict | Should Be 'NOT_EVALUATED'
+        foreach ($ordinal in 1..4) {
+            $caseRoot = Join-Path $script:attributionDirectory "case-$ordinal"
+            (Get-Content -LiteralPath (Join-Path $caseRoot 'runner.stderr.log') -Raw) | Should Be "independent stderr $ordinal"
+            Test-Path -LiteralPath (Join-Path $caseRoot 'coverage.json') | Should Be $true
+        }
+    }
+    It 'retains an ordinary proven case failure and continues once without converting the job to passing' {
+        $script:attributionState.failureAt=1
+        { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+        $index=Get-Content (Join-Path $script:attributionDirectory 'commands-ui-attribution.json') -Raw|ConvertFrom-Json
+        ($index.entries.status -join ',') | Should Be 'failed,passed,passed,passed'
+        $script:attributionState.calls.Count | Should Be 4
+        $index.status | Should Be 'failed'
+    }
+    It 'stops after unsafe teardown proof and explicitly leaves later selections unexecuted' {
+        $script:attributionState.unsafeAt=2
+        { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+        $index=Get-Content (Join-Path $script:attributionDirectory 'commands-ui-attribution.json') -Raw|ConvertFrom-Json
+        ($index.entries.status -join ',') | Should Be 'passed,unsafe-or-invalid,unexecuted,unexecuted'
+        $script:attributionState.calls.Count | Should Be 2
+    }
+    It 'refuses changed receipt identity before another launch and after the current child' {
+        foreach ($changeAt in @(2,3,4)) {
+            $script:attributionDirectory=Join-Path $script:attributionDirectory "change-$changeAt"
+            $script:attributionState.changeAt=$changeAt;$script:attributionState.identityCalls=0;$script:attributionState.calls.Clear()
+            { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+            $script:attributionState.calls.Count | Should Be $(if($changeAt -eq 2){0}else{1})
+        }
+    }
+    It 'rejects duplicate child run IDs without a replacement run' {
+        $script:attributionState.duplicate=$true
+        { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+        $script:attributionState.calls.Count | Should Be 2
+    }
+    It 'refuses active or invalid quarantine before a first or later launch without losing the prior failure' {
+        foreach($errorAt in @(1,3)){
+            $script:attributionDirectory=Join-Path $script:attributionDirectory "quarantine-$errorAt"
+            $script:attributionState.quarantineErrorAt=$errorAt;$script:attributionState.quarantineCalls=0
+            $script:attributionState.calls.Clear();$script:attributionState.failureAt=1
+            { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+            $script:attributionState.calls.Count | Should Be $(if($errorAt -eq 1){0}else{1})
+            $index=Get-Content (Join-Path $script:attributionDirectory 'commands-ui-attribution.json') -Raw|ConvertFrom-Json
+            if($errorAt -eq 3){($index.entries.status -join ',') | Should Be 'failed,unsafe-or-invalid,unexecuted,unexecuted'}
+        }
+    }
+    It 'stops before another selection when the clean canonical quarantine identity changed' {
+        $script:attributionState.quarantineChangeAt=3
+        { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+        $script:attributionState.calls.Count | Should Be 1
+        $index=Get-Content (Join-Path $script:attributionDirectory 'commands-ui-attribution.json') -Raw|ConvertFrom-Json
+        ($index.entries.status -join ',') | Should Be 'passed,unsafe-or-invalid,unexecuted,unexecuted'
+    }
+    It 'rejects repair evidence and prevents a repeated campaign from overwriting its index' {
+        $script:attributionState.noRepairs=$false
+        { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+        $script:attributionState.calls.Count | Should Be 1
+        { & $script:invokeAttribution } | Should Throw 'already exists'
+        $script:attributionState.calls.Count | Should Be 1
+    }
+    It 'rejects an unexpected child exit without retrying it' {
+        $script:attributionState.exit=0
+        { & $script:invokeAttribution } | Should Throw 'failed or left unexecuted'
+        $script:attributionState.calls.Count | Should Be 1
+    }
+    It 'resolves the index through real canonical archival rather than a stale live scratch path' {
+        & $script:attributionModule {
+            function script:Invoke-RSHostedCommandsUiAttributionCore {
+                param($RepoRoot,$TestRoot,$Platform,$Configuration,$EvidenceRunId,$EvidenceDirectory,$RunCase)
+                $index=[pscustomobject]@{status='passed';repository_verdict='NOT_EVALUATED';evidence_run_id=$EvidenceRunId;
+                    evidence_member='scratch/UnifiedCI/CommandsUiAttribution/commands-ui-attribution.json'}
+                $index|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'commands-ui-attribution.json') -Encoding utf8
+                return $index
+            }
+        }
+        $index=Invoke-RSHostedCommandsUiAttribution -RepoRoot $repoRoot -TestRoot $env:REDSALAMANDER_TEST_ROOT `
+            -Platform ARM64 -Configuration Release -RunCase {throw 'The archival fixture must not launch a child'}
+        $live=Join-Path $env:REDSALAMANDER_TEST_ROOT "runs/$($index.evidence_run_id)"
+        $final=Join-Path $env:REDSALAMANDER_TEST_ROOT "evidence/completed-runs/$($index.evidence_run_id)"
+        Test-Path -LiteralPath $live | Should Be $false
+        Test-Path -LiteralPath (Join-Path $final $index.evidence_member) | Should Be $true
+        (Get-Content -LiteralPath (Join-Path $final $index.evidence_member) -Raw|ConvertFrom-Json).evidence_run_id | Should Be $index.evidence_run_id
+        Test-Path -LiteralPath (Join-Path $env:REDSALAMANDER_TEST_ROOT "evidence/run-archive-records/$($index.evidence_run_id)/complete.json") | Should Be $true
     }
 }

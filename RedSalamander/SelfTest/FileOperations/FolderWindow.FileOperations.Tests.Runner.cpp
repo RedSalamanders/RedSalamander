@@ -9752,6 +9752,58 @@ using TickResult = std::optional<bool>;
         const auto micros = [](FILETIME time) noexcept { return ((static_cast<uint64_t>(time.dwHighDateTime) << 32u) | time.dwLowDateTime) / 10u; };
         return micros(kernel) + micros(user);
     };
+    const auto emitCadenceObservations = [&](std::wstring_view phase, const FileOperationsPopupState& popupState) noexcept
+    {
+        const auto rows     = popupState.DebugCadenceObservationsForSelfTest();
+        const uint64_t lost = popupState.DebugCadenceLostForSelfTest();
+        Debug::Perf::Emit(L"FileOps.PopupCadence.ObserverRows", phase, 0u, rows.size(), lost, S_OK);
+        note(std::format(L"{} observer: rows={} lost={} (opt-in fixed storage; graph/host queries add diagnostic overhead; output follows measurement)",
+                         phase,
+                         rows.size(),
+                         lost));
+        note(L"observer events: 0=before graph sync, 1=after graph sync, 2=paint begin, 3=paint end, 4=message, 5=host handled; "
+             L"sampleTransition excludes the separate marker transition; displayed/target marker values remain observable");
+        uintptr_t previousGraph = 0u;
+        size_t graphGeneration  = 0u;
+        const uint64_t start    = rows.empty() ? 0u : rows.front().tick;
+        for (size_t index = 0u; index < rows.size(); ++index)
+        {
+            const auto& row = rows[index];
+            if (row.graphIdentity != 0u && row.graphIdentity != previousGraph)
+            {
+                previousGraph = row.graphIdentity;
+                ++graphGeneration;
+            }
+            // Publish run-local identity changes, never an address or any content.
+            note(std::format(L"{} observer[{}]: ms={} event={} message=0x{:X} popupTimer={} paint={} intervalMs={} invalidations={} subscription={} "
+                             L"publishedKnown={} paused={} graphGeneration={} graphQueried={} graphPresent={} visible={} samples={} sampleTransition={} "
+                             L"sampleDisplayed={} sampleTarget={} markerVisible={} markerDisplayed={} markerTarget={} reducedMotion={}",
+                             phase,
+                             index,
+                             row.tick - start,
+                             static_cast<unsigned>(row.event),
+                             row.message,
+                             row.popupTimer,
+                             row.paintGeneration,
+                             row.telemetryIntervalMs,
+                             row.hostInvalidations,
+                             row.hostAnimationSubscribed,
+                             row.publishedStateKnown,
+                             row.publishedPaused,
+                             graphGeneration,
+                             row.graphQueried,
+                             row.graphIdentity != 0u,
+                             row.graphVisible,
+                             row.graph.sampleCount,
+                             row.graph.transitionActive,
+                             row.graph.displayedLatestValue,
+                             row.graph.targetLatestValue,
+                             row.graph.currentValueMarkerVisible,
+                             row.graph.displayedCurrentValue,
+                             row.graph.targetCurrentValue,
+                             row.graph.reducedMotion));
+        }
+    };
 
     // 1. Synthetic popup on a private engine: the cadence each declared task state selects, and the
     //    path-detail motion check (x-lifetime#3). Nothing here admits work or touches the user's popup.
@@ -9869,6 +9921,55 @@ using TickResult = std::optional<bool>;
                 fail(std::format(L"{} kept repainting a waiting task: timerTicks={} renders={}", scenario.name, ticks, renders));
             if (scenario.intervalMs == 0u && ticks != 0u)
                 fail(std::format(L"{} kept an idle timer: timerTicks={}", scenario.name, ticks));
+        }
+
+        // Retain one actual hosted graph through a nonzero running -> paused rate
+        // transition. Unlike a new already-paused scene, this preserves its control
+        // and history. It observes bounded host motion without changing idle budgets.
+        {
+            popupState->DebugSetVisualScenario({running}, false, true);
+            paint();
+            static_cast<void>(pumpFor(600ms));
+            if (! popupState->DebugCadenceObservationsForSelfTest().empty())
+                fail(L"cadence observations were enabled by default");
+            popupState->DebugStartCadenceCaptureForSelfTest(taskId);
+            const auto stopCapture = wil::scope_exit([&]() noexcept { popupState->DebugStopCadenceCaptureForSelfTest(); });
+            paint();
+            uintptr_t runningGraph = 0u;
+            size_t runningSamples  = 0u;
+            for (const auto& row : popupState->DebugCadenceObservationsForSelfTest())
+                if (row.event == PopupCadenceDebugEvent::AfterGraphSync && row.graphVisible && row.graph.sampleCount != 0u &&
+                    row.graph.displayedCurrentValue > 0.0 && row.graph.targetCurrentValue > 0.0)
+                {
+                    runningGraph   = row.graphIdentity;
+                    runningSamples = row.graph.sampleCount;
+                }
+            if (popupState->DebugPauseRetainedVisualRateForSelfTest(taskId + 1u))
+                return reject(L"retained graph adapter accepted an absent task");
+            if (runningGraph == 0u || ! popupState->DebugPauseRetainedVisualRateForSelfTest(taskId))
+                return reject(L"retained graph fixture did not establish a nonzero running rate before the actual paused reducer");
+            if (popupState->DebugPauseRetainedVisualRateForSelfTest(taskId))
+                return reject(L"retained graph adapter accepted an already-paused task");
+            paint();
+            const auto elapsed = pumpFor(2200ms);
+            popupState->DebugStopCadenceCaptureForSelfTest();
+            bool sawPausedZeroTarget = false;
+            bool retained            = true;
+            for (const auto& row : popupState->DebugCadenceObservationsForSelfTest())
+            {
+                if (row.graphIdentity != 0u && row.graphIdentity != runningGraph)
+                    retained = false;
+                if (row.event == PopupCadenceDebugEvent::AfterGraphSync && row.publishedStateKnown && row.publishedPaused &&
+                    row.graphIdentity == runningGraph && row.graph.targetCurrentValue == 0.0 && row.graph.sampleCount == runningSamples &&
+                    row.graph.targetLatestValue > 0.0)
+                    sawPausedZeroTarget = true;
+            }
+            const size_t stoppedRows = popupState->DebugCadenceObservationsForSelfTest().size();
+            paint();
+            const bool stopped = popupState->DebugCadenceObservationsForSelfTest().size() == stoppedRows;
+            emitCadenceObservations(L"synthetic-retained-running-paused", *popupState);
+            if (! elapsed.conditionMet || ! retained || ! sawPausedZeroTarget || ! stopped || popupState->DebugCadenceLostForSelfTest() != 0u)
+                fail(L"retained nonzero-to-paused graph/control observation was incomplete or changed control identity");
         }
 
         // A finished card's bar after the idle transition. The last tick decides idle before any frame shows the
@@ -10460,6 +10561,18 @@ using TickResult = std::optional<bool>;
                          operations->DebugLastPresentationHeartbeatMsForSelfTest(),
                          after.recoveryTicks - before.recoveryTicks));
 
+    // Capture the first slow tick as well as the original steady-state sample.
+    // Reading pinned graph/host debug facts adds diagnostic-only observer overhead.
+    auto* cadencePopupState = reinterpret_cast<FileOperationsPopupState*>(GetWindowLongPtrW(popup, GWLP_USERDATA));
+    if (! cadencePopupState)
+        return reject(L"paused cadence observer popup unavailable");
+    cadencePopupState->DebugStartCadenceCaptureForSelfTest(taskId);
+    auto stopCadenceCapture = wil::scope_exit([&]() noexcept
+    {
+        if (GetWindowLongPtrW(popup, GWLP_USERDATA) == reinterpret_cast<LONG_PTR>(cadencePopupState))
+            cadencePopupState->DebugStopCadenceCaptureForSelfTest();
+    });
+
     // Paused: the waiting cadence for the popup, the backed-off heartbeat for the owner (x-perf#5).
     task->SetPaused(true);
     if (! waitForInterval(1000u, SelfTest::Scale(2s), L"paused copy waiting cadence").conditionMet)
@@ -10480,6 +10593,11 @@ using TickResult = std::optional<bool>;
     note(std::format(L"resume re-armed the 100 ms cadence in {} ms", resumed.elapsed.count()));
     if (! resumed.conditionMet)
         fail(L"resuming the Copy did not restore the 100 ms cadence promptly");
+    if (GetWindowLongPtrW(popup, GWLP_USERDATA) != reinterpret_cast<LONG_PTR>(cadencePopupState))
+        return reject(L"paused cadence observer popup lifetime ended before observation publication");
+    cadencePopupState->DebugStopCadenceCaptureForSelfTest();
+    stopCadenceCapture.release();
+    emitCadenceObservations(L"engine-paused-through-resume", *cadencePopupState);
 
     // Prompt-blocked: the engine classifies a published decision as waiting, and its metadata load
     // (which still changes the card) as active. The flags are restored before any pump.

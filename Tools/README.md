@@ -95,6 +95,20 @@ ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapte
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
 
+The existing manual workflow also accepts platform All (default), x64 or ARM64.
+`CommandsUiAttribution` runs the existing help/observer-control case first and three
+fixed Preferences, path-detail and menu-hover cases once each, using one test-enabled
+build and independent canonical Commands/Fresh/SkipBuild processes. The module owns
+their marked-sandbox context, independent streams/coverage, unique child IDs and
+archive-relative index. Changed source/receipt bytes, retries/repair, missing proof or
+unsafe retirement stop later launches; an ordinary fully proven case failure remains
+failed, and any failed/unexecuted row fails the job. This is filtered attribution,
+not Full or production qualification; see `Specs/Build/Build_UnifiedCI.md` for the exact list.
+Each child passes `-RequireCleanQuarantine`; the canonical reader refuses blocking or
+invalid ledgers before native work and the runner cannot dispatch a repair under this
+opt-in. Preflight and post-run checks do not replace that guard. Ordinary callers keep
+the existing default repair behavior.
+
 Hosted native interactive entries use the rendered `WinSta0\Default` desktop on this project's
 GitHub-hosted runner. Paired comparisons retain the original fixture on both sources.
 A thread-owned neutral window must prove real foreground and focus before child launch,
@@ -585,7 +599,7 @@ and focused tests.
 | `Modules/Testing/TestMachineResources.psm1` | Schema validation, non-secret capability digesting, and scoped environment projection for per-machine Connection Manager, SMB, MTP, and alternate local-root resources. |
 | `Modules/Testing/TestRunArchive.psm1` | Archived evidence structure/content validation, area-schema dispatch, complete JSONL validation, and paired Terminal VT admission comparison. |
 | `Modules/Testing/TestRunPlan.Common.psm1` | Stable plan entries, canonical validation-plan digests, path normalization, run identities, and process snapshots. |
-| `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface. |
+| `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface, including `Assert-RSTestQuarantineClean` for runner admission. |
 | `Modules/Testing/TestRunSummary.psm1` | Legacy v1 plus verified composite v2 summaries, verdict axes, the canonical 0..5 terminal-state mapping, case history, dashboard, JSONL, and step-summary rendering. |
 | `Modules/Testing/TestSandbox.psm1` | Fail-closed exact `X:\RedSalamander.Perf` authorization, ownership markers, fresh uncached reparse-component checks, `New-RSTestSandboxLink` (the only governed creator of test junctions, symbolic links and hard links, refusing any link that would live or point outside one marked sandbox), run contexts, cleanup planning, stale-run removal that never follows reparse points (links are unlinked; a run with a volume mount point is retained whole), the per-run test-owned VHDX fixture (elevated provisioning that proves the attached disk is the blank file-backed VHDX before formatting and the volume is its own before mounting, a durable receipt before mounting, reverse-order teardown that can keep a detached VHDX as evidence, and receipt-aware cleanup that retains a run when not elevated unless its disk is already detached), and live-owner-consistent disk audits. |
 | `Modules/Testing/TestSuitePlan.psm1` | Declarative stable-ID suite construction, governed Commands families, exact reviewed no-activation owned witnesses including identity-interlock waiting, and selected-profile artifact-mutating Pester coverage. |

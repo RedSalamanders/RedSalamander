@@ -181,6 +181,159 @@ Describe 'Product documentation capture fixtures' {
     }
 }
 
+Describe 'Popup cadence diagnostic source contracts' {
+    It 'keeps the bounded observer default-off test-only and free of emission or allocation inside capture' {
+        $header=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.h'
+        $source=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.cpp'
+        $header|Should Match '(?s)#ifdef ENABLE_TESTS(?:(?!#endif).)*DebugStartCadenceCaptureForSelfTest'
+        $header|Should Match 'kCadenceObservationCapacity\s*=\s*1024u'
+        $header|Should Match 'std::array<PopupCadenceDebugObservation, kCadenceObservationCapacity>'
+        $header|Should Match '_debugCadenceEnabled\s*=\s*false;'
+        $capture=[regex]::Match($source,'(?ms)^void FileOperationsPopupInternal::FileOperationsPopupState::DebugRecordCadenceObservation\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $capture.Success|Should Be $true
+        $capture.Value|Should Match '(?s)if \(! _debugCadenceEnabled\)\s*return;.*if \(_debugCadenceCount == _debugCadenceObservations->size\(\)\).*\+\+_debugCadenceLost;\s*return;'
+        $capture.Value|Should Match '_controlsHost\.DebugGetInvalidateCount\(\)'
+        $capture.Value|Should Match '_controlsHost\.DebugHasActiveAnimationSubscription\(\)'
+        $capture.Value|Should Match 'row\.publishedPaused\s*=\s*_debugCadencePublishedPaused'
+        $capture.Value|Should Match 'row\.publishedStateKnown\s*=\s*_debugCadencePublishedStateKnown'
+        $capture.Value|Should Match '(?s)_debugCadenceRendering.*return;\s*row\.graphQueried = true;.*graph->IsVisible\(\).*graph->GetDebugState\(\)'
+        $capture.Value|Should Not Match '\b(?:new|make_unique|malloc|realloc|format|Emit|AppendLog|WriteFile|SetTimer|InvalidateRect|SendMessageW|PostMessageW)\b'
+        $destroy=[regex]::Match($source,'(?ms)^LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $destroy.Success|Should Be $true
+        $destroy.Value.IndexOf('_debugCadenceEnabled = false;')|Should BeLessThan $destroy.Value.IndexOf('_controlsHost.Detach()')
+    }
+    It 'uses the actual retained rate reducer and preserves the original case activation and sampling boundaries' {
+        $source=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.cpp'
+        $reducer=[regex]::Match($source,'(?ms)^bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVisualRateForSelfTest\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $reducer.Success|Should Be $true
+        $reducer.Value|Should Match 'task->paused \|\| history->second\.displayedBytesPerSec <= 0\.0'
+        $reducer.Value|Should Match 'AdvanceRateHistory\(history->second, rate, rate\.progressStateChangeTick, totals\)'
+        $reducer.Value|Should Not Match 'DebugSetVisualScenario|_rates\.clear|_controlsHost\.Detach|SetTimer'
+        $runner=Get-RSText 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'
+        $case=[regex]::Match($runner,'(?ms)^\[\[nodiscard\]\] bool RunFileOpsPopupIdleCadenceChecks\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success|Should Be $true
+        $case.Value|Should Match 'ScopedWindowActivationBlocker blocker'
+        $case.Value|Should Match 'SW_SHOWNOACTIVATE'
+        $case.Value|Should Match '(?s)pumpFor\(600ms\).*DebugCadenceObservationsForSelfTest\(\)\.empty\(\).*DebugStartCadenceCaptureForSelfTest\(taskId\)'
+        $case.Value|Should Match '(?s)runningGraph == 0u.*DebugPauseRetainedVisualRateForSelfTest\(taskId\).*pumpFor\(2200ms\).*DebugStopCadenceCaptureForSelfTest\(\)'
+        $case.Value|Should Match 'row\.graphIdentity == runningGraph && row\.graph\.targetCurrentValue == 0\.0 && row\.graph\.sampleCount == runningSamples'
+        $case.Value|Should Match 'DebugCadenceLostForSelfTest\(\) != 0u'
+        $case.Value|Should Match 'stopCadenceCapture\.release\(\)'
+        $case.Value|Should Match 'FileOps\.PopupCadence\.ObserverRows'
+        $case.Value|Should Match 'sampleTransition excludes the separate marker transition'
+        $case.Value|Should Match 'graphGeneration=\{\} graphQueried=\{\}'
+        $case.Value|Should Not Match 'graphIdentity=\{[^}]*\}|address=\{[^}]*\}'
+    }
+}
+
+Describe 'Commands attribution and UI prerequisite source contracts' {
+    It 'keeps process enrichment query-only with held identity, canonical digests and no raw identity text' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $read=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessFacts ReadCommandsProcessFacts\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $capture=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessObservation CaptureCommandsProcessObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $observe=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessObservation ObserveCommandsProcess\([^\r\n]+\)\s*\{.*?^\}')
+        $describe=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsProcessObservation\([^\r\n]+\)\s*\{.*?^\}')
+        foreach($body in @($read,$capture,$observe,$describe)){$body.Success|Should Be $true}
+        $capture.Value|Should Match 'wil::unique_handle child\(OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, window\.process\)\)'
+        $capture.Value|Should Match '(?s)wil::unique_handle parent;.*parent\.reset\(OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId\)\).*return ObserveCommandsProcess\(window,'
+        $observe.Value|Should Match '(?s)readProcess\(window\.process, true\).*readProcess\(result\.process\.parentProcess, false\).*readWindow\(window\.window, result\.finalProcess, result\.relationError\)'
+        $observe.Value|Should Match 'result\.parent\.creationTime <= result\.process\.creationTime'
+        $observe.Value|Should Match 'result\.finalThread == window\.thread && result\.finalProcess == window\.process'
+        $read.Value|Should Match 'GetProcessTimes\(process,'
+        $read.Value|Should Match '(?s)if \(! extended\)\s*return result;.*QueryFullProcessImageNameW'
+        $read.Value|Should Match '(?s)ComputeContentDigest\(Common::Crypto::ContentDigestAlgorithm::Sha256,\s*std::as_bytes\(std::span<const wchar_t>\(path\.data\(\), path\.size\(\)\)\)'
+        $read.Value|Should Match 'IsProcessInJob\(process, nullptr, &inJob\)'
+        $read.Value|Should Match 'result\.parentStatus = query\(process, 0u,'
+        $describe.Value|Should Match 'pathDigestAlgorithm=SHA256-UTF16LE'
+        $describe.Value|Should Match 'exactTestJob=unavailable'
+        $describe.Value|Should Match 'parent compatibility is not creator/ownership proof'
+        $describe.Value|Should Match 'CommandsProcessImageKind\(p\.imageKind\)'
+        $describe.Value|Should Not Match '\b(?:QueryFullProcessImageNameW|GetWindowTextW|GetCommandLineW)\s*\(|\b(?:leaf|imagePath|commandLine)\b'
+        $callPattern='(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $captureCalls=@('CaptureCommandsProcessObservation','if','child','OpenProcess','GetLastError','ReadCommandsProcessFacts','get','reset','ObserveCommandsProcess','SetLastError','GetWindowThreadProcessId')
+        @([regex]::Matches($capture.Value,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $captureCalls}).Count|Should Be 0
+        $formatCalls=@('DescribeCommandsProcessObservation','if','Common::Crypto::AppendHexToken','std::format','CommandsProcessImageKind')
+        @([regex]::Matches($describe.Value,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $formatCalls}).Count|Should Be 0
+        ($read.Value+$capture.Value+$observe.Value+$describe.Value)|Should Not Match '\b(?:TerminateProcess|SendInput|SetForegroundWindow|RequestForegroundWindow|SetFocus|SetActiveWindow|PostMessageW|SendMessageW|CreateToolhelp32Snapshot)\s*\('
+        $registration=[regex]::Match($source,'(?s)L"red_salamander_help_lists_diagnostics_options".*?\}\);')
+        $registration.Value|Should Match '(?s)if \(! TestCommandsProcessObservationControls\(state\)\)\s*return false;\s*return TestRedSalamanderHelpListsDiagnosticsOptions\(state\);'
+    }
+    It 'keeps the managed observer failure-only except minimal original entry identity and releases held handles after relation checks' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $source|Should Match '(?s)DescribeWindowIdentity\(IntPtr window\).*?DescribeWindowIdentityCore\(window, true\)'
+        $source|Should Match '(?s)DescribeEntryWindowIdentity\(IntPtr window\).*?DescribeWindowIdentityCore\(window, false\)'
+        $source|Should Match 'CaptureIdentityForDiagnostics\(original, HostedDesktopNative\.DescribeEntryWindowIdentity\)'
+        $body=[regex]::Match($source,'(?ms)^        private static string DescribeWindowIdentityCore\(.*?^        \}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'OpenProcess\(0x1000, false, pid\)'
+        $body.Value|Should Match '(?s)SafeProcessHandle childLease = null, parentLease = null;.*ObserveProcessForWindow\(window, thread, process, extended, read, ReadWindowProcessIdentity\).*finally.*parentLease\.Dispose\(\).*childLease\.Dispose\(\)'
+        $source|Should Match '(?s)ProcessImageDigest\(string path\).*?Buffer\.BlockCopy\(path\.ToCharArray\(\), 0, bytes, 0, bytes\.Length\).*?System\.Security\.Cryptography\.SHA256\.Create\(\)'
+        $source|Should Match 'exactTestJob=unavailable'
+        $body.Value|Should Not Match 'Process\.GetProcesses|MainWindowTitle|GetWindowText|CommandLine|SetForegroundWindow|SendInput|\.Kill\('
+    }
+    It 'fails the exact path-detail positive prerequisite before Enter while preserving text and focus assertions' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp'
+        $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestFileOperationsPopupThroughputDisclosure\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'detailForeground = CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $body.Value|Should Match 'detailFocus\s*= CaptureCommandsWindowObservation\(GetFocus\(\)\)'
+        $gate=[regex]::Match($body.Value,'(?s)if \(! state\.Require\(DebugCanRestoreFileOperationsPathDetailTextFocus\(popup\.get\(\), detailFocus\.window, detailForeground\.window\),.*?DescribeCommandsWindowObservation\(detailForeground\).*?DescribeCommandsWindowObservation\(detailFocus\)\)\)\)\s*return false;')
+        $gate.Success|Should Be $true
+        $enter=$body.Value.IndexOf('SendMessageW(popup.get(), WM_KEYDOWN, VK_RETURN, 0)', $gate.Index)
+        $enter|Should BeGreaterThan ($gate.Index+$gate.Length)
+        $body.Value|Should Match 'Enter must place hosted focus on the path-detail text'
+        $body.Value|Should Match 'read.only'
+        $body.Value|Should Match 'multiline|multi.line'
+        $body.Value|Should Match 'Unicode'
+        $gate.Value|Should Not Match 'TryActivateOwnedWindow|RequestForegroundWindow|SetForegroundWindow|state\.Skip|sleep_for'
+    }
+    It 'guards the pinned bounded menu metadata variant and requires readiness before queuing the first hover' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp'
+        $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestMainMenuPersistentViewToPluginsHoverSwitchesPopup\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'std::array<wchar_t, 1024u> text'
+        $body.Value|Should Match 'std::array<MenuMetadataRecord, 64u> records'
+        $body.Value|Should Match 'static thread_local MenuMetadataCapture\* currentMenuMetadata'
+        $body.Value|Should Match '(?s)std::make_unique<MenuMetadataCapture>\(\).*wil::scope_exit.*DxUi::Diagnostics::sink = previousDiagnosticSink;.*currentMenuMetadata\s*= previousDiagnosticTarget;'
+        $callback=[regex]::Match($body.Value,'(?s)DxUi::Diagnostics::sink\s*= \[\]\(std::wstring_view, std::wstring_view message\) noexcept\s*\{.*?\r?\n    \};')
+        $callback.Success|Should Be $true
+        $allowed=@('menu.show-begin','menu.show-end','menu.popup-create-begin','menu.popup-create-end','menu.loop-dismiss-activation',
+            'menu.loop-nonpopup-pointer','menu.pointer','DxUi::MenuTrace Popup root-switch-probe','DxUi::MenuTrace Popup root-switch-accepted',
+            'DxUi::MenuTrace Popup root-switch-rejected','DxUi::MenuTrace Popup root-switch-stale-after-keyboard','DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted')
+        $events=@([regex]::Matches($callback.Value,'L"([^"]+)"')|ForEach-Object{$_.Groups[1].Value})
+        ($events -join '|')|Should Be ($allowed -join '|')
+        $callback.Value|Should Not Match '\b(?:new|malloc|realloc|format|AppendSuiteTrace|SendMessageW|PostMessageW|SendInput|SetForegroundWindow)\b|std::(?:w?fstream|w?cout)|WriteFile'
+        $callPattern='(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $allowedCallbackCalls=@('if','std::ranges::any_of','starts_with','size','std::min','GetTickCount64','std::copy_n','begin')
+        $unreviewedCallbackCalls={param($Text) @([regex]::Matches($Text,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $allowedCallbackCalls}).Count}
+        (& $unreviewedCallbackCalls $callback.Value)|Should Be 0
+        (& $unreviewedCallbackCalls ($callback.Value.Replace('auto* const capture = currentMenuMetadata;','::UnreviewedObserver(); auto* const capture = currentMenuMetadata;')))|Should Be 1
+        $callback.Value|Should Match 'capture->dropped'
+        $callback.Value|Should Match 'capture->truncated'
+        $body.Value|Should Match 'return owned && readable && ! popupState\.itemTexts\.empty\(\) && selected == static_cast<int>\(viewMapping->visualIndex\)'
+        $readiness='(?s)const bool hoverReady = traceMenuState\(L"before-first-hover", initialPopup\);\s*firstHoverReady\.store\(hoverReady, std::memory_order_release\);\s*if \(! hoverReady\)\s*return;'
+        $move='PostMessageW\(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM\(livePluginsClientPoint\.x, livePluginsClientPoint\.y\)\)'
+        $leave='PostMessageW\(menuBarWindow, WM_MOUSELEAVE, 0, 0\)'
+        $hasGuardedQueue={
+            param($Text)
+            $gate=[regex]::Match($Text,$readiness)
+            if (! $gate.Success) { return $false }
+            # Earlier View-open mouseleave is separate; bind only the Plugins hover branches after readiness.
+            $hoverBranches=$Text.Substring($gate.Index+$gate.Length)
+            $moves=@([regex]::Matches($hoverBranches,$move));$leaves=@([regex]::Matches($hoverBranches,$leave))
+            return $moves.Count -eq 1 -and $leaves.Count -eq 1
+        }
+        (& $hasGuardedQueue $body.Value)|Should Be $true
+        $withoutReadiness=[regex]::Replace($body.Value,'if \(! hoverReady\)\s*return;','')
+        (& $hasGuardedQueue $withoutReadiness)|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('PostMessageW(menuBarWindow, WM_MOUSEMOVE','PostMessageW(initialPopup, WM_MOUSEMOVE')))|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('PostMessageW(menuBarWindow, WM_MOUSELEAVE','PostMessageW(initialPopup, WM_MOUSELEAVE')))|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)','MAKELPARAM(viewClientPoint.x, viewClientPoint.y)')))|Should Be $false
+        $body.Value|Should Match 'replacementPopupClosed'
+        $body.Value|Should Match 'hoverViaMouseLeaveRefresh'
+    }
+}
+
 Describe 'Commands boundary observation and clipboard source contracts' {
     It 'keeps the narrow window observation metadata-only with explicit unavailable identity' {
         $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'

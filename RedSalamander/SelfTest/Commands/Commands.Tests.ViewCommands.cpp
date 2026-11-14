@@ -11294,10 +11294,12 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> clickInputSent{false};
-    std::atomic<bool> hoverMessageDelivered{false};
+    std::atomic<bool> hoverMessageQueued{false};
     std::atomic<bool> hoverCursorMoved{prepositionedLiveCursor};
     std::atomic<bool> viewMenuSelected{false};
     std::atomic<bool> initialPopupObserved{false};
+    std::atomic<bool> initialPopupReady{false};
+    std::atomic<bool> firstHoverReady{false};
     std::atomic<bool> pluginsMenuSelected{false};
     std::atomic<bool> replacementPopupObserved{false};
     std::atomic<bool> initialPopupClosed{false};
@@ -11309,6 +11311,114 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::atomic<int> selectedIndexBeforeHoverMessage{-2};
     std::atomic<int> selectedIndexAfterHoverWait{-2};
     std::atomic<unsigned long long> rootPointerSwitchCount{0};
+    // This case-local adapter deliberately retains only audited menu metadata, not the
+    // SDK's unrestricted diagnostic stream. The synchronous TLS sink is temporarily
+    // intercepted on this UI thread; the prior consumer/target are restored before storage dies.
+    struct MenuMetadataRecord
+    {
+        std::array<wchar_t, 1024u> text{};
+        size_t length  = 0u;
+        ULONGLONG tick = 0u;
+        bool truncated = false;
+    };
+    struct MenuMetadataCapture
+    {
+        std::array<MenuMetadataRecord, 64u> records{};
+        size_t next        = 0u;
+        size_t retained    = 0u;
+        uint64_t dropped   = 0u;
+        uint64_t truncated = 0u;
+    };
+    auto menuMetadata                                            = std::make_unique<MenuMetadataCapture>();
+    static thread_local MenuMetadataCapture* currentMenuMetadata = nullptr;
+    const auto previousDiagnosticSink                            = DxUi::Diagnostics::sink;
+    auto* const previousDiagnosticTarget                         = currentMenuMetadata;
+    const auto restoreDiagnosticSink                             = wil::scope_exit([&]() noexcept
+    {
+        DxUi::Diagnostics::sink = previousDiagnosticSink;
+        currentMenuMetadata     = previousDiagnosticTarget;
+    });
+    currentMenuMetadata                                          = menuMetadata.get();
+    DxUi::Diagnostics::sink                                      = [](std::wstring_view, std::wstring_view message) noexcept
+    {
+        auto* const capture = currentMenuMetadata;
+        if (! capture)
+            return;
+        // Exact pinned definitions contain only numeric/HWND/enum geometry and routing facts.
+        // No menu label, title, clipboard value, or path event is admitted here.
+        static constexpr std::array<std::wstring_view, 12u> allowedEvents{{L"menu.show-begin",
+                                                                           L"menu.show-end",
+                                                                           L"menu.popup-create-begin",
+                                                                           L"menu.popup-create-end",
+                                                                           L"menu.loop-dismiss-activation",
+                                                                           L"menu.loop-nonpopup-pointer",
+                                                                           L"menu.pointer",
+                                                                           L"DxUi::MenuTrace Popup root-switch-probe",
+                                                                           L"DxUi::MenuTrace Popup root-switch-accepted",
+                                                                           L"DxUi::MenuTrace Popup root-switch-rejected",
+                                                                           L"DxUi::MenuTrace Popup root-switch-stale-after-keyboard",
+                                                                           L"DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted"}};
+        const bool admitted = std::ranges::any_of(allowedEvents, [message](std::wstring_view event) noexcept {
+            return message.starts_with(event) && (message.size() == event.size() || message[event.size()] == L' ');
+        });
+        if (! admitted)
+            return;
+        auto& record     = capture->records[capture->next];
+        record.length    = std::min(message.size(), record.text.size() - 1u);
+        record.tick      = GetTickCount64();
+        record.truncated = message.size() > record.length;
+        std::copy_n(message.begin(), record.length, record.text.begin());
+        record.text[record.length] = L'\0';
+        capture->next              = (capture->next + 1u) % capture->records.size();
+        if (capture->retained < capture->records.size())
+            ++capture->retained;
+        else
+            ++capture->dropped;
+        if (record.truncated)
+            ++capture->truncated;
+    };
+    const DWORD menuUiThread  = GetWindowThreadProcessId(mainWindow, nullptr);
+    const auto traceMenuState = [&](std::wstring_view phase, HWND popup) noexcept
+    {
+        const auto popupObservation = CaptureCommandsWindowObservation(popup);
+        const auto ownerObservation = CaptureCommandsWindowObservation(popup ? GetWindow(popup, GW_OWNER) : nullptr);
+        const auto foreground       = CaptureCommandsWindowObservation(GetForegroundWindow());
+        const auto mainObservation  = CaptureCommandsWindowObservation(mainWindow);
+        const auto barObservation   = CaptureCommandsWindowObservation(menuBarWindow);
+        GUITHREADINFO gui{};
+        gui.cbSize = sizeof(gui);
+        SetLastError(ERROR_SUCCESS);
+        const bool guiAvailable       = GetGUIThreadInfo(menuUiThread, &gui) != FALSE;
+        const DWORD guiError          = guiAvailable ? ERROR_SUCCESS : GetLastError();
+        const auto captureObservation = CaptureCommandsWindowObservation(guiAvailable ? gui.hwndCapture : nullptr);
+        const auto focusObservation   = CaptureCommandsWindowObservation(guiAvailable ? gui.hwndFocus : nullptr);
+        const auto ownedPopups        = FindVisibleOwnedDxUiContextMenuWindows(mainWindow);
+        const bool owned              = popupObservation.process == GetCurrentProcessId() && popupObservation.thread == menuUiThread &&
+                                        std::ranges::find(ownedPopups, popup) != ownedPopups.end();
+        DxUi::ContextMenuPopupDebugState popupState{};
+        const bool readable = popupObservation.valid && DxUi::DebugGetContextMenuPopupState(popup, popupState);
+        const int selected  = DebugGetMainMenuBarSelectedIndex();
+        SelfTest::AppendSuiteTrace(
+            SelfTest::SelfTestSuite::Commands,
+            std::format(L"menuBar_view_to_plugins boundary={}: owned={} visible={} readable={} items={} selected={} "
+                        L"guiAvailable={} guiError={}; popup [{}]; owner [{}]; main [{}]; bar [{}]; foreground [{}]; capture [{}]; focus [{}].",
+                        phase,
+                        owned,
+                        popup && IsWindowVisible(popup) != FALSE,
+                        readable,
+                        popupState.itemTexts.size(),
+                        selected,
+                        guiAvailable,
+                        guiError,
+                        DescribeCommandsWindowObservation(popupObservation),
+                        DescribeCommandsWindowObservation(ownerObservation),
+                        DescribeCommandsWindowObservation(mainObservation),
+                        DescribeCommandsWindowObservation(barObservation),
+                        DescribeCommandsWindowObservation(foreground),
+                        DescribeCommandsWindowObservation(captureObservation),
+                        DescribeCommandsWindowObservation(focusObservation)));
+        return owned && readable && ! popupState.itemTexts.empty() && selected == static_cast<int>(viewMapping->visualIndex);
+    };
     std::jthread popupDriver([&](std::stop_token stopToken) noexcept
     {
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: worker start");
@@ -11346,7 +11456,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                                    std::format(L"menuBar_view_to_plugins: view selected={} selectedIndex={}",
                                                viewMenuSelected.load(std::memory_order_acquire),
                                                DebugGetMainMenuBarSelectedIndex()));
-        const HWND initialPopup = WaitForWindow([]() noexcept { return FindVisibleDxUiContextMenuWindow(); }, SelfTest::Scale(2000ms));
+        const HWND initialPopup = WaitForWindow([&]() noexcept { return FindVisibleOwnedDxUiContextMenuWindow(mainWindow); }, SelfTest::Scale(2000ms));
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
                                    std::format(L"menuBar_view_to_plugins: initial popup=0x{:X}", reinterpret_cast<uintptr_t>(initialPopup)));
         if (! initialPopup)
@@ -11357,17 +11467,23 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         initialPopupObserved.store(true, std::memory_order_release);
         selectedIndexBeforeHoverMessage.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
         const auto popupReadyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+        bool ready                    = false;
         while (std::chrono::steady_clock::now() < popupReadyDeadline)
         {
             DxUi::ContextMenuPopupDebugState popupState{};
             if (DxUi::DebugGetContextMenuPopupState(initialPopup, popupState) && ! popupState.itemTexts.empty())
             {
+                ready = true;
                 break;
             }
 
             std::this_thread::sleep_for(10ms);
         }
-        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: popup ready wait done");
+        ready = traceMenuState(L"initial-ready", initialPopup) && ready;
+        initialPopupReady.store(ready, std::memory_order_release);
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, std::format(L"menuBar_view_to_plugins: popup ready={}", ready));
+        if (! ready)
+            return;
 
         RECT livePluginsItemRect{};
         POINT livePluginsScreenPoint = pluginsScreenPoint;
@@ -11385,13 +11501,18 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             hoverHitIndexAfterMove.store(static_cast<int>(hoverHitIndex), std::memory_order_release);
         }
 
+        const bool hoverReady = traceMenuState(L"before-first-hover", initialPopup);
+        firstHoverReady.store(hoverReady, std::memory_order_release);
+        if (! hoverReady)
+            return;
+
         if (hoverViaMouseLeaveRefresh)
         {
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: mouseleave hover branch");
             if (hoverCursorMoved.load(std::memory_order_acquire) && IsWindow(menuBarWindow) != FALSE)
             {
                 DebugSetMainMenuBarHoverSuppressionCursorOverride(hoverSuppressionPoint);
-                hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSELEAVE, 0, 0) != FALSE, std::memory_order_release);
+                hoverMessageQueued.store(PostMessageW(menuBarWindow, WM_MOUSELEAVE, 0, 0) != FALSE, std::memory_order_release);
             }
         }
         else
@@ -11400,6 +11521,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             const auto hoverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
             HWND replacementPopup    = nullptr;
             bool settledOnPlugins    = false;
+            bool lossRecorded        = false;
             while (! stopToken.stop_requested() && ! settledOnPlugins && std::chrono::steady_clock::now() < hoverDeadline)
             {
                 POINT livePluginsClientPoint = livePluginsScreenPoint;
@@ -11407,7 +11529,8 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                 {
                     if (PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)) != FALSE)
                     {
-                        hoverMessageDelivered.store(true, std::memory_order_release);
+                        // Queue admission is not proof that a still-live menu session dispatched this event.
+                        hoverMessageQueued.store(true, std::memory_order_release);
                     }
                 }
 
@@ -11415,6 +11538,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                 replacementPopup             = WaitForRootSwitchedDxUiContextMenuWindow(initialPopup, 0u, &observedSwitchCount, SelfTest::Scale(100ms));
                 rootPointerSwitchCount.store(observedSwitchCount, std::memory_order_release);
                 selectedIndexAfterHoverWait.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
+                if (! lossRecorded && (selectedIndexAfterHoverWait.load(std::memory_order_acquire) < 0 || IsWindow(initialPopup) == FALSE))
+                {
+                    static_cast<void>(traceMenuState(L"first-selection-or-session-loss", initialPopup));
+                    lossRecorded = true;
+                }
                 settledOnPlugins =
                     replacementPopup && selectedIndexAfterHoverWait.load(std::memory_order_acquire) == static_cast<int>(pluginsMapping->visualIndex);
                 if (settledOnPlugins)
@@ -11424,22 +11552,22 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
                 std::this_thread::sleep_for(25ms);
             }
-            SelfTest::AppendSuiteTrace(
-                SelfTest::SelfTestSuite::Commands,
-                std::format(L"menuBar_view_to_plugins: mousemove hover loop done replacement=0x{:X} delivered={} switches={} selected={}",
-                            reinterpret_cast<uintptr_t>(replacementPopup),
-                            hoverMessageDelivered.load(std::memory_order_acquire),
-                            rootPointerSwitchCount.load(std::memory_order_acquire),
-                            DebugGetMainMenuBarSelectedIndex()));
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                       std::format(L"menuBar_view_to_plugins: mousemove hover loop done replacement=0x{:X} queued={} switches={} selected={}",
+                                                   reinterpret_cast<uintptr_t>(replacementPopup),
+                                                   hoverMessageQueued.load(std::memory_order_acquire),
+                                                   rootPointerSwitchCount.load(std::memory_order_acquire),
+                                                   DebugGetMainMenuBarSelectedIndex()));
+            static_cast<void>(traceMenuState(L"hover-loop-end", replacementPopup ? replacementPopup : initialPopup));
 
             DxUi::ContextMenuPopupDebugState popupState{};
             if (DxUi::DebugGetContextMenuPopupState(initialPopup, popupState))
             {
                 rootPointerSwitchCount.store(popupState.rootPointerSwitchCount, std::memory_order_release);
             }
-            if (! hoverMessageDelivered.load(std::memory_order_acquire))
+            if (! hoverMessageQueued.load(std::memory_order_acquire))
             {
-                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no hover delivered, dismiss initial");
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no hover queued, dismiss initial");
                 PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
                 initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
                 return;
@@ -11475,9 +11603,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: worker return replacement path");
             return;
         }
-        if (! hoverMessageDelivered.load(std::memory_order_acquire))
+        if (! hoverMessageQueued.load(std::memory_order_acquire))
         {
-            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no mouseleave delivered, dismiss initial");
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no mouseleave queued, dismiss initial");
             PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
             initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
             return;
@@ -11513,13 +11641,30 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: driver joined");
+    const size_t firstRecord = menuMetadata->retained == menuMetadata->records.size() ? menuMetadata->next : 0u;
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::Commands,
+        std::format(L"menuBar_view_to_plugins diagnostics: retained={} dropped={} truncated={}; missing events are inconclusive after loss.",
+                    menuMetadata->retained,
+                    menuMetadata->dropped,
+                    menuMetadata->truncated));
+    for (size_t index = 0u; index < menuMetadata->retained; ++index)
+    {
+        const auto& record = menuMetadata->records[(firstRecord + index) % menuMetadata->records.size()];
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                   std::format(L"menuBar_view_to_plugins diagnostic tick={} truncated={}: {}",
+                                               record.tick,
+                                               record.truncated,
+                                               std::wstring_view(record.text.data(), record.length)));
+    }
 
     state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the View top-level menu.");
     state.Require(viewMenuSelected.load(std::memory_order_acquire), L"Clicking View did not select the View top-level menu.");
     state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Clicking View did not open the initial DxUI popup.");
+    state.Require(initialPopupReady.load(std::memory_order_acquire), L"The initial View popup must be live, owned, readable and nonempty before hover.");
+    state.Require(firstHoverReady.load(std::memory_order_acquire), L"The owned View menu session must remain ready before the first hover is queued.");
     state.Require(hoverCursorMoved.load(std::memory_order_acquire), L"Failed to park the real cursor on Plugins before mouse-leave validation.");
-    state.Require(hoverMessageDelivered.load(std::memory_order_acquire),
-                  L"Failed to deliver the captured-session hover message to the persistent DxUI menu bar.");
+    state.Require(hoverMessageQueued.load(std::memory_order_acquire), L"Failed to queue the captured-session hover message to the persistent DxUI menu bar.");
     if (hoverViaMouseLeaveRefresh)
     {
         state.Require(
