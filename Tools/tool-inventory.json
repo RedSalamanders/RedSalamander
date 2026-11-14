@@ -67,14 +67,32 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate exact filtered hosted diagnostic cases without promoting repository coverage.",
-      "usage": "Imported by the project CI adapter for fixed explicit diagnostic scopes and immutable paired-dispatch admission.",
-      "usedBy": ["Tools/Invoke-ProjectCi.ps1"],
-      "prerequisites": ["PowerShell 7", "marked TestSandbox", "verified full-solution receipt"],
-      "sideEffects": ["Reads exact archived runner and native case evidence"],
-      "outputs": ["Validated filtered diagnostic selection and evidence"],
+      "purpose": "Validate exact filtered hosted diagnostic cases and schema-dispatched archived Commands runs, binding single-suite v1 to rotated prelaunch source/receipt/plan proof and owned native PID/time evidence without inventing durable promotion or promoting repository coverage. Own the fixed observer-help plus three UI attribution selections with clean-quarantine admission, unchanged receipt bytes, unique child IDs, safe-teardown proof and canonical archive-relative evidence.",
+      "usage": "Imported by the project CI adapter and filtered hosted product qualification workflows for fixed explicit diagnostic scopes and immutable paired-dispatch admission. Optional TimeoutMultiplier defaults to 1 and comes from the trusted invocation; the hosted attribution producer supplies the same explicit 2 to its child and verifier, never inferring it from evidence.",
+      "usedBy": [
+        "Tools/Invoke-ProjectCi.ps1",
+        ".github/workflows/ghostty-runtime-product-qualification.yml"
+      ],
+      "prerequisites": [
+        "PowerShell 7",
+        "marked TestSandbox",
+        "verified full-solution or exact selected application-closure receipt as required by the diagnostic contract"
+      ],
+      "sideEffects": [
+        "Reads exact archived runner and native case evidence",
+        "Allocates and canonically seals one owned marked-sandbox campaign context; invokes each fixed child once through the caller-contained process boundary and preserves independent stdout/stderr/coverage."
+      ],
+      "outputs": [
+        "Validated filtered diagnostic selection and evidence",
+        "Fixed CommandsUiAttribution index with relative context members and exact child archive references, retaining failed/unexecuted rows; never Full or production acceptance"
+      ],
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
-      "tests": ["Tools/Tests/RunAllTestsPlan.Tests.ps1", "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"],
+      "tests": [
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+        "Tools/Tests/TestRunEvidenceArchive.Tests.ps1",
+        "Tools/Tests/HostedTestDesktop.Tests.ps1",
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
+      ],
       "replacement": null
     },
     {
@@ -141,7 +159,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify pinned vcpkg safety, platform-private overlay/toolset selection, and the source/compiler/architecture scope of the MSVC 14.52 ARM64 AWS hash inlining workaround.",
+      "purpose": "Verify pinned vcpkg safety, platform-private overlay/toolset selection, immutable baseline data through a verified existing consumer object store, and the source/compiler/architecture scope of the MSVC 14.52 ARM64 AWS hash inlining workaround.",
       "usage": "Run in the current tooling Pester profile after installer, toolset or overlay changes. Restore pinned DxUi source for the module mirror check; data-only floor/override and ARM64 overlay assertions materialize selected files from immutable builtin-baseline Git objects into marked TestSandbox scratch.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -560,7 +578,7 @@
         "Git"
       ],
       "sideEffects": [
-        "Read-only Git/GitHub scope discovery; reusable evidence helpers are used only by standalone library/RedXe copies."
+        "Read-only Git/GitHub scope discovery; canonical Startrail owns all execution receipts and source/artifact identities."
       ],
       "outputs": [
         "Native naming findings",
@@ -1125,14 +1143,16 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Validate specification information architecture and render derived inventories.",
-      "usage": "Run in documentation governance checks; pass -FailOnFindings to enforce the contract.",
+      "usage": "Validation uses -FailOnFindings -NoReports, retaining the same specification and test-inventory reconciliation without generating files. Default catalog generation remains available to compatible non-validation consumers; -PassThru returns the specification object in either mode.",
       "usedBy": [
         "Specification maintainers",
-        "repository validation workflows"
+        "repository validation workflows",
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Run-AllTests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
-        "Writes derived reports beneath .build/SpecInventory"
+        "Default catalog mode writes four derived reports beneath .build/SpecInventory; -NoReports performs no report writes and rejects explicit -OutputRoot"
       ],
       "outputs": [
         "Specification inventory JSON",
@@ -1142,7 +1162,9 @@
       ],
       "ownerSpec": "Specs/README.md",
       "tests": [
-        "Tools/Tests/SpecInformationArchitecture.Tests.ps1"
+        "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "replacement": null
     },
@@ -1579,7 +1601,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox.",
+      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane.",
       "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
       "usedBy": [
         "Developers",
@@ -2015,7 +2037,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
+      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process/MSBuild helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
       "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -2030,7 +2052,8 @@
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
         "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
-        "Tools/Modules/Build/DxUiDependency.psm1"
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer",
@@ -2073,10 +2096,12 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Choose safe MSBuild invocation and classify optional-code diagnostic headers once for log counts and replay colors.",
+      "purpose": "Share host-ordered MSBuild discovery, choose safe invocation and classify optional-code diagnostic headers once for log counts and replay colors.",
       "usage": "Import from build.ps1 and focused build-output tests, including the relocated native fixture; do not invoke as a command.",
       "usedBy": [
         "build.ps1",
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Modules/Build/VcpkgInstallSafety.psm1",
         "Tools/Tests/MSBuildInvocation.Tests.ps1",
         "Tools/Tests/RelocatedTestSandbox.Tests.ps1"
       ],
@@ -2110,7 +2135,8 @@
         "Tools/Tests/BuildRuntimeClean.Tests.ps1",
         "Tools/Tests/MSBuildInvocation.Tests.ps1",
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
-        "Tools/Tests/RelocatedTestSandbox.Tests.ps1"
+        "Tools/Tests/RelocatedTestSandbox.Tests.ps1",
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -2491,11 +2517,12 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Parse quarantine policy, determine entry status, and construct repair plans that preserve stable entry metadata.",
+      "purpose": "Parse quarantine policy, determine entry status, and construct repair plans that preserve stable entry metadata. Provide the shared read-only Assert-RSTestQuarantineClean admission and empty-repair-plan guard without changing default repair behavior.",
       "usage": "Loaded through the TestRunPlan facade; current commands use the facade rather than importing this domain module directly.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
-        "Tools/Run-AllTests.ps1"
+        "Tools/Run-AllTests.ps1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -2550,6 +2577,7 @@
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Modules/Testing/TestSandbox.psm1",
         "Tools/Modules/Testing/TestSuitePlan.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
         "Tools/Run-AllTests.ps1"
       ],
       "prerequisites": [
@@ -2589,6 +2617,7 @@
         "Tools/Modules/Testing/TestRunPlan.Common.psm1",
         "Tools/Modules/Testing/TestRunSummary.psm1",
         "Tools/Modules/Testing/ValidationEvidence.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
         "Tools/Modules/Testing/ValidationImpact.psm1",
         "Tools/Modules/Testing/TestRunArchive.psm1",
         "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
@@ -2603,6 +2632,7 @@
         "Tools/Tests/TestRunArchive.Tests.ps1",
         "Tools/Tests/ValidationEvidence.Tests.ps1",
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Tests/HostedTestDesktop.Tests.ps1",
         "Tools/Tests/ValidationImpact.Tests.ps1",
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
         "Tools/Tests/RunResultReference.Tests.ps1"
@@ -2706,7 +2736,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide the canonical test-run-plan facade for suite construction, exact drive-root sandboxing, machine resources, quarantine, execution, and reporting helpers.",
+      "purpose": "Provide the canonical test-run-plan facade for suite construction, exact drive-root sandboxing, machine resources, quarantine including strict clean-state admission, execution, and reporting helpers.",
       "usage": "Import from Run-AllTests.ps1, test inventory, sandbox cleanup, and current contract tests; sealed consumers may use Tools/TestRunPlan.ps1.",
       "usedBy": [
         "Tools/Run-AllTests.ps1",
@@ -2743,7 +2773,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure.",
+      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure. Foreign-foreground refusal includes current, saved/current-original and boundary HWND/PID/thread/class identities with UTC capture times; unavailable diagnostics never authorize restoration. Separate failure-only process enrichment retains query-only handles through captured HWND relation rechecks, fixed image categories and canonical exact-UTF16LE SHA256 only; minimal original creation identity is sampled at entry. Availability/errors and parent/any-job facts grant no ownership or close authority.",
       "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest and Get-RSHostedStockPreparationRequest for pure policy selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. The project adapter opts eligible hosted native ARM64 entries into the wrapper's private stock preparation; paired studies retain the original fixture. Local preparation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
@@ -2898,12 +2928,13 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, one exact static product-documentation Commands exception and eleven exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete and identity-interlock waiting, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite.",
+      "purpose": "Construct declarative stable-ID validation entries with FileOps desktop serialization independent of no-activation, one exact static product-documentation Commands exception and eleven exact case-sensitive FileOps-only owned progress/callback/storage lease exceptions including identity-less Delete and identity-interlock waiting, fresh selection convergence and real SMB Copy/Move shape parity, its exact documentation interaction opt-in, other explicit GUI activation groups, the fourteen Commands family contracts, and isolated selected-profile artifact-mutating Pester coverage for each Run-AllTests suite. The closed case-sensitive FileOps no-desktop list additionally admits only exact FileOps_PopupIdleCadence; broad, family, prefix, multi-case and proof-injected selections retain the lease.",
       "usage": "Loaded through the TestRunPlan facade; current commands and inventory tooling consume Get-RSTestRunPlan through that facade, Full's first writer inherits the caller-selected platform/configuration, and Commands family selection is limited to -Suite Commands iteration.",
       "usedBy": [
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Run-AllTests.ps1",
-        "Tools/Modules/Testing/TestInventory.psm1"
+        "Tools/Modules/Testing/TestInventory.psm1",
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
       ],
       "prerequisites": [],
       "sideEffects": [],
@@ -4915,7 +4946,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. File Operations bridge guards retain the shared new-file transfer route alongside managed and verification routes. Overlap guards enforce serial Copy/Move choices and reject stale concurrent consent. File Operations tick-spanning transfer fixture guards protect runtime budget publication, progress-gate ownership and cleanup order. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics. Physical alternate-volume acquisition refuses missing or unmarked roots without writing to them.",
+      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. File Operations bridge guards retain the shared new-file transfer route alongside managed and verification routes. Overlap guards enforce serial Copy/Move choices and reject stale concurrent consent. File Operations tick-spanning transfer fixture guards protect runtime budget publication, progress-gate ownership and cleanup order. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics. Physical alternate-volume acquisition refuses missing or unmarked roots without writing to them. Commands metadata observations retain privacy and same-captured-HWND comparison/diagnostics; defaulted clipboard setup gates a single product-copy attempt without content logging. Separate process-attribution privacy/lifetime guards, captured pre-Enter ownership and bounded pinned menu-metadata interception preserve diagnostic-only semantics and original assertions.",
       "usage": "Run through the current Tools Pester profile and Full; source guards complement native behavioral tests and do not replace them.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -4923,7 +4954,16 @@
       ],
       "prerequisites": [
         "PowerShell with Pester",
-        "Current repository sources"
+        "Current repository sources",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp",
+        "Tools/Modules/Testing/HostedTestDesktop.psm1",
+        "RedSalamander/FolderWindow.FileOperations.Popup.h",
+        "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+        "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp"
       ],
       "sideEffects": [
         "Reads current repository sources; Pester framework artifacts stay in the test sandbox"
@@ -5163,7 +5203,7 @@
         "Eligible Release test-build/production phases may prepare exact pinned SDK inputs; other roles retain Source"
       ],
       "path": "Tools/Invoke-ProjectCi.ps1",
-      "purpose": "Adapt pinned organization CI roles to canonical project build, test and ZIP commands, preserving SDK compiler defaults through canonical vcpkg MSBuild integration.",
+      "purpose": "Adapt pinned organization CI roles to canonical project build, test and ZIP commands, preserving SDK compiler defaults through canonical vcpkg MSBuild integration. CommandsUiAttribution executes one observer prerequisite and three fixed UI cases independently with RequireCleanQuarantine, returning only filtered diagnostic evidence.",
       "kind": "command",
       "replacement": null,
       "prerequisites": [
@@ -5176,7 +5216,7 @@
       "lifecycle": "active",
       "ownerSpec": "Specs/Build/Build_UnifiedCI.md",
       "visibility": "public",
-      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification alone permits fixed CommandsHandoff, FileOpsVolumes and ViewerSpaceCapture filtered diagnostics, the manual Release R0ePaired study and the read-only DesktopProbe; none publishes regression receipts. Native local work uses canonical build/test entry points.",
+      "usage": "Use hosted CI phases; local compiler-free validation supports DevelopmentEngine. Relative EngineRoot paths resolve from the current PowerShell filesystem location. Qualification diagnostic scopes and architecture choices follow Specs/Build/Build_UnifiedCI.md and publish no regression receipts. Native local work uses canonical build/test entry points.",
       "tests": [
         "Tools/Tests/ToolingGovernance.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
@@ -5188,7 +5228,8 @@
       "usedBy": [
         ".github/workflows/ci.yml",
         ".github/workflows/qualify.yml",
-        ".github/workflows/qualification.yml"
+        ".github/workflows/qualification.yml",
+        ".github/workflows/nightly-ci.yml"
       ],
       "outputs": [
         "Governed RedSalamander.Perf evidence and regression receipt",
@@ -5196,7 +5237,8 @@
         "Source-bound read-only hosted desktop.json evidence for DesktopProbe, without build or test receipts",
         ".build production ZIP and source-bound receipt",
         "GitHub job output paths",
-        "Pinned tool/registry and platform-private installed dependencies beneath .build"
+        "Pinned tool/registry and platform-private installed dependencies beneath .build",
+        "Owned-context CommandsUiAttribution index and per-selection streams/coverage, resolved through canonical archive records"
       ]
     },
     {

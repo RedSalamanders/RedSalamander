@@ -1582,6 +1582,64 @@ Related documents:
 - `Specs/TestRuns/README.md`
 - `Specs/Plans/WIP/Operation_PerfMeasurementContract_2026-07-06.md`
 
+### Local cross-root destructive distinctness
+
+The early private controls in `FileOps_ReviewRemediationContracts` protect Managed regular-file
+collision admission across differing qualified Local roots. They run the production guard, admission
+and prompt with the existing test-only reported-identity namespace seam. The same-entry and distinct-file
+controls must both withhold Delete source while preserving ordinary collision actions; both answer
+Cancel and verify unchanged bytes. Comparable positive identity remains an independent refusal control.
+`FileOps.SelfTest.LocalCrossRootDistinctness` records diagnostic execution plus responder-drain duration,
+prompt count (`value0`) and whether Delete source was offered (`value1`); setup, byte verification and
+JSONL emission are outside its span. The expected offered count is zero, not a wall-time budget.
+`FileOps.Conflict.LocalDistinctnessUnproved` counts actual helper refusals, including a third early
+identityless-overwrite control, which must publish the new bytes and retain its source with a completed
+typed result. All three controls precede queued-admission prerequisite skips in that exact case.
+Archive these treatment/correctness observations with source/receipt/profile identity; they establish
+neither a historical speedup nor physical NAS/export identity or cross-system sharing qualification.
+
+### Queue head selector component comparison (`queue_head_selector_v1`)
+
+`FileOps_IdentityInterlockWaiting` reuses its private owned queue/admission fixtures to compare
+the actual production `FirstUnblockedQueuedTaskIdLocked` with the frozen selector from
+`78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e` (`FolderWindow.FileOperations.State.Queue.cpp`,
+`firstUnblockedQueuedTaskId`; canonical LF/UTF-8 complete-lambda excerpt SHA-256
+`88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a`). Mechanical adaptations are the member-function wrapper
+and observing vector capacity after collection; allocation, de-duplication, sorting and selection
+remain inside the baseline. This host-private control deliberately retains the old policy;
+it is not a generic helper, production switch or reconstructed historical application binary.
+
+Both paths consume the same immutable 4/64/256-task fixture, with all four combinations of
+ascending/descending task storage and queue-order keys. Independent expectations check ready,
+Preparing, waiting-for-user, withdrawn cancellation, overlap predecessor and direct-waiter cases.
+Only the restored all-ready fixture is timed. One untimed warm call per selector precedes four
+counterbalanced AB/BA pairs per fixture (order reversed for descending storage); each sample
+contains 16 selections. Output arrays, fixtures, assertions and metric emission are outside the
+timed spans. The queue lock is held before timing; both selector calls include their same nested
+task-lifetime mutex. Each timed call writes a selected ID and a relaxed atomic capacity-output
+slot on both paths; the candidate explicitly stores zero rather than omitting that observation.
+The common output-store cost is included. The baseline additionally reads its actual vector
+capacity through a local scalar adapter; this mechanical observation cost is included in its
+duration. Compiler code generation, adapter and timer costs can dominate tiny differences, which
+must never be attributed solely to selector logic. No workers, provider I/O, physical desktop
+input or public task admission run.
+
+`FileOps.Queue.Selector.BaselineBatchUs` and `CandidateBatchUs` report the exclusive 16-call
+component duration in microseconds; `value0` is fixture task count and `value1` the independently
+expected task ID. Detail binds protocol, storage/key direction, pair index, execution order and
+call count. `CollectionCapacityBytes` reports the baseline's actual vector capacity times element
+size in `value0` and candidate temporary collection capacity zero in `value1`. These are neither
+allocator-call counts nor heap/process peaks; all existing task/admission storage is excluded.
+Retain all 48 pairs (96 duration rows and 48 capacity rows), zero-duration samples and regressions.
+Report raw samples and medians/ranges; no p95, fixed speedup or wall-time acceptance threshold applies.
+
+Archive results, trace and raw metrics with exact source/binary/build receipt, build flavor,
+machine/root, fixture/protocol and frozen-baseline identities. Debug first establishes correctness
+and diagnostic costs; measured latency conclusions require test-enabled Release. This same-binary
+component A/B can establish selector cost and temporary-collection differences under its declared
+fixture, never historical whole-application speedup, production queue-start latency, NAS throughput
+or complete queue non-regression. Existing start-order/cancellation tests remain required.
+
 ## Validation-planner scenario contract
 
 Operation Startrail is itself performance-sensitive tooling. Its implementation must

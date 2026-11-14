@@ -1,6 +1,10 @@
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot 'TestSuitePlan.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'TestRunPlan.Common.psm1') -Scope Local -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'ValidationEvidence.psm1') -Scope Local
 Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1') -Scope Local
+Import-Module (Join-Path $PSScriptRoot '../Build/BuildEvidence.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'ValidationFingerprint.psm1') -Scope Local -ErrorAction Stop
 
 function Get-RSHostedPairedDispatch {
     param([Parameter(Mandatory)][string]$EventName, [Parameter(Mandatory)][string]$EventJson,
@@ -49,25 +53,16 @@ function Assert-RSHostedDiagnosticSelection {
     if ($matches.Count -ne 1) { throw 'Unknown hosted diagnostic selection.' }
 }
 
-function Test-RSHostedDiagnosticOutcome {
-    param([Parameter(Mandatory)][int]$ExitCode, [Parameter(Mandatory)][string]$RunId,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Summary,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Native,
-          [Parameter(Mandatory)][string]$Platform, [Parameter(Mandatory)][string]$Configuration,
-          [Parameter(Mandatory)][bool]$ReceiptVerified,
-          [Parameter(Mandatory)][string]$ExpectedExePath,
-          [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc, [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc)
-    Assert-RSHostedDiagnosticSelection $Selection
-    if ($RunId -cnotmatch '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$') { throw 'Invalid diagnostic run ID.' }
-    if (-not $ReceiptVerified -or $ExitCode -ne 2 -or $Summary.schema -cne 'red-salamander.run-all-tests.v1' -or
-        $Summary.run_id -cne $RunId -or $Summary.suite -cne $Selection.suite -or $Summary.case_filter -cne $Selection.case -or
-        $Summary.platform -cne $Platform -or $Summary.configuration -cne $Configuration -or [int]$Summary.exit_code -ne 2) {
-        throw 'Filtered runner, profile, or source receipt does not match the diagnostic request.'
+function Test-RSHostedTimeWindow {
+    param(
+        [Parameter(Mandatory)][object]$Summary,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc
+    )
+
+    if ($InvocationStartedUtc -gt $InvocationEndedUtc) {
+        throw 'Invocation window bounds are inverted.'
     }
-    # V1 has no receipt ID; bind the summary to this child invocation and executable.
-    if ($Summary.executable -isnot [string] -or $Summary.executable -ine $ExpectedExePath -or
-        $InvocationStartedUtc -gt $InvocationEndedUtc) { throw 'Diagnostic executable or invocation window does not match.' }
     $times = @()
     foreach ($value in @($Summary.run_started_utc, $Summary.run_ended_utc)) {
         $parsed = [DateTimeOffset]::MinValue
@@ -85,6 +80,11 @@ function Test-RSHostedDiagnosticOutcome {
     if ($times.Count -ne 2 -or $times[0] -lt $InvocationStartedUtc -or $times[1] -gt $InvocationEndedUtc -or $times[0] -gt $times[1]) {
         throw 'Diagnostic summary falls outside the invocation window.'
     }
+}
+
+function Assert-RSHostedCleanQuarantine {
+    param([Parameter(Mandatory)][object]$Summary)
+
     $q = $Summary.quarantine
     if ($q -isnot [System.Collections.IDictionary] -or -not $q.Contains('is_valid') -or -not $q.Contains('has_blocking_entries') -or
         -not $q.Contains('active_count') -or -not $q.Contains('active_entries') -or -not $q.Contains('invalid_count') -or
@@ -94,6 +94,30 @@ function Test-RSHostedDiagnosticOutcome {
         @($q.active_entries).Count -ne 0 -or @($q.invalid_entries).Count -ne 0 -or @($q.errors).Count -ne 0) {
         throw 'Missing, invalid, or blocking quarantine state.'
     }
+}
+
+function Test-RSHostedDiagnosticOutcome {
+    param([Parameter(Mandatory)][int]$ExitCode, [Parameter(Mandatory)][string]$RunId,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Summary,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Native,
+          [Parameter(Mandatory)][string]$Platform, [Parameter(Mandatory)][string]$Configuration,
+          [Parameter(Mandatory)][bool]$ReceiptVerified,
+          [Parameter(Mandatory)][string]$ExpectedExePath,
+          [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc, [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc)
+    Assert-RSHostedDiagnosticSelection $Selection
+    if ($RunId -cnotmatch '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$') { throw 'Invalid diagnostic run ID.' }
+    if (-not $ReceiptVerified -or $ExitCode -ne 2 -or $Summary.schema -cne 'red-salamander.run-all-tests.v1' -or
+        $Summary.run_id -cne $RunId -or $Summary.suite -cne $Selection.suite -or $Summary.case_filter -cne $Selection.case -or
+        $Summary.platform -cne $Platform -or $Summary.configuration -cne $Configuration -or [int]$Summary.exit_code -ne 2) {
+        throw 'Filtered runner, profile, or source receipt does not match the diagnostic request.'
+    }
+    # V1 has no receipt ID; bind the summary to this child invocation and executable.
+    if ($Summary.executable -isnot [string] -or $Summary.executable -ine $ExpectedExePath) {
+        throw 'Diagnostic executable or invocation window does not match.'
+    }
+    Test-RSHostedTimeWindow -Summary $Summary -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc
+    Assert-RSHostedCleanQuarantine -Summary $Summary
     if (-not $Native.Contains('suite') -or $Native.suite -cne $Selection.nativeSuite -or -not $Native.Contains('cases') -or
         -not $Native.Contains('passed') -or -not $Native.Contains('failed') -or -not $Native.Contains('skipped')) {
         throw 'Native diagnostic result is incomplete.'
@@ -119,10 +143,12 @@ function Test-RSHostedDiagnosticOutcome {
     return $true
 }
 
-function Read-RSHostedDiagnosticEvidence {
-    param([Parameter(Mandatory)][string]$TestRoot, [Parameter(Mandatory)][string]$RunId,
-          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection)
-    Assert-RSHostedDiagnosticSelection $Selection
+function Read-RSHostedVerifiedArchiveRecord {
+    param(
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$RunId
+    )
+
     if ($RunId -cnotmatch '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$') { throw 'Invalid diagnostic run ID.' }
     $run = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "evidence/completed-runs/$RunId") -RequireDescendant
     $records = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "evidence/run-archive-records/$RunId") -RequireDescendant
@@ -134,18 +160,513 @@ function Read-RSHostedDiagnosticEvidence {
     if ($intent.schema -cne 'red-salamander.run-archive.v1' -or $intent.run_id -cne $RunId -or $intent.disposition -cne 'completed' -or
         $intent.destination -ine $run -or $intent.source -ine $expectedSource -or $complete.source -ine $expectedSource -or
         $complete.schema -cne 'red-salamander.run-archive-complete.v1' -or $complete.destination -ine $run -or
-        $complete.intent_sha256 -ine (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash) { throw 'Diagnostic archive proof is invalid.' }
+        $complete.intent_sha256 -ine (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash) {
+        throw 'Diagnostic archive proof is invalid.'
+    }
+    return @{
+        RunDirectory = $run
+        Intent = $intent
+        ArchiveIntentSha256 = $complete.intent_sha256
+    }
+}
+
+function Read-RSHostedDiagnosticEvidence {
+    param([Parameter(Mandatory)][string]$TestRoot, [Parameter(Mandatory)][string]$RunId,
+          [Parameter(Mandatory)][System.Collections.IDictionary]$Selection)
+    Assert-RSHostedDiagnosticSelection $Selection
+    $archive = Read-RSHostedVerifiedArchiveRecord -TestRoot $TestRoot -RunId $RunId
+    $run = $archive.RunDirectory
+    $intent = $archive.Intent
     $relative = 'artifacts\selftest\last_run\' + $Selection.native + '\results.json'
     $nativePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run $relative) -RequireDescendant
     $rows = @($intent.inventory | Where-Object { $_.path -ieq $relative -and -not $_.directory })
     if ($rows.Count -ne 1 -or [int64]$rows[0].length -ne (Get-Item -LiteralPath $nativePath).Length -or
         $rows[0].sha256 -ine (Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash) { throw 'Native diagnostic result does not match the archive.' }
     $summaryPath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run 'artifacts/selftest/last_run/run-all-tests-results.json') -RequireDescendant
+    $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json -AsHashtable
+    if ($summary.Contains('schema') -and $summary.schema -ceq 'red-salamander.run-all-tests.v2') {
+        # Durable PR/CI/Full runs retain v1 beside their stable v2 summary.
+        $summaryPath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run 'artifacts/selftest/last_run/run-all-tests-results-v1.json') -RequireDescendant
+    }
     return @{ summary=(Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json -AsHashtable);
         native=(Get-Content -LiteralPath $nativePath -Raw | ConvertFrom-Json -AsHashtable);
         summarySha256=(Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash;
         nativeSha256=(Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash;
-        archiveIntentSha256=$complete.intent_sha256 }
+        archiveIntentSha256=$archive.ArchiveIntentSha256 }
 }
 
-Export-ModuleMember -Function Get-RSHostedDiagnosticSelection, Get-RSHostedDiagnosticRunId, Test-RSHostedDiagnosticOutcome, Read-RSHostedDiagnosticEvidence, Get-RSHostedPairedDispatch
+function Get-RSHostedArchiveMemberPath {
+    param($Archive, [string]$TestRoot, [string]$RelativePath)
+    $rows = @($Archive.Intent.inventory | Where-Object { $_.path -ieq $RelativePath -and -not $_.directory })
+    $path = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $Archive.RunDirectory $RelativePath) -RequireDescendant
+    if ($rows.Count -ne 1 -or [int64]$rows[0].length -ne (Get-Item -LiteralPath $path).Length -or
+        $rows[0].sha256 -ine (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) {
+        throw "Archived diagnostic member does not match its inventory: $RelativePath"
+    }
+    return $path
+}
+
+function Assert-RSHostedV1CommandsProof {
+    param($Archive, [string]$TestRoot, [string]$RepoRoot, [string]$CaseFilter,
+        [string]$Platform, [string]$Configuration, $Summary, $Receipt, $Snapshot,
+        [DateTimeOffset]$InvocationStartedUtc, [DateTimeOffset]$InvocationEndedUtc,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
+        [switch]$RecordedFailure)
+
+    $candidates = @($Archive.Intent.inventory | Where-Object {
+        -not $_.directory -and $_.path -imatch '^artifacts\\selftest\\(?:previous_run|last_run)\\entry-fingerprints\.json$'
+    })
+    if ($candidates.Count -ne 1) { throw 'Missing or ambiguous archived prelaunch fingerprint proof.' }
+    $prelaunch = Split-Path -Parent $candidates[0].path
+    $records = @{}
+    foreach ($pair in @(
+            @('fingerprints','entry-fingerprints.json','ValidationEntryFingerprints.schema.json'),
+            @('plan','validation-plan.json','ValidationPlan.schema.json'),
+            @('decision','validation-plan-decision.json','ValidationPlanDecision.schema.json'))) {
+        $path = Get-RSHostedArchiveMemberPath $Archive $TestRoot (Join-Path $prelaunch $pair[1])
+        $records[$pair[0]] = Read-RSValidationJsonFile -LiteralPath $path -AllowedRoot $TestRoot `
+            -SchemaPath (Join-Path $RepoRoot "Specs/Testing/$($pair[2])")
+    }
+    $fp = $records.fingerprints; $plan = $records.plan; $decision = $records.decision
+    $exe = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".build/$Platform/$Configuration/RedSalamander.exe"))
+    $entries = @(Get-RSTestRunPlan -Suite Commands -RepoRoot $RepoRoot -Platform $Platform -Configuration $Configuration `
+        -RedSalamanderExePath $exe -CaseFilter $CaseFilter -TimeoutMultiplier $TimeoutMultiplier)
+    $expectedPlan = New-RSValidationPlan -RepoRoot $RepoRoot -RequestedSuite Commands -Entries $entries -ValidationMode Fresh -CoverageScope filtered
+    if ((Get-RSCanonicalJsonDigest -InputObject $plan) -cne (Get-RSCanonicalJsonDigest -InputObject $expectedPlan) -or
+        $plan.plan_digest -cne $expectedPlan.plan_digest -or $plan.coverage_plan_digest -cne $expectedPlan.coverage_plan_digest -or
+        $fp.plan_digest -cne $plan.plan_digest -or $fp.coverage_plan_digest -cne $plan.coverage_plan_digest -or
+        $fp.snapshot_id -cne $Snapshot.SnapshotId -or $fp.build_receipt_id -cne $Receipt.receipt_id -or $fp.artifact_epoch -ne 0 -or
+        @($fp.entries).Count -ne 1 -or $fp.entries[0].id -cne 'selftest.commands') {
+        throw 'Archived Commands plan, profile, filter, source or receipt proof does not match.'
+    }
+    $fpProjection = [ordered]@{}
+    foreach ($key in @('schema','canonicalization','plan_digest','coverage_plan_digest','snapshot_id','build_receipt_id','artifact_epoch','entries')) {
+        $fpProjection[$key] = $fp.$key
+    }
+    $row = $fp.entries[0]
+    $rowDigest = Get-RSCanonicalJsonDigest -InputObject ([ordered]@{
+        schema='red-salamander.entry-fingerprint.v2'; canonicalization='rs-canonical-json-v1'
+        component_digest_version=$row.component_digest_version; component_digests=$row.component_digests })
+    if ($fp.fingerprints_digest -cne (Get-RSCanonicalJsonDigest -InputObject $fpProjection) -or $row.fingerprint -cne $rowDigest) {
+        throw 'Archived prelaunch fingerprint digest is invalid.'
+    }
+    # Reuse the fingerprint owner for deterministic source/receipt/plan components;
+    # environment and runner discovery remain the archived invocation's observations.
+    $expected = Get-RSValidationEntryFingerprint -EntryContract $expectedPlan.entries[0] `
+        -CoveragePlanDigest $expectedPlan.coverage_plan_digest -WorkspaceSnapshot @{snapshot_id=$Snapshot.SnapshotId} -BuildReceipt $Receipt
+    foreach ($component in @('arguments','coverage','outcome_policy','shared_contract','source_input','artifact_epoch','build_artifact')) {
+        if ($row.component_digests.$component -cne $expected.ComponentDigests.$component) { throw "Archived fingerprint component mismatch: $component" }
+    }
+    $projection = [ordered]@{}
+    foreach ($property in $decision.PSObject.Properties) { if ($property.Name -cne 'decision_digest') { $projection[$property.Name] = $property.Value } }
+    if ($decision.decision_digest -cne (Get-RSCanonicalJsonDigest -InputObject $projection) -or
+        $decision.planner_mode -cne 'shadow' -or
+        $decision.plan_digest -cne $plan.plan_digest -or $decision.snapshot_id -cne $fp.snapshot_id -or
+        @($decision.entries).Count -ne 1 -or $decision.entries[0].id -cne 'selftest.commands' -or
+        $decision.entries[0].ordinal -ne 0 -or
+        $decision.entries[0].decision -cne 'EXECUTE' -or $decision.entries[0].expected_fingerprint -cne $row.fingerprint -or
+        $null -ne $decision.entries[0].origin_run_id -or $null -ne $decision.entries[0].origin_evidence_digest) {
+        throw 'Archived Commands execution decision does not match its prelaunch proof.'
+    }
+    $snapshots = @()
+    foreach ($relative in @((Join-Path $prelaunch 'workspace-initial.json'),
+            'artifacts/selftest/last_run/workspace-after-selftest.commands.json', 'artifacts/selftest/last_run/workspace-final.json')) {
+        $path = Get-RSHostedArchiveMemberPath $Archive $TestRoot $relative.Replace('/','\')
+        $record = Read-RSValidationJsonFile -LiteralPath $path -AllowedRoot $TestRoot -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/WorkspaceSnapshot.schema.json')
+        if ($record.snapshot_id -cne $fp.snapshot_id -or $record.acquisition_before -cne $fp.snapshot_id -or
+            $record.acquisition_after -cne $fp.snapshot_id -or $record.git_head -cne $Snapshot.GitHead -or
+            $record.repo_identity -cne $Receipt.repo_identity) { throw 'Archived Commands workspace source identity changed.' }
+        Test-RSHostedTimeWindow -Summary @{run_started_utc=$record.created_utc;run_ended_utc=$record.created_utc} `
+            -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc
+        $snapshots += [DateTimeOffset]$record.created_utc
+    }
+    $suites = @($Summary.suites)
+    $expectedClassification = if ($RecordedFailure) { 'UNCLASSIFIED_FAILURE' } else { 'PASSED' }
+    $expectedNativeExit = if ($RecordedFailure) { 1 } else { 0 }
+    $expectedFailed = if ($RecordedFailure) { 1 } else { 0 }
+    if ($suites.Count -ne 1 -or $suites[0].suite -cne 'Commands' -or $suites[0].kind -cne 'SelfTest' -or
+        $suites[0].classification -cne $expectedClassification -or [int]$suites[0].exit_code -ne $expectedNativeExit -or
+        [int64]$suites[0].passed -ne [int64]$Summary.passed -or [int64]$suites[0].failed -ne $expectedFailed -or
+        [int64]$suites[0].skipped -ne 0 -or @($suites[0].retry_attempts).Count -ne 0) {
+        throw 'Commands v1 native execution did not pass once without retries.'
+    }
+    $exits = @($Archive.Intent.inventory | Where-Object {
+        -not $_.directory -and $_.path -imatch '^artifacts\\native-process-exits\\[0-9a-f]{32}\.json$'
+    })
+    if ($exits.Count -ne 1) { throw 'Missing or ambiguous owned native exit proof.' }
+    $path = Get-RSHostedArchiveMemberPath $Archive $TestRoot $exits[0].path
+    $exit = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ($exit.schema -cne 'red-salamander.native-process-exit.v1' -or ($exit.process_id -isnot [long] -and $exit.process_id -isnot [int]) -or
+        $exit.process_id -le 0 -or $exit.executable -ine $exe -or [int]$exit.exit_code -ne $expectedNativeExit) { throw 'Owned native PID, executable or exit code does not match.' }
+    Test-RSHostedTimeWindow -Summary @{run_started_utc=$exit.observed_utc;run_ended_utc=$exit.observed_utc} `
+        -InvocationStartedUtc ([DateTimeOffset]$Summary.run_started_utc) -InvocationEndedUtc ([DateTimeOffset]$Summary.run_ended_utc)
+    $observed = [DateTimeOffset]$exit.observed_utc
+    if ($snapshots[0] -gt [DateTimeOffset]$Summary.run_started_utc -or $snapshots[1] -lt $observed -or
+        $snapshots[2] -lt $snapshots[1]) { throw 'Archived prelaunch/postlaunch snapshot ordering is invalid.' }
+    $metrics = Get-RSHostedArchiveMemberPath $Archive $TestRoot 'artifacts\selftest\last_run\perf\perf_metrics.jsonl'
+    $count = 0
+    $reader = [IO.File]::OpenText($metrics)
+    try {
+        while ($null -ne ($line = $reader.ReadLine())) {
+            $metric = $line | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+            if (($metric.process -isnot [long] -and $metric.process -isnot [int]) -or $metric.process -ne $exit.process_id) {
+                throw 'Native metric PID does not match the owned exit.'
+            }
+            Test-RSHostedTimeWindow -Summary @{run_started_utc=$metric.timestamp;run_ended_utc=$metric.timestamp} `
+                -InvocationStartedUtc ([DateTimeOffset]$Summary.run_started_utc) -InvocationEndedUtc $observed
+            ++$count
+        }
+    } finally { $reader.Dispose() }
+    if ($count -eq 0) { throw 'Owned native metric evidence is empty.' }
+}
+
+function Read-RSHostedFilteredCaseRun {
+    <#
+    .SYNOPSIS
+        Verifies v1 single-suite or v2 durable filtered Commands evidence, including
+        archived prelaunch source/receipt/plan and owned native PID/time proof for v1.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$ExitCode,
+        [Parameter(Mandatory)][string]$Output,
+        [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][ValidateSet('Commands')][string]$Suite,
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_]+$')][string]$CaseFilter,
+        [Parameter(Mandatory)][string]$Platform,
+        [Parameter(Mandatory)][string]$Configuration,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
+        [switch]$AllowRecordedFailure
+    )
+
+    # Failure observation is private to the fixed attribution campaign. It never
+    # grants passing evidence or changes the public assertion's exit-2 contract.
+    $recordedFailure = $AllowRecordedFailure -and $ExitCode -eq 1
+    if ($AllowRecordedFailure -and $CaseFilter -cnotin @('red_salamander_help_lists_diagnostics_options','cmd_preferences_dialog_keyboard_reset_live_dx_interaction',
+        'cmd_pane_fileops_popup_throughput_disclosure','cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup')) {
+        throw 'Failure observation is restricted to the fixed attribution selections.'
+    }
+    if ($ExitCode -ne 2 -and -not $recordedFailure) {
+        throw "Filtered hosted runner for '$Suite' filter '$CaseFilter' failed with exit code $ExitCode."
+    }
+    $runId = Get-RSHostedDiagnosticRunId -Output $Output
+    $archive = Read-RSHostedVerifiedArchiveRecord -TestRoot $TestRoot -RunId $runId
+    $run = $archive.RunDirectory
+    $lastRun = Join-Path $run 'artifacts/selftest/last_run'
+    $v2Path = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $lastRun 'run-all-tests-results.json') -RequireDescendant
+    $v1Path = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $lastRun 'run-all-tests-results-v1.json') -RequireDescendant
+    $stable = Get-Content -LiteralPath $v2Path -Raw -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    $v2 = $null
+    if ($stable.schema -ceq 'red-salamander.run-all-tests.v2') {
+        $v2 = Read-RSValidationJsonFile -LiteralPath $v2Path -AllowedRoot $TestRoot `
+            -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        $v1 = Get-Content -LiteralPath $v1Path -Raw | ConvertFrom-Json -AsHashtable
+    } elseif ($stable.schema -ceq 'red-salamander.run-all-tests.v1') {
+        $v1 = $stable
+    } else { throw 'Unsupported filtered runner summary schema.' }
+    if ($recordedFailure -and $null -ne $v2) { throw 'Attribution failure observation requires actual single-suite v1 evidence.' }
+
+    if ($null -ne $v2) {
+    if ($v2.schema -cne 'red-salamander.run-all-tests.v2' -or $v2.run_id -cne $runId -or
+        $v2.requested_gate -cne $Suite -or $v2.change_verdict -cne 'PASSED' -or
+        $v2.validation_mode -cne 'Fresh' -or $v2.coverage_scope -cne 'filtered' -or
+        @($v2.entries).Count -ne 1 -or $v2.entries[0].id -cne 'selftest.commands' -or
+        $v2.entries[0].execution -cne 'executed' -or $v2.entries[0].promotion_state -cne 'promoted') {
+        throw "Filtered hosted v2 summary for '$CaseFilter' did not reach change_verdict PASSED."
+    }
+    if ($v2.repository_verdict -cne 'NOT_EVALUATED') {
+        throw "Filtered hosted exit 2 for '$CaseFilter' expected repository_verdict NOT_EVALUATED but got '$($v2.repository_verdict)'."
+    }
+    if ([int]$v2.counts.executed -ne 1 -or [int]$v2.counts.promoted -ne 1 -or
+        [int]$v2.counts.reused -ne 0 -or [int]$v2.counts.provisional -ne 0 -or
+        [int]$v2.counts.invalidated -ne 0 -or [int]$v2.counts.incomplete -ne 0 -or
+        [int64]$v2.case_counts.passed -lt 1 -or [int64]$v2.case_counts.failed -ne 0 -or [int64]$v2.case_counts.skipped -ne 0) {
+        throw "Filtered hosted case counts for '$CaseFilter' are incomplete, skipped, or failed."
+    }
+    }
+
+    if ($v1.schema -cne 'red-salamander.run-all-tests.v1' -or $v1.run_id -cne $runId -or
+        $v1.suite -cne $Suite -or $v1.case_filter -cne $CaseFilter -or
+        $v1.platform -cne $Platform -or $v1.configuration -cne $Configuration -or
+        [int]$v1.exit_code -ne $ExitCode -or
+        [int64]$v1.passed -lt $(if ($recordedFailure) { 0 } else { 1 }) -or
+        [int64]$v1.failed -ne $(if ($recordedFailure) { 1 } else { 0 }) -or [int64]$v1.skipped -ne 0) {
+        throw "Filtered hosted v1 summary for '$CaseFilter' does not match the expected run identity or counts."
+    }
+    Test-RSHostedTimeWindow -Summary $v1 -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc
+    Assert-RSHostedCleanQuarantine -Summary $v1
+    $noRepairs = $v1.quarantine.Contains('repair_attempt_count') -and $v1.quarantine.Contains('repair_attempts') -and
+        [int]$v1.quarantine.repair_attempt_count -eq 0 -and @($v1.quarantine.repair_attempts).Count -eq 0
+    if ($AllowRecordedFailure -and -not $noRepairs) { throw 'Attribution forbids missing or nonzero quarantine repair attempts.' }
+
+    # Aggregates are written after archival, so native bytes (not aggregates) are
+    # authenticated against its inventory. Require actual selected passing cases.
+    $relative = 'artifacts\selftest\last_run\commands\results.json'
+    $nativePath = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $run $relative) -RequireDescendant
+    $rows = @($archive.Intent.inventory | Where-Object { $_.path -ieq $relative -and -not $_.directory })
+    if ($rows.Count -ne 1 -or [int64]$rows[0].length -ne (Get-Item -LiteralPath $nativePath).Length -or
+        $rows[0].sha256 -ine (Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash) {
+        throw 'Native filtered result does not match the archive.'
+    }
+    $native = Get-Content -LiteralPath $nativePath -Raw | ConvertFrom-Json -AsHashtable
+    if ($native.suite -cne 'Commands') { throw 'Native filtered suite mismatch.' }
+    foreach ($record in @($v1, $native)) {
+        $observed = $record['timeout_scale']
+        if (($observed -isnot [long] -and $observed -isnot [int] -and $observed -isnot [double] -and $observed -isnot [decimal]) -or
+            [double]$observed -ne $TimeoutMultiplier) {
+            throw 'Filtered runner and native timeout scales do not match the trusted invocation.'
+        }
+    }
+    if ($null -eq $v2) {
+        Test-RSHostedTimeWindow -Summary @{run_started_utc=$native.run_started_utc;run_ended_utc=$native.run_started_utc} `
+            -InvocationStartedUtc ([DateTimeOffset]$v1.run_started_utc) -InvocationEndedUtc ([DateTimeOffset]$v1.run_ended_utc)
+    }
+    $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($case in @($native.cases)) {
+        $matches = [string]::Equals($case.name, $CaseFilter, [StringComparison]::OrdinalIgnoreCase) -or
+            ($CaseFilter.EndsWith('_') -and ([string]$case.name).StartsWith($CaseFilter, [StringComparison]::OrdinalIgnoreCase))
+        if (-not $matches -or ($AllowRecordedFailure -and $case.name -cne $CaseFilter) -or
+            $case.status -cne $(if ($recordedFailure) { 'failed' } else { 'passed' }) -or -not $names.Add([string]$case.name)) {
+            throw 'Native filtered cases are unexpected, duplicated, or not passing.'
+        }
+    }
+    $passedCount = if ($recordedFailure) { 0 } else { $names.Count }
+    $failedCount = if ($recordedFailure) { 1 } else { 0 }
+    if ($names.Count -lt 1 -or ($AllowRecordedFailure -and $names.Count -ne 1) -or
+        [int64]$native.passed -ne $passedCount -or [int64]$native.failed -ne $failedCount -or
+        [int64]$native.skipped -ne 0 -or [int64]$v1.total -ne $names.Count -or
+        [int64]$v1.passed -ne $passedCount -or ($null -ne $v2 -and ([int64]$v2.case_counts.total -ne $names.Count -or
+        [int64]$v2.case_counts.passed -ne $names.Count))) { throw 'Native filtered case counts do not match runner summaries.' }
+
+    $buildOutput = Join-Path $RepoRoot ".build/$Platform/$Configuration"
+    $receipt = Read-RSBuildReceipt -BuildOutputDir $buildOutput -SchemaPath (Join-Path $RepoRoot 'Specs/Build/BuildReceipt.schema.json')
+    $snapshot = Get-RSBuildSourceSnapshot -RepoRoot $RepoRoot
+    $requiredExe = ".build/$Platform/$Configuration/RedSalamander.exe"
+    if ($v1.executable -ine [IO.Path]::GetFullPath((Join-Path $RepoRoot $requiredExe)) -or
+        $null -eq $receipt -or ($null -ne $v2 -and ($v2.snapshot_id -cne $snapshot.SnapshotId -or
+        $v2.build_receipt_id -cne $receipt.receipt_id)) -or
+        -not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot $snapshot -Platform $Platform `
+            -Configuration $Configuration -RepoRoot $RepoRoot -RequiredRelativePath @($requiredExe) `
+            -RequiredProjectSelection @('RedSalamander/RedSalamander.vcxproj'))) {
+        throw 'Native filtered source, executable, or artifact receipt mismatch.'
+    }
+    if ($null -eq $v2) {
+        Assert-RSHostedV1CommandsProof -Archive $archive -TestRoot $TestRoot -RepoRoot $RepoRoot -CaseFilter $CaseFilter `
+            -Platform $Platform -Configuration $Configuration -Summary $v1 -Receipt $receipt -Snapshot $snapshot `
+            -TimeoutMultiplier $TimeoutMultiplier `
+            -InvocationStartedUtc $InvocationStartedUtc -InvocationEndedUtc $InvocationEndedUtc -RecordedFailure:$recordedFailure
+    }
+
+    return [pscustomobject]@{
+        RunId = $runId
+        RepositoryVerdict = 'NOT_EVALUATED'
+        ChangeVerdict = $(if ($recordedFailure) { 'FAILED' } else { 'PASSED' })
+        Passed = [int64]$v1.passed
+        Failed = [int64]$v1.failed
+        Skipped = [int64]$v1.skipped
+        SummarySchema = $stable.schema
+        NativeCaseCount = $names.Count
+        HasNoRepairAttempts = $noRepairs
+        NativeResultSha256 = $rows[0].sha256
+        RunnerSummarySha256 = (Get-FileHash -LiteralPath $v2Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        ArchiveIntentSha256 = $archive.ArchiveIntentSha256
+    }
+}
+
+function Assert-RSHostedFilteredCaseRun {
+    <# .SYNOPSIS
+    Requires passing archived filtered Commands evidence; exit 2 never grants Full coverage.
+    .PARAMETER TimeoutMultiplier
+    Trusted invocation multiplier in the native supported range [0.1,100], default 1.
+    It must match both observed timeout scales and the complete archived plan; it is
+    never inferred from untrusted evidence.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$ExitCode, [Parameter(Mandatory)][string]$Output,
+        [Parameter(Mandatory)][string]$TestRoot, [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][ValidateSet('Commands')][string]$Suite,
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_]+$')][string]$CaseFilter,
+        [Parameter(Mandatory)][string]$Platform, [Parameter(Mandatory)][string]$Configuration,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationStartedUtc,
+        [Parameter(Mandatory)][DateTimeOffset]$InvocationEndedUtc,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0
+    )
+    Read-RSHostedFilteredCaseRun @PSBoundParameters
+}
+
+function Get-RSHostedAttributionBuildIdentity {
+    param([string]$RepoRoot, [string]$Platform, [string]$Configuration)
+    $output = Join-Path $RepoRoot ".build/$Platform/$Configuration"
+    $receiptPath = Join-Path $output 'build-receipt.json'
+    $receipt = Read-RSBuildReceipt -BuildOutputDir $output -SchemaPath (Join-Path $RepoRoot 'Specs/Build/BuildReceipt.schema.json')
+    $snapshot = Get-RSBuildSourceSnapshot -RepoRoot $RepoRoot
+    if ($null -eq $receipt -or -not $receipt.tests_enabled -or
+        -not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot $snapshot -Platform $Platform `
+            -Configuration $Configuration -RepoRoot $RepoRoot `
+            -RequiredRelativePath @(".build/$Platform/$Configuration/RedSalamander.exe"))) {
+        throw 'Attribution requires an unchanged byte-compatible test-enabled build receipt.'
+    }
+    return [ordered]@{snapshot_id=$snapshot.SnapshotId;build_receipt_id=$receipt.receipt_id;
+        receipt_sha256=(Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()}
+}
+
+function Get-RSHostedAttributionQuarantineIdentity {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    Import-Module (Join-Path $PSScriptRoot 'TestQuarantine.psm1') -Scope Local -ErrorAction Stop
+    $path = Join-Path $RepoRoot 'Tools/test-quarantine.jsonl'
+    $status = Read-RSTestQuarantineFile -Path $path
+    Assert-RSTestQuarantineClean -Status $status
+    return $(if (Test-Path -LiteralPath $path -PathType Leaf) {
+        (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    } else { 'absent' })
+}
+
+function Invoke-RSHostedCommandsUiAttributionCore {
+    <#
+    .SYNOPSIS
+    Runs one observer-control case and three fixed hosted UI cases once, retaining independent
+    filtered evidence. A failed case remains failed; unsafe teardown stops the sequence.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
+        [Parameter(Mandatory)][ValidateSet('Debug','Release','ASan Debug')][string]$Configuration,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
+        [Parameter(Mandatory)][ValidatePattern('^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$')][string]$EvidenceRunId,
+        [Parameter(Mandatory)][string]$EvidenceDirectory,
+        [Parameter(Mandatory)][scriptblock]$RunCase
+    )
+    $directory = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path $EvidenceDirectory -RequireDescendant
+    [void][IO.Directory]::CreateDirectory($directory)
+    $indexPath = Join-Path $directory 'commands-ui-attribution.json'
+    $evidenceRunRoot = Join-Path $TestRoot "runs/$EvidenceRunId"
+    $indexMember = [IO.Path]::GetRelativePath($evidenceRunRoot, $indexPath).Replace('\','/')
+    if ($indexMember.StartsWith('../') -or [IO.Path]::IsPathRooted($indexMember)) { throw 'Attribution index must belong to its owned run context.' }
+    if (@(Get-ChildItem -LiteralPath $directory -Force).Count -ne 0) { throw 'Attribution evidence already exists; repetition is forbidden.' }
+    $cases = @('red_salamander_help_lists_diagnostics_options','cmd_preferences_dialog_keyboard_reset_live_dx_interaction',
+        'cmd_pane_fileops_popup_throughput_disclosure',
+        'cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup')
+    $rows = @($cases | ForEach-Object { [ordered]@{case=$_;status='unexecuted';run_id=$null;exit_code=$null;
+        started_utc=$null;ended_utc=$null;proof=$null;error=$null} })
+    $index = [ordered]@{schema='red-salamander.commands-ui-attribution.v1';scope='CommandsUiAttribution';
+        platform=$Platform;configuration=$Configuration;coverage='filtered';repository_verdict='NOT_EVALUATED';
+        status='incomplete';build_identity=$null;entries=$rows;error=$null;evidence_run_id=$EvidenceRunId;evidence_member=$indexMember}
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $stopped = $false
+    $quarantineIdentity = $null
+    try {
+        $identity = Get-RSHostedAttributionBuildIdentity -RepoRoot $RepoRoot -Platform $Platform -Configuration $Configuration
+        $index.build_identity = $identity
+        $identityDigest = Get-RSCanonicalJsonDigest $identity
+        for ($ordinal = 0; $ordinal -lt $cases.Count; ++$ordinal) {
+            $row = $rows[$ordinal]
+            $caseDirectory = Join-Path $directory ('case-' + ($ordinal + 1))
+            [void][IO.Directory]::CreateDirectory($caseDirectory)
+            $row.stdout_member = [IO.Path]::GetRelativePath($evidenceRunRoot, (Join-Path $caseDirectory 'runner.stdout.log')).Replace('\','/')
+            $row.stderr_member = [IO.Path]::GetRelativePath($evidenceRunRoot, (Join-Path $caseDirectory 'runner.stderr.log')).Replace('\','/')
+            try {
+                $before = Get-RSHostedAttributionBuildIdentity -RepoRoot $RepoRoot -Platform $Platform -Configuration $Configuration
+                if ((Get-RSCanonicalJsonDigest $before) -cne $identityDigest) { throw 'Attribution source or artifact receipt changed before launch.' }
+                $quarantineBefore = Get-RSHostedAttributionQuarantineIdentity -RepoRoot $RepoRoot
+                if ($null -eq $quarantineIdentity) { $quarantineIdentity = $quarantineBefore }
+                if ($quarantineBefore -cne $quarantineIdentity) { throw 'Canonical quarantine changed before the next attribution launch.' }
+                $row.quarantine_identity = $quarantineBefore
+                $row.status = 'running'
+                $started = [DateTimeOffset]::UtcNow; $row.started_utc = $started.ToString('o')
+                $process = & $RunCase $row.case
+                $ended = [DateTimeOffset]::UtcNow; $row.ended_utc = $ended.ToString('o')
+                [IO.File]::WriteAllText((Join-Path $caseDirectory 'runner.stdout.log'), [string]$process.stdout)
+                [IO.File]::WriteAllText((Join-Path $caseDirectory 'runner.stderr.log'), [string]$process.stderr)
+                $row.exit_code = [int]$process.exitCode
+                $row.run_id = Get-RSHostedDiagnosticRunId -Output $process.stdout
+                $row.child_archive_record = "run-archive-records/$($row.run_id)/complete.json"
+                if (-not $seen.Add($row.run_id)) { throw 'Attribution child run IDs must be unique.' }
+                $after = Get-RSHostedAttributionBuildIdentity -RepoRoot $RepoRoot -Platform $Platform -Configuration $Configuration
+                if ((Get-RSCanonicalJsonDigest $after) -cne $identityDigest) { throw 'Attribution source or artifact receipt changed after launch.' }
+                if ((Get-RSHostedAttributionQuarantineIdentity -RepoRoot $RepoRoot) -cne $quarantineIdentity) {
+                    throw 'Canonical quarantine changed during the attribution child.'
+                }
+                $arguments = @{ExitCode=$row.exit_code;Output=$process.stdout;TestRoot=$TestRoot;RepoRoot=$RepoRoot;
+                    Suite='Commands';CaseFilter=$row.case;Platform=$Platform;Configuration=$Configuration;
+                    TimeoutMultiplier=$TimeoutMultiplier;
+                    InvocationStartedUtc=$started;InvocationEndedUtc=$ended}
+                if ($row.exit_code -eq 2) {
+                    $row.proof = Assert-RSHostedFilteredCaseRun @arguments
+                    # The campaign requires exactly one case and no repair even for a pass.
+                    if ($row.proof.SummarySchema -cne 'red-salamander.run-all-tests.v1' -or
+                        $row.proof.Passed -ne 1 -or $row.proof.Failed -ne 0 -or $row.proof.NativeCaseCount -ne 1 -or
+                        -not $row.proof.HasNoRepairAttempts) { throw 'Attribution expected one passing selected v1 case without repair.' }
+                } else {
+                    $row.proof = Read-RSHostedFilteredCaseRun @arguments -AllowRecordedFailure
+                }
+                $row.status = if ($row.proof.ChangeVerdict -ceq 'PASSED') { 'passed' } else { 'failed' }
+            } catch {
+                # Missing normal after/final snapshots, a refused boundary, changed
+                # receipt, bad archive, or quarantine cannot authorize another child.
+                $row.status = 'unsafe-or-invalid'; $row.error = $_.Exception.Message
+                $stopped = $true
+            } finally {
+                $row | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $caseDirectory 'coverage.json') -Encoding utf8
+                $index | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath $indexPath -Encoding utf8
+            }
+            if ($stopped) { break }
+        }
+        $index.status = if (@($rows | Where-Object { $_.status -cne 'passed' }).Count -eq 0) { 'passed' } else { 'failed' }
+    } catch {
+        $index.status = 'failed'; $index.error = $_.Exception.Message
+        throw
+    } finally {
+        $index | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath $indexPath -Encoding utf8
+    }
+    if ($index.status -cne 'passed') { throw 'Commands UI attribution failed or left unexecuted selections; preserve its diagnostic index.' }
+    return [pscustomobject]$index
+}
+
+function Invoke-RSHostedCommandsUiAttribution {
+    <#
+    .SYNOPSIS
+    Owns and archives a marked-sandbox run for one observer-control case and three
+    exact hosted UI selections. It grants no repository or production acceptance.
+    .PARAMETER TimeoutMultiplier
+    Trusted multiplier used by the caller's child invocation and evidence verifier,
+    default 1. The hosted adapter supplies the same explicit 2 to both paths.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$TestRoot,
+        [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
+        [Parameter(Mandatory)][ValidateSet('Debug','Release','ASan Debug')][string]$Configuration,
+        [ValidateRange(0.1,100.0)][double]$TimeoutMultiplier = 1.0,
+        [Parameter(Mandatory)][scriptblock]$RunCase
+    )
+    $context = New-RSTestRunContext -RepoRoot $RepoRoot -TestRootOverride $TestRoot
+    if ([IO.Path]::GetFullPath($env:REDSALAMANDER_TEST_ROOT).TrimEnd('\') -ine $context.TestRoot.TrimEnd('\')) {
+        throw 'Attribution scratch root must match its explicit marked test root.'
+    }
+    $directory = New-RSTestSandboxScratchDirectory -RepoRoot $RepoRoot -Harness UnifiedCI `
+        -Case CommandsUiAttribution -RunId $context.RunId
+    Write-Host "Commands UI attribution evidence run: $($context.RunId)"
+    $result = $null; $failure = $null; $archiveFailure = $null
+    try {
+        $result = Invoke-RSHostedCommandsUiAttributionCore -RepoRoot $RepoRoot -TestRoot $TestRoot `
+            -Platform $Platform -Configuration $Configuration -TimeoutMultiplier $TimeoutMultiplier `
+            -EvidenceRunId $context.RunId -EvidenceDirectory $directory -RunCase $RunCase
+    } catch { $failure = $_ }
+    try { Save-RSTestSandboxRunEvidence -TestRoot $context.TestRoot -RunId $context.RunId -Disposition completed | Out-Null }
+    catch { $archiveFailure = $_ }
+    if ($null -ne $failure -and $null -ne $archiveFailure) {
+        throw [AggregateException]::new('Attribution execution and archival failed.', [Exception[]]@($failure.Exception,$archiveFailure.Exception))
+    }
+    if ($null -ne $archiveFailure) { throw $archiveFailure }
+    if ($null -ne $failure) { throw $failure }
+    $archive = Read-RSHostedVerifiedArchiveRecord -TestRoot $context.TestRoot -RunId $context.RunId
+    [void](Get-RSHostedArchiveMemberPath -Archive $archive -TestRoot $context.TestRoot -RelativePath $result.evidence_member.Replace('/','\'))
+    return $result
+}
+
+Export-ModuleMember -Function Get-RSHostedDiagnosticSelection, Get-RSHostedDiagnosticRunId, Test-RSHostedDiagnosticOutcome, Read-RSHostedDiagnosticEvidence, Assert-RSHostedFilteredCaseRun, Get-RSHostedPairedDispatch, Invoke-RSHostedCommandsUiAttribution

@@ -1,0 +1,350 @@
+{
+  "schema": "red-salamander.native-component-evidence-preparation.v1",
+  "status": "DRAFT DEBUG SUBSECTION; NOT ARCHIVE-VALIDATED; RELEASE PENDING; NO FULL/PRODUCTION QUALIFICATION",
+  "prepared_utc": "2026-11-13T17:06:27.766106+00:00",
+  "receipt_id": "2a421a6b4d303b142f68a56faf7b070fdeff32953a4803884fba1ecd0e105135",
+  "receipt_file_sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed",
+  "candidate_source": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+  "candidate_snapshot": "bf6aed7cb9a8479f998dbde44717845600a8735933c4387f518d531e8100b04d",
+  "machine_profile": "4cb089111a23",
+  "proposed_archive_path": "Specs/TestRuns/4cb089111a23/FileOps/2026-11-13_165916_NativeComponents",
+  "historical_receipt_selected_outputs": [
+    {
+      "relative_path": ".build/x64/Debug/RedSalamander.exe",
+      "sha256": "6291df20f9ddc7bc16bbbf1eb39958dd3dd18214d4ebbd79fca867994b390fa2",
+      "size_bytes": 113005056,
+      "verification": "historical immutable receipt output identity; current profile is being re-attested and is deliberately not used as historical proof"
+    },
+    {
+      "relative_path": ".build/x64/Debug/Plugins/FileSystem.dll",
+      "sha256": "9953cb50307cbdb2b9356a370aa6142ef2b4dc0fb5307a59a7a71153312e6cbd",
+      "size_bytes": 6334976,
+      "verification": "historical immutable receipt output identity; current profile is being re-attested and is deliberately not used as historical proof"
+    },
+    {
+      "relative_path": ".build/x64/Debug/Common.dll",
+      "sha256": "f0bc5e89d4e9febb6b70cce8b8d4faa6934c1c3b987e887b85736ddce716951c",
+      "size_bytes": 4044288,
+      "verification": "historical immutable receipt output identity; current profile is being re-attested and is deliberately not used as historical proof"
+    }
+  ],
+  "runs": {
+    "Review": {
+      "run_id": "20261113T165013Z-78108-95535f9d947843e7b9305611372ac711",
+      "case_filter": "FileOps_ReviewRemediationContracts",
+      "sealed_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711",
+      "native_counts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      "native_process_exit_code": 0,
+      "native_suite_classification": "PASSED",
+      "outer_wrapper_exit_code": 2,
+      "whole_repository_qualification": "NOT_EVALUATED; exact filtered v1 diagnostic evidence",
+      "sandbox_audit": {
+        "is_clean": false,
+        "issue_count": 100,
+        "category_counts": {
+          "stale-test-run-dir": 9,
+          "unexpected-test-root-child": 19,
+          "unexpected-test-run-dir": 72
+        },
+        "contract": "Testing_SelfTests.md:644 calls this aggregate audit non-blocking; keep residue visible, never waive or relabel root clean",
+        "ownership": "Unproven for unrelated listed residue. No issue is a current selected-run escape/reparse finding; no cleanup performed."
+      },
+      "source_binding": {
+        "git_head_from_outer_workspace": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+        "receipt_git_head": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+        "after_and_final_snapshot_id": "bf6aed7cb9a8479f998dbde44717845600a8735933c4387f518d531e8100b04d",
+        "receipt_source_snapshot_id": "bf6aed7cb9a8479f998dbde44717845600a8735933c4387f518d531e8100b04d",
+        "repo_identity": "1a51f23b3d81ca37fd14c60d850d8f736ee51d6a4122a961bbc5e438df844072",
+        "receipt_id": "2a421a6b4d303b142f68a56faf7b070fdeff32953a4803884fba1ecd0e105135",
+        "prelaunch_entry_fingerprints_sha256": "11832e36d5dd4b6506e1a63117446f4b73dc32fad09e086f68bef0f361cea837",
+        "prelaunch_fingerprints_digest": "681dc47512371c268501ab4495d01bc7c285812a7df076c3d43ba27e20d96d20",
+        "prelaunch_plan_digest": "5fa72bd2e84293a3a1d738c351506bec73da5ad38eca254a04a1c9c6a4f1b96e",
+        "prelaunch_artifact_epoch": 0,
+        "native_metric_commit_field": "",
+        "native_commit_was_not_invented": true,
+        "join": "sealed prelaunch fingerprints explicitly bind receipt ID, source snapshot, artifact epoch and filtered plan; plan/decision/fingerprints match and archive inventory binds their bytes; same exact executable path in outer aggregate and owned exit record; one native PID throughout hashed raw metrics; metric timestamps contained by outer interval and precede owned exit; matching after/final workspace snapshot and receipt; archive transaction binds raw bytes"
+      },
+      "process_id": 79504,
+      "outer_started_utc": "2026-11-13T16:51:12.2036248Z",
+      "outer_ended_utc": "2026-11-13T16:52:41.4415098Z",
+      "native_metric_first_utc": "2026-11-13T16:51:12.344000+00:00",
+      "native_metric_last_utc": "2026-11-13T16:52:30.299000+00:00",
+      "native_metric_run_ids": [
+        "2026-11-13_165112"
+      ],
+      "raw_metrics_sha256": "a3aaae65b2aa08caacfcc074f2420f2c854053f76a74f268b16f7368edb53cba",
+      "raw_metrics_bytes": 15162768,
+      "raw_metrics_rows": 44184,
+      "excerpt_metrics_rows": 104,
+      "metric_counts": {
+        "FileOps.Conflict.LocalDistinctnessUnproved": 3,
+        "FileOps.Conflict.WaitCalls": 68,
+        "FileOps.Power.ConflictWaitCalls": 6,
+        "FileOps.SelfTest.LocalAncestryProbe": 1,
+        "FileOps.SelfTest.LocalCrossRootDistinctness": 3,
+        "FileOps.Transfer.InsideSourceProbeUs": 23
+      },
+      "archive_intent_sha256": "b3422641853dab4331d38c4d4b532a19ebb1572336de251931e2763617d94883",
+      "archive_complete_sha256": "5ffc5c40afe48d91516fa379a4f426a505a9225ec37d87513406337bee8c2214"
+    },
+    "Identity": {
+      "run_id": "20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c",
+      "case_filter": "FileOps_IdentityInterlockWaiting",
+      "sealed_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c",
+      "native_counts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      "native_process_exit_code": 0,
+      "native_suite_classification": "PASSED",
+      "outer_wrapper_exit_code": 2,
+      "whole_repository_qualification": "NOT_EVALUATED; exact filtered v1 diagnostic evidence",
+      "sandbox_audit": {
+        "is_clean": false,
+        "issue_count": 99,
+        "category_counts": {
+          "stale-test-run-dir": 8,
+          "unexpected-test-root-child": 19,
+          "unexpected-test-run-dir": 72
+        },
+        "contract": "Testing_SelfTests.md:644 calls this aggregate audit non-blocking; keep residue visible, never waive or relabel root clean",
+        "ownership": "Unproven for unrelated listed residue. No issue is a current selected-run escape/reparse finding; no cleanup performed."
+      },
+      "source_binding": {
+        "git_head_from_outer_workspace": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+        "receipt_git_head": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+        "after_and_final_snapshot_id": "bf6aed7cb9a8479f998dbde44717845600a8735933c4387f518d531e8100b04d",
+        "receipt_source_snapshot_id": "bf6aed7cb9a8479f998dbde44717845600a8735933c4387f518d531e8100b04d",
+        "repo_identity": "1a51f23b3d81ca37fd14c60d850d8f736ee51d6a4122a961bbc5e438df844072",
+        "receipt_id": "2a421a6b4d303b142f68a56faf7b070fdeff32953a4803884fba1ecd0e105135",
+        "prelaunch_entry_fingerprints_sha256": "e3d83dc063f5ea423627b6060fc3564aba5343211657abbb1dfb2c54e2dbf0bd",
+        "prelaunch_fingerprints_digest": "929e3e9f839ab85b409c6c2e64b37a3fec08011680e4d02188e168eed9baf516",
+        "prelaunch_plan_digest": "1dbfbe831d62a6a3fdf6f1fe7a3e5bd2f5c91705818cbca5e0dbf2f4f5a80925",
+        "prelaunch_artifact_epoch": 0,
+        "native_metric_commit_field": "",
+        "native_commit_was_not_invented": true,
+        "join": "sealed prelaunch fingerprints explicitly bind receipt ID, source snapshot, artifact epoch and filtered plan; plan/decision/fingerprints match and archive inventory binds their bytes; same exact executable path in outer aggregate and owned exit record; one native PID throughout hashed raw metrics; metric timestamps contained by outer interval and precede owned exit; matching after/final workspace snapshot and receipt; archive transaction binds raw bytes"
+      },
+      "process_id": 72540,
+      "outer_started_utc": "2026-11-13T16:54:20.0223138Z",
+      "outer_ended_utc": "2026-11-13T16:54:54.4606966Z",
+      "native_metric_first_utc": "2026-11-13T16:54:20.202000+00:00",
+      "native_metric_last_utc": "2026-11-13T16:54:43.224000+00:00",
+      "native_metric_run_ids": [
+        "2026-11-13_165420"
+      ],
+      "raw_metrics_sha256": "ad68d11a6cd45008af9730637ccd40b6f778ae1e84b32f895ccc51afdeb7a6a4",
+      "raw_metrics_bytes": 6290115,
+      "raw_metrics_rows": 18123,
+      "excerpt_metrics_rows": 145,
+      "metric_counts": {
+        "FileOps.Queue.Selector.BaselineBatchUs": 48,
+        "FileOps.Queue.Selector.CandidateBatchUs": 48,
+        "FileOps.Queue.Selector.CollectionCapacityBytes": 48,
+        "FileOps.SelfTest.QueueStartOrder.Us": 1
+      },
+      "archive_intent_sha256": "c01ed60126172296e54ad24cc187f9d00753929eb1e18872043a34cd4082b989",
+      "archive_complete_sha256": "0ea5bb3c9ceeaa5a7635eee54adae1f184cf038c100d0ae8726d4893fb8bddc3"
+    }
+  },
+  "exact_copies": [
+    {
+      "source": "Z:\\src\\.worktrees\\RS-audit20261113\\.build\\x64\\Debug\\receipts\\2a421a6b4d303b142f68a56faf7b070fdeff32953a4803884fba1ecd0e105135.json",
+      "packet_path": "provenance/build-receipt.json",
+      "bytes": 84985,
+      "sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T164233Z-54404-7c6a1aaf2f3446578555674b91a20dd7\\scratch\\audit-native\\full-debug-build\\build-receipt.json",
+      "packet_path": "provenance/sealed-build-receipt.json",
+      "bytes": 84985,
+      "sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T164233Z-54404-7c6a1aaf2f3446578555674b91a20dd7\\scratch\\audit-native\\full-debug-build\\build-result.json",
+      "packet_path": "provenance/sealed-build-result.json",
+      "bytes": 671,
+      "sha256": "c81f290d3cefe70973be49403f2a371c7fba0a8ff10f1440c41f2c52bdbac0d0"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\results.json",
+      "packet_path": "Debug/Review/results.json",
+      "bytes": 1438,
+      "sha256": "a9743a2354b31842b0b6fae53fad124ac03f118d04071a2223b7113b44916851"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\trace.txt",
+      "packet_path": "Debug/Review/trace.txt",
+      "bytes": 177074,
+      "sha256": "0869129f88a9baf5b08d99f425385abc27d9db1df2a488e106b66a28a78e7486"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "packet_path": "Debug/Review/run-all-tests-results.json",
+      "bytes": 30121,
+      "sha256": "4dd1e213de0544efcc7262a0e689b23fdec3fc3f1b57ccb7327bf4d39fb4c6d8"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "packet_path": "Debug/Review/run-all-tests-case-history.jsonl",
+      "bytes": 1080,
+      "sha256": "d676111f1a7869061a1b2f0ca75f757460ba717207e8d6057d8ccbff9297c54e"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+      "packet_path": "Debug/Review/workspace-after-selftest.file-operations.json",
+      "bytes": 801,
+      "sha256": "71aac156e7bd2b9275c3bd00048ab7fe2e80017e1b24c59158355fbe169a7404"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "packet_path": "Debug/Review/workspace-final.json",
+      "bytes": 801,
+      "sha256": "7b5715959934e3f84cc42e27286ad40ca53caaf9599bc97cc581717b04c6e869"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "packet_path": "Debug/Review/fileops/results.json",
+      "bytes": 891,
+      "sha256": "bd1964c04de7af87fd2432169dadb8800fd14c98a5ecc3741e6c88d1b016beb6"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "packet_path": "Debug/Review/fileops/trace.txt",
+      "bytes": 149288,
+      "sha256": "0917c0379d7ce0dad407bd63572ff52cf686cc499441cb07be7d1194b123b161"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+      "packet_path": "Debug/Review/prelaunch/entry-fingerprints.json",
+      "bytes": 1696,
+      "sha256": "11832e36d5dd4b6506e1a63117446f4b73dc32fad09e086f68bef0f361cea837"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\previous_run\\validation-plan.json",
+      "packet_path": "Debug/Review/prelaunch/validation-plan.json",
+      "bytes": 1664,
+      "sha256": "3babaf360e62f3fd639d984cb74059b6a693490deb28a4a7da9a42499dc4ea83"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+      "packet_path": "Debug/Review/prelaunch/validation-plan-decision.json",
+      "bytes": 878,
+      "sha256": "73b18afa3cdafff7fe92993d3d2261bf6e8b2f85c1bb3f6e359166a7a118fc30"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\artifacts\\native-process-exits\\e1e03bf6371e47e2a6fec459f8023431.json",
+      "packet_path": "Debug/Review/native-process-exit.json",
+      "bytes": 223,
+      "sha256": "3aa69e28cb9c8afe25789ecb79ca9c66fccea401a86d188294ce4a17991f9ff1"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\intent.json",
+      "packet_path": "Debug/Review/archive-intent.json",
+      "bytes": 112700,
+      "sha256": "b3422641853dab4331d38c4d4b532a19ebb1572336de251931e2763617d94883"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T165013Z-78108-95535f9d947843e7b9305611372ac711\\complete.json",
+      "packet_path": "Debug/Review/archive-complete.json",
+      "bytes": 399,
+      "sha256": "5ffc5c40afe48d91516fa379a4f426a505a9225ec37d87513406337bee8c2214"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\results.json",
+      "packet_path": "Debug/Identity/results.json",
+      "bytes": 1432,
+      "sha256": "ea164c208b9d85636e32f06d48acb562400ca8935805a2b9dae278886f42af24"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\trace.txt",
+      "packet_path": "Debug/Identity/trace.txt",
+      "bytes": 46222,
+      "sha256": "8f095ce9eb39ffcc345e12f2049631529e462ae2ddd8c2467e63dd052b1386d9"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "packet_path": "Debug/Identity/run-all-tests-results.json",
+      "bytes": 29760,
+      "sha256": "2ffbf73da443db4de2179bde10c45139d4492d47911050781b56d253423c3e59"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "packet_path": "Debug/Identity/run-all-tests-case-history.jsonl",
+      "bytes": 1078,
+      "sha256": "98198083fbc2faf8954b22ca033441071db120a3c4802e0f479a58e388bae388"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+      "packet_path": "Debug/Identity/workspace-after-selftest.file-operations.json",
+      "bytes": 801,
+      "sha256": "5b4b83a551831ddc4e0d3b4bb4c98ed8445f9f54bdb8f24c398e67285e95a5f1"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "packet_path": "Debug/Identity/workspace-final.json",
+      "bytes": 801,
+      "sha256": "a5d40b657577bec76df945e28cfd3d061e8e1bf2b906af25860f900ffcc0965d"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "packet_path": "Debug/Identity/fileops/results.json",
+      "bytes": 889,
+      "sha256": "5e19a08dc4b17ff961840d4137cecfa71cf15ca86ec57b642590225317a8fdad"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "packet_path": "Debug/Identity/fileops/trace.txt",
+      "bytes": 12520,
+      "sha256": "e101762f42499c7d2937cd1f440fb553b4d678158337df8fd5dce1f64e66a7ff"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+      "packet_path": "Debug/Identity/prelaunch/entry-fingerprints.json",
+      "bytes": 1696,
+      "sha256": "e3d83dc063f5ea423627b6060fc3564aba5343211657abbb1dfb2c54e2dbf0bd"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\previous_run\\validation-plan.json",
+      "packet_path": "Debug/Identity/prelaunch/validation-plan.json",
+      "bytes": 1662,
+      "sha256": "247fbcacb7d7a2bcf4bc82209815742eaa3daad987ed08a0142367cc8aff5564"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+      "packet_path": "Debug/Identity/prelaunch/validation-plan-decision.json",
+      "bytes": 878,
+      "sha256": "b03ecc5fec8d7c2f7229f51953d6d7f15a0dcb2e90a9823d88201d6503365b98"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\artifacts\\native-process-exits\\1572ee44011b4c859c50322e3172ea0b.json",
+      "packet_path": "Debug/Identity/native-process-exit.json",
+      "bytes": 223,
+      "sha256": "b11a085207394daa621a88aa6d9122c089aeda2410b167681e192de994bc6331"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\intent.json",
+      "packet_path": "Debug/Identity/archive-intent.json",
+      "bytes": 38989,
+      "sha256": "c01ed60126172296e54ad24cc187f9d00753929eb1e18872043a34cd4082b989"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T165333Z-71548-2273ce8cd6be4862af7db946309da83c\\complete.json",
+      "packet_path": "Debug/Identity/archive-complete.json",
+      "bytes": 399,
+      "sha256": "0ea5bb3c9ceeaa5a7635eee54adae1f184cf038c100d0ae8726d4893fb8bddc3"
+    }
+  ],
+  "raw_preservation": "Both complete metric streams remain unchanged in their sealed run roots. Packet JSONL is an exact ordered metric-name excerpt, with one-based original line indexes and per-line SHA256; no commit metadata is filled in.",
+  "release": {
+    "status": "PENDING",
+    "receipt": null,
+    "runs": [],
+    "measurements": null
+  }
+}

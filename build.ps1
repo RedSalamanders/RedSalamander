@@ -378,88 +378,11 @@ $versionContext = Resolve-RSVersionContext `
 $versionStatePath = Get-RSVersionStatePath -RepoRoot $SolutionDir
 
 # Function to find MSBuild
-function Get-RSHostOrderedMSBuildRelativePaths {
-    # Bin\MSBuild.exe is the 32-bit x86 MSBuild. The VC toolset derives the compiler host from the
-    # MSBuild process architecture and downgrades arm64/x64 hosts it cannot see, so every discovery
-    # strategy prefers the native 64-bit MSBuild of this host, then every other 64-bit executable
-    # the host can run (ARM64 Windows emulates x64; x64 Windows cannot run arm64\), and only then
-    # an x86 executable.
-    $isArm64Host = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'
-    [string[]]$candidates = if ($isArm64Host) {
-        @('MSBuild\Current\Bin\arm64\MSBuild.exe', 'MSBuild\Current\Bin\amd64\MSBuild.exe')
-    } else {
-        @('MSBuild\Current\Bin\amd64\MSBuild.exe')
-    }
-    return $candidates + [string[]]@(
-        'MSBuild\15.0\Bin\amd64\MSBuild.exe',
-        'MSBuild\Current\Bin\MSBuild.exe',
-        'MSBuild\15.0\Bin\MSBuild.exe'
-    )
-}
-
-function Resolve-RSHostOrderedMSBuildPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    # A PATH hit from a developer prompt is usually the x86 MSBuild\Current\Bin\MSBuild.exe; map
-    # it to the best host-ordered executable of the same installation when one exists.
-    $match = [regex]::Match($Path, '^(?<root>.+?)\\MSBuild\\(?:Current|15\.0)\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$', 'IgnoreCase')
-    if (-not $match.Success) { return $Path }
-    foreach ($relative in Get-RSHostOrderedMSBuildRelativePaths) {
-        $candidate = Join-Path $match.Groups['root'].Value $relative
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
-    }
-    return $Path
-}
-
 function Find-MSBuild {
     Write-Host "Locating MSBuild..." -ForegroundColor Yellow
 
-    # In GitHub Actions, consume the exact workflow-selected path first so the cache-key
-    # identity probe and the build receipt cannot resolve different MSBuild executables.
-    if ($env:GITHUB_ACTIONS -and ($env:GITHUB_ACTIONS -eq "true")) {
-        if (-not [string]::IsNullOrWhiteSpace($env:MSBUILD_EXE_PATH)) {
-            $selectedPath = [IO.Path]::GetFullPath($env:MSBUILD_EXE_PATH)
-            if (-not (Test-Path -LiteralPath $selectedPath -PathType Leaf)) {
-                throw "Workflow-selected MSBuild does not exist: $selectedPath"
-            }
-            $selectedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($selectedPath)
-            # A registered VS instance can live under RUNNER_TEMP or another custom
-            # root. Validate the binary identity and MSBuild layout, not its parent name.
-            if ($selectedVersion.FileMajorPart -lt 18 -or
-                $selectedVersion.OriginalFilename -ne 'MSBuild.exe' -or
-                $selectedPath -notmatch '\\MSBuild\\Current\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$') {
-                throw "Workflow-selected MSBuild is not a Visual Studio 2026 executable: $selectedPath"
-            }
-            return @{
-                Path = $selectedPath
-                Version = "MSBuild $($selectedVersion.FileMajorPart) (workflow-selected)"
-                Method = "MSBUILD_EXE_PATH"
-            }
-        }
-
-        # Compatibility fallback for callers that only prepend the selected directory.
-        $msbuildInPath = Get-Command msbuild.exe -ErrorAction SilentlyContinue
-        if ($msbuildInPath -and $msbuildInPath.Source -and (Test-Path $msbuildInPath.Source)) {
-            $candidatePath = Resolve-RSHostOrderedMSBuildPath -Path $msbuildInPath.Source
-            $fileMajor = $null
-            try {
-                $ver = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($candidatePath)
-                $fileMajor = $ver.FileMajorPart
-            }
-            catch {
-                $fileMajor = $null
-            }
-
-            # VS 2026 MSBuild should report major version 18.
-            if (($null -ne $fileMajor) -and ($fileMajor -ge 18) -and $ver.OriginalFilename -eq 'MSBuild.exe' -and
-                $candidatePath -match '\\MSBuild\\Current\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$') {
-                return @{
-                    Path = $candidatePath
-                    Version = "MSBuild $fileMajor (PATH)"
-                    Method = "PATH"
-                }
-            }
-        }
-    }
+    $workflowSelected = Get-RSWorkflowSelectedMSBuild
+    if ($null -ne $workflowSelected) { return $workflowSelected }
 
     # Strategy 1: Try vswhere (preferred method for VS 2017+)
     $vswherePaths = @(
@@ -941,8 +864,17 @@ $buildParams += "/p:RSBuildCompilerDebugInformation=$effectiveCompilerDebugInfor
 $buildParams += "/p:RSBuildArtifactManifestRoot=$($artifactManifestDir.TrimEnd('\'))\"
 $buildParams += $sdkProperties
 if ($null -ne $sdkInput) {
-    & $msbuildPath (Join-Path $SolutionDir 'RedSalamander/RedSalamander.vcxproj') /nologo /v:minimal '/t:CiValidateSdkConsumer' "/p:Platform=$Platform" "/p:Configuration=$Configuration" "/p:SolutionDir=$SolutionDirWithSlash" @sdkProperties
-    if ($LASTEXITCODE) {throw 'The actual application profile refused the qualified SDK before compilation.'}
+    $sdkValidationArgs = @(
+        (Join-Path $SolutionDir 'RedSalamander\RedSalamander.vcxproj'),
+        '/nologo',
+        '/v:minimal',
+        '/t:CiValidateSdkConsumer',
+        "/p:Platform=$Platform",
+        "/p:Configuration=$Configuration",
+        "/p:SolutionDir=$SolutionDirWithSlash"
+    ) + $sdkProperties
+    $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $sdkValidationArgs -WorkingDirectory $SolutionDir
+    if ($LASTEXITCODE -ne 0) { throw 'The actual application profile refused the qualified SDK before compilation.' }
 }
 if ($OfficialRelease) {
     $buildParams += "/p:RSVersionOfficialRelease=true"
@@ -1056,15 +988,23 @@ function Assert-BuildOutputProcessNotRunning {
         -IdentityRecord $buildIdentity.ToolchainIdentityRecord `
         -SchemaPath $toolchainIdentitySchema
 
-    # Execute clean if requested
-    if ($Clean) {
+    # Execute clean if requested (skip standalone Clean when Rebuild already cleans within the target graph)
+    if ($Clean -and -not $Rebuild) {
         Write-Host "Cleaning..." -ForegroundColor Yellow
         $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $cleanParams -WorkingDirectory $SolutionDir
 
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "Clean failed, continuing with build..." -ForegroundColor Yellow
+            $stopwatch.Stop()
+            Write-Host ""
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host "Clean Failed!" -ForegroundColor Red
+            Write-Host "Exit code: $LASTEXITCODE" -ForegroundColor Red
+            Write-Host "========================================" -ForegroundColor Red
+            exit $LASTEXITCODE
         }
         Write-Host "Building..." -ForegroundColor Yellow
+    } elseif ($Clean -and $Rebuild) {
+        Write-Host "Rebuild already cleans selected targets; skipping separate Clean pass." -ForegroundColor DarkGray
     }
 
     $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $buildParams -WorkingDirectory $SolutionDir

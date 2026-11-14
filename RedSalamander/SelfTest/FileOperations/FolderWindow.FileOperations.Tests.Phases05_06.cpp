@@ -11124,6 +11124,7 @@ case SelfTestState::Step::C0_CurlImapTransportTruth:
 
 case SelfTestState::Step::R3_1_IdentityLessReplaceDummy:
 {
+    static uint64_t transientGeneration = 0u;
     // R3-1: a destination without object binding (Dummy) replaces one occupant conditionally through
     // its atomic-final writer. (1) The Exists prompt offers Overwrite and the replacement lands with
     // the source bytes. (2) When the occupant changes while the decision is pending, nothing is
@@ -11181,6 +11182,7 @@ case SelfTestState::Step::R3_1_IdentityLessReplaceDummy:
 
     if (state.stepState == 0u)
     {
+        transientGeneration = 0u;
         if (! state.fsDummy)
         {
             Fail(L"R3-1: the Dummy provider is required for the identity-less replace proof.");
@@ -11324,6 +11326,74 @@ case SelfTestState::Step::R3_1_IdentityLessReplaceDummy:
         {
             Fail(L"R3-1: the raced occupant must survive untouched when the replacement is refused.");
             return true;
+        }
+        if (! DummyWriteTextFile(state.fsDummy.get(), dummyFile, occupantBytes, true))
+        {
+            Fail(L"R3-1: failed to seed the transient replacement race.");
+            return true;
+        }
+        state.taskA = startReplaceCopy();
+        if (! state.taskA.has_value())
+        {
+            Fail(L"R3-1: failed to start the transient replacement race.");
+            return true;
+        }
+        state.stepState = 3u;
+        return false;
+    }
+    if (state.stepState >= 3u && state.stepState <= 6u)
+    {
+        const bool skip = state.stepState >= 5u;
+        if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+        {
+            if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
+            {
+                if (state.stepState == 3u || state.stepState == 5u)
+                {
+                    if (! DummyWriteTextFile(state.fsDummy.get(), dummyFile, racedBytes, true))
+                    {
+                        Fail(L"R3-1: failed to change the transient occupant.");
+                        return true;
+                    }
+                    transientGeneration = prompt->generation;
+                    task->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Overwrite, false);
+                    ++state.stepState;
+                    return false;
+                }
+                if (prompt->generation != transientGeneration)
+                {
+                    task->DebugSubmitCurrentConflictDecision(skip ? Task::ConflictAction::Skip : Task::ConflictAction::Overwrite, false);
+                }
+                return false;
+            }
+        }
+        const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+        if (completed == state.completedTasks.end())
+            return false;
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+        state.fileOps->CollectCompletedTasks(summaries);
+        const auto summary = std::ranges::find(summaries, state.taskA.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+        if (completed->second.conflictPromptCount != 2u || summary == summaries.end() || summary->errorCount != 0u ||
+            ! dummyBytesEqual(skip ? racedBytes : sourceBytes))
+        {
+            Fail(L"R3-1: a transient mismatch resolved by Replace or Skip must preserve the selected bytes and leave zero errors.");
+            return true;
+        }
+        if (! skip)
+        {
+            if (! DummyWriteTextFile(state.fsDummy.get(), dummyFile, occupantBytes, true))
+            {
+                Fail(L"R3-1: failed to seed the transient Skip race.");
+                return true;
+            }
+            state.taskA = startReplaceCopy();
+            if (! state.taskA.has_value())
+            {
+                Fail(L"R3-1: failed to start the transient Skip race.");
+                return true;
+            }
+            state.stepState = 5u;
+            return false;
         }
         static_cast<void>(SelfTest::RemoveAll(srcRoot));
         NextStep(state, SelfTestState::Step::R3_2_WriterProofDummy);

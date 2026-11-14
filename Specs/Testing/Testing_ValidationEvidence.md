@@ -22,6 +22,18 @@ acceptance. Affected selected-build admission follows the producer contract belo
 `Fresh`, explicit exact `Resume`, and opt-in `Affected` are active as described below;
 CI, nightly, release, and final closeout remain explicit Fresh.
 
+`ScopedTesting.psm1` owns scope discovery, native naming, reviewed PR delegation and
+scheduled-source decisions only. Its former local receipt writers and independent
+source/artifact/environment identities are retired; canonical Startrail records own
+execution and reuse. Hosted stock-preparation opt-in remains an interactive capability
+input in the canonical runner fingerprint.
+
+Workspace snapshot acquisition may cache a historical Git tree map only by repository
+and resolved immutable commit identity. It must reread the mutable index and worktree.
+Canonical blob hashing uses measured batches bounded to 64 MiB, isolating an individually
+larger object. Affected planning may reuse an already validated impact manifest and
+graph-governance result only when the post-build workspace snapshot is identical.
+
 ## Workspace and entry identity (Phase 3 active)
 
 FileOperations child-profile isolation is runner-owned execution policy. Its unique
@@ -396,6 +408,9 @@ from the pre-relocation archive intent inventory. Keep native results, traces an
 to that closed inventory. Separately retain and hash the observed runner-summary bytes and check
 their run ID, executable, invocation times, profile, counts and outcome against the exact launch.
 Do not describe a post-archive summary as inventory-sealed or infer success from archive closure.
+A location beneath completed-runs does not establish inventory membership. Publication projections
+must distinguish original inventory members from late control records and identify any later
+hash binding or copy custody with its actual capture time; otherwise retain explicit hash-only limits.
 
 Aggregate state labels are never sufficient evidence. One verified loader recomputes
 promotion, evidence, and terminal-result digests; requires digest/filename equality;
@@ -545,7 +560,7 @@ Exact local continuation uses the existing explicit Full Resume and its promoted
 
 `-Mode Full` selects the full local obligation. `-Mode PrePush` accounts for full coverage across local execution and the forthcoming PR gate. Delegation requires a clean committed candidate, the enabled GitHub workflow, matching candidate workflow bytes and their reviewed manifest digest, and a matching native profile. Staged, unstaged and untracked inputs retain obligations locally; a dirty tree or changed HEAD during the coverage lookup also rejects delegation. Nightly and weekly jobs are not PR coverage. Workflow/API uncertainty keeps obligations local. A delegated run reports `CI_PENDING`, never repository `PASSED`; the PR must pass its required checks. Main/release acceptance remains separate because its merge tree, configuration matrix or requirements can differ.
 
-RedSalamander defers only entries whose complete portable entry contracts equal the PR plan, retaining writers, in-product cases and extra scenarios locally. Its `-NonInteractive` option omits entries that require desktop-global state and records incomplete coverage; it cannot alter an exact Resume. When every selected entry is omitted (for example FileOps admission coverage with shared foreground invariants) the run executes nothing, lists the omitted entries as `PENDING_INTERACTIVE`, writes no pass claim and ends repository `NOT_EVALUATED` with exit 2. Only `-Suite FileOps` with one exact, case-sensitive filter from `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`, `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal` or `FileOps_SelectionShapeSmb`, and no flaky/order proof injection, is admitted without that desktop lease. These owned callback, storage and progress witnesses retain `--selftest-no-activate`; application captures use the canonical owned HWND WGC path; broad suites, families, prefixes, wildcards, multiple-case filters, casing near-misses and unknown filters remain leased. The plan module stays in the recursive runner dependency digest, invalidating prior entry identity after a classification change. Focused successes still report filtered coverage and repository `NOT_EVALUATED`. DxUi foreground suites remain explicit `test.ps1 -Interactive` work after agreement to the time. Noninteractive iteration and CI do not claim those manual gates; no desktop automation is introduced.
+RedSalamander defers only entries whose complete portable entry contracts equal the PR plan, retaining writers, in-product cases and extra scenarios locally. Its `-NonInteractive` option omits entries that require desktop-global state and records incomplete coverage; it cannot alter an exact Resume. When every selected entry is omitted (for example FileOps admission coverage with shared foreground invariants) the run executes nothing, lists the omitted entries as `PENDING_INTERACTIVE`, writes no pass claim and ends repository `NOT_EVALUATED` with exit 2. Only `-Suite FileOps` with one exact, case-sensitive filter from `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`, `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`, `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb` or `Delete_IdentityLessPinnedTreeChangedEntry`, and no flaky/order proof injection, is admitted without that desktop lease. These owned callback, storage and progress witnesses retain `--selftest-no-activate`; application captures use the canonical owned HWND WGC path; broad suites, families, prefixes, wildcards, multiple-case filters, casing near-misses and unknown filters remain leased. The plan module stays in the recursive runner dependency digest, invalidating prior entry identity after a classification change. Focused successes still report filtered coverage and repository `NOT_EVALUATED`. DxUi foreground suites remain explicit `test.ps1 -Interactive` work after agreement to the time. Noninteractive iteration and CI do not claim those manual gates; no desktop automation is introduced.
 
 `Tests/test-scopes.json` owns the standalone scope and verified PR-profile mapping; RedSalamander's `Tools/validation-impact.json` and canonical plan continue to own its affected execution. Specific standalone test-source rules use their semantic entry tags, while common support and unknown paths retain conservative fan-out. New source/build/runtime/runner dependencies must extend the relevant manifest and focused regression coverage.
 

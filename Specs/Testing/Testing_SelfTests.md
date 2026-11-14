@@ -726,7 +726,7 @@ Environment variables may select alternate test inputs such as profile names, bu
   dependency installation and directs a baseline bump to update
   `vcpkg-tool.json`; cache hits or ambient tools cannot bypass it.
 - `.github/workflows/asan.yml` is the explicit manual x64/ARM64 `ASan Debug` qualification entrypoint; it has no schedule. Before accepting a green harness run, it must invoke the opt-in `--asan-seed-heap-overflow` probe, require a nonzero result with an AddressSanitizer diagnostic, and then run the ordinary contracts successfully. `_DISABLE_STL_ANNOTATION` remains documented technical debt for non-ASan vcpkg dependencies; the seeded proof covers ordinary heap detection, not STL container annotations.
-- `.github/workflows/nightly-flake.yml` retains its historical filename as the explicit manual shuffle-repeat lane, with no schedule. It stays separate from PR CI, builds the Debug self-test artifact, runs `Tools/Run-AllTests.ps1 -Suite All -SkipBuild -SelfTestRepeat 5 -SelfTestShuffleSeed <seed> -ClassifyFailures`, and uploads the runner-owned `REDSALAMANDER_TEST_ROOT` tree as `selftest-artifacts-nightly-shuffle`. `nightly-ci.yml` likewise dispatches manual Full qualification only.
+- `.github/workflows/nightly-flake.yml` retains its historical filename as the explicit manual shuffle-repeat lane, with no schedule. It stays separate from PR CI, builds the Debug self-test artifact, runs `Tools/Run-AllTests.ps1 -Suite All -SkipBuild -SelfTestRepeat 5 -SelfTestShuffleSeed <seed> -ClassifyFailures`, and uploads the runner-owned `REDSALAMANDER_TEST_ROOT` tree as `selftest-artifacts-nightly-shuffle`. `nightly-ci.yml` likewise performs explicit test-only qualification; its Full default, fixed diagnostic scopes and architecture choices are governed by [Build_UnifiedCI.md](../Build/Build_UnifiedCI.md).
 - Hosted Windows checkouts enable Git long paths before checkout. The shuffle-repeat producer
   and consumer use the same VS 2026 runner family; the consumer initializes its governed sandbox
   and verifies/rebinds the unchanged portable attestation before testing. Its evidence upload
@@ -768,6 +768,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   foreground window and native focus only while the fixture owns foreground (or verifies an
   already restored original), and is joined before the retained desktop handle closes. Setup or retirement
   failure fails qualification; a setup witness alone does not prove screenshot or input coverage.
+  A foreign-foreground refusal captures current, saved/current-original and owned-boundary
+  HWND/PID/thread/class identities with UTC capture times at the rejection boundary, without
+  window titles. Diagnostic enrichment is best-effort and never changes the refusal,
+  restoration authority, input policy or deadlines. Fatal diagnostic exceptions are not
+  suppressed and follow the existing owner-thread propagation.
   Startup cancellation never waits on an in-flight window API: the worker checks it before each
   subsequent activation step and readiness, while the original API may still complete. A ten-second
   worker-join threshold records a failure, but the mutex-owning caller stays inside the fixture
@@ -890,6 +895,11 @@ Environment variables may select alternate test inputs such as profile names, bu
   partial candidates.
 - A broad command-dispatch smoke case MUST NOT invoke commands whose contract performs a whole-runtime reload from durable or machine-local settings, such as `cmd/app/rereadAssociations`, or begins provider/OS lifecycle preparation before user confirmation, such as `cmd/pane/disconnect`; those commands require dedicated deterministic cases. After a smoke-dispatched command can alter navigation or presentation state, the smoke fixture MUST restore its in-memory settings snapshot, both pane providers and paths, and each pane's live display mode, sort key/direction, and visibility options, then prove both current-folder enumerations have settled before dispatching the next command. Restoring only the settings object does not reapply already-mutated `FolderView` state, and matching path text alone is not quiescence evidence.
 - A Commands case that asserts navigation-shell stability after changing a pane provider/path or focus MUST pump pending messages and observe a bounded quiet baseline across repeated samples before capturing refresh/path/focus counters. A single matching snapshot is not sufficient because queued provider and focus notifications can invalidate it immediately after capture. The Refresh-shell fixture captures its protected counters from the final quiet sample and dispatches Refresh immediately; it must not insert another focus helper/message pump between baseline capture and the command. Timeout diagnostics for this fixture and drive-menu focus restoration are formatted after the wait so their state describes the observed result.
+- The drive-menu navigation-shell case compares copied live provider drive roots, order and value-presence facts before opening, in the full popup snapshot and after dismissal. It does not require a host to expose two drives or compare changing free-space text. A separate exactly-two-row, display-only fixture exercises the actual ContextMenu renderer with different value widths and requires nonempty shared value-column boundaries within 0.5 DIP. It creates no drive or volume and dispatches no navigation. The live menu's owner, ordering, bitmap, dismissal, shell and focus assertions remain mandatory.
+- Commands post-settle foreground diagnostics compare and describe the same captured HWND. The narrow observation adapter records HWND/PID/thread/class, explicit unavailable metadata/errors, UTC FILETIME in 100 ns units and monotonic tick without cursor, physical-input or title sampling. These sequential observations are not atomic ownership proof. A later reacquired HWND/PID cannot identify the owner at an earlier failure. The source-contract guard in `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` preserves this privacy boundary and unchanged admission/refusal behavior.
+- Failure-only process enrichment is separate from that narrow HWND sampler. Query only the captured HWND/PID, retain query-only noninheritable process handles through the final HWND/thread/PID relation sample, and report per-API availability/errors, creation time, session, any-job membership and bounded parent creation compatibility with NTSTATUS. The hosted boundary may capture minimal original-process creation identity at entry; extended queries remain failure-only. Known image categories are fixed; unknown images stay `other`. Log only canonical SHA256 of the exact UTF-16LE image-path bytes, never the raw path, arbitrary basename, title or command line. Sequential relation stability does not eliminate HWND ABA, parent creation compatibility is not creator/ownership proof, and any-job membership is not exact test-job membership. These facts never authorize close, input, restoration or another activation attempt. Existing help-case fake controls and focused source guards cover the variant; live native query outcomes remain separate evidence.
+- Positive text/keyboard fixtures recheck native focus and foreground ownership by the admitted popup or its children immediately before the action after message pumping. Compare and diagnose the same captured HWNDs. Lost ownership is a failed prerequisite, never a skip or permission to reacquire foreign foreground. Background-negative controls retain logical targets and require no native text-session activation.
+- Before the persistent menu fixture queues its first root-hover event, require a live process/thread-owned, readable nonempty popup with its expected active root. Queue admission is not dispatch. A scoped UI-thread diagnostic interceptor retains only the pinned audited metadata events in fixed bounded storage, restores its prior sink/borrowed target before storage destruction, and reports retained/dropped/truncated counts. Its callback does not allocate, format, perform I/O or re-enter controls. Capture loss makes absent records inconclusive; instrumented timings include observer overhead and do not qualify production latency. Existing root-switch/closure and mouse-leave-negative assertions and deadlines remain mandatory.
 - The inspection-selection reentry fixture MUST establish `Selected` for a current
   visit after forcing a new same-folder refresh, immediately before installing its
   reentrant clear callback. Cached matching rows or an earlier successful settlement
@@ -1040,8 +1050,8 @@ the same synchronous reporter and counter path as the pointer overload.
   suites and family/phase/prefix selections: their admission, storage, shutdown
   and UIA witnesses share foreground invariants. The only reviewed lease
   exceptions are `-Suite FileOps` with the exact, case-sensitive
-  `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`
-  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_IdentityInterlockWaiting`,
+  `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`,
+  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, or `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
@@ -1049,7 +1059,9 @@ the same synchronous reporter and counter path as the pointer overload.
   the Local direct-API witness uses owned filesystem data and callback controls, including its joined worker;
   the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
-  they require no foreground assertion, UIA, clipboard or pointer input. Casing
+  the exact cadence case uses a private nonactivating popup and preserves its existing
+  foreground-preservation observations without acquiring foreground;
+  they require no foreground ownership transfer, UIA, clipboard or pointer input. Casing
   near-misses, wildcards, multiple-case filters and unknown names fail closed to
   the existing lease. This does not grant activation. Keep
   `--selftest-no-activate` for FileOperations except the exact, case-insensitive
@@ -1711,6 +1723,12 @@ the same synchronous reporter and counter path as the pointer overload.
   Setup failure remains a failed test. Confirm the settled selected grid row
   and focus before copying; retain owner, open-window, sequence and focus
   diagnostics without retrying the product operation or relaxing TSV assertions.
+- Batch Rename preview-copy setup uses the defaulted `ClipboardSetupProbe` output of
+  `ClearClipboardContents` to require successful clear and quiet before one product-copy
+  attempt. Metadata records setup stage/error, sequence and owner/opener identities;
+  Boolean command failure is not attributed to a stale Win32 error. Failure stops dependent
+  copy/read actions. Readback reports system/fallback stage, equality and character counts
+  without contents; this does not add a system-read requirement to legacy fallback policy.
 - `cmd_preferences_dialog_viewers_copy_follows_reordered_columns` must likewise
   require successful clear/quiet setup and recheck the selected mapping and grid
   focus after setup message pumping, before its single product copy attempt.
@@ -2190,6 +2208,13 @@ navigation, but each `Commands.SelfTest.Preferences.*.cpp` chunk must own a
 complete anonymous namespace wrapper. A chunk must not close a namespace opened
 by the coordinator or leave a namespace open for the next family include.
 
+Source-contract guards for localized diagnostics must resolve the stable resource
+ID inside the owning function or branch and check its associated control flow.
+A resource ID found elsewhere in the file, or an English display literal, does
+not prove that the intended path uses that diagnostic. Lexical source guards can
+protect routing and branch structure, but they do not establish runtime behavior;
+behavioral claims still require the relevant native execution evidence.
+
 
 Stale-run cleanup given a synthetic process snapshot must also receive an explicit `CandidateRunIds`
 allowlist. Tests may remove only their own uniquely named run directories; injected PIDs never
@@ -2632,6 +2657,16 @@ DIP subset of the actual work area for a deterministic small-desktop control; it
 This keeps the required analysis panel representable at the current DPI. The real work area still bounds the fixture.
 Capture failures record their API stage and actual witness/frame bounds; fresh child failures record the exit code.
 
+The ViewerSpace disposal-close capacity fixture first holds only the retired model until a fresh
+display generation, layout and presented generation publish. It then holds layout callbacks and
+completes one resize publication to establish exactly two retained disposal owners. Preparation,
+cancellation and pre-Close barriers require stable published generations, exact charged bytes and
+no hold completion or expiry. `ViewerSpacePerfDebugSnapshot.refreshDisposeBytes` observes submitted
+and awaiting-submission disposal storage separately from pending `layoutCancellationOwnedBytes`.
+The existing 30-second hold fail-safe, 100 ms Close budget and callback/device lifetime assertions
+remain unchanged. Failed capacity setup or any hold expiry invalidates the Close timing; see
+`Specs/Plugins/Plugins_ViewerSpace.md` for the hook and accounting contract.
+
 Known layered fixtures SHOULD supply `WindowScreenshotColorProbe` witnesses for their distinct
 render layers. Probe rectangles use client pixels mapped against the captured extended-frame bounds;
 color tolerances and minimum populations avoid depending on a single antialiasing pixel. The helper
@@ -2921,3 +2956,16 @@ initialization. Automatic drive discovery must reject unmarked/missing roots wit
 writing to them. First initialization is a separate exact-path-authorized action.
 An explicitly configured unauthorized alternate root fails visibly; it does not
 silently choose another drive. This does not change the separate owned-VHDX contract.
+## Hosted retirement and archive verification
+
+Hosted managed callback and worker boundaries retain unexpected managed exceptions
+and propagate them through the existing owner after retirement. The display wrapper
+must retain both the primary action/setup failure and a display-restoration failure;
+restoration must never replace the original cause. This changes no foreground or
+desktop-admission policy.
+
+A fresh native evidence archive may use its freshly acquired stable inventory without
+an additional pre-move content scan, but must still verify the complete destination
+inventory before publishing completion. Recovery with a pre-existing intent must
+also compare the current source inventory before moving it. The same-volume,
+no-overwrite, reparse and owned-disk checks remain mandatory.

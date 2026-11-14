@@ -121,6 +121,10 @@
     is the canonical no-quarantine state. Invalid or active entries in an
     explicit or default ledger keep the aggregate run red.
 
+.PARAMETER RequireCleanQuarantine
+    Refuse active, invalid, malformed or error quarantine before native work and
+    forbid every repair dispatch. Default off preserves the ordinary repair lane.
+
 .PARAMETER Platform
     Target platform. Default: x64.
 
@@ -238,6 +242,8 @@ param(
     [switch]$ClassifyFailures,
 
     [string]$QuarantinePath = '',
+
+    [switch]$RequireCleanQuarantine,
 
     [ValidateSet('x64', 'ARM64')]
     [string]$Platform = 'x64',
@@ -1468,6 +1474,7 @@ if ([string]::IsNullOrWhiteSpace($QuarantinePath)) {
     $QuarantinePath = Join-Path $repoRoot 'Tools\test-quarantine.jsonl'
 }
 $quarantineStatus = Read-RSTestQuarantineFile -Path $QuarantinePath
+if ($RequireCleanQuarantine) { Assert-RSTestQuarantineClean -Status $quarantineStatus }
 
 # --- Build step ---
 
@@ -1484,7 +1491,7 @@ function Invoke-RSRunnerCompilerFreeChecks {
     foreach ($check in @(
         @{Path='Tools/Test-Changelog.ps1';Arguments=@{}},
         @{Path='Tools/Get-ToolInventory.ps1';Arguments=@{FailOnFindings=$true;Format='Json'}},
-        @{Path='Tools/Get-SpecInventory.ps1';Arguments=@{FailOnFindings=$true}}
+        @{Path='Tools/Get-SpecInventory.ps1';Arguments=@{FailOnFindings=$true;NoReports=$true}}
     )) {
         $global:LASTEXITCODE = 0
         $checkArguments = $check.Arguments
@@ -1498,6 +1505,7 @@ $requiredBuildSelection = @()
 $useAffectedSelectedBuild = $false
 $prebuildAffectedEntries = @()
 $prebuildWorkspaceSnapshot = $null
+$prebuildManifest = $null
 if ($ValidationMode -ceq 'Affected') {
     Import-RSRunnerValidationModules
     $prebuildEntries = @(Get-RSRunnerRequestedTestPlan)
@@ -1834,14 +1842,20 @@ function New-RSRunnerEntryFingerprintRecord {
 
 $entryFingerprintRecord = New-RSRunnerEntryFingerprintRecord -ExecutionEntries $testPlan -PortablePlan $validationPlan
 $entryFingerprintRows = @($entryFingerprintRecord.entries)
-$impactManifest = Read-RSValidationImpactManifest `
-    -Path (Join-Path $repoRoot 'Tools\validation-impact.json') `
-    -SchemaPath (Join-Path $repoRoot 'Specs\Testing\ValidationImpact.schema.json') `
-    -RepoRoot $repoRoot
-$trackedGraphInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
-$impactGovernance = Test-RSValidationImpactGovernance -Manifest $impactManifest -TrackedPaths $trackedGraphInputs -RepoRoot $repoRoot
-if (-not $impactGovernance.IsValid) {
-    Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete: $(@($impactGovernance.UnmappedBuildInputs) -join ', ')"
+if ($null -ne $prebuildWorkspaceSnapshot -and
+    $null -ne $prebuildManifest -and
+    $prebuildWorkspaceSnapshot.snapshot_id -ceq $initialWorkspaceSnapshot.snapshot_id) {
+    $impactManifest = $prebuildManifest
+} else {
+    $impactManifest = Read-RSValidationImpactManifest `
+        -Path (Join-Path $repoRoot 'Tools\validation-impact.json') `
+        -SchemaPath (Join-Path $repoRoot 'Specs\Testing\ValidationImpact.schema.json') `
+        -RepoRoot $repoRoot
+    $trackedGraphInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+    $impactGovernance = Test-RSValidationImpactGovernance -Manifest $impactManifest -TrackedPaths $trackedGraphInputs -RepoRoot $repoRoot
+    if (-not $impactGovernance.IsValid) {
+        Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete: $(@($impactGovernance.UnmappedBuildInputs) -join ', ')"
+    }
 }
 $durationEstimates = Get-RSValidationDurationEstimates `
     -EvidenceRoot $validationEvidenceRoot `
@@ -2002,6 +2016,10 @@ function Publish-RSRunnerEntryEvidence {
         -ResultArtifact $preserved -RequiredArtifact $required
     return [pscustomobject]@{ TerminalResult = $terminalResult; PublishedEvidence = $published }
 }
+if ($RequireCleanQuarantine) {
+    $quarantineStatus = Read-RSTestQuarantineFile -Path $QuarantinePath
+    Assert-RSTestQuarantineClean -Status $quarantineStatus
+}
 $quarantineHarnessCaseMap = @{}
 $activeQuarantineEntries = @(Get-RSObjectValue -Object $quarantineStatus -Names @('ActiveEntries', 'active_entries') -DefaultValue @())
 $activeQuarantineHarnesses = @($activeQuarantineEntries | ForEach-Object {
@@ -2021,6 +2039,7 @@ foreach ($selfTestEntry in @($suiteConfigs | Where-Object { [string]$_.Name -in 
     }
 }
 $quarantineRepairPlan = Get-RSTestQuarantineRepairPlan -QuarantineStatus $quarantineStatus -TestPlan $testPlan -HarnessCaseMap $quarantineHarnessCaseMap
+if ($RequireCleanQuarantine) { Assert-RSTestQuarantineClean -Status $quarantineStatus -RepairPlan $quarantineRepairPlan }
 if (-not $quarantineRepairPlan.IsValid) {
     $quarantineStatus = [pscustomobject]@{
         IsValid = $false
@@ -2461,6 +2480,9 @@ if (@($quarantineRepairPlan.Attempts).Count -gt 0) {
         $expires = Get-RSObjectValue -Object $attempt -Names @('expires') -DefaultValue '(missing expiry)'
         Write-Host "  Repair: [$harness] $name owner=$owner expires=$expires" -ForegroundColor Yellow
 
+        if ($RequireCleanQuarantine) {
+            Assert-RSTestQuarantineClean -Status (Read-RSTestQuarantineFile -Path $QuarantinePath) -RepairPlan $quarantineRepairPlan
+        }
         $attemptResult = Invoke-RSTestQuarantineRepairAttempt -Attempt $attempt -RepoRoot $repoRoot -ArtifactRoot $artifactRoot
         $quarantineRepairAttempts += $attemptResult
         if (-not [bool]$attemptResult.passed) {

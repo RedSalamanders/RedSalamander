@@ -66,15 +66,24 @@ directory object.
     Local provider, the one provider whose Delete either uses the Recycle Bin or refuses before any
     change; the destination is a regular file, not a link or a folder; and the destination is
     provably another file than the source. That last fact comes from the two bound objects'
-    identities, or, where the destination's location opens the file and cannot identify it, from the
+    identities within the admitted qualification below, or, where an eligible destination's location
+    opens the file and cannot identify it, from the
     location itself: the destination is held denying all sharing and the source's own name is then
     opened for reading; a sharing refusal means one file reached by two names. The location is
     first checked for the rule this relies on: a second open of the held destination must be
     refused, and a location that admits it cannot answer. Both names must be regular files, not
     links or folders. A destination another reader holds for a moment is tried five times, 25 ms
-    apart. Any doubt withholds the action. One file reached through two different systems (a
-    local disk and a network or virtual path to that same disk) is not detected: no identity and
-    no sharing rule relates the two paths, as in Explorer. The removal is by name through the provider's Recycle route, immediately
+    apart. Any doubt withholds the action. When both admitted endpoints are Local and their qualified
+    roots differ (including a differing instance or path profile), negative bound IDs cannot prove
+    distinctness: overlapping export/transport views may report valid IDs in different namespaces.
+    The bridge withholds `Delete source` for that pair and does not substitute the sharing fallback,
+    whose same-destination control does not establish cross-view sharing coherence. This includes
+    roots that happen to encode different native volume GUIDs: root IDs remain opaque and may also
+    be lexical fallbacks, so this repair parses no root text and adds no storage probe. Equal qualified
+    Local roots and other providers retain their existing behavior; positive equality still rejects
+    aliases before destructive admission. The conservative cost is that even distinct files across
+    differing Local roots cannot use `Delete source`; normal Replace, Keep both, Skip and Cancel remain
+    governed by their existing capabilities. The removal is by name through the provider's Recycle route, immediately
     after the answer; a source changed in between is still recycled and can be restored. Where the
     source's location has no Recycle Bin, the provider refuses the Recycle before any change and the
     task asks one question on the card (D-5): `This location has no Recycle Bin. Delete the source
@@ -200,7 +209,11 @@ directory object.
     cloud placeholder. When an existing destination item was replaced, the location is first asked
     whether the source and the published file are two files (the same-file probe of 13a, here
     without a source binding), because a copy published over the source itself under another
-    spelling has the source's facts; unless they are distinct, the source is kept. A source folder
+    spelling has the source's facts; unless they are distinct, the source is kept. Differing qualified
+    Local roots withhold that destructive distinctness proof as in 13a: replacement may succeed, but
+    the identityless source is retained with the existing localized reason. This does not disable
+    ordinary bound Managed cleanup, which consumes its separate exact source/publication authority.
+    A source folder
     is removed only when the Move emptied it, through the provider's empty-folder removal by name,
     which fails on a folder that still holds anything; a link source is copied and kept. Nothing is
     asked beyond the Move itself; this is not Permanent Delete by name, whose confirmation is
@@ -660,7 +673,10 @@ mutation; provider Invalid preserves its exact HRESULT, and the shared provider 
 distinguishes the length bound (`ERROR_FILENAME_EXCED_RANGE`) and reserved device
 names (`ERROR_BAD_DEVICE`, including `COM0`-`COM9`, `LPT0`-`LPT9`, their superscript
 forms, `CONIN$`, and `CONOUT$`) from every other invalid proposed name
-(`ERROR_INVALID_NAME`). Batch Rename checks shape before the provider call
+(`ERROR_INVALID_NAME`). This canonical device policy trims trailing spaces/dots and spaces before
+the first extension separator, so `CON .txt`, `NUL .log` and `COM1 .txt` retain their reserved status.
+The bridge's Windows-name validation calls the same helper, including its superscript aliases.
+Batch Rename checks shape before the provider call
 (`name_empty`, `name_dot`, `name_separator`), maps provider Invalid to
 `name_too_long`, `name_reserved_device`, or `name_invalid_character`, combines the
 typed parent path key with the provider collision key for duplicate, existing-target,
@@ -2290,6 +2306,72 @@ card; (c) is queued behind a named task by an overlap decision; or (d) was passe
 Start now or reorder. In cases (b) and (c) the earlier card states its reason, and it starts next once
 the reason clears. Every exit that ends a task before it starts gives its place up and wakes the
 waiters in the same step, and every transition into and out of waiting for the user wakes them.
+This includes an OS worker-launch failure in either ordinary admission or scheduled Rename:
+withdraw the unpublished task under the queue predicate mutex and wake immediately. Queue
+head selection chooses the least eligible `(orderKey, taskId)` directly without allocating or
+sorting a temporary collection on each wake. Reordering takes its eligibility, ordering,
+adjacency and overlap-edge observations under that same queue mutex before swapping keys.
+`FileOps_IdentityInterlockWaiting` additionally runs the named `queue_head_selector_v1`
+same-binary component A/B: the actual locked production helper versus the frozen prior selector,
+with identical bounded private fixtures and independent correctness expectations. Its owning
+protocol in `Specs/Testing/Testing_PerformanceValidation.md` defines counterbalanced timing,
+actual temporary collection capacity, baseline provenance and source/receipt-bound archival.
+This component evidence does not establish historical whole-application or queue-start speedup.
+
+For a Local directory transfer whose provider cannot prove ancestry by object IDs, whose
+endpoint identity domains are incomparable, or whose qualified Local roots differ, qualify containment before creating missing
+destination parents. A cryptographically unique, delete-on-close marker in the existing
+destination folder (or nearest existing ancestor) is the control. Probe its possible names
+through the selected source tree without following interior reparses; a selected source reached
+through an ancestor alias remains eligible for the probe. A visible marker proves the destination
+is inside the source and fails with `ERROR_INVALID_NAME`.
+The internal probe result keeps status separate from containment evidence: only an observed marker
+through validated non-follow interiors sets `destinationInsideSource`. A Win32 control/probe error
+that happens to return `ERROR_INVALID_NAME` remains `identity.ancestryUnproved` with its exact status.
+Missing destination leaves and parents, extended paths and ordinary paths beyond `MAX_PATH` must
+not bypass the check. Failed creation,
+an unreadable control or an inconclusive lookup refuses the transfer with a separate
+`identity.ancestryUnproved` error; cancellation remains cancellation. The marker handle owns
+cleanup on every exit and refuses sharing for marker deletion/rename. A negative result also
+requires a final lookup of the original control path; a relocated/disappeared ancestor is an
+unanswered error. This is a bounded observation under the non-follow traversal policy, not a
+lease on the whole namespace or a promise against future concurrent mutations. A missing source
+kind cannot bypass the check: retain trusted bound-object kind or refuse failed source attributes.
+The probe grants no replacement or deletion authority. Positive object-ID equality still refuses
+SameObject or containment before the probe, including across different root IDs. A negative
+comparison across different Local roots is insufficient: overlapping exports or transport views
+can report valid IDs in different namespaces despite sharing a Local provider instance/profile.
+`FileOps.Transfer.InsideSourceProbeUs` records elapsed microseconds, total attribute lookups,
+candidate-marker lookup count and status. Outside candidates normally require one marker lookup;
+only found or inconclusive marker observations validate the interior non-follow components.
+Path construction remains proportional to each candidate's path length; there is no total linear
+time claim for arbitrary depth.
+Regular-file destructive distinctness is a separate qualification owned by invariant 13a.
+`FileOps.Conflict.LocalDistinctnessUnproved` counts an uncertain Local pair refused by that helper,
+including its post-replacement identityless-cleanup call; it is not a SameObject finding or a provider
+identity-domain change. The early no-activation cross-view controls in `FileOps_ReviewRemediationContracts`
+execute real private Managed file admissions: different reported IDs for one physical entry and an
+ordinary distinct-file control both withhold `Delete source`, retain the other collision actions,
+and are answered Cancel before any recycle. Comparable positive identity still refuses the alias.
+`FileOps.SelfTest.LocalCrossRootDistinctness` retains per-control diagnostic duration, actual prompt
+count and whether `Delete source` was offered. A third early control executes an uncertain cross-root
+identityless-source replacement and requires the typed result to report publication plus retained source,
+not Error. All three controls precede the case's existing queued-admission prerequisite skips.
+The established same-path case runs before this cross-alias probe: within one qualified root,
+unsupported identity still makes Copy select its normal distinct sibling and Move return
+`ERROR_ALREADY_EXISTS`. Comparable SameObject handling remains unchanged.
+The no-desktop, no-activation `FileOps_ReviewRemediationContracts` case covers aliases, nonexistent descendants, outward links,
+long paths, cancellation, an invalid control parent, a missing source, attempted marker retirement,
+and attempted control-parent relocation. These deterministic local fixtures
+do not qualify physical NAS alias semantics or an unwritable remote control directory.
+The bound cross-view regression uses the test-only
+`REDSALAMANDER_FILEOPS_BIND_IDENTITY_NAMESPACE_PATH` seam, scoped to one owned alias subtree.
+Objects bound through that view retain real physical handles/native checks but report a stable
+separate snapshot namespace for all bound comparisons and fresh-bind revalidations. The case first
+proves `Ready` with two bound objects and differing reported IDs for the same physical folder, then
+requires the real task to refuse a nested alias before parent creation; a distinct cross-root Copy
+still succeeds with exact bytes. The seam is absent from production builds and restored with the
+existing environment scope.
 
 Automatic independent admission requires built-in local-filesystem endpoints, a non-Native
 transfer strategy, positively bound regular source files, and destination leaves that were
@@ -3048,11 +3130,26 @@ preference: the request is always made.
   Windows may still enter standby while the request is held. This limit has not been measured.
 - A failure of any power call never fails a task. The first failure of the process-wide request is written once
   as an Information line to the debug output, and the task continues.
+  The localized writable reason is captured before the request's leaf mutex is entered; creating the native
+  request performs no resource lookup or temporary-string allocation under that mutex. Native create errors
+  survive cleanup unchanged. A failed clear closes the owning handle to retire any remaining kernel request;
+  the next acquisition creates a fresh request. Counters retain the exact latest API error and one-log guard.
+- Conflict workers wait on their decision, durable cancellation and resumed-work events. Until quiet they use
+  the remaining deadline from actual progress/item-completion timestamps; once quiet they wait indefinitely
+  for an event. A resumed stream reacquires the request and rearms the deadline without periodic polling.
+  Progress ticks are monotonic across streams, and cancellation published before waiting cannot be missed.
+  If the optional progress event cannot be allocated, conservatively retain the request until the answer.
+  `FileOps.Conflict.WaitCalls` records wait calls and deadline timeouts alongside the existing wait duration.
 - Each task re-evaluates its share through `Task::UpdateKeepAwake` when one of the facts changes: admission,
   leaving the operation, user pause and resume, queue pause and resume, the start and end of a wait for an
   answer, a cancel or stop request, and the terminal state. The predicate is the pure function
   `FileOperations::TaskNeedsMachineAwake`; `FileOperations::PowerRequest` counts holders. Both are covered
   with a fake power API in `FileOps_ReviewRemediationContracts`.
+  That case also exercises the actual conflict waiter with unadmitted private tasks: prepublished decisions,
+  cancellation before entry, quiet cancellation, resumed-work rearming, stop-token-only cancellation and
+  spurious decision wakes. A test-only short quiet budget bounds these controls; their wait-count assertions
+  and `FileOps.Power.ConflictWaitCalls` metrics prove event-driven waiting without a two-minute sleep. These
+  controls neither invoke real power APIs nor qualify machine sleep/Modern Standby behavior.
 
 ## Artifact warnings and retained state
 
@@ -3086,7 +3183,12 @@ generated-name shapes produce `Possible`: the Win32 shapes `<name>.<32 hex>[_<st
 and `<name>.<32 hex>.rs-bak`, and the provider staging names
 (I35 R7.6) `.rs-bak-<32 hex>[-<leaf>]` (an S3 backup key), `.redsalamander-upload-`, `-writer-` and
 `-rollback-<32 hex>` (Curl; `rollback` also Microsoft Drive) and `.<leaf>.rs-mtp-overwrite-<32 hex>.tmp`
-(the MTP writer temp). All other names are Ordinary, including the names earlier versions wrote. Neither a name shape, pane row, search-index field, badge,
+(the MTP writer temp). ASCII letters in the fixed markers and extensions are matched without case,
+so an externally case-renamed leftover retains its warning and touch guard, including on a
+case-insensitive destination. Token length, hex digits, delimiters and complete-leaf boundaries
+remain required; Unicode lookalikes are not marker aliases. The fixed-width MTP suffix is checked
+at its only possible offset rather than scanning the provider leaf. All other names are Ordinary,
+including the names earlier versions wrote. Neither a name shape, pane row, search-index field, badge,
 nor an in-memory task object proves app ownership or grants cleanup/recovery authority.
 
 Folder enumeration and Find load one empty classifier snapshot per request. After Batch Rename
@@ -3101,6 +3203,19 @@ hides a row and never grants recovery or cleanup. A future durable claim source 
 its own authoritative schema before any keyed candidate index can return.
 
 ### Visibility and touch guard
+
+Managed Move source-retention warnings carry `LocalizedDiagnosticText` for every reason, including
+missing source/destination authority, unreadable facts, incomplete child cleanup, refused metadata
+consent and unavailable publication proof. Issues and card notes render these resource IDs in the
+current language; raw producer prose is not their user-facing fallback. The identity-less regular-file
+Move matrix covers long-path distinct-file corroboration and preauthorized overwrite: when binding
+exists but the individual occupant returns `ERROR_NOT_SUPPORTED`, the bridge still captures its
+facts and requests per-object consent before conditional publication.
+
+A replacement refused because its observed occupant changed is a recoverable transition while the
+bounded re-prompt loop remains active. A later successful Replace or Skip leaves no Error diagnostic
+from the intermediate mismatch. Exhaustion records one terminal occupant-changed error. Failure to
+accept an expectation for any other reason uses its own failure category rather than claiming a race.
 
 Possible and Ordinary items participate in ordinary enumeration, sort, user filters, name search,
 content search, and Compare decisions. Possible classification adds a warning overlay/badge and the

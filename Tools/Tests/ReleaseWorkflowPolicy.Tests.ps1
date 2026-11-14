@@ -20,7 +20,101 @@ function New-RSReleasePolicyTestRoot {
             -Case "release-policy-$([Guid]::NewGuid().ToString('N'))")
 }
 
+Describe 'Commands UI attribution adapter wiring' {
+    It 'preserves Full and both-architecture defaults while forwarding only the pinned architecture choice' {
+        $workflow=[IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/nightly-ci.yml'))
+        $pin=([IO.File]::ReadAllText((Join-Path $repoRoot '.ci/project.json'))|ConvertFrom-Json).engine.ref
+        $workflow | Should Match ([regex]::Escape("qualification.yml@$pin"))
+        $workflow | Should Match 'options: \[Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $workflow | Should Match '(?m)^        default: Full\s*$'
+        $workflow | Should Match '(?s)platform:\s+description:[^\r\n]+\s+type: choice\s+options: \[All, x64, ARM64\]\s+default: All'
+        $workflow | Should Match '(?m)^      platform: \$\{\{ inputs\.platform \}\}\s*$'
+        $workflow | Should Match '(?m)^  contents: read\s*$'
+        $workflow | Should Not Match 'production|publish|ghostty|run_all_tests|run_full_tests'
+    }
+    It 'uses one governed build then the observer prerequisite and three exact fresh child selections' {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $branches=@($ast.FindAll({param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Extent.Text -match '^if \(\$QualificationScope -ceq ''CommandsUiAttribution''\)'
+        },$true))
+        $branches.Count | Should Be 1
+        $branch=$branches[0].Extent.Text
+        $root=$repoRoot;$profile=@('-Platform','ARM64','-Configuration','Release');$number='42';$Platform='ARM64';$Configuration='Release'
+        $QualificationScope='CommandsUiAttribution'
+        $receiptDirectory=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('attribution-wire-'+[guid]::NewGuid().ToString('N'))
+        $calls=[Collections.Generic.List[object]]::new()
+        function Import-Module { param($Name) if($Name -notlike '*HostedDiagnosticEvidence.psm1'){throw 'Unexpected adapter import'} }
+        function Assert-CiContainedPath { param($Root,$Path) return $Path }
+        function Invoke-CiProcess {
+            param($FilePath,$Arguments,$WorkingDirectory,$TimeoutSeconds,[switch]$Stream,[switch]$AllowFailure)
+            # Record first, assert outside the child success stream. Pester 3's
+            # successful assertions can themselves emit values at this boundary.
+            $calls.Add([pscustomobject]@{arguments=@($Arguments);workingDirectory=$WorkingDirectory;
+                timeout=$TimeoutSeconds;stream=[bool]$Stream;allowFailure=[bool]$AllowFailure})
+            Write-Host 'recorded streamed diagnostic'
+            return [pscustomobject]@{exitCode=2;stdout='recorded child';stderr='recorded stderr'}
+        }
+        function Invoke-RSHostedCommandsUiAttribution {
+            param($RepoRoot,$TestRoot,$Platform,$Configuration,$TimeoutMultiplier,[scriptblock]$RunCase)
+            $TimeoutMultiplier | Should Be 2.0
+            foreach($case in @('red_salamander_help_lists_diagnostics_options','cmd_preferences_dialog_keyboard_reset_live_dx_interaction',
+                'cmd_pane_fileops_popup_throughput_disclosure','cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup')){
+                $observed=@(& $RunCase $case)
+                $observed.Count | Should Be 1
+                $observed[0].exitCode | Should Be 2
+            }
+        }
+        & ([scriptblock]::Create($branch))
+        $calls.Count | Should Be 4
+        foreach($call in $calls){
+            $call.workingDirectory | Should Be $repoRoot
+            $call.timeout | Should Be 18000
+            $call.stream | Should Be $true
+            $call.allowFailure | Should Be $true
+            $arguments=$call.arguments
+            ($arguments -join ' ') | Should Match '-Suite Commands -CaseFilter [A-Za-z0-9_]+ -ValidationMode Fresh -SkipBuild'
+            ($arguments -join ' ') | Should Not Match 'ClassifyFailures|Repeat|Shuffle|Proof|AllowAlternateVolume|ResultReference'
+            @($arguments|Where-Object{$_ -eq '-CaseFilter'}).Count | Should Be 1
+            @($arguments|Where-Object{$_ -eq '-RequireCleanQuarantine'}).Count | Should Be 1
+            @($arguments|Where-Object{$_ -eq '-TimeoutMultiplier'}).Count | Should Be 1
+            $timeoutIndex=[array]::IndexOf($arguments,'-TimeoutMultiplier')
+            $arguments[$timeoutIndex+1] | Should Be '2'
+        }
+        $adapter=[IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'))
+        $adapter | Should Match "(?s)if \(\`$Phase -in @\('ReleaseTestBuild','Qualification'\)\).*?Run 'build.ps1'.*?Invoke-RSWithHostedTestDesktop -Action"
+        $adapter | Should Match "if \(\`$QualificationScope -in @\('CommandsHandoff','CommandsUiAttribution','FileOpsVolumes','ViewerSpaceCapture','R0ePaired'\)\) \{ return \}"
+    }
+}
+
 Describe 'Project CI engine path resolution' {
+    It 'requests report-free specification validation in the actual Static phase' {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $staticBranch=@($ast.FindAll({param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match "^if \(\`$Phase -eq 'Static'\)"
+        },$true))
+        $staticBranch.Count | Should Be 1
+        $root=New-RSReleasePolicyTestRoot
+        $EngineRoot=Join-Path $root 'engine'
+        [void][IO.Directory]::CreateDirectory((Join-Path $EngineRoot 'Tools'))
+        [IO.File]::WriteAllText((Join-Path $EngineRoot 'Tools/Test-Workflows.ps1'),'param($Root)')
+        $context=@{};$Base='fixture';$Phase='Static'
+        $calls=[Collections.Generic.List[object]]::new()
+        function Test-CiProjectConfiguration {param($Context)}
+        function Resolve-CiCommit {param($Root,$Base) return $Base}
+        function Run {param($Path,$Arguments) $calls.Add([pscustomobject]@{Path=$Path;Arguments=@($Arguments)})}
+        $before=$env:CI_NATIVE_BUILDS_DISABLED
+        try { & ([scriptblock]::Create($staticBranch[0].Extent.Text)) }
+        finally { $env:CI_NATIVE_BUILDS_DISABLED=$before }
+        $spec=@($calls|Where-Object Path -ceq 'Tools/Get-SpecInventory.ps1')
+        $spec.Count | Should Be 1
+        ($spec[0].Arguments -join ',') | Should Be '-FailOnFindings,-NoReports'
+    }
+
     It 'resolves relative engine paths from the PowerShell filesystem location and preserves absolute paths' {
         $scratch = New-RSReleasePolicyTestRoot
         $psLocation = Join-Path $scratch 'powershell'
@@ -509,12 +603,22 @@ Describe 'Release workflow source contracts' {
 
     It 'selects and restores the hosted request inside all three actual direct workflow actions' {
         Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
         $saved = @{}
-        foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY','REDSALAMANDER_HOSTED_TEST_DESKTOP')) {
+        foreach ($name in @('GITHUB_ACTIONS','RUNNER_ENVIRONMENT','GITHUB_REPOSITORY','GITHUB_WORKSPACE','REDSALAMANDER_HOSTED_TEST_DESKTOP')) {
             $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         $priorExit = Get-Variable LASTEXITCODE -Scope Global -ValueOnly -ErrorAction SilentlyContinue
         function Invoke-RSWithHostedTestDesktop { param([scriptblock]$Action) & $Action }
+        # This fixture checks workflow wiring; real archived-proof validation and
+        # tamper/freshness controls remain in HostedTestDesktop.Tests.ps1.
+        function Assert-RSHostedFilteredCaseRun {
+            param($ExitCode, $Output, $TestRoot, $RepoRoot, $Suite, $CaseFilter, $Platform, $Configuration,
+                [DateTimeOffset]$InvocationStartedUtc, [DateTimeOffset]$InvocationEndedUtc)
+            $verified.Add(@{ ExitCode=$ExitCode; Output=$Output; TestRoot=$TestRoot; RepoRoot=$RepoRoot; Suite=$Suite;
+                CaseFilter=$CaseFilter; Platform=$Platform; Configuration=$Configuration;
+                Started=$InvocationStartedUtc; Ended=$InvocationEndedUtc })
+        }
         try {
             foreach ($relative in @('.github/workflows/nightly-flake.yml', '.github/workflows/build-reusable.yml', '.github/workflows/ghostty-runtime-product-qualification.yml')) {
                 $text = Get-Content -LiteralPath (Join-Path $repoRoot $relative) -Raw
@@ -539,12 +643,19 @@ Describe 'Release workflow source contracts' {
                         $env:GITHUB_ACTIONS = 'true'
                         $env:RUNNER_ENVIRONMENT = if ($hosted) { 'github-hosted' } else { 'self-hosted' }
                         $env:GITHUB_REPOSITORY = 'RedSalamanders/RedSalamander'
+                        $env:GITHUB_WORKSPACE = $repoRoot
                         [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $(if ($prior) { $prior } else { $null }), 'Process')
                         $observed = [Collections.Generic.List[string]]::new()
+                        $verified = [Collections.Generic.List[hashtable]]::new()
+                        $started = [DateTimeOffset]::UtcNow
                         $fakeNative = {
                             $observed.Add([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process'))
                             if ($fail) { $global:LASTEXITCODE = 9; throw 'seeded native failure' }
-                            $global:LASTEXITCODE = 0
+                            $global:LASTEXITCODE = if ($relative -like '*ghostty*') { 2 } else { 0 }
+                            # Match Run-AllTests: the authoritative ID is host output
+                            # (information stream 6), not success-pipeline data.
+                            $fakeRunId = '20000101T000000Z-1-' + $observed.Count.ToString('x32')
+                            Write-Host "  Run id:    $fakeRunId"
                         }
                         $runTests = $fakeNative
                         $result = Invoke-RSTestBlock { & $action }
@@ -552,6 +663,22 @@ Describe 'Release workflow source contracts' {
                         if ($fail) { $result.Error.Exception.Message | Should Match 'seeded native failure' }
                         $expectedCount = if ($relative -like '*ghostty*' -and -not $fail) { 3 } else { 1 }
                         $observed.Count | Should Be $expectedCount
+                        $expectedFilters = @('terminal_', 'cmd_pane_embedded_terminal_', 'cmd_pane_open_command_shell_prefers_windows_terminal')
+                        $verified.Count | Should Be $(if ($relative -like '*ghostty*' -and -not $fail) { 3 } else { 0 })
+                        for ($index = 0; $index -lt $verified.Count; $index++) {
+                            $call = $verified[$index]
+                            $call.ExitCode | Should Be 2
+                            $expectedRunId = '20000101T000000Z-1-' + ($index + 1).ToString('x32')
+                            $call.Output | Should Be "  Run id:    $expectedRunId"
+                            (Get-RSHostedDiagnosticRunId -Output $call.Output) | Should Be $expectedRunId
+                            $call.TestRoot | Should Be $env:REDSALAMANDER_TEST_ROOT
+                            $call.RepoRoot | Should Be $repoRoot
+                            $call.Suite | Should Be 'Commands'
+                            $call.CaseFilter | Should Be $expectedFilters[$index]
+                            $call.Platform | Should Be 'ARM64'
+                            $call.Configuration | Should Be 'Debug'
+                            ($call.Started -ge $started -and $call.Ended -ge $call.Started -and $call.Ended -le [DateTimeOffset]::UtcNow) | Should Be $true
+                        }
                         foreach ($actual in $observed) { $actual | Should Be $(if ($hosted) { 'default' } else { '' }) }
                         ([string][Environment]::GetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', 'Process')) | Should Be $prior
                       }
@@ -617,19 +744,24 @@ Describe 'Release workflow source contracts' {
         # build.ps1 routes every discovery strategy (vswhere, common installation roots,
         # VSINSTALLDIR) through one host-ordered candidate list.
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $buildScript | Should Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
+        $buildScript | Should Match 'Import-Module \$MSBuildInvocationModule -Force -ErrorAction Stop'
+        $buildScript | Should Match '\$workflowSelected = Get-RSWorkflowSelectedMSBuild'
+        $buildScript | Should Not Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
+        $msbuildModulePath = Join-Path $repoRoot 'Tools/Modules/Build/MSBuildInvocation.psm1'
+        $msbuildModule = Get-Content -LiteralPath $msbuildModulePath -Raw
         # ARM64 hosts also accept the emulated amd64 executable; x64 hosts cannot run arm64\, so it
         # is never a candidate there. Every runnable 64-bit executable, including the legacy 15.0
         # layout, outranks both x86 executables.
-        $buildScript | Should Match "if \(\`$isArm64Host\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)\s*\r?\n\s*\} else \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
-        $buildScript | Should Match "return \`$candidates \+ \[string\[\]\]@\(\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\Current\\Bin\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\MSBuild\.exe'\s*\r?\n\s*\)"
-        $buildScript | Should Not Match '\$other'
+        $msbuildModule | Should Match "if \(\`$isArm64Host\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)\s*\r?\n\s*\} else \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $msbuildModule | Should Match "return \`$candidates \+ \[string\[\]\]@\(\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\Current\\Bin\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\MSBuild\.exe'\s*\r?\n\s*\)"
+        $msbuildModule | Should Not Match '\$other'
         # A PATH hit (developer prompts expose the x86 MSBuild\Current\Bin) is mapped to the best
         # host-ordered executable of the same installation before it is returned.
-        ([regex]::Matches($buildScript, 'Resolve-RSHostOrderedMSBuildPath -Path \$msbuildInPath\.Source')).Count | Should Be 2
+        ([regex]::Matches($buildScript, 'Resolve-RSHostOrderedMSBuildPath -Path \$msbuildInPath\.Source')).Count | Should Be 1
+        $msbuildModule | Should Match 'Resolve-RSHostOrderedMSBuildPath -Path \$command\.Source'
         $buildScript | Should Not Match 'Path = \$msbuildInPath\.Source'
         $tokens = $null; $parseErrors = $null
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'), [ref]$tokens, [ref]$parseErrors)
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($msbuildModulePath, [ref]$tokens, [ref]$parseErrors)
         @($parseErrors).Count | Should Be 0
         $helpers = @($ast.FindAll({ param($node)
                     $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and

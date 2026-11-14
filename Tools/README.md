@@ -1,5 +1,18 @@
 # Repository tooling
 
+Build and SDK reopen share host-ordered MSBuild discovery through
+`Modules/Build/MSBuildInvocation.psm1`. Explicit Clean failure stops the build;
+combined Clean/Rebuild performs the Rebuild clean once. DxUi restore preserves the
+current PowerShell host and complete nested policy identity.
+In GitHub Actions, build and SDK reopen share explicit workflow selection validation
+and the PATH-only fallback. Dependency installation uses that same PATH-selected
+installation; a newer registered installation cannot silently replace it.
+
+Filtered Ghostty Commands qualification verifies archived native case bytes and
+selection, current source/artifact receipt, both aggregate summaries and invocation
+identity before accepting directed exit 2. Repository coverage remains NOT_EVALUATED.
+ScopedTesting retains planning/delegation only; canonical Startrail owns receipts.
+
 Native startup diagnostics print the start and elapsed time of File Operations
 profile/volume setup, the existing interactive lease wait, and contained process
 launch. Keep the parent console log when investigating a delay. The rows do not
@@ -81,6 +94,20 @@ The manual native suite defaults to Full. Its explicit CommandsHandoff, FileOpsV
 ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
+
+The existing manual workflow also accepts platform All (default), x64 or ARM64.
+`CommandsUiAttribution` runs the existing help/observer-control case first and three
+fixed Preferences, path-detail and menu-hover cases once each, using one test-enabled
+build and independent canonical Commands/Fresh/SkipBuild processes. The module owns
+their marked-sandbox context, independent streams/coverage, unique child IDs and
+archive-relative index. Changed source/receipt bytes, retries/repair, missing proof or
+unsafe retirement stop later launches; an ordinary fully proven case failure remains
+failed, and any failed/unexecuted row fails the job. This is filtered attribution,
+not Full or production qualification; see `Specs/Build/Build_UnifiedCI.md` for the exact list.
+Each child passes `-RequireCleanQuarantine`; the canonical reader refuses blocking or
+invalid ledgers before native work and the runner cannot dispatch a repair under this
+opt-in. Preflight and post-run checks do not replace that guard. Ordinary callers keep
+the existing default repair behavior.
 
 Hosted native interactive entries use the rendered `WinSta0\Default` desktop on this project's
 GitHub-hosted runner. Paired comparisons retain the original fixture on both sources.
@@ -463,7 +490,7 @@ cost without invoking the C++ compiler.
 | Freeze and review an exact Ghostty candidate | `./Tools/New-GhosttyTerminalRuntimeCandidateReview.ps1` |
 | Validate a rederived Ghostty candidate overlay | `./Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` |
 | Inspect test coverage | `./Tools/Get-TestInventory.ps1` |
-| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings` |
+| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports` |
 | Validate this inventory | `./Tools/Get-ToolInventory.ps1 -FailOnFindings` |
 | Run raw cloc for solution directories | `./Tools/InvokeSolutionCloc.ps1` |
 | Review archived performance runs | `./Tools/Show-PerfRuns.ps1` |
@@ -490,7 +517,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Fold-Changelog.ps1` | Public changelog command | Folds pending fragments in the checkout it is given: the default branch's fold, normally through `Submit-ChangelogFold.ps1`, never part of a feature change; supports read-only -Check and -WhatIf preview. |
 | `GenerateDebugIcons.ps1` | Internal asset generator | Regenerates checked-in debug-badged icon resources. |
 | `Get-GhosttyTerminalRuntimeStatus.ps1` | Public read-only runtime status command | Validates the lock without network, observes official upstream/advisories, or freezes one explicit candidate; writes only below `.build`. |
-| `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and writes derived reports below `.build`. |
+| `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and test inventory. Validation uses `-NoReports`; default catalog generation retains four reports below `.build`. |
 | `Get-TerminalDependencyStatus.ps1` | Dormant generic lifecycle command | Explicit-lock validation and opt-in advisory checks for a reviewed future upgrade. |
 | `Get-TestInventory.ps1` | Public discovery command | Derives test registrations, projects, Pester cases, and run-plan coverage. |
 | `Get-ToolInventory.ps1` | Public governance command | Validates and renders `tool-inventory.json`. |
@@ -572,7 +599,7 @@ and focused tests.
 | `Modules/Testing/TestMachineResources.psm1` | Schema validation, non-secret capability digesting, and scoped environment projection for per-machine Connection Manager, SMB, MTP, and alternate local-root resources. |
 | `Modules/Testing/TestRunArchive.psm1` | Archived evidence structure/content validation, area-schema dispatch, complete JSONL validation, and paired Terminal VT admission comparison. |
 | `Modules/Testing/TestRunPlan.Common.psm1` | Stable plan entries, canonical validation-plan digests, path normalization, run identities, and process snapshots. |
-| `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface. |
+| `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface, including `Assert-RSTestQuarantineClean` for runner admission. |
 | `Modules/Testing/TestRunSummary.psm1` | Legacy v1 plus verified composite v2 summaries, verdict axes, the canonical 0..5 terminal-state mapping, case history, dashboard, JSONL, and step-summary rendering. |
 | `Modules/Testing/TestSandbox.psm1` | Fail-closed exact `X:\RedSalamander.Perf` authorization, ownership markers, fresh uncached reparse-component checks, `New-RSTestSandboxLink` (the only governed creator of test junctions, symbolic links and hard links, refusing any link that would live or point outside one marked sandbox), run contexts, cleanup planning, stale-run removal that never follows reparse points (links are unlinked; a run with a volume mount point is retained whole), the per-run test-owned VHDX fixture (elevated provisioning that proves the attached disk is the blank file-backed VHDX before formatting and the volume is its own before mounting, a durable receipt before mounting, reverse-order teardown that can keep a detached VHDX as evidence, and receipt-aware cleanup that retains a run when not elevated unless its disk is already detached), and live-owner-consistent disk audits. |
 | `Modules/Testing/TestSuitePlan.psm1` | Declarative stable-ID suite construction, governed Commands families, exact reviewed no-activation owned witnesses including identity-interlock waiting, and selected-profile artifact-mutating Pester coverage. |

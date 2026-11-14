@@ -1,0 +1,15 @@
+{
+  "source_packet": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T185116Z-79860-6ed6a80910b24d61a8e16b8ed43e957c\\scratch\\NativeComponentEvidence\\packet-debug-release-v1",
+  "source_manifest_sha256": "2dd9b84dddd621e7d066a5d74fbdcbece4264176b3d3d23dd6610e353c26e887",
+  "source_readme_sha256": "d99fe188b3b7cfb4df1dfedd4c0566b5a9e091a93df5b44d4a4c6b1f80d4df4a",
+  "derived_readme_sha256": "f1a9322bd86c6efa6dfcabada687725bd3d57ba1e10b2f8cadbd940ecaedafff",
+  "changes": "Readability, neutral retain decision, frozen algorithm/current harness distinction, one ancestry aggregate row reporting 21 controls; five explicit SID-free selected-member projections replace public raw intents. Renamed historical/private reference documents remain byte-identical.",
+  "omitted_raw_intents": [
+    "historical-debug/Debug/Identity/archive-intent.json",
+    "historical-debug/Debug/Review/archive-intent.json",
+    "Release/analysis/archive-intent.json",
+    "Release/Identity/archive-intent.json",
+    "Release/Review/archive-intent.json"
+  ],
+  "original_private_packet_and_manifest_unchanged": true
+}

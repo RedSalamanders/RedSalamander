@@ -120,7 +120,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\RedConfigure\Lang\ja-JP\RedConfigure-ja-JP.vcxproj">
+    <ProjectReference Include="..\..\RedConfigure\Lang\ja-JP\RedConfigure-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{25272EAA-F0A5-5026-AFDE-0219ADF15EAC}</Project>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>

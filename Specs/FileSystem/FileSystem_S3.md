@@ -277,6 +277,10 @@ result). The writer reports that digest through `IFileWriterContentProof`, the r
 `verification.providerProof: "writer-digest"`, and the host compares it with the bytes it streamed: Verified Copy
 needs no readback and Managed Move into S3 deletes its source only after the proof matches. An endpoint that
 returns no digest leaves verification `Unavailable` and keeps the Move source.
+This writer-proof capability belongs only to the standard S3 route. The read-only S3 Table route
+advertises `FILESYSTEM_ROUTE_PROOF_NONE` and diagnostic `verification.providerProof: "none"`;
+it exposes no writer that could provide a publication digest. Provider contract tests assert these
+two expectations independently as well as checking typed/diagnostic parity.
 
 Within-provider directory COPY/MOVE uses the same publication boundary. After a just-in-time refresh observes a
 destination missing, a no-overwrite small-object `CopyObject` and multipart `CompleteMultipartUpload` MUST carry

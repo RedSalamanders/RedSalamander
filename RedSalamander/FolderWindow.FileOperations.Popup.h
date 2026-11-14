@@ -416,6 +416,37 @@ struct PopupTelemetryDebugSnapshot final
     uint64_t unattributedTaskSnapshots = 0u;
 };
 
+// Opt-in UI-thread observations for the cadence case only. No text, paths, input
+// payloads or owning control references; a full buffer drops rows and counts loss.
+enum class PopupCadenceDebugEvent : uint8_t
+{
+    BeforeGraphSync,
+    AfterGraphSync,
+    PaintBegin,
+    PaintEnd,
+    Message,
+    HostHandledMessage
+};
+
+struct PopupCadenceDebugObservation final
+{
+    uint64_t tick                = 0u;
+    uint64_t paintGeneration     = 0u;
+    uint64_t hostInvalidations   = 0u;
+    uintptr_t graphIdentity      = 0u;
+    PopupCadenceDebugEvent event = PopupCadenceDebugEvent::Message;
+    UINT message                 = 0u;
+    UINT telemetryIntervalMs     = 0u;
+    bool popupTimer              = false;
+    bool hostAnimationSubscribed = false;
+    // Last task snapshot synchronized by the host, not a new engine read.
+    bool publishedPaused     = false;
+    bool publishedStateKnown = false;
+    bool graphVisible        = false;
+    bool graphQueried        = false;
+    DxUi::ThroughputGraphDebugState graph{};
+};
+
 struct PopupLayoutDebugSnapshot
 {
     // Facts recorded at the real paint sites. These observations never select or render a row.
@@ -452,6 +483,8 @@ struct PopupLayoutDebugSnapshot
     bool conflictApplyToAllVisible                 = false;
     bool conflictApplyToAllIsCheckbox              = false;
     bool conflictApplyToAllChecked                 = false;
+    bool conflictApplyToAllHasDiscardSourceHelp    = false;
+    bool conflictApplyToAllScopeHelpEmpty          = true;
     bool conflictMoreVisible                       = false;
     bool completedDiagnosticsMoreVisible           = false;
     bool completedDiagnosticsMoreButtonRectVisible = false;
@@ -550,7 +583,9 @@ struct PopupLayoutDebugSnapshot
     bool reducedMotionEnabled                    = false;
     bool layoutMotionActive                      = false;
     bool autoResizeMotionActive                  = false;
-    bool selectedTaskHeightMotionActive          = false;
+    bool expandedPlacementRestorePending         = false;
+    RECT expandedPlacementRestoreRect{};
+    bool selectedTaskHeightMotionActive = false;
     // I63 slice F: the stream rows the task's card reserves (painted or blank) and the card list's scrollbar decision.
     size_t taskReservedStreamRows                   = 0u;
     bool scrollBarVisible                           = false;
@@ -1033,6 +1068,23 @@ public:
         _autoResizePending        = true;
         _autoResizePendingDueTick = GetTickCount64();
     }
+    // Reproduce a model offset while a pending resize withholds the native range.
+    void DebugWithholdScrollBarForSelfTest(HWND hwnd, int position) noexcept
+    {
+        _scrollBarVisible = false;
+        _scrollPos        = position;
+        _scrollY          = static_cast<float>(position);
+        SCROLLINFO info{};
+        info.cbSize = sizeof(info);
+        info.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+        SetScrollInfo(hwnd, SB_VERT, &info, FALSE);
+    }
+    // Exercise production rounding/resize, using client pixels so a one-pixel
+    // growth can be asserted without deriving the private footer height in tests.
+    void DebugAutoResizeClientHeightForSelfTest(HWND hwnd, int clientHeight) noexcept
+    {
+        AutoResizeWindow(hwnd, static_cast<float>(clientHeight) - FooterHeightPixels(), 1u, false, true);
+    }
     [[nodiscard]] PopupTelemetryDebugSnapshot DebugTelemetrySnapshot() const noexcept
     {
         return {_telemetryTimerTickCount,
@@ -1047,8 +1099,36 @@ public:
                 _snapshotCallSites,
                 _unattributedTaskSnapshots};
     }
-    // UI-thread-only documentation fixture; never starts workers or admits operations.
-    void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded);
+    // UI-thread-only unadmitted fixture; never starts workers or grants mutation authority.
+    // DiscardSource models a separately qualified Move capability, not an inference from operation.
+    void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded, bool allowDiscardSource = false);
+    // Synthetic input adapter to the real rate reducer; unlike scenario replacement,
+    // this retains history and the hosted tree through a nonzero-to-paused transition.
+    [[nodiscard]] bool DebugPauseRetainedVisualRateForSelfTest(uint64_t taskId) noexcept;
+    void DebugStartCadenceCaptureForSelfTest(uint64_t taskId) noexcept
+    {
+        // Allocate once at explicit fixture admission, outside measured spans.
+        if (! _debugCadenceObservations)
+            _debugCadenceObservations = std::make_unique<CadenceObservationBuffer>();
+        _debugCadenceTaskId              = taskId;
+        _debugCadenceCount               = 0u;
+        _debugCadenceLost                = 0u;
+        _debugCadencePublishedStateKnown = false;
+        _debugCadenceEnabled             = true;
+    }
+    void DebugStopCadenceCaptureForSelfTest() noexcept
+    {
+        _debugCadenceEnabled = false;
+    }
+    [[nodiscard]] std::span<const PopupCadenceDebugObservation> DebugCadenceObservationsForSelfTest() const noexcept
+    {
+        return _debugCadenceObservations ? std::span<const PopupCadenceDebugObservation>{_debugCadenceObservations->data(), _debugCadenceCount}
+                                         : std::span<const PopupCadenceDebugObservation>{};
+    }
+    [[nodiscard]] uint64_t DebugCadenceLostForSelfTest() const noexcept
+    {
+        return _debugCadenceLost;
+    }
     // A live fixture transition keeps geometry/choices. Publish its text immediately so a deferred
     // accessibility-text timer cannot accidentally supply the missing height-animation frames.
     void DebugUpdateLiveVisualScenario(std::vector<TaskSnapshot> tasks)
@@ -1807,6 +1887,17 @@ private:
     };
     std::unordered_map<uint64_t, PaintedLiveProgressForSelfTest> _paintedLiveProgressForSelfTest;
     uint64_t _paintGenerationForSelfTest = 0u;
+    void DebugRecordCadenceObservation(PopupCadenceDebugEvent event, UINT message = 0u, bool popupTimer = false) noexcept;
+    static constexpr size_t kCadenceObservationCapacity = 1024u;
+    using CadenceObservationBuffer                      = std::array<PopupCadenceDebugObservation, kCadenceObservationCapacity>;
+    std::unique_ptr<CadenceObservationBuffer> _debugCadenceObservations;
+    size_t _debugCadenceCount             = 0u;
+    uint64_t _debugCadenceLost            = 0u;
+    uint64_t _debugCadenceTaskId          = 0u;
+    bool _debugCadenceEnabled             = false;
+    bool _debugCadencePublishedPaused     = false;
+    bool _debugCadencePublishedStateKnown = false;
+    bool _debugCadenceRendering           = false;
     struct PaintedStatusChipForSelfTest final
     {
         bool painted = false;

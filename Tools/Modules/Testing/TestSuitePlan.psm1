@@ -136,8 +136,9 @@ function Get-RSTestRunPlan {
 
     foreach ($selfTest in $selfTests) {
         # Broad FileOps selections share foreground and UIA assertions even when
-        # activation is blocked. Only reviewed exact FileOps-only progress and
-        # callback witnesses avoid desktop-global assertions and input.
+        # activation is blocked. Only reviewed exact FileOps-only callback,
+        # storage, progress and private-presentation witnesses omit this lease;
+        # they retain no-activation and owned-window preservation assertions.
         # Keep this admission case-sensitive and closed to proof injections.
         $ownedFolderProgressCase = $Suite -eq 'FileOps' -and
             ($CaseFilter -ceq 'DiscoveryScope_LocalDirectApi' -or
@@ -145,6 +146,7 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'DiscoveryScope_MultipleFoldersLiveProgress' -or
              $CaseFilter -ceq 'FileOps_RepeatDecisionContracts' -or
              $CaseFilter -ceq 'FileOps_ReviewRemediationContracts' -or
+             $CaseFilter -ceq 'FileOps_PopupIdleCadence' -or
              $CaseFilter -ceq 'FileOps_IdentityInterlockWaiting' -or
              $CaseFilter -ceq 'FileOps_CrossRootLocalCopy' -or
              $CaseFilter -ceq 'FileOps_SmallFileCopyCost' -or

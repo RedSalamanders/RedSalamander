@@ -1,4 +1,4 @@
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+﻿$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -Force
@@ -638,5 +638,43 @@ Describe 'Operation Startrail atomic records and fixtures' {
         ($status -join "`n") | Should Match 'delete\.txt'
         ($status -join "`n") | Should Match 'rename\.txt -> renamed\.txt'
         $fixture.SpacePath | Should Be 'path with spaces/tracked.txt'
+    }
+
+    It 'caches immutable historical tree maps without caching mutable index lookups' {
+        $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'tree-cache-and-batch')
+        $headOid = (& git -C $fixture.Root rev-parse HEAD).Trim()
+        & (Get-Module ValidationFingerprint) { $script:HistoricalTreeMapCache.Clear() }
+
+        $first = & (Get-Module ValidationFingerprint) {
+            param($Root, $TreeId)
+            Get-RSValidationGitObjectMap -RepoRoot $Root -Tree $TreeId
+        } $fixture.Root $headOid
+        $first.Count | Should BeGreaterThan 0
+
+        Mock Invoke-RSValidationGitBinary { throw 'Historical tree cache miss when hit was expected' } `
+            -ModuleName ValidationFingerprint -ParameterFilter { $Argument -contains 'ls-tree' }
+
+        # Repeated immutable tree call hits cache; index call ($Tree = '') still runs ls-files
+        $second = & (Get-Module ValidationFingerprint) {
+            param($Root, $TreeId)
+            Get-RSValidationGitObjectMap -RepoRoot $Root -Tree $TreeId
+        } $fixture.Root $headOid
+        $second.Count | Should Be $first.Count
+        Assert-MockCalled Invoke-RSValidationGitBinary -ModuleName ValidationFingerprint -Scope It -Times 0 -Exactly -ParameterFilter { $Argument -contains 'ls-tree' }
+
+        $indexFirst = & (Get-Module ValidationFingerprint) {
+            param($Root)
+            Get-RSValidationGitObjectMap -RepoRoot $Root
+        } $fixture.Root
+        $indexFirst.Count | Should BeGreaterThan 0
+        [IO.File]::WriteAllText((Join-Path $fixture.Root 'new-index.txt'), 'new tracked input')
+        & git -C $fixture.Root add -- new-index.txt
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to update the mutable index fixture.' }
+        $indexSecond = & (Get-Module ValidationFingerprint) {
+            param($Root)
+            Get-RSValidationGitObjectMap -RepoRoot $Root
+        } $fixture.Root
+        $indexFirst.ContainsKey('new-index.txt') | Should Be $false
+        $indexSecond.ContainsKey('new-index.txt') | Should Be $true
     }
 }

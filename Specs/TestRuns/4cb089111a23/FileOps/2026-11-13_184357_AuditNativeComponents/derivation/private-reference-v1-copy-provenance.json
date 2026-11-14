@@ -1,0 +1,524 @@
+[
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\component-summary.json",
+    "packet_path": "historical-debug/Debug/component-summary.json",
+    "bytes": 10602,
+    "sha256": "26b8a44a47011860286191bc7df972081804c3ac2b05d4eb14d5f7b752fbcc51"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\archive-complete.json",
+    "packet_path": "historical-debug/Debug/Identity/archive-complete.json",
+    "bytes": 399,
+    "sha256": "0ea5bb3c9ceeaa5a7635eee54adae1f184cf038c100d0ae8726d4893fb8bddc3"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\archive-intent.json",
+    "packet_path": "historical-debug/Debug/Identity/archive-intent.json",
+    "bytes": 38989,
+    "sha256": "c01ed60126172296e54ad24cc187f9d00753929eb1e18872043a34cd4082b989"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\fileops\\results.json",
+    "packet_path": "historical-debug/Debug/Identity/fileops/results.json",
+    "bytes": 889,
+    "sha256": "5e19a08dc4b17ff961840d4137cecfa71cf15ca86ec57b642590225317a8fdad"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\fileops\\trace.txt",
+    "packet_path": "historical-debug/Debug/Identity/fileops/trace.txt",
+    "bytes": 12520,
+    "sha256": "e101762f42499c7d2937cd1f440fb553b4d678158337df8fd5dce1f64e66a7ff"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\native-process-exit.json",
+    "packet_path": "historical-debug/Debug/Identity/native-process-exit.json",
+    "bytes": 223,
+    "sha256": "b11a085207394daa621a88aa6d9122c089aeda2410b167681e192de994bc6331"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\perf\\perf_metrics.jsonl",
+    "packet_path": "historical-debug/Debug/Identity/perf/perf_metrics.jsonl",
+    "bytes": 63448,
+    "sha256": "619ce1dd0a8bef8bc3269af12d5b3a4e6869d68aefcdd46280d34c0a78217ddf"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\perf\\raw-row-index.json",
+    "packet_path": "historical-debug/Debug/Identity/perf/raw-row-index.json",
+    "bytes": 36007,
+    "sha256": "a91767ce154e8f35b9f1dd232b3fc181dd91689e716eb073bc7e26b4be1d98bc"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\prelaunch\\entry-fingerprints.json",
+    "packet_path": "historical-debug/Debug/Identity/prelaunch/entry-fingerprints.json",
+    "bytes": 1696,
+    "sha256": "e3d83dc063f5ea423627b6060fc3564aba5343211657abbb1dfb2c54e2dbf0bd"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\prelaunch\\validation-plan-decision.json",
+    "packet_path": "historical-debug/Debug/Identity/prelaunch/validation-plan-decision.json",
+    "bytes": 878,
+    "sha256": "b03ecc5fec8d7c2f7229f51953d6d7f15a0dcb2e90a9823d88201d6503365b98"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\prelaunch\\validation-plan.json",
+    "packet_path": "historical-debug/Debug/Identity/prelaunch/validation-plan.json",
+    "bytes": 1662,
+    "sha256": "247fbcacb7d7a2bcf4bc82209815742eaa3daad987ed08a0142367cc8aff5564"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\results.json",
+    "packet_path": "historical-debug/Debug/Identity/results.json",
+    "bytes": 1432,
+    "sha256": "ea164c208b9d85636e32f06d48acb562400ca8935805a2b9dae278886f42af24"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\run-all-tests-case-history.jsonl",
+    "packet_path": "historical-debug/Debug/Identity/run-all-tests-case-history.jsonl",
+    "bytes": 1078,
+    "sha256": "98198083fbc2faf8954b22ca033441071db120a3c4802e0f479a58e388bae388"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\run-all-tests-results.json",
+    "packet_path": "historical-debug/Debug/Identity/run-all-tests-results.json",
+    "bytes": 29760,
+    "sha256": "2ffbf73da443db4de2179bde10c45139d4492d47911050781b56d253423c3e59"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\sandbox-audit.json",
+    "packet_path": "historical-debug/Debug/Identity/sandbox-audit.json",
+    "bytes": 25953,
+    "sha256": "4b382afd193d5a5e83c6b08ac8f63afde73eb5bde1f27c0f482065043fa704ec"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\trace.txt",
+    "packet_path": "historical-debug/Debug/Identity/trace.txt",
+    "bytes": 46222,
+    "sha256": "8f095ce9eb39ffcc345e12f2049631529e462ae2ddd8c2467e63dd052b1386d9"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\workspace-after-selftest.file-operations.json",
+    "packet_path": "historical-debug/Debug/Identity/workspace-after-selftest.file-operations.json",
+    "bytes": 801,
+    "sha256": "5b4b83a551831ddc4e0d3b4bb4c98ed8445f9f54bdb8f24c398e67285e95a5f1"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Identity\\workspace-final.json",
+    "packet_path": "historical-debug/Debug/Identity/workspace-final.json",
+    "bytes": 801,
+    "sha256": "a5d40b657577bec76df945e28cfd3d061e8e1bf2b906af25860f900ffcc0965d"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\queue-pairs.csv",
+    "packet_path": "historical-debug/Debug/queue-pairs.csv",
+    "bytes": 2978,
+    "sha256": "d78be93f4bda86a7671cc95513ee5b5e8a92fc46840f95072412f11771189b24"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\archive-complete.json",
+    "packet_path": "historical-debug/Debug/Review/archive-complete.json",
+    "bytes": 399,
+    "sha256": "5ffc5c40afe48d91516fa379a4f426a505a9225ec37d87513406337bee8c2214"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\archive-intent.json",
+    "packet_path": "historical-debug/Debug/Review/archive-intent.json",
+    "bytes": 112700,
+    "sha256": "b3422641853dab4331d38c4d4b532a19ebb1572336de251931e2763617d94883"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\fileops\\results.json",
+    "packet_path": "historical-debug/Debug/Review/fileops/results.json",
+    "bytes": 891,
+    "sha256": "bd1964c04de7af87fd2432169dadb8800fd14c98a5ecc3741e6c88d1b016beb6"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\fileops\\trace.txt",
+    "packet_path": "historical-debug/Debug/Review/fileops/trace.txt",
+    "bytes": 149288,
+    "sha256": "0917c0379d7ce0dad407bd63572ff52cf686cc499441cb07be7d1194b123b161"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\native-process-exit.json",
+    "packet_path": "historical-debug/Debug/Review/native-process-exit.json",
+    "bytes": 223,
+    "sha256": "3aa69e28cb9c8afe25789ecb79ca9c66fccea401a86d188294ce4a17991f9ff1"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\perf\\perf_metrics.jsonl",
+    "packet_path": "historical-debug/Debug/Review/perf/perf_metrics.jsonl",
+    "bytes": 36067,
+    "sha256": "865048f5512ffb40f8170da7bf963dbd10810b6257f01d4f6020739dae0a6e6a"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\perf\\raw-row-index.json",
+    "packet_path": "historical-debug/Debug/Review/perf/raw-row-index.json",
+    "bytes": 24940,
+    "sha256": "faccc06c958af92ca4816c50e427d8a649e4216209ce24b434fd836f17120634"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\prelaunch\\entry-fingerprints.json",
+    "packet_path": "historical-debug/Debug/Review/prelaunch/entry-fingerprints.json",
+    "bytes": 1696,
+    "sha256": "11832e36d5dd4b6506e1a63117446f4b73dc32fad09e086f68bef0f361cea837"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\prelaunch\\validation-plan-decision.json",
+    "packet_path": "historical-debug/Debug/Review/prelaunch/validation-plan-decision.json",
+    "bytes": 878,
+    "sha256": "73b18afa3cdafff7fe92993d3d2261bf6e8b2f85c1bb3f6e359166a7a118fc30"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\prelaunch\\validation-plan.json",
+    "packet_path": "historical-debug/Debug/Review/prelaunch/validation-plan.json",
+    "bytes": 1664,
+    "sha256": "3babaf360e62f3fd639d984cb74059b6a693490deb28a4a7da9a42499dc4ea83"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\results.json",
+    "packet_path": "historical-debug/Debug/Review/results.json",
+    "bytes": 1438,
+    "sha256": "a9743a2354b31842b0b6fae53fad124ac03f118d04071a2223b7113b44916851"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\run-all-tests-case-history.jsonl",
+    "packet_path": "historical-debug/Debug/Review/run-all-tests-case-history.jsonl",
+    "bytes": 1080,
+    "sha256": "d676111f1a7869061a1b2f0ca75f757460ba717207e8d6057d8ccbff9297c54e"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\run-all-tests-results.json",
+    "packet_path": "historical-debug/Debug/Review/run-all-tests-results.json",
+    "bytes": 30121,
+    "sha256": "4dd1e213de0544efcc7262a0e689b23fdec3fc3f1b57ccb7327bf4d39fb4c6d8"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\sandbox-audit.json",
+    "packet_path": "historical-debug/Debug/Review/sandbox-audit.json",
+    "bytes": 26295,
+    "sha256": "5f8c1b15240db90a67e0d1dd3d7bef75db82075b85365eccac57ff748f178ec3"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\trace.txt",
+    "packet_path": "historical-debug/Debug/Review/trace.txt",
+    "bytes": 177074,
+    "sha256": "0869129f88a9baf5b08d99f425385abc27d9db1df2a488e106b66a28a78e7486"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\workspace-after-selftest.file-operations.json",
+    "packet_path": "historical-debug/Debug/Review/workspace-after-selftest.file-operations.json",
+    "bytes": 801,
+    "sha256": "71aac156e7bd2b9275c3bd00048ab7fe2e80017e1b24c59158355fbe169a7404"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Debug\\Review\\workspace-final.json",
+    "packet_path": "historical-debug/Debug/Review/workspace-final.json",
+    "bytes": 801,
+    "sha256": "7b5715959934e3f84cc42e27286ad40ca53caaf9599bc97cc581717b04c6e869"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\evidence-bindings.json",
+    "packet_path": "historical-debug/evidence-bindings.json",
+    "bytes": 20672,
+    "sha256": "f0f1739dfcbaee83f3e41cf5078ddfda6ec2506ec6695088c8f6ab9834819c66"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\provenance\\build-receipt.json",
+    "packet_path": "historical-debug/provenance/build-receipt.json",
+    "bytes": 84985,
+    "sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\provenance\\sealed-build-receipt.json",
+    "packet_path": "historical-debug/provenance/sealed-build-receipt.json",
+    "bytes": 84985,
+    "sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\provenance\\sealed-build-result.json",
+    "packet_path": "historical-debug/provenance/sealed-build-result.json",
+    "bytes": 671,
+    "sha256": "c81f290d3cefe70973be49403f2a371c7fba0a8ff10f1440c41f2c52bdbac0d0"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\README.md",
+    "packet_path": "historical-debug/README.md",
+    "bytes": 5851,
+    "sha256": "017dbcbc457e8e6f4f603b7bf8f076996f2f6bf1aa9243a0073dbed9dc6d4f61"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\recipe.txt",
+    "packet_path": "historical-debug/recipe.txt",
+    "bytes": 719,
+    "sha256": "c0559e6d54717c00852409de8f7f00b250ee276c781843686033b12bb9a0df37"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\Release\\PENDING.json",
+    "packet_path": "historical-debug/Release/PENDING.json",
+    "bytes": 403,
+    "sha256": "4388308dde339db4fe8979306b490d8fa672eab8df7ff1aa88388a7b0940f995"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\source-excerpts\\baseline-adapter-e83.txt",
+    "packet_path": "historical-debug/source-excerpts/baseline-adapter-e83.txt",
+    "bytes": 3006,
+    "sha256": "1f8bdd68b67b8cd6bf0bcc1d312035e5a187458c70879b4a3480e4e1cb0cb238"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\source-excerpts\\baseline-selector-78a8a75c4.txt",
+    "packet_path": "historical-debug/source-excerpts/baseline-selector-78a8a75c4.txt",
+    "bytes": 3108,
+    "sha256": "88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\source-excerpts\\candidate-selector-e83.txt",
+    "packet_path": "historical-debug/source-excerpts/candidate-selector-e83.txt",
+    "bytes": 2667,
+    "sha256": "b83859d93cf345ecdef557ef9c8fb614714e411f5663cae41726f0c3517da4de"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\source-excerpts\\provenance.json",
+    "packet_path": "historical-debug/source-excerpts/provenance.json",
+    "bytes": 2014,
+    "sha256": "4f1320de5173fa90762732730d5bfb8bd197af0070eda187d307d6f2d775fb5c"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3\\source-excerpts\\queue-witness-e83.txt",
+    "packet_path": "historical-debug/source-excerpts/queue-witness-e83.txt",
+    "bytes": 11375,
+    "sha256": "d3fad110173d64dc594c3214dc5fb5879a876470cfc157da5ea9e8e7dc4610d2"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-manifest.json",
+    "packet_path": "historical-debug/original-packet-manifest.json",
+    "bytes": 8491,
+    "sha256": "d962bb8972ad30f45207ff7bb40e351edb9db62d7b30589b258a30ebe497cfab"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\prepare_packet.py",
+    "packet_path": "historical-debug/original-prepare-packet.py",
+    "bytes": 29602,
+    "sha256": "ac66e1597c608c81403a23b6041c07d2072528da1f4d60635d2e19f53d2f4ffa"
+  },
+  {
+    "source": "Z:\\src\\.worktrees\\RS-audit20261113\\.build\\x64\\Release\\receipts\\2354fa6e57b4050d001c295d11a1e6f305eb11c6cc8ca21853006cfe3f5bf1ea.json",
+    "packet_path": "Release/provenance/build-receipt.json",
+    "bytes": 86418,
+    "sha256": "7504f44067b32455831c748c9be8e132936c7e377a77a49ab2e3de27fda1659b"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\results.json",
+    "packet_path": "Release/Review/results.json",
+    "bytes": 1438,
+    "sha256": "b6a5a008738df2b9301eabf363ee2f94924632e7b1652de0a446fa608200d9a5"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\trace.txt",
+    "packet_path": "Release/Review/trace.txt",
+    "bytes": 177114,
+    "sha256": "194f91b96290f1901d7ef886ad532364a38e0d3c3d42a3cc70c093ea3100cd14"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+    "packet_path": "Release/Review/workspace-after-selftest.file-operations.json",
+    "bytes": 801,
+    "sha256": "b89a91bca47cd596b57f4c952e8493bf3bd2df2d3a69310decf3bd9ef65ee2d9"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "packet_path": "Release/Review/workspace-final.json",
+    "bytes": 801,
+    "sha256": "5fe014fbe72190ab21122f5c0c706e6d9618a42f9bb8387903efaf53b73795c7"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "packet_path": "Release/Review/fileops/results.json",
+    "bytes": 891,
+    "sha256": "db76e81e4b769a2c774b3e934ff83c1fa92530b37f967cd680fbb5f1761df16c"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "packet_path": "Release/Review/fileops/trace.txt",
+    "bytes": 149288,
+    "sha256": "2afa6a36a58230655e1aa0f7abfcdf2d363d3c8ad2b644d7991de806d04ebd9d"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+    "packet_path": "Release/Review/run-all-tests-case-history.jsonl",
+    "bytes": 1080,
+    "sha256": "673900cf665b10fd3a08bc0ffdd21329f4dd80896b809edd678292519a4941c0"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "packet_path": "Release/Review/run-all-tests-results.json",
+    "bytes": 30041,
+    "sha256": "17a949c27990c75711b44d34abd9dd76fa199a25c6da6a92f60d531c67cc6c10"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\intent.json",
+    "packet_path": "Release/Review/archive-intent.json",
+    "bytes": 112696,
+    "sha256": "17a9c38e4a6ee171a35c925b79e51acdad1236c687e5a28503185dd2386d4fe9"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\complete.json",
+    "packet_path": "Release/Review/archive-complete.json",
+    "bytes": 399,
+    "sha256": "bd20f96a4a145fe459f86c3d5f6e84c0470a77d42e08ca0e2bddb52e581be3c3"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "packet_path": "Release/Review/prelaunch/entry-fingerprints.json",
+    "bytes": 1696,
+    "sha256": "63859a52ed2cecacacb965c03971b5d1bbb15eb7b67d93705f89ca40271545be"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "packet_path": "Release/Review/prelaunch/validation-plan.json",
+    "bytes": 1666,
+    "sha256": "ab2b70eb707a1a38664d9a8695cfbac07fbfa91a082da3cdf910b3869d29f7b6"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+    "packet_path": "Release/Review/prelaunch/validation-plan-decision.json",
+    "bytes": 878,
+    "sha256": "0672cdd7c97af65ba3df67069d5a96f324e0337e67856a8356e5b02946f42f1d"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "packet_path": "Release/Review/prelaunch/workspace-initial.json",
+    "bytes": 801,
+    "sha256": "637d67ab962783c9676f43cb43c395dc67a9839d3fdc776650a90bb725aabef9"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\native-process-exits\\0f6cb79931624716a2e853aeb03eba1a.json",
+    "packet_path": "Release/Review/native-process-exit.json",
+    "bytes": 225,
+    "sha256": "d1327d344e14b47643f22ed64373e92bf9fc5f0dd5ef4aac1dc4e03185a2aa4f"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\results.json",
+    "packet_path": "Release/Identity/results.json",
+    "bytes": 1432,
+    "sha256": "5b08b66268fd451ba5615c2efb83bf00200cefb1fca0bba408a199c98f1bd827"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\trace.txt",
+    "packet_path": "Release/Identity/trace.txt",
+    "bytes": 46262,
+    "sha256": "9bf194778eca14b18c5b6fcd3b621982babd9c7ca2560225ae720b4dd00132ef"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+    "packet_path": "Release/Identity/workspace-after-selftest.file-operations.json",
+    "bytes": 801,
+    "sha256": "36034e624beddcb754d0c6ef3336d7ff501e346ff98e3971f01680749d03ce06"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "packet_path": "Release/Identity/workspace-final.json",
+    "bytes": 801,
+    "sha256": "7996a5dad8648bd7127e8d02e0789a81dbc847de620ad0b0fce66894319563ba"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "packet_path": "Release/Identity/fileops/results.json",
+    "bytes": 889,
+    "sha256": "a6cae82fa8a7b3ceef6834cc7e0376cbf30ace71d7879ea22d82fea7466645d5"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "packet_path": "Release/Identity/fileops/trace.txt",
+    "bytes": 12520,
+    "sha256": "77d353b838a674c290e7bb8d4c77863fd250480f6300c159d6fa872cc9e86574"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+    "packet_path": "Release/Identity/run-all-tests-case-history.jsonl",
+    "bytes": 1078,
+    "sha256": "57a503260ebb982594de7394732d23f0ec8491577d44065f19581b120e95a5ec"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "packet_path": "Release/Identity/run-all-tests-results.json",
+    "bytes": 30036,
+    "sha256": "ee78995eabe1ceae11a222aa14c06f8c890aab0949f738f3125235959333be7e"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\intent.json",
+    "packet_path": "Release/Identity/archive-intent.json",
+    "bytes": 38005,
+    "sha256": "89d007a75829d4d680469174c634c12f996f367da735e71a6bacdb82e9386fa8"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\complete.json",
+    "packet_path": "Release/Identity/archive-complete.json",
+    "bytes": 399,
+    "sha256": "8399abde33458a42b3b97a045454a6de5d8a3e8dab3861400945e723dd02419c"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "packet_path": "Release/Identity/prelaunch/entry-fingerprints.json",
+    "bytes": 1696,
+    "sha256": "85ed980d36dbbffe508473274ba213fa5e424b86cb26b941cb01537a0624a87d"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\previous_run\\validation-plan.json",
+    "packet_path": "Release/Identity/prelaunch/validation-plan.json",
+    "bytes": 1664,
+    "sha256": "4e3e6eb3bfd3c1c1d9f053ea8ba8f2b446a324f20ef8beac8544b609b71acd3e"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+    "packet_path": "Release/Identity/prelaunch/validation-plan-decision.json",
+    "bytes": 878,
+    "sha256": "a0bbbfb1aa385ce0fa9ddac863250004cb2608a0c59e23fb7b39c9957c6f9e2d"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\previous_run\\workspace-initial.json",
+    "packet_path": "Release/Identity/prelaunch/workspace-initial.json",
+    "bytes": 801,
+    "sha256": "4b7563ca34d9da98f9515ae612177000cde348142bf57c9badd584dc42786723"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\native-process-exits\\0598cccafc424323aaa39232bd2c69fa.json",
+    "packet_path": "Release/Identity/native-process-exit.json",
+    "bytes": 225,
+    "sha256": "d6e6793be384b9f310060279ec424acff2152f4a02ce0f525be7039493d0ea78"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\scratch\\audit-native\\release-queue-cohort\\all-12-cohorts.json",
+    "packet_path": "Release/analysis/all-12-cohorts.json",
+    "bytes": 8849,
+    "sha256": "4ccecf86c429927880aa3f2265f3135a6f55521c80a8e23232956e50d2dc1126"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\scratch\\audit-native\\release-queue-cohort\\all-48-pairs.json",
+    "packet_path": "Release/analysis/all-48-pairs.json",
+    "bytes": 20643,
+    "sha256": "4b3364bdb023894a806838edf8a11aebffca53b535af8113ffc2c4f55fac50fc"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\scratch\\audit-native\\release-queue-cohort\\all-48-pairs.csv",
+    "packet_path": "Release/analysis/all-48-pairs.csv",
+    "bytes": 5365,
+    "sha256": "4724db830a1927093ff9b6fdfcb2a5d4939d4fe0e0b05ccbe0b25d130a40a01b"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\scratch\\audit-native\\release-queue-cohort\\binding-and-caveats.json",
+    "packet_path": "Release/analysis/binding-and-caveats.json",
+    "bytes": 2534,
+    "sha256": "5dfea140f087d95b1616579780c8dfdc1b87580bf41f99dcf0566a634a3fd0b7"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\intent.json",
+    "packet_path": "Release/analysis/archive-intent.json",
+    "bytes": 4182,
+    "sha256": "1145937bbed6ecbdd7a41776c60dd1ab4a38b22c29eaf4cfb72bfecf2f06b46e"
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\complete.json",
+    "packet_path": "Release/analysis/archive-complete.json",
+    "bytes": 399,
+    "sha256": "6579684ca181da6552457b49f2a7c9e9e6151f2b12dd32228afe471fd47a0cf4"
+  }
+]

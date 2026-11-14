@@ -513,6 +513,13 @@ instead of inventing a numeric value.
   - A plain activating press on an item outside the kept selection arms a potential drag whose immutable source is that item alone. When the pointer leaves the drag-threshold rectangle, the selection is replaced by that item and the item is dragged. Release inside the rectangle changes nothing further. A plain activating press on a selected item arms the selection as the source, as in the active pane.
   - A double-click whose first press is activating activates the item under the pointer.
   - A middle-button press makes the pane active and changes nothing else.
+  - Blocking overlays retain pane activation: a left press establishes FolderView focus before
+    overlay hit-testing, including an overlay action or blocked background. Capture the prior pane
+    state before changing focus so ordinary activating-press selection semantics remain intact.
+    Double-click and context-menu messages establish the same pane focus but must not select,
+    activate or expose item commands while the overlay blocks input. These input paths retire any
+    earlier armed drag before overlay actions or guards; pointer movement under an overlay also
+    releases its captured gesture so a later dismissal cannot resurrect a stale drag.
   - Right-click and context-menu rules do not depend on the pane's prior state: a right-click always targets what is under the pointer.
   - The second plain press, now in the active pane, selects normally.
 - Destructive context-menu commands MUST execute only when the selected/current provider-aware target set still matches the immutable snapshot captured before the nested menu loop. Generic disappearance repairs current through the same-location successor/predecessor contract above and MUST NOT retarget the captured command. Host-owned Delete/Move remains the more specific exception: it captures its source intent and ownership epochs, accepts only exact per-source `S_OK` removal proof, and resolves replacement only against a newer accepted enumeration after the old current identity disappears. The replacement remains unselected unless it was already a surviving selected identity.

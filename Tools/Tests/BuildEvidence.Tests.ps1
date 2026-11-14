@@ -127,6 +127,7 @@ Describe 'Ghostty build evidence identity closure' {
             'Tools\Build-GhosttyTerminalRuntime.ps1',
             'Tools\Modules\Build\ArtifactOperationLock.psm1',
             'Tools\Modules\Build\DxUiDependency.psm1',
+            'Tools\Modules\Build\MSBuildInvocation.psm1',
             'Tools\Modules\Build\ProcessStreaming.psm1',
             'Tools\Modules\Build\SanitizedEnvironment.psm1',
             'Tools\Modules\Testing\ValidationFingerprint.psm1',

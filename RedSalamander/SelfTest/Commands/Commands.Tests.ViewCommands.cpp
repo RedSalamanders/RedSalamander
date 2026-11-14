@@ -4379,6 +4379,19 @@ private:
         return false;
     }
 
+    // Non-action presses establish the target pane before the next keyboard command.
+    for (const UINT message : {static_cast<UINT>(WM_RBUTTONDOWN), static_cast<UINT>(WM_MBUTTONDOWN)})
+    {
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(rightNavigationView, message, 0, MAKELPARAM(1, 1));
+        state.Require(WaitForFocusedFolderViewForMainMenu(rightFolderView, SelfTest::Scale(2000ms)) &&
+                          g_folderWindow.GetActivePane() == FolderWindow::Pane::Right,
+                      std::format(L"Navigation bar message {} did not focus its owning pane.", message));
+        state.Require(g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right) == std::optional<std::filesystem::path>{right},
+                      L"A non-action navigation-bar press changed the pane location.");
+    }
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+
     const std::filesystem::path expectedAncestorPath = std::filesystem::path(baselineSnapshot.pathAncestorTargetText);
     state.Require(! expectedAncestorPath.empty() && expectedAncestorPath != right,
                   L"Unfocused-pane breadcrumb click target should resolve to a non-current ancestor path.");
@@ -11281,10 +11294,12 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> clickInputSent{false};
-    std::atomic<bool> hoverMessageDelivered{false};
+    std::atomic<bool> hoverMessageQueued{false};
     std::atomic<bool> hoverCursorMoved{prepositionedLiveCursor};
     std::atomic<bool> viewMenuSelected{false};
     std::atomic<bool> initialPopupObserved{false};
+    std::atomic<bool> initialPopupReady{false};
+    std::atomic<bool> firstHoverReady{false};
     std::atomic<bool> pluginsMenuSelected{false};
     std::atomic<bool> replacementPopupObserved{false};
     std::atomic<bool> initialPopupClosed{false};
@@ -11296,6 +11311,114 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::atomic<int> selectedIndexBeforeHoverMessage{-2};
     std::atomic<int> selectedIndexAfterHoverWait{-2};
     std::atomic<unsigned long long> rootPointerSwitchCount{0};
+    // This case-local adapter deliberately retains only audited menu metadata, not the
+    // SDK's unrestricted diagnostic stream. The synchronous TLS sink is temporarily
+    // intercepted on this UI thread; the prior consumer/target are restored before storage dies.
+    struct MenuMetadataRecord
+    {
+        std::array<wchar_t, 1024u> text{};
+        size_t length  = 0u;
+        ULONGLONG tick = 0u;
+        bool truncated = false;
+    };
+    struct MenuMetadataCapture
+    {
+        std::array<MenuMetadataRecord, 64u> records{};
+        size_t next        = 0u;
+        size_t retained    = 0u;
+        uint64_t dropped   = 0u;
+        uint64_t truncated = 0u;
+    };
+    auto menuMetadata                                            = std::make_unique<MenuMetadataCapture>();
+    static thread_local MenuMetadataCapture* currentMenuMetadata = nullptr;
+    const auto previousDiagnosticSink                            = DxUi::Diagnostics::sink;
+    auto* const previousDiagnosticTarget                         = currentMenuMetadata;
+    const auto restoreDiagnosticSink                             = wil::scope_exit([&]() noexcept
+    {
+        DxUi::Diagnostics::sink = previousDiagnosticSink;
+        currentMenuMetadata     = previousDiagnosticTarget;
+    });
+    currentMenuMetadata                                          = menuMetadata.get();
+    DxUi::Diagnostics::sink                                      = [](std::wstring_view, std::wstring_view message) noexcept
+    {
+        auto* const capture = currentMenuMetadata;
+        if (! capture)
+            return;
+        // Exact pinned definitions contain only numeric/HWND/enum geometry and routing facts.
+        // No menu label, title, clipboard value, or path event is admitted here.
+        static constexpr std::array<std::wstring_view, 12u> allowedEvents{{L"menu.show-begin",
+                                                                           L"menu.show-end",
+                                                                           L"menu.popup-create-begin",
+                                                                           L"menu.popup-create-end",
+                                                                           L"menu.loop-dismiss-activation",
+                                                                           L"menu.loop-nonpopup-pointer",
+                                                                           L"menu.pointer",
+                                                                           L"DxUi::MenuTrace Popup root-switch-probe",
+                                                                           L"DxUi::MenuTrace Popup root-switch-accepted",
+                                                                           L"DxUi::MenuTrace Popup root-switch-rejected",
+                                                                           L"DxUi::MenuTrace Popup root-switch-stale-after-keyboard",
+                                                                           L"DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted"}};
+        const bool admitted = std::ranges::any_of(allowedEvents, [message](std::wstring_view event) noexcept {
+            return message.starts_with(event) && (message.size() == event.size() || message[event.size()] == L' ');
+        });
+        if (! admitted)
+            return;
+        auto& record     = capture->records[capture->next];
+        record.length    = std::min(message.size(), record.text.size() - 1u);
+        record.tick      = GetTickCount64();
+        record.truncated = message.size() > record.length;
+        std::copy_n(message.begin(), record.length, record.text.begin());
+        record.text[record.length] = L'\0';
+        capture->next              = (capture->next + 1u) % capture->records.size();
+        if (capture->retained < capture->records.size())
+            ++capture->retained;
+        else
+            ++capture->dropped;
+        if (record.truncated)
+            ++capture->truncated;
+    };
+    const DWORD menuUiThread  = GetWindowThreadProcessId(mainWindow, nullptr);
+    const auto traceMenuState = [&](std::wstring_view phase, HWND popup) noexcept
+    {
+        const auto popupObservation = CaptureCommandsWindowObservation(popup);
+        const auto ownerObservation = CaptureCommandsWindowObservation(popup ? GetWindow(popup, GW_OWNER) : nullptr);
+        const auto foreground       = CaptureCommandsWindowObservation(GetForegroundWindow());
+        const auto mainObservation  = CaptureCommandsWindowObservation(mainWindow);
+        const auto barObservation   = CaptureCommandsWindowObservation(menuBarWindow);
+        GUITHREADINFO gui{};
+        gui.cbSize = sizeof(gui);
+        SetLastError(ERROR_SUCCESS);
+        const bool guiAvailable       = GetGUIThreadInfo(menuUiThread, &gui) != FALSE;
+        const DWORD guiError          = guiAvailable ? ERROR_SUCCESS : GetLastError();
+        const auto captureObservation = CaptureCommandsWindowObservation(guiAvailable ? gui.hwndCapture : nullptr);
+        const auto focusObservation   = CaptureCommandsWindowObservation(guiAvailable ? gui.hwndFocus : nullptr);
+        const auto ownedPopups        = FindVisibleOwnedDxUiContextMenuWindows(mainWindow);
+        const bool owned              = popupObservation.process == GetCurrentProcessId() && popupObservation.thread == menuUiThread &&
+                                        std::ranges::find(ownedPopups, popup) != ownedPopups.end();
+        DxUi::ContextMenuPopupDebugState popupState{};
+        const bool readable = popupObservation.valid && DxUi::DebugGetContextMenuPopupState(popup, popupState);
+        const int selected  = DebugGetMainMenuBarSelectedIndex();
+        SelfTest::AppendSuiteTrace(
+            SelfTest::SelfTestSuite::Commands,
+            std::format(L"menuBar_view_to_plugins boundary={}: owned={} visible={} readable={} items={} selected={} "
+                        L"guiAvailable={} guiError={}; popup [{}]; owner [{}]; main [{}]; bar [{}]; foreground [{}]; capture [{}]; focus [{}].",
+                        phase,
+                        owned,
+                        popup && IsWindowVisible(popup) != FALSE,
+                        readable,
+                        popupState.itemTexts.size(),
+                        selected,
+                        guiAvailable,
+                        guiError,
+                        DescribeCommandsWindowObservation(popupObservation),
+                        DescribeCommandsWindowObservation(ownerObservation),
+                        DescribeCommandsWindowObservation(mainObservation),
+                        DescribeCommandsWindowObservation(barObservation),
+                        DescribeCommandsWindowObservation(foreground),
+                        DescribeCommandsWindowObservation(captureObservation),
+                        DescribeCommandsWindowObservation(focusObservation)));
+        return owned && readable && ! popupState.itemTexts.empty() && selected == static_cast<int>(viewMapping->visualIndex);
+    };
     std::jthread popupDriver([&](std::stop_token stopToken) noexcept
     {
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: worker start");
@@ -11333,7 +11456,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                                    std::format(L"menuBar_view_to_plugins: view selected={} selectedIndex={}",
                                                viewMenuSelected.load(std::memory_order_acquire),
                                                DebugGetMainMenuBarSelectedIndex()));
-        const HWND initialPopup = WaitForWindow([]() noexcept { return FindVisibleDxUiContextMenuWindow(); }, SelfTest::Scale(2000ms));
+        const HWND initialPopup = WaitForWindow([&]() noexcept { return FindVisibleOwnedDxUiContextMenuWindow(mainWindow); }, SelfTest::Scale(2000ms));
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
                                    std::format(L"menuBar_view_to_plugins: initial popup=0x{:X}", reinterpret_cast<uintptr_t>(initialPopup)));
         if (! initialPopup)
@@ -11344,17 +11467,23 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         initialPopupObserved.store(true, std::memory_order_release);
         selectedIndexBeforeHoverMessage.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
         const auto popupReadyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+        bool ready                    = false;
         while (std::chrono::steady_clock::now() < popupReadyDeadline)
         {
             DxUi::ContextMenuPopupDebugState popupState{};
             if (DxUi::DebugGetContextMenuPopupState(initialPopup, popupState) && ! popupState.itemTexts.empty())
             {
+                ready = true;
                 break;
             }
 
             std::this_thread::sleep_for(10ms);
         }
-        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: popup ready wait done");
+        ready = traceMenuState(L"initial-ready", initialPopup) && ready;
+        initialPopupReady.store(ready, std::memory_order_release);
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, std::format(L"menuBar_view_to_plugins: popup ready={}", ready));
+        if (! ready)
+            return;
 
         RECT livePluginsItemRect{};
         POINT livePluginsScreenPoint = pluginsScreenPoint;
@@ -11372,13 +11501,18 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             hoverHitIndexAfterMove.store(static_cast<int>(hoverHitIndex), std::memory_order_release);
         }
 
+        const bool hoverReady = traceMenuState(L"before-first-hover", initialPopup);
+        firstHoverReady.store(hoverReady, std::memory_order_release);
+        if (! hoverReady)
+            return;
+
         if (hoverViaMouseLeaveRefresh)
         {
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: mouseleave hover branch");
             if (hoverCursorMoved.load(std::memory_order_acquire) && IsWindow(menuBarWindow) != FALSE)
             {
                 DebugSetMainMenuBarHoverSuppressionCursorOverride(hoverSuppressionPoint);
-                hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSELEAVE, 0, 0) != FALSE, std::memory_order_release);
+                hoverMessageQueued.store(PostMessageW(menuBarWindow, WM_MOUSELEAVE, 0, 0) != FALSE, std::memory_order_release);
             }
         }
         else
@@ -11387,6 +11521,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             const auto hoverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
             HWND replacementPopup    = nullptr;
             bool settledOnPlugins    = false;
+            bool lossRecorded        = false;
             while (! stopToken.stop_requested() && ! settledOnPlugins && std::chrono::steady_clock::now() < hoverDeadline)
             {
                 POINT livePluginsClientPoint = livePluginsScreenPoint;
@@ -11394,7 +11529,8 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                 {
                     if (PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)) != FALSE)
                     {
-                        hoverMessageDelivered.store(true, std::memory_order_release);
+                        // Queue admission is not proof that a still-live menu session dispatched this event.
+                        hoverMessageQueued.store(true, std::memory_order_release);
                     }
                 }
 
@@ -11402,6 +11538,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                 replacementPopup             = WaitForRootSwitchedDxUiContextMenuWindow(initialPopup, 0u, &observedSwitchCount, SelfTest::Scale(100ms));
                 rootPointerSwitchCount.store(observedSwitchCount, std::memory_order_release);
                 selectedIndexAfterHoverWait.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
+                if (! lossRecorded && (selectedIndexAfterHoverWait.load(std::memory_order_acquire) < 0 || IsWindow(initialPopup) == FALSE))
+                {
+                    static_cast<void>(traceMenuState(L"first-selection-or-session-loss", initialPopup));
+                    lossRecorded = true;
+                }
                 settledOnPlugins =
                     replacementPopup && selectedIndexAfterHoverWait.load(std::memory_order_acquire) == static_cast<int>(pluginsMapping->visualIndex);
                 if (settledOnPlugins)
@@ -11411,22 +11552,22 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
                 std::this_thread::sleep_for(25ms);
             }
-            SelfTest::AppendSuiteTrace(
-                SelfTest::SelfTestSuite::Commands,
-                std::format(L"menuBar_view_to_plugins: mousemove hover loop done replacement=0x{:X} delivered={} switches={} selected={}",
-                            reinterpret_cast<uintptr_t>(replacementPopup),
-                            hoverMessageDelivered.load(std::memory_order_acquire),
-                            rootPointerSwitchCount.load(std::memory_order_acquire),
-                            DebugGetMainMenuBarSelectedIndex()));
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                       std::format(L"menuBar_view_to_plugins: mousemove hover loop done replacement=0x{:X} queued={} switches={} selected={}",
+                                                   reinterpret_cast<uintptr_t>(replacementPopup),
+                                                   hoverMessageQueued.load(std::memory_order_acquire),
+                                                   rootPointerSwitchCount.load(std::memory_order_acquire),
+                                                   DebugGetMainMenuBarSelectedIndex()));
+            static_cast<void>(traceMenuState(L"hover-loop-end", replacementPopup ? replacementPopup : initialPopup));
 
             DxUi::ContextMenuPopupDebugState popupState{};
             if (DxUi::DebugGetContextMenuPopupState(initialPopup, popupState))
             {
                 rootPointerSwitchCount.store(popupState.rootPointerSwitchCount, std::memory_order_release);
             }
-            if (! hoverMessageDelivered.load(std::memory_order_acquire))
+            if (! hoverMessageQueued.load(std::memory_order_acquire))
             {
-                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no hover delivered, dismiss initial");
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no hover queued, dismiss initial");
                 PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
                 initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
                 return;
@@ -11462,9 +11603,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: worker return replacement path");
             return;
         }
-        if (! hoverMessageDelivered.load(std::memory_order_acquire))
+        if (! hoverMessageQueued.load(std::memory_order_acquire))
         {
-            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no mouseleave delivered, dismiss initial");
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: no mouseleave queued, dismiss initial");
             PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
             initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
             return;
@@ -11500,13 +11641,30 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"menuBar_view_to_plugins: driver joined");
+    const size_t firstRecord = menuMetadata->retained == menuMetadata->records.size() ? menuMetadata->next : 0u;
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::Commands,
+        std::format(L"menuBar_view_to_plugins diagnostics: retained={} dropped={} truncated={}; missing events are inconclusive after loss.",
+                    menuMetadata->retained,
+                    menuMetadata->dropped,
+                    menuMetadata->truncated));
+    for (size_t index = 0u; index < menuMetadata->retained; ++index)
+    {
+        const auto& record = menuMetadata->records[(firstRecord + index) % menuMetadata->records.size()];
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                   std::format(L"menuBar_view_to_plugins diagnostic tick={} truncated={}: {}",
+                                               record.tick,
+                                               record.truncated,
+                                               std::wstring_view(record.text.data(), record.length)));
+    }
 
     state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the View top-level menu.");
     state.Require(viewMenuSelected.load(std::memory_order_acquire), L"Clicking View did not select the View top-level menu.");
     state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Clicking View did not open the initial DxUI popup.");
+    state.Require(initialPopupReady.load(std::memory_order_acquire), L"The initial View popup must be live, owned, readable and nonempty before hover.");
+    state.Require(firstHoverReady.load(std::memory_order_acquire), L"The owned View menu session must remain ready before the first hover is queued.");
     state.Require(hoverCursorMoved.load(std::memory_order_acquire), L"Failed to park the real cursor on Plugins before mouse-leave validation.");
-    state.Require(hoverMessageDelivered.load(std::memory_order_acquire),
-                  L"Failed to deliver the captured-session hover message to the persistent DxUI menu bar.");
+    state.Require(hoverMessageQueued.load(std::memory_order_acquire), L"Failed to queue the captured-session hover message to the persistent DxUI menu bar.");
     if (hoverViaMouseLeaveRefresh)
     {
         state.Require(
@@ -24657,66 +24815,145 @@ struct FolderViewDummyPluginHandles
     const std::wstring previousHoldValue = hadPreviousHold ? std::wstring(previousHold.data(), previousHoldChars) : std::wstring{};
     auto restoreHold                     = wil::scope_exit([&]() noexcept
     { SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", hadPreviousHold ? previousHoldValue.c_str() : nullptr); });
-    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", L"1");
+    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", L"model-only");
     const std::uintmax_t metricScan = FolderViewPerfMetricScanOffset();
 
+    const auto disposalDiagnostic = [metricScan](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot)
+    {
+        return std::format(L"display={}, layout={}, presented={}, owners={}, bytes={}, dirty={}, building={}, canceled={}, canceledBytes={}, "
+                           L"modelHeld={}, layoutHeld={}, modelCompleted={}, layoutCompleted={}, modelExpired={}, layoutExpired={}.",
+                           snapshot.displayGeneration,
+                           snapshot.layoutGeneration,
+                           snapshot.presentedLayoutGeneration,
+                           snapshot.refreshDisposePending,
+                           snapshot.refreshDisposeBytes,
+                           snapshot.layoutDirty,
+                           snapshot.layoutBuildActive,
+                           snapshot.layoutCancellationPending,
+                           snapshot.layoutCancellationOwnedBytes,
+                           FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_completed", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_expired", metricScan),
+                           FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_expired", metricScan));
+    };
+    const auto modelHoldIntact = [metricScan]() noexcept
+    {
+        return FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan) == 1u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_completed", metricScan) == 0u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_expired", metricScan) == 0u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_expired", metricScan) == 0u;
+    };
+
+    // Let incidental canceled layout candidates finish while retaining the old model.
+    // Holding every callback here can fill both slots before the fresh map publishes.
     SendMessageW(probe.hwnd, WM_COMMAND, MAKEWPARAM(40001u, 0u), 0);
     WndMsg::ViewerSpacePerfDebugSnapshot refreshed{};
-    state.Require(WaitForViewerSpacePerfSnapshot(probe.hwnd,
-                                                 refreshed,
-                                                 [before](const auto& snapshot) noexcept
+    const bool refreshedPublished = WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                                   refreshed,
+                                                                   [before, &modelHoldIntact, metricScan](const auto& snapshot) noexcept
     {
-        return snapshot.displayGeneration != before.displayGeneration && snapshot.refreshDisposePending == 2u &&
-               snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && ! snapshot.layoutDirty && ! snapshot.layoutBuildActive;
+        return snapshot.displayGeneration != before.displayGeneration && snapshot.layoutGeneration > before.layoutGeneration &&
+               snapshot.presentedLayoutGeneration == snapshot.layoutGeneration && snapshot.hasPublishedPositiveGeometry &&
+               snapshot.refreshDisposePending == 1u && snapshot.refreshDisposeBytes > 0u && snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done &&
+               ! snapshot.layoutDirty && ! snapshot.layoutBuildActive && ! snapshot.layoutCancellationPending && modelHoldIntact() &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) == 0u;
     },
-                                                 SelfTest::Scale(20000ms)),
-                  L"ViewerSpace did not publish the refreshed map with one model and one layout disposal held.");
-    const auto heldDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while ((FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan) == 0u ||
-            FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) == 0u) &&
-           std::chrono::steady_clock::now() < heldDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_entered", metricScan) > 0u &&
-                      FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) > 0u,
-                  L"One model and one layout disposal callback were not held before closing.");
+                                                                   SelfTest::Scale(20000ms));
+    state.Require(refreshedPublished,
+                  std::format(L"ViewerSpace did not publish the refreshed map with only the model disposal held. {}", disposalDiagnostic(refreshed)));
     if (! state.failure.empty())
     {
         return false;
     }
 
-    // A resize starts a small preparation turn. Cancel it while both disposal slots
-    // are occupied; later resizes must reuse the one pending cancellation slot.
     RECT originalWindow{};
     state.Require(GetWindowRect(probe.hwnd, &originalWindow) != FALSE, L"Could not size the owned disposal-close test window.");
-    const int originalWidth  = originalWindow.right - originalWindow.left;
-    const int originalHeight = originalWindow.bottom - originalWindow.top;
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const int originalWidth                  = originalWindow.right - originalWindow.left;
+    const int originalHeight                 = originalWindow.bottom - originalWindow.top;
+    const uint64_t layoutCompletedBeforeHold = FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan);
+    const auto bothHoldsIntact               = [metricScan, layoutCompletedBeforeHold, &modelHoldIntact]() noexcept
+    {
+        return modelHoldIntact() && FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_entered", metricScan) == 1u &&
+               FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan) == layoutCompletedBeforeHold;
+    };
+
+    // Establish the second owner from a completed resize of the fresh published map,
+    // rather than from an incidental canceled refresh candidate.
+    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_HOLD_DISPOSAL_CALLBACK", L"1");
+    SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 12, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    WndMsg::ViewerSpacePerfDebugSnapshot held{};
+    const bool bothOwnersHeld = WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                               held,
+                                                               [refreshed, &bothHoldsIntact](const auto& snapshot) noexcept
+    {
+        return snapshot.displayGeneration == refreshed.displayGeneration && snapshot.layoutGeneration > refreshed.layoutGeneration &&
+               snapshot.presentedLayoutGeneration == snapshot.layoutGeneration && snapshot.hasPublishedPositiveGeometry && ! snapshot.layoutDirty &&
+               ! snapshot.layoutBuildActive && ! snapshot.layoutCancellationPending && snapshot.refreshDisposePending == 2u &&
+               snapshot.refreshDisposeBytes > refreshed.refreshDisposeBytes && bothHoldsIntact();
+    },
+                                                               SelfTest::Scale(5000ms));
+    state.Require(bothOwnersHeld,
+                  std::format(L"ViewerSpace did not hold one model and one completed-layout disposal before cancellation. {}", disposalDiagnostic(held)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto capacityIntact = [held, &bothHoldsIntact](const auto& snapshot) noexcept
+    {
+        return snapshot.displayGeneration == held.displayGeneration && snapshot.layoutGeneration == held.layoutGeneration &&
+               snapshot.presentedLayoutGeneration == held.presentedLayoutGeneration && snapshot.refreshDisposePending == 2u &&
+               snapshot.refreshDisposeBytes == held.refreshDisposeBytes && bothHoldsIntact();
+    };
+    // A resize starts a small preparation turn. Cancel it while both disposal slots
+    // are occupied; later resizes must reuse the one pending cancellation slot.
     SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugSetLayoutWorkUnits, 1u, 0u);
     SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 24, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     WndMsg::ViewerSpacePerfDebugSnapshot preparing{};
-    state.Require(WaitForViewerSpacePerfSnapshot(
-                      probe.hwnd, preparing, [](const auto& snapshot) noexcept { return snapshot.layoutBuildActive; }, SelfTest::Scale(5000ms)),
-                  L"ViewerSpace did not begin the bounded resize preparation.");
+    const bool preparationStarted = WaitForViewerSpacePerfSnapshot(probe.hwnd, preparing, [&capacityIntact](const auto& snapshot) noexcept {
+        return snapshot.layoutBuildActive && capacityIntact(snapshot);
+    }, SelfTest::Scale(5000ms));
+    state.Require(preparationStarted,
+                  std::format(L"ViewerSpace did not begin the bounded resize preparation with both owners held. {}", disposalDiagnostic(preparing)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 48, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     SetWindowPos(probe.hwnd, nullptr, 0, 0, originalWidth - 72, originalHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     WndMsg::ViewerSpacePerfDebugSnapshot canceled{};
-    state.Require(WaitForViewerSpacePerfSnapshot(probe.hwnd,
-                                                 canceled,
-                                                 [](const auto& snapshot) noexcept
+    const bool cancellationRetained = WaitForViewerSpacePerfSnapshot(probe.hwnd, canceled, [&capacityIntact](const auto& snapshot) noexcept {
+        return snapshot.layoutCancellationPending && snapshot.layoutCancellationOwnedBytes > 0u && ! snapshot.layoutBuildActive && capacityIntact(snapshot);
+    }, SelfTest::Scale(5000ms));
+    state.Require(cancellationRetained,
+                  std::format(L"ViewerSpace did not retain exactly one charged canceled builder at disposal capacity. {}", disposalDiagnostic(canceled)));
+    if (! state.failure.empty())
     {
-        return snapshot.layoutCancellationPending && snapshot.layoutCancellationOwnedBytes > 0u && ! snapshot.layoutBuildActive &&
-               snapshot.refreshDisposePending == 2u;
-    },
-                                                 SelfTest::Scale(5000ms)),
-                  L"ViewerSpace did not retain exactly one charged canceled builder at disposal capacity.");
+        return false;
+    }
 
     // The next replacement defers at normal capacity; close has one final slot,
     // containing the active model, published names, and canceled preparation.
     SendMessageW(probe.hwnd, WM_COMMAND, MAKEWPARAM(40009u, 0u), 0);
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.refresh.start_deferred", metricScan) > 0u,
                   L"ViewerSpace did not defer a replacement when both normal disposal slots were occupied.");
+    WndMsg::ViewerSpacePerfDebugSnapshot closing{};
+    const bool closingSnapshotRead = SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&closing)) != FALSE;
+    state.Require(closingSnapshotRead && capacityIntact(closing) && closing.layoutCancellationPending && closing.layoutCancellationOwnedBytes > 0u &&
+                      ! closing.layoutBuildActive,
+                  std::format(L"ViewerSpace disposal capacity or charged cancellation changed before Close (snapshotRead={}). {}",
+                              closingSnapshotRead,
+                              disposalDiagnostic(closing)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     const auto closeStartedAt = std::chrono::steady_clock::now();
     const HRESULT closeHr     = probe.viewer->Close();
     const uint64_t closeUs    = Debug::Perf::ElapsedUs(closeStartedAt);
@@ -24729,6 +24966,11 @@ struct FolderViewDummyPluginHandles
                   L"Close must charge exactly one final renderer device to the bounded retirement owner.");
     state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.render.retired_device.release_us", metricScan) == 0u,
                   L"The final renderer device must remain owned while the actual disposal callbacks are held.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_hold_expired", metricScan) == 0u &&
+                      FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_hold_expired", metricScan) == 0u &&
+                      FolderViewPerfMetricCountInRun(L"viewer.space.refresh.dispose_completed", metricScan) == 0u &&
+                      FolderViewPerfMetricCountInRun(L"viewer.space.layout.dispose_completed", metricScan) == layoutCompletedBeforeHold,
+                  std::format(L"A disposal hold expired or completed before the explicit post-Close release. {}", disposalDiagnostic(closing)));
     probe.hwnd = nullptr;
     probe.viewer.reset();
 
@@ -29983,6 +30225,33 @@ template <typename Body> [[nodiscard]] bool RunFolderViewActivationPressCase(HWN
                                             L"FolderView activation press keeps selection",
                                             [&](const FolderViewActivationPressFixture& fixture, const std::filesystem::path&) noexcept
     {
+        // The blocked overlay stops item actions while the press activates its pane.
+        if (! fixture.Arrange({L"a.txt", L"b.txt"}, L"a.txt", L"the blocked-overlay press"))
+            return;
+        const auto armedBeforeOverlay = fixture.Down(L"a.txt");
+        state.Require(armedBeforeOverlay.potentialDragSourceCount != 0u, L"Overlay fixture did not arm a drag before the overlay appeared.");
+        g_folderWindow.DebugShowOverlaySampleBusyWithCancel(FolderWindow::Pane::Right);
+        {
+            const auto hideOverlay = wil::scope_exit([]() noexcept { g_folderWindow.DebugHideOverlaySample(FolderWindow::Pane::Right); });
+            RECT client{};
+            GetClientRect(fixture.rightView, &client);
+            const LPARAM background = MAKELPARAM(client.right - 2, client.bottom - 2);
+            SendMessageW(fixture.rightView, WM_MOUSEMOVE, MK_LBUTTON, background);
+            state.Require(fixture.Snapshot().potentialDragSourceCount == 0u && GetCapture() != fixture.rightView,
+                          L"An overlay retained an earlier armed drag or capture after pointer movement.");
+            state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, fixture.leftView, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                          L"The left pane did not regain focus before the blocked-overlay activation press.");
+            SendMessageW(fixture.rightView, WM_LBUTTONDOWN, MK_LBUTTON, background);
+            SendMessageW(fixture.rightView, WM_LBUTTONUP, 0, background);
+            PumpPendingMessages();
+            state.Require(fixture.RightPaneIsActive() && fixture.Selected({L"a.txt", L"b.txt"}) && fixture.Snapshot().currentDisplayName == L"a.txt",
+                          L"A blocked-overlay press failed to activate its pane or changed its selection.");
+            const POINT blockedPoint = fixture.PointFor(L"sub");
+            SendMessageW(fixture.rightView, WM_LBUTTONDBLCLK, MK_LBUTTON, MAKELPARAM(blockedPoint.x, blockedPoint.y));
+            state.Require(fixture.Selected({L"a.txt", L"b.txt"}) && fixture.Snapshot().currentDisplayName == L"a.txt",
+                          L"A blocked overlay allowed double-click activation or changed the current item.");
+        }
+
         // An item outside the selection: the pane becomes active, the item becomes current, nothing else changes.
         if (! fixture.Arrange({L"a.txt", L"b.txt", L"c.txt"}, L"a.txt", L"the unselected-item press"))
         {

@@ -21,7 +21,7 @@ Immutable PR comparison base for changelog validation.
 .PARAMETER Configuration
 Debug, Release or ASan Debug for an explicit qualification only.
 .PARAMETER QualificationScope
-Normal regression, explicit Full qualification, a fixed filtered diagnostic, the manual R0e paired study, or read-only DesktopProbe; never advances automatic Release state.
+Normal regression, explicit Full qualification, a fixed filtered diagnostic, CommandsUiAttribution (one observer-control case then three UI cases), the manual R0e paired study, or read-only DesktopProbe; never advances automatic Release state.
 .PARAMETER DevelopmentEngine
 Allows a local engine under development for compiler-free checks only.
 .OUTPUTS
@@ -45,10 +45,10 @@ See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual a
 param([Parameter(Mandatory)][ValidateSet('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')][string]$Phase,
     [Parameter(Mandatory)][string]$EngineRoot, [ValidateSet('x64','ARM64')][string]$Platform = 'x64',
     [string]$Descriptor = '', [string]$Base = 'origin/main',
-    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
+    [ValidateSet('Debug','Release','ASan Debug')][string]$Configuration = 'Release', [ValidateSet('Normal','Full','CommandsHandoff','CommandsUiAttribution','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe')][string]$QualificationScope = 'Normal', [switch]$DevelopmentEngine)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe') -and $Phase -ne 'Qualification') {
+if ($QualificationScope -in @('CommandsHandoff','CommandsUiAttribution','FileOpsVolumes','ViewerSpaceCapture','R0ePaired','DesktopProbe') -and $Phase -ne 'Qualification') {
     throw 'Filtered diagnostic scopes are only valid for explicit Qualification.'
 }
 if ($QualificationScope -ceq 'R0ePaired' -and $Configuration -cne 'Release') { throw 'R0e paired validation requires Release.' }
@@ -107,7 +107,7 @@ if ($Phase -eq 'Static') {
     Run 'Tools/Test-Changelog.ps1' @('-Base',$baseCommit)
     foreach ($script in @('Tools/Verify-NoSubclassManager.ps1','Tools/Audit-ComctlReportSurfaces.ps1','Tools/Audit-VisibleNativeSurfaces.ps1')) { Run $script }
     Run 'Tools/Get-ToolInventory.ps1' @('-FailOnFindings','-Format','Json')
-    Run 'Tools/Get-SpecInventory.ps1' @('-FailOnFindings')
+    Run 'Tools/Get-SpecInventory.ps1' @('-FailOnFindings','-NoReports')
     return
 }
 if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
@@ -192,6 +192,24 @@ try {
 [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION',
     (Get-RSHostedStockPreparationRequest -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope), 'Process')
 Invoke-RSWithHostedTestDesktop -Action {
+    if ($QualificationScope -ceq 'CommandsUiAttribution') {
+        Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1')
+        $runner = Assert-CiContainedPath $root (Join-Path $root 'Tools/Run-AllTests.ps1')
+        $hostPath = (Get-Process -Id $PID).Path
+        $diagnosticTimeoutMultiplier = 2.0
+        $runCase = {
+            param([string]$CaseFilter)
+            $runnerArguments = @('-NoProfile','-NonInteractive','-File',$runner) + $profile +
+                @('-Suite','Commands','-CaseFilter',$CaseFilter,'-ValidationMode','Fresh','-SkipBuild',
+                    '-BuildNumber',$number,'-TestRoot',$env:REDSALAMANDER_TEST_ROOT,
+                    '-TimeoutMultiplier',$diagnosticTimeoutMultiplier.ToString('g',[Globalization.CultureInfo]::InvariantCulture),'-RequireCleanQuarantine')
+            Invoke-CiProcess -FilePath $hostPath -Arguments $runnerArguments -WorkingDirectory $root -TimeoutSeconds 18000 -Stream -AllowFailure
+        }
+        [void](Invoke-RSHostedCommandsUiAttribution -RepoRoot $root -TestRoot $env:REDSALAMANDER_TEST_ROOT `
+            -Platform $Platform -Configuration $Configuration -TimeoutMultiplier $diagnosticTimeoutMultiplier -RunCase $runCase)
+        Write-Host 'Commands UI attribution passed its observer controls and three selected UI cases; repository coverage remains NOT_EVALUATED.'
+        return
+    }
     if ($QualificationScope -ceq 'R0ePaired') {
         [void][IO.Directory]::CreateDirectory($receiptDirectory)
         $command = Assert-CiContainedPath $root (Join-Path $root 'Tools/Invoke-R0ePairedValidation.ps1')
@@ -268,7 +286,7 @@ Invoke-RSWithHostedTestDesktop -Action {
     [Environment]::SetEnvironmentVariable('RS_HOSTED_ARM64_STOCK_PREPARATION', $priorStockPreparationRequest, 'Process')
     [Environment]::SetEnvironmentVariable('REDSALAMANDER_HOSTED_TEST_DESKTOP', $priorHostedDesktopRequest, 'Process')
 }
-if ($QualificationScope -in @('CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
+if ($QualificationScope -in @('CommandsHandoff','CommandsUiAttribution','FileOpsVolumes','ViewerSpaceCapture','R0ePaired')) { return }
 $probe = Invoke-CiAssertionProbe -Context $context -Executable ".build/$Platform/$Configuration/PluginContractTests.exe" -ExpectedExitCode 21
 if ($Phase -eq 'Qualification') { Write-Host 'Explicit native qualification finished; it does not authorize production or publication.'; return }
 Import-Module (Join-Path $root 'Tools/Modules/Testing/TestRunSummary.psm1') -ErrorAction Stop

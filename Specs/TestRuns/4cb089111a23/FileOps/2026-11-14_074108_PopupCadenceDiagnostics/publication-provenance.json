@@ -1,0 +1,209 @@
+{
+  "kind": "Authored selected-member component publication",
+  "publication_context_id": "20261114T075257Z-83032-73bf3edc4c1542328efba2a243595937",
+  "publication_target": "Specs/TestRuns/4cb089111a23/FileOps/2026-11-14_074108_PopupCadenceDiagnostics",
+  "measured_manifest_sha256": "ce5789c5b8cfe5cbd531f00da35e9b7a654136c5aaed2ec4a4aac3d58897346f",
+  "copied_members": [
+    {
+      "bytes": 106685,
+      "origin_run": "20261114T072828Z-89860-0fa0313bc7bc49e7ba25b2a2194aa1ee",
+      "sha256": "f30d5ad9c1b16b56f4b3a4206545ff56209254503963bff69c1e4b063d7a6930",
+      "kind": "Byte-identical existing selected derivative, not raw trace/JSONL",
+      "origin_member": "scratch/audit-native/dirty29-cadence-debug-final-proof/all-147-observer-rows.json",
+      "published": "Debug/observer-rows.json"
+    },
+    {
+      "bytes": 11242,
+      "origin_run": "20261114T072828Z-89860-0fa0313bc7bc49e7ba25b2a2194aa1ee",
+      "sha256": "5a5b95961376630abe7e95ceff940da99404de562d5829723f21194e09a9a1d8",
+      "kind": "Byte-identical existing selected derivative, not raw trace/JSONL",
+      "origin_member": "scratch/audit-native/dirty29-cadence-debug-final-proof/all-cadence-metrics.json",
+      "published": "Debug/cadence-metrics.json"
+    },
+    {
+      "bytes": 3327,
+      "origin_run": "20261114T072828Z-89860-0fa0313bc7bc49e7ba25b2a2194aa1ee",
+      "sha256": "0ce70e67f8901107ac7bf7b12f71301a1a64c0a349b3198db6a9dd450e5d334d",
+      "kind": "Byte-identical existing selected derivative, not raw trace/JSONL",
+      "origin_member": "scratch/audit-native/dirty29-cadence-debug-final-proof/cadence-notes.txt",
+      "published": "Debug/cadence-notes.txt"
+    },
+    {
+      "bytes": 106399,
+      "origin_run": "20261114T074322Z-83108-048ab667334d4cbea34e49c7ef239dba",
+      "sha256": "b07d113a5bf9463051e4cf34a62042352794f86c69b6ea2e04d8ad0e71f7feff",
+      "kind": "Byte-identical existing selected derivative, not raw trace/JSONL",
+      "origin_member": "scratch/audit-native/dirty29-cadence-release-final-proof/all-147-observer-rows.json",
+      "published": "Release/observer-rows.json"
+    },
+    {
+      "bytes": 11283,
+      "origin_run": "20261114T074322Z-83108-048ab667334d4cbea34e49c7ef239dba",
+      "sha256": "bf12c81b77146450feb426da094541e328f2fb874a26a75bf1ab110abd45a687",
+      "kind": "Byte-identical existing selected derivative, not raw trace/JSONL",
+      "origin_member": "scratch/audit-native/dirty29-cadence-release-final-proof/all-cadence-metrics.json",
+      "published": "Release/cadence-metrics.json"
+    },
+    {
+      "bytes": 3331,
+      "origin_run": "20261114T074322Z-83108-048ab667334d4cbea34e49c7ef239dba",
+      "sha256": "917e43218c628b7b99e387d7ccc53ccd2dcfee004b60296e28dfc077811a9a60",
+      "kind": "Byte-identical existing selected derivative, not raw trace/JSONL",
+      "origin_member": "scratch/audit-native/dirty29-cadence-release-final-proof/cadence-notes.txt",
+      "published": "Release/cadence-notes.txt"
+    },
+    {
+      "published": "source-targets.json",
+      "origin_member": "scratch/tooling/facade-export-review/targets.json",
+      "origin_run": "20261114T071456Z-66456-48f4556a3bec4a46a685f4a55cceaab1",
+      "kind": "Seventh exact byte copy: immutable measured29 source manifest",
+      "bytes": 4423,
+      "sha256": "ce5789c5b8cfe5cbd531f00da35e9b7a654136c5aaed2ec4a4aac3d58897346f"
+    }
+  ],
+  "authored_members": [
+    "README.md",
+    "evidence-bindings.json",
+    "history-and-limits.json",
+    "publication-provenance.json",
+    "publication-manifest.json",
+    "derivation.txt",
+    "Debug/case-results.projection.json",
+    "Release/case-results.projection.json"
+  ],
+  "omitted": [
+    "Raw security-bearing intents",
+    "Full receipt bodies",
+    "Absolute artifact/executable paths",
+    "Broad raw streams",
+    "Two path-bearing late v1 aggregate bodies; exact copied bodies retained only in later private custody"
+  ],
+  "privacy": "Closed reviewed fields and approved canonical/project-relative member identities; no SID/raw path/title/clipboard content",
+  "projection_semantic_gate": "Explicit independent joins required; generic archive gate is not a semantic schema validator",
+  "qualified_scope": "Selected dirty29 x64 component observations only",
+  "metric_timestamp_normalizations": [
+    {
+      "profile": "Debug",
+      "selected_index_zero_based": 6,
+      "raw_line": 1668,
+      "utc_ticks": 639302379316900000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:25:31.690Z",
+      "derived_literal": "2026-11-14T07:25:31.69Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 3,
+      "raw_line": 990,
+      "utc_ticks": 639302388458800000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:40:45.880Z",
+      "derived_literal": "2026-11-14T07:40:45.88Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 6,
+      "raw_line": 1620,
+      "utc_ticks": 639302388528300000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:40:52.830Z",
+      "derived_literal": "2026-11-14T07:40:52.83Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 13,
+      "raw_line": 4835,
+      "utc_ticks": 639302388637400000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:03.740Z",
+      "derived_literal": "2026-11-14T07:41:03.74Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 14,
+      "raw_line": 4836,
+      "utc_ticks": 639302388637400000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:03.740Z",
+      "derived_literal": "2026-11-14T07:41:03.74Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 15,
+      "raw_line": 4837,
+      "utc_ticks": 639302388637400000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:03.740Z",
+      "derived_literal": "2026-11-14T07:41:03.74Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 16,
+      "raw_line": 4838,
+      "utc_ticks": 639302388637400000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:03.740Z",
+      "derived_literal": "2026-11-14T07:41:03.74Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 17,
+      "raw_line": 5167,
+      "utc_ticks": 639302388673500000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:07.350Z",
+      "derived_literal": "2026-11-14T07:41:07.35Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 18,
+      "raw_line": 5168,
+      "utc_ticks": 639302388673500000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:07.350Z",
+      "derived_literal": "2026-11-14T07:41:07.35Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 19,
+      "raw_line": 5169,
+      "utc_ticks": 639302388673500000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:07.350Z",
+      "derived_literal": "2026-11-14T07:41:07.35Z"
+    },
+    {
+      "profile": "Release",
+      "selected_index_zero_based": 20,
+      "raw_line": 5170,
+      "utc_ticks": 639302388673500000,
+      "kind": "Existing serializer formatting normalization only; original/derived bytes unchanged",
+      "original_literal": "2026-11-14T07:41:07.350Z",
+      "derived_literal": "2026-11-14T07:41:07.35Z"
+    }
+  ],
+  "metric_derivation_semantics": "Six existing selected derivative files are byte-identical copies. Metric JSON objects preserve all non-timestamp fields;11 timestamp spellings differ from raw JSONL but represent exactly the same strict UTC instant. No original or selected derivative is repaired or rewritten.",
+  "late_control_custody": {
+    "body_publication": false,
+    "capture_record_sha256": "cf648a1e4443c38001a68282610e80b4e162460f5192c9cb094c15ad8fa4cbbb",
+    "strict_original_members": 34,
+    "original_native_inventory_membership": false,
+    "actual_archive": {
+      "run_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+      "bodies_published": false,
+      "kind": "Later current-time control-record evidence custody,not native execution",
+      "intent": {
+        "bytes": 14490,
+        "sha256": "167a8c2e268ce10189776ca21c8a5d04f2e95f981bde83330c5cee2607f80f92"
+      },
+      "complete": {
+        "bytes": 399,
+        "sha256": "a17e782d420498d368354bac5b0a7309a37d39de56855224e6ee72de61568f94"
+      }
+    },
+    "context_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+    "capture_record_member": "scratch/tooling/cadence-publication/late-control-capture.json",
+    "limits": "Later exact-copy custody strengthens retention; it does not backdate membership or establish portable/native/Full/future-source acceptance",
+    "later_control_copies": 2
+  }
+}

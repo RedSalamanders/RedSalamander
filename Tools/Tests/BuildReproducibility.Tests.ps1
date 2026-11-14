@@ -9,6 +9,7 @@ Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Fo
 Import-Module (Join-Path $repoRoot 'Tools\Tests\TestSupport.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1') -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\ProcessStreaming.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\MSBuildInvocation.psm1') -ErrorAction Stop
 
 function Assert-RSThrowsMatching {
     param(
@@ -659,7 +660,7 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '''--x-install-root'',\s*\$env:VCPKG_INSTALLED_DIR'
         $ci | Should Match '&\s+"\$env:VCPKG_ROOT\\vcpkg\.exe"\s+@vcpkgArguments'
         $ci | Should Match '\$vcpkgRoot\s*=\s*Join-Path \$env:VCPKG_INSTALLED_DIR \$triplet'
-        $ci | Should Match "hashFiles\('vcpkg\.json', 'vcpkg-tool\.json', 'vcpkg-install\.ps1', 'Tools/Modules/Build/VcpkgInstallSafety\.psm1', 'Build/vcpkg-ports/\*\*'\)"
+        $ci | Should Match "hashFiles\('vcpkg\.json', 'vcpkg-tool\.json', 'vcpkg-install\.ps1', 'Tools/Modules/Build/VcpkgInstallSafety\.psm1', 'Tools/Modules/Build/MSBuildInvocation\.psm1', 'Build/vcpkg-ports/\*\*'\)"
         $ci | Should Match 'id:\s*toolchain_identity'
         $ci | Should Match 'Get-RSBuildToolchainIdentity'
         @($ci | Select-String -Pattern 'steps\.toolchain_identity\.outputs\.digest' -AllMatches).Matches.Count | Should Be 2
@@ -708,7 +709,8 @@ Describe 'Pinned build-tool and CI identity' {
 
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
         $buildScript | Should Match '(?s)Get-RSBuildIdentityBundle.+?-Platform\s+\$Platform\s+-Configuration\s+\$Configuration'
-        $buildScript | Should Match '(?s)GITHUB_ACTIONS.+?MSBUILD_EXE_PATH.+?GetFullPath.+?return\s+@\{.+?Method\s*=\s*"MSBUILD_EXE_PATH"'
+        $buildScript | Should Match '\$workflowSelected = Get-RSWorkflowSelectedMSBuild'
+        $buildScript | Should Match 'if \(\$null -ne \$workflowSelected\) \{ return \$workflowSelected \}'
         $buildScript | Should Match 'Publish-RSBuildToolchainIdentity'
         $buildScript | Should Match 'ToolchainIdentity\.schema\.json'
         $buildScript | Should Match '(?s)New-RSBuildArtifactRecord.+?-LiteralPath\s+\$toolchainIdentityPath'
@@ -749,7 +751,17 @@ Describe 'Pinned build-tool and CI identity' {
         $adapter | Should Match 'Import-Module.*HostedTestDesktop'
         $nightly = Get-Content (Join-Path $repoRoot '.github/workflows/nightly-ci.yml') -Raw
         $nightly | Should Match 'workflow_dispatch:'
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $scopeInput = '(?m-i)^      scope:\r?\n        description:[^\r\n]+\r?\n        type: choice\r?\n        options: \[Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]\r?\n        default: Full\s*$'
+        $platformInput = '(?m-i)^      platform:\r?\n        description:[^\r\n]+\r?\n        type: choice\r?\n        options: \[All, x64, ARM64\]\r?\n        default: All\s*$'
+        $platformForward = '(?m-i)^      platform: \$\{\{ inputs\.platform \}\}\s*$'
+        $nightly | Should Match $scopeInput
+        $nightly | Should Match $platformInput
+        $nightly | Should Match $platformForward
+        $nightly.Replace(', CommandsUiAttribution', '') | Should Not Match $scopeInput
+        $nightly.Replace('DesktopProbe]', 'DesktopProbe, UnreviewedScope]') | Should Not Match $scopeInput
+        $nightly.Replace('All, x64, ARM64]', 'All, x64, ARM64, Win32]') | Should Not Match $platformInput
+        $nightly.Replace('default: All', 'default: ARM64') | Should Not Match $platformInput
+        $nightly.Replace('platform: '+[char]36+'{{ inputs.platform }}', 'platform: ARM64') | Should Not Match $platformForward
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'
@@ -844,7 +856,7 @@ Describe 'Workflow-selected MSBuild identity' {
             [void][IO.Directory]::CreateDirectory((Split-Path $wrongLayout))
             Copy-Item -LiteralPath $real -Destination $wrongLayout
             $env:MSBUILD_EXE_PATH = $wrongLayout
-            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            Assert-RSThrowsMatching { & $find } 'not an existing Visual Studio 2026 executable'
             # Keep valid version metadata but use a different binary identity.
             # Native ARM64 installs can keep task hosts/managed assemblies in the
             # parent Bin directory. Require a real VS18 counterexample there too.
@@ -865,9 +877,9 @@ Describe 'Workflow-selected MSBuild identity' {
             (Get-Item -LiteralPath $other).VersionInfo.OriginalFilename | Should Not Be 'MSBuild.exe'
             Copy-Item -LiteralPath $other -Destination $fixture -Force
             $env:MSBUILD_EXE_PATH = $fixture
-            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            Assert-RSThrowsMatching { & $find } 'not an existing Visual Studio 2026 executable'
             $env:MSBUILD_EXE_PATH = Join-Path $TestDrive 'missing/MSBuild.exe'
-            Assert-RSThrowsMatching { & $find } 'does not exist'
+            Assert-RSThrowsMatching { & $find } 'not an existing Visual Studio 2026 executable'
         } finally {
             $env:GITHUB_ACTIONS = $savedActions
             $env:MSBUILD_EXE_PATH = $savedMsbuild

@@ -1,0 +1,55 @@
+{
+  "schema": "red-salamander.public-archive-member-projection.v1",
+  "kind": "Derived public proof projection; NOT canonical raw archive intent or new archive transaction",
+  "source_private_packet_path": "Release/analysis/archive-intent.json",
+  "omitted_public_raw_intent": true,
+  "original_intent": {
+    "path": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7\\intent.json",
+    "length": 4182,
+    "sha256": "1145937bbed6ecbdd7a41776c60dd1ab4a38b22c29eaf4cfb72bfecf2f06b46e",
+    "schema": "red-salamander.run-archive.v1",
+    "run_id": "20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7",
+    "source": "Z:\\RedSalamander.Perf\\runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7",
+    "destination": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7",
+    "disposition": "completed",
+    "written_utc": "2026-11-13T18:43:57.9712214Z"
+  },
+  "completion_binding": {
+    "public_packet_path": "Release/analysis/archive-complete.json",
+    "length": 399,
+    "sha256": "6579684ca181da6552457b49f2a7c9e9e6151f2b12dd32228afe471fd47a0cf4",
+    "schema": "red-salamander.run-archive-complete.v1",
+    "source": "Z:\\RedSalamander.Perf\\runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7",
+    "destination": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184357Z-75388-2957a1026492403cb7a5c769509a6eb7",
+    "intent_sha256": "1145937BBED6ECBDD7A41776C60DD1AB4A38B22C29EAF4CFB72BFECF2F06B46E",
+    "interpretation": "Unmodified completion binds the omitted original private intent hash. No new completion or transaction is fabricated."
+  },
+  "selection": "Exact selected file path/length/SHA256 from original inventory; original security descriptors, ACL/account SIDs and all unselected inventory rows omitted. Full raw metrics remain private; public excerpts retain separate original-row indexes. Post-archive summaries/history are not claimed as inventory members.",
+  "members": [
+    {
+      "path": "scratch\\audit-native\\release-queue-cohort\\all-12-cohorts.json",
+      "length": 8849,
+      "sha256": "4CCECF86C429927880AA3F2265F3135A6F55521C80A8E23232956E50D2DC1126",
+      "directory": false
+    },
+    {
+      "path": "scratch\\audit-native\\release-queue-cohort\\all-48-pairs.csv",
+      "length": 5365,
+      "sha256": "4724DB830A1927093FF9B6FDFCB2A5D4939D4FE0E0B05CCBE0B25D130A40A01B",
+      "directory": false
+    },
+    {
+      "path": "scratch\\audit-native\\release-queue-cohort\\all-48-pairs.json",
+      "length": 20643,
+      "sha256": "4B3364BDB023894A806838EDF8A11AEBFFCA53B535AF8113FFC2C4F55FAC50FC",
+      "directory": false
+    },
+    {
+      "path": "scratch\\audit-native\\release-queue-cohort\\binding-and-caveats.json",
+      "length": 2534,
+      "sha256": "5DFEA140F087D95B1616579780C8DFDC1B87580BF41F99DCF0566A634A3FD0B7",
+      "directory": false
+    }
+  ],
+  "limits": "Independent full-transaction verification requires the untouched local raw intent; public projection preserves selected evidence hashes, not byte-for-byte publication of the original intent."
+}

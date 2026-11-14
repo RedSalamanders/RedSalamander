@@ -89,6 +89,7 @@ struct ForceWilTemplateInstantiations
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionManagerWindow.h"
 #include "ConnectionSecrets.h"
+#include "ContentDigest.h"
 #include "DirectoryInfoCache.h"
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"

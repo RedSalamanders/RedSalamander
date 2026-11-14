@@ -1209,6 +1209,92 @@ if (Test-Path -LiteralPath $fixtureParent -PathType Container) {
     }
 }
 
+Describe 'Specification inventory report-free entrypoint' {
+    BeforeEach {
+        # Keep these actual-entrypoint fixtures after the earlier suite cleanup so
+        # a failed attempt remains available in its owned marked run.
+        $script:commandFixture = New-RSSpecFixtureRepository
+        $tools = Join-Path $script:commandFixture 'Tools'
+        $modules = Join-Path $tools 'Modules/Tooling'
+        [void][IO.Directory]::CreateDirectory($modules)
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Get-SpecInventory.ps1') -Destination $tools
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Tooling/SpecInformationArchitecture.psm1') -Destination $modules
+        # This synthetic checkout lacks the native registration graph. Keep the
+        # real spec scanner and command, with a read-only test-inventory producer
+        # whose refusal proves that -NoReports still executes that dependency.
+        # It also lacks the immutable 596-object Done relocation history: the
+        # actual public command must report that one finding, not waive it. The
+        # real-checkout -FailOnFindings control covers a complete source tree.
+        Set-RSFixtureFile -Root $script:commandFixture -RelativePath 'Tools/Get-TestInventory.ps1' -Content @'
+param([string]$RepoRoot,[string]$Format)
+if(Test-Path -LiteralPath (Join-Path $RepoRoot 'reject-test-inventory')){throw 'fixture test inventory refused'}
+'{"fixtureTestInventory":true}'
+'@
+        $script:specCommand = Join-Path $tools 'Get-SpecInventory.ps1'
+    }
+
+    It 'returns the same specification object without creating reports' {
+        $before = @(Get-ChildItem -LiteralPath $script:commandFixture -File -Recurse -Force | ForEach-Object FullName | Sort-Object)
+        $inventory = & $script:specCommand -NoReports -PassThru -ProtectedDoneBaseCommit HEAD
+        $inventory.SchemaVersion | Should Be 1
+        $inventory.Summary.BlockingFindings | Should Be 1
+        ($inventory.Findings.Code -join ',') | Should Be 'DONE_HISTORY_CHANGED'
+        $inventory.ProtectedDone.Relocations.Errors[0] | Should Match 'Required path-relocation manifest is missing'
+        ($inventory.Files.Count -gt 0) | Should Be $true
+        @(& $script:specCommand -NoReports -ProtectedDoneBaseCommit HEAD).Count | Should Be 0
+        $after = @(Get-ChildItem -LiteralPath $script:commandFixture -File -Recurse -Force | ForEach-Object FullName | Sort-Object)
+        ($after -join "`n") | Should Be ($before -join "`n")
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'keeps blocking specification findings fatal without writing reports' {
+        $ledger = Join-Path $script:commandFixture 'Specs/NormativeConsistency.json'
+        [IO.File]::WriteAllText($ledger, [IO.File]::ReadAllText($ledger).Replace('VERIFIED_MATCH', 'UNVERIFIED'))
+        $inventory = & $script:specCommand -NoReports -PassThru -ProtectedDoneBaseCommit HEAD
+        $inventory.Summary.BlockingFindings | Should Be 2
+        @($inventory.Findings | Where-Object Code -ceq 'NORMATIVE_UNRESOLVED_CONSISTENCY').Count | Should Be 1
+        { & $script:specCommand -NoReports -FailOnFindings -ProtectedDoneBaseCommit HEAD } | Should Throw '2 blocking issue'
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'still runs test-inventory reconciliation and propagates its failure without reports' {
+        Set-RSFixtureFile -Root $script:commandFixture -RelativePath 'reject-test-inventory' -Content 'reject'
+        { & $script:specCommand -NoReports -FailOnFindings -ProtectedDoneBaseCommit HEAD } | Should Throw 'fixture test inventory refused'
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'rejects an explicit OutputRoot with NoReports before creating any output' {
+        $output = Join-Path $script:commandFixture '.build/explicit'
+        { & $script:specCommand -NoReports -OutputRoot $output -ProtectedDoneBaseCommit HEAD } | Should Throw 'cannot be combined'
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'preserves the default four-report catalog in an owned fixture checkout' {
+        $inventory = & $script:specCommand -PassThru -ProtectedDoneBaseCommit HEAD
+        $inventory.Summary.BlockingFindings | Should Be 1
+        ($inventory.Findings.Code -join ',') | Should Be 'DONE_HISTORY_CHANGED'
+        $output = Join-Path $script:commandFixture '.build/SpecInventory'
+        $names = @(Get-ChildItem -LiteralPath $output -File | ForEach-Object Name | Sort-Object)
+        ($names -join ',') | Should Be 'normative-consistency.json,spec-inventory.json,spec-inventory.md,test-inventory.json'
+        (Get-Content -LiteralPath (Join-Path $output 'spec-inventory.json') -Raw | ConvertFrom-Json).SchemaVersion | Should Be 1
+        (Get-Content -LiteralPath (Join-Path $output 'test-inventory.json') -Raw | ConvertFrom-Json).fixtureTestInventory | Should Be $true
+    }
+
+    It 'resolves its checkout independently of a foreign caller directory' {
+        $foreign = Join-Path $script:commandFixture 'foreign'
+        [void][IO.Directory]::CreateDirectory($foreign)
+        $prior = Get-Location
+        try {
+            Set-Location -LiteralPath $foreign
+            $inventory = & $script:specCommand -NoReports -PassThru -ProtectedDoneBaseCommit HEAD
+            $inventory.RepositoryRoot | Should Be $script:commandFixture
+            $inventory.Summary.BlockingFindings | Should Be 1
+            ($inventory.Findings.Code -join ',') | Should Be 'DONE_HISTORY_CHANGED'
+            (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+        } finally { Set-Location -LiteralPath $prior.Path }
+    }
+}
+
 Describe 'Markdown fence indentation boundaries' {
     It 'keeps unindented prose visible after an opener prefixed by <Name>' -TestCases @(
         @{Name='four spaces'; Indent='    '},

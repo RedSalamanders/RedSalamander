@@ -582,8 +582,39 @@ Describe 'Vcpkg dependency pins' {
     # These cases prove manifest data against immutable builtin-baseline Git objects.
     # They do not qualify the current vcpkg executable checkout or bootstrap state.
     $toolObjectStore = Join-Path $repoRoot '.build\vcpkg-tool'
+    if (-not (Test-Path -LiteralPath (Join-Path $toolObjectStore '.git'))) {
+        # Consumer restores keep their object store in the identity-verified short
+        # output root. Its active checkout need not equal our baseline: only exact
+        # immutable objects are read below, without fetch, checkout or executable use.
+        $dependency = Join-Path $repoRoot '.build/dependencies/DxUi'
+        $dependencyPin = Get-Content -LiteralPath (Join-Path $repoRoot 'Dependencies/DxUi.lock.json') -Raw | ConvertFrom-Json
+        $source = Get-DxUiSourcePath -DependencyRoot $dependency -Commit $dependencyPin.commit
+        foreach ($platform in @('x64', 'ARM64')) {
+            $identityPath = Join-Path $dependency "DxUi.identity.$platform.json"
+            if (-not (Test-Path -LiteralPath $identityPath -PathType Leaf)) { continue }
+            $identity = Get-Content -LiteralPath $identityPath -Raw | ConvertFrom-Json
+            if ($identity.Identity.commit -cne $dependencyPin.commit -or $identity.Identity.platform -cne $platform) {
+                throw 'Pinned-baseline object-store locator has a stale DxUi dependency identity.'
+            }
+            $sourceHead = & git --no-optional-locks --no-lazy-fetch -C $source rev-parse HEAD 2>&1
+            if ($LASTEXITCODE -ne 0 -or ([string]$sourceHead).Trim() -cne $dependencyPin.commit) {
+                throw 'Pinned-baseline object-store locator does not match the complete DxUi source pin.'
+            }
+            $output = Read-DxUiResolvedOutputRoot -DependencyRoot $dependency -Platform $platform -BuildIdentity $identity
+            $candidate = Join-Path $output 'vcpkg-tool'
+            if (-not (Test-Path -LiteralPath (Join-Path $candidate '.git'))) { continue }
+            $origin = & git --no-optional-locks --no-lazy-fetch -C $candidate remote get-url origin 2>&1
+            $expectedOrigin = (Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg-tool.json') -Raw | ConvertFrom-Json).repository
+            if ($LASTEXITCODE -ne 0 -or (([string]$origin).Trim().TrimEnd('/') -replace '\.git$', '') -cne $expectedOrigin) {
+                throw 'Pinned-baseline object store does not have the pinned microsoft/vcpkg origin.'
+            }
+            $toolObjectStore = $candidate
+            break
+        }
+    }
     $baselineCommit = [string]$manifest.'builtin-baseline'
     if ($baselineCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'vcpkg builtin-baseline must be a full commit SHA before reading Git objects.' }
+    Write-Host "Pinned-baseline data object store: $toolObjectStore; requested commit: $baselineCommit"
     $baselinePaths = [System.Collections.Generic.List[string]]::new()
     $packageNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $baselinePaths.Add('versions/baseline.json')
@@ -817,9 +848,12 @@ Describe 'Hosted vcpkg install parity' {
         $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml')
         $keys = @($workflow | Where-Object { $_ -match '^\s*key:.*-vcpkg-' })
         $keys.Count | Should Be 1
-        foreach ($input in @('vcpkg.json','vcpkg-tool.json','vcpkg-install.ps1','Tools/Modules/Build/VcpkgInstallSafety.psm1','Build/vcpkg-ports/**')) {
+        foreach ($input in @('vcpkg.json','vcpkg-tool.json','vcpkg-install.ps1','Tools/Modules/Build/VcpkgInstallSafety.psm1','Tools/Modules/Build/MSBuildInvocation.psm1','Build/vcpkg-ports/**')) {
             $keys[0].Contains("'$input'") | Should Be $true
         }
+        $terminalKeys = @($workflow | Where-Object { $_ -match '^\s*key:.*-terminal-runtime-' })
+        $terminalKeys.Count | Should Be 1
+        $terminalKeys[0].Contains("'Tools/Modules/Build/MSBuildInvocation.psm1'") | Should Be $true
     }
 }
 

@@ -1,0 +1,509 @@
+{
+  "inputs": [
+    {
+      "sha256": "a0dfbac695d76433c98f63a6830aef18618b8f2291afe3bd559af812f58e0149",
+      "path": "Build/NativeBuildPolicy.targets"
+    },
+    {
+      "sha256": "0236e49767fcd1dc091802b24151cefeab4fefc8e5e0682cb80214b58b05df06",
+      "path": "Build/PinnedDxUiPolicy.targets"
+    },
+    {
+      "sha256": "d6d28f2f0926ea65ee25708f2f4194ad411bfb8d47f8b261ecf3021cbe287957",
+      "path": "Build/RedSalamander.DxUi.props"
+    },
+    {
+      "sha256": "1aa5b06b074916b428a647b776e2c7245654d76fd61024d5f649c8f222774708",
+      "path": "Build/RedSalamander.DxUi.targets"
+    },
+    {
+      "sha256": "0996c16b165914636c2c54e36d04a28e709fec7a570723bb8b04fbe33b88604c",
+      "path": "Common/Common/Common.vcxproj"
+    },
+    {
+      "sha256": "3d2dfbbd093acd5a595047ec8d4ed64fe1048b582db67a8bf2507b690a36234f",
+      "path": "Directory.Build.props"
+    },
+    {
+      "sha256": "b0a0e2e59ff1beb0663778b6258775d27bfdc9e7ce23e0257783b67eb82c8ebc",
+      "path": "Directory.Build.targets"
+    },
+    {
+      "sha256": "8aa34cbffa57232ad5a087482aef6cf984a7749532fc949602e5f432318657ff",
+      "path": "Plugins/Directory.Build.props"
+    },
+    {
+      "sha256": "340022edce26f7cfe7c244ea9fd7048a46ea28bcfcee663125d0121d515dd4ff",
+      "path": "Plugins/FileSystem/FileSystem.vcxproj"
+    },
+    {
+      "sha256": "b0f68db5f5cc951a24a795a0f3e12154ac205214464d6cf0cbf85bc5aacea651",
+      "path": "Plugins/FileSystem/Lang/cs-CZ/FileSystem-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "37381d8b042a1edc0112af506269d861f7ea30f00ed95bc7d90c762a66abb00c",
+      "path": "Plugins/FileSystem/Lang/fr-FR/FileSystem-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "e96dac22a5cc260dd17d45ffb80d7e4f8f5f8142c6ef424e6f3df5ad95413cd9",
+      "path": "Plugins/FileSystem/Lang/ja-JP/FileSystem-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "123fd116c4b3a4f9f00b7dee59cb7d28a36962aa63bd7f949ecd9d39c68c415d",
+      "path": "Plugins/FileSystem/Lang/sk-SK/FileSystem-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "7eed060cd3389924099be39a0244f14f2a0dc4887604e4a8c4da8ba988b6c1aa",
+      "path": "Plugins/FileSystem7z/FileSystem7z.vcxproj"
+    },
+    {
+      "sha256": "dfd19937afa5ebc4f2fe22d062c8ba34e2a343e7b709aa9cd6524da859cee516",
+      "path": "Plugins/FileSystem7z/Lang/cs-CZ/FileSystem7z-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "1fc37f5efffb6ad9397b266501140d261203d4c45761c6b104f72cd30ca55cc4",
+      "path": "Plugins/FileSystem7z/Lang/fr-FR/FileSystem7z-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "0bad58b8d9a14596595983851d678a6e1d582694cf0c9d0ba11dfce13b161be9",
+      "path": "Plugins/FileSystem7z/Lang/ja-JP/FileSystem7z-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "b62436d60e5b966102928d2a10f8d596946000cffcd5d2cccab44e12bfad6832",
+      "path": "Plugins/FileSystem7z/Lang/sk-SK/FileSystem7z-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "61ad279ae44dafadff4f7436efc254687d3955a72b72d1f80f901f6e56628832",
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.vcxproj"
+    },
+    {
+      "sha256": "b9f0d0516dc27a8aca950289738cdfb917af456fb0063b4ab7312fdc4e79b6f6",
+      "path": "Plugins/FileSystemCurl/Lang/cs-CZ/FileSystemCurl-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "823afb1145cf56150720e08c4d24bfed16a9eef5b4ac60c585a89dc3aaab75a6",
+      "path": "Plugins/FileSystemCurl/Lang/fr-FR/FileSystemCurl-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "285edc85c7e8949f5efbb81911e6d21470f173aeb13f57e5ad48dcbdfa4d1daf",
+      "path": "Plugins/FileSystemCurl/Lang/ja-JP/FileSystemCurl-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "b2b5c904a223a05356d6c0c61c98be608b858a02b9d5cae1905d5487dc13fce1",
+      "path": "Plugins/FileSystemCurl/Lang/sk-SK/FileSystemCurl-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "441e9a0d18d1a3dfae9b75ef50bdb060f419733829869f42c8c89cecd9400547",
+      "path": "Plugins/FileSystemDummy/FileSystemDummy.vcxproj"
+    },
+    {
+      "sha256": "b368e9837a01523dcfd6560c67bc056a84ee5dcc653b84a7cb0ad3896ad4e73e",
+      "path": "Plugins/FileSystemDummy/Lang/cs-CZ/FileSystemDummy-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "41ea749fd82e18e92b4f99627ac98ddd348931bc9dcc11a7df1669f74ef1e10d",
+      "path": "Plugins/FileSystemDummy/Lang/fr-FR/FileSystemDummy-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "26e534a1260bb35971b38595f8a8712c5e2a83e034d4eb1739b043dd6b6caad0",
+      "path": "Plugins/FileSystemDummy/Lang/ja-JP/FileSystemDummy-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "4879452aaefafb9944346a3590cb5378c9a863a18437a1d03503df7d3c1c2a82",
+      "path": "Plugins/FileSystemDummy/Lang/sk-SK/FileSystemDummy-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "63301cd3f46dfb327d39bcb1939f60e010aa89a7fa87998ec985e3503e7619de",
+      "path": "Plugins/FileSystemGoogleDrive/FileSystemGoogleDrive.vcxproj"
+    },
+    {
+      "sha256": "5400a8a608bc89eec96880cd288475ab617c2741364e7e86b03748407fb65d9e",
+      "path": "Plugins/FileSystemGoogleDrive/Lang/cs-CZ/FileSystemGoogleDrive-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "cd4acfae0a68243aacb6a4002f0688a9f927fdd12440c2eeba209237e5077ef5",
+      "path": "Plugins/FileSystemGoogleDrive/Lang/fr-FR/FileSystemGoogleDrive-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "ed642093f1679981271e5ee22527321910bee419c7b6562eb808476bf0bb2c1f",
+      "path": "Plugins/FileSystemGoogleDrive/Lang/ja-JP/FileSystemGoogleDrive-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "c4ed4411a16e8b7bbaea984a251d61e6d9b87439c19a74682599040e38498a7d",
+      "path": "Plugins/FileSystemGoogleDrive/Lang/sk-SK/FileSystemGoogleDrive-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "ba1c9d60c5bdda736988e6bb1378f29db3bfa07ac3dd6623ccfc854ae3d49c7d",
+      "path": "Plugins/FileSystemMicrosoftDrive/FileSystemMicrosoftDrive.vcxproj"
+    },
+    {
+      "sha256": "983592c87f647b7859d65fdb472e2c152cfae95c802c6677c131b144724d4189",
+      "path": "Plugins/FileSystemMicrosoftDrive/Lang/cs-CZ/FileSystemMicrosoftDrive-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "cab221bac32b1743b32f6f37349fdb793db6dc1080fa056fe3e37c9589fd41cc",
+      "path": "Plugins/FileSystemMicrosoftDrive/Lang/fr-FR/FileSystemMicrosoftDrive-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "5e2db51e09a56f4f3058075a5d97e2a5e3139d16721aaa618f660e90093b6d27",
+      "path": "Plugins/FileSystemMicrosoftDrive/Lang/ja-JP/FileSystemMicrosoftDrive-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "0223336d5172351ffbcd06021030322db2a522971102956adb61dfcc06c919d4",
+      "path": "Plugins/FileSystemMicrosoftDrive/Lang/sk-SK/FileSystemMicrosoftDrive-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "5b16ae7a2c6cdc52066459484e9f36ec8a28ab1a36de94510bad1cfa78acbbbb",
+      "path": "Plugins/FileSystemMtp/FileSystemMtp.vcxproj"
+    },
+    {
+      "sha256": "a7c58b8ad929a8975751db71164a2056729dbd70a5aa370d2d8d99a4fb526ea7",
+      "path": "Plugins/FileSystemMtp/Lang/cs-CZ/FileSystemMtp-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "81fa130b93e2aec074d47d90d9d401bf47e6c1ee22b0c718970742b784db8d5f",
+      "path": "Plugins/FileSystemMtp/Lang/fr-FR/FileSystemMtp-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "77e16be25832496b912a3f7681ff50f8da17d77450f72fd11e2ad8b86e469e84",
+      "path": "Plugins/FileSystemMtp/Lang/ja-JP/FileSystemMtp-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "447973cfbe7cda9339cd34efc8dd6db3fbdf6cc1b65aafec936a7b5648e52a2d",
+      "path": "Plugins/FileSystemMtp/Lang/sk-SK/FileSystemMtp-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "fee7bb51efcb561c010b048e33e6e0a6c796cf2d9893705b80220930c3485956",
+      "path": "Plugins/FileSystemS3/FileSystemS3.vcxproj"
+    },
+    {
+      "sha256": "98da9af24ba7685b2ffdb4da7b1f05ae7319b03a597e7694df499c0c314f7e4e",
+      "path": "Plugins/FileSystemS3/Lang/cs-CZ/FileSystemS3-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "4fa1f328b58159785f1dc584d04436b1d05e36a8e742d89a212d2fa3af56534a",
+      "path": "Plugins/FileSystemS3/Lang/fr-FR/FileSystemS3-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "2f3c69088e6479e54ed28f4229955f763dd276a8bbe228db8258fcc5c7b10f4d",
+      "path": "Plugins/FileSystemS3/Lang/ja-JP/FileSystemS3-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "d0b9e0853e109514f03ad74d9ba54b357a4c0b2a1760aabdfa785d718260cbeb",
+      "path": "Plugins/FileSystemS3/Lang/sk-SK/FileSystemS3-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "4dddf1727fb15229144c11b56edc215f0d312c8af8c411e5af2ed4aacc9bdb29",
+      "path": "Plugins/Terminal/Lang/cs-CZ/Terminal-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "4c6cbd2cbec6cedf495017fe7ca8772645679be3f752e8823dd4c08257457d95",
+      "path": "Plugins/Terminal/Lang/fr-FR/Terminal-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "228561fa07605a80de51a8c3f54cb559610b562ebbe5e7d698319d7e3168b3f2",
+      "path": "Plugins/Terminal/Lang/ja-JP/Terminal-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "12cf249b82e78f1860737f253cb3a0007960855b09ef95bd9d64a068db78037d",
+      "path": "Plugins/Terminal/Lang/sk-SK/Terminal-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "c35873110fa02fe9587b867942271edb84aec3ac2d56d4e2616b559f06cd627b",
+      "path": "Plugins/Terminal/Terminal.vcxproj"
+    },
+    {
+      "sha256": "09dc16f4fd18e16bd657e73433d113371fc30146a16764ce1e1fdc08e434aaf9",
+      "path": "Plugins/ViewerImgRaw/Lang/cs-CZ/ViewerImgRaw-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "e29b0b849e1a106eef1755e089c944cf5a4daaf6d780ed9eb5489e16c0310833",
+      "path": "Plugins/ViewerImgRaw/Lang/fr-FR/ViewerImgRaw-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "d2ac2c7c9d041936aad8850805bba4627405461061a87b0cb11e1c1fc17a3037",
+      "path": "Plugins/ViewerImgRaw/Lang/ja-JP/ViewerImgRaw-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "392bd5f345f18faaee410991c7946c1a44396694845a2fab978019b396098a4b",
+      "path": "Plugins/ViewerImgRaw/Lang/sk-SK/ViewerImgRaw-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "538223217004499508aca97fd5f906da145549f043f45969d75818c8f142feb9",
+      "path": "Plugins/ViewerImgRaw/ViewerImgRaw.vcxproj"
+    },
+    {
+      "sha256": "eb1d2b5a3f99e9af987848ae4a24731f026f6c96346263c60712907df821a948",
+      "path": "Plugins/ViewerPE/Lang/cs-CZ/ViewerPE-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "d40b116d27069e1b587763d1a5c47e9a1d52de357ac710963df9b8c1098f2238",
+      "path": "Plugins/ViewerPE/Lang/fr-FR/ViewerPE-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "d62b0a25a3005251b58f7144135969dd96dcacbefce7d51b186f5d8efe2668ab",
+      "path": "Plugins/ViewerPE/Lang/ja-JP/ViewerPE-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "86f94e7331fd094546c70dde4b0571076fdb878fcef1c284dcb04e47ea809a3f",
+      "path": "Plugins/ViewerPE/Lang/sk-SK/ViewerPE-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "e64584bd6dc0fefa3ef1ef4b2175735f3605ca633c6cd0723557ff95dea7162c",
+      "path": "Plugins/ViewerPE/ViewerPE.vcxproj"
+    },
+    {
+      "sha256": "3dc01c31697bcdaed2f70f905c4a034ecc77912152799ea2c186382d74ab03a3",
+      "path": "Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "5f84dcaed9b09cd070ad345d562d9a6738e010b3de41282e594543e81d87735e",
+      "path": "Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "08091e6ce58f36378683fb2682858e48ad28b5f03b882f19bec331c55627aa46",
+      "path": "Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "6f3e4256703810a04c900bec28d5c8cdb4c323d4991c82f855c2d24c5faf338f",
+      "path": "Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "f7f4c7654e36f2acbaa12ae37590005b4cbdc2ad342005eb6dfbf71b668b51a1",
+      "path": "Plugins/ViewerSpace/ViewerSpace.vcxproj"
+    },
+    {
+      "sha256": "a4998ac9f39839c829672a579cefdc619a58b7b12fd3461c570ca97a1d6a9e19",
+      "path": "Plugins/ViewerSqlite/Lang/cs-CZ/ViewerSqlite-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "a8f4653fcfc0ab8af1605951ffff8f4ebfa91b94b53182fad7046bfef6db13ba",
+      "path": "Plugins/ViewerSqlite/Lang/fr-FR/ViewerSqlite-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "20bf2f8565ad40040a28292e6c7cd48cda51672025721eadae0272d26c3e2771",
+      "path": "Plugins/ViewerSqlite/Lang/ja-JP/ViewerSqlite-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "520e0c60655f5eb0ee303072b0d4012f6ab0e5c477daba15e79ca6f171e8b48b",
+      "path": "Plugins/ViewerSqlite/Lang/sk-SK/ViewerSqlite-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "ca3d310192d35e6934edcd2fa0312894aac87ed437984da24caca17e6f707525",
+      "path": "Plugins/ViewerSqlite/ViewerSqlite.vcxproj"
+    },
+    {
+      "sha256": "8a1adf63da222b22745f8ffe2f3070218c2c32246424def308d59bba7c07fc76",
+      "path": "Plugins/ViewerText/Lang/cs-CZ/ViewerText-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "2da718a2e5f88bf25c0fcc8fee53a3d13d5dac7f0ed324ff380dc2dad69f11db",
+      "path": "Plugins/ViewerText/Lang/fr-FR/ViewerText-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "1a655cc0911d96820980df202f142f4ba04befe0bfba1ff23ea396c9f43c68b9",
+      "path": "Plugins/ViewerText/Lang/ja-JP/ViewerText-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "fd41a2327dedf6a9577470c1a634797065468d3c0da1158298b6583f8043bac5",
+      "path": "Plugins/ViewerText/Lang/sk-SK/ViewerText-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "57b497bc5dd25ed1a39d585b7afc6938231c62e19533404d59ddac4942eb83fa",
+      "path": "Plugins/ViewerText/ViewerText.vcxproj"
+    },
+    {
+      "sha256": "e8641f942e0332e31258a87eba3d926d7d57f1915556f664f453f728f1cbf414",
+      "path": "Plugins/ViewerVLC/Lang/cs-CZ/ViewerVLC-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "496f45f7bf9fd45d845013a1d400f70c7d784c61e0f313bf3a33602c06e55324",
+      "path": "Plugins/ViewerVLC/Lang/fr-FR/ViewerVLC-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "e15d6382cf2a062846a3d6b823218f89668eb3a4dd0311b4590cba1501a010ac",
+      "path": "Plugins/ViewerVLC/Lang/ja-JP/ViewerVLC-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "365f1cdb6b4242fe241d9eedd4bbe8b2d82cbec6a42ae8ce9d0402806e1e1cea",
+      "path": "Plugins/ViewerVLC/Lang/sk-SK/ViewerVLC-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "0d418b254e7808e295f4b9fbea27ff530dfa81f675a0ade2c6b620c48e890038",
+      "path": "Plugins/ViewerVLC/ViewerVLC.vcxproj"
+    },
+    {
+      "sha256": "8e958d35f1a518452e8eefbcee109d1fbb911735e8b7517846afc49fae8c7654",
+      "path": "Plugins/ViewerWeb/Lang/cs-CZ/ViewerWeb-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "20f57b7022dfa64bd7030f4026ae94c1982e932e483604034c51aeca60e659f1",
+      "path": "Plugins/ViewerWeb/Lang/fr-FR/ViewerWeb-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "99743242f9253fee31e0b26feecf0feab63733712180856d30a8066c32d947f6",
+      "path": "Plugins/ViewerWeb/Lang/ja-JP/ViewerWeb-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "641f8e78d719d7102870baab358fdb0ca4b493634a3002876504ee6a579aacf3",
+      "path": "Plugins/ViewerWeb/Lang/sk-SK/ViewerWeb-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "513a322ea4974400f184d670d77718b678f60fd47e9712e8ce951bdd3fc5b263",
+      "path": "Plugins/ViewerWeb/ViewerWeb.vcxproj"
+    },
+    {
+      "sha256": "a168f0b2437d3abf4ae236d11e8af53bf79c6d32b621f6a20199c77d678cbaa7",
+      "path": "PoC/Directory.Build.props"
+    },
+    {
+      "sha256": "1a0d211207decfd79be82c01d1faaf8d11d161eb4f77aab92d833bf9b545b715",
+      "path": "PoC/FlipSequentialDiscard/FlipSequentialDiscard.vcxproj"
+    },
+    {
+      "sha256": "95a2a04d7e1a374824ede2152dbcc5c2b5449913a2ece8957fee096738381c67",
+      "path": "PoC/ls1/ls1.vcxproj"
+    },
+    {
+      "sha256": "8ea23e0f3a9ef9c227e64a626d3536a8187b708a7e6f5dc19b1567fb22837182",
+      "path": "PoC/ls2/ls2.vcxproj"
+    },
+    {
+      "sha256": "6e37e95ecee31bc0d58c60a473146cdbd35f7b448e32534ac5866917d34f3afd",
+      "path": "PoC/ls3/ls3.vcxproj"
+    },
+    {
+      "sha256": "791eb76146cdef1e2cb80c40a1257eaaffcc41e86bdcb1aff6072344fa5ed4c8",
+      "path": "PoC/ls4/ls4.vcxproj"
+    },
+    {
+      "sha256": "a2608c767bac7bcdded36758ea1e931400a3eb1f8213bff877a3b45d0c61e37f",
+      "path": "PoC/Win32HelloCred/Win32HelloCred.vcxproj"
+    },
+    {
+      "sha256": "3b77b2f103fbc63f4827d49bb2ae7acf190b34fbc10cb656576f6dc88ff0993d",
+      "path": "RedConfigure/Lang/cs-CZ/RedConfigure-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "66f3a368a1cf0815652c7c772917d044ab92f321ed5aa9b40476c03075c3dc78",
+      "path": "RedConfigure/Lang/ja-JP/RedConfigure-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "15329e2c786b8a6912fe9ce14ed26e56b4709b98587158507435d54295818527",
+      "path": "RedConfigure/Lang/sk-SK/RedConfigure-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "420dfe60c26ba36974e201b4254d24cfa0d710b9c7c5d6367d17ba5a25a1ea9f",
+      "path": "RedConfigure/RedConfigure.vcxproj"
+    },
+    {
+      "sha256": "d03f3f852e283132acdd8866a23afe93089982fecfbfb3fe4ec0235dc0be1228",
+      "path": "RedLauncher/RedLauncher.vcxproj"
+    },
+    {
+      "sha256": "1ee9fa73370ec9c35a4af62ae298fb2d350ff90810e01583345cda461573f03c",
+      "path": "RedSalamander.sln"
+    },
+    {
+      "sha256": "3e4c31bc6ed358970f24a6da94e8143c91082d852adc4e67fe3ae935cb0c13e8",
+      "path": "RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "a4696a532f278425e15cef7d882fa31ac276b3e484e8070abb8a0e5b717bca40",
+      "path": "RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "01e5147ed321a2495d08d6d5f3cba98cf216ab554df47fec7b80c2426ec95a05",
+      "path": "RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.vcxproj"
+    },
+    {
+      "sha256": "22af1e5fe6d1d2d1def542960b23d327152ce0995d3bb94c171ba4620f1ea043",
+      "path": "RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "551a2fc28070168d700299923a723f05c004072faaa3f3fb7e8254d16348868d",
+      "path": "RedSalamander/RedSalamander.vcxproj"
+    },
+    {
+      "sha256": "ee2f79fde3a338871da86ffd2ff6b76b036545b053901e2b8c0cd2eee2152db1",
+      "path": "RedSalamanderSearchService/RedSalamanderSearchService.vcxproj"
+    },
+    {
+      "sha256": "a08823a2a2034c653ee877dd4a8efe696a5b29846c1e5a7bd1717219a003ac44",
+      "path": "RuntimeDependencies.props"
+    },
+    {
+      "sha256": "19b2c410e8bd6eef43494385a0929725a2defd2fc33f59f9880384318af69470",
+      "path": "Tests/CrashHandlingTests/CrashHandlingTests.vcxproj"
+    },
+    {
+      "sha256": "473a8e5df453c08dd507cc92078089ea55d832a7ca1c549c1dff674ca7ba1a66",
+      "path": "Tests/Directory.Build.props"
+    },
+    {
+      "sha256": "c5d2fc752d72f56a0259fdcf7571fad3c192e175978c6853a267bd82dcb4e909",
+      "path": "Tests/Directory.Build.targets"
+    },
+    {
+      "sha256": "ff1952a9201fe09175ada2256e8d2d92488857c85014123dc7bed452129cd687",
+      "path": "Tests/FileSystemCurlTests/FileSystemCurlTests.vcxproj"
+    },
+    {
+      "sha256": "01c868da91a035e7676ddc6a0596b2bae1dd4f5fcd0160dac71abd5dbd59cec4",
+      "path": "Tests/LocalizationTests/Lang/cs-CZ/LocalizationTests-cs-CZ.vcxproj"
+    },
+    {
+      "sha256": "53e0b9dd1f4c66ec87cdde27869db38939c816d99c19465968687f996eb77eed",
+      "path": "Tests/LocalizationTests/Lang/fr-FR/LocalizationTests-fr-FR.vcxproj"
+    },
+    {
+      "sha256": "c9fd86f87134f5ea994127250aba93a6602da18ed03b5132b291f25ca420003a",
+      "path": "Tests/LocalizationTests/Lang/sk-SK/LocalizationTests-sk-SK.vcxproj"
+    },
+    {
+      "sha256": "d24849753f7fc8edd23f9fe3691994725875352bb0bd6d31e11fe08a7a72f9c9",
+      "path": "Tests/LocalizationTests/LocalizationTests.vcxproj"
+    },
+    {
+      "sha256": "472771fd0dd93aec193ca173fa10fc114a6ecf30035da44b6a7cc3c2460d9ab7",
+      "path": "Tests/PerformanceTests2/PerformanceTests2.vcxproj"
+    },
+    {
+      "sha256": "37801ce98c25fce07c24366b0212e950e717e78df00efa07452f242aa30e74bb",
+      "path": "Tests/PluginContractTests/PluginContractTests.vcxproj"
+    },
+    {
+      "sha256": "75193b14f995e646ec595e77e9ab015eeff6af301e86ee1dec6bc3faf5c578d0",
+      "path": "Tests/ProductUiTests/ProductUiTests.vcxproj"
+    },
+    {
+      "sha256": "93429ca61c92cce4b621281d4aa72a2a14088a205c3e7f5baa457edcdfe1a972",
+      "path": "Tests/RedConfigureTests/RedConfigureTests.vcxproj"
+    },
+    {
+      "sha256": "4bc128cd5f7edb79af685413cf12fa0a7089d52a4c932dcefad85513efd80ef7",
+      "path": "Tests/SettingsSchemaTests/SettingsSchemaTests.vcxproj"
+    },
+    {
+      "sha256": "d4fd6c1d999508b5d4974849795a5403c9c4282ed583ba40a461ce51d7dde4a1",
+      "path": "Tests/ViewerPETests/ViewerPETests.vcxproj"
+    },
+    {
+      "sha256": "4dfac9409bd03294337a14098c66b4f231eae4ea844beecca2bfada4e9f229b4",
+      "path": "Tests/ViewerSqliteTests/ViewerSqliteTests.vcxproj"
+    },
+    {
+      "sha256": "b5487743af1331848306036d9d779ff2bb8d246764cb857da5ad4c3bb32cb832",
+      "path": "Tools/TerminalEngine/TerminalEngineGate0ContractTestAdapter.vcxproj"
+    },
+    {
+      "sha256": "67dcce54f8528e346c08e74823f6c689ff7353e8ff604dde5bbc3e6cc1b6086c",
+      "path": "Tools/TerminalEngine/TerminalEngineGate0Harness.vcxproj"
+    },
+    {
+      "sha256": "c90fddf3f4c965909de842928f788c9621494dec031d2dfb16e3974b05c372f3",
+      "path": "Tools/TerminalEngine/TerminalEngineGate0Probe.vcxproj"
+    }
+  ],
+  "capture": "after successful pair; conductor held source frozen"
+}

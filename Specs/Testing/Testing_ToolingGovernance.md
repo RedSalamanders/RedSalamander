@@ -429,8 +429,10 @@ The minimum tooling-governance checks are:
 .\Tools\Get-ToolInventory.ps1 -Validate
 Invoke-Pester .\Tools\Tests\ToolInventory.Tests.ps1 -PassThru
 Invoke-Pester .\Tools\Tests\ToolingGovernance.Tests.ps1 -PassThru
-.\Tools\Get-SpecInventory.ps1 -FailOnFindings
+.\Tools\Get-SpecInventory.ps1 -FailOnFindings -NoReports
 ```
+
+Specification validation uses `Get-SpecInventory.ps1 -FailOnFindings -NoReports` so the canonical spec and test-inventory checks run without generating reports. Default catalog generation retains its four repository-local report paths for compatible non-validation consumers; it does not authorize validation evidence in `.build` or arbitrary external output. `-NoReports` rejects an explicit `-OutputRoot` and preserves `-PassThru` and blocking-finding failures.
 
 Run focused tests for each touched module or entrypoint. Use the owning scoped
 testing contract to select affected iteration and PrePush/local-versus-PR obligations.

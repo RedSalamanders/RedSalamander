@@ -37,7 +37,7 @@ Use focused behavior/negative tests for the actual command, inventory/help/calle
 
 Use Test-Changes.ps1 -Explain and affected iteration, then the owning PrePush/qualification contract for final obligations. Full is explicit where required; pending CI, foreground/platform acceptance or a focused pass is never a complete repository result.
 
-Useful checks include Get-ToolInventory.ps1 -Validate, relevant Tools/Tests suites, and Get-SpecInventory.ps1 -FailOnFindings. Run fixture-producing checks inside the governed sandbox, distinguish structural checks from task-level evaluation, and record actual outcomes. Keep the local fragment/fold/check workflow current.
+Useful checks include Get-ToolInventory.ps1 -Validate, relevant Tools/Tests suites, and Get-SpecInventory.ps1 -FailOnFindings -NoReports. Run fixture-producing checks inside the governed sandbox, distinguish structural checks from task-level evaluation, and record actual outcomes. Keep the local fragment/fold/check workflow current.
 
 ## Conditional references
 

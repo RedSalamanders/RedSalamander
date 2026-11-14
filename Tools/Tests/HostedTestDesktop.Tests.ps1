@@ -343,6 +343,10 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $p=@{Phase='ReleaseTest';Platform='ARM64';QualificationScope='Normal';OsArchitecture='Arm64';ProcessArchitecture='Arm64'}
         Get-RSHostedStockPreparationRequest @p | Should Be '1'
         $p.Phase='Qualification'; $p.QualificationScope='CommandsHandoff'; Get-RSHostedStockPreparationRequest @p | Should Be '1'
+        $p.QualificationScope='CommandsUiAttribution'; Get-RSHostedStockPreparationRequest @p | Should Be '1'
+        $p.Platform='x64'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.Platform='ARM64';$p.Phase='Static';Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
+        $p.Phase='Qualification'
         $p.QualificationScope='R0ePaired'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
         $p.QualificationScope='DesktopProbe'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
         $p.QualificationScope='Normal'; $p.Platform='x64'; Get-RSHostedStockPreparationRequest @p | Should BeNullOrEmpty
@@ -520,6 +524,80 @@ Describe 'Hosted foreground chord role policy' {
 }
 
 Describe 'Hosted boundary return policy' {
+    BeforeEach {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        if (-not ('RedSalamander.Testing.HostedIdentityDiagnosticControl' -as [type])) {
+            # Managed-only observers: no windows, desktop queries, activation or input.
+            Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+namespace RedSalamander.Testing {
+    public static class HostedIdentityDiagnosticControl {
+        public static readonly List<long> Seen = new List<long>();
+        public static Func<IntPtr, string> Recorder { get { return Observe; } }
+        public static Func<IntPtr, string> Unavailable { get { return Fail; } }
+        public static Func<IntPtr, string> Fatal { get { return FailFatally; } }
+        private static string Observe(IntPtr window) {
+            Seen.Add(window.ToInt64());
+            return "observed-hwnd=0x" + window.ToInt64().ToString("X");
+        }
+        private static string Fail(IntPtr window) {
+            Seen.Add(window.ToInt64());
+            throw new InvalidOperationException("seeded private diagnostic text");
+        }
+        private static string FailFatally(IntPtr window) { throw new OutOfMemoryException("seeded fatal control"); }
+    }
+}
+'@
+        }
+        [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Seen.Clear()
+    }
+    It 'formats window identities without native calls or title/content fields' {
+        $native = 'RedSalamander.Testing.HostedDesktopNative' -as [type]
+        $format = $native.GetMethod('FormatWindowIdentity', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $captured = [DateTimeOffset]::Parse('2026-11-14T00:00:00+00:00', [Globalization.CultureInfo]::InvariantCulture)
+        $identity = $format.Invoke($null, [object[]]@([IntPtr]0x123, [uint32]12, [uint32]34, "Example`r`nClass", $true, $captured))
+        $identity | Should Match 'hwnd=0x123; thread=12; pid=34; classKnown=True; class="Example\\r\\nClass"; capturedUtc=2026-11-14T00:00:00.0000000\+00:00'
+        $identity | Should Not Match 'title|clipboard|\r|\n'
+    }
+    It 'retains distinct immediate identities and the saved original in the actual refusal builder' {
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $refuse = $boundary.GetMethod('ForeignForegroundRefusal', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $failure = $refuse.Invoke($null, [object[]]@([IntPtr]0x22, [IntPtr]0x11, [IntPtr]0x33, 'saved-original-identity', [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Recorder))
+        ($failure -is [InvalidOperationException]) | Should Be $true
+        $failure.Message.StartsWith('A foreign foreground change must not be replaced by the hosted fixture.') | Should Be $true
+        $failure.Message | Should Match 'capturedUtc=\d{4}-\d{2}-\d{2}T'
+        $failure.Message | Should Match 'current=\{observed-hwnd=0x22\}; originalAtCapture=\{saved-original-identity\}; originalNow=\{observed-hwnd=0x11\}; boundary=\{observed-hwnd=0x33\}'
+        ([RedSalamander.Testing.HostedIdentityDiagnosticControl]::Seen -join ',') | Should Be '34,17,51'
+    }
+    It 'keeps the safety refusal when diagnostic capture fails and omits private exception messages' {
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $flags = [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $capture = $boundary.GetMethod('CaptureIdentityForDiagnostics', $flags)
+        $saved = $capture.Invoke($null, [object[]]@([IntPtr]0x11, [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Unavailable))
+        $failure = $boundary.GetMethod('ForeignForegroundRefusal', $flags).Invoke($null, [object[]]@([IntPtr]0x22, [IntPtr]0x11, [IntPtr]0x33, $saved, [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Unavailable))
+        ($failure -is [InvalidOperationException]) | Should Be $true
+        $failure.Message.StartsWith('A foreign foreground change must not be replaced by the hosted fixture.') | Should Be $true
+        $failure.Message | Should Match 'current=\{hwnd=0x22; capturedUtc=.*unavailable=InvalidOperationException\}'
+        $failure.Message | Should Not Match 'seeded private diagnostic text'
+        ([RedSalamander.Testing.HostedIdentityDiagnosticControl]::Seen -join ',') | Should Be '17,34,17,51'
+    }
+    It 'does not swallow a fatal CLR diagnostic failure' {
+        $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $refuse = $boundary.GetMethod('ForeignForegroundRefusal', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        $caught = $null
+        try { [void]$refuse.Invoke($null, [object[]]@([IntPtr]0x22, [IntPtr]0x11, [IntPtr]0x33, 'saved', [RedSalamander.Testing.HostedIdentityDiagnosticControl]::Fatal)) }
+        catch [System.Management.Automation.MethodInvocationException] { $caught = $_.Exception.GetBaseException() }
+        ($caught -is [OutOfMemoryException]) | Should Be $true
+    }
+    It 'uses the identity builder only on the unchanged foreign foreground refusal branch' {
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Raw
+        $source | Should Match 'if \(current != original\)\s+throw ForeignForegroundRefusal\(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity\);'
+        $start = $source.IndexOf('internal static string DescribeWindowIdentity(')
+        $end = $source.IndexOf('// ABI/layer exception:', $start)
+        $observation = $source.Substring($start, $end - $start)
+        $observation | Should Not Match 'SetForegroundWindow|SetFocus|SendInput|GetWindowText|Sleep|Kill|CloseWindow'
+    }
     It 'waits only for null or owned foreground before the existing deadline' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
         $boundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
@@ -675,5 +753,453 @@ Describe 'Hosted WSL startup audit' {
         $result.arguments_match | Should Be $false
         $result.close_requested | Should Be $false
         (Get-Content (Join-Path $dir 'completion.json') -Raw|ConvertFrom-Json).wsl_startup_close_requested | Should Be $false
+    }
+}
+
+Describe 'HostedTestDesktop AggregateException and filtered case run verification' {
+    It 'preserves both action and restoration exceptions as AggregateException in Invoke-RSWithHostedTestDesktop' {
+        $priorGitHubActions = [Environment]::GetEnvironmentVariable('GITHUB_ACTIONS', 'Process')
+        $env:GITHUB_ACTIONS = 'true'
+        $global:rsHostedAggQueue = [Collections.Generic.Queue[object]]::new()
+        try {
+            $smallMode = [pscustomobject]@{ Width = 1024; Height = 768; BitsPerPixel = 32; Frequency = 60 }
+            $largeMode = [pscustomobject]@{ Width = 1920; Height = 1080; BitsPerPixel = 32; Frequency = 60 }
+            $small = [pscustomobject]@{ Mode = $smallMode; Width = 1024; Height = 768; WorkWidth = 1024; WorkHeight = 728; CoordinateScale = 1.0 }
+            $large = [pscustomobject]@{ Mode = $largeMode; Width = 1920; Height = 1080; WorkWidth = 1920; WorkHeight = 1040; CoordinateScale = 1.0 }
+            $global:rsHostedAggQueue.Enqueue($small)
+            $global:rsHostedAggQueue.Enqueue($large)
+            $global:rsHostedAggMode = $largeMode
+            Mock Get-RSHostedDesktopState { $global:rsHostedAggQueue.Dequeue() } -ModuleName HostedTestDesktop
+            Mock Get-RSHostedDisplayModes { $global:rsHostedAggMode } -ModuleName HostedTestDesktop
+            Mock Set-RSHostedDisplayMode {
+                if ($Mode.Width -eq 1024) { throw [InvalidOperationException]::new('seeded display restore failure') }
+            } -ModuleName HostedTestDesktop
+
+            $caught = $null
+            try {
+                Invoke-RSWithHostedTestDesktop -Action { throw [InvalidOperationException]::new('seeded action failure') }
+            } catch {
+                $caught = $_.Exception
+            }
+            ($null -ne $caught) | Should Be $true
+            ($caught -is [System.AggregateException]) | Should Be $true
+            $caught.InnerExceptions.Count | Should Be 2
+            $caught.InnerExceptions[0].Message | Should Match 'seeded action failure'
+            $caught.InnerExceptions[1].Message | Should Match 'seeded display restore failure'
+        } finally {
+            [Environment]::SetEnvironmentVariable('GITHUB_ACTIONS', $priorGitHubActions, 'Process')
+            Remove-Variable rsHostedAggQueue, rsHostedAggMode -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'validates writer-faithful v1 Commands proof and rejects stale ambiguous or mismatched joins' {
+        foreach ($fixtureTimeout in @(1.0,2.0)) {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSuitePlan.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.Common.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+        Mock Read-RSBuildReceipt { [pscustomobject]@{
+            receipt_id=('b'*64);repo_identity=('c'*64);source_snapshot_id=('a'*64)
+            platform='ARM64';configuration='Debug';target='Build';tests_enabled=$true
+            toolchain_identity_digest=('e'*64);vcpkg_identity_digest=('e'*64);ghostty_runtime_identity=('e'*64)
+            project_graph_digest=('e'*64);runtime_dependency_digest=('e'*64);outputs=@()
+        } } -ModuleName HostedDiagnosticEvidence
+        Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64);GitHead=('d'*40)} } -ModuleName HostedDiagnosticEvidence
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        Mock Assert-RSTestSandboxContainedPath { param($TestRoot,$Path,[switch]$RequireDescendant) [IO.Path]::GetFullPath($Path) } -ModuleName HostedDiagnosticEvidence
+        $sandbox = Join-Path $TestDrive ('v1-proof-' + $fixtureTimeout)
+        $runId = '20261113T120000Z-1234-' + ('a'*32)
+        $run = Join-Path $sandbox "evidence/completed-runs/$runId"
+        $last = Join-Path $run 'artifacts/selftest/last_run'
+        $pre = Join-Path $run 'artifacts/selftest/previous_run'
+        $records = Join-Path $sandbox "evidence/run-archive-records/$runId"
+        [void][IO.Directory]::CreateDirectory($pre)
+        [void][IO.Directory]::CreateDirectory((Join-Path $last 'commands'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $last 'perf'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $run 'artifacts/native-process-exits'))
+        [void][IO.Directory]::CreateDirectory($records)
+        $exe = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
+        $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Commands -ValidationMode Fresh -CoverageScope filtered `
+            -Entries @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform ARM64 -Configuration Debug -RedSalamanderExePath $exe -CaseFilter terminal_ -TimeoutMultiplier $fixtureTimeout)
+        $fixtureReceipt = & (Get-Module HostedDiagnosticEvidence) { Read-RSBuildReceipt -BuildOutputDir 'synthetic' -SchemaPath 'synthetic' }
+        $row = Get-RSValidationEntryFingerprint -EntryContract $plan.entries[0] -CoveragePlanDigest $plan.coverage_plan_digest `
+            -WorkspaceSnapshot @{snapshot_id=('a'*64)} -BuildReceipt $fixtureReceipt
+        $fp = [ordered]@{schema='red-salamander.validation-entry-fingerprints.v1';canonicalization='rs-canonical-json-v1';
+            plan_digest=$plan.plan_digest;coverage_plan_digest=$plan.coverage_plan_digest;snapshot_id=('a'*64);build_receipt_id=('b'*64);artifact_epoch=0;
+            entries=@(@{id='selftest.commands';fingerprint=$row.Fingerprint;component_digest_version=$row.ComponentDigestVersion;component_digests=$row.ComponentDigests;computation_ms=0})}
+        $fp.fingerprints_digest=Get-RSCanonicalJsonDigest $fp
+        $fp.computation_ms=0
+        $decision=[ordered]@{schema='red-salamander.validation-plan-decision.v1';canonicalization='rs-canonical-json-v1';planner_mode='shadow';
+            snapshot_id=('a'*64);plan_digest=$plan.plan_digest;changed_paths=@();matched_impact_rules=@();advisory_build_action='none';
+            entries=@(@{id='selftest.commands';ordinal=0;affected=$true;matched_impact_tags=@();decision='EXECUTE';reason_codes=@('FORCED');expected_fingerprint=$row.Fingerprint;origin_run_id=$null;origin_evidence_digest=$null});
+            estimated_fresh_duration_ms=0;estimated_executed_duration_ms=0;estimated_avoided_duration_ms=0}
+        $decision.decision_digest=Get-RSCanonicalJsonDigest $decision
+        function Write-CanonicalProof($Path,$Value,$Schema) {
+            Write-RSAtomicCanonicalJsonFile -LiteralPath $Path -InputObject $Value -AllowedRoot $sandbox -SchemaPath (Join-Path $repoRoot "Specs/Testing/$Schema")
+        }
+        Write-CanonicalProof (Join-Path $pre 'entry-fingerprints.json') $fp 'ValidationEntryFingerprints.schema.json'
+        Write-CanonicalProof (Join-Path $pre 'validation-plan.json') $plan 'ValidationPlan.schema.json'
+        Write-CanonicalProof (Join-Path $pre 'validation-plan-decision.json') $decision 'ValidationPlanDecision.schema.json'
+        $snap=[ordered]@{schema='red-salamander.workspace-snapshot.v1';canonicalization='rs-canonical-json-v1';snapshot_id=('a'*64);repo_identity=('c'*64);git_head=('d'*40);base=('d'*40);files=@();
+            acquisition_before=('a'*64);acquisition_after=('a'*64);acquisition_attempts=1;git_discovery_ms=0;content_hashing_ms=0;canonicalization_ms=0;computation_ms=0;created_utc='2026-11-13T12:00:02Z'}
+        Write-CanonicalProof (Join-Path $pre 'workspace-initial.json') $snap 'WorkspaceSnapshot.schema.json'
+        $snap.created_utc='2026-11-13T12:00:54.500Z'
+        Write-CanonicalProof (Join-Path $last 'workspace-after-selftest.commands.json') $snap 'WorkspaceSnapshot.schema.json'
+        $snap.created_utc='2026-11-13T12:00:54.800Z'
+        Write-CanonicalProof (Join-Path $last 'workspace-final.json') $snap 'WorkspaceSnapshot.schema.json'
+        $native=@{run_started_utc='2026-11-13T12:00:06Z';suite='Commands';timeout_scale=$fixtureTimeout;passed=2;failed=0;skipped=0;cases=@(@{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'})}
+        $nativePath=Join-Path $last 'commands/results.json'
+        $native|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $nativePath
+        $exitPath=Join-Path $run ('artifacts/native-process-exits/'+('f'*32)+'.json')
+        @{schema='red-salamander.native-process-exit.v1';process_id=42;executable=$exe;observed_utc='2026-11-13T12:00:54Z';exit_code=0}|ConvertTo-Json|Set-Content -LiteralPath $exitPath
+        $metricPath=Join-Path $last 'perf/perf_metrics.jsonl'
+        '{"process":42,"timestamp":"2026-11-13T12:00:50Z"}'|Set-Content -LiteralPath $metricPath
+        $summary=@{schema='red-salamander.run-all-tests.v1';run_id=$runId;suite='Commands';case_filter='terminal_';platform='ARM64';configuration='Debug';executable=$exe;
+            run_started_utc='2026-11-13T12:00:05Z';run_ended_utc='2026-11-13T12:00:55Z';timeout_scale=$fixtureTimeout;exit_code=2;total=2;passed=2;failed=0;skipped=0;
+            quarantine=@{is_valid=$true;has_blocking_entries=$false;active_count=0;active_entries=@();invalid_count=0;invalid_entries=@();errors=@()};
+            test_sandbox_audit=@{is_clean=$false;issue_count=1};suites=@(@{suite='Commands';kind='SelfTest';classification='PASSED';exit_code=0;passed=2;failed=0;skipped=0;retry_attempts=@()})}
+        $summaryPath=Join-Path $last 'run-all-tests-results.json'
+        $summary|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $summaryPath
+        function Seal-Proof {
+            $inventory=@(Get-ChildItem -LiteralPath $run -File -Recurse|Where-Object FullName -ne $summaryPath|ForEach-Object {
+                @{path=[IO.Path]::GetRelativePath($run,$_.FullName);directory=$false;length=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+            })
+            $intent=@{schema='red-salamander.run-archive.v1';run_id=$runId;disposition='completed';source=(Join-Path $sandbox "runs/$runId");destination=$run;inventory=$inventory}
+            $intentPath=Join-Path $records 'intent.json';$intent|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $intentPath
+            @{schema='red-salamander.run-archive-complete.v1';source=$intent.source;destination=$run;intent_sha256=(Get-FileHash $intentPath).Hash}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $records 'complete.json')
+        }
+        $invoke={
+            param($ExpectedTimeout=$fixtureTimeout)
+            $arguments=@{ExitCode=2;Output="Run id: $runId";TestRoot=$sandbox;RepoRoot=$repoRoot;Suite='Commands';CaseFilter='terminal_';Platform='ARM64';Configuration='Debug';
+                InvocationStartedUtc=([DateTimeOffset]'2026-11-13T12:00:00Z');InvocationEndedUtc=([DateTimeOffset]'2026-11-13T12:01:00Z')}
+            if($null -ne $ExpectedTimeout){$arguments.TimeoutMultiplier=$ExpectedTimeout}
+            Assert-RSHostedFilteredCaseRun @arguments
+        }
+        Seal-Proof
+        (& $invoke).RepositoryVerdict | Should Be 'NOT_EVALUATED'
+        if($fixtureTimeout -eq 1.0){(& $invoke $null).Passed | Should Be 2}
+        else {
+            {& $invoke $null}|Should Throw 'trusted invocation'
+            {& $invoke 1.0}|Should Throw 'trusted invocation'
+            {& $invoke 3.0}|Should Throw 'trusted invocation'
+            # Untrusted matching summary/native claims cannot authorize a different archived plan.
+            $summary.timeout_scale=3.0;$native.timeout_scale=3.0
+            $summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath
+            $native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+            {& $invoke 3.0}|Should Throw 'plan, profile'
+            $summary.timeout_scale=2.0;$native.timeout_scale=1.0
+            $summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath
+            $native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+            {& $invoke}|Should Throw 'trusted invocation'
+            $native.timeout_scale=2.0;$native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+            foreach($bad in @(0.0,101.0,[double]::NaN,[double]::PositiveInfinity)){
+                {& $invoke $bad}|Should Throw 'TimeoutMultiplier'
+            }
+        }
+        # Mutations are resealed where appropriate so semantic joins, not just byte checks, must reject them.
+        $original=[IO.File]::ReadAllText($metricPath)
+        foreach($control in @(
+            @('{"process":43,"timestamp":"2026-11-13T12:00:50Z"}','PID'),
+            @('{"process":42,"timestamp":"2026-11-13T12:00:56Z"}','outside the invocation window'),
+            @('not json','JSON'), @('','empty'))) {
+            [IO.File]::WriteAllText($metricPath,$control[0]);Seal-Proof;{& $invoke}|Should Throw $control[1]
+        }
+        [IO.File]::WriteAllText($metricPath,$original)
+        $exitText=[IO.File]::ReadAllText($exitPath)
+        [IO.File]::WriteAllText($exitPath,$exitText.Replace('"exit_code": 0','"exit_code": 9'));Seal-Proof;{& $invoke}|Should Throw 'exit code'
+        [IO.File]::WriteAllText($exitPath,$exitText)
+        $fpPath=Join-Path $pre 'entry-fingerprints.json';$fpText=[IO.File]::ReadAllText($fpPath)
+        foreach($bad in @($fpText.Replace(('a'*64),('9'*64)),$fpText.Replace(('b'*64),('8'*64)))) {
+            [IO.File]::WriteAllText($fpPath,$bad);Seal-Proof;{& $invoke}|Should Throw 'source or receipt'
+        }
+        [IO.File]::WriteAllText($fpPath,$fpText)
+        Remove-Item -LiteralPath $fpPath;Seal-Proof;{& $invoke}|Should Throw 'Missing'
+        [IO.File]::WriteAllText($fpPath,$fpText)
+        Copy-Item -LiteralPath $fpPath -Destination (Join-Path $last 'entry-fingerprints.json');Seal-Proof;{& $invoke}|Should Throw 'ambiguous'
+        Remove-Item -LiteralPath (Join-Path $last 'entry-fingerprints.json')
+        $planPath=Join-Path $pre 'validation-plan.json';$planText=[IO.File]::ReadAllText($planPath)
+        [IO.File]::WriteAllText($planPath,$planText.Replace('terminal_','other_'));Seal-Proof;{& $invoke}|Should Throw 'plan, profile'
+        [IO.File]::WriteAllText($planPath,$planText)
+        $summary.configuration='Release';$summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath;{& $invoke}|Should Throw 'does not match'
+        $summary.configuration='Debug';$summary|ConvertTo-Json -Depth 12|Set-Content $summaryPath
+        $postPath=Join-Path $last 'workspace-final.json';$postText=[IO.File]::ReadAllText($postPath)
+        [IO.File]::WriteAllText($postPath,$postText.Replace(('a'*64),('9'*64)));Seal-Proof;{& $invoke}|Should Throw 'source identity changed'
+        [IO.File]::WriteAllText($postPath,$postText)
+        $native.cases[0].name='outside_terminal_suffix';$native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof;{& $invoke}|Should Throw 'unexpected'
+        $native.cases[0].name='terminal_one';$native|ConvertTo-Json -Depth 8|Set-Content $nativePath;Seal-Proof
+        Mock Test-RSBuildReceiptForArtifactUse { $false } -ModuleName HostedDiagnosticEvidence
+        {& $invoke}|Should Throw 'artifact receipt mismatch'
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        (& $invoke).Passed | Should Be 2
+        }
+    }
+
+    It 'validates archived filtered case runs in Assert-RSHostedFilteredCaseRun for exit 2 NOT_EVALUATED and rejects failures' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/HostedDiagnosticEvidence.psm1') -ErrorAction Stop
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -ErrorAction Stop
+        Mock Read-RSBuildReceipt { [pscustomobject]@{receipt_id=('b'*64)} } -ModuleName HostedDiagnosticEvidence
+        Mock Get-RSBuildSourceSnapshot { [pscustomobject]@{SnapshotId=('a'*64)} } -ModuleName HostedDiagnosticEvidence
+        Mock Test-RSBuildReceiptForArtifactUse { $true } -ModuleName HostedDiagnosticEvidence
+        $sandboxRoot = Join-Path $TestDrive ('filtered-case-' + [guid]::NewGuid().ToString('N'))
+        $null = New-Item -ItemType Directory -Path $sandboxRoot -Force
+        Mock Assert-RSTestSandboxContainedPath {
+            param($TestRoot, $Path, [switch]$RequireDescendant)
+            return [IO.Path]::GetFullPath($Path)
+        } -ModuleName HostedDiagnosticEvidence
+
+        $runId = '20261113T120000Z-1234-' + ('a' * 32)
+        $runDir = Join-Path $sandboxRoot "evidence/completed-runs/$runId"
+        $lastRunDir = Join-Path $runDir 'artifacts/selftest/last_run'
+        $recordsDir = Join-Path $sandboxRoot "evidence/run-archive-records/$runId"
+        $null = New-Item -ItemType Directory -Path $lastRunDir, $recordsDir -Force
+
+        $startedUtc = [DateTimeOffset]::Parse('2026-11-13T12:00:00Z')
+        $endedUtc = [DateTimeOffset]::Parse('2026-11-13T12:01:00Z')
+        $v2 = [ordered]@{
+            schema = 'red-salamander.run-all-tests.v2'
+            run_id = $runId
+            validation_mode = 'Fresh'
+            requested_gate = 'Commands'
+            coverage_scope = 'filtered'
+            snapshot_id = ('a'*64); build_receipt_id = ('b'*64)
+            plan_digest = ('a'*64); coverage_plan_digest = ('a'*64); decision_digest = ('a'*64)
+            duration_ms = 1; estimated_avoided_duration_ms = 0; commands_broad_seal_state = 'absent'
+            entries = @(@{
+                id='selftest.commands';execution='executed';promotion_state='promoted';evidence_digest=('a'*64)
+                promotion_digest=('a'*64);origin_run_id=$null;artifact_epoch=0;artifact_read_ids=@();artifact_write_ids=@()
+                produces_artifact_ids=@();cache_policy='ExactArtifact';reason_codes=@();coverage_digest=('a'*64)
+                outcome_digest=('a'*64);capability_digest=$null;duration_ms=1
+            })
+            repository_verdict = 'NOT_EVALUATED'
+            change_verdict = 'PASSED'
+            counts = [ordered]@{ executed = 1; reused = 0; provisional = 0; promoted = 1; invalidated = 0; incomplete = 0 }
+            case_counts = [ordered]@{ passed = 3; failed = 0; skipped = 0; total = 3 }
+        }
+        $v1 = [ordered]@{
+            schema = 'red-salamander.run-all-tests.v1'
+            run_id = $runId
+            run_started_utc = '2026-11-13T12:00:05.0000000Z'
+            run_ended_utc = '2026-11-13T12:00:55.0000000Z'
+            suite = 'Commands'
+            case_filter = 'terminal_'
+            platform = 'ARM64'
+            configuration = 'Debug'
+            timeout_scale = 1.0
+            exit_code = 2
+            executable = [IO.Path]::GetFullPath((Join-Path $repoRoot '.build/ARM64/Debug/RedSalamander.exe'))
+            total = 3
+            passed = 3
+            failed = 0
+            skipped = 0
+            quarantine = [ordered]@{
+                is_valid = $true; has_blocking_entries = $false
+                active_count = 0; active_entries = @()
+                invalid_count = 0; invalid_entries = @(); errors = @()
+            }
+        }
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        [IO.File]::WriteAllText((Join-Path $lastRunDir 'run-all-tests-results-v1.json'), ($v1 | ConvertTo-Json -Depth 10))
+        [void][IO.Directory]::CreateDirectory((Join-Path $lastRunDir 'commands'))
+        $nativePath = Join-Path $lastRunDir 'commands/results.json'
+        $native = @{suite='Commands';timeout_scale=1.0;passed=3;failed=0;skipped=0;cases=@(
+            @{name='terminal_one';status='passed'},@{name='terminal_two';status='passed'},@{name='terminal_three';status='passed'})}
+        [IO.File]::WriteAllText($nativePath, ($native | ConvertTo-Json -Depth 10))
+
+        $intentPath = Join-Path $recordsDir 'intent.json'
+        $intent = [ordered]@{
+            schema = 'red-salamander.run-archive.v1'
+            run_id = $runId
+            disposition = 'completed'
+            source = [IO.Path]::GetFullPath((Join-Path $sandboxRoot "runs/$runId"))
+            destination = [IO.Path]::GetFullPath($runDir)
+            inventory = @(@{path='artifacts\selftest\last_run\commands\results.json';directory=$false;
+                length=(Get-Item $nativePath).Length;sha256=(Get-FileHash $nativePath).Hash})
+        }
+        [IO.File]::WriteAllText($intentPath, ($intent | ConvertTo-Json -Depth 6))
+        $intentHash = (Get-FileHash -LiteralPath $intentPath -Algorithm SHA256).Hash
+        $complete = [ordered]@{
+            schema = 'red-salamander.run-archive-complete.v1'
+            source = [IO.Path]::GetFullPath((Join-Path $sandboxRoot "runs/$runId"))
+            destination = [IO.Path]::GetFullPath($runDir)
+            intent_sha256 = $intentHash
+        }
+        [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 6))
+
+        $outputText = "Header`nRun id: $runId`nDone"
+        $verified = Assert-RSHostedFilteredCaseRun `
+            -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' `
+            -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' `
+            -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc
+        $verified.RunId | Should Be $runId
+        $verified.RepositoryVerdict | Should Be 'NOT_EVALUATED'
+        $verified.ChangeVerdict | Should Be 'PASSED'
+
+        # Reject mismatched case filter, failed case count, or exit 1
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'other_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match'
+        { Assert-RSHostedFilteredCaseRun -ExitCode 1 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'failed with exit code 1'
+        { Assert-RSHostedFilteredCaseRun -ExitCode 0 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'failed with exit code 0'
+
+        $v2.case_counts.failed = 1
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'incomplete, skipped, or failed'
+
+        $v2.case_counts.failed = 0
+        $v2.build_receipt_id = 'c'*64
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'artifact receipt mismatch'
+        $v2.build_receipt_id = 'b'*64
+        Write-RSAtomicCanonicalJsonFile -LiteralPath (Join-Path $lastRunDir 'run-all-tests-results.json') -InputObject $v2 -AllowedRoot $sandboxRoot -SchemaPath (Join-Path $repoRoot 'Specs/Testing/RunAllTestsSummary.schema.json')
+        [IO.File]::AppendAllText($nativePath, ' ')
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match the archive'
+
+        # Re-seal a coherent archive containing an unselected case: valid bytes and
+        # aggregate counts alone must not authorize the requested filter.
+        $native.cases[0].name = 'unselected_case'
+        [IO.File]::WriteAllText($nativePath, ($native | ConvertTo-Json -Depth 10))
+        $intent.inventory[0].length = (Get-Item $nativePath).Length
+        $intent.inventory[0].sha256 = (Get-FileHash $nativePath).Hash
+        [IO.File]::WriteAllText($intentPath, ($intent | ConvertTo-Json -Depth 10))
+        $complete.intent_sha256 = (Get-FileHash $intentPath).Hash
+        [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 10))
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'unexpected, duplicated, or not passing'
+
+        $intent.inventory = @()
+        [IO.File]::WriteAllText($intentPath, ($intent | ConvertTo-Json -Depth 10))
+        $complete.intent_sha256 = (Get-FileHash $intentPath).Hash
+        [IO.File]::WriteAllText((Join-Path $recordsDir 'complete.json'), ($complete | ConvertTo-Json -Depth 10))
+        { Assert-RSHostedFilteredCaseRun -ExitCode 2 -Output $outputText -TestRoot $sandboxRoot -RepoRoot $repoRoot -Suite 'Commands' -CaseFilter 'terminal_' -Platform 'ARM64' -Configuration 'Debug' -InvocationStartedUtc $startedUtc -InvocationEndedUtc $endedUtc } | Should Throw 'does not match the archive'
+    }
+}
+
+Describe 'Hosted process attribution diagnostics' {
+    BeforeEach {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $script:processObserver = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).GetMethod('ObserveProcessForWindow', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+    }
+    function New-ProcessObservationFixture {
+        $child = [RedSalamander.Testing.HostedProcessFacts]::new()
+        $child.Opened = $true; $child.HandleProcess = 42; $child.CreationAvailable = $true; $child.CreationTime = 200
+        $child.ParentAvailable = $true; $child.ParentProcess = 41
+        $parent = [RedSalamander.Testing.HostedProcessFacts]::new()
+        $parent.Opened = $true; $parent.HandleProcess = 41; $parent.CreationAvailable = $true; $parent.CreationTime = 100
+        [pscustomobject]@{Child=$child;Parent=$parent;FinalPid=[uint32]42;FinalThread=[uint32]7;RelationError=0;Fatal=$false;Unavailable=$false;
+            Reads=[Collections.Generic.List[string]]::new();Windows=[Collections.Generic.List[long]]::new()}
+    }
+    function Invoke-ProcessObservationFixture($fixture, [bool]$extended=$true) {
+        $read = [Func[uint32,bool,RedSalamander.Testing.HostedProcessFacts]] {
+            param($pidValue,$full)
+            $fixture.Reads.Add("$pidValue/$full")
+            if ($fixture.Fatal) { throw [OutOfMemoryException]::new('private fatal text') }
+            if ($fixture.Unavailable) { throw [InvalidOperationException]::new('private query text') }
+            if ($pidValue -eq 42) { return $fixture.Child }
+            if ($pidValue -eq 41 -and -not $full) { return $fixture.Parent }
+            throw 'Unexpected process query.'
+        }.GetNewClosure()
+        $readWindow = [Func[IntPtr,Tuple[uint32,uint32,int]]] {
+            param($window)
+            $fixture.Windows.Add($window.ToInt64())
+            [Tuple[uint32,uint32,int]]::new($fixture.FinalThread,$fixture.FinalPid,$fixture.RelationError)
+        }.GetNewClosure()
+        $script:processObserver.Invoke($null, [object[]]@([IntPtr]0x123,[uint32]7,[uint32]42,$extended,$read,$readWindow))
+    }
+    It 'binds exact child creation and only one minimal parent candidate through the actual observer' {
+        $f=New-ProcessObservationFixture; $text=Invoke-ProcessObservationFixture $f
+        $text | Should Match 'instanceAvailable=True.*handlePid=42.*creationFileTime100ns=200'
+        $text | Should Match 'parentQueried=True.*handlePid=41.*creationFileTime100ns=100.*parentCreationCompatible=True'
+        $text | Should Match 'relationStable=True; finalPid=42; finalThread=7; relationError=0'
+        ($f.Reads -join ',') | Should Be '42/True,41/False'
+        ($f.Windows -join ',') | Should Be '291'
+        $text | Should Match 'not creator/ownership proof'
+    }
+    It 'keeps the entry-time query minimal and distinct from later extended observations' {
+        $f=New-ProcessObservationFixture; $text=Invoke-ProcessObservationFixture $f $false
+        ($f.Reads -join ',') | Should Be '42/False'
+        $text | Should Match 'extended=False; instanceAvailable=True'
+        $text | Should Not Match 'imageKind|pathDigest|anyJobKnown'
+        $source=Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Raw
+        $source | Should Match 'originalAtCapture = CaptureIdentityForDiagnostics\(original, HostedDesktopNative.DescribeEntryWindowIdentity\)'
+        $source | Should Match '(?s)DescribeEntryWindowIdentity\(IntPtr window\)\s*\{\s*return DescribeWindowIdentityCore\(window, false\);'
+    }
+    It 'refuses to join a reused parent PID to an older child creation identity' {
+        $f=New-ProcessObservationFixture; $f.Parent.CreationTime=300
+        (Invoke-ProcessObservationFixture $f) | Should Match 'parentCreationCompatible=False'
+    }
+    It 'never opens zero or self as a parent candidate' {
+        foreach($parent in @(0,42)) {
+            $f=New-ProcessObservationFixture;$f.Child.ParentProcess=$parent
+            (Invoke-ProcessObservationFixture $f) | Should Match 'parentQueried=False'
+            ($f.Reads -join ',') | Should Be '42/True'
+        }
+    }
+    It 'does not query a parent after a mismatched process handle or missing creation identity' {
+        foreach($mode in @('wrong-handle','missing-creation','zero-creation')) {
+            $f=New-ProcessObservationFixture
+            if($mode -eq 'wrong-handle'){$f.Child.HandleProcess=99}
+            if($mode -eq 'missing-creation'){$f.Child.CreationAvailable=$false;$f.Child.CreationError=5}
+            if($mode -eq 'zero-creation'){$f.Child.CreationTime=0}
+            $text=Invoke-ProcessObservationFixture $f
+            $text | Should Match 'instanceAvailable=False'
+            $text | Should Match 'parentQueried=False'
+            ($f.Reads -join ',') | Should Be '42/True'
+        }
+    }
+    It 'retains independent denial and query errors instead of treating missing facts as negative membership' {
+        $f=New-ProcessObservationFixture
+        $f.Child.Opened=$false;$f.Child.OpenError=5;$f.Child.IdentityError=6;$f.Child.CreationAvailable=$false;$f.Child.CreationError=87
+        $f.Child.ImageError=122;$f.Child.SessionError=1168;$f.Child.JobError=50;$f.Child.ParentStatus=-1073741790
+        $text=Invoke-ProcessObservationFixture $f
+        $text | Should Match 'opened=False; openError=5; handlePid=42; identityError=6; creationKnown=False; creationFileTime100ns=200; creationError=87'
+        $text | Should Match 'imageKnown=False; imageError=122'
+        $text | Should Match 'sessionKnown=False; session=0; sessionError=1168; anyJobKnown=False; anyJob=False; jobError=50; exactTestJob=unavailable'
+        $text | Should Match 'parentNtStatus=0xC0000022'
+    }
+    It 'records changed or vanished captured HWND relations without another foreground selection' {
+        foreach($sample in @(@{pid=99;thread=7;error=0},@{pid=0;thread=0;error=1400})) {
+            $f=New-ProcessObservationFixture;$f.FinalPid=$sample.pid;$f.FinalThread=$sample.thread;$f.RelationError=$sample.error
+            $text=Invoke-ProcessObservationFixture $f
+            $text | Should Match 'relationStable=False'
+            $text | Should Match ('relationError='+$sample.error)
+            ($f.Windows -join ',') | Should Be '291'
+        }
+    }
+    It 'never upgrades membership in any Job into exact test containment or authority' {
+        $f=New-ProcessObservationFixture;$f.Child.AnyJobAvailable=$true;$f.Child.AnyJob=$true
+        (Invoke-ProcessObservationFixture $f) | Should Match 'anyJobKnown=True; anyJob=True; jobError=0; exactTestJob=unavailable'
+    }
+    It 'omits arbitrary image paths names and malformed digests even from an injected backend' {
+        $f=New-ProcessObservationFixture;$f.Child.ImageAvailable=$true;$f.Child.DigestAvailable=$true
+        $f.Child.ImageKind='C:\private-fixture\account-secret.exe';$f.Child.ImageDigest='private invalid digest'
+        $text=Invoke-ProcessObservationFixture $f
+        $text | Should Match 'imageKind=other; pathDigestAlgorithm=SHA256-UTF16LE; pathDigestKnown=False; pathDigest=unavailable'
+        $text | Should Not Match 'account-secret|private-fixture|private invalid|title|commandLine|clipboard'
+    }
+    It 'uses SHA256 of exact UTF16LE bytes without exposing the queried path' {
+        $native='RedSalamander.Testing.HostedDesktopNative' -as [type]
+        $flags=[Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $path='C:\private-fixture\WindowsTerminal.exe'
+        $digest=$native.GetMethod('ProcessImageDigest',$flags).Invoke($null,[object[]]@($path))
+        $digest | Should Match '^[0-9a-f]{64}$'
+        $digest | Should Be ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::Unicode.GetBytes($path))).ToLowerInvariant())
+        $native.GetMethod('ProcessImageKind',$flags).Invoke($null,[object[]]@($path)) | Should Be 'WindowsTerminal.exe'
+        $f=New-ProcessObservationFixture;$f.Child.ImageKind='WindowsTerminal.exe';$f.Child.ImageDigest=$digest;$f.Child.DigestAvailable=$true
+        (Invoke-ProcessObservationFixture $f) | Should Not Match 'private-fixture'
+        $unpaired='A'+[char]0xd800+'Z'
+        $expected=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([byte[]]@(0x41,0,0,0xd8,0x5a,0))).ToLowerInvariant()
+        $native.GetMethod('ProcessImageDigest',$flags).Invoke($null,[object[]]@($unpaired)) | Should Be $expected
+    }
+    It 'propagates direct managed reader exceptions without swallowing fatal failures' {
+        foreach($exceptionType in @([InvalidOperationException],[OutOfMemoryException])) {
+            $method=[Reflection.Emit.DynamicMethod]::new('ProcessObservationFailure',[RedSalamander.Testing.HostedProcessFacts],[Type[]]@([uint32],[bool]))
+            $il=$method.GetILGenerator()
+            $il.Emit([Reflection.Emit.OpCodes]::Newobj,$exceptionType.GetConstructor([Type]::EmptyTypes))
+            $il.Emit([Reflection.Emit.OpCodes]::Throw)
+            $read=$method.CreateDelegate([Func[uint32,bool,RedSalamander.Testing.HostedProcessFacts]])
+            $readWindow=[Func[IntPtr,Tuple[uint32,uint32,int]]] { param($window) [Tuple[uint32,uint32,int]]::new(7,42,0) }
+            $caught=$null
+            try{[void]$script:processObserver.Invoke($null,[object[]]@([IntPtr]0x123,[uint32]7,[uint32]42,$true,$read,$readWindow))}catch{$caught=$_.Exception.GetBaseException()}
+            $caught | Should Not BeNullOrEmpty
+            $caught.GetType() | Should Be $exceptionType
+        }
     }
 }

@@ -181,6 +181,285 @@ Describe 'Product documentation capture fixtures' {
     }
 }
 
+Describe 'Popup cadence diagnostic source contracts' {
+    It 'keeps the bounded observer default-off test-only and free of emission or allocation inside capture' {
+        $header=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.h'
+        $source=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.cpp'
+        $header|Should Match '(?s)#ifdef ENABLE_TESTS(?:(?!#endif).)*DebugStartCadenceCaptureForSelfTest'
+        $header|Should Match 'kCadenceObservationCapacity\s*=\s*1024u'
+        $header|Should Match 'std::array<PopupCadenceDebugObservation, kCadenceObservationCapacity>'
+        $header|Should Match '_debugCadenceEnabled\s*=\s*false;'
+        $capture=[regex]::Match($source,'(?ms)^void FileOperationsPopupInternal::FileOperationsPopupState::DebugRecordCadenceObservation\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $capture.Success|Should Be $true
+        $capture.Value|Should Match '(?s)if \(! _debugCadenceEnabled\)\s*return;.*if \(_debugCadenceCount == _debugCadenceObservations->size\(\)\).*\+\+_debugCadenceLost;\s*return;'
+        $capture.Value|Should Match '_controlsHost\.DebugGetInvalidateCount\(\)'
+        $capture.Value|Should Match '_controlsHost\.DebugHasActiveAnimationSubscription\(\)'
+        $capture.Value|Should Match 'row\.publishedPaused\s*=\s*_debugCadencePublishedPaused'
+        $capture.Value|Should Match 'row\.publishedStateKnown\s*=\s*_debugCadencePublishedStateKnown'
+        $capture.Value|Should Match '(?s)_debugCadenceRendering.*return;\s*row\.graphQueried = true;.*graph->IsVisible\(\).*graph->GetDebugState\(\)'
+        $capture.Value|Should Not Match '\b(?:new|make_unique|malloc|realloc|format|Emit|AppendLog|WriteFile|SetTimer|InvalidateRect|SendMessageW|PostMessageW)\b'
+        $destroy=[regex]::Match($source,'(?ms)^LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $destroy.Success|Should Be $true
+        $destroy.Value.IndexOf('_debugCadenceEnabled = false;')|Should BeLessThan $destroy.Value.IndexOf('_controlsHost.Detach()')
+    }
+    It 'uses the actual retained rate reducer and preserves the original case activation and sampling boundaries' {
+        $source=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.cpp'
+        $reducer=[regex]::Match($source,'(?ms)^bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVisualRateForSelfTest\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $reducer.Success|Should Be $true
+        $reducer.Value|Should Match 'task->paused \|\| history->second\.displayedBytesPerSec <= 0\.0'
+        $reducer.Value|Should Match 'AdvanceRateHistory\(history->second, rate, rate\.progressStateChangeTick, totals\)'
+        $reducer.Value|Should Not Match 'DebugSetVisualScenario|_rates\.clear|_controlsHost\.Detach|SetTimer'
+        $runner=Get-RSText 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'
+        $case=[regex]::Match($runner,'(?ms)^\[\[nodiscard\]\] bool RunFileOpsPopupIdleCadenceChecks\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success|Should Be $true
+        $case.Value|Should Match 'ScopedWindowActivationBlocker blocker'
+        $case.Value|Should Match 'SW_SHOWNOACTIVATE'
+        $case.Value|Should Match '(?s)pumpFor\(600ms\).*DebugCadenceObservationsForSelfTest\(\)\.empty\(\).*DebugStartCadenceCaptureForSelfTest\(taskId\)'
+        $case.Value|Should Match '(?s)runningGraph == 0u.*DebugPauseRetainedVisualRateForSelfTest\(taskId\).*pumpFor\(2200ms\).*DebugStopCadenceCaptureForSelfTest\(\)'
+        $case.Value|Should Match 'row\.graphIdentity == runningGraph && row\.graph\.targetCurrentValue == 0\.0 && row\.graph\.sampleCount == runningSamples'
+        $case.Value|Should Match 'DebugCadenceLostForSelfTest\(\) != 0u'
+        $case.Value|Should Match 'stopCadenceCapture\.release\(\)'
+        $case.Value|Should Match 'FileOps\.PopupCadence\.ObserverRows'
+        $case.Value|Should Match 'sampleTransition excludes the separate marker transition'
+        $case.Value|Should Match 'graphGeneration=\{\} graphQueried=\{\}'
+        $case.Value|Should Not Match 'graphIdentity=\{[^}]*\}|address=\{[^}]*\}'
+    }
+}
+
+Describe 'Commands attribution and UI prerequisite source contracts' {
+    It 'keeps process enrichment query-only with held identity, canonical digests and no raw identity text' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $read=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessFacts ReadCommandsProcessFacts\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $capture=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessObservation CaptureCommandsProcessObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $observe=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessObservation ObserveCommandsProcess\([^\r\n]+\)\s*\{.*?^\}')
+        $describe=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsProcessObservation\([^\r\n]+\)\s*\{.*?^\}')
+        foreach($body in @($read,$capture,$observe,$describe)){$body.Success|Should Be $true}
+        $capture.Value|Should Match 'wil::unique_handle child\(OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, window\.process\)\)'
+        $capture.Value|Should Match '(?s)wil::unique_handle parent;.*parent\.reset\(OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId\)\).*return ObserveCommandsProcess\(window,'
+        $observe.Value|Should Match '(?s)readProcess\(window\.process, true\).*readProcess\(result\.process\.parentProcess, false\).*readWindow\(window\.window, result\.finalProcess, result\.relationError\)'
+        $observe.Value|Should Match 'result\.parent\.creationTime <= result\.process\.creationTime'
+        $observe.Value|Should Match 'result\.finalThread == window\.thread && result\.finalProcess == window\.process'
+        $read.Value|Should Match 'GetProcessTimes\(process,'
+        $read.Value|Should Match '(?s)if \(! extended\)\s*return result;.*QueryFullProcessImageNameW'
+        $read.Value|Should Match '(?s)ComputeContentDigest\(Common::Crypto::ContentDigestAlgorithm::Sha256,\s*std::as_bytes\(std::span<const wchar_t>\(path\.data\(\), path\.size\(\)\)\)'
+        $read.Value|Should Match 'IsProcessInJob\(process, nullptr, &inJob\)'
+        $read.Value|Should Match 'result\.parentStatus = query\(process, 0u,'
+        $describe.Value|Should Match 'pathDigestAlgorithm=SHA256-UTF16LE'
+        $describe.Value|Should Match 'exactTestJob=unavailable'
+        $describe.Value|Should Match 'parent compatibility is not creator/ownership proof'
+        $describe.Value|Should Match 'CommandsProcessImageKind\(p\.imageKind\)'
+        $describe.Value|Should Not Match '\b(?:QueryFullProcessImageNameW|GetWindowTextW|GetCommandLineW)\s*\(|\b(?:leaf|imagePath|commandLine)\b'
+        $callPattern='(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $captureCalls=@('CaptureCommandsProcessObservation','if','child','OpenProcess','GetLastError','ReadCommandsProcessFacts','get','reset','ObserveCommandsProcess','SetLastError','GetWindowThreadProcessId')
+        @([regex]::Matches($capture.Value,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $captureCalls}).Count|Should Be 0
+        $formatCalls=@('DescribeCommandsProcessObservation','if','Common::Crypto::AppendHexToken','std::format','CommandsProcessImageKind')
+        @([regex]::Matches($describe.Value,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $formatCalls}).Count|Should Be 0
+        ($read.Value+$capture.Value+$observe.Value+$describe.Value)|Should Not Match '\b(?:TerminateProcess|SendInput|SetForegroundWindow|RequestForegroundWindow|SetFocus|SetActiveWindow|PostMessageW|SendMessageW|CreateToolhelp32Snapshot)\s*\('
+        $registration=[regex]::Match($source,'(?s)L"red_salamander_help_lists_diagnostics_options".*?\}\);')
+        $registration.Value|Should Match '(?s)if \(! TestCommandsProcessObservationControls\(state\)\)\s*return false;\s*return TestRedSalamanderHelpListsDiagnosticsOptions\(state\);'
+    }
+    It 'keeps the managed observer failure-only except minimal original entry identity and releases held handles after relation checks' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $source|Should Match '(?s)DescribeWindowIdentity\(IntPtr window\).*?DescribeWindowIdentityCore\(window, true\)'
+        $source|Should Match '(?s)DescribeEntryWindowIdentity\(IntPtr window\).*?DescribeWindowIdentityCore\(window, false\)'
+        $source|Should Match 'CaptureIdentityForDiagnostics\(original, HostedDesktopNative\.DescribeEntryWindowIdentity\)'
+        $body=[regex]::Match($source,'(?ms)^        private static string DescribeWindowIdentityCore\(.*?^        \}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'OpenProcess\(0x1000, false, pid\)'
+        $body.Value|Should Match '(?s)SafeProcessHandle childLease = null, parentLease = null;.*ObserveProcessForWindow\(window, thread, process, extended, read, ReadWindowProcessIdentity\).*finally.*parentLease\.Dispose\(\).*childLease\.Dispose\(\)'
+        $source|Should Match '(?s)ProcessImageDigest\(string path\).*?Buffer\.BlockCopy\(path\.ToCharArray\(\), 0, bytes, 0, bytes\.Length\).*?System\.Security\.Cryptography\.SHA256\.Create\(\)'
+        $source|Should Match 'exactTestJob=unavailable'
+        $body.Value|Should Not Match 'Process\.GetProcesses|MainWindowTitle|GetWindowText|CommandLine|SetForegroundWindow|SendInput|\.Kill\('
+    }
+    It 'fails the exact path-detail positive prerequisite before Enter while preserving text and focus assertions' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp'
+        $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestFileOperationsPopupThroughputDisclosure\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'detailForeground = CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $body.Value|Should Match 'detailFocus\s*= CaptureCommandsWindowObservation\(GetFocus\(\)\)'
+        $gate=[regex]::Match($body.Value,'(?s)if \(! state\.Require\(DebugCanRestoreFileOperationsPathDetailTextFocus\(popup\.get\(\), detailFocus\.window, detailForeground\.window\),.*?DescribeCommandsWindowObservation\(detailForeground\).*?DescribeCommandsWindowObservation\(detailFocus\)\)\)\)\s*return false;')
+        $gate.Success|Should Be $true
+        $enter=$body.Value.IndexOf('SendMessageW(popup.get(), WM_KEYDOWN, VK_RETURN, 0)', $gate.Index)
+        $enter|Should BeGreaterThan ($gate.Index+$gate.Length)
+        $body.Value|Should Match 'Enter must place hosted focus on the path-detail text'
+        $body.Value|Should Match 'read.only'
+        $body.Value|Should Match 'multiline|multi.line'
+        $body.Value|Should Match 'Unicode'
+        $gate.Value|Should Not Match 'TryActivateOwnedWindow|RequestForegroundWindow|SetForegroundWindow|state\.Skip|sleep_for'
+    }
+    It 'guards the pinned bounded menu metadata variant and requires readiness before queuing the first hover' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp'
+        $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestMainMenuPersistentViewToPluginsHoverSwitchesPopup\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'std::array<wchar_t, 1024u> text'
+        $body.Value|Should Match 'std::array<MenuMetadataRecord, 64u> records'
+        $body.Value|Should Match 'static thread_local MenuMetadataCapture\* currentMenuMetadata'
+        $body.Value|Should Match '(?s)std::make_unique<MenuMetadataCapture>\(\).*wil::scope_exit.*DxUi::Diagnostics::sink = previousDiagnosticSink;.*currentMenuMetadata\s*= previousDiagnosticTarget;'
+        $callback=[regex]::Match($body.Value,'(?s)DxUi::Diagnostics::sink\s*= \[\]\(std::wstring_view, std::wstring_view message\) noexcept\s*\{.*?\r?\n    \};')
+        $callback.Success|Should Be $true
+        $allowed=@('menu.show-begin','menu.show-end','menu.popup-create-begin','menu.popup-create-end','menu.loop-dismiss-activation',
+            'menu.loop-nonpopup-pointer','menu.pointer','DxUi::MenuTrace Popup root-switch-probe','DxUi::MenuTrace Popup root-switch-accepted',
+            'DxUi::MenuTrace Popup root-switch-rejected','DxUi::MenuTrace Popup root-switch-stale-after-keyboard','DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted')
+        $events=@([regex]::Matches($callback.Value,'L"([^"]+)"')|ForEach-Object{$_.Groups[1].Value})
+        ($events -join '|')|Should Be ($allowed -join '|')
+        $callback.Value|Should Not Match '\b(?:new|malloc|realloc|format|AppendSuiteTrace|SendMessageW|PostMessageW|SendInput|SetForegroundWindow)\b|std::(?:w?fstream|w?cout)|WriteFile'
+        $callPattern='(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $allowedCallbackCalls=@('if','std::ranges::any_of','starts_with','size','std::min','GetTickCount64','std::copy_n','begin')
+        $unreviewedCallbackCalls={param($Text) @([regex]::Matches($Text,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $allowedCallbackCalls}).Count}
+        (& $unreviewedCallbackCalls $callback.Value)|Should Be 0
+        (& $unreviewedCallbackCalls ($callback.Value.Replace('auto* const capture = currentMenuMetadata;','::UnreviewedObserver(); auto* const capture = currentMenuMetadata;')))|Should Be 1
+        $callback.Value|Should Match 'capture->dropped'
+        $callback.Value|Should Match 'capture->truncated'
+        $body.Value|Should Match 'return owned && readable && ! popupState\.itemTexts\.empty\(\) && selected == static_cast<int>\(viewMapping->visualIndex\)'
+        $readiness='(?s)const bool hoverReady = traceMenuState\(L"before-first-hover", initialPopup\);\s*firstHoverReady\.store\(hoverReady, std::memory_order_release\);\s*if \(! hoverReady\)\s*return;'
+        $move='PostMessageW\(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM\(livePluginsClientPoint\.x, livePluginsClientPoint\.y\)\)'
+        $leave='PostMessageW\(menuBarWindow, WM_MOUSELEAVE, 0, 0\)'
+        $hasGuardedQueue={
+            param($Text)
+            $gate=[regex]::Match($Text,$readiness)
+            if (! $gate.Success) { return $false }
+            # Earlier View-open mouseleave is separate; bind only the Plugins hover branches after readiness.
+            $hoverBranches=$Text.Substring($gate.Index+$gate.Length)
+            $moves=@([regex]::Matches($hoverBranches,$move));$leaves=@([regex]::Matches($hoverBranches,$leave))
+            return $moves.Count -eq 1 -and $leaves.Count -eq 1
+        }
+        (& $hasGuardedQueue $body.Value)|Should Be $true
+        $withoutReadiness=[regex]::Replace($body.Value,'if \(! hoverReady\)\s*return;','')
+        (& $hasGuardedQueue $withoutReadiness)|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('PostMessageW(menuBarWindow, WM_MOUSEMOVE','PostMessageW(initialPopup, WM_MOUSEMOVE')))|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('PostMessageW(menuBarWindow, WM_MOUSELEAVE','PostMessageW(initialPopup, WM_MOUSELEAVE')))|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)','MAKELPARAM(viewClientPoint.x, viewClientPoint.y)')))|Should Be $false
+        $body.Value|Should Match 'replacementPopupClosed'
+        $body.Value|Should Match 'hoverViaMouseLeaveRefresh'
+    }
+}
+
+Describe 'Commands boundary observation and clipboard source contracts' {
+    It 'keeps the narrow window observation metadata-only with explicit unavailable identity' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $capture = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] CommandsWindowObservation CaptureCommandsWindowObservation\(HWND window\) noexcept\s*\{.*?^\}')
+        $describe = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsWindowObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $capture.Success | Should Be $true
+        $describe.Success | Should Be $true
+        $capture.Value | Should Match 'result\.window\s*=\s*window;'
+        $capture.Value | Should Match 'GetWindowThreadProcessId\(window,\s*&result\.process\)'
+        $capture.Value | Should Match 'GetClassNameW\(window,\s*result\.className\.data\(\)'
+        $capture.Value | Should Match 'GetSystemTimePreciseAsFileTime\(&utc\)'
+        $capture.Value | Should Match 'result\.monotonicMs\s*=\s*GetTickCount64\(\)'
+        $capture.Value | Should Match '(?s)if \(! result\.valid\).*?result\.identityError\s*=\s*ERROR_INVALID_WINDOW_HANDLE;.*?result\.classError\s*=\s*ERROR_INVALID_WINDOW_HANDLE;.*?return result;'
+        $describe.Value | Should Match 'identityAvailable=\{\}.*classAvailable=\{\}.*classError=\{\}'
+        $describe.Value | Should Match 'value\.thread != 0u'
+        $describe.Value | Should Match 'value\.classAvailable \? value\.className\.data\(\) : L"<unavailable>"'
+        $describe.Value | Should Match 'utcFileTime100ns=\{\},monotonicMs=\{\}'
+
+        # This is the reviewed Commands-local variant: allow only synchronous metadata reads,
+        # diagnostic last-error bookkeeping and control syntax, not the broader desktop sampler.
+        $allowedCalls = @('CaptureCommandsWindowObservation', 'if', 'GetSystemTimePreciseAsFileTime', 'GetTickCount64',
+            'IsWindow', 'SetLastError', 'GetWindowThreadProcessId', 'GetClassNameW', 'GetLastError', 'data', 'size')
+        $callPattern = '(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        # Supported lexical call forms only; this guard does not parse arbitrary C++ syntax.
+        foreach ($counterfactual in @(
+            @{ Source='SomeHelper()'; Name='SomeHelper' },
+            @{ Source='SomeNamespace::SomeHelper()'; Name='SomeNamespace::SomeHelper' },
+            @{ Source='::SomeHelper()'; Name='::SomeHelper' },
+            @{ Source='::SomeNamespace::SomeHelper()'; Name='::SomeNamespace::SomeHelper' },
+            @{ Source='object.SomeHelper()'; Name='SomeHelper' },
+            @{ Source='object->SomeHelper()'; Name='SomeHelper' }
+        )) {
+            $unreviewedCalls = @([regex]::Matches($counterfactual.Source, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+            $unreviewedCalls.Count | Should Be 1
+            $unreviewedCalls[0] | Should Be $counterfactual.Name
+            @($unreviewedCalls | Where-Object { $_ -cnotin $allowedCalls }).Count | Should Be 1
+        }
+        $calls = @([regex]::Matches($capture.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($calls | Where-Object { $_ -cnotin $allowedCalls }).Count | Should Be 0
+        $describeCalls = @([regex]::Matches($describe.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($describeCalls | Where-Object { $_ -cnotin @('DescribeCommandsWindowObservation', 'std::format', 'data') }).Count | Should Be 0
+        $adapter = $capture.Value + $describe.Value
+        $adapter | Should Not Match '\b(?:GetCursorPos|GetPhysicalCursorPos|GetLastInputInfo|GetKeyboardState|GetKeyState|GetAsyncKeyState|GetRawInputData|SetCursorPos|SetPhysicalCursorPos|SendInput|mouse_event|keybd_event|ClipCursor|SetForegroundWindow|RequestForegroundWindow|SetActiveWindow|SetFocus|AttachThreadInput|SetWinEventHook|CaptureDesktopState|GetWindowText[AW]?|GetWindowTextLength[AW]?|SendMessage[AW]?|PostMessage[AW]?)\s*\('
+    }
+
+    It 'compares and reports the same captured foreground HWND at settling refusal' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $start = $source.IndexOf('[[nodiscard]] bool PrepareMainWindowForIsolatedUiCase')
+        $next = $source.IndexOf('void FocusFolderViewPane', $start)
+        $start | Should BeGreaterThan -1
+        $next | Should BeGreaterThan $start
+        $helper = $source.Substring($start, $next - $start)
+        $helper | Should Match 'foregroundBeforeObservation\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'foregroundAfterObservation\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'settledForeground\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'expectedSettledForeground\s*=\s*CaptureCommandsWindowObservation\(inputWindow\)'
+        $helper | Should Match 'const bool foregroundOwned\s*=\s*settledForeground\.window == inputWindow;'
+        $helper | Should Match '(?s)state\.Require\(foregroundOwned,.*?stage=settled-validation; current.*?DescribeCommandsWindowObservation\(settledForeground\).*?DescribeCommandsWindowObservation\(expectedSettledForeground\)'
+        $helper | Should Match 'stage=before-admission.*stage=after-admission'
+        $helper | Should Not Match 'state\.Require\(GetForegroundWindow\(\)\s*=='
+        ([regex]::Matches($helper, 'WaitForFolderViewPaneFocus\(')).Count | Should Be 2
+        $helper | Should Match 'settleAttempt < 3u'
+    }
+
+    It 'requires clear and quiet setup before one copy attempt and stops dependent checks' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $case = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameWindowPreviewContextMenuCopiesRows\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success | Should Be $true
+        $action = [regex]::Match($case.Value, '(?s)const auto expectCopy\s*=.*?\r?\n    \};')
+        $action.Success | Should Be $true
+        $clear = $action.Value.IndexOf('ClearClipboardContents(batchWindow, &clearedAndQuiet, &setup)')
+        $prerequisite = [regex]::Match($action.Value, '(?s)if \(! state\.Require\(clearedAndQuiet,.*?\r?\n\s+return false;')
+        $prerequisite.Success | Should Be $true
+        $clear | Should BeGreaterThan -1
+        $prerequisite.Index | Should BeGreaterThan $clear
+        $copy = $action.Value.IndexOf('DebugCopyBatchRenameWindowPreview(kind, rowIndex)')
+        $copy | Should BeGreaterThan ($prerequisite.Index + $prerequisite.Length)
+        ([regex]::Matches($action.Value, '\bDebugCopyBatchRenameWindowPreview\s*\(')).Count | Should Be 1
+        $action.Value | Should Not Match '\b(?:for|while|do)\s*(?:\(|\{)|\bgoto\b|\bexpectCopy\s*\('
+        $failedCopy = [regex]::Match($action.Value, '(?s)if \(! state\.Require\(commandSucceeded,.*?\r?\n\s+return false;')
+        $failedCopy.Success | Should Be $true
+        $failedCopy.Index | Should BeGreaterThan $copy
+        $action.Value.IndexOf('ReadClipboardUnicodeText(batchWindow, &readProbe)') | Should BeGreaterThan ($failedCopy.Index + $failedCopy.Length)
+        $case.Value | Should Match '(?s)if \(! expectCopy\(BatchRenameDebugPreviewCopyKind::OriginalName,.*?\|\|\s*! expectCopy\(BatchRenameDebugPreviewCopyKind::NewName,.*?\|\|\s*! expectCopy\(BatchRenameDebugPreviewCopyKind::SourcePath,.*?\r?\n\s+return false;'
+        $case.Value | Should Match '(?s)if \(! expectCopy\(BatchRenameDebugPreviewCopyKind::PreviewRows,.*?\r?\n\s+return false;'
+
+        $settings = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $clearHelper = [regex]::Match($settings, '(?ms)^void ClearClipboardContents\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $clearHelper.Success | Should Be $true
+        $clearHelper.Value | Should Match 'bool\* outClearedAndQuiet = nullptr, ClipboardSetupProbe\* outProbe = nullptr'
+        $clearHelper.Value | Should Match '(?s)recordSetup\(L"OpenClipboard", openError, false, false\).*?recordSetup\(L"EmptyClipboard", clearError, false, false\).*?recordSetup\(L"quiet-point", ERROR_SUCCESS, true, false\).*?recordSetup\(L"cleared-and-quiet", ERROR_SUCCESS, true, true\)'
+    }
+
+    It 'keeps clipboard diagnostics content-free and identifies the readback source' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $case = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameWindowPreviewContextMenuCopiesRows\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success | Should Be $true
+        $action = [regex]::Match($case.Value, '(?s)const auto expectCopy\s*=.*?\r?\n    \};')
+        $action.Success | Should Be $true
+        $action.Value | Should Match 'CaptureCommandsClipboardObservation\(\)'
+        $action.Value | Should Match 'DescribeCommandsClipboardObservation\(beforeCopy\)'
+        $action.Value | Should Match 'DescribeCommandsClipboardObservation\(afterCopy\)'
+        $action.Value | Should Match 'readProbe\.readSystemClipboard'
+        $action.Value | Should Match 'readProbe\.usedFallback'
+        $action.Value | Should Match 'state\.Require\(copied == expected,'
+        $action.Value | Should Match 'contents omitted'
+        $action.Value | Should Not Match '\bGetLastError\s*\('
+        $settings = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $clipboardCapture = [regex]::Match($settings, '(?ms)^\[\[nodiscard\]\] CommandsClipboardObservation CaptureCommandsClipboardObservation\(\) noexcept\s*\{.*?^\}')
+        $clipboardDescribe = [regex]::Match($settings, '(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsClipboardObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $clipboardCapture.Success | Should Be $true
+        $clipboardDescribe.Success | Should Be $true
+        $callPattern = '(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $captureCalls = @([regex]::Matches($clipboardCapture.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($captureCalls | Where-Object { $_ -cnotin @('CaptureCommandsClipboardObservation', 'GetClipboardSequenceNumber',
+            'CaptureCommandsWindowObservation', 'GetClipboardOwner', 'GetOpenClipboardWindow') }).Count | Should Be 0
+        $describeCalls = @([regex]::Matches($clipboardDescribe.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($describeCalls | Where-Object { $_ -cnotin @('DescribeCommandsClipboardObservation', 'std::format', 'DescribeCommandsWindowObservation') }).Count | Should Be 0
+        # Permit content only for its declaration, equality Boolean and character counts. A new
+        # logging/formatting argument containing either value must fail this source-only contract.
+        $body = $action.Value.Substring($action.Value.IndexOf('{') + 1)
+        $withoutSafeUses = $body -replace 'const\s+std::wstring\s+copied\s*=', '' -replace 'copied\s*==\s*expected', '' -replace '\b(?:copied|expected)\.size\(\)', ''
+        $withoutSafeUses | Should Not Match '\b(?:copied|expected)\b'
+    }
+}
+
 Describe 'ViewerSpace nonactivating desktop observations' {
     It 'keeps UIA observations and synthetic desktop interference free of physical input writes' {
         $sources = @(
@@ -4100,10 +4379,13 @@ Specs\TestRuns\local_scratch
         $source | Should Match 'copyOnlyMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::CopyOnly'
         $source | Should Match 'managedMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::Managed'
         # Match the constructor statement, not a formatting-dependent character window. The
-        # admitted endpoint identities precede the one cleanup-permission argument.
+        # admitted endpoint identities and immutable Local guard precede the one cleanup-permission argument.
         $bridgeCall = [regex]::Match($source, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
         $bridgeCall.Success | Should Be $true
-        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*localCrossRootDistinctnessUnproved,\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $source | Should Match 'const\s+bool\s+localCrossRootDistinctnessUnproved\s*=\s*transferPlan\s*!=\s*nullptr\s*&&\s*FileOperations::IsLocalFileSystemEndpoint\(transferPlan->sourceEndpoint\)\s*&&\s*FileOperations::IsLocalFileSystemEndpoint\(transferPlan->destinationEndpoint\)\s*&&\s*!\s*FileOperations::QualifiedEndpointsReferToSameRoot\(transferPlan->sourceEndpoint,\s*transferPlan->destinationEndpoint\);'
+        $source | Should Match 'const\s+bool\s+localCrossRootDistinctnessUnproved;'
+        $source | Should Match 'destinationPathIdentity\(destinationPathIdentityIn\),\s*localCrossRootDistinctnessUnproved\(localCrossRootDistinctnessUnprovedIn\),\s*sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
         $source | Should Match 'sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
         # I35 R5.6: the message is one constant shared by the disclosed note and the undisclosed Warning.
         $source | Should Match 'kCopyOnlyMessage\s*=\s*L"Copied; source kept[\s\S]{0,900}L"move\.copyOnly\.sourceKept",\s*kCopyOnlyMessage'
@@ -4610,7 +4892,7 @@ Specs\TestRuns\local_scratch
         ([regex]::Matches($bridge, 'CrossFileSystemBridge\s+bridge\(')).Count | Should Be 1
         $bridgeCall = [regex]::Match($bridge, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
         $bridgeCall.Success | Should Be $true
-        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*localCrossRootDistinctnessUnproved,\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
         $bridge | Should Not Match 'moveBridge->cookie\s*=\s*static_cast<void\*>\(&cookie\);'
         $bridge | Should Match 'hasManagedMovePlans\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,420}OperationStrategy::Managed'
         $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\s*\|\|\s*\(selectedAdmission->interlock\s*&&\s*selectedAdmission->interlock->parallelNewFiles\)\)\s*&&'
@@ -5275,11 +5557,22 @@ Specs\TestRuns\local_scratch
         $interaction | Should Match '!\s*_items\[hitIndex\]\.selected[\s\S]{0,100}SelectSingle\(hitIndex\)'
         $leftButtonDown = [regex]::Match(
             $interaction,
-            '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::OnLButtonDblClk\()').Value
+            '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::)').Value
         $leftButtonDown.Length | Should BeGreaterThan 0
+        $leftButtonDown | Should Not Match 'void\s+FolderView::OnMButtonDown'
         # I63 slice A: the pane state is read before the press takes the focus, and a press in the pane
         # that was not active keeps its selection (no SelectSingle, no ClearSelection).
-        $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*const\s+auto\s+hit\s*=\s*HitTest\(pt\)'
+        $focusCapture = [regex]::Match($leftButtonDown,
+            'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);')
+        $blockingOverlayReturn = [regex]::Match($leftButtonDown, 'if\s*\(hasOverlay\s*&&\s*overlay\.blocksInput\)\s*return;')
+        $itemHit = [regex]::Match($leftButtonDown, 'const\s+auto\s+hit\s*=\s*HitTest\(pt\);')
+        $focusCapture.Success | Should Be $true
+        $blockingOverlayReturn.Success | Should Be $true
+        $itemHit.Success | Should Be $true
+        # BUG06 keeps the reviewed overlay close/cancel path ahead of item input.
+        # Focus state is captured first; a blocking overlay must return before hit testing.
+        ($focusCapture.Index + $focusCapture.Length) | Should BeLessThan $blockingOverlayReturn.Index
+        ($blockingOverlayReturn.Index + $blockingOverlayReturn.Length) | Should BeLessThan $itemHit.Index
         # The index is read once through value(); the optional is not dereferenced with '*'.
         $leftButtonDown | Should Match 'if\s*\(hit\.has_value\(\)\)\s*\{\s*const\s+size_t\s+hitIndex\s*=\s*hit\.value\(\);'
         $leftButtonDown | Should Not Match '\*hit\b'

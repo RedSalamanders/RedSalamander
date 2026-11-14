@@ -3287,17 +3287,88 @@ struct BatchRenameLocalStampParts final
     state.Require(snapshot.newNames == std::vector<std::wstring>{L"Alpha_renamed.txt", L"Beta_renamed.md"},
                   L"Batch Rename context-menu copy preview should contain renamed rows.");
 
-    const auto expectCopy = [&](const BatchRenameDebugPreviewCopyKind kind, const size_t rowIndex, const std::wstring_view expected, const wchar_t* label)
+    const auto expectCopy =
+        [&](const BatchRenameDebugPreviewCopyKind kind, const size_t rowIndex, const std::wstring_view expected, const wchar_t* label) -> bool
     {
-        ClearClipboardContents(batchWindow);
-        state.Require(DebugCopyBatchRenameWindowPreview(kind, rowIndex), std::format(L"{} copy command should succeed.", label));
-        const std::wstring copied = ReadClipboardUnicodeText(batchWindow);
-        state.Require(copied == expected, std::format(L"{} copy command wrote unexpected text. Expected '{}', saw '{}'.", label, expected, copied));
+        const CommandsClipboardObservation beforeSetup = CaptureCommandsClipboardObservation();
+        bool clearedAndQuiet                           = false;
+        ClipboardSetupProbe setup{};
+        ClearClipboardContents(batchWindow, &clearedAndQuiet, &setup);
+        const CommandsClipboardObservation beforeCopy = CaptureCommandsClipboardObservation();
+        if (! state.Require(clearedAndQuiet,
+                            std::format(L"{} clipboard setup/quiet prerequisite failed. stage={}, error={}, cleared={}, quiet={}, sequenceBefore={}, "
+                                        L"sequenceAfter={}; before-setup [{}]; before-copy [{}]; contents omitted.",
+                                        label,
+                                        setup.stage,
+                                        setup.error,
+                                        setup.cleared,
+                                        setup.quiet,
+                                        setup.sequenceBefore,
+                                        setup.sequenceAfter,
+                                        DescribeCommandsClipboardObservation(beforeSetup),
+                                        DescribeCommandsClipboardObservation(beforeCopy))))
+            return false;
+
+        BatchRenameDebugSnapshot beforeCopySnapshot{};
+        const bool snapshotAvailable = DebugGetBatchRenameWindowSnapshot(beforeCopySnapshot);
+        // The product command is attempted exactly once. Its Boolean does not promise a Win32 error;
+        // owner/opener observations are evidence, never an inference that contention caused failure.
+        const bool commandSucceeded                  = DebugCopyBatchRenameWindowPreview(kind, rowIndex);
+        const CommandsClipboardObservation afterCopy = CaptureCommandsClipboardObservation();
+        Trace(
+            std::format(L"Batch Rename clipboard attempt: label={}, kind={}, row={}, commandSucceeded={}; before-copy [{}]; after-copy [{}]; contents omitted.",
+                        label,
+                        static_cast<unsigned int>(kind),
+                        rowIndex,
+                        commandSucceeded,
+                        DescribeCommandsClipboardObservation(beforeCopy),
+                        DescribeCommandsClipboardObservation(afterCopy)));
+        if (! state.Require(commandSucceeded,
+                            std::format(L"{} copy command should succeed. kind={}, row={}, snapshotAvailable={}, originalRows={}, newRows={}, "
+                                        L"window [{}]; before-copy [{}]; after-copy [{}]; contents omitted.",
+                                        label,
+                                        static_cast<unsigned int>(kind),
+                                        rowIndex,
+                                        snapshotAvailable,
+                                        beforeCopySnapshot.originalNames.size(),
+                                        beforeCopySnapshot.newNames.size(),
+                                        DescribeCommandsWindowObservation(CaptureCommandsWindowObservation(batchWindow)),
+                                        DescribeCommandsClipboardObservation(beforeCopy),
+                                        DescribeCommandsClipboardObservation(afterCopy))))
+            return false;
+
+        ClipboardTextReadProbe readProbe{};
+        const std::wstring copied                    = ReadClipboardUnicodeText(batchWindow, &readProbe);
+        const CommandsClipboardObservation afterRead = CaptureCommandsClipboardObservation();
+        Trace(std::format(L"Batch Rename clipboard readback: label={}, stage={}, error={}, systemRead={}, fallback={}, matchesExpected={}, "
+                          L"expectedCharacters={}, copiedCharacters={}; after-read [{}]; contents omitted.",
+                          label,
+                          readProbe.stage,
+                          readProbe.error,
+                          readProbe.readSystemClipboard,
+                          readProbe.usedFallback,
+                          copied == expected,
+                          expected.size(),
+                          copied.size(),
+                          DescribeCommandsClipboardObservation(afterRead)));
+        return state.Require(copied == expected,
+                             std::format(L"{} copy command wrote unexpected text. readStage={}, readError={}, systemRead={}, fallback={}, "
+                                         L"expectedCharacters={}, copiedCharacters={}; after-copy [{}]; after-read [{}]; contents omitted.",
+                                         label,
+                                         readProbe.stage,
+                                         readProbe.error,
+                                         readProbe.readSystemClipboard,
+                                         readProbe.usedFallback,
+                                         expected.size(),
+                                         copied.size(),
+                                         DescribeCommandsClipboardObservation(afterCopy),
+                                         DescribeCommandsClipboardObservation(afterRead)));
     };
 
-    expectCopy(BatchRenameDebugPreviewCopyKind::OriginalName, 0u, L"Alpha.txt", L"Batch Rename original-name");
-    expectCopy(BatchRenameDebugPreviewCopyKind::NewName, 1u, L"Beta_renamed.md", L"Batch Rename new-name");
-    expectCopy(BatchRenameDebugPreviewCopyKind::SourcePath, 0u, (root / L"Alpha.txt").native(), L"Batch Rename source-path");
+    if (! expectCopy(BatchRenameDebugPreviewCopyKind::OriginalName, 0u, L"Alpha.txt", L"Batch Rename original-name") ||
+        ! expectCopy(BatchRenameDebugPreviewCopyKind::NewName, 1u, L"Beta_renamed.md", L"Batch Rename new-name") ||
+        ! expectCopy(BatchRenameDebugPreviewCopyKind::SourcePath, 0u, (root / L"Alpha.txt").native(), L"Batch Rename source-path"))
+        return false;
 
     const std::wstring expectedPreviewRows = L"Original Name\tNew Name\tSize\tDate\tTime\tPath\r\n"
                                              L"Alpha.txt\tAlpha_renamed.txt\t0\t\t\t" +
@@ -3305,7 +3376,8 @@ struct BatchRenameLocalStampParts final
                                              L"\r\n"
                                              L"Beta.md\tBeta_renamed.md\t0\t\t\t" +
                                              (root / L"Beta.md").native();
-    expectCopy(BatchRenameDebugPreviewCopyKind::PreviewRows, 0u, expectedPreviewRows, L"Batch Rename preview-rows");
+    if (! expectCopy(BatchRenameDebugPreviewCopyKind::PreviewRows, 0u, expectedPreviewRows, L"Batch Rename preview-rows"))
+        return false;
 
     state.Require(DebugRevealBatchRenameWindowPreview(1u), L"Batch Rename reveal command should invoke the preview-row reveal callback.");
     state.Require(revealCalls == 1u, std::format(L"Batch Rename reveal callback should run once; saw {}.", revealCalls));

@@ -1,0 +1,91 @@
+{
+  "schema": "red-salamander.public-archive-member-projection.v1",
+  "kind": "Selected native cases and exit; not canonical runner summary",
+  "profile": "Debug",
+  "platform": "x64",
+  "origin_run": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f",
+  "original_results": {
+    "sha256": "6ebeb7e75dd5d0773ea5b26a2ad5a8821bc05583855a904d4ab4294eebc52f51",
+    "bytes": 881
+  },
+  "omitted_fields": [
+    "artifact_root"
+  ],
+  "run_started_utc": "2026-11-14T07:25:14.935Z",
+  "duration_ms": 33406,
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "duration_ms": 1390,
+      "repeat_index": 1
+    },
+    {
+      "name": "FileOps_PopupIdleCadence",
+      "status": "passed",
+      "duration_ms": 31969,
+      "repeat_index": 1
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "duration_ms": 47,
+      "repeat_index": 1
+    }
+  ],
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "repeat_count": 1,
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "native_process": {
+    "executable_relative_path": ".build/x64/Debug/RedSalamander.exe",
+    "pid": 87972,
+    "observed_utc": "2026-11-14T07:25:49.0945838Z",
+    "exit_code": 0
+  },
+  "runner_exit": 2,
+  "repository_verdict": "NOT_EVALUATED",
+  "coverage_scope": "filtered",
+  "suite": "FileOperations",
+  "projection_rules": {
+    "added_fields": "Projection schema/kind,profile,platform,origin/digests and filtered runner verdict describe provenance,not original native-result fields",
+    "native_exit": {
+      "source_member": "artifacts/native-process-exits/9ca27408c8bc4bad815171c63020be20.json",
+      "omitted_fields": [
+        "schema",
+        "executable"
+      ],
+      "retained_nested_fields": [
+        "observed_utc",
+        "exit_code"
+      ],
+      "source_sha256": "386eaaf86fb1e75196a7fe04c0bfcb06c0a777be5c90631313e2ac2ef7d06ff1",
+      "renamed_fields": {
+        "process_id": "native_process.pid"
+      },
+      "derived_fields": {
+        "executable_relative_path": "Receipt-relative path joined to the original absolute executable identity"
+      }
+    },
+    "native_results": {
+      "renamed_fields": [],
+      "retained_fields": [
+        "suite",
+        "run_started_utc",
+        "duration_ms",
+        "cases",
+        "passed",
+        "failed",
+        "skipped",
+        "repeat_count",
+        "fail_fast",
+        "timeout_scale"
+      ],
+      "omitted_fields": [
+        "artifact_root"
+      ]
+    }
+  }
+}

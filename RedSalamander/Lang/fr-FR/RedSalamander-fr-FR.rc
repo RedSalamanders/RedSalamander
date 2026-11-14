@@ -485,6 +485,19 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP "Supprimer la source ne s’applique à tous que si les deux fichiers ont la même taille et la même date."
+    IDS_FILEOPS_RETAINED_DESTINATION_AUTHORITY "Copié ; source conservée car la destination ne peut pas garantir l’identité de l’objet publié."
+    IDS_FILEOPS_RETAINED_SOURCE_FACTS "Copié ; source conservée car son nom, sa taille et ses dates n’ont pas pu être lus."
+    IDS_FILEOPS_RETAINED_SOURCE_AUTHORITY "Copié ; source conservée car son identité exacte n’est pas disponible."
+    IDS_FILEOPS_RETAINED_FOLDER_CHILDREN "Le dossier source a été conservé car il contient un élément non sélectionné ou ajouté depuis."
+    IDS_FILEOPS_RETAINED_SOURCE_CLEANUP "Copié ; source conservée car sa suppression conditionnelle n’a pas abouti."
+    IDS_FILEOPS_RETAINED_SOURCE_PLACEHOLDER "Copié ; source conservée conformément à votre choix pour l’espace réservé cloud."
+    IDS_FILEOPS_RETAINED_SOURCE_EFS "Copié ; source conservée car le chiffrement EFS n’a pas pu être préservé."
+    IDS_FILEOPS_RETAINED_SOURCE_SPARSE "Copié ; source conservée car l’allocation éparse n’a pas pu être préservée."
+    IDS_FILEOPS_RETAINED_SOURCE_SECURITY_METADATA "Copié ; source conservée car les métadonnées de sécurité n’ont pas été préservées."
+    IDS_FILEOPS_RETAINED_DESTINATION_CONTENT_PROOF "Copié ; source conservée car la destination n’a pas pu vérifier le contenu publié."
+    IDS_FILEOPS_RETAINED_FOLDER_INCOMPLETE "Le dossier source a été conservé car au moins un de ses éléments n’a pas été traité."
+    IDS_FILEOPS_DIAG_DESTINATION_ANCESTRY_UNPROVED "Impossible de vérifier que la destination est hors du dossier source. Aucun élément n’a été copié ou déplacé."
     IDS_FMT_FILEOPS_TRANSFER_AMOUNT "{0} sur {1}"
     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} fichiers, {1:L} dossiers"

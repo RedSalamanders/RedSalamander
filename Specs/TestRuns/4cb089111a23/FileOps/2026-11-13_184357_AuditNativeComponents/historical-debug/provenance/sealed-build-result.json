@@ -1,0 +1,14 @@
+{
+  "source": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+  "runId": "20261113T164233Z-54404-7c6a1aaf2f3446578555674b91a20dd7",
+  "platform": "x64",
+  "configuration": "Debug",
+  "exitCode": 0,
+  "warnings": 0,
+  "errors": 0,
+  "elapsed": "00:07:00",
+  "receipt": "2a421a6b4d303b142f68a56faf7b070fdeff32953a4803884fba1ecd0e105135",
+  "snapshot": "bf6aed7cb9a8479f998dbde44717845600a8735933c4387f518d531e8100b04d",
+  "receiptPath": "Z:\\src\\.worktrees\\RS-audit20261113\\.build\\x64\\Debug\\receipts\\2a421a6b4d303b142f68a56faf7b070fdeff32953a4803884fba1ecd0e105135.json",
+  "logSha256": "0a179cea19b447068150dc0ea75601573ae9e42274c5e89eeda44f808f69cee1"
+}

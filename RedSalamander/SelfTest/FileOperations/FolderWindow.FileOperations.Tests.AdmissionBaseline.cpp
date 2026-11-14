@@ -210,7 +210,8 @@ using MetadataProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
 
 [[nodiscard]] bool RunOwnedRootMetadataOplockControl(const std::filesystem::path& directory, MetadataProbe metadataProbe, std::wstring& failure) noexcept
 {
-    wil::unique_hfile owner(CreateFileW(directory.c_str(),
+    const std::wstring extendedDirectory = Common::Paths::ToExtendedWin32Path(directory.native());
+    wil::unique_hfile owner(CreateFileW(extendedDirectory.c_str(),
                                         FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
                                         FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                         nullptr,
@@ -222,10 +223,26 @@ using MetadataProbe = HRESULT(__stdcall*)(const wchar_t*, BOOL*);
         failure = L"the owned directory oplock handle could not open";
         return false;
     }
-    std::array<wchar_t, MAX_PATH> nativeName{};
-    const DWORD nativeLength =
-        GetFinalPathNameByHandleW(owner.get(), nativeName.data(), static_cast<DWORD>(nativeName.size()), VOLUME_NAME_NT | FILE_NAME_NORMALIZED);
-    if (nativeLength == 0u || nativeLength >= nativeName.size())
+    std::wstring nativeName;
+    DWORD requiredNameUnits = GetFinalPathNameByHandleW(owner.get(), nullptr, 0u, VOLUME_NAME_NT | FILE_NAME_NORMALIZED);
+    bool nameResolved       = false;
+    // The pinned directory may be renamed between the sizing and copying calls.
+    for (unsigned int attempt = 0u; requiredNameUnits != 0u && requiredNameUnits <= 65'536u && attempt < 3u; ++attempt)
+    {
+        nativeName.resize(static_cast<size_t>(requiredNameUnits) + 1u);
+        const DWORD copied =
+            GetFinalPathNameByHandleW(owner.get(), nativeName.data(), static_cast<DWORD>(nativeName.size()), VOLUME_NAME_NT | FILE_NAME_NORMALIZED);
+        if (copied == 0u)
+            break;
+        if (copied < nativeName.size())
+        {
+            nativeName.resize(copied);
+            nameResolved = true;
+            break;
+        }
+        requiredNameUnits = copied;
+    }
+    if (! nameResolved)
     {
         failure = L"the owned directory's handle-derived NT name is unavailable";
         return false;

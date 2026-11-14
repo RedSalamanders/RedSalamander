@@ -1,0 +1,25 @@
+{
+  "status": "Bounded public payload review clear for searched identifiers; archive semantic validation remains pending",
+  "files_scanned_before_this_report": 102,
+  "scope": "All proposed public textual payload files, BOM-aware UTF-8 and UTF-16 decoding. JSON/JSONL strings are decoded before UNC host classification to avoid treating escaped local drive paths as hostnames. No external/user-root enumeration or SID account resolution. Not a guarantee against undisclosed secrets.",
+  "patterns_checked": [
+    "local_account_sid",
+    "user_profile_path",
+    "email_address",
+    "credential_marker",
+    "unc_host",
+    "hostname_key"
+  ],
+  "match_counts": {
+    "local_account_sid": 0,
+    "user_profile_path": 0,
+    "email_address": 0,
+    "credential_marker": 0,
+    "unc_host": 0,
+    "hostname_key": 0
+  },
+  "private_packet_finding": "Five omitted raw archive intents contain local machine/account-specific owner/group SIDs in inventory[].security SDDL. These are identifying metadata; no password or secret was discovered.",
+  "remediation": "Five raw intents and prior private packet versions remain unchanged locally. Public copies are explicitly derived selected-member projections with no security descriptors or SID values. Historical/private-reference manifest copies are provenance only, not the current public inventory. Other clean native/receipt/source/metric/analysis bytes are exact.",
+  "privacy_findings_remaining": [],
+  "remaining_validation_limit": "No dedicated archive-validator schema/semantic dispatch currently exists for red-salamander.public-archive-member-projection.v1. This report does not claim that gate passed."
+}

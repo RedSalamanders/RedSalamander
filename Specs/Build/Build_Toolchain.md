@@ -1,5 +1,33 @@
 # Official Build Toolchain Identity
 
+## Build discovery and preparation failures
+
+Every guarded standalone resource-satellite ProjectReference must have the same
+satellite in its owning solution project's ProjectDependencies. Solution builds
+disable those references when CurrentSolutionConfigurationContents is populated,
+so the explicit solution graph must preserve all locales for selected application,
+configuration, plugin and test builds.
+
+Host-ordered MSBuild executable discovery is shared by the ordinary build and DxUi
+SDK artifact reopener. Within one selected installation it prefers native 64-bit,
+then runnable 64-bit emulation, then x86; x64 hosts never select ARM64 executables.
+Explicit GitHub workflow-selected MSBuild remains independently validated and bound
+to its original receipt hash. SDK consumer preflight uses the same sanitized,
+contained, dependency-scoped invocation and `/nr:false` policy as compilation.
+The shared workflow-selection helper gives an explicit `MSBUILD_EXE_PATH` priority
+and refuses invalid selections without fallback. With that variable absent, a valid
+PATH-selected MSBuild chooses its own installation and host-ordered executable before
+latest-instance discovery. Build, SDK reopen and vcpkg dependency installation preserve
+that same PATH-only installation even when another registered instance is newer.
+Direct vcpkg callers retain their existing explicit-path installation parser; executable
+admission for builds and SDK artifacts remains subject to the stricter shared helper.
+
+Pinned DxUi restoration uses the current PowerShell executable, performs read-only
+Git status checks without optional index locks, and serializes the complete native
+policy identity without truncating its nested fields. A failed explicit Clean stops
+the build before compilation and receipt publication. Rebuild already cleans its
+selected graph and must not receive a second preceding Clean pass.
+
 ## Explicit local SDK application builds
 
 `Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin
@@ -286,7 +314,8 @@ Ghostty lifecycle module and its complete direct/indirect helper closure, the
 canonical Ghostty product lock and schema, the current private-runtime patch, the
 complete notice-input set, and `RuntimeDependencies.props`.
 This includes `ArtifactOperationLock.psm1` for closed-package path guards and
-`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation.
+`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation,
+and `MSBuildInvocation.psm1` imported by the dependency owner.
 `Get-RSGhosttyRuntimeIdentityInputPaths` owns that exact closure and
 `ReleaseWorkflowPolicy.Tests.ps1` compares it with the workflow key; adding or
 removing a behavioral input
@@ -733,6 +762,10 @@ Updating vcpkg dependencies is therefore a manual, single reviewed change:
 3. Prove availability with the governed installer gate: `vcpkg-install.ps1` against the new tool and baseline on a clean
    restore, and the offline pin contract (`Tools/Tests/VcpkgInstallSafety.Tests.ps1`), which checks each floor and
    override against the immutable builtin-baseline version database; those data checks do not attest a live executable checkout.
+   Their offline object reader may reuse the existing DxUi consumer output's vcpkg object store through the
+   canonical resolved-output helper after checking the complete dependency source pin, output identity and pinned
+   microsoft/vcpkg origin. The store's active checkout is not the baseline authority: the exact requested
+   RedSalamander baseline, tree and blob IDs must be present and verified without fetching or moving refs.
 4. Merge only with a green CI build.
 
 The governed installer pins every triplet it builds to the Visual Studio installation and the default MSVC toolset the
@@ -934,13 +967,12 @@ DxUi is public: exact-pin HTTPS source restore requires no PAT or Actions secret
 public Actions API access were verified on 2026-09-09. CI can use its automatic read-only job token
 for advisory API rate limits; unavailable/rate-limited advisory queries never change or reject the pin.
 
-The native matrix is selected per event: pull requests build x64 Debug and ARM64 Debug,
-pushes to `main` add both Release profiles, and ASan Debug runs from `asan.yml`. Each
-job builds the test-enabled solution, verifies the ASAN defect probe where selected,
-then uses the receipt-gated runner in that same job with the suite named by the
-reusable workflow's `test_suite` input (`PR` on pull requests and pushes to `main`;
-`CI` on the nightly `nightly-ci.yml` matrix and the weekly ASan lane, which never runs
-on pull requests; `Full` remains the local closeout gate). Cross-job nightly/package handoffs still require portable attestation.
+Hosted scheduling and scope selection follow [Build_UnifiedCI.md](Build_UnifiedCI.md).
+Pull requests run compiler-free checks; admitted main native Release regression runs on
+x64 and ARM64 before production. Explicit manual native and ASan qualification use
+their configured profiles and architectures without advancing main qualification.
+In-product tests require test-enabled receipt-bound artifacts; ASan retains its
+seeded detector requirement. Cross-job/package handoffs still require portable attestation.
 Runtime execution is rejected if host architecture differs from the selected target.
 No custom DxUi secret is required; the public pin restores through HTTPS.
 

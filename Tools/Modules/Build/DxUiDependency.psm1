@@ -2,6 +2,7 @@ Import-Module (Join-Path $PSScriptRoot 'DxUiPaths.psm1') -Scope Local -ErrorActi
 # Product policy around the canonical library's restore identity and imports.
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'ArtifactOperationLock.psm1') -Scope Local
+Import-Module (Join-Path $PSScriptRoot 'MSBuildInvocation.psm1') -Scope Local
 Import-Module (Join-Path $PSScriptRoot 'ProcessStreaming.psm1') -Scope Local
 
 # The restore leaves out what the library keeps for its own development: retained measurements, specifications and the
@@ -63,7 +64,7 @@ function Get-RSDxUiSourceIdentity {
     }
     $head = (& git -C $source rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $head -cne $pin.commit) { throw 'The restored DxUi checkout does not match the product pin.' }
-    $dirty = & git -C $source status --porcelain --untracked-files=normal
+    $dirty = & git -C $source --no-optional-locks status --porcelain --untracked-files=normal
     if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'The restored DxUi source is dirty; build and test receipt reuse is forbidden.' }
     $tree = (& git -C $source rev-parse HEAD:include).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the pinned DxUi public headers.' }
@@ -110,7 +111,7 @@ function Install-RSDxUiPinnedSource {
         Invoke-RSDxUiRestoreProcess $RepoRoot 'git.exe' (@('-C', $Source, 'sparse-checkout', 'set', '--no-cone') + $script:RSDxUiSparseCheckoutPatterns)
         Invoke-RSDxUiRestoreProcess $RepoRoot 'git.exe' @('-C', $Source, '-c', 'core.longpaths=true', 'checkout', '--detach', $Commit)
         # git checkout can name files it could not write and still exit 0; the status shows each as a deletion.
-        $dirty = @(& git -C $Source status --porcelain --untracked-files=normal)
+        $dirty = @(& git -C $Source --no-optional-locks status --porcelain --untracked-files=normal)
         if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
             throw "The DxUi checkout is incomplete: $($dirty.Count) path(s) were not written, such as '$($dirty | Select-Object -First 1)'."
         }
@@ -241,7 +242,9 @@ foreach($field in (Get-DxUiNativePolicyFields -RepoRoot $RepoRoot).GetEnumerator
         # Before the library's own dependency restore: a pin that crossed an API revision is adopted deliberately.
         Assert-RSDxUiApiRevision -Pin $pin -Recorded (Get-RSDxUiRecordedApiRevision $identity.Identity) -Context 'The pinned DxUi source'
         $output = Initialize-DxUiOutputRoot -DependencyRoot $dependency -BuildIdentity $identity
-        Invoke-RSDxUiRestoreProcess $RepoRoot 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',
+        $pwshExe = (Get-Process -Id $PID).Path
+        if ([string]::IsNullOrWhiteSpace($pwshExe) -or -not (Test-Path -LiteralPath $pwshExe -PathType Leaf)) { $pwshExe = 'pwsh.exe' }
+        Invoke-RSDxUiRestoreProcess $RepoRoot $pwshExe @('-NoProfile','-ExecutionPolicy','Bypass','-File',
             (Join-Path $source 'vcpkg-install.ps1'),'-Platform',$Platform,'-OutputRoot',$output)
         $values = [ordered]@{
             DxUiRoot=$source; DxUiConsumerOutputRoot=$output; DxUiConsumerLockFile=(Join-Path $RepoRoot 'Dependencies/DxUi.lock.json');
@@ -252,7 +255,7 @@ foreach($field in (Get-DxUiNativePolicyFields -RepoRoot $RepoRoot).GetEnumerator
         $properties = foreach ($name in $values.Keys) { '<' + $name + '>' + [Security.SecurityElement]::Escape($values[$name]) + '</' + $name + '>' }
         $props = '<Project><PropertyGroup>' + ($properties -join '') + '</PropertyGroup></Project>'
         foreach ($record in @(@{path="DxUi.resolved.$Platform.props";text=$props},
-            @{path="DxUi.identity.$Platform.json";text=($identity | ConvertTo-Json -Depth 5)})) {
+            @{path="DxUi.identity.$Platform.json";text=($identity | ConvertTo-Json -Depth 9)})) {
             $path = Join-Path $dependency $record.path
             if (-not (Test-Path -LiteralPath $path) -or [IO.File]::ReadAllText($path) -cne $record.text) {
                 [IO.File]::WriteAllText($path,$record.text,[Text.UTF8Encoding]::new($false))
@@ -380,11 +383,18 @@ function Open-RSDxUiSdkArtifactInput {
     if((Get-FileHash -LiteralPath $descriptor).Hash -ine $record.descriptorSha256){throw 'The independent SDK descriptor changed after compilation.'}
     if([IO.Path]::GetFileName($record.msbuildPath) -ine 'MSBuild.exe'){throw 'The SDK record cannot select another executable.'}
     # This SDK policy is deliberately narrower than general build discovery: use
-    # the registered selected VS instance's native MSBuild, never a record-supplied executable.
-    Import-Module (Join-Path $PSScriptRoot 'VcpkgInstallSafety.psm1') -Scope Local
-    $installation=Get-RSVcpkgVisualStudioInstallation
-    $hostFolder=if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ceq 'Arm64'){'arm64'}else{'amd64'}
-    $msbuild=Join-Path $installation "MSBuild/Current/Bin/$hostFolder/MSBuild.exe"
+    # the registered selected VS instance's native MSBuild (or CI workflow-selected
+    # MSBUILD_EXE_PATH on GitHub Actions), never a record-supplied executable.
+    $selected = Get-RSWorkflowSelectedMSBuild
+    $msbuild = if ($null -ne $selected) { $selected.Path } else { $null }
+    if (-not $msbuild) {
+        Import-Module (Join-Path $PSScriptRoot 'VcpkgInstallSafety.psm1') -Scope Local
+        $installation = Get-RSVcpkgVisualStudioInstallation
+        $msbuild = Find-RSHostOrderedMSBuildInInstallation -InstallationPath $installation
+    }
+    if (-not $msbuild -or -not (Test-Path -LiteralPath $msbuild -PathType Leaf)) {
+        throw 'Cannot locate a native MSBuild executable in the selected Visual Studio installation.'
+    }
     $tool=Get-Content -LiteralPath $toolPath -Raw|ConvertFrom-Json
     if(-not [string]::Equals([IO.Path]::GetFullPath($msbuild),[IO.Path]::GetFullPath($record.msbuildPath),[StringComparison]::OrdinalIgnoreCase) -or
         (Get-FileHash -LiteralPath $msbuild).Hash -ine $record.msbuildSha256 -or $tool.msbuild.sha256 -ine $record.msbuildSha256){throw 'The SDK artifact requires its unchanged independently selected native MSBuild.'}

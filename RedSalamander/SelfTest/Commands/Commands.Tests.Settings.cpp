@@ -9453,6 +9453,421 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     }
 }
 
+// Admission/clipboard failure evidence needs only HWND identity metadata at a named boundary. Unlike
+// DesktopStateSnapshot, this adapter never samples cursor/input or observes events; unlike the existing
+// window descriptions it records PID/thread/class availability and capture time, without window titles.
+// Metadata can disappear between these read-only calls, so availability/errors remain explicit.
+struct CommandsWindowObservation
+{
+    HWND window         = nullptr;
+    DWORD process       = 0u;
+    DWORD thread        = 0u;
+    DWORD identityError = ERROR_SUCCESS;
+    DWORD classError    = ERROR_SUCCESS;
+    bool valid          = false;
+    bool classAvailable = false;
+    std::array<wchar_t, 256u> className{};
+    uint64_t utcFileTime100ns = 0u;
+    ULONGLONG monotonicMs     = 0u;
+};
+
+[[nodiscard]] CommandsWindowObservation CaptureCommandsWindowObservation(HWND window) noexcept
+{
+    CommandsWindowObservation result{};
+    result.window = window;
+    FILETIME utc{};
+    GetSystemTimePreciseAsFileTime(&utc);
+    result.utcFileTime100ns = (static_cast<uint64_t>(utc.dwHighDateTime) << 32u) | utc.dwLowDateTime;
+    result.monotonicMs      = GetTickCount64();
+    result.valid            = window && IsWindow(window) != FALSE;
+    if (! result.valid)
+    {
+        result.identityError = ERROR_INVALID_WINDOW_HANDLE;
+        result.classError    = ERROR_INVALID_WINDOW_HANDLE;
+        return result;
+    }
+    SetLastError(ERROR_SUCCESS);
+    result.thread = GetWindowThreadProcessId(window, &result.process);
+    if (result.thread == 0u)
+        result.identityError = GetLastError();
+    SetLastError(ERROR_SUCCESS);
+    result.classAvailable = GetClassNameW(window, result.className.data(), static_cast<int>(result.className.size())) > 0;
+    if (! result.classAvailable)
+        result.classError = GetLastError();
+    return result;
+}
+
+[[nodiscard]] std::wstring DescribeCommandsWindowObservation(const CommandsWindowObservation& value)
+{
+    return std::format(L"hwnd=0x{:X},pid={},thread={},valid={},identityAvailable={},identityError={},classAvailable={},classError={},class='{}',"
+                       L"utcFileTime100ns={},monotonicMs={}",
+                       reinterpret_cast<UINT_PTR>(value.window),
+                       value.process,
+                       value.thread,
+                       value.valid,
+                       value.thread != 0u,
+                       value.identityError,
+                       value.classAvailable,
+                       value.classError,
+                       value.classAvailable ? value.className.data() : L"<unavailable>",
+                       value.utcFileTime100ns,
+                       value.monotonicMs);
+}
+
+// Same-TU test diagnostics, not a process-control API. The inline C# hosted observer
+// cannot consume this native ABI; both hash exact UTF-16LE image-path bytes with SHA-256.
+// No raw path, arbitrary executable name, title or command line enters the observation.
+struct CommandsProcessFacts
+{
+    uint64_t creationTime  = 0u;
+    DWORD handleProcess    = 0u;
+    DWORD openError        = ERROR_SUCCESS;
+    DWORD identityError    = ERROR_SUCCESS;
+    DWORD creationError    = ERROR_SUCCESS;
+    DWORD imageError       = ERROR_SUCCESS;
+    DWORD sessionError     = ERROR_SUCCESS;
+    DWORD jobError         = ERROR_SUCCESS;
+    DWORD parentError      = ERROR_SUCCESS;
+    LONG parentStatus      = 0;
+    DWORD parentProcess    = 0u;
+    DWORD session          = 0u;
+    uint32_t imageKind     = 0u;
+    bool opened            = false;
+    bool creationAvailable = false;
+    bool imageAvailable    = false;
+    bool digestAvailable   = false;
+    bool sessionAvailable  = false;
+    bool anyJobAvailable   = false;
+    bool anyJob            = false;
+    bool parentAvailable   = false;
+    std::array<std::byte, 32u> imageDigest{};
+};
+
+[[nodiscard]] const wchar_t* CommandsProcessImageKind(uint32_t kind) noexcept
+{
+    constexpr std::array names{L"other",
+                               L"WindowsTerminal.exe",
+                               L"OpenConsole.exe",
+                               L"conhost.exe",
+                               L"pwsh.exe",
+                               L"powershell.exe",
+                               L"cmd.exe",
+                               L"hosted-compute-agent",
+                               L"hosted-compute-agent.exe",
+                               L"RedSalamander.exe",
+                               L"RedSalamanderSearchService.exe"};
+    return kind < names.size() ? names[kind] : names[0];
+}
+
+[[nodiscard]] uint32_t ClassifyCommandsProcessImage(std::wstring_view path) noexcept
+{
+    const size_t separator       = path.find_last_of(L"\\/");
+    const std::wstring_view leaf = separator == std::wstring_view::npos ? path : path.substr(separator + 1u);
+    for (uint32_t kind = 1u; kind <= 10u; ++kind)
+    {
+        if (Redaction::EqualsNoCaseAscii(leaf, CommandsProcessImageKind(kind)))
+            return kind;
+    }
+    return 0u;
+}
+
+[[nodiscard]] CommandsProcessFacts ReadCommandsProcessFacts(HANDLE process, DWORD processId, bool extended, DWORD openError) noexcept
+{
+    CommandsProcessFacts result{};
+    if (! process)
+    {
+        result.openError = openError;
+        return result;
+    }
+    result.opened = true;
+    SetLastError(ERROR_SUCCESS);
+    result.handleProcess = GetProcessId(process);
+    if (result.handleProcess == 0u)
+        result.identityError = GetLastError();
+    if (result.handleProcess != processId)
+        return result;
+    FILETIME created{}, exited{}, kernel{}, user{};
+    result.creationAvailable = GetProcessTimes(process, &created, &exited, &kernel, &user) != FALSE;
+    if (result.creationAvailable)
+        result.creationTime = (static_cast<uint64_t>(created.dwHighDateTime) << 32u) | created.dwLowDateTime;
+    else
+        result.creationError = GetLastError();
+    if (! extended)
+        return result;
+
+    std::array<wchar_t, 4096u> image{};
+    DWORD imageChars      = static_cast<DWORD>(image.size());
+    result.imageAvailable = QueryFullProcessImageNameW(process, 0u, image.data(), &imageChars) != FALSE;
+    if (result.imageAvailable)
+    {
+        const std::wstring_view path(image.data(), imageChars);
+        result.imageKind = ClassifyCommandsProcessImage(path);
+        std::vector<std::byte> digest;
+        result.digestAvailable = Common::Crypto::ComputeContentDigest(Common::Crypto::ContentDigestAlgorithm::Sha256,
+                                                                      std::as_bytes(std::span<const wchar_t>(path.data(), path.size())),
+                                                                      digest) &&
+                                 digest.size() == result.imageDigest.size();
+        if (result.digestAvailable)
+            std::ranges::copy(digest, result.imageDigest.begin());
+    }
+    else
+        result.imageError = GetLastError();
+    result.sessionAvailable = ProcessIdToSessionId(processId, &result.session) != FALSE;
+    if (! result.sessionAvailable)
+        result.sessionError = GetLastError();
+    BOOL inJob             = FALSE;
+    result.anyJobAvailable = IsProcessInJob(process, nullptr, &inJob) != FALSE;
+    if (result.anyJobAvailable)
+        result.anyJob = inJob != FALSE;
+    else
+        result.jobError = GetLastError();
+
+    // Match the existing bounded ProcessBasicInformation query in SanitizedEnvironment.
+    // Resolve the query-only ntdll entry without adding a link dependency or enumerating processes.
+    struct BasicInformation
+    {
+        void* reserved1;
+        void* peb;
+        void* reserved2[2];
+        ULONG_PTR uniqueProcess;
+        ULONG_PTR parentProcess;
+    };
+    using QueryInformation = LONG(NTAPI*)(HANDLE, ULONG, void*, ULONG, ULONG*);
+    const HMODULE module   = GetModuleHandleW(L"ntdll.dll"); // Borrowed module; never released here.
+    const FARPROC address  = module ? GetProcAddress(module, "NtQueryInformationProcess") : nullptr;
+    if (! address)
+    {
+        result.parentError = GetLastError();
+        return result;
+    }
+    QueryInformation query = nullptr;
+    static_assert(sizeof(query) == sizeof(address));
+    std::memcpy(&query, &address, sizeof(query)); // Windows function-pointer ABI, without an unsafe function-pointer cast.
+    BasicInformation information{};
+    result.parentStatus = query(process, 0u, &information, static_cast<ULONG>(sizeof(information)), nullptr);
+    if (result.parentStatus >= 0 && information.uniqueProcess == processId && information.parentProcess > 0u &&
+        information.parentProcess <= (std::numeric_limits<DWORD>::max)())
+    {
+        result.parentAvailable = true;
+        result.parentProcess   = static_cast<DWORD>(information.parentProcess);
+    }
+    else if (result.parentStatus >= 0)
+        result.parentError = ERROR_INVALID_DATA;
+    return result;
+}
+
+struct CommandsProcessObservation
+{
+    CommandsProcessFacts process;
+    CommandsProcessFacts parent;
+    DWORD finalThread             = 0u;
+    DWORD finalProcess            = 0u;
+    DWORD relationError           = ERROR_SUCCESS;
+    bool processInstanceAvailable = false;
+    bool parentQueried            = false;
+    bool parentCreationCompatible = false;
+    bool relationStable           = false;
+};
+
+// The injected readers exercise this actual orchestration without opening a process/window.
+template <typename ReadProcess, typename ReadWindow>
+[[nodiscard]] CommandsProcessObservation ObserveCommandsProcess(const CommandsWindowObservation& window, ReadProcess&& readProcess, ReadWindow&& readWindow)
+{
+    CommandsProcessObservation result{};
+    if (window.process == 0u || window.thread == 0u)
+    {
+        result.relationError = ERROR_INVALID_WINDOW_HANDLE;
+        return result;
+    }
+    result.process = readProcess(window.process, true);
+    result.processInstanceAvailable =
+        result.process.opened && result.process.handleProcess == window.process && result.process.creationAvailable && result.process.creationTime > 0u;
+    if (result.processInstanceAvailable && result.process.parentAvailable && result.process.parentProcess != 0u &&
+        result.process.parentProcess != window.process)
+    {
+        result.parentQueried            = true;
+        result.parent                   = readProcess(result.process.parentProcess, false);
+        result.parentCreationCompatible = result.parent.opened && result.parent.handleProcess == result.process.parentProcess &&
+                                          result.parent.creationAvailable && result.parent.creationTime > 0u &&
+                                          result.parent.creationTime <= result.process.creationTime;
+    }
+    result.finalThread    = readWindow(window.window, result.finalProcess, result.relationError);
+    result.relationStable = result.finalThread != 0u && result.finalThread == window.thread && result.finalProcess == window.process;
+    return result;
+}
+
+[[nodiscard]] CommandsProcessObservation CaptureCommandsProcessObservation(const CommandsWindowObservation& window)
+{
+    if (window.process == 0u || window.thread == 0u)
+    {
+        CommandsProcessObservation result{};
+        result.relationError = ERROR_INVALID_WINDOW_HANDLE;
+        return result;
+    }
+    // Keep both queried process instances pinned until the final HWND relation sample.
+    wil::unique_handle child(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, window.process));
+    const DWORD childError = child ? ERROR_SUCCESS : GetLastError();
+    wil::unique_handle parent;
+    const auto reader = [&](DWORD processId, bool extended) noexcept
+    {
+        if (processId == window.process)
+            return ReadCommandsProcessFacts(child.get(), processId, extended, childError);
+        parent.reset(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId));
+        const DWORD parentError = parent ? ERROR_SUCCESS : GetLastError();
+        return ReadCommandsProcessFacts(parent.get(), processId, extended, parentError);
+    };
+    return ObserveCommandsProcess(window,
+                                  reader,
+                                  [](HWND handle, DWORD& processId, DWORD& error) noexcept
+    {
+        SetLastError(ERROR_SUCCESS);
+        const DWORD thread = GetWindowThreadProcessId(handle, &processId);
+        error              = thread == 0u ? GetLastError() : ERROR_SUCCESS;
+        return thread;
+    });
+}
+
+[[nodiscard]] std::wstring DescribeCommandsProcessObservation(const CommandsProcessObservation& value)
+{
+    const auto& p      = value.process;
+    const auto& parent = value.parent;
+    std::wstring digest;
+    if (p.digestAvailable)
+        Common::Crypto::AppendHexToken(digest, p.imageDigest);
+    return std::format(
+        L"instanceAvailable={},opened={},openError={},handlePid={},identityError={},creationKnown={},creationFileTime100ns={},creationError={},"
+        L"imageKnown={},imageError={},imageKind={},pathDigestAlgorithm=SHA256-UTF16LE,pathDigestKnown={},pathDigest={},"
+        L"sessionKnown={},session={},sessionError={},anyJobKnown={},anyJob={},jobError={},exactTestJob=unavailable,"
+        L"parentKnown={},parentPid={},parentError={},parentNtStatus=0x{:08X},parentQueried={},parentOpened={},parentOpenError={},parentHandlePid={},"
+        L"parentIdentityError={},"
+        L"parentCreationKnown={},parentCreationFileTime100ns={},parentCreationError={},parentCreationCompatible={},"
+        L"relationStable={},finalPid={},finalThread={},relationError={}; sequential observations only; parent compatibility is not creator/ownership proof",
+        value.processInstanceAvailable,
+        p.opened,
+        p.openError,
+        p.handleProcess,
+        p.identityError,
+        p.creationAvailable,
+        p.creationTime,
+        p.creationError,
+        p.imageAvailable,
+        p.imageError,
+        CommandsProcessImageKind(p.imageKind),
+        p.digestAvailable,
+        digest,
+        p.sessionAvailable,
+        p.session,
+        p.sessionError,
+        p.anyJobAvailable,
+        p.anyJob,
+        p.jobError,
+        p.parentAvailable,
+        p.parentProcess,
+        p.parentError,
+        static_cast<ULONG>(p.parentStatus),
+        value.parentQueried,
+        parent.opened,
+        parent.openError,
+        parent.handleProcess,
+        parent.identityError,
+        parent.creationAvailable,
+        parent.creationTime,
+        parent.creationError,
+        value.parentCreationCompatible,
+        value.relationStable,
+        value.finalProcess,
+        value.finalThread,
+        value.relationError);
+}
+
+[[nodiscard]] bool TestCommandsProcessObservationControls(CaseState& state) noexcept
+{
+    CommandsWindowObservation window{};
+    window.window  = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x123u));
+    window.process = 42u;
+    window.thread  = 7u;
+    CommandsProcessFacts child{};
+    child.opened                = true;
+    child.handleProcess         = 42u;
+    child.creationAvailable     = true;
+    child.creationTime          = 200u;
+    child.parentAvailable       = true;
+    child.parentProcess         = 41u;
+    CommandsProcessFacts parent = child;
+    parent.handleProcess        = 41u;
+    parent.creationTime         = 100u;
+    size_t reads                = 0u;
+    const auto reader           = [&](DWORD pid, bool extended)
+    {
+        ++reads;
+        state.Require((pid == 42u && extended) || (pid == 41u && ! extended),
+                      L"Process observation must query only the captured child and one minimal parent.");
+        return pid == 42u ? child : parent;
+    };
+    DWORD finalPid          = 42u;
+    const auto windowReader = [&](HWND observed, DWORD& pid, DWORD& error) noexcept
+    {
+        state.Require(observed == window.window, L"Process observation must recheck the same captured HWND.");
+        pid   = finalPid;
+        error = ERROR_SUCCESS;
+        return 7u;
+    };
+    auto observed = ObserveCommandsProcess(window, reader, windowReader);
+    state.Require(observed.processInstanceAvailable && observed.parentCreationCompatible && observed.relationStable && reads == 2u,
+                  L"Process observations must retain creation-bound child and bounded compatible parent facts.");
+    parent.creationTime = 300u;
+    finalPid            = 99u;
+    observed            = ObserveCommandsProcess(window, reader, windowReader);
+    state.Require(! observed.parentCreationCompatible && ! observed.relationStable, L"Reused parent PID and changed HWND ownership must remain unproved.");
+    child.handleProcess = 99u;
+    reads               = 0u;
+    observed            = ObserveCommandsProcess(window, reader, windowReader);
+    state.Require(! observed.processInstanceAvailable && ! observed.parentQueried && reads == 1u,
+                  L"A mismatched process handle must not admit a parent query.");
+    child           = {};
+    child.openError = ERROR_ACCESS_DENIED;
+    reads           = 0u;
+    observed        = ObserveCommandsProcess(window, reader, windowReader);
+    state.Require(observed.process.openError == ERROR_ACCESS_DENIED && ! observed.parentQueried && reads == 1u, L"Process denial must preserve its own error.");
+    child.opened        = true;
+    child.handleProcess = 42u;
+    child.creationError = ERROR_INVALID_PARAMETER;
+    child.imageError    = ERROR_INSUFFICIENT_BUFFER;
+    child.sessionError  = ERROR_NOT_FOUND;
+    child.jobError      = ERROR_NOT_SUPPORTED;
+    child.parentStatus  = static_cast<LONG>(0xC0000022u);
+    reads               = 0u;
+    observed            = ObserveCommandsProcess(window, reader, windowReader);
+    state.Require(! observed.processInstanceAvailable && ! observed.parentQueried && reads == 1u && observed.process.creationError == ERROR_INVALID_PARAMETER &&
+                      observed.process.imageError == ERROR_INSUFFICIENT_BUFFER && observed.process.sessionError == ERROR_NOT_FOUND &&
+                      observed.process.jobError == ERROR_NOT_SUPPORTED && observed.process.parentStatus < 0,
+                  L"Unavailable creation, image, session, Job and parent facts must retain independent errors without another process query.");
+    observed.process.imageKind       = 999u;
+    observed.process.imageAvailable  = true;
+    observed.process.anyJobAvailable = true;
+    observed.process.anyJob          = true;
+    const auto text                  = DescribeCommandsProcessObservation(observed);
+    state.Require(text.find(L"imageKind=other") != std::wstring::npos && text.find(L"exactTestJob=unavailable") != std::wstring::npos,
+                  L"Unknown images and membership in any Job must never become an executable/ownership grant.");
+    state.Require(ClassifyCommandsProcessImage(LR"(C:\private-fixture\private-secret.exe)") == 0u &&
+                      ClassifyCommandsProcessImage(LR"(C:\private-fixture\WindowsTerminal.exe)") == 1u,
+                  L"Image projection must expose only fixed allowlisted kinds, without trusting their path or basename as authority.");
+    child                   = {};
+    child.opened            = true;
+    child.handleProcess     = window.process;
+    child.creationAvailable = true;
+    child.creationTime      = 200u;
+    child.parentAvailable   = true;
+    for (const DWORD parentPid : std::array<DWORD, 2u>{0u, window.process})
+    {
+        child.parentProcess = parentPid;
+        reads               = 0u;
+        observed            = ObserveCommandsProcess(window, reader, windowReader);
+        state.Require(! observed.parentQueried && reads == 1u, L"Zero and self parent candidates must never open another process.");
+    }
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool PrepareMainWindowForIsolatedUiCase(HWND mainWindow, CaseState& state, std::wstring_view context) noexcept
 {
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
@@ -9480,17 +9895,19 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     DebugHideThemeCycleOverlay();
 
-    const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
-    const HWND inputWindow      = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
-    const HWND foregroundBefore = GetForegroundWindow();
+    const HWND rootWindow                                         = GetAncestor(mainWindow, GA_ROOT);
+    const HWND inputWindow                                        = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
+    const CommandsWindowObservation foregroundBeforeObservation   = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const CommandsWindowObservation expectedForegroundObservation = CaptureCommandsWindowObservation(inputWindow);
+    const HWND foregroundBefore                                   = foregroundBeforeObservation.window;
     DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics admission{};
-    const auto handoffStarted  = std::chrono::steady_clock::now();
-    const bool activated       = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow, false, &admission);
-    const auto handoffElapsed  = std::chrono::steady_clock::now() - handoffStarted;
-    DWORD foregroundProcess    = 0u;
-    const HWND foregroundAfter = GetForegroundWindow();
-    static_cast<void>(GetWindowThreadProcessId(foregroundAfter, &foregroundProcess));
-    if (foregroundBefore != inputWindow)
+    const auto handoffStarted                                  = std::chrono::steady_clock::now();
+    const bool activated                                       = DirectedSelfTestInputWarning::TryActivateOwnedWindow(inputWindow, false, &admission);
+    const auto handoffElapsed                                  = std::chrono::steady_clock::now() - handoffStarted;
+    const CommandsWindowObservation foregroundAfterObservation = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const HWND foregroundAfter                                 = foregroundAfterObservation.window;
+    const DWORD foregroundProcess                              = foregroundAfterObservation.process;
+    if (foregroundBefore != inputWindow || ! activated || foregroundAfter != inputWindow)
     {
         Trace(std::format(L"Commands isolation foreground: before=0x{:X} after=0x{:X} target=0x{:X} foregroundPid={} selfPid={} acquired={} stage={} error={} "
                           L"heldKey={} sent={} requestAccepted={}",
@@ -9505,9 +9922,16 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
                           admission.heldKey,
                           admission.sentInputCount,
                           admission.foregroundRequestAccepted));
+        Trace(std::format(L"Commands foreground observations: context={}; stage=before-admission [{}]; stage=after-admission [{}]; expected [{}].",
+                          context,
+                          DescribeCommandsWindowObservation(foregroundBeforeObservation),
+                          DescribeCommandsWindowObservation(foregroundAfterObservation),
+                          DescribeCommandsWindowObservation(expectedForegroundObservation)));
     }
     if (! activated || foregroundAfter != inputWindow)
     {
+        Trace(std::format(L"Commands refusal process observation [{}].",
+                          DescribeCommandsProcessObservation(CaptureCommandsProcessObservation(foregroundAfterObservation))));
         DWORD selfSession                 = 0u;
         DWORD foregroundSession           = 0u;
         const bool selfSessionKnown       = ProcessIdToSessionId(GetCurrentProcessId(), &selfSession) != FALSE;
@@ -9640,7 +10064,29 @@ void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexc
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1000))),
                   std::format(L"Main folder view focus was not stable after input settling before {}.", context));
-    state.Require(GetForegroundWindow() == inputWindow, std::format(L"Main foreground ownership changed during input settling before {}.", context));
+    const CommandsWindowObservation settledForeground         = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const CommandsWindowObservation expectedSettledForeground = CaptureCommandsWindowObservation(inputWindow);
+    const bool foregroundOwned                                = settledForeground.window == inputWindow;
+    if (! foregroundOwned)
+    {
+        Trace(std::format(L"Commands refusal process observation [{}].",
+                          DescribeCommandsProcessObservation(CaptureCommandsProcessObservation(settledForeground))));
+    }
+    if (! state.failure.empty() || ! foregroundOwned)
+    {
+        Trace(std::format(L"Commands foreground observations: context={}; stage=before-admission [{}]; stage=after-admission [{}]; "
+                          L"stage=settled-validation [{}]; expected [{}].",
+                          context,
+                          DescribeCommandsWindowObservation(foregroundBeforeObservation),
+                          DescribeCommandsWindowObservation(foregroundAfterObservation),
+                          DescribeCommandsWindowObservation(settledForeground),
+                          DescribeCommandsWindowObservation(expectedSettledForeground)));
+    }
+    state.Require(foregroundOwned,
+                  std::format(L"Main foreground ownership changed during input settling before {}. stage=settled-validation; current [{}]; expected [{}].",
+                              context,
+                              DescribeCommandsWindowObservation(settledForeground),
+                              DescribeCommandsWindowObservation(expectedSettledForeground)));
     return state.failure.empty();
 }
 
@@ -11479,7 +11925,37 @@ struct ClipboardTextReadProbe final
     return clipText;
 }
 
-void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr) noexcept
+struct ClipboardSetupProbe final
+{
+    const wchar_t* stage = L"not-started";
+    DWORD error          = ERROR_SUCCESS;
+    bool cleared         = false;
+    bool quiet           = false;
+    DWORD sequenceBefore = 0u;
+    DWORD sequenceAfter  = 0u;
+};
+
+struct CommandsClipboardObservation
+{
+    DWORD sequence = 0u;
+    CommandsWindowObservation owner;
+    CommandsWindowObservation opener;
+};
+
+[[nodiscard]] CommandsClipboardObservation CaptureCommandsClipboardObservation() noexcept
+{
+    return {GetClipboardSequenceNumber(), CaptureCommandsWindowObservation(GetClipboardOwner()), CaptureCommandsWindowObservation(GetOpenClipboardWindow())};
+}
+
+[[nodiscard]] std::wstring DescribeCommandsClipboardObservation(const CommandsClipboardObservation& value)
+{
+    return std::format(L"sequence={}; owner [{}]; opener [{}]",
+                       value.sequence,
+                       DescribeCommandsWindowObservation(value.owner),
+                       DescribeCommandsWindowObservation(value.opener));
+}
+
+void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr, ClipboardSetupProbe* outProbe = nullptr) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -11488,11 +11964,28 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
         *outClearedAndQuiet = false;
     }
 
+    if (outProbe)
+    {
+        *outProbe                = {};
+        outProbe->sequenceBefore = GetClipboardSequenceNumber();
+    }
+    const auto recordSetup = [&](const wchar_t* stage, DWORD error, bool cleared, bool quiet) noexcept
+    {
+        if (outProbe)
+        {
+            outProbe->stage         = stage;
+            outProbe->error         = error;
+            outProbe->cleared       = cleared;
+            outProbe->quiet         = quiet;
+            outProbe->sequenceAfter = GetClipboardSequenceNumber();
+        }
+    };
     DxUi::DebugClearClipboardFallbackText();
 
     DWORD openError = ERROR_SUCCESS;
     if (! OpenClipboardForSelfTest(ownerWindow, SelfTest::Scale(3000ms), &openError))
     {
+        recordSetup(L"OpenClipboard", openError, false, false);
         Debug::Warning(std::format(L"Commands clipboard fixture could not open clipboard for clear (owner=0x{:X}, openWindow=0x{:X}, error={}, sequence={}).",
                                    reinterpret_cast<UINT_PTR>(ownerWindow),
                                    reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
@@ -11505,7 +11998,8 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
     DWORD clearError = ERROR_SUCCESS;
     {
         const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-        cleared                   = EmptyClipboard();
+        SetLastError(ERROR_SUCCESS);
+        cleared = EmptyClipboard();
         if (cleared == FALSE)
         {
             clearError = GetLastError(); // Diagnostic only; EmptyClipboard's return value controls setup.
@@ -11513,6 +12007,7 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
     }
     if (cleared == FALSE)
     {
+        recordSetup(L"EmptyClipboard", clearError, false, false);
         Debug::Warning(std::format(L"Commands clipboard fixture could not empty clipboard (owner=0x{:X}, openWindow=0x{:X}, error={}, sequence={}).",
                                    reinterpret_cast<UINT_PTR>(ownerWindow),
                                    reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
@@ -11522,12 +12017,14 @@ void ClearClipboardContents(HWND ownerWindow, bool* outClearedAndQuiet = nullptr
     }
     if (! WaitForClipboardQuietForSelfTest(ownerWindow))
     {
+        recordSetup(L"quiet-point", ERROR_SUCCESS, true, false);
         Debug::Warning(std::format(L"Commands clipboard fixture did not reach a quiet point after clearing (owner=0x{:X}, openWindow=0x{:X}, sequence={}).",
                                    reinterpret_cast<UINT_PTR>(ownerWindow),
                                    reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
                                    GetClipboardSequenceNumber()));
         return;
     }
+    recordSetup(L"cleared-and-quiet", ERROR_SUCCESS, true, true);
     if (outClearedAndQuiet)
     {
         *outClearedAndQuiet = true;
@@ -18429,7 +18926,13 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
         options, suite, L"folder_view_icon_bitmap_interpolation", [](CaseState& state) noexcept { return TestFolderViewIconBitmapInterpolation(state); });
     SelfTest::RunCase(
         options, suite, L"icon_cache_selects_non_upscaled_source", [](CaseState& state) noexcept { return TestIconCacheSelectsNonUpscaledSource(state); });
-    SelfTest::RunCase(options, suite, L"red_salamander_help_lists_diagnostics_options", [](CaseState& state) noexcept {
+    SelfTest::RunCase(options,
+                      suite,
+                      L"red_salamander_help_lists_diagnostics_options",
+                      [](CaseState& state) noexcept
+    {
+        if (! TestCommandsProcessObservationControls(state))
+            return false;
         return TestRedSalamanderHelpListsDiagnosticsOptions(state);
     });
     SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });

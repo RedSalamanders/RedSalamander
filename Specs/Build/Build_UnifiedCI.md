@@ -9,12 +9,53 @@ identity remain required. See the shared [SDK cache contract](https://github.com
 This compatibility rule grants no native or production acceptance; both main
 regression branches must still pass before production can start.
 
-The manual native suite defaults to Full and may explicitly select CommandsHandoff,
+The manual native suite defaults to Full and platform `All`; explicit platform choices
+`x64` and `ARM64` select the matching existing pinned native runner. It may select CommandsHandoff,
 FileOpsVolumes or ViewerSpaceCapture, each mapped to one fixed diagnostic case. The adapter permits filtered runner
 exit 2 only after validating the exact archived native cases, quarantine state, profile and
 source-bound full-solution receipt. It labels that result filtered and NOT_EVALUATED for
 repository coverage and creates no regression or production receipt. Other phases reject these
 scopes before mutation; the pinned native matrix, desktop lease and build contracts still apply.
+
+`CommandsUiAttribution` is a fixed test-only diagnostic campaign: run
+`red_salamander_help_lists_diagnostics_options` once for the observer prerequisite controls,
+then `cmd_preferences_dialog_keyboard_reset_live_dx_interaction`,
+`cmd_pane_fileops_popup_throughput_disclosure`, and
+`cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup` once each in that order.
+Use one governed test-enabled build and independent canonical Commands/Fresh/SkipBuild
+processes. Reverify unchanged source, receipt identity and receipt bytes before and after
+each child. Preflight the canonical default quarantine before every launch and bind its
+absent/content identity across the campaign. Pass `-RequireCleanQuarantine`: the runner
+uses `Assert-RSTestQuarantineClean` on its own canonical parsed state before native work,
+rechecks at repair planning, and rejects every nonempty plan at the actual repair-dispatch
+boundary. An outer preflight is not an atomic file lock; this runner-owned opt-in prevents
+repair even when the ledger changes before the child reads it. Ordinary callers default
+to the existing repair behavior. No alternate quarantine store is substituted.
+Do not select classification, repeat, shuffle, proof hooks or repair attempts.
+Each passing child must satisfy `Assert-RSHostedFilteredCaseRun` with actual v1 evidence,
+exactly one passed case, no skips, no retries and no active or repaired quarantine.
+The trusted adapter's one timeout-multiplier value `2.0` feeds both the child CLI
+and expected verifier plan. The verifier's optional `TimeoutMultiplier` defaults
+to `1.0` for existing callers, accepts the native supported range `[0.1,100]`, and
+requires both runner/native observed timeout scales and the complete archived
+plan to match the trusted value. Never infer expected parameters from an
+untrusted summary or plan; all other fixed campaign planner controls retain
+their defaults.
+An ordinary selected-case failure stays failed and may proceed to the next selection
+only after the same strict archived v1 source/receipt/plan/native PID/exit/time proof,
+normal after/final snapshots and clean quarantine establish safe completion. A refused
+boundary, missing/invalid proof, changed receipt or unsafe teardown aborts the sequence;
+later rows remain explicitly unexecuted. Run IDs must be unique. Any failed or unexecuted
+row fails the job without a replacement launch.
+
+The campaign owns a canonical marked-sandbox run context. Keep each child's stdout,
+stderr and coverage record plus the aggregate diagnostic index inside that context,
+then seal it through canonical archival. Bind its context ID and relative members and
+the child run IDs/archive records; never persist live scratch paths as final references.
+Archive failure remains failure and grants no completion claim. Passing filtered exit 2
+retains repository `NOT_EVALUATED`; this scope returns before the Full assertion probe,
+regression receipt and all production/ZIP/publication continuation. It does not reclassify
+desktop authority or satisfy Full, PR, local-gate or production acceptance.
 
 The manual `DesktopProbe` scope reads desktop and session facts on the same native hosted
 matrix before dependency installation or builds. It records calling window-station and
@@ -175,3 +216,32 @@ imports and installed paths but omit the helper's synthetic `CL` include overrid
 Source and manual qualification keep their existing environment. Never clear an
 inherited caller compiler override: the SDK ABI reader must independently reject
 unsupported overrides rather than accepting a different compiler environment.
+## Filtered Ghostty product evidence
+
+The manual Ghostty product qualification's Commands filters accept the canonical
+runner's exit 2 only as directed evidence with repository coverage NOT_EVALUATED.
+`Assert-RSHostedFilteredCaseRun` dispatches by the actual runner summary schema.
+Durable PR/CI/Full runs write v2 with a v1 sibling and retain strict promoted-entry
+validation. Single-suite Commands, FileOps and Compare runs write only v1 at the
+stable summary path. A filtered Commands v1 result requires one archive-bound
+prelaunch fingerprint/plan/decision proof (including native rotation to `previous_run`),
+matching initial/post-entry/final source snapshots, the exact current byte-verified
+receipt and filtered plan, one successful owned native PID/exit and matching timed
+raw metrics. Missing, stale, ambiguous or malformed proof fails; v1 does not acquire
+v2 promotion. Both paths require matching invocation window/filter/profile and
+clean quarantine. The nonblocking sandbox audit remains visible without requiring
+an unrelated globally clean root. The native Commands payload must match its completed archive
+inventory hash and length, contain unique passing cases selected by the exact name
+or trailing-underscore prefix, and agree with both aggregate counts. The current
+source snapshot, executable path and byte-verified build receipt must match the durable v2
+record or the validated v1 prelaunch proof, respectively. The exact application project-union receipt remains admissible under the
+ordinary filtered-run contract; these checks grant no Full or release acceptance.
+In-process hosted callers must capture information stream 6 alongside success output
+because the runner-owned `Run id:` line is emitted by `Write-Host`; capturing that line
+does not replace the exact source, profile, receipt and archived-case checks above.
+
+Durable runners write v2 at `run-all-tests-results.json` and retain v1 at
+`run-all-tests-results-v1.json`; single-suite runners keep v1 at the stable path.
+Fixed diagnostic readers select the v1 sibling only when the stable summary is v2;
+they continue verifying native result bytes against archive inventory. Aggregates
+are generated after the native archive transaction and are not inventory members.

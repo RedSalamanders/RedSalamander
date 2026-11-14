@@ -1,0 +1,7 @@
+# Preparation recipe (read-only source / scratch-only writes)
+1. Create a fresh explicit New-RSTestRunContext with RunId='' and existing marked Z root; do not initialize roots.
+2. Run prepare_packet.py in that owned scratch. It verifies expected raw hashes, sealed archive transactions,
+   result counts, prelaunch fingerprint/workspace/receipt/PID/time bindings, exact metric rows and protocol groups.
+3. Inspect Debug/component-summary.json, every regression/range and the complete original audit objects.
+4. Preserve whole raw metric files in their sealed locations; never replace them with this excerpt.
+5. Future Release and complete archive checks are separate parent-owned steps; nothing here runs native tests.

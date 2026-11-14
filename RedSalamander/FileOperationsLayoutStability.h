@@ -11,7 +11,6 @@ namespace FileOperationsLayoutStability
 {
 inline constexpr uint64_t kReservationHoldMs = 2'000u; // a reserved row, a stacked pair or a note outlives its need by this long
 inline constexpr uint64_t kNumericTextHoldMs = 500u;   // rate and ETA text change at most twice per second
-inline constexpr uint64_t kFileNameHoldMs    = 250u;   // a displayed file name stays at least this long
 inline constexpr float kUnstackSpareDip      = 16.0f;  // a stacked pair returns to one line only with this much room to spare
 
 [[nodiscard]] constexpr bool Elapsed(uint64_t sinceMs, uint64_t nowMs, uint64_t durationMs) noexcept

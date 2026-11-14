@@ -1,0 +1,103 @@
+{
+  "schema": "red-salamander.public-archive-member-projection.v1",
+  "kind": "Derived public proof projection; NOT canonical raw archive intent or new archive transaction",
+  "source_private_packet_path": "Release/Identity/archive-intent.json",
+  "omitted_public_raw_intent": true,
+  "original_intent": {
+    "path": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\intent.json",
+    "length": 38005,
+    "sha256": "89d007a75829d4d680469174c634c12f996f367da735e71a6bacdb82e9386fa8",
+    "schema": "red-salamander.run-archive.v1",
+    "run_id": "20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+    "source": "Z:\\RedSalamander.Perf\\runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+    "destination": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+    "disposition": "completed",
+    "written_utc": "2026-11-13T18:41:52.0285319Z"
+  },
+  "completion_binding": {
+    "public_packet_path": "Release/Identity/archive-complete.json",
+    "length": 399,
+    "sha256": "8399abde33458a42b3b97a045454a6de5d8a3e8dab3861400945e723dd02419c",
+    "schema": "red-salamander.run-archive-complete.v1",
+    "source": "Z:\\RedSalamander.Perf\\runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+    "destination": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+    "intent_sha256": "89D007A75829D4D680469174C634C12F996F367DA735E71A6BACDB82E9386FA8",
+    "interpretation": "Unmodified completion binds the omitted original private intent hash. No new completion or transaction is fabricated."
+  },
+  "selection": "Exact selected file path/length/SHA256 from original inventory; original security descriptors, ACL/account SIDs and all unselected inventory rows omitted. Full raw metrics remain private; public excerpts retain separate original-row indexes. Post-archive summaries/history are not claimed as inventory members.",
+  "members": [
+    {
+      "path": "artifacts\\native-process-exits\\0598cccafc424323aaa39232bd2c69fa.json",
+      "length": 225,
+      "sha256": "D6E6793BE384B9F310060279EC424ACFF2152F4A02CE0F525BE7039493D0EA78",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\fileops\\results.json",
+      "length": 889,
+      "sha256": "A6CAE82FA8A7B3CEEF6834CC7E0376CBF30ACE71D7879EA22D82FEA7466645D5",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "length": 12520,
+      "sha256": "77D353B838A674C290E7BB8D4C77863FD250480F6300C159D6FA872CC9E86574",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+      "length": 6318083,
+      "sha256": "8C5FAF3CA743606D3F5683C767234077485753D60B41DCC8A74AA7969757A1DD",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\results.json",
+      "length": 1432,
+      "sha256": "5B08B66268FD451BA5615C2EFB83BF00200CEFB1FCA0BBA408A199C98F1BD827",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\trace.txt",
+      "length": 46262,
+      "sha256": "9BF194778ECA14B18C5B6FCD3B621982BABD9C7CA2560225AE720B4DD00132EF",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\workspace-after-selftest.file-operations.json",
+      "length": 801,
+      "sha256": "36034E624BEDDCB754D0C6EF3336D7FF501E346FF98E3971F01680749D03CE06",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\last_run\\workspace-final.json",
+      "length": 801,
+      "sha256": "7996A5DAD8648BD7127E8D02E0789A81DBC847DE620AD0B0FCE66894319563BA",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+      "length": 1696,
+      "sha256": "85ED980D36DBBFFE508473274BA213FA5E424B86CB26B941CB01537A0624A87D",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+      "length": 878,
+      "sha256": "A0BBBFB1AA385CE0FA9DDAC863250004CB2608A0C59E23FB7B39C9957C6F9E2D",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\previous_run\\validation-plan.json",
+      "length": 1664,
+      "sha256": "4E3E6EB3BFD3C1C1D9F053EA8BA8F2B446A324F20EF8BEAC8544B609B71ACD3E",
+      "directory": false
+    },
+    {
+      "path": "artifacts\\selftest\\previous_run\\workspace-initial.json",
+      "length": 801,
+      "sha256": "4B7563CA34D9DA98F9515AE612177000CDE348142BF57C9BADD584DC42786723",
+      "directory": false
+    }
+  ],
+  "limits": "Independent full-transaction verification requires the untouched local raw intent; public projection preserves selected evidence hashes, not byte-for-byte publication of the original intent."
+}

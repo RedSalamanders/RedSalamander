@@ -10,6 +10,7 @@
 #include "FileOperationsLayoutStability.h"
 #include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
+#include "FileSystemRouteProviderBase.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "FolderWindow.FileOperations.Tests.OwnedShutdown.h"
 #include "HostServices.h"
@@ -3003,41 +3004,11 @@ constexpr uint64_t kDefaultBandwidthLimitBytesPerSecond = 0;
     return S_OK;
 }
 
-[[nodiscard]] bool IsReservedWindowsBridgeChildName(std::wstring_view name) noexcept
-{
-    while (! name.empty() && (name.back() == L' ' || name.back() == L'.'))
-    {
-        name.remove_suffix(1u);
-    }
-
-    if (const size_t firstDot = name.find(L'.'); firstDot != std::wstring_view::npos)
-    {
-        name = name.substr(0u, firstDot);
-    }
-    while (! name.empty() && name.back() == L' ')
-    {
-        name.remove_suffix(1u);
-    }
-
-    if (OrdinalString::EqualsNoCase(name, L"CON") || OrdinalString::EqualsNoCase(name, L"PRN") || OrdinalString::EqualsNoCase(name, L"AUX") ||
-        OrdinalString::EqualsNoCase(name, L"NUL") || OrdinalString::EqualsNoCase(name, L"CONIN$") || OrdinalString::EqualsNoCase(name, L"CONOUT$"))
-    {
-        return true;
-    }
-
-    if (name.size() != 4u || (name[3] < L'0' || name[3] > L'9'))
-    {
-        return false;
-    }
-
-    return OrdinalString::StartsWithNoCase(name, L"COM") || OrdinalString::StartsWithNoCase(name, L"LPT");
-}
-
 [[nodiscard]] HRESULT ValidateWindowsBridgeChildName(const std::wstring_view name) noexcept
 {
     constexpr size_t kMaximumWindowsComponentLength = 255u;
     if (name.empty() || name.size() > kMaximumWindowsComponentLength || name.back() == L' ' || name.back() == L'.' ||
-        name.find_first_of(L":*?\"<>|") != std::wstring_view::npos || IsReservedWindowsBridgeChildName(name))
+        name.find_first_of(L":*?\"<>|") != std::wstring_view::npos || FileSystemRouteCapabilitiesBase::IsReservedWindowsLeaf(name))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
@@ -6734,6 +6705,8 @@ struct ConflictPromptBeginResult
     task.SetAwaitingUserDecision(true);
     const auto answeredScope     = wil::scope_exit([&task]() noexcept { task.SetAwaitingUserDecision(false); });
     const uint64_t perfStartUs   = PerfNowUs();
+    uint64_t waitCallCount       = 0u;
+    uint64_t timeoutCount        = 0u;
     const auto perfCallbackScope = wil::scope_exit([&] noexcept
     {
         const uint64_t waitUs = PerfElapsedUs(perfStartUs);
@@ -6751,6 +6724,7 @@ struct ConflictPromptBeginResult
         if (Debug::Perf::IsCaptureEnabled())
         {
             Debug::Perf::Emit(consentPrompt ? L"FileOps.Consent.WaitUs" : L"FileOps.Conflict.WaitUs", L"", waitUs, 0u, 0u, S_OK);
+            Debug::Perf::Emit(L"FileOps.Conflict.WaitCalls", L"calls,timeouts", 0u, waitCallCount, timeoutCount, S_OK);
         }
     });
 
@@ -6769,9 +6743,19 @@ struct ConflictPromptBeginResult
     bool chosenPolicyIsNew      = false;
     std::wstring chosenPolicySourcePath;
     std::wstring chosenPolicyDestinationPath;
-    // I63 G7: other streams of this task may still transfer while this worker waits; see RefreshAwaitingAnswerQuiet.
-    uint64_t keepAwakeWorkSeen      = 0u;
-    ULONGLONG keepAwakeLastWorkTick = GetTickCount64();
+    // Other streams may resume after this worker becomes quiet. Their event rearms
+    // the actual last-progress deadline; cancellation has its own durable wake.
+    wil::unique_event_nothrow cancelled;
+    cancelled.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! cancelled)
+    {
+        Debug::ErrorWithLastError(L"File Operations could not create its conflict cancellation event.");
+        ClearConflictPrompt(task);
+        return {ConflictAction::Cancel, false};
+    }
+    [[maybe_unused]] const std::stop_callback cancelWake(task._stopToken, [event = cancelled.get()]() noexcept { static_cast<void>(SetEvent(event)); });
+    const ULONGLONG waitStartedTick = GetTickCount64();
+    const std::array<HANDLE, 3u> waits{{cancelled.get(), task._conflictArbiter.decisionEvent.get(), task._keepAwakeWorkEvent.get()}};
     for (;;)
     {
         if (task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
@@ -6780,15 +6764,29 @@ struct ConflictPromptBeginResult
             return {ConflictAction::Cancel, false};
         }
 
-        const DWORD wait = WaitForSingleObject(task._conflictArbiter.decisionEvent.get(), 50);
+        const DWORD waitMs = task.RefreshAwaitingAnswerQuiet(waitStartedTick);
+#ifdef ENABLE_TESTS
+        task._dbgConflictDecisionWaitCount.fetch_add(1u, std::memory_order_relaxed);
+        if (waitMs == INFINITE)
+            task._dbgConflictDecisionInfiniteWaitCount.fetch_add(1u, std::memory_order_release);
+#endif
+        ++waitCallCount;
+        const DWORD wait = WaitForMultipleObjects(task._keepAwakeWorkEvent ? 3u : 2u, waits.data(), FALSE, waitMs);
+        if (wait == WAIT_TIMEOUT)
+            ++timeoutCount;
         if (wait == WAIT_FAILED)
+        {
+            Debug::ErrorWithLastError(L"File Operations conflict decision wait failed.");
+            ClearConflictPrompt(task);
+            return {ConflictAction::Cancel, false};
+        }
+        if (wait == WAIT_OBJECT_0)
         {
             ClearConflictPrompt(task);
             return {ConflictAction::Cancel, false};
         }
-        if (wait != WAIT_OBJECT_0)
+        if (wait != WAIT_OBJECT_0 + 1u)
         {
-            task.RefreshAwaitingAnswerQuiet(keepAwakeWorkSeen, keepAwakeLastWorkTick);
             continue;
         }
         std::scoped_lock lock(task._conflictArbiter.mutex);
@@ -9323,16 +9321,18 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
            ! loading.skipAllEligible && ! loading.buttonsPublishable;
 }
 
-void DebugBuildFileOpsVisualConflictPolicyForSelfTest(Task::ConflictPromptState& prompt,
-                                                      bool allowReplacement,
-                                                      bool allowReadOnlyDelete,
-                                                      FileSystemOperation operation) noexcept
+void DebugBuildFileOpsVisualConflictPolicyForSelfTest(
+    Task::ConflictPromptState& prompt, bool allowReplacement, bool allowReadOnlyDelete, FileSystemOperation operation, bool allowDiscardSource) noexcept
 {
     const bool collision         = prompt.bucket == ConflictBucket::RegularFileExists || prompt.bucket == ConflictBucket::ReadOnlyRegularFileExists ||
                                    prompt.bucket == ConflictBucket::DestinationLink;
     const bool hasRepeatCapacity = prompt.repeatUnavailableReason == FileOperations::ConflictRepeatUnavailableReason::None;
-    const auto policy =
-        BuildConflictActionPolicy(prompt.bucket, ! collision, collision, hasRepeatCapacity, allowReplacement, true, true, allowReadOnlyDelete, operation);
+    // Synthetic snapshots have no admitted source-removal capability. Only an
+    // explicit test request on a Move models that prequalification; real tasks
+    // still obtain authority through their normal admission and producer path.
+    const bool offerDiscardSource = allowDiscardSource && operation == FILESYSTEM_MOVE;
+    const auto policy             = BuildConflictActionPolicy(
+        prompt.bucket, ! collision, collision, hasRepeatCapacity, allowReplacement, true, true, allowReadOnlyDelete, operation, offerDiscardSource);
     prompt.actions             = policy.actions;
     prompt.actionCount         = policy.actionCount;
     prompt.primaryActions      = policy.primaryActions;
@@ -9350,6 +9350,7 @@ void DebugBuildFileOpsVisualConflictPolicyForSelfTest(Task::ConflictPromptState&
 FolderWindow::FileOperationState::Task::Task(FileOperationState& state) noexcept : _state(&state), _folderWindow(&state._owner)
 {
     _conflictArbiter.decisionEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    _keepAwakeWorkEvent.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
 }
 
 std::shared_ptr<const FolderWindow::FileOperationState::SelectedAdmissionView> FolderWindow::FileOperationState::Task::LoadSelectedAdmission() const noexcept
@@ -9833,6 +9834,7 @@ HRESULT FolderWindow::FileOperationState::Task::ReportProgressWithPhase(Progress
     }
 
     const uint64_t previousProgressCallbackCount = _progressCallbackCount.fetch_add(1, std::memory_order_relaxed);
+    NoteKeepAwakeWork(nowTick);
     if (previousProgressCallbackCount == 0)
     {
         const ULONGLONG opStartTick = _operationStartTick.load(std::memory_order_acquire);
@@ -10202,6 +10204,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
     const auto perfCallbackScope              = wil::scope_exit([&] noexcept { _perf.itemCompletedCallbackUs += PerfElapsedUs(perfStartUs); });
     unsigned int perItemBandwidthActiveCalls  = 1u;
     const uint64_t itemCompletedCallbackCount = _itemCompletedCallbackCount.fetch_add(1, std::memory_order_relaxed) + 1u;
+    NoteKeepAwakeWork(GetTickCount64());
     PublishedProgressSnapshot publishedProgressSnapshot{};
 
     PerItemCallbackCookie* const perItemCookie =
@@ -14240,7 +14243,7 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
         _cancelRequestedTick.compare_exchange_strong(expected, GetTickCount64(), std::memory_order_release);
     }
     _cancelled.store(true, std::memory_order_release);
-    _stopSource.request_stop();
+    _stopSource.request_stop(); // Every active conflict wait's stop callback signals its manual-reset cancellation event.
     // Publish durable authority before the lifecycle phase becomes observable.
     PublishLifecyclePhase(TaskLifecyclePhase::Stopping);
     HRESULT pendingReadiness = E_PENDING;
@@ -14727,17 +14730,50 @@ void FolderWindow::FileOperationState::Task::SetAwaitingAnswerQuiet(const bool q
         UpdateKeepAwake();
 }
 
-void FolderWindow::FileOperationState::Task::RefreshAwaitingAnswerQuiet(uint64_t& workSeen, ULONGLONG& lastWorkTick) noexcept
+void FolderWindow::FileOperationState::Task::NoteKeepAwakeWork(const ULONGLONG workTick) noexcept
 {
-    // Every progress and item-completed callback of the task counts, whichever stream reported it.
-    const uint64_t work = _progressCallbackCount.load(std::memory_order_relaxed) + _itemCompletedCallbackCount.load(std::memory_order_relaxed);
-    const ULONGLONG now = GetTickCount64();
-    if (work != workSeen)
+    if (! _awaitingUserDecision.load(std::memory_order_acquire))
+        return;
+    ULONGLONG previous = _keepAwakeLastWorkTick.load(std::memory_order_relaxed);
+    while (workTick > previous && ! _keepAwakeLastWorkTick.compare_exchange_weak(previous, workTick, std::memory_order_release, std::memory_order_relaxed))
     {
-        workSeen     = work;
-        lastWorkTick = now;
     }
-    SetAwaitingAnswerQuiet(FileOperations::AwaitingAnswerIsQuiet(now - lastWorkTick));
+    if (_awaitingAnswerQuiet.exchange(false, std::memory_order_acq_rel))
+    {
+        UpdateKeepAwake();
+        if (_keepAwakeWorkEvent)
+            static_cast<void>(SetEvent(_keepAwakeWorkEvent.get()));
+    }
+}
+
+DWORD FolderWindow::FileOperationState::Task::RefreshAwaitingAnswerQuiet(const ULONGLONG waitStartedTick) noexcept
+{
+    // Without a progress wake, conservatively retain the request until the answer;
+    // optional power bookkeeping must not fail a task or miss resumed stream work.
+    if (! _keepAwakeWorkEvent)
+    {
+        SetAwaitingAnswerQuiet(false);
+        return INFINITE;
+    }
+    const ULONGLONG observedWork = _keepAwakeLastWorkTick.load(std::memory_order_acquire);
+    const ULONGLONG lastWork     = std::max(waitStartedTick, observedWork);
+    const ULONGLONG now          = GetTickCount64();
+    const DWORD quietMs =
+#ifdef ENABLE_TESTS
+        _dbgConflictQuietPeriodMs.load(std::memory_order_relaxed);
+#else
+        static_cast<DWORD>(FileOperations::kAwaitingAnswerQuietMs);
+#endif
+    const DWORD remaining = FileOperations::AwaitingAnswerWaitMilliseconds(now >= lastWork ? now - lastWork : 0u, quietMs);
+    SetAwaitingAnswerQuiet(remaining == INFINITE);
+    if (remaining == INFINITE && _keepAwakeLastWorkTick.load(std::memory_order_acquire) != observedWork)
+    {
+        // Progress published between observation and quiet publication. Recompute
+        // immediately rather than losing its wake or leaving an active stream quiet.
+        SetAwaitingAnswerQuiet(false);
+        return 0u;
+    }
+    return remaining;
 }
 
 void FolderWindow::FileOperationState::Task::SetAwaitingUserDecision(const bool awaiting) noexcept
@@ -16310,6 +16346,9 @@ struct CrossFileSystemBridge
     std::wstring rootDestinationPath;
     FileSystemPathIdentity sourcePathIdentity;
     FileSystemPathIdentity destinationPathIdentity;
+    // Local cross-root IDs can be valid in separate namespaces. A negative comparison
+    // cannot authorize deleting a file that may be the destination under another view.
+    const bool localCrossRootDistinctnessUnproved;
 
     std::mutex traversalBudgetMutex;
     uint64_t traversalRetainedEntries       = 0;
@@ -16600,6 +16639,7 @@ struct CrossFileSystemBridge
                           std::wstring_view destinationRootIdIn,
                           const FileSystemPathIdentity& sourcePathIdentityIn,
                           const FileSystemPathIdentity& destinationPathIdentityIn,
+                          bool localCrossRootDistinctnessUnprovedIn,
                           bool sourceCleanupPermittedIn,
                           bool verificationRequestedIn,
                           bool verificationHostReadbackIn,
@@ -16628,6 +16668,7 @@ struct CrossFileSystemBridge
           rootDestinationPath(rootDestinationPathIn ? rootDestinationPathIn : L""),
           sourcePathIdentity(sourcePathIdentityIn),
           destinationPathIdentity(destinationPathIdentityIn),
+          localCrossRootDistinctnessUnproved(localCrossRootDistinctnessUnprovedIn),
           sourceCleanupPermitted(sourceCleanupPermittedIn),
           verificationRequested(verificationRequestedIn),
           verificationHostReadback(verificationHostReadbackIn),
@@ -16886,15 +16927,11 @@ struct CrossFileSystemBridge
         traversalRetainedMetadataBytes = (traversalRetainedMetadataBytes >= bytes) ? (traversalRetainedMetadataBytes - bytes) : 0u;
     }
 
-    [[nodiscard]] std::wstring SourceKeptReason(std::wstring_view detail) const
-    {
-        return std::format(L"{} because {}", renameMerge ? L"Moved; source folder kept" : L"Copied; source kept", detail);
-    }
-
-    // reason is technical text (std::wstring_view) or a localized resource
-    // (FileOperationState::LocalizedDiagnosticText) that Issues shows as the problem.
-    template <typename Reason>
-    void MarkManagedSourceRetained(const std::wstring& sourcePath, const std::wstring& destinationPath, HRESULT status, Reason reason) noexcept
+    // Issues presents this reason to the user: every retention branch must carry a resource.
+    void MarkManagedSourceRetained(const std::wstring& sourcePath,
+                                   const std::wstring& destinationPath,
+                                   HRESULT status,
+                                   FileOperationState::LocalizedDiagnosticText reason) noexcept
     {
         if (! sourceCleanupPermitted)
         {
@@ -16972,7 +17009,7 @@ struct CrossFileSystemBridge
             MarkManagedSourceRetained(sourcePath,
                                       destinationPath,
                                       HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                                      L"Copied; source kept because exact destination publication authority is unavailable.");
+                                      FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_DESTINATION_AUTHORITY});
             return S_FALSE;
         }
 
@@ -17045,14 +17082,14 @@ struct CrossFileSystemBridge
                 MarkManagedSourceRetained(sourcePath,
                                           destinationPath,
                                           FAILED(factsHr) ? factsHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          L"Copied; source kept because the facts of a source this location cannot identify could not be read.");
+                                          FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_FACTS});
                 return S_FALSE;
             }
         }
         MarkManagedSourceRetained(sourcePath,
                                   destinationPath,
                                   FAILED(binding.status) ? binding.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                                  L"Copied; source kept because exact source binding is unavailable for this item.");
+                                  FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_AUTHORITY});
         return S_FALSE;
     }
 
@@ -17169,7 +17206,7 @@ struct CrossFileSystemBridge
                 // changed after discovery. Retain the exact source directory and propagate
                 // the task's source-kept outcome through the shared retention generation.
                 MarkManagedSourceRetained(
-                    sourcePath, destinationPath, deleteHr, SourceKeptReason(L"the source directory gained or retained an unselected child."));
+                    sourcePath, destinationPath, deleteHr, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_FOLDER_CHILDREN});
                 cleanupRecord.armed     = false;
                 cleanupRecord.authority = {};
                 return S_OK;
@@ -17193,7 +17230,7 @@ struct CrossFileSystemBridge
             if (action == ConflictAction::Skip || action == ConflictAction::SkipAll)
             {
                 MarkManagedSourceRetained(
-                    sourcePath, destinationPath, deleteHr, L"Copied; source kept because exact conditional source cleanup did not commit.");
+                    sourcePath, destinationPath, deleteHr, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_CLEANUP});
                 cleanupRecord.armed     = false;
                 cleanupRecord.authority = {};
                 return S_OK;
@@ -18074,7 +18111,7 @@ struct CrossFileSystemBridge
         }
         if (deleteHr == HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY))
         {
-            MarkManagedSourceRetained(sourcePath, destinationPath, deleteHr, SourceKeptReason(L"the source directory gained or retained an unselected child."));
+            MarkManagedSourceRetained(sourcePath, destinationPath, deleteHr, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_FOLDER_CHILDREN});
             return S_OK;
         }
         NoteFailure(QualifiedItemFailurePhase::SourceCleanup, deleteHr);
@@ -18088,14 +18125,17 @@ struct CrossFileSystemBridge
     }
 
     // I63 B4, B8: Delete source is offered only when the existing destination is provably another file than the
-    // source. Two bound objects answer by identity. Where the destination's location opens the file and cannot
-    // identify it, the location is asked another way: the destination is held denying all sharing and the
+    // source. Two bound objects answer by identity within the admitted qualification. Differing qualified Local
+    // roots can report different namespaces for the same file: neither negative IDs nor the same-view sharing
+    // control below proves cross-view distinctness, so those pairs withhold destructive cleanup. Where an
+    // eligible destination's location opens the file and cannot identify it, the location is asked another
+    // way: the destination is held denying all sharing and the
     // source's own name is then opened for reading. A sharing refusal means one file reached by two names;
     // success means two files. That holds only where the location enforces sharing, so it is measured first: a
     // second open of the held destination must be refused. Both handles must be regular files. Any doubt withholds
     // the action. The cost is two binds, and three opens at a destination without identity, per collision of a
-    // Move that may remove its source. Not covered: one file reached through two different systems (a local disk
-    // and a network or virtual path to that same disk), which no identity and no sharing rule relates.
+    // Move that may remove its source. Other providers retain their own identity/sharing contracts;
+    // this Local qualification does not assert cross-system sharing coherence.
     // I63 B7: with sourceMayBeUnbound, a source its location opens and cannot identify is asked the same way.
     [[nodiscard]] bool SourceAndDestinationAreDistinctFiles(const std::wstring& sourcePath,
                                                             const std::wstring& destinationPath,
@@ -18119,7 +18159,15 @@ struct CrossFileSystemBridge
         if (source && destinationBound)
         {
             BOOL same = TRUE;
-            return SUCCEEDED(source->IsSameObject(destination.get(), &same)) && same == FALSE;
+            if (FAILED(source->IsSameObject(destination.get(), &same)) || same != FALSE)
+                return false;
+            if (! localCrossRootDistinctnessUnproved)
+                return true;
+        }
+        if (localCrossRootDistinctnessUnproved)
+        {
+            Debug::Perf::EmitCounter(L"FileOps.Conflict.LocalDistinctnessUnproved");
+            return false;
         }
         if ((! destinationBound && destinationHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)) ||
             ! NavigationLocation::LooksLikeWindowsAbsolutePath(sourcePath) || ! NavigationLocation::LooksLikeWindowsAbsolutePath(destinationPath))
@@ -18128,8 +18176,10 @@ struct CrossFileSystemBridge
         }
         source.reset();
         destination.reset();
-        constexpr DWORD kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-        const auto isRegularFile  = [](HANDLE file) noexcept
+        const std::wstring extendedSourcePath      = Common::Paths::ToExtendedWin32Path(sourcePath);
+        const std::wstring extendedDestinationPath = Common::Paths::ToExtendedWin32Path(destinationPath);
+        constexpr DWORD kShareAll                  = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+        const auto isRegularFile                   = [](HANDLE file) noexcept
         {
             // A link's handle holds the link and not what it names, and a folder is not this question's subject.
             BY_HANDLE_FILE_INFORMATION facts{};
@@ -18143,7 +18193,8 @@ struct CrossFileSystemBridge
         wil::unique_hfile heldDestination;
         for (unsigned int attempt = 1u;; ++attempt)
         {
-            heldDestination.reset(CreateFileW(destinationPath.c_str(), GENERIC_READ, 0u, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            heldDestination.reset(
+                CreateFileW(extendedDestinationPath.c_str(), GENERIC_READ, 0u, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
             if (heldDestination || GetLastError() != ERROR_SHARING_VIOLATION || attempt >= kHoldAttempts || CancelRequested())
             {
                 break;
@@ -18158,7 +18209,7 @@ struct CrossFileSystemBridge
         // enforce sharing, so the source's open below would succeed for one file as for two.
         {
             const wil::unique_hfile control(
-                CreateFileW(destinationPath.c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+                CreateFileW(extendedDestinationPath.c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
             bool sharingEnforced = ! control && GetLastError() == ERROR_SHARING_VIOLATION;
 #ifdef ENABLE_TESTS
             sharingEnforced = sharingEnforced && ! g_fileOpsSameFileProbeSharingUnenforcedForSelfTest.load(std::memory_order_acquire);
@@ -18170,7 +18221,7 @@ struct CrossFileSystemBridge
             }
         }
         const wil::unique_hfile sourceByName(
-            CreateFileW(sourcePath.c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            CreateFileW(extendedSourcePath.c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
         const bool distinct = sourceByName.is_valid() && isRegularFile(sourceByName.get());
         Debug::Perf::Emit(L"FileOps.Conflict.SameFileProbe", L"", 0u, distinct ? 1u : 0u, 0u, S_OK);
         return distinct;
@@ -19407,7 +19458,13 @@ struct CrossFileSystemBridge
         const bool alreadyAuthorized = overwriteGranted && (! readonlyCollision || replaceReadOnlyGranted) && (! linkCollision || replaceLinkGranted);
         if (alreadyAuthorized && destinationBinding)
         {
-            return BindExpectedPublicationDestination(destinationPath, true, expectedDestination);
+            const HRESULT bindHr = BindExpectedPublicationDestination(destinationPath, true, expectedDestination);
+            if (bindHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+                return bindHr;
+            expectedDestination.reset();
+            // An interface can be available while this individual occupant opens without
+            // identity. Fall through to the same observed-facts prompt used by that route;
+            // an ALLOW_OVERWRITE flag alone never authorizes a by-name replacement.
         }
         // R3-1: on a route without object binding a compatibility flag is not a receipt for the
         // occupant; the user decides per object and the writer carries what they saw. The occupant
@@ -19512,17 +19569,18 @@ struct CrossFileSystemBridge
                                             bool& ownedStageCleanupAllowed) noexcept
     {
         return PublishOwnedStageAs(&ownedStage,
-                                   {.sourcePath             = sourcePath,
-                                    .destinationPath        = destinationPath,
-                                    .expectedDestination    = expectedDestination,
-                                    .expectedOccupant       = expectedOccupant,
-                                    .overwriteGranted       = overwriteGranted,
-                                    .replaceReadOnlyGranted = replaceReadOnlyGranted,
-                                    .replaceLinkGranted     = replaceLinkGranted,
-                                    .unknownCategory        = L"bridge.publication.unknown",
-                                    .unknownMessage         = L"Publication outcome is unknown; destination and visible stage are retained for reconciliation.",
-                                    .partialCategory        = L"bridge.publication.cleanupPartial",
-                                    .partialMessage         = L"Destination was published, but exact post-publication cleanup was incomplete."},
+                                   {.sourcePath                     = sourcePath,
+                                    .destinationPath                = destinationPath,
+                                    .expectedDestination            = expectedDestination,
+                                    .expectedOccupant               = expectedOccupant,
+                                    .overwriteGranted               = overwriteGranted,
+                                    .replaceReadOnlyGranted         = replaceReadOnlyGranted,
+                                    .replaceLinkGranted             = replaceLinkGranted,
+                                    .deferOccupantChangedDiagnostic = true,
+                                    .unknownCategory                = L"bridge.publication.unknown",
+                                    .unknownMessage  = L"Publication outcome is unknown; destination and visible stage are retained for reconciliation.",
+                                    .partialCategory = L"bridge.publication.cleanupPartial",
+                                    .partialMessage  = L"Destination was published, but exact post-publication cleanup was incomplete."},
                                    publishedAuthority,
                                    promoted,
                                    ownedStageCleanupAllowed);
@@ -19541,6 +19599,7 @@ struct CrossFileSystemBridge
         bool overwriteGranted                              = false;
         bool replaceReadOnlyGranted                        = false;
         bool replaceLinkGranted                            = false;
+        bool deferOccupantChangedDiagnostic                = false;
         std::wstring_view unknownCategory; // empty: no diagnostic for an unknown outcome
         std::wstring_view unknownMessage;
         std::wstring_view partialCategory; // empty: no diagnostic for a partial post-publication cleanup
@@ -19577,7 +19636,7 @@ struct CrossFileSystemBridge
                                                                                  &options,
                                                                                  &publicationResult,
                                                                                  publishedAuthority.put());
-            if (publishHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+            if (publishHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && ! publication.deferOccupantChangedDiagnostic)
             {
                 task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
                                    publishHr,
@@ -19973,6 +20032,15 @@ struct CrossFileSystemBridge
                                                          replaceRefused);
             if (! replaceRefused || attempt >= kMaxReplaceRePrompts || CancelRequested())
             {
+                if (replaceRefused && FAILED(hr) && ! CancelRequested())
+                {
+                    task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                                       hr,
+                                       L"bridge.replace.occupantChanged",
+                                       L"The destination kept changing after the replace decision; nothing was replaced by the final attempt.",
+                                       sourcePath,
+                                       destinationPath);
+                }
                 finalStatus = hr;
                 return hr;
             }
@@ -20122,7 +20190,8 @@ struct CrossFileSystemBridge
         }
         if (retainSourceByConsent && managedCleanupRecord.Pending())
         {
-            MarkManagedSourceRetained(sourcePath, destinationPath, S_FALSE, L"Copied; source kept by the placeholder-hydration consent decision.");
+            MarkManagedSourceRetained(
+                sourcePath, destinationPath, S_FALSE, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_PLACEHOLDER});
             managedCleanupRecord = {};
         }
 
@@ -20228,7 +20297,7 @@ struct CrossFileSystemBridge
             MarkManagedSourceRetained(sourcePath,
                                       destinationPath,
                                       HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                                      L"Copied; source kept because the destination cannot retain exact publication authority.");
+                                      FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_DESTINATION_AUTHORITY});
             managedCleanupRecord = {};
         }
         // R3-1: a granted replacement on a route without object binding publishes through the
@@ -20325,13 +20394,16 @@ struct CrossFileSystemBridge
                 hr                                  = replacement->SetExpectedReplacement(&expected);
                 if (FAILED(hr))
                 {
-                    task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
-                                       hr,
-                                       L"bridge.replace.occupantChanged",
-                                       L"The destination changed after the replace decision; nothing was replaced.",
-                                       sourcePath,
-                                       destinationPath);
                     replaceRefused = hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                    if (! replaceRefused)
+                    {
+                        task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                                           hr,
+                                           L"bridge.replace.expectationFailed",
+                                           L"The destination writer could not accept the replacement expectation; nothing was written.",
+                                           sourcePath,
+                                           destinationPath);
+                    }
                     return hr;
                 }
             }
@@ -20425,7 +20497,7 @@ struct CrossFileSystemBridge
             }
 
             const auto applyPreContentConsent =
-                [&](uint32_t feature, FileOperations::DeferredConsentRisk risk, std::wstring_view retainedReason) noexcept -> HRESULT
+                [&](uint32_t feature, FileOperations::DeferredConsentRisk risk, FileOperationState::LocalizedDiagnosticText retainedReason) noexcept -> HRESULT
             {
                 if ((metadataResult.lostFeatures & feature) == 0u)
                 {
@@ -20455,12 +20527,12 @@ struct CrossFileSystemBridge
             };
             hr = applyPreContentConsent(FILESYSTEM_METADATA_EFS,
                                         FileOperations::DeferredConsentRisk::EfsPlaintext,
-                                        L"Copied; source kept because EFS encryption could not be preserved.");
+                                        FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_EFS});
             if (SUCCEEDED(hr))
             {
                 hr = applyPreContentConsent(FILESYSTEM_METADATA_SPARSE,
                                             FileOperations::DeferredConsentRisk::SparseInflation,
-                                            L"Copied; source kept because sparse allocation could not be preserved.");
+                                            FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_SPARSE});
             }
             if (FAILED(hr))
             {
@@ -20937,12 +21009,6 @@ struct CrossFileSystemBridge
             }
             if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && identityLessReplace)
             {
-                task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
-                                   hr,
-                                   L"bridge.replace.occupantChanged",
-                                   L"The destination changed after the replace decision; nothing was replaced.",
-                                   sourcePath,
-                                   destinationPath);
                 replaceRefused = true;
                 return hr;
             }
@@ -21022,7 +21088,7 @@ struct CrossFileSystemBridge
                 if (consent.action == ConflictAction::RetainSource)
                 {
                     MarkManagedSourceRetained(
-                        sourcePath, destinationPath, S_FALSE, L"Copied; source kept because security-significant metadata was not preserved.");
+                        sourcePath, destinationPath, S_FALSE, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_SECURITY_METADATA});
                     managedCleanupRecord = {};
                 }
                 else if (consent.action != ConflictAction::Proceed)
@@ -21073,7 +21139,7 @@ struct CrossFileSystemBridge
             MarkManagedSourceRetained(sourcePath,
                                       destinationPath,
                                       txn.writerProofMatched.has_value() ? HRESULT_FROM_WIN32(ERROR_CRC) : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                                      L"Copied; source kept because the destination could not prove the published content.");
+                                      FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_DESTINATION_CONTENT_PROOF});
             managedCleanupRecord = {};
         }
         writer.reset();
@@ -22461,8 +22527,10 @@ struct CrossFileSystemBridge
 
         if (frame.hadChildFailure)
         {
-            MarkManagedSourceRetained(
-                sourcePath, destinationPath, HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), SourceKeptReason(L"at least one child did not complete."));
+            MarkManagedSourceRetained(sourcePath,
+                                      destinationPath,
+                                      HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+                                      FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_FOLDER_INCOMPLETE});
             return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
 
@@ -25438,29 +25506,72 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                 samePathCopy = true;
                 return S_OK;
             }
+            if (guard.state == FileOperations::TransferSafetyState::Unsupported &&
+                FileOperations::QualifiedEndpointsReferToSameRoot(plan.sourceEndpoint, plan.destinationEndpoint) &&
+                plan.sourceEndpoint.pathIdentity.has_value() && EquivalentPath(plan.sourceEndpoint.pathIdentity.value(), sourcePath, destinationPath))
+            {
+                // Preserve the established same-path route before probing cross-alias
+                // ancestry: Copy chooses a distinct sibling, while Move is refused.
+                if (plan.intent == FileOperations::TransferIntent::Copy)
+                {
+                    samePathCopy = true;
+                    return S_OK;
+                }
+                const HRESULT sameMoveHr = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+                LogDiagnostic(DiagnosticSeverity::Error,
+                              sameMoveHr,
+                              L"identity.sameFolderMove",
+                              L"The provider cannot prove object identity and the Move source and destination paths are equivalent.",
+                              sourcePath,
+                              destinationPath);
+                return sameMoveHr;
+            }
+            const bool needsLocalAncestryProof =
+                guard.state == FileOperations::TransferSafetyState::Unsupported ||
+                (guard.state == FileOperations::TransferSafetyState::Ready &&
+                 (! FileOperations::QualifiedEndpointsShareObjectIdentityDomain(plan.sourceEndpoint, plan.destinationEndpoint) ||
+                  ! FileOperations::QualifiedEndpointsReferToSameRoot(plan.sourceEndpoint, plan.destinationEndpoint)));
+            if (needsLocalAncestryProof && FileOperations::IsLocalFileSystemEndpoint(plan.sourceEndpoint) &&
+                FileOperations::IsLocalFileSystemEndpoint(plan.destinationEndpoint))
+            {
+                bool sourceIsTraversedDirectory = guard.source.boundObject && guard.source.kind == FILESYSTEM_BOUND_DIRECTORY;
+                HRESULT sourceKindHr            = S_OK;
+                if (! guard.source.boundObject)
+                {
+                    const std::wstring extendedSourcePath = Common::Paths::ToExtendedWin32Path(sourcePath);
+                    const DWORD attributes                = GetFileAttributesW(extendedSourcePath.c_str());
+                    const DWORD sourceError               = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+                    if (attributes == INVALID_FILE_ATTRIBUTES)
+                        sourceKindHr = HRESULT_FROM_WIN32(sourceError);
+                    else
+                        sourceIsTraversedDirectory = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u;
+                }
+                if (FAILED(sourceKindHr) || sourceIsTraversedDirectory)
+                {
+                    const FileOperations::LocalDirectoryAncestryProbeResult ancestry =
+                        FAILED(sourceKindHr) ? FileOperations::LocalDirectoryAncestryProbeResult{.status = sourceKindHr}
+                                             : FileOperations::ProbeLocalDirectoryTransferAncestry(sourcePath,
+                                                                                                   destinationPath,
+                                                                                                   plan.destinationEndpoint.pathIdentity.value(),
+                                                                                                   [&]() noexcept { return CancelRequestedDurable(); });
+                    if (FAILED(ancestry.status))
+                    {
+                        if (! IsCancellationOutcome(ancestry.status))
+                        {
+                            LogDiagnostic(DiagnosticSeverity::Error,
+                                          ancestry.status,
+                                          ancestry.destinationInsideSource ? L"identity.destinationInsideSource" : L"identity.ancestryUnproved",
+                                          ancestry.destinationInsideSource ? LocalizedDiagnosticText{IDS_FILEOPS_DIAG_DESTINATION_INSIDE_SOURCE}
+                                                                           : LocalizedDiagnosticText{IDS_FILEOPS_DIAG_DESTINATION_ANCESTRY_UNPROVED},
+                                          sourcePath,
+                                          destinationPath);
+                        }
+                        return ancestry.status;
+                    }
+                }
+            }
             if (guard.state == FileOperations::TransferSafetyState::Unsupported)
             {
-                const bool sameEndpoint   = FileOperations::QualifiedEndpointsReferToSameRoot(plan.sourceEndpoint, plan.destinationEndpoint);
-                const bool equivalentPath = sameEndpoint && plan.sourceEndpoint.pathIdentity.has_value() &&
-                                            EquivalentPath(plan.sourceEndpoint.pathIdentity.value(), sourcePath, destinationPath);
-                if (equivalentPath)
-                {
-                    if (plan.intent == FileOperations::TransferIntent::Copy)
-                    {
-                        samePathCopy = true;
-                        return S_OK;
-                    }
-
-                    const HRESULT sameMoveHr = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-                    LogDiagnostic(DiagnosticSeverity::Error,
-                                  sameMoveHr,
-                                  L"identity.sameFolderMove",
-                                  L"The provider cannot prove object identity and the Move source and destination paths are equivalent.",
-                                  sourcePath,
-                                  destinationPath);
-                    return sameMoveHr;
-                }
-
                 // Binding is optional for honest Copy, a qualified provider-native Move, and
                 // Copy-only. It remains mandatory before managed destructive source cleanup.
                 if (plan.intent == FileOperations::TransferIntent::Copy || plan.strategy == FileOperations::OperationStrategy::Native ||
@@ -26390,6 +26501,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
 
             const bool copyOnlyMove = _operation == FILESYSTEM_MOVE && transferPlan != nullptr && itemStrategy == FileOperations::OperationStrategy::CopyOnly;
             const bool managedMove  = _operation == FILESYSTEM_MOVE && transferPlan != nullptr && itemStrategy == FileOperations::OperationStrategy::Managed;
+            const bool localCrossRootDistinctnessUnproved =
+                transferPlan != nullptr && FileOperations::IsLocalFileSystemEndpoint(transferPlan->sourceEndpoint) &&
+                FileOperations::IsLocalFileSystemEndpoint(transferPlan->destinationEndpoint) &&
+                ! FileOperations::QualifiedEndpointsReferToSameRoot(transferPlan->sourceEndpoint, transferPlan->destinationEndpoint);
             if (_operation == FILESYSTEM_COPY || copyOnlyMove || managedMove)
             {
                 if (transferPlan == nullptr)
@@ -26425,6 +26540,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                      transferPlan->destinationEndpoint.rootId,
                                                      transferPlan->sourceEndpoint.pathIdentity.value(),
                                                      transferPlan->destinationEndpoint.pathIdentity.value(),
+                                                     localCrossRootDistinctnessUnproved,
                                                      managedMove,
                                                      transferPlan->options.verifyAfterCopy,
                                                      transferPlan->destinationEndpoint.verificationHostReadback,
@@ -26584,6 +26700,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                                       transferPlan->destinationEndpoint.rootId,
                                                       transferPlan->sourceEndpoint.pathIdentity.value(),
                                                       transferPlan->destinationEndpoint.pathIdentity.value(),
+                                                      localCrossRootDistinctnessUnproved,
                                                       true,
                                                       false,
                                                       false,

@@ -5,6 +5,7 @@ Import-Module (Join-Path $PSScriptRoot 'TestInvocation.psm1') -Force -Scope Loca
 function Get-RSTestQuarantineDate {
     param(
         [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
         [string]$Value
     )
 
@@ -142,6 +143,34 @@ function Read-RSTestQuarantineFile {
     return $status
 }
 
+function Assert-RSTestQuarantineClean {
+    <# .SYNOPSIS
+    Requires canonical clean quarantine and, when supplied, an empty valid repair plan.
+    This read-only assertion grants no repair or skip authority.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Status, [object]$RepairPlan)
+    $valid = Get-RSObjectValue $Status @('IsValid','is_valid') $null
+    $blocking = Get-RSObjectValue $Status @('HasBlockingEntries','has_blocking_entries') $null
+    if ($valid -isnot [bool] -or $blocking -isnot [bool] -or -not $valid -or $blocking -or
+        @(Get-RSObjectValue $Status @('ActiveEntries','active_entries') 'missing').Count -ne 0 -or
+        @(Get-RSObjectValue $Status @('InvalidEntries','invalid_entries') 'missing').Count -ne 0 -or
+        @(Get-RSObjectValue $Status @('Errors','errors') 'missing').Count -ne 0 -or
+        (Get-RSObjectValue $Status @('TotalCount','total_count') -1) -ne 0) {
+        throw 'Clean quarantine is required: active, invalid, malformed or error entries block this run before native/repair work.'
+    }
+    if ($PSBoundParameters.ContainsKey('RepairPlan')) {
+        $planValid = Get-RSObjectValue $RepairPlan @('IsValid','is_valid') $null
+        $planBlocking = Get-RSObjectValue $RepairPlan @('HasBlockingEntries','has_blocking_entries') $null
+        if ($planValid -isnot [bool] -or $planBlocking -isnot [bool] -or -not $planValid -or $planBlocking -or
+            @(Get-RSObjectValue $RepairPlan @('Attempts','attempts') 'missing').Count -ne 0 -or
+            @(Get-RSObjectValue $RepairPlan @('InvalidEntries','invalid_entries') 'missing').Count -ne 0 -or
+            @(Get-RSObjectValue $RepairPlan @('Errors','errors') 'missing').Count -ne 0) {
+            throw 'Clean-quarantine mode forbids every quarantine repair dispatch; its repair plan must be valid and empty.'
+        }
+    }
+}
+
 function Get-RSTestQuarantineRepairPlan {
     param(
         [AllowNull()]
@@ -254,5 +283,6 @@ Export-ModuleMember -Function @(
     'Get-RSTestQuarantineDate',
     'Get-RSTestQuarantineStatus',
     'Read-RSTestQuarantineFile',
+    'Assert-RSTestQuarantineClean',
     'Get-RSTestQuarantineRepairPlan'
 )

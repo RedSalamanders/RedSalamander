@@ -920,6 +920,8 @@ struct ViewerSpacePerfDebugSnapshot
     bool layoutAnimationActive = false;
     // The tile the last WM_LBUTTONDOWN hit; 0 when it landed in the header strip or on no tile.
     uint32_t lastLButtonDownHitNodeId = 0u;
+    // Charged storage bytes retained by submitted or awaiting-submission disposal owners.
+    uint64_t refreshDisposeBytes = 0u;
 };
 
 struct ViewerSpaceDebugRectDip
