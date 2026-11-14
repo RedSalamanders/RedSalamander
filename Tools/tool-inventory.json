@@ -620,7 +620,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate exact DxUi source/archive provenance, API-revision gating, the long-path sparse restore from a root deeper than MAX_PATH and its failure cleanup, package sidecars, severity/action-ready update-advisory presentation, and real six-profile MSBuild evaluation including sanitizer settings and compiler-host overrides.",
+      "purpose": "Validate exact DxUi source/archive provenance, API-revision gating, the long-path sparse restore from a root deeper than MAX_PATH and its failure cleanup, package sidecars, severity/action-ready update-advisory presentation, and real six-profile MSBuild evaluation including sanitizer settings and compiler-host overrides. Guard candidate-only actual Git launches before start and validate silent separate streams, literal arguments, explicit CWD, actual exits, inherited environment and exact containment without an unsafe baseline.",
       "usage": "Run with Pester or the current tooling test aggregate; MSBuild queries evaluate imports without compiling or modifying product outputs.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -709,7 +709,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Own pinned DxUi Source policy and receipt-bound qualified SDK build, artifact-reopen and package provenance.",
+      "purpose": "Own pinned DxUi Source policy and receipt-bound qualified SDK build, artifact-reopen and package provenance; read-only Git identity/status uses silent contained no-window capture without artifact-write delegation.",
       "usage": "Import through build, snapshot and dependency restore entrypoints.",
       "usedBy": [
         "build.ps1",
@@ -719,7 +719,8 @@
         "Tools/Restore-DxUi.ps1",
         "Tools/Tests/BuildEvidence.Tests.ps1",
         "Tools/Tests/DxUiDependency.Tests.ps1",
-        "Tools/Invoke-ProjectCi.ps1"
+        "Tools/Invoke-ProjectCi.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "consumerClosure": "derived-references",
       "prerequisites": [
@@ -2145,7 +2146,9 @@
         "Tools/Tests/MSBuildInvocation.Tests.ps1",
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
         "Tools/Tests/RelocatedTestSandbox.Tests.ps1",
-        "Tools/Tests/RunAllTestsPlan.Tests.ps1"
+        "Tools/Tests/RunAllTestsPlan.Tests.ps1",
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Tests/DxUiDependency.Tests.ps1"
       ],
       "prerequisites": [],
       "sideEffects": [
@@ -2178,9 +2181,12 @@
         "Tools/Invoke-SanitizedMsbuild.ps1",
         "Tools/Run-AllTests.ps1",
         "Tools/SanitizedEnvironment.ps1",
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/DxUiDependency.Tests.ps1"
       ],
-      "prerequisites": ["Exact pinned .ci-engine/Tools/Modules/Ci.Policy.psm1"],
+      "prerequisites": [
+        "Exact pinned .ci-engine/Tools/Modules/Ci.Policy.psm1"
+      ],
       "sideEffects": [
         "Can update the current process environment or launch contained child processes when explicitly requested",
         "Contained-child admission may query the current process through local Windows APIs"
@@ -4955,7 +4961,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. File Operations bridge guards retain the shared new-file transfer route alongside managed and verification routes. Overlap guards enforce serial Copy/Move choices and reject stale concurrent consent. File Operations tick-spanning transfer fixture guards protect runtime budget publication, progress-gate ownership and cleanup order. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics. Physical alternate-volume acquisition refuses missing or unmarked roots without writing to them. Commands metadata observations retain privacy and same-captured-HWND comparison/diagnostics; defaulted clipboard setup gates a single product-copy attempt without content logging. Separate process-attribution privacy/lifetime guards, captured pre-Enter ownership and bounded pinned menu-metadata interception preserve diagnostic-only semantics and original assertions. Stock refusal guards require the original borrowed lease, positive captured creation and bounded failure-only queries. Background wrapper guards retain exact captured arguments/delegation and protect the test-local four-query console/pipe observation allowlist plus preflight-before-launch ordering.",
+      "purpose": "Enforce current application, plugin and self-test source contracts, including no native volume mounts outside the harness-proved test-owned VHDX, every test link, mount, SUBST and share call inside an allowlisted sandbox-guarded helper, bounded history-popup state, keyboard capture, revisioned pure Issues projection ownership, observational diagnostics, semantic bridge cleanup arguments and offered cached actions, selected-root/descendant Keep Both separation and mixed-object non-mutating Skip reuse with native witnesses, fail-closed loopback refusal outcomes, ViewerSpace observed-ancestor monotonic totals and formatting-tolerant durable-store publication policy checks, plus process-scoped nonactivating ViewerSpace desktop witnesses, cooperative application foreground requests and physical-input/activation-write bans. Guidance examples participate in the canonical callback-return module-pin guard. Documentation guards cover one-shot shell-free Terminal mode, injected shares, owned fake providers and real generated-AVI decoder assertions. File Operations bridge guards retain the shared new-file transfer route alongside managed and verification routes. Overlap guards enforce serial Copy/Move choices and reject stale concurrent consent. File Operations tick-spanning transfer fixture guards protect runtime budget publication, progress-gate ownership and cleanup order. Repeated shuffle qualification remains manual and absent from compiler-free PR checks. Foreground admission failures retain stage, error, held-key and sent-input diagnostics. Physical alternate-volume acquisition refuses missing or unmarked roots without writing to them. Commands metadata observations retain privacy and same-captured-HWND comparison/diagnostics; defaulted clipboard setup gates a single product-copy attempt without content logging. Separate process-attribution privacy/lifetime guards, captured pre-Enter ownership and bounded pinned menu-metadata interception preserve diagnostic-only semantics and original assertions. Stock refusal guards require the original borrowed lease, positive captured creation and bounded failure-only queries. Background wrapper guards retain exact captured arguments/delegation and protect the test-local four-query console/pipe observation allowlist plus preflight-before-launch ordering. DxUi Git-query guards retain all four captured calls, optional-lock policy and absence of artifact-write delegation with negative counterfactuals.",
       "usage": "Run through the current Tools Pester profile and Full; source guards complement native behavioral tests and do not replace them.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",
@@ -4973,7 +4979,8 @@
         "Tools/Tests/ProcessStreaming.Tests.ps1",
         "RedSalamander/FolderWindow.FileOperations.Popup.h",
         "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
-        "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp"
+        "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp",
+        "Tools/Modules/Build/DxUiDependency.psm1"
       ],
       "sideEffects": [
         "Reads current repository sources; Pester framework artifacts stay in the test sandbox"

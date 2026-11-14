@@ -1,0 +1,89 @@
+{
+  "schema": "red-salamander.dxui-git-captured-work.v1",
+  "data_origin": "Authored closed-field projection of original retained mock-query and actual safe-child observations",
+  "measured_context": "20261114T231409Z-87496-d44e7ff3500b41a68b7319f3a7407328",
+  "source_base": "46939438b3a9101a73faec539bb4eaec93176bb7",
+  "workspace": "dirty candidate follow-up",
+  "identity_mock_rows": [
+    {
+      "index": 0,
+      "query": "HEAD",
+      "captured_calls": 1,
+      "literal_arguments_match": true,
+      "working_directory_matches_fixture": true,
+      "artifact_write_delegation": false
+    },
+    {
+      "index": 1,
+      "query": "clean-status",
+      "captured_calls": 1,
+      "literal_arguments_match": true,
+      "working_directory_matches_fixture": true,
+      "artifact_write_delegation": false
+    },
+    {
+      "index": 2,
+      "query": "public-header-tree",
+      "captured_calls": 1,
+      "literal_arguments_match": true,
+      "working_directory_matches_fixture": true,
+      "artifact_write_delegation": false
+    }
+  ],
+  "actual_safe_git_rows": [
+    {
+      "index": 0,
+      "fixture_operation": "init",
+      "no_window": true,
+      "stdout_redirected": true,
+      "stderr_redirected": true,
+      "exact_owned_job": true,
+      "artifact_write_delegation": false,
+      "inherited_fixture_value_match": true
+    },
+    {
+      "index": 1,
+      "fixture_operation": "add",
+      "no_window": true,
+      "stdout_redirected": true,
+      "stderr_redirected": true,
+      "exact_owned_job": true,
+      "artifact_write_delegation": false,
+      "inherited_fixture_value_match": true
+    },
+    {
+      "index": 2,
+      "fixture_operation": "commit",
+      "no_window": true,
+      "stdout_redirected": true,
+      "stderr_redirected": true,
+      "exact_owned_job": true,
+      "artifact_write_delegation": false,
+      "inherited_fixture_value_match": true
+    },
+    {
+      "index": 3,
+      "fixture_operation": "unicode-log",
+      "no_window": true,
+      "stdout_redirected": true,
+      "stderr_redirected": true,
+      "exact_owned_job": true,
+      "artifact_write_delegation": false,
+      "inherited_fixture_value_match": true
+    },
+    {
+      "index": 4,
+      "fixture_operation": "missing-tree",
+      "no_window": true,
+      "stdout_redirected": true,
+      "stderr_redirected": true,
+      "exact_owned_job": true,
+      "artifact_write_delegation": false,
+      "inherited_fixture_value_match": true
+    }
+  ],
+  "identity_mock_calls": 3,
+  "actual_safe_git_launches": 5,
+  "counterfactual_unsafe_start_refused": true,
+  "claims": "No paired unsafe baseline, speedup, historical creator, platform, Full or receipt qualification"
+}

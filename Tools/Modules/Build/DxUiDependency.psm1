@@ -51,6 +51,33 @@ function Assert-RSDxUiApiRevision {
     }
 }
 
+function Invoke-RSDxUiSourceGitCapture {
+    # Module-local projection for read-only source checks. The canonical launcher owns
+    # no-window creation, containment, environment normalization and argument quoting.
+    # Do not delegate artifact-write authority for these identity/status queries.
+    param(
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [Parameter(Mandatory)][string[]]$Arguments
+    )
+    $gitApplication = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $gitPath = [IO.Path]::GetFullPath([string]$gitApplication.Source)
+    $stdoutLines = [Collections.Generic.List[string]]::new()
+    $stderrLines = [Collections.Generic.List[string]]::new()
+    # Retain these collections across the ProcessStreaming module's callback scope.
+    $captureLine = {
+        param($Line, $IsError)
+        if ($IsError) { [void]$stderrLines.Add([string]$Line) }
+        else { [void]$stdoutLines.Add([string]$Line) }
+    }.GetNewClosure()
+    $exitCode = Invoke-RSStreamingProcess -FilePath $gitPath -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory -OutputLineCallback $captureLine
+    return [pscustomobject]@{
+        ExitCode = [int]$exitCode
+        StdOut = [string[]]$stdoutLines.ToArray()
+        StdErr = [string[]]$stderrLines.ToArray()
+    }
+}
+
 function Get-RSDxUiSourceIdentity {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepoRoot, [switch]$AllowMissing)
@@ -62,12 +89,15 @@ function Get-RSDxUiSourceIdentity {
         if ($AllowMissing) { return $null }
         throw 'The pinned DxUi source is missing. Run Tools/Restore-DxUi.ps1 for this profile.'
     }
-    $head = (& git -C $source rev-parse HEAD).Trim()
-    if ($LASTEXITCODE -ne 0 -or $head -cne $pin.commit) { throw 'The restored DxUi checkout does not match the product pin.' }
-    $dirty = & git -C $source --no-optional-locks status --porcelain --untracked-files=normal
-    if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'The restored DxUi source is dirty; build and test receipt reuse is forbidden.' }
-    $tree = (& git -C $source rev-parse HEAD:include).Trim()
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the pinned DxUi public headers.' }
+    $headResult = Invoke-RSDxUiSourceGitCapture -WorkingDirectory $RepoRoot -Arguments @('-C', $source, 'rev-parse', 'HEAD')
+    $head = ($headResult.StdOut -join "`n").Trim()
+    if ($headResult.ExitCode -ne 0 -or $head -cne $pin.commit) { throw 'The restored DxUi checkout does not match the product pin.' }
+    $statusResult = Invoke-RSDxUiSourceGitCapture -WorkingDirectory $RepoRoot `
+        -Arguments @('-C', $source, '--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal')
+    if ($statusResult.ExitCode -ne 0 -or $statusResult.StdOut) { throw 'The restored DxUi source is dirty; build and test receipt reuse is forbidden.' }
+    $treeResult = Invoke-RSDxUiSourceGitCapture -WorkingDirectory $RepoRoot -Arguments @('-C', $source, 'rev-parse', 'HEAD:include')
+    $tree = ($treeResult.StdOut -join "`n").Trim()
+    if ($treeResult.ExitCode -ne 0) { throw 'Cannot identify the pinned DxUi public headers.' }
     return [pscustomobject]@{ Pin=$pin; Source=$source; PublicHeadersGitTree=$tree; DisableStlAnnotations=$true }
 }
 
@@ -111,8 +141,10 @@ function Install-RSDxUiPinnedSource {
         Invoke-RSDxUiRestoreProcess $RepoRoot 'git.exe' (@('-C', $Source, 'sparse-checkout', 'set', '--no-cone') + $script:RSDxUiSparseCheckoutPatterns)
         Invoke-RSDxUiRestoreProcess $RepoRoot 'git.exe' @('-C', $Source, '-c', 'core.longpaths=true', 'checkout', '--detach', $Commit)
         # git checkout can name files it could not write and still exit 0; the status shows each as a deletion.
-        $dirty = @(& git -C $Source --no-optional-locks status --porcelain --untracked-files=normal)
-        if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
+        $statusResult = Invoke-RSDxUiSourceGitCapture -WorkingDirectory $RepoRoot `
+            -Arguments @('-C', $Source, '--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal')
+        $dirty = @($statusResult.StdOut)
+        if ($statusResult.ExitCode -ne 0 -or $dirty.Count -gt 0) {
             throw "The DxUi checkout is incomplete: $($dirty.Count) path(s) were not written, such as '$($dirty | Select-Object -First 1)'."
         }
         foreach ($required in $script:RSDxUiRequiredSourcePaths) {

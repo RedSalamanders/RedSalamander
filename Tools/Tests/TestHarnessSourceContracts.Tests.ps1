@@ -5566,6 +5566,32 @@ Specs\TestRuns\local_scratch
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'
     }
 
+    It 'keeps all DxUi source Git queries on the captured no-window boundary without write delegation' {
+        $source = Get-RSText 'Tools/Modules/Build/DxUiDependency.psm1'
+        # AST command names plus narrow helper-shape checks protect this reviewed
+        # module. This is not a general proof of arbitrary dynamic invocation.
+        $valid = { param($body)
+            $tokens = $null; $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseInput($body, [ref]$tokens, [ref]$errors)
+            $commands = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true))
+            $bareGit = @($commands | Where-Object { $_.GetCommandName() -imatch '(^|[\\/])git(?:\.exe)?$' })
+            $captures = @($commands | Where-Object { $_.GetCommandName() -ceq 'Invoke-RSDxUiSourceGitCapture' })
+            $helper = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSDxUiSourceGitCapture' }, $true))
+            if ($errors.Count -ne 0 -or $bareGit.Count -ne 0 -or $captures.Count -ne 4 -or $helper.Count -ne 1) { return $false }
+            $captureText = $helper[0].Body.Extent.Text
+            return $captureText -match 'Get-Command git -CommandType Application -ErrorAction Stop \| Select-Object -First 1' -and
+                $captureText -match '(?s)Invoke-RSStreamingProcess -FilePath \$gitPath -Arguments \$Arguments\s+`\s*-WorkingDirectory \$WorkingDirectory -OutputLineCallback \$captureLine' -and
+                $captureText -notmatch 'DelegateArtifactOperation|Write-Host|2>&1' -and
+                ([regex]::Matches($body, "'--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'").Count -eq 2)
+        }
+        (& $valid $source) | Should Be $true
+        $unsafe = $source.Replace("Invoke-RSDxUiSourceGitCapture -WorkingDirectory `$RepoRoot -Arguments @('-C', `$source, 'rev-parse', 'HEAD')", "& git -C `$source rev-parse HEAD")
+        ($unsafe -cne $source) | Should Be $true
+        (& $valid $unsafe) | Should Be $false
+        (& $valid ($source.Replace('-OutputLineCallback $captureLine', '-OutputLineCallback $captureLine -DelegateArtifactOperation'))) | Should Be $false
+        (& $valid ($source.Replace("'--no-optional-locks', 'status'", "'status'"))) | Should Be $false
+    }
+
     It 'keeps the background console probe read-only and preflights windowless captured flags before launch' {
         $source=Get-RSText 'Tools/Tests/ProcessStreaming.Tests.ps1'
         $type=[regex]::Match($source,'(?ms)^public static class BackgroundBuildConsoleObservation\s*\{.*?^\}')

@@ -184,6 +184,17 @@ Consumers import `Build/RedSalamander.DxUi.props` and `.targets`; they never enu
 The root build restores the exact source with `Tools/Modules/Build/DxUiDependency.psm1`, or developers
 can use `Tools/Restore-DxUi.ps1` before an IDE build. Restore owns the repository/platform dependency
 lease, contains its native child processes and leaves sibling repositories unchanged.
+Read-only source identity (HEAD, status and public-header tree) and post-checkout status use the existing
+contained `Invoke-RSStreamingProcess` boundary, never bare PowerShell native-command invocation.
+The private `Invoke-RSDxUiSourceGitCapture` projection resolves the first Git Application, forwards literal
+arguments and an explicit working directory, captures stdout/stderr as separate silent line arrays, and
+returns the actual child exit code. Status retains `--no-optional-locks` and normal untracked-file checks;
+pin, dirty-source and failed-restore rules remain fail-closed. These queries do not delegate artifact-write
+authority or alter the parent environment. Canonical child decoding/line normalization is reused; callers
+join and trim only the HEAD/tree values. No secondary console window/default-terminal UX is requested;
+an inbox console-server association may still exist. This launch-policy guarantee does not identify the
+creator of a historical foreground process. Candidate-only guarded Git controls and counterfactual source
+guards live in `Tools/Tests/DxUiDependency.Tests.ps1` and `Tools/Tests/TestHarnessSourceContracts.Tests.ps1`.
 The clone enables Git long paths twice: a process-level `-c core.longpaths=true` covers `git init`, which copies its
 template hooks before the new repository has a configuration, and `clone -c` stores the setting in that repository so every
 later git command on the checkout (the clean-source check) works from a deep consumer root. User and global Git

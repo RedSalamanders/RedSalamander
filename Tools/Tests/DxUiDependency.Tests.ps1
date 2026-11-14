@@ -1,5 +1,185 @@
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiDependency.psm1') -Force
+$script:dxUiTestModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiDependency.psm1') -Force -PassThru
+
+function Invoke-RSDxUiTestGit {
+    # Fixture setup may write only its sandbox repository; use the same safe
+    # capture boundary rather than executing a legacy bare-CUI baseline.
+    $capture = & $script:dxUiTestModule {
+        param($Directory, $GitArguments)
+        Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Directory -Arguments $GitArguments
+    } $repoRoot ([string[]]$args)
+    $global:LASTEXITCODE = $capture.ExitCode
+    return $capture.StdOut
+}
+
+Describe 'Captured DxUi source Git identity' {
+    function New-RSDxUiCaptureFixture {
+        param([string]$Root)
+        [void][IO.Directory]::CreateDirectory((Join-Path $Root 'Dependencies'))
+        $commit = 'a' * 40
+        @{repository='https://github.com/RedSalamanders/DxUi';commit=$commit;apiRevision=3;targets=@('DxUi')} |
+            ConvertTo-Json | Set-Content (Join-Path $Root 'Dependencies/DxUi.lock.json') -Encoding utf8
+        [void][IO.Directory]::CreateDirectory((Join-Path $Root ('.build/dependencies/DxUi/source/' + $commit.Substring(0,16))))
+        return $Root
+    }
+
+    It 'captures separate line arrays and actual exit using the first Git application without host output or delegation' {
+        $captureRoot = Join-Path $TestDrive 'capture-streams'
+        [void][IO.Directory]::CreateDirectory($captureRoot)
+        Mock Get-Command -ModuleName DxUiDependency {
+            @([pscustomobject]@{Source='C:\first Git\git.exe'},[pscustomobject]@{Source='C:\second Git\git.exe'})
+        } -ParameterFilter { $Name -ceq 'git' -and $CommandType -eq 'Application' -and $env:RS_DXUI_FAKE_GIT -ceq '1' }
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
+            @{file=$FilePath;arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation} |
+                ConvertTo-Json -Compress | Set-Content (Join-Path $WorkingDirectory 'recording.json') -Encoding utf8
+            & $OutputLineCallback 'first line' $false
+            & $OutputLineCallback '' $false
+            & $OutputLineCallback 'snow 雪' $false
+            & $OutputLineCallback 'separate error' $true
+            return 17
+        } -ParameterFilter { $WorkingDirectory -like '*capture-streams' }
+        $priorFake = $env:RS_DXUI_FAKE_GIT
+        try {
+            $env:RS_DXUI_FAKE_GIT = '1'
+            $result = @(& $script:dxUiTestModule {
+                param($Root)
+                Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('literal space','snow 雪','$notAnExpression')
+            } $captureRoot)
+        } finally { $env:RS_DXUI_FAKE_GIT = $priorFake }
+        $result.Count | Should Be 1
+        $result[0].ExitCode | Should Be 17
+        ($result[0].StdOut -join '|') | Should Be 'first line||snow 雪'
+        ($result[0].StdErr -join '|') | Should Be 'separate error'
+        $record = Get-Content (Join-Path $captureRoot 'recording.json') -Raw | ConvertFrom-Json
+        $record.file | Should Be 'C:\first Git\git.exe'
+        ($record.arguments -join '|') | Should Be 'literal space|snow 雪|$notAnExpression'
+        $record.cwd | Should Be $captureRoot
+        $record.delegated | Should Be $false
+    }
+
+    It 'keeps the three literal identity queries and clean empty output separate from stderr' {
+        $root = New-RSDxUiCaptureFixture (Join-Path $TestDrive 'capture identity root')
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
+            [IO.File]::AppendAllText((Join-Path $WorkingDirectory 'queries.jsonl'), ((@{arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation}|ConvertTo-Json -Compress)+"`n"))
+            if ($Arguments[-1] -ceq 'HEAD') { & $OutputLineCallback ('a'*40) $false }
+            elseif ($Arguments[-1] -ceq 'HEAD:include') { & $OutputLineCallback ('b'*40) $false }
+            else { & $OutputLineCallback 'warning is not a dirty stdout row' $true }
+            return 0
+        } -ParameterFilter { $WorkingDirectory -like '*capture identity root' }
+        $identity = Get-RSDxUiSourceIdentity -RepoRoot $root
+        $identity.Pin.commit | Should Be ('a'*40)
+        $identity.PublicHeadersGitTree | Should Be ('b'*40)
+        $queries = @(Get-Content (Join-Path $root 'queries.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
+        $queries.Count | Should Be 3
+        ($queries[0].arguments -join '|') | Should Be ('-C|'+$identity.Source+'|rev-parse|HEAD')
+        ($queries[1].arguments -join '|') | Should Be ('-C|'+$identity.Source+'|--no-optional-locks|status|--porcelain|--untracked-files=normal')
+        ($queries[2].arguments -join '|') | Should Be ('-C|'+$identity.Source+'|rev-parse|HEAD:include')
+        @($queries | Where-Object { $_.cwd -cne $root }).Count | Should Be 0
+        @($queries | Where-Object delegated).Count | Should Be 0
+        $work = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('identity-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+        $queries | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $work 'identity-queries.json') -Encoding utf8
+    }
+
+    It 'fails closed on <Mode> without accepting captured stdout as success' -TestCases @(
+        @{Mode='head-exit'}, @{Mode='pin-mismatch'}, @{Mode='dirty-status'}, @{Mode='status-exit'}, @{Mode='tree-exit'}
+    ) {
+        param($Mode)
+        $root = New-RSDxUiCaptureFixture (Join-Path $TestDrive ('capture-'+$Mode))
+        $Mode | Set-Content (Join-Path $root 'query-mode')
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback)
+            $mode = (Get-Content (Join-Path $WorkingDirectory 'query-mode') -Raw).Trim()
+            if ($Arguments[-1] -ceq 'HEAD') {
+                & $OutputLineCallback ($(if($mode -ceq 'pin-mismatch'){'c'*40}else{'a'*40})) $false
+                if($mode -ceq 'head-exit'){return 128}
+            } elseif ($Arguments[-1] -ceq 'HEAD:include') {
+                if($mode -ceq 'tree-exit'){& $OutputLineCallback 'missing include tree' $true;return 128}
+                & $OutputLineCallback ('b'*40) $false
+            } else {
+                if($mode -ceq 'dirty-status'){& $OutputLineCallback '?? untracked 雪.txt' $false}
+                if($mode -ceq 'status-exit'){return 17}
+            }
+            return 0
+        } -ParameterFilter { (Test-Path -LiteralPath (Join-Path $WorkingDirectory 'query-mode')) }
+        $message = ''
+        try { Get-RSDxUiSourceIdentity -RepoRoot $root | Out-Null } catch { $message = $_.Exception.Message }
+        $expected = if($Mode -in @('head-exit','pin-mismatch')){'does not match the product pin'}elseif($Mode -eq 'tree-exit'){'Cannot identify the pinned DxUi public headers'}else{'restored DxUi source is dirty'}
+        $message | Should Match ([regex]::Escape($expected))
+    }
+
+    It 'preflights actual Git PSI before launching and preserves Unicode, exit, environment and owned-job facts' {
+        $stream = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -PassThru
+        $actualStream = & $script:dxUiTestModule { (Get-Command Invoke-RSStreamingProcess).Module }
+        $actualStream.InstanceId | Should Be $stream.InstanceId
+        $sandbox = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('git-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+        $origin = Join-Path $sandbox 'origin 雪'
+        [void][IO.Directory]::CreateDirectory((Join-Path $origin 'include'))
+        $priorRecord = $env:RS_DXUI_CAPTURE_RECORD
+        $priorModule = $env:RS_DXUI_CAPTURE_STARTER
+        $priorSentinel = $env:RS_DXUI_CAPTURE_SENTINEL
+        try {
+            $env:RS_DXUI_CAPTURE_RECORD = Join-Path $sandbox 'launches.jsonl'
+            $env:RS_DXUI_CAPTURE_STARTER = Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+            $env:RS_DXUI_CAPTURE_SENTINEL = 'literal inherited 雪'
+            Mock Start-RSContainedProcess -ModuleName ProcessStreaming {
+                param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
+                if($ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or
+                    -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation) {
+                    throw 'Refusing unsafe DxUi Git fixture launch.'
+                }
+                # Resolve the already-loaded canonical module without importing it
+                # over this module-scoped interception after the first child.
+                $starterModule = @(Get-Module -All | Where-Object { $_.Path -ceq $env:RS_DXUI_CAPTURE_STARTER })
+                if ($starterModule.Count -ne 1) { throw 'Expected one canonical contained-process module.' }
+                $starter = $starterModule[0].ExportedFunctions['Start-RSContainedProcess']
+                $owned = & $starter -ProcessStartInfo $ProcessStartInfo
+                $transferred = $false
+                try {
+                    [ordered]@{process=$owned.Id;exact_job=$owned.IsInContainmentJob;file=$ProcessStartInfo.FileName;
+                        cwd=$ProcessStartInfo.WorkingDirectory;arguments=@($ProcessStartInfo.ArgumentList);no_window=$ProcessStartInfo.CreateNoWindow;
+                        stdout=$ProcessStartInfo.RedirectStandardOutput;stderr=$ProcessStartInfo.RedirectStandardError;delegated=[bool]$DelegateArtifactOperation;
+                        inherited_sentinel=$ProcessStartInfo.Environment['RS_DXUI_CAPTURE_SENTINEL']} |
+                        ConvertTo-Json -Compress | Add-Content -LiteralPath $env:RS_DXUI_CAPTURE_RECORD -Encoding utf8
+                    $transferred = $true
+                    return $owned
+                } finally { if(-not $transferred){$owned.Dispose()} }
+            }
+            # Assert the hook is in the actual module before any real fixture child.
+            (& $stream { (Get-Command Start-RSContainedProcess).Definition }) | Should Match 'Invoke-Mock'
+            $unsafe = [Diagnostics.ProcessStartInfo]::new()
+            $unsafe.FileName = (Get-Command git -CommandType Application | Select-Object -First 1).Source
+            $unsafe.UseShellExecute = $false
+            $refused = $false
+            try { & $stream {param($Psi) Start-RSContainedProcess -ProcessStartInfo $Psi} $unsafe | Out-Null }
+            catch { $refused = $_.Exception.Message -like '*Refusing unsafe DxUi Git fixture*' }
+            $refused | Should Be $true
+            (Test-Path $env:RS_DXUI_CAPTURE_RECORD) | Should Be $false
+            '// synthetic header' | Set-Content (Join-Path $origin 'include/Example.h') -Encoding utf8
+            Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $origin
+            Invoke-RSDxUiTestGit -C $origin add .
+            Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m 'Unicode 雪 fixture'
+            $LASTEXITCODE | Should Be 0
+            $unicode = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-C',$Root,'log','-1','--format=%s')} $origin
+            $unicode.ExitCode | Should Be 0
+            ($unicode.StdOut -join "`n") | Should Be 'Unicode 雪 fixture'
+            $failure = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-C',$Root,'rev-parse','HEAD:missing')} $origin
+            ($failure.ExitCode -ne 0) | Should Be $true
+            @($failure.StdErr).Count | Should BeGreaterThan 0
+            $env:RS_DXUI_CAPTURE_SENTINEL | Should Be 'literal inherited 雪'
+            $rows = @(Get-Content $env:RS_DXUI_CAPTURE_RECORD | ForEach-Object { $_ | ConvertFrom-Json })
+            $rows.Count | Should Be 5
+            @($rows | Where-Object { -not $_.no_window -or -not $_.stdout -or -not $_.stderr -or -not $_.exact_job -or $_.delegated }).Count | Should Be 0
+            @($rows | Where-Object { $_.inherited_sentinel -cne 'literal inherited 雪' }).Count | Should Be 0
+            $rows | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $sandbox 'safe-git-observations.json') -Encoding utf8
+        } finally {
+            $env:RS_DXUI_CAPTURE_RECORD=$priorRecord
+            $env:RS_DXUI_CAPTURE_STARTER=$priorModule
+            $env:RS_DXUI_CAPTURE_SENTINEL=$priorSentinel
+        }
+    }
+}
 
 Describe 'SDK consumer Windows header policy' {
     It 'retains application macro semantics and the shared ABI guards in both native Release profiles' {
@@ -69,7 +249,7 @@ Describe 'Folded DxUi change notes' {
 Describe 'Canonical DxUi source ownership' {
     It 'keeps the shared implementation and control suites out of the consumer tracked tree' {
         foreach ($relative in @('Common/DxUi', 'Tests/DxUiTests')) {
-            $tracked = @(& git -C $repoRoot ls-files -- $relative)
+            $tracked = @(Invoke-RSDxUiTestGit -C $repoRoot ls-files -- $relative)
             if ($LASTEXITCODE -ne 0) { throw "Cannot enumerate tracked legacy path: $relative" }
             $tracked.Count | Should Be 0
         }
@@ -79,7 +259,7 @@ Describe 'Canonical DxUi source ownership' {
     }
 
     It 'keeps owned project inputs separate from the restored library implementation' {
-        $projects = @(& git -C $repoRoot ls-files -- '*.vcxproj')
+        $projects = @(Invoke-RSDxUiTestGit -C $repoRoot ls-files -- '*.vcxproj')
         if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate owned projects.' }
         $projects.Count | Should BeGreaterThan 0
         foreach ($project in $projects) {
@@ -134,18 +314,18 @@ Describe 'Exact DxUi consumer dependency' {
         [void](New-Item -ItemType Directory -Path (Join-Path $origin 'include') -Force)
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'Dependencies') -Force)
         'synthetic public header' | Set-Content -LiteralPath (Join-Path $origin 'include/Example.h')
-        & git init --quiet $origin
-        & git -C $origin add .
-        & git -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit init --quiet $origin
+        Invoke-RSDxUiTestGit -C $origin add .
+        Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize isolated source fixture.' }
-        $head = (& git -C $origin rev-parse HEAD).Trim()
+        $head = (Invoke-RSDxUiTestGit -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $rejected=$false; try { Get-RSDxUiSourceIdentity -RepoRoot $root | Out-Null } catch { $rejected=$true }; $rejected | Should Be $true
         Get-RSDxUiSourceIdentity -RepoRoot $root -AllowMissing | Should BeNullOrEmpty
         $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
-        & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated source fixture.' }
         (Get-RSDxUiSourceIdentity -RepoRoot $root).Pin.commit | Should Be $head
         $header = Join-Path $source 'include/Example.h'
@@ -164,17 +344,17 @@ Describe 'Exact DxUi consumer dependency' {
         [void](New-Item -ItemType Directory -Path (Join-Path $origin 'include') -Force)
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'Dependencies') -Force)
         'synthetic public header' | Set-Content -LiteralPath (Join-Path $origin 'include/Example.h')
-        & git init --quiet $origin
-        & git -C $origin add .
-        & git -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit init --quiet $origin
+        Invoke-RSDxUiTestGit -C $origin add .
+        Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize isolated provenance fixture.' }
-        $head = (& git -C $origin rev-parse HEAD).Trim()
+        $head = (Invoke-RSDxUiTestGit -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
         $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
-        & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated provenance fixture.' }
         $identity = @{Fingerprint=('b'*64);Identity=@{commit=$head;apiRevision=3;platform='x64';disableStlAnnotations=$true}}
         $identityPath = Join-Path $dependency 'DxUi.identity.x64.json'
@@ -250,15 +430,15 @@ Describe 'Lighter DxUi source restore' {
             [void](New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force)
             [IO.File]::WriteAllText($target, $files[$relative])
         }
-        & git -c core.longpaths=true init --quiet $Path
+        Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $Path
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        & git -C $Path config core.longpaths true
+        Invoke-RSDxUiTestGit -C $Path config core.longpaths true
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        & git -C $Path add .
+        Invoke-RSDxUiTestGit -C $Path add .
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        & git -C $Path -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit -C $Path -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        return (& git -C $Path rev-parse HEAD).Trim()
+        return (Invoke-RSDxUiTestGit -C $Path rev-parse HEAD).Trim()
     }
 
     It 'restores beneath a deep root with Git long paths, without measurements, specifications or gallery sheets' {
@@ -285,10 +465,10 @@ Describe 'Lighter DxUi source restore' {
             Test-Path -LiteralPath (Join-Path $source $kept) | Should Be $true
         }
         # Long paths live in the checkout's own configuration; no user or global configuration is involved.
-        (& git -C $source config --local --get core.longpaths) | Should Be 'true'
+        (Invoke-RSDxUiTestGit -C $source config --local --get core.longpaths) | Should Be 'true'
         # The omitted paths are not deletions: the restore's own clean-source check accepts the sparse checkout.
         (Get-RSDxUiSourceIdentity -RepoRoot $root).Pin.commit | Should Be $head
-        (& git -C $source rev-parse HEAD).Trim() | Should Be $head
+        (Invoke-RSDxUiTestGit -C $source rev-parse HEAD).Trim() | Should Be $head
     }
 
     It 'removes the partial checkout it created when the restore fails, and never one it did not' {
@@ -358,22 +538,22 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
 '@ | Set-Content -LiteralPath (Join-Path $origin 'Tools/ConsumerBuild.psm1')
         # The fixture intentionally exceeds MAX_PATH, including Git's own object database.
         # Configure each bootstrap command before it can read a repository-local setting.
-        & git -c core.longpaths=true init --quiet $origin
+        Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $origin
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize long-path compiler-host fixture.' }
-        & git -c core.longpaths=true -C $origin config core.longpaths true
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $origin config core.longpaths true
         if ($LASTEXITCODE -ne 0) { throw 'Cannot configure long-path compiler-host fixture.' }
-        & git -c core.longpaths=true -C $origin add .
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $origin add .
         if ($LASTEXITCODE -ne 0) { throw 'Cannot stage long-path compiler-host fixture.' }
-        & git -c core.longpaths=true -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize compiler-host fixture.' }
-        $head = (& git -C $origin rev-parse HEAD).Trim()
+        $head = (Invoke-RSDxUiTestGit -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
         $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         (Join-Path $source '.git/hooks/fsmonitor-watchman.sample').Length | Should BeGreaterThan 260
-        & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone compiler-host fixture.' }
         Mock Invoke-RSDxUiRestoreProcess {} -ModuleName DxUiDependency
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
