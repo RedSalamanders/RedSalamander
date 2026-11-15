@@ -2039,7 +2039,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process/MSBuild helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild.",
+      "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process/MSBuild helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild. Repeated receipt publication validates complete candidate/stored records and full governing projections, preserves the first immutable bytes and republishes their exact canonical pointer; first publication is create-only.",
       "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -5078,7 +5078,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Guard canonical artifact and receipt identity, uniform test-surface metadata, final native-byte capture and pre-publication drift rejection.",
+      "purpose": "Guard canonical artifact and receipt identity, uniform test-surface metadata, final native-byte capture and pre-publication drift rejection. Cover repeated identity with changed timing/diagnostics, malformed candidates, identity/collision mismatches, noncanonical/corrupt stored bytes and exact immutable/pointer preservation.",
       "usage": "Current tooling profile; execute the whole file so its fingerprint command-surface setup is retained.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"

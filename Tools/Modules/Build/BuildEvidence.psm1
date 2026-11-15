@@ -938,6 +938,12 @@ function Publish-RSBuildReceipt {
         [Parameter(Mandatory = $true)][string]$SchemaPath
     )
 
+    # Even excluded diagnostic/timing metadata must satisfy the complete record
+    # schema before an existing governing identity can be reused.
+    $candidateJson = ConvertTo-RSCanonicalJson -InputObject $Receipt
+    if (-not (Test-Json -Json $candidateJson -SchemaFile $SchemaPath -ErrorAction SilentlyContinue)) {
+        throw "Build receipt does not satisfy schema '$SchemaPath'."
+    }
     $null = Assert-RSBuildReceiptSemantics -Receipt $Receipt
     $store = Get-RSBuildReceiptStore -BuildOutputDir $BuildOutputDir
     if (-not (Test-Path -LiteralPath $store.ReceiptDirectory -PathType Container)) {
@@ -945,13 +951,17 @@ function Publish-RSBuildReceipt {
     }
     $recordPath = Join-Path $store.ReceiptDirectory ($Receipt.receipt_id + '.json')
     if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) {
-        Write-RSAtomicCanonicalJsonFile -LiteralPath $recordPath -InputObject $Receipt -SchemaPath $SchemaPath -AllowedRoot $store.Root
+        Write-RSAtomicCanonicalJsonFile -LiteralPath $recordPath -InputObject $Receipt -SchemaPath $SchemaPath -AllowedRoot $store.Root -CreateNew
     }
     $stored = Read-RSValidationJsonFile -LiteralPath $recordPath -SchemaPath $SchemaPath -AllowedRoot $store.Root
     $null = Assert-RSBuildReceiptSemantics -Receipt $stored
-    if ((Get-RSCanonicalJsonDigest -InputObject $stored) -cne (Get-RSCanonicalJsonDigest -InputObject $Receipt)) {
-        throw "Stored build receipt record does not exactly match the receipt being published: $recordPath"
+    $storedProjection = ConvertTo-RSCanonicalJson -InputObject (Get-RSBuildReceiptProjection -Receipt $stored)
+    $candidateProjection = ConvertTo-RSCanonicalJson -InputObject (Get-RSBuildReceiptProjection -Receipt $Receipt)
+    if ($storedProjection -cne $candidateProjection) {
+        throw "Stored build receipt governing projection does not match the receipt being published: $recordPath"
     }
+    # The reader requires exact canonical UTF-8/LF bytes. Re-emitting this stored
+    # object therefore preserves its original bytes, including first-build metadata.
     Write-RSAtomicCanonicalJsonFile -LiteralPath $store.PointerPath -InputObject $stored -SchemaPath $SchemaPath -AllowedRoot $store.Root
     return $stored
 }

@@ -621,6 +621,20 @@ graph, runtime dependency identity, output sizes/digests, and declared runtime c
 Any missing, malformed, incompatible, aliased, reparse-routed, semantically inconsistent,
 or byte-mismatched artifact fails closed.
 
+Repeated successful publication with the same complete governing identity is idempotent.
+The candidate must pass complete canonical-object/schema and receipt-semantic validation,
+including excluded timing and diagnostic fields. The existing record must independently
+pass the canonical reader and the same semantic checks. Compare the complete canonical
+governing projections, not only receipt IDs or projection hashes. When they match, retain
+the first immutable record and atomically republish that exact canonical record to the
+pointer; do not replace its original timestamps, duration or diagnostic path spelling with
+the later candidate's metadata. Actual later build intervals remain in their build logs.
+First publication uses create-only record I/O, so a concurrent winner causes failure rather
+than replacement. Malformed/noncanonical stored bytes, invalid candidates or different
+governing projections fail before pointer mutation. `Read-RSBuildReceipt` retains its full
+record and byte-for-byte pointer equality check; idempotency grants no artifact, source,
+profile, portable or qualification exception.
+
 When an official workflow builds in one job and tests a downloaded artifact in another,
 the producer first revalidates every receipt output's regular-file status, size, and
 SHA-256, verifies the receipt-bound canonical toolchain record, then copies exactly those
