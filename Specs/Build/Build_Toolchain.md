@@ -195,6 +195,12 @@ join and trim only the HEAD/tree values. No secondary console window/default-ter
 an inbox console-server association may still exist. This launch-policy guarantee does not identify the
 creator of a historical foreground process. Candidate-only guarded Git controls and counterfactual source
 guards live in `Tools/Tests/DxUiDependency.Tests.ps1` and `Tools/Tests/TestHarnessSourceContracts.Tests.ps1`.
+The captured-Git fixture enters strict test scope and requires one real canonical Script
+module resolved in the consumer session, its expected normalized path, and a FunctionInfo
+export whose owner is that exact PSModuleInfo by reference. Missing, lookalike, foreign or
+ambiguous candidates fail before interception/launch; module GUIDs and Pester proxy ownership
+are not loaded-instance identity. All five recorded safe starts remain the independent
+behavioral routing proof, with no dependency reimport over the hook.
 The clone enables Git long paths twice: a process-level `-c core.longpaths=true` covers `git init`, which copies its
 template hooks before the new repository has a configuration, and `clone -c` stores the setting in that repository so every
 later git command on the checkout (the clean-source check) works from a deep consumer root. User and global Git

@@ -620,7 +620,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate exact DxUi source/archive provenance, API-revision gating, the long-path sparse restore from a root deeper than MAX_PATH and its failure cleanup, package sidecars, severity/action-ready update-advisory presentation, and real six-profile MSBuild evaluation including sanitizer settings and compiler-host overrides. Guard candidate-only actual Git launches before start and validate silent separate streams, literal arguments, explicit CWD, actual exits, inherited environment and exact containment without an unsafe baseline.",
+      "purpose": "Validate exact DxUi source/archive provenance, API-revision gating, the long-path sparse restore from a root deeper than MAX_PATH and its failure cleanup, package sidecars, severity/action-ready update-advisory presentation, and real six-profile MSBuild evaluation including sanitizer settings and compiler-host overrides. Guard candidate-only actual Git launches before start and validate silent separate streams, literal arguments, explicit CWD, actual exits, inherited environment and exact containment without an unsafe baseline. Strict-mode controls require canonical module type/path/export-owner reference and reject missing, lookalike, foreign or ambiguous identities before the five actual safe launches.",
       "usage": "Run with Pester or the current tooling test aggregate; MSBuild queries evaluate imports without compiling or modifying product outputs.",
       "usedBy": [
         "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1",

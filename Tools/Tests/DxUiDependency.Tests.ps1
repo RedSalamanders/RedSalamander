@@ -1,3 +1,4 @@
+Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:dxUiTestModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiDependency.psm1') -Force -PassThru
 
@@ -110,10 +111,35 @@ Describe 'Captured DxUi source Git identity' {
     }
 
     It 'preflights actual Git PSI before launching and preserves Unicode, exit, environment and owned-job facts' {
-        $stream = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -PassThru
-        $actualStream = & $script:dxUiTestModule { (Get-Command Invoke-RSStreamingProcess).Module }
-        $actualStream.InstanceId | Should Be $stream.InstanceId
+        $expectedStreamPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1'))
+        # Resolve in the actual consumer session. Its current Get-Command can be
+        # a legitimate Pester proxy; validate the canonical export owner instead.
+        $streamCandidates = @(& $script:dxUiTestModule {
+            Get-Module -Name ProcessStreaming -All | Where-Object { $_.ModuleType -eq 'Script' }
+        })
+        $streamCandidates.Count | Should Be 1
+        $stream = $streamCandidates[0]
+        $export = $stream.ExportedFunctions['Invoke-RSStreamingProcess']
+        $validOwner = { param([object[]]$Candidates, [string]$ExpectedPath, $Command)
+            if ($null -eq $Candidates -or $Candidates.Count -ne 1) { return $false }
+            $module = $Candidates[0]
+            if ($module -isnot [Management.Automation.PSModuleInfo] -or
+                $module.ModuleType -ne 'Script' -or [string]::IsNullOrEmpty($module.Path)) { return $false }
+            return [string]::Equals([IO.Path]::GetFullPath($module.Path), $ExpectedPath, [StringComparison]::OrdinalIgnoreCase) -and
+                $Command -is [Management.Automation.FunctionInfo] -and [object]::ReferenceEquals($Command.Module, $module)
+        }
+        (& $validOwner $streamCandidates $expectedStreamPath $export) | Should Be $true
+        (& $validOwner @() $expectedStreamPath $export) | Should Be $false
+        (& $validOwner @($null) $expectedStreamPath $export) | Should Be $false
+        (& $validOwner @([pscustomobject]@{Path=$expectedStreamPath;ModuleType='Script'}) $expectedStreamPath $export) | Should Be $false
+        (& $validOwner $streamCandidates ($expectedStreamPath+'.other') $export) | Should Be $false
+        (& $validOwner $streamCandidates $expectedStreamPath $script:dxUiTestModule.ExportedFunctions['Get-RSDxUiPin']) | Should Be $false
+        (& $validOwner $streamCandidates $expectedStreamPath ([pscustomobject]@{Module=$stream})) | Should Be $false
+        (& $validOwner @($stream,$stream) $expectedStreamPath $export) | Should Be $false
         $sandbox = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('git-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+        [ordered]@{strict_entry='Latest';canonical_candidates=$streamCandidates.Count;export_owner_reference_match=[object]::ReferenceEquals($export.Module,$stream);
+            missing_lookalike_wrongpath_wrongowner_proxy_ambiguity_rejected=$true} |
+            ConvertTo-Json | Set-Content (Join-Path $sandbox 'module-ownership.json') -Encoding utf8
         $origin = Join-Path $sandbox 'origin 雪'
         [void][IO.Directory]::CreateDirectory((Join-Path $origin 'include'))
         $priorRecord = $env:RS_DXUI_CAPTURE_RECORD
