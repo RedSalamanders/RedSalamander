@@ -51,16 +51,15 @@ function Assert-RSDxUiApiRevision {
     }
 }
 
-function Invoke-RSDxUiSourceGitCapture {
-    # Module-local projection for read-only source checks. The canonical launcher owns
+function Invoke-RSDxUiReadOnlyCapture {
+    # Module-local projection for source/metadata checks. The canonical launcher owns
     # no-window creation, containment, environment normalization and argument quoting.
     # Do not delegate artifact-write authority for these identity/status queries.
     param(
         [Parameter(Mandatory)][string]$WorkingDirectory,
+        [Parameter(Mandatory)][string]$FilePath,
         [Parameter(Mandatory)][string[]]$Arguments
     )
-    $gitApplication = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
-    $gitPath = [IO.Path]::GetFullPath([string]$gitApplication.Source)
     $stdoutLines = [Collections.Generic.List[string]]::new()
     $stderrLines = [Collections.Generic.List[string]]::new()
     # Retain these collections across the ProcessStreaming module's callback scope.
@@ -69,13 +68,23 @@ function Invoke-RSDxUiSourceGitCapture {
         if ($IsError) { [void]$stderrLines.Add([string]$Line) }
         else { [void]$stdoutLines.Add([string]$Line) }
     }.GetNewClosure()
-    $exitCode = Invoke-RSStreamingProcess -FilePath $gitPath -Arguments $Arguments `
+    $exitCode = Invoke-RSStreamingProcess -FilePath $FilePath -Arguments $Arguments `
         -WorkingDirectory $WorkingDirectory -OutputLineCallback $captureLine
     return [pscustomobject]@{
         ExitCode = [int]$exitCode
         StdOut = [string[]]$stdoutLines.ToArray()
         StdErr = [string[]]$stderrLines.ToArray()
     }
+}
+
+function Invoke-RSDxUiSourceGitCapture {
+    param(
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [Parameter(Mandatory)][string[]]$Arguments
+    )
+    $gitApplication = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $gitPath = [IO.Path]::GetFullPath([string]$gitApplication.Source)
+    return Invoke-RSDxUiReadOnlyCapture -WorkingDirectory $WorkingDirectory -FilePath $gitPath -Arguments $Arguments
 }
 
 function Get-RSDxUiSourceIdentity {
@@ -168,10 +177,11 @@ function Install-RSDxUiPinnedSource {
 function Get-RSDxUiConsumerCompilerHost {
     param([string]$RepoRoot, [string]$MSBuildPath, [string]$Platform, [string]$Configuration)
     # Restore cannot depend on BuildEvidence, which imports this module. Use its same first-party probe project.
-    $hostOutput = & $MSBuildPath (Join-Path $RepoRoot 'RedSalamander/RedSalamander.vcxproj') /nologo `
-        "/p:Configuration=$Configuration" "/p:Platform=$Platform" '-getProperty:PreferredToolArchitecture'
-    if ($LASTEXITCODE -ne 0) { throw ('Cannot evaluate the consumer compiler host before DxUi restore: ' + ($hostOutput -join "`n")) }
-    $compilerHost = ($hostOutput -join "`n").Trim()
+    $capture = Invoke-RSDxUiReadOnlyCapture -WorkingDirectory $RepoRoot -FilePath $MSBuildPath `
+        -Arguments @((Join-Path $RepoRoot 'RedSalamander/RedSalamander.vcxproj'), '/nologo',
+            "/p:Configuration=$Configuration", "/p:Platform=$Platform", '-getProperty:PreferredToolArchitecture')
+    if ($capture.ExitCode -ne 0) { throw ('Cannot evaluate the consumer compiler host before DxUi restore: ' + ((@($capture.StdOut) + @($capture.StdErr)) -join "`n")) }
+    $compilerHost = ($capture.StdOut -join "`n").Trim()
     if ($compilerHost -notin @('x86','x64','arm64')) { throw "Unsupported consumer compiler host: $compilerHost" }
     return $compilerHost
 }

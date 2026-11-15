@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:dxUiTestModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiDependency.psm1') -Force -PassThru
+$script:dxUiMetadataAudit = $null
 
 function Invoke-RSDxUiTestGit {
     # Fixture setup may write only its sandbox repository; use the same safe
@@ -9,8 +10,85 @@ function Invoke-RSDxUiTestGit {
         param($Directory, $GitArguments)
         Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Directory -Arguments $GitArguments
     } $repoRoot ([string[]]$args)
+    if ($null -ne $script:dxUiMetadataAudit -and $script:dxUiMetadataAudit.Active) {
+        $record = Assert-RSTestSandboxContainedPath -TestRoot $script:dxUiMetadataAudit.TestRoot `
+            -Path (Join-Path $script:dxUiMetadataAudit.Directory 'git-captures.jsonl') -RequireDescendant
+        [ordered]@{arguments=@($args);cwd=$repoRoot;exit=$capture.ExitCode;stdout=@($capture.StdOut);stderr=@($capture.StdErr)} |
+            ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath $record -Encoding utf8
+    }
     $global:LASTEXITCODE = $capture.ExitCode
     return $capture.StdOut
+}
+
+
+
+function Invoke-RSDxUiTestMetadataCapture {
+    param([string]$FilePath, [string[]]$Arguments, [string]$WorkingDirectory=$repoRoot)
+    return & $script:dxUiTestModule {
+        param($File,$Values,$Directory)
+        Invoke-RSDxUiReadOnlyCapture -FilePath $File -Arguments $Values -WorkingDirectory $Directory
+    } $FilePath $Arguments $WorkingDirectory
+}
+
+function Start-RSDxUiMetadataAudit {
+    # Test-only interception; canonical starter still owns launch and lifetime.
+    $directory = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('metadata-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+    $testRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+    $record = Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path $directory 'launches.jsonl') -RequireDescendant
+    $state = [pscustomobject]@{PreviousRecord=$env:RS_DXUI_METADATA_RECORD;PreviousStarter=$env:RS_DXUI_METADATA_STARTER;
+        PreviousAudit=$script:dxUiMetadataAudit;Directory=$directory;TestRoot=$testRoot;Active=$true;
+        Record=$record;Starter=(Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')}
+    $script:dxUiMetadataAudit = $state
+    $env:RS_DXUI_METADATA_RECORD = Join-Path $directory 'launches.jsonl'
+    $env:RS_DXUI_METADATA_STARTER = Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+    $installed = $false
+    try {
+    Mock Start-RSContainedProcess -ModuleName ProcessStreaming ({
+        param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
+        if(-not $state.Active){throw 'Metadata audit lease is inactive.'}
+        if($ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or
+            -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation){
+            throw 'Refusing unsafe DxUi metadata fixture launch.'
+        }
+        $modules = @(Get-Module -All | Where-Object { $_.Path -ceq $state.Starter })
+        if($modules.Count -ne 1){throw 'Expected one canonical metadata starter module.'}
+        $starter = $modules[0].ExportedFunctions['Start-RSContainedProcess']
+        $record = Assert-RSTestSandboxContainedPath -TestRoot $state.TestRoot -Path (Join-Path $state.Directory 'launches.jsonl') -RequireDescendant
+        $owned = & $starter -ProcessStartInfo $ProcessStartInfo
+        $transferred = $false
+        try {
+            [ordered]@{process=$owned.Id;exact_job=$owned.IsInContainmentJob;file=$ProcessStartInfo.FileName;cwd=$ProcessStartInfo.WorkingDirectory;
+                arguments=@($ProcessStartInfo.ArgumentList);no_window=$ProcessStartInfo.CreateNoWindow;stdout=$ProcessStartInfo.RedirectStandardOutput;
+                stderr=$ProcessStartInfo.RedirectStandardError;delegated=[bool]$DelegateArtifactOperation} |
+                ConvertTo-Json -Compress | Add-Content -LiteralPath $record -Encoding utf8
+            $transferred = $true
+            return $owned
+        } finally {if(-not $transferred){$owned.Dispose()}}
+    }.GetNewClosure())
+        $installed = $true
+        return $state
+    } finally {
+        if(-not $installed){Stop-RSDxUiMetadataAudit -State $state}
+    }
+}
+
+function Stop-RSDxUiMetadataAudit {
+    param($State)
+    try {
+        $State.Active = $false
+        $script:dxUiMetadataAudit = $State.PreviousAudit
+    } finally {
+        $env:RS_DXUI_METADATA_RECORD = $State.PreviousRecord
+        $env:RS_DXUI_METADATA_STARTER = $State.PreviousStarter
+    }
+}
+
+function Assert-RSDxUiMetadataAudit {
+    param($State, [int]$ExpectedMSBuild)
+    $rows=@(Get-Content (Join-Path $State.Directory 'launches.jsonl')|ForEach-Object{$_|ConvertFrom-Json})
+    @($rows|Where-Object{[IO.Path]::GetFileName($_.file) -ieq 'MSBuild.exe'}).Count|Should Be $ExpectedMSBuild
+    @($rows|Where-Object{[IO.Path]::GetFileName($_.file) -ieq 'vswhere.exe'}).Count|Should Be 1
+    @($rows|Where-Object{-not $_.no_window -or -not $_.stdout -or -not $_.stderr -or -not $_.exact_job -or $_.delegated}).Count|Should Be 0
 }
 
 Describe 'Captured DxUi source Git identity' {
@@ -208,6 +286,8 @@ Describe 'Captured DxUi source Git identity' {
 }
 
 Describe 'SDK consumer Windows header policy' {
+    BeforeEach { $script:dxUiMetadataAuditLease = $null; $script:dxUiMetadataAuditLease = Start-RSDxUiMetadataAudit }
+    AfterEach { if($null -ne $script:dxUiMetadataAuditLease){Stop-RSDxUiMetadataAudit -State $script:dxUiMetadataAuditLease} }
     It 'retains application macro semantics and the shared ABI guards in both native Release profiles' {
         $sdk = Join-Path $TestDrive 'sdk-profile'
         [void][IO.Directory]::CreateDirectory($sdk)
@@ -218,7 +298,9 @@ Describe 'SDK consumer Windows header policy' {
 </Project>
 '@ | Set-Content -LiteralPath (Join-Path $sdk 'DxUi.Sdk.props')
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $installationCapture = Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath')
+        if($installationCapture.ExitCode -ne 0){throw ('Cannot locate the metadata fixture toolchain: '+($installationCapture.StdErr -join [Environment]::NewLine))}
+        $installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
         $hostFolder = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ceq 'Arm64') {'arm64'} else {'amd64'}
         $msbuild = Join-Path $installation "MSBuild/Current/Bin/$hostFolder/MSBuild.exe"
         $taskProbe = Join-Path $sdk 'definition-list.targets'
@@ -230,9 +312,9 @@ Describe 'SDK consumer Windows header policy' {
 </Project>
 '@ | Set-Content -LiteralPath $taskProbe
         foreach ($platform in @('x64','ARM64')) {
-            $json = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo /p:Configuration=Release "/p:Platform=$platform" "/p:RSDxUiSdkRoot=$sdk" "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')" '-getItem:ClCompile,ProjectReference'
-            if ($LASTEXITCODE) {throw "Cannot evaluate SDK Windows macro policy for $platform."}
-            $evaluated = ($json -join "`n") | ConvertFrom-Json
+            $json = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', '/p:Configuration=Release', "/p:Platform=$platform", "/p:RSDxUiSdkRoot=$sdk", "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')", '-getItem:ClCompile,ProjectReference')
+            if ($json.ExitCode -ne 0) {throw "Cannot evaluate SDK Windows macro policy for $platform."}
+            $evaluated = ($json.StdOut -join "`n") | ConvertFrom-Json
             @($evaluated.Items.ClCompile).Count | Should BeGreaterThan 0
             foreach ($item in $evaluated.Items.ClCompile) {
                 $item.PreprocessorDefinitions | Should Not Match '(^|;)(WIN32_LEAN_AND_MEAN|NOMINMAX)(=1)?(;|$)'
@@ -244,8 +326,8 @@ Describe 'SDK consumer Windows header policy' {
             # A getItem string hides escaped delimiters. Exercise an actual
             # MSBuild task's list binding, as the compiler task consumes it.
             $lines = Join-Path $sdk ("definitions-$platform.txt")
-            $probeOutput = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo /p:Configuration=Release "/p:Platform=$platform" "/p:RSDxUiSdkRoot=$sdk" "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')" "/p:ForceImportAfterCppTargets=$taskProbe" "/p:I61DefinitionLines=$lines" /t:I61DefinitionListProbe 2>&1
-            if ($LASTEXITCODE) {throw "Cannot probe actual MSBuild definition list binding for $platform`: $($probeOutput -join [Environment]::NewLine)"}
+            $probeOutput = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', '/p:Configuration=Release', "/p:Platform=$platform", "/p:RSDxUiSdkRoot=$sdk", "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')", "/p:ForceImportAfterCppTargets=$taskProbe", "/p:I61DefinitionLines=$lines", '/t:I61DefinitionListProbe')
+            if ($probeOutput.ExitCode -ne 0) {throw "Cannot probe actual MSBuild definition list binding for $platform`: $((@($probeOutput.StdOut)+@($probeOutput.StdErr)) -join [Environment]::NewLine)"}
             $definitions = @(Get-Content -LiteralPath $lines)
             $definitions.Count | Should BeGreaterThan 4
             foreach ($definition in $definitions) {$definition | Should Not Match ';'}
@@ -256,6 +338,7 @@ Describe 'SDK consumer Windows header policy' {
         # Metadata evaluation above grants no build/ABI verdict. Actual SDK builds
         # must still execute the shared live-reader and per-TU admission targets.
         [IO.File]::ReadAllText((Join-Path $repoRoot 'Build/RedSalamander.DxUi.props')) | Should Match 'Ci\.SdkConsumer\.targets'
+        Assert-RSDxUiMetadataAudit -State $script:dxUiMetadataAudit -ExpectedMSBuild 4
     }
 }
 
@@ -520,13 +603,25 @@ Describe 'Lighter DxUi source restore' {
 }
 
 Describe 'DxUi consumer profile evaluation' {
+    BeforeEach { $script:dxUiMetadataAuditLease = $null; $script:dxUiMetadataAuditLease = Start-RSDxUiMetadataAudit }
+    AfterEach { if($null -ne $script:dxUiMetadataAuditLease){Stop-RSDxUiMetadataAudit -State $script:dxUiMetadataAuditLease} }
     It 'uses the first-party host during restore and restores the caller environment after success or failure' {
-        $root = Join-Path $TestDrive ('host-restore-' + [guid]::NewGuid().ToString('N'))
+        $root = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('host-' + [guid]::NewGuid().ToString('N').Substring(0,8))
         # Exercise a genuinely long Git metadata path in both focused and deeper Full sandboxes.
         # Size the padding from the shortened source locator rather than the old 40-character folder.
         $metadataSuffix = '.build/dependencies/DxUi/source/' + ('0' * 16) + '/.git/hooks/fsmonitor-watchman.sample'
         $metadataPath = Join-Path $root $metadataSuffix
-        if ($metadataPath.Length -lt 280) { $root = Join-Path $root ('x' * (280 - $metadataPath.Length)) }
+        # The contract is long Git metadata, not a >260-character Git -C directory.
+        if ($metadataPath.Length -lt 270) { $root = Join-Path $root ('x' * (270 - $metadataPath.Length)) }
+        $predictedSource = Join-Path $root ('.build/dependencies/DxUi/source/' + ('0' * 16))
+        $metadataPath = Join-Path $root $metadataSuffix
+        if ($predictedSource.Length -gt 240) { throw 'Compiler-host fixture exceeds the safe Git -C directory budget (240).' }
+        $metadataPath.Length | Should BeGreaterThan 260
+        $budgetRecord = Assert-RSTestSandboxContainedPath -TestRoot $script:dxUiMetadataAudit.TestRoot `
+            -Path (Join-Path $script:dxUiMetadataAudit.Directory 'fixture-path-budget.json') -RequireDescendant
+        @{source_length=$predictedSource.Length;source_limit=240;metadata_length=$metadataPath.Length;metadata_minimum_exclusive=260;
+            placement='owned shallow source with long metadata; not Git -C>=265 support'} |
+            ConvertTo-Json | Set-Content $budgetRecord -Encoding utf8
         $origin = Join-Path $root 'fixture-origin'
         foreach ($relative in @('RedSalamander','Dependencies','Build','fixture-origin/include','fixture-origin/Tools')) {
             [void](New-Item -ItemType Directory -Path (Join-Path $root $relative) -Force)
@@ -579,11 +674,19 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
         $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         (Join-Path $source '.git/hooks/fsmonitor-watchman.sample').Length | Should BeGreaterThan 260
-        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        # Match the canonical restore's two phases: initialize the long-path
+        # repository before explicitly selecting its worktree and pinned commit.
+        # Copy fixture objects rather than retaining links to the origin.
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local --no-hardlinks --no-checkout $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone compiler-host fixture.' }
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $source checkout --quiet --detach $head
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot check out compiler-host fixture.' }
+        (Invoke-RSDxUiTestGit -c core.longpaths=true -C $source rev-parse HEAD).Trim() | Should Be $head
         Mock Invoke-RSDxUiRestoreProcess {} -ModuleName DxUiDependency
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $installationCapture = Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath')
+        if($installationCapture.ExitCode -ne 0){throw ('Cannot locate the metadata fixture toolchain: '+($installationCapture.StdErr -join [Environment]::NewLine))}
+        $installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
         $msbuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
         $previousHost = $env:PreferredToolArchitecture
         try {
@@ -618,11 +721,14 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
             { Restore-RSDxUiDependency -RepoRoot $root -MSBuildPath $msbuild -Platform ARM64 -Configuration Debug } | Should Throw 'Injected identity failure'
             [string]$env:PreferredToolArchitecture | Should Be ''
         } finally { $env:PreferredToolArchitecture = $previousHost }
+        Assert-RSDxUiMetadataAudit -State $script:dxUiMetadataAudit -ExpectedMSBuild 15
     }
 
     It 'evaluates the six real consumer profiles with sanitizer settings and a 64-bit cross-compiler host' {
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $installationCapture = Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath')
+        if($installationCapture.ExitCode -ne 0){throw ('Cannot locate the metadata fixture toolchain: '+($installationCapture.StdErr -join [Environment]::NewLine))}
+        $installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
         $relative = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
             'MSBuild/Current/Bin/arm64/MSBuild.exe'
         } else { 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
@@ -638,9 +744,9 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
             $env:PreferredToolArchitecture = $null
             foreach ($platform in @('x64','ARM64')) {
                 foreach ($configuration in @('Debug','Release','ASan Debug')) {
-                    $json = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo "/p:Configuration=$configuration" "/p:Platform=$platform" "/p:DxUiRoot=$dxuiFixture" '-getProperty:EnableASAN,PreferredToolArchitecture' '-getItem:ClCompile,ProjectReference'
-                    if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate consumer profile $platform/$configuration." }
-                    $evaluated = ($json -join "`n") | ConvertFrom-Json
+                    $json = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', "/p:Configuration=$configuration", "/p:Platform=$platform", "/p:DxUiRoot=$dxuiFixture", '-getProperty:EnableASAN,PreferredToolArchitecture', '-getItem:ClCompile,ProjectReference')
+                    if ($json.ExitCode -ne 0) { throw "Cannot evaluate consumer profile $platform/$configuration." }
+                    $evaluated = ($json.StdOut -join "`n") | ConvertFrom-Json
                     $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
                     if ($hostArchitecture -eq 'X64') {
                         $evaluated.Properties.PreferredToolArchitecture | Should Be 'x64'
@@ -669,9 +775,9 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                             $item.ForcedIncludeFiles | Should Not Match 'RequireAddressSanitizer\.h'
                         }
                     }
-                    $explicitHost = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo "/p:Configuration=$configuration" "/p:Platform=$platform" "/p:DxUiRoot=$dxuiFixture" '/p:PreferredToolArchitecture=x86' '-getProperty:PreferredToolArchitecture' '-getItem:ProjectReference'
-                    if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate explicit compiler host for $platform/$configuration." }
-                    $explicitEvaluation = ($explicitHost -join "`n") | ConvertFrom-Json
+                    $explicitHost = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', "/p:Configuration=$configuration", "/p:Platform=$platform", "/p:DxUiRoot=$dxuiFixture", '/p:PreferredToolArchitecture=x86', '-getProperty:PreferredToolArchitecture', '-getItem:ProjectReference')
+                    if ($explicitHost.ExitCode -ne 0) { throw "Cannot evaluate explicit compiler host for $platform/$configuration." }
+                    $explicitEvaluation = ($explicitHost.StdOut -join "`n") | ConvertFrom-Json
                     $explicitEvaluation.Properties.PreferredToolArchitecture | Should Be 'x86'
                     $explicitReference = @($explicitEvaluation.Items.ProjectReference | Where-Object { [IO.Path]::GetFileName($_.Identity) -eq 'DxUi.vcxproj' })
                     $explicitReference.Count | Should Be 1
@@ -687,6 +793,7 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                 }
             }
         } finally { $env:PreferredToolArchitecture = $previousHost }
+        Assert-RSDxUiMetadataAudit -State $script:dxUiMetadataAudit -ExpectedMSBuild 24
     }
 }
 
@@ -872,5 +979,115 @@ Describe 'Packaged DxUi module provenance' {
         $record | ConvertTo-Json | Set-Content -LiteralPath $sidecar
         Add-Content -LiteralPath (Join-Path $package 'Plugins/ViewerText.dll') -Value 'changed after build'
         $rejected=$false; try { Copy-RSDxUiPackageProvenance @arguments } catch { $rejected=$true }; $rejected | Should Be $true
+    }
+}
+
+
+Describe 'Captured DxUi metadata probes' {
+    It 'does not grant Git recording authority to an inherited ambient path' {
+        $root = Join-Path $TestDrive 'metadata-ambient-record'
+        [void][IO.Directory]::CreateDirectory($root)
+        $sentinel = Join-Path $root 'owned-sentinel'
+        'unchanged' | Set-Content $sentinel -Encoding utf8
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency { return 0 } -ParameterFilter { $env:RS_DXUI_METADATA_AMBIENT_TEST -ceq '1' }
+        $previousRecord = $env:RS_DXUI_METADATA_RECORD
+        $previousAudit = $script:dxUiMetadataAudit
+        $previousFixtureFlag = $env:RS_DXUI_METADATA_AMBIENT_TEST
+        try {
+            $env:RS_DXUI_METADATA_AMBIENT_TEST = '1'
+            $env:RS_DXUI_METADATA_RECORD = $sentinel
+            foreach($audit in @($null,[pscustomobject]@{Active=$false})) {
+                $script:dxUiMetadataAudit = $audit
+                Invoke-RSDxUiTestGit --version | Out-Null
+                (Get-Content $sentinel -Raw).Trim() | Should Be 'unchanged'
+                (Test-Path ($sentinel + '.git-captures.jsonl')) | Should Be $false
+            }
+        } finally {
+            $script:dxUiMetadataAudit = $previousAudit
+            $env:RS_DXUI_METADATA_RECORD = $previousRecord
+            $env:RS_DXUI_METADATA_AMBIENT_TEST = $previousFixtureFlag
+        }
+    }
+
+    It 'refuses unsafe metadata PSI before the actual starter receives a child' {
+        $state = Start-RSDxUiMetadataAudit
+        try {
+            $stream = & $script:dxUiTestModule { Get-Module -Name ProcessStreaming }
+            (& $stream { (Get-Command Start-RSContainedProcess).Definition }) | Should Match 'Invoke-Mock'
+            $unsafe = [Diagnostics.ProcessStartInfo]::new()
+            # A nonexistent file also prevents a child if the hook were absent.
+            $unsafe.FileName = Join-Path $state.Directory 'must-not-start.exe'
+            $unsafe.UseShellExecute = $false
+            $message = ''
+            try { & $stream {param($Psi) Start-RSContainedProcess -ProcessStartInfo $Psi} $unsafe | Out-Null }
+            catch { $message = $_.Exception.Message }
+            $message | Should Match 'Refusing unsafe DxUi metadata fixture launch'
+            (Test-Path $env:RS_DXUI_METADATA_RECORD) | Should Be $false
+        } finally { Stop-RSDxUiMetadataAudit -State $state }
+    }
+
+    It 'keeps compiler host <HostValue> arguments, CWD, stderr and parent environment independent' -TestCases @(
+        @{HostValue='x86'},@{HostValue='x64'},@{HostValue='arm64'}
+    ) {
+        param($HostValue)
+        $root=Join-Path $TestDrive ('metadata-host-'+$HostValue)
+        [void][IO.Directory]::CreateDirectory($root)
+        $HostValue|Set-Content (Join-Path $root 'metadata-mode')
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
+            @{file=$FilePath;arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation;parent_host=$env:PreferredToolArchitecture} |
+                ConvertTo-Json -Depth 5|Set-Content (Join-Path $WorkingDirectory 'metadata-record.json') -Encoding utf8
+            & $OutputLineCallback (' '+(Get-Content (Join-Path $WorkingDirectory 'metadata-mode') -Raw).Trim()+' ') $false
+            & $OutputLineCallback 'stderr is not a host value' $true
+            return 0
+        } -ParameterFilter { Test-Path -LiteralPath (Join-Path $WorkingDirectory 'metadata-mode') }
+        $previousHost=$env:PreferredToolArchitecture;$previousExit=$global:LASTEXITCODE
+        try {
+            $env:PreferredToolArchitecture='literal & inherited';$global:LASTEXITCODE=73
+            $actual=&$script:dxUiTestModule {param($r) Get-RSDxUiConsumerCompilerHost -RepoRoot $r -MSBuildPath 'C:\fixture\MSBuild.exe' -Platform ARM64 -Configuration 'ASan Debug'} $root
+            $actual|Should Be $HostValue
+            $env:PreferredToolArchitecture|Should Be 'literal & inherited'
+            $record=Get-Content (Join-Path $root 'metadata-record.json') -Raw|ConvertFrom-Json
+            $record.file|Should Be 'C:\fixture\MSBuild.exe'
+            $record.cwd|Should Be $root
+            ($record.arguments -join '|')|Should Be ((Join-Path $root 'RedSalamander/RedSalamander.vcxproj')+'|/nologo|/p:Configuration=ASan Debug|/p:Platform=ARM64|-getProperty:PreferredToolArchitecture')
+            $record.delegated|Should Be $false
+            $record.parent_host|Should Be 'literal & inherited'
+        } finally {$env:PreferredToolArchitecture=$previousHost;$global:LASTEXITCODE=$previousExit}
+    }
+
+    It 'refuses metadata failure <Mode> with its actual exit and supported-host checks' -TestCases @(
+        @{Mode='nonzero'},@{Mode='unsupported'}
+    ) {
+        param($Mode)
+        $root=Join-Path $TestDrive ('metadata-refusal-'+$Mode)
+        [void][IO.Directory]::CreateDirectory($root)
+        $Mode|Set-Content (Join-Path $root 'metadata-failure')
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+            param($WorkingDirectory,$OutputLineCallback)
+            $mode=(Get-Content (Join-Path $WorkingDirectory 'metadata-failure') -Raw).Trim()
+            & $OutputLineCallback ($(if($mode -eq 'nonzero'){'x64'}else{'foreign-host'})) $false
+            & $OutputLineCallback 'metadata failure detail' $true
+            if($mode -eq 'nonzero'){return 17}else{return 0}
+        } -ParameterFilter { Test-Path -LiteralPath (Join-Path $WorkingDirectory 'metadata-failure') }
+        $message=''
+        try { &$script:dxUiTestModule {param($r) Get-RSDxUiConsumerCompilerHost -RepoRoot $r -MSBuildPath 'C:\fixture\MSBuild.exe' -Platform x64 -Configuration Debug} $root|Out-Null }
+        catch {$message=$_.Exception.Message}
+        $message|Should Match ($(if($Mode -eq 'nonzero'){'(?s)Cannot evaluate the consumer compiler host.*metadata failure detail'}else{'Unsupported consumer compiler host: foreign-host'}))
+    }
+
+    It 'preserves JSON stdout separately from stderr and retains the exact nonzero exit' {
+        $root=Join-Path $TestDrive 'metadata-json'
+        [void][IO.Directory]::CreateDirectory($root)
+        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+            param($OutputLineCallback)
+            & $OutputLineCallback '{"Properties":{"Value":"Unicode 雪"}}' $false
+            & $OutputLineCallback 'not JSON: diagnostic stderr' $true
+            return 29
+        } -ParameterFilter { $WorkingDirectory -like '*metadata-json' }
+        $capture=Invoke-RSDxUiTestMetadataCapture -FilePath 'C:\fixture\vswhere.exe' -Arguments @('literal space','*') -WorkingDirectory $root
+        $capture.ExitCode|Should Be 29
+        (($capture.StdOut -join [Environment]::NewLine)|ConvertFrom-Json).Properties.Value|Should Be 'Unicode 雪'
+        ($capture.StdErr -join '|')|Should Be 'not JSON: diagnostic stderr'
     }
 }

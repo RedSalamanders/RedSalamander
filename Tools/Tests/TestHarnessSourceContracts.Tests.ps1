@@ -5579,9 +5579,13 @@ Specs\TestRuns\local_scratch
             $helper = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSDxUiSourceGitCapture' }, $true))
             if ($errors.Count -ne 0 -or $bareGit.Count -ne 0 -or $captures.Count -ne 4 -or $helper.Count -ne 1) { return $false }
             $captureText = $helper[0].Body.Extent.Text
+            $backend = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSDxUiReadOnlyCapture' }, $true))
+            if ($backend.Count -ne 1) { return $false }
+            $backendText = $backend[0].Body.Extent.Text
             return $captureText -match 'Get-Command git -CommandType Application -ErrorAction Stop \| Select-Object -First 1' -and
-                $captureText -match '(?s)Invoke-RSStreamingProcess -FilePath \$gitPath -Arguments \$Arguments\s+`\s*-WorkingDirectory \$WorkingDirectory -OutputLineCallback \$captureLine' -and
-                $captureText -notmatch 'DelegateArtifactOperation|Write-Host|2>&1' -and
+                $captureText -match 'Invoke-RSDxUiReadOnlyCapture -WorkingDirectory \$WorkingDirectory -FilePath \$gitPath -Arguments \$Arguments' -and
+                $backendText -match '(?s)Invoke-RSStreamingProcess -FilePath \$FilePath -Arguments \$Arguments\s+`\s*-WorkingDirectory \$WorkingDirectory -OutputLineCallback \$captureLine' -and
+                $backendText -notmatch 'DelegateArtifactOperation|Write-Host|2>&1' -and
                 ([regex]::Matches($body, "'--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'").Count -eq 2)
         }
         (& $valid $source) | Should Be $true
@@ -6565,5 +6569,39 @@ Describe 'Leftover scan worker retirement contract' {
         $identityLess | Should Match 'provider->ReferenceCountForSelfTest\(\)\s*!=\s*2u'
         $identityLess | Should Match 'probe\.delivered\.load\(std::memory_order_acquire\)\s*!=\s*0u'
         $runner | Should Match 'SetBlockReadDirectoryInfoForSelfTest'
+    }
+}
+
+Describe 'Captured DxUi metadata process source contracts' {
+    It 'keeps compiler-host and fixture metadata off bare native invocation' {
+        $source = Get-RSText 'Tools/Modules/Build/DxUiDependency.psm1'
+        $tests = Get-RSText 'Tools/Tests/DxUiDependency.Tests.ps1'
+        $backend = [regex]::Match($source,'(?ms)^function Invoke-RSDxUiReadOnlyCapture \{.*?^\}')
+        $backend.Success | Should Be $true
+        $backend.Value | Should Match 'Invoke-RSStreamingProcess -FilePath \$FilePath -Arguments \$Arguments'
+        $backend.Value | Should Not Match 'DelegateArtifactOperation|Write-Host|2>&1'
+        $hostProbe = [regex]::Match($source,'(?ms)^function Get-RSDxUiConsumerCompilerHost \{.*?^\}')
+        $hostProbe.Success | Should Be $true
+        $validHost = {param($body) $body -match 'Invoke-RSDxUiReadOnlyCapture' -and $body -notmatch '&\s*\$MSBuildPath'}
+        (& $validHost $hostProbe.Value) | Should Be $true
+        (& $validHost ($hostProbe.Value.Replace('Invoke-RSDxUiReadOnlyCapture', '& $MSBuildPath'))) | Should Be $false
+        $validTests = {param($body) $body -match 'Invoke-RSDxUiTestMetadataCapture' -and $body -notmatch '&\s*\$(?:vswhere|msbuild)\b'}
+        (& $validTests $tests) | Should Be $true
+        (& $validTests ($tests.Replace('Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere', '& $vswhere'))) | Should Be $false
+        $audit = [regex]::Match($tests,'(?ms)^function Start-RSDxUiMetadataAudit \{.*?^\}')
+        $audit.Success | Should Be $true
+        $audit.Value | Should Match 'Refusing unsafe DxUi metadata fixture launch'
+        $audit.Value.IndexOf('Refusing unsafe DxUi metadata fixture launch') | Should BeLessThan $audit.Value.IndexOf('$owned = & $starter')
+        $gitFixture = [regex]::Match($tests,'(?ms)^function Invoke-RSDxUiTestGit \{.*?^\}')
+        $gitFixture.Value | Should Match '\$script:dxUiMetadataAudit\.Active'
+        $gitFixture.Value | Should Match 'Assert-RSTestSandboxContainedPath'
+        $gitFixture.Value | Should Not Match 'Add-Content[^\r\n]*\$env:'
+        $audit.Value | Should Match '\$state\.Active'
+        $audit.Value | Should Match 'Assert-RSTestSandboxContainedPath'
+        $audit.Value | Should Not Match 'Add-Content[^\r\n]*\$env:'
+        $tests | Should Match 'clone --config core\.longpaths=true --quiet --local --no-hardlinks --no-checkout \$origin \$source'
+        $tests | Should Match '-c core\.longpaths=true -C \$source checkout --quiet --detach \$head'
+        $tests | Should Match '\$predictedSource\.Length -gt 240'
+        $tests | Should Match '\$metadataPath\.Length \| Should BeGreaterThan 260'
     }
 }

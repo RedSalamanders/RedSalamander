@@ -201,6 +201,20 @@ export whose owner is that exact PSModuleInfo by reference. Missing, lookalike, 
 ambiguous candidates fail before interception/launch; module GUIDs and Pester proxy ownership
 are not loaded-instance identity. All five recorded safe starts remain the independent
 behavioral routing proof, with no dependency reimport over the hook.
+The same private `Invoke-RSDxUiReadOnlyCapture` backend serves the consumer compiler-host
+MSBuild query and the test-local VSwhere/MSBuild metadata probes. It preserves literal
+arguments and filesystem working directory, returns actual exit status, and keeps silent
+stdout separate from stderr so diagnostics cannot become a compiler-host value or JSON.
+The Git wrapper alone resolves the first Git Application. Metadata fixture controls preflight
+the actual contained starter before each launch, retain exact job/PSI observations, and
+evaluate imports or an owned definition-list target without compiling product code.
+Fixture diagnostic retention requires active script-owned audit state and the canonical
+containment check for each derived recorder file. An inherited record-path variable grants
+no output authority; cleanup restores the prior audit state and environment.
+The restore fixture supplies its own synthetic consumer-identity module; these controls do
+not execute the pinned upstream identity helper. That helper's own bare native probes remain
+outside this local correction, so complete build-launch closure remains pending. No hidden
+console-server absence, historical creator or foreground-restoration guarantee is inferred.
 The clone enables Git long paths twice: a process-level `-c core.longpaths=true` covers `git init`, which copies its
 template hooks before the new repository has a configuration, and `clone -c` stores the setting in that repository so every
 later git command on the checkout (the clean-source check) works from a deep consumer root. User and global Git
