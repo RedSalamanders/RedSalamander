@@ -32,6 +32,7 @@ at forbidden old drive-root paths.
 
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
 - Project skills live in `.github/skills/` (one directory per skill; table below). Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
+- Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
 - Repository crash-forensics meta-skill (`red-salamander-crash-forensics`) lives only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
 - Agent/skill authority, package/example integrity, compatibility routes and truthful evaluation are governed by [Testing_AgentGuidance.md](Specs/Testing/Testing_AgentGuidance.md). Keep mutable machine facts and delivery history with their owners rather than copying them into instructions.
 
@@ -238,7 +239,7 @@ The solution additionally contains ~90 per-language localization satellite resou
 | RedMonitor client | ThirdParty/RedMonitor/include/RedMonitor/Client.h | Normalized diagnostics and optional installed-helper discovery |
 | PlugInterfaces | Common/PlugInterfaces/ | COM-style interfaces for plugins |
 | Helpers.h | Common/ | Core utilities, Debug logging, TraceLogging |
-| SettingsStore | Common/ | Registry-based settings persistence |
+| SettingsStore | Common/ | JSON/JSON5 settings persistence through yyjson |
 
 ### Plugin Architecture
 
