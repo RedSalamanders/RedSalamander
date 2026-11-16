@@ -855,7 +855,7 @@ function Write-RSArchiveStagingFailureDiagnosticForTest {
 
 Describe 'Engine-free archive metadata transport' {
     It 'drains large stderr and preserves ordered UTF8 stdin hashing and archive errors' {
-        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('archive-native-'+[guid]::NewGuid().ToString('N'))
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'ps' -Case ('ar-'+[guid]::NewGuid().ToString('N'))
         $copy=Join-Path $fixture 'ArchiveBootstrap.psm1'
         Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunArchive.psm1') -Destination $copy
         Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/GitMetadataCapture.psm1') -Destination (Join-Path $fixture 'GitMetadataCapture.psm1')
@@ -869,6 +869,10 @@ Describe 'Engine-free archive metadata transport' {
             $config.ExitCode|Should Be 0
             $paths=@(0..799|ForEach-Object {('fixture-{0:0000}-' -f $_)+('x'*90)+'.txt'})
             $paths[0]='fixture-é雪.txt'
+            # This case qualifies transport pipes and hashing, not Git long-path support.
+            # Bound only fixture housing; keep every generated relative filename and payload.
+            $maximumNativePathLength=($paths|ForEach-Object {[IO.Path]::GetFullPath((Join-Path $fixture $_)).Length}|Measure-Object -Maximum).Maximum
+            ($maximumNativePathLength -lt 260)|Should Be $true
             foreach($path in $paths){[IO.File]::WriteAllText((Join-Path $fixture $path),('payload'+[char]10),[Text.UTF8Encoding]::new($false))}
             $staged=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('add','--all')} $fixture
             if ($staged.ExitCode -ne 0) { Write-RSArchiveStagingFailureDiagnosticForTest -Fixture $fixture -Staged $staged }

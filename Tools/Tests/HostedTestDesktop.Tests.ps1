@@ -422,6 +422,201 @@ It 'reads only visited leaf message getters within the aggregate node budget' {
     }
 }
 
+Describe 'Hosted focus query failure diagnostics' {
+    BeforeEach {
+        Mock Write-Host {} -ModuleName HostedTestDesktop
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $script:focusBoundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        $script:focusFlags = [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic
+        $script:focusFailure = $script:focusBoundary.GetMethod('FocusReadFailure', $script:focusFlags)
+        if (-not ('RedSalamander.Testing.HostedFocusFailureControl' -as [type])) {
+            # Managed delegates only: no window, desktop, input or process queries.
+            Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+namespace RedSalamander.Testing {
+    public static class HostedFocusFailureControl {
+        public static int Calls;
+        public static long Window;
+        public static Func<IntPtr, string> ChangedAmbient { get { return Observe; } }
+        public static Func<IntPtr, string> Unavailable { get { return Fail; } }
+        public static Func<IntPtr, string> Fatal { get { return FailFatally; } }
+        private static string Observe(IntPtr window) {
+            Calls++; Window = window.ToInt64(); Marshal.SetLastPInvokeError(5);
+            return "originalWindowValid=False; observedThread=0; observedPid=0; currentForeground=0x22; foregroundMatches=False";
+        }
+        private static string Fail(IntPtr window) {
+            Calls++; Window = window.ToInt64();
+            throw new IOException("private probe exception text");
+        }
+        private static string FailFatally(IntPtr window) { throw new AccessViolationException("synthetic fatal focus observer"); }
+        // Compiler control only: never invoked. The old failed-branch capture shape
+        // still requires display-class storage at this method's entry.
+        public static Func<IntPtr, string> EagerCaptureForControl(bool failed, uint thread, uint process) {
+            if (failed) return window => (thread + process + window.ToInt64()).ToString();
+            return null;
+        }
+    }
+}
+'@
+        }
+        [RedSalamander.Testing.HostedFocusFailureControl]::Calls = 0
+        [RedSalamander.Testing.HostedFocusFailureControl]::Window = 0
+    }
+    AfterEach {
+        Remove-Variable rsFocusBoundedText -Scope Global -ErrorAction SilentlyContinue
+    }
+    It 'retains the saved native error and exact context after an observer changes ambient error' {
+        $saved = [Runtime.InteropServices.Marshal]::GetLastPInvokeError()
+        try {
+            foreach ($stage in @('entry-original-focus','verify-original-focus','restore-original-focus')) {
+                $failure = $script:focusFailure.Invoke($null, [object[]]@([int]87,[uint32]12,[uint32]72,[IntPtr]0x11,[uint32]34,$stage,'saved-entry-identity',[RedSalamander.Testing.HostedFocusFailureControl]::ChangedAmbient))
+                ($failure -is [ComponentModel.Win32Exception]) | Should Be $true
+                $failure.NativeErrorCode | Should Be 87
+                $failure.Message.StartsWith('Cannot verify the original hosted foreground focus.') | Should Be $true
+                $failure.Message | Should Match ('stage='+$stage+'; requestedThread=12; requestedPid=34; requestedHwnd=0x11; cbSize=72; pointerBytes='+[IntPtr]::Size)
+                $failure.Message | Should Match 'originalAtCapture=\{saved-entry-identity\}'
+                $failure.Message | Should Match 'originalWindowValid=False; observedThread=0; observedPid=0; currentForeground=0x22; foregroundMatches=False'
+                $failure.Message | Should Match 'nonAtomic=True; failedGuiFields=unspecified'
+            }
+            [RedSalamander.Testing.HostedFocusFailureControl]::Calls | Should Be 3
+            [RedSalamander.Testing.HostedFocusFailureControl]::Window | Should Be 17
+        } finally { [Runtime.InteropServices.Marshal]::SetLastPInvokeError($saved) }
+    }
+    It 'preserves the saved error when observation is unavailable and does not disclose its exception message' {
+        $failure = $script:focusFailure.Invoke($null, [object[]]@([int]87,[uint32]12,[uint32]72,[IntPtr]0x11,[uint32]34,'entry-original-focus',$null,[RedSalamander.Testing.HostedFocusFailureControl]::Unavailable))
+        $failure.NativeErrorCode | Should Be 87
+        $failure.Message | Should Match 'originalAtCapture=\{unavailable\}'
+        $failure.Message | Should Match 'unavailable=IOException'
+        $failure.Message | Should Not Match 'private probe exception text'
+        [RedSalamander.Testing.HostedFocusFailureControl]::Calls | Should Be 1
+    }
+    It 'does not swallow a synthetic fatal observer exception' {
+        $caught = $null
+        try { [void]$script:focusFailure.Invoke($null, [object[]]@([int]87,[uint32]12,[uint32]72,[IntPtr]0x11,[uint32]34,'entry-original-focus',$null,[RedSalamander.Testing.HostedFocusFailureControl]::Fatal)) }
+        catch [Management.Automation.MethodInvocationException] { $caught = $_.Exception.GetBaseException() }
+        ($caught -is [AccessViolationException]) | Should Be $true
+        $caught.Message | Should Be 'synthetic fatal focus observer'
+    }
+    It 'matches the pointer-width GUITHREADINFO layout and native signature without calling user32' {
+        $gui = $script:focusBoundary.GetNestedType('GuiThreadInfo', [Reflection.BindingFlags]::NonPublic)
+        $sizeOf = [Runtime.InteropServices.Marshal].GetMethod('SizeOf', [type[]]@([type]))
+        $expected = if ([IntPtr]::Size -eq 8) { 72 } else { 48 }
+        $sizeOf.Invoke($null, [object[]]@($gui)) | Should Be $expected
+        foreach ($field in @(@{name='Size';offset=0},@{name='Flags';offset=4},@{name='Active';offset=8},
+                @{name='Focus';offset=8+[IntPtr]::Size},@{name='Capture';offset=8+2*[IntPtr]::Size},
+                @{name='MenuOwner';offset=8+3*[IntPtr]::Size},@{name='MoveSize';offset=8+4*[IntPtr]::Size},
+                @{name='Caret';offset=8+5*[IntPtr]::Size},@{name='CaretBounds';offset=8+6*[IntPtr]::Size})) {
+            [Runtime.InteropServices.Marshal]::OffsetOf($gui, $field.name).ToInt32() | Should Be $field.offset
+        }
+        $method = $script:focusBoundary.GetMethod('GetGUIThreadInfo', $script:focusFlags)
+        $method.GetParameters()[0].ParameterType | Should Be ([uint32])
+        $method.GetParameters()[1].ParameterType | Should Be ($gui.MakeByRefType())
+        $import = @($method.GetCustomAttributes([Runtime.InteropServices.DllImportAttribute], $false))[0]
+        $import.SetLastError | Should Be $true
+        $import.ExactSpelling | Should Be $true
+        $return = @($method.ReturnParameter.GetCustomAttributes([Runtime.InteropServices.MarshalAsAttribute], $false))[0]
+        $return.Value | Should Be ([Runtime.InteropServices.UnmanagedType]::Bool)
+    }
+    It 'captures the original error before only the fixed failure probes and rejects an ordering counterfactual' {
+        $source = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1'))
+        $check = {
+            param($text)
+            $start = $text.IndexOf('private static GuiThreadInfo ReadFocus(')
+            $end = $text.IndexOf('internal static Win32Exception FocusReadFailure(', $start)
+            $read = $text.Substring($start, $end-$start)
+            if ($read -notmatch 'if\s*\(!GetGUIThreadInfo\(thread, ref info\)\)\s*\{\s*int error = Marshal.GetLastWin32Error\(\);\s*throw CaptureFocusReadFailure\(error, thread, size, original, originalProcess, stage, originalAtCapture\);') {
+                throw 'the original native error must be captured before failure observations'
+            }
+        }
+        & $check $source
+        { & $check ($source.Replace('int error = Marshal.GetLastWin32Error();','int error = 0;')) } | Should Throw 'the original native error must be captured'
+        $start = $source.IndexOf('internal static Win32Exception FocusReadFailure(')
+        $end = $source.IndexOf('internal static ushort[] RemainingOwnedChordKeyUps(', $start)
+        $probe = $source.Substring($start,$end-$start)
+        foreach ($api in @('IsWindow','GetWindowThreadProcessId','GetForegroundWindow')) {
+            [regex]::Matches($probe, ('\b'+$api+'\(')).Count | Should Be 1
+        }
+        $probe | Should Not Match 'SetForegroundWindow|SetFocus|SendInput|AttachThreadInput|OpenProcess|OpenThread|EnumWindows|GetWindowText|Sleep|Wait|Retry'
+        [regex]::Matches($source, 'ReadFocus\(originalThread, original, originalProcess, "(?:entry|verify|restore)-original-focus",').Count | Should Be 3
+    }
+    It 'keeps observer capture outside the compiled successful query and rejects the old capture shape' {
+        $read = $script:focusBoundary.GetMethod('ReadFocus', $script:focusFlags)
+        $displayClasses = @($read.GetMethodBody().LocalVariables | Where-Object {
+            $_.LocalType.IsDefined([Runtime.CompilerServices.CompilerGeneratedAttribute], $false) -and $_.LocalType.Name -like '*DisplayClass*'
+        })
+        $displayClasses.Count | Should Be 0
+        $control = [RedSalamander.Testing.HostedFocusFailureControl].GetMethod('EagerCaptureForControl')
+        @($control.GetMethodBody().LocalVariables | Where-Object {
+            $_.LocalType.IsDefined([Runtime.CompilerServices.CompilerGeneratedAttribute], $false) -and $_.LocalType.Name -like '*DisplayClass*'
+        }).Count | Should Be 1
+        $source = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1'))
+        $start = $source.IndexOf('private static GuiThreadInfo ReadFocus(')
+        $end = $source.IndexOf('internal static Win32Exception FocusReadFailure(', $start)
+        $body = $source.Substring($start,$end-$start)
+        $guard = { param($text) if ($text -match '=>|\bdelegate\b') { throw 'ReadFocus cannot construct an observer closure' } }
+        & $guard $body
+        $oldShape = $body.Replace('throw CaptureFocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture);',
+            'throw FocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture, window => ObserveFocusFailureWindow(window, thread, originalProcess));')
+        ($oldShape -cne $body) | Should Be $true
+        { & $guard $oldShape } | Should Throw 'ReadFocus cannot construct an observer closure'
+    }
+    It 'retains fresh focus facts through the real bounded formatter before clipping a long saved identity' {
+        $saved = [Runtime.InteropServices.Marshal]::GetLastPInvokeError()
+        $global:rsFocusBoundedText = [Collections.Generic.List[string]]::new()
+        Mock Write-Host { param($Object) $global:rsFocusBoundedText.Add([string]$Object) } -ModuleName HostedTestDesktop
+        try {
+            $failure = $script:focusFailure.Invoke($null, [object[]]@([int]87,[uint32]12,[uint32]72,[IntPtr]0x11,[uint32]34,'entry-original-focus',('old-identity-'+('x'*5000)),[RedSalamander.Testing.HostedFocusFailureControl]::ChangedAmbient))
+            $record = [Management.Automation.ErrorRecord]::new($failure,'bounded-focus-context',[Management.Automation.ErrorCategory]::NotSpecified,$null)
+            & (Get-Module HostedTestDesktop) { param($captured) Write-RSHostedSetupFailureDiagnostic -ErrorRecord $captured } $record
+            $global:rsFocusBoundedText.Count | Should Be 1
+            $text = $global:rsFocusBoundedText[0]
+            $text | Should Match 'NativeErrorCode=87'
+            $text | Should Match 'HResult=0x80004005'
+            $text | Should Match 'requestedThread=12; requestedPid=34; requestedHwnd=0x11; cbSize=72'
+            $text | Should Match 'failureObservation=\{originalWindowValid=False; observedThread=0; observedPid=0; currentForeground=0x22; foregroundMatches=False\}'
+            $text | Should Match 'nonAtomic=True; failedGuiFields=unspecified'
+            $text | Should Match 'diagnostic-truncated: field-string'
+            ($text.Length -le 16384) | Should Be $true
+            # Same real formatter, but the rejected order puts the long old identity first.
+            $freshStart = $failure.Message.IndexOf('failureObservation={')
+            $oldStart = $failure.Message.IndexOf('originalAtCapture={')
+            $oldOrder = $failure.Message.Substring(0,$freshStart) + $failure.Message.Substring($oldStart) + '; ' +
+                $failure.Message.Substring($freshStart,$oldStart-$freshStart)
+            $global:rsFocusBoundedText.Clear()
+            $oldFailure = [ComponentModel.Win32Exception]::new(87,$oldOrder)
+            $oldRecord = [Management.Automation.ErrorRecord]::new($oldFailure,'rejected-focus-order',[Management.Automation.ErrorCategory]::NotSpecified,$null)
+            & (Get-Module HostedTestDesktop) { param($captured) Write-RSHostedSetupFailureDiagnostic -ErrorRecord $captured } $oldRecord
+            $global:rsFocusBoundedText.Count | Should Be 1
+            $global:rsFocusBoundedText[0] | Should Not Match 'originalWindowValid=False|nonAtomic=True'
+            $global:rsFocusBoundedText[0] | Should Match 'NativeErrorCode=87'
+            $global:rsFocusBoundedText[0] | Should Match 'diagnostic-truncated: field-string'
+        } finally { [Runtime.InteropServices.Marshal]::SetLastPInvokeError($saved) }
+    }
+    It 'reuses only the matching normalized inline implementation in the same process' {
+        $before = 'RedSalamander.Testing.HostedDesktopNative' -as [type]
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        ([object]::ReferenceEquals($before, ('RedSalamander.Testing.HostedDesktopNative' -as [type]))) | Should Be $true
+        $field = $before.GetField('ImplementationSourceHash', $script:focusFlags)
+        ([string]$field.GetRawConstantValue()) | Should Match '^[a-f0-9]{64}$'
+        $field.IsPrivate | Should Be $true
+    }
+    It 'refuses missing or changed cached implementation identity before native initialization' {
+        $tokens=$null; $errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1'),[ref]$tokens,[ref]$errors)
+        $initializer=@($ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Initialize-RSHostedDesktopNative'},$true))[0]
+        $body=$initializer.Body.Extent.Text.Substring(1,$initializer.Body.Extent.Text.Length-2)
+        foreach ($counterfactual in @(
+                $body.Replace('using System;', 'using System; // changed implementation identity'),
+                $body.Replace('$loaded = ''RedSalamander.Testing.HostedDesktopNative'' -as [type]', '$loaded = [Exception]'))) {
+            $attempt=Invoke-RSTestBlock { & ([scriptblock]::Create($counterfactual)) }
+            $attempt.Succeeded | Should Be $false
+            $attempt.Error.Exception.Message | Should Match 'start a fresh PowerShell process'
+        }
+    }
+}
+
 Describe 'Hosted boundary managed drain' {
     It 'keeps disposal pending after its threshold until a stalled managed worker exits' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }

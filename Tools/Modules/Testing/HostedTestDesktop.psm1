@@ -2,8 +2,7 @@ Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot '../Build/ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 
 function Initialize-RSHostedDesktopNative {
-    if ('RedSalamander.Testing.HostedDesktopNative' -as [type]) { return }
-    Add-Type -TypeDefinition @'
+    $nativeSource = @'
 using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -176,16 +175,48 @@ namespace RedSalamander.Testing {
             if (original != IntPtr.Zero) {
                 uint process;
                 if (!IsWindow(original) || GetWindowThreadProcessId(original, out process) != originalThread || process != originalProcess ||
-                    ReadFocus(originalThread).Focus != originalFocus || GetForegroundWindow() != original)
+                    ReadFocus(originalThread, original, originalProcess, "verify-original-focus", null).Focus != originalFocus || GetForegroundWindow() != original)
                     throw new InvalidOperationException("The hosted foreground identity or focus changed before boundary acquisition.");
             }
         }
-        private static GuiThreadInfo ReadFocus(uint thread) {
-            var info = new GuiThreadInfo { Size = (uint)Marshal.SizeOf<GuiThreadInfo>() };
+        private static GuiThreadInfo ReadFocus(uint thread, IntPtr original, uint originalProcess, string stage, string originalAtCapture) {
+            uint size = (uint)Marshal.SizeOf<GuiThreadInfo>();
+            var info = new GuiThreadInfo { Size = size };
             if (thread == 0) throw new InvalidOperationException("The original hosted foreground thread is unavailable.");
-            if (!GetGUIThreadInfo(thread, ref info))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot verify the original hosted foreground focus.");
+            if (!GetGUIThreadInfo(thread, ref info)) {
+                int error = Marshal.GetLastWin32Error();
+                throw CaptureFocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture);
+            }
             return info;
+        }
+        // Failure-only observations cannot authorize a retry or replace the saved query error.
+        internal static Win32Exception FocusReadFailure(int error, uint thread, uint size, IntPtr original, uint originalProcess,
+            string stage, string originalAtCapture, Func<IntPtr, string> observe) {
+            string observation = CaptureIdentityForDiagnostics(original, observe);
+            return new Win32Exception(error, String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "Cannot verify the original hosted foreground focus. stage={0}; requestedThread={1}; requestedPid={2}; " +
+                "requestedHwnd=0x{3:X}; cbSize={4}; pointerBytes={5}; failureObservation={{{6}}}; " +
+                "nonAtomic=True; failedGuiFields=unspecified; originalAtCapture={{{7}}}",
+                stage, thread, originalProcess, original.ToInt64(), size, IntPtr.Size, observation, originalAtCapture ?? "unavailable"));
+        }
+        private static Win32Exception CaptureFocusReadFailure(int error, uint thread, uint size, IntPtr original, uint originalProcess,
+            string stage, string originalAtCapture) {
+            // Keep captured-parameter storage and delegate creation out of the successful query method.
+            return FocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture,
+                window => ObserveFocusFailureWindow(window, thread, originalProcess));
+        }
+        // Unlike DescribeWindowIdentityCore, this fixed failure sample opens no
+        // process handles and reads only the original HWND relation and foreground.
+        private static string ObserveFocusFailureWindow(IntPtr original, uint expectedThread, uint expectedProcess) {
+            bool valid = IsWindow(original);
+            uint process = 0;
+            uint thread = original == IntPtr.Zero ? 0 : GetWindowThreadProcessId(original, out process);
+            IntPtr foreground = GetForegroundWindow();
+            return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "originalWindowValid={0}; observedThread={1}; observedPid={2}; threadMatches={3}; processMatches={4}; " +
+                "currentForeground=0x{5:X}; foregroundMatches={6}; capturedUtc={7:o}",
+                valid, thread, process, thread != 0 && thread == expectedThread, process != 0 && process == expectedProcess,
+                foreground.ToInt64(), foreground == original, DateTimeOffset.UtcNow);
         }
         internal static ushort[] RemainingOwnedChordKeyUps(uint downs, uint ups) {
             if (downs > 2) throw new ArgumentOutOfRangeException("downs");
@@ -426,7 +457,7 @@ namespace RedSalamander.Testing {
                 throw ForeignForegroundRefusal(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity);
             if (original != IntPtr.Zero) {
                 var timer = System.Diagnostics.Stopwatch.StartNew();
-                while (ReadFocus(originalThread).Focus != originalFocus) {
+                while (ReadFocus(originalThread, original, originalProcess, "restore-original-focus", originalAtCapture).Focus != originalFocus) {
                     if (GetForegroundWindow() != original || timer.ElapsedMilliseconds >= 1500)
                         throw new InvalidOperationException("The original hosted native focus was not restored.");
                     WaitOneRestoreMessage(timer);
@@ -455,7 +486,8 @@ namespace RedSalamander.Testing {
                 // This minimal entry-time creation query is intentional. A retirement-time
                 // query cannot retroactively identify the process instance saved at entry.
                 string originalAtCapture = CaptureIdentityForDiagnostics(original, HostedDesktopNative.DescribeEntryWindowIdentity);
-                IntPtr originalFocus = original == IntPtr.Zero ? IntPtr.Zero : ReadFocus(originalThread).Focus;
+                IntPtr originalFocus = original == IntPtr.Zero ? IntPtr.Zero :
+                    ReadFocus(originalThread, original, originalProcess, "entry-original-focus", originalAtCapture).Focus;
                 if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before window creation.");
                 var window = CreateWindowExW(0x08040080, "STATIC", "RedSalamander hosted test boundary", 0x90000000,
                     Math.Max(0, GetSystemMetrics(0) - 8), Math.Max(0, GetSystemMetrics(1) - 8), 8, 8,
@@ -587,6 +619,7 @@ namespace RedSalamander.Testing {
         public int ForegroundDesktopError;
     }
     public static class HostedDesktopNative {
+        private const string ImplementationSourceHash = "__RS_HOSTED_NATIVE_SOURCE_HASH__";
         [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentThreadId();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetProcessWindowStation();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint thread);
@@ -867,11 +900,26 @@ namespace RedSalamander.Testing {
     }
 }
 '@
+    # Add-Type cannot replace an existing type. Bind the normalized template before
+    # accepting a cached type; reflection of a literal field invokes no native code.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $sourceHash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($nativeSource.Replace("`r`n", "`n")))).Replace('-', '').ToLowerInvariant()
+    } finally { $sha.Dispose() }
+    $loaded = 'RedSalamander.Testing.HostedDesktopNative' -as [type]
+    if ($null -ne $loaded) {
+        $field = $loaded.GetField('ImplementationSourceHash', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        if ($null -eq $field -or [string]$field.GetRawConstantValue() -cne $sourceHash) {
+            throw 'Hosted desktop native source differs from the loaded type; start a fresh PowerShell process.'
+        }
+        return
+    }
+    Add-Type -TypeDefinition ($nativeSource.Replace('__RS_HOSTED_NATIVE_SOURCE_HASH__', $sourceHash))
 }
 
 function Initialize-RSHostedStockSurfaceNative {
-    if ('RedSalamander.Testing.HostedStockSurface' -as [type]) { return }
     Initialize-RSHostedDesktopNative
+    if ('RedSalamander.Testing.HostedStockSurface' -as [type]) { return }
     Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;

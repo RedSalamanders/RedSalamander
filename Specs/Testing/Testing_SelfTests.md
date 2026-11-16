@@ -791,6 +791,22 @@ Environment variables may select alternate test inputs such as profile names, bu
   overall, with explicit truncation markers. They query no fresh native/window state and
   dump no environment. Nonfatal formatting/sink failures preserve the primary setup error;
   the existing fatal diagnostic exception policy still propagates.
+  A failed `GetGUIThreadInfo` saves its original error before any failure-only observations.
+  Its private exception context retains the actual requested thread/window/process, input
+  structure size, pointer width, closed call stage and already captured original identity.
+  It reuses the safe diagnostic fallback for one read-only sample of the original window's
+  validity and thread/process relation plus current foreground. These sequential observations
+  are non-atomic; output GUI fields from the failed call are unspecified and are not consumed.
+  Requested arguments, the fresh failure sample and its validity markers precede the potentially
+  longer saved identity so the existing field cap preserves the new facts. Observer delegate and
+  captured-parameter storage are constructed only in a helper reached after the query fails;
+  the successful query method must not acquire that observer closure.
+  Missing observations never replace the saved error or authorize activation, attachment,
+  retry, a different target, unknown focus, a skip or successful qualification. Code 87 alone
+  establishes no layout, access, lifetime or historical failure cause.
+  The managed inline implementation binds its normalized source template to the cached type.
+  A missing or mismatched private identity fails before native initialization and requires a
+  fresh PowerShell process; reimport must not silently keep an older implementation.
   Worker completion signalling is not a positive foreground-readiness witness. Multiple
   wrappers may carry the same worker failure; their labels do not prove independent faults.
   The existing complete retirement exception chain remains logged before propagation,

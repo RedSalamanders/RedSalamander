@@ -505,6 +505,14 @@ is its explicit Git stdout UTF-8 specialization. These named functions are not g
 command shims and do not authorize product execution or arbitrary writes; callers retain
 their marked-fixture and locking obligations. No selected caller supplies pipeline stdin.
 
+The archive transport's large-stderr/UTF-8/ordered-hash fixture qualifies transport
+semantics, not Git long-path support. Acquire its unique housing through the existing
+marked short scratch layout (ps/ar-fullGUID), retain all 800 relative filenames and
+payloads, and assert that the maximum normalized full native data-file path is below
+260 characters before writing the workload. This bounds only housing; it does not
+reduce the pipe-buffer assertion, hashing count or error expectations. Do not depend
+on or alter user/global Git configuration. Native controls retain real path-limit
+failures at and above the old boundary separately from bounded-housing success.
 Version-counter/lease fixtures retain asynchronous `Start-Process` and real process
 objects, concurrency, `PassThru` and ownership; their explicit Hidden disposition is not
 a claim that no console object exists. The tiny C++ dependency-warning fixture still

@@ -128,6 +128,13 @@ Boundary setup and restoration errors remain failures. Setup logs retain a bound
 ErrorRecord/exception traversal and emitted text, including visited nonaggregate messages,
 omitted aggregate-summary markers, existing HResult/Win32 codes and truncation markers,
 without fresh observations or replacing the original error after nonfatal diagnostic failure.
+The underlying failed focus query separately saves its original error before a single read-only
+window/thread/process/foreground sample. Its context records the actual arguments, input structure
+size and call stage; the sample is non-atomic and failed GUI output fields remain unspecified.
+Fresh facts precede the older identity under the same field cap; observer capture is created
+only in the failure helper, without adding its closure to a successful query.
+It grants no retry, focus or qualification authority. A private normalized inline-source identity
+rejects stale Add-Type reuse and requires a fresh PowerShell process on mismatch.
 Retirement logs retain the complete exception chain; existing fatal diagnostic propagation stays binding. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 

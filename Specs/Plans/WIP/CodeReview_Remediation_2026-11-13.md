@@ -457,3 +457,75 @@ after the diagnostic change. I65 remains ACTIVE; no tracked TestRuns closeout or
 Done move is claimed. The approved first local 4–6 hour foreground window has
 never started, and fresh unfiltered x64 Debug/Release Full plus the separate
 applicable ARM Full qualification remain pending.
+### Actual 22a local failure and bounded archive fixture housing (2026-11-16)
+
+Source 22a1fedf3aef1dc3e8a19fa70f2ba6c6cb0d6c44 completed test-enabled
+full-solution x64 Debug and Release Source Rebuilds with zero warnings/errors and
+current-head byte/profile/header/archive/toolchain/CRT verification. Actual fresh
+Debug PrePush then FAILED: 14 executed, 13 promoted, one incomplete; 1746 passed,
+one failed and 27 skipped. Tooling recorded 1444/1/0, with all eight new hosted-setup
+diagnostic controls passing. Quarantine and repair counts were zero. Release
+PrePush did not start; no failed result was retried or reclassified.
+
+The retained archive staging diagnostic now identifies this occurrence's native
+failure: Git add --all exited 128 with Filename too long, at a 152-character
+fixture root plus separator and 107-character generated leaf (260 total).
+The original 3ebf occurrence remains unproved. The command-resolution probe is
+not failed-process image identity. The failed source, raw stderr/argv, actual
+consumed writer receipt 62e1cb8b4244d62bdd490be6de6760df5721341e86c37f9125353a75f7b9c4d6
+and original archived run 20261116T102505Z-108548-f57ef8e9e04a4cb3a88363db19c11427
+remain unchanged.
+
+The test-only correction uses canonical ps/ar-fullGUID housing and checks the
+maximum normalized full native path is below 260 before workload writes. Every
+800 relative filename, payload, UTF-8/ordered-stdin/worktree-map assertion, original
+exit/error expectation and greater-than-65536 stderr requirement remains intact.
+No production helper, Git policy, environment default, user/global config, alias,
+junction, mount or root changes. Native inherited/sanitized controls preserved
+four real 260/268-path failures and two bounded-housing successes at maximum path
+236, including distinct ordered hash/worktree witnesses and Git-emitted argv.
+The exact actual 800-file case passed 1/0/0 under an owned child-only global-false
+configuration. Earlier local/command-policy controls remain diagnostic attempts,
+not the chosen fix or a claim about all Git versions.
+
+Fresh integrated current-head build/local qualification remains pending after
+this fixture change. Separate ARM boundary failure evidence and investigation
+retain their own source/cause owner. I65 remains ACTIVE; the first approved
+foreground window is unstarted, four desktop obligations and Full remain pending,
+and there is no new ARM dispatch, tracked TestRuns closeout or Done move here.
+### Actual 22a ARM focus-query failure and next context diagnostics (2026-11-16)
+
+[ARM attribution run 43846481982](https://github.com/RedSalamanders/RedSalamander/actions/runs/43846481982)
+at source 22a1fedf3aef1dc3e8a19fa70f2ba6c6cb0d6c44 retained Help 1/0/0,
+then a Preferences pre-native hosted-boundary failure; the final two selections
+did not run. The new logger retained Win32Exception code 87/HResult 0x80004005
+from HostedForegroundBoundary.ReadFocus in the worker's Run path. The actual
+requested thread and its liveness/relation were not retained, so the underlying
+cause remains unknown. This is separate from the local Debug 1746/1/27 failure
+above; Release PrePush did not start, and neither failed result is reclassified.
+
+The accepted next diagnostics save that original query error before a fixed
+failure-only read-only sample of the requested window relation and foreground.
+Requested HWND/TID/PID, input size, closed stage, fresh observed facts and explicit
+non-atomic/unspecified-output markers precede the potentially long saved identity
+under the unchanged formatter limits. Observer closure construction occurs only
+after query failure. A private normalized source-template identity refuses stale
+inline native types before initialization. No retry, additional focus/input,
+attachment, handles, unknown-focus acceptance, wait or restoration-policy change.
+
+The changed-source pure controls passed 43/0/0: nine focus-context controls plus
+26 existing lifetime and eight return-policy controls. Compiled/source controls
+reject the old closure shape, and the real bounded formatter retains fresh facts
+with a long saved identity while rejecting the old ordering. All 84 prior cases
+remain exact; no native window sampler or UI ran. These are observability/cache
+controls, not native ARM qualification or a behavioral root-cause repair. Earlier
+control provenance failures and superseded diagnostic packets remain preserved.
+The accepted packet is retained under
+Z:\RedSalamander.Perf\evidence\completed-runs\20261116T120253Z-68180-35e6b75e365f4ea9a703c4a474e6bc90\scratch\validation\RS-focus-error-context-v2.
+
+The bounded archive fixture component and these focus diagnostics are integrated
+for one future reviewed source cohort. Fresh current-head builds, actual local
+PrePush and hosted ARM gates remain pending after commit. Existing producer pin,
+engine, C++ and test assertions retain their accepted identities. I65 stays ACTIVE;
+no foreground lease has started, and no Full, merge, TestRuns closeout or Done move
+is established by these component/static checks.
