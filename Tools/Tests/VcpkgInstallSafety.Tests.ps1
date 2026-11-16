@@ -913,7 +913,7 @@ Describe 'MSBuild manifest install toolset pin' {
                 'Update-RSBuildVcpkgOverlayTriplet'
                 'if (-not $script:vcpkgOverlayTripletRefreshed) { throw ''overlay flag was not recorded'' }'
             )
-            $output = @(& (Join-Path $PSHOME 'pwsh.exe') -NoProfile -NonInteractive -File $probe 2>&1)
+            $output = @(Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @('-NoProfile'; '-NonInteractive'; '-File'; $probe) 2>&1)
             $exitCode = $LASTEXITCODE
             ($output -join [Environment]::NewLine) | Should Not Match 'cannot be retrieved because it has not been set'
             $exitCode | Should Be 0
@@ -925,7 +925,7 @@ Describe 'MSBuild manifest install toolset pin' {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $msbuild = $null
     if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
-        $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath) |
+        $installation = @(Invoke-RSTestFixtureNative -FilePath $vswhere -Arguments @('-latest'; '-prerelease'; '-products'; '*'; '-requires'; 'Microsoft.Component.MSBuild'; '-property'; 'installationPath')) |
             Where-Object { $_ } | Select-Object -First 1
         if ($installation) {
             $relative = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
@@ -943,7 +943,7 @@ Describe 'MSBuild manifest install toolset pin' {
             $project = Join-Path $repoRoot 'Common\Common\Common.vcxproj'
             $evaluate = {
                 param([string]$Platform)
-                $output = & $msbuild $project /nologo '/p:Configuration=Debug' "/p:Platform=$Platform" "/p:RSBuildRoot=$buildRoot" '-getProperty:VcpkgAdditionalInstallOptions'
+                $output = Invoke-RSTestFixtureNative -FilePath $msbuild -Arguments @($project; '/nologo'; '/p:Configuration=Debug'; "/p:Platform=$Platform"; "/p:RSBuildRoot=$buildRoot"; '-getProperty:VcpkgAdditionalInstallOptions')
                 if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate $project for $Platform." }
                 return (($output -join "`n").Trim())
             }
@@ -967,7 +967,7 @@ Describe 'MSBuild manifest install toolset pin' {
 Describe 'MSVC 14.52 ARM64 AWS hash compiler workaround' {
     It 'limits expansion only for the affected compiler target and translation unit' {
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath | Select-Object -First 1)
+        $installation = (Invoke-RSTestFixtureNative -FilePath $vswhere -Arguments @('-latest'; '-prerelease'; '-products'; '*'; '-requires'; 'Microsoft.Component.MSBuild'; '-property'; 'installationPath') | Select-Object -First 1)
         $cmake = Join-Path $installation 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'
         (Test-Path -LiteralPath $cmake) | Should Be $true
         $fixture = New-RSTemporaryVcpkgInstallSafetyRoot
@@ -1000,7 +1000,7 @@ file(WRITE "`${CMAKE_BINARY_DIR}/result.txt" "`${affected}\n`${other}\n")
 "@
             [IO.File]::WriteAllText((Join-Path $source 'CMakeLists.txt'),$project)
             $build = Join-Path $source 'build'
-            & $cmake -G Ninja ('-DCMAKE_MAKE_PROGRAM=' + $ninja.Replace('\','/')) -S $source -B $build *> (Join-Path $source 'configure.log')
+            Invoke-RSTestFixtureNative -FilePath $cmake -Arguments @('-G'; 'Ninja'; ('-DCMAKE_MAKE_PROGRAM=' + $ninja.Replace('\','/')); '-S'; $source; '-B'; $build) *> (Join-Path $source 'configure.log')
             $LASTEXITCODE | Should Be 0
             $actual = @(Get-Content -LiteralPath (Join-Path $build 'result.txt'))
             $actual[0] | Should Be $case.expected

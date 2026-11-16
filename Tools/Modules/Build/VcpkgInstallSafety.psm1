@@ -651,6 +651,14 @@ function Assert-RSVcpkgManagedBootstrapPath {
     }
 }
 
+function Invoke-RSVcpkgBootstrapPayload {
+    param([Parameter(Mandatory)][string]$BootstrapPath)
+    # The real installer intentionally retains its inherited interactive payload routing.
+    # Tests replace only this private launcher with a real, owned no-window batch boundary.
+    & $BootstrapPath -disableMetrics | Out-Host
+    return [int]$LASTEXITCODE
+}
+
 function Initialize-RSVcpkgToolContext {
     <#
     .SYNOPSIS
@@ -758,8 +766,8 @@ function Initialize-RSVcpkgToolContext {
             }
         }
         $bootstrap = Join-Path $toolRoot 'bootstrap-vcpkg.bat'
-        & $bootstrap -disableMetrics | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "Pinned vcpkg bootstrap failed with exit code $LASTEXITCODE." }
+        $bootstrapExit = Invoke-RSVcpkgBootstrapPayload -BootstrapPath $bootstrap
+        if ($bootstrapExit -ne 0) { throw "Pinned vcpkg bootstrap failed with exit code $bootstrapExit." }
         $executable = Join-Path $toolRoot 'vcpkg.exe'
         if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'Pinned bootstrap did not produce vcpkg.exe.' }
         Write-Host "Pinned vcpkg ready: tool=$commit baseline=$baseline schema=$toolSchema"

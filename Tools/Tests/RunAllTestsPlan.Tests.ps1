@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -1094,8 +1095,7 @@ Describe 'Run-AllTests plan helper' {
             CORRUPT_EVIDENCE = 5
         }
         foreach ($pair in $expected.GetEnumerator()) {
-            & pwsh -NoLogo -NoProfile -Command `
-                "Import-Module '$helperModule' -Force; exit (Get-RSValidationExitCode -TerminalState '$($pair.Key)')"
+            Invoke-RSTestFixtureNative -FilePath 'pwsh' -Arguments @('-NoLogo'; '-NoProfile'; '-Command'; "Import-Module '$helperModule' -Force; exit (Get-RSValidationExitCode -TerminalState '$($pair.Key)')")
             $LASTEXITCODE | Should Be $pair.Value
         }
     }
@@ -1117,9 +1117,7 @@ Describe 'Run-AllTests plan helper' {
 
     It 'finishes NOT_EVALUATED with exit 2 when every selected entry is pending the interactive desktop' {
         $evidenceName = "pending-interactive-$([guid]::NewGuid().ToString('N')).json"
-        $output = @(& pwsh -NoLogo -NoProfile -File (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') `
-                -Suite FileOps -CaseFilter FileOps_AdmissionBaseline -NonInteractive `
-                -ExplainPlan -ExplainPlanPath $evidenceName 2>&1 | ForEach-Object { [string]$_ })
+        $output = @(Invoke-RSTestFixtureNative -FilePath 'pwsh' -Arguments @('-NoLogo'; '-NoProfile'; '-File'; (Join-Path $repoRoot 'Tools\Run-AllTests.ps1'); '-Suite'; 'FileOps'; '-CaseFilter'; 'FileOps_AdmissionBaseline'; '-NonInteractive'; '-ExplainPlan'; '-ExplainPlanPath'; $evidenceName) 2>&1 | ForEach-Object { [string]$_ })
         $exitCode = $LASTEXITCODE
         $text = $output -join "`n"
         $exitCode | Should Be 2
@@ -1172,9 +1170,7 @@ Describe 'Run-AllTests plan helper' {
 
     It 'explains an exact non-interactive folder-progress selection with no desktop-pending entries' {
         $evidenceName = "no-pending-interactive-$([guid]::NewGuid().ToString('N')).json"
-        $output = @(& pwsh -NoLogo -NoProfile -File (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') `
-                -Suite FileOps -CaseFilter DiscoveryScope_FolderLiveProgress -NonInteractive `
-                -ExplainPlan -ExplainPlanPath $evidenceName 2>&1 | ForEach-Object { [string]$_ })
+        $output = @(Invoke-RSTestFixtureNative -FilePath 'pwsh' -Arguments @('-NoLogo'; '-NoProfile'; '-File'; (Join-Path $repoRoot 'Tools\Run-AllTests.ps1'); '-Suite'; 'FileOps'; '-CaseFilter'; 'DiscoveryScope_FolderLiveProgress'; '-NonInteractive'; '-ExplainPlan'; '-ExplainPlanPath'; $evidenceName) 2>&1 | ForEach-Object { [string]$_ })
         $exitCode = $LASTEXITCODE
         $text = $output -join "`n"
         $exitCode | Should Be 2
@@ -1272,8 +1268,7 @@ Set-StrictMode -Version Latest
     }
 
     It 'rejects missing and duplicate stable IDs' {
-        & pwsh -NoLogo -NoProfile -NonInteractive -Command `
-            "Import-Module '$helperModule' -Force; try { New-RSTestRunPlanEntry -Name Missing -Kind Executable -Path 'C:\missing.exe' | Out-Null } catch { exit 17 }; exit 0"
+        Invoke-RSTestFixtureNative -FilePath 'pwsh' -Arguments @('-NoLogo'; '-NoProfile'; '-NonInteractive'; '-Command'; "Import-Module '$helperModule' -Force; try { New-RSTestRunPlanEntry -Name Missing -Kind Executable -Path 'C:\missing.exe' | Out-Null } catch { exit 17 }; exit 0")
         Assert-RSEqual -Actual $LASTEXITCODE -Expected 17 -Message 'Missing stable ID must fail without prompting.'
         $entry = New-RSTestRunPlanEntry -Id 'duplicate.entry' -Name Duplicate -Kind Executable `
             -Path (Join-Path $repoRoot '.build\x64\Debug\Duplicate.exe') -WorkingDirectory $repoRoot

@@ -1,4 +1,5 @@
-﻿Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -633,7 +634,7 @@ Describe 'Resource localization contracts' {
         $excludedRoots = @('.build', 'vcpkg_installed', 'packages', '.claude', '.git')
         # Review active tracked/untracked source inputs, excluding ignored dependency/checkouts.
         # A recursive disk walk also picked up independent nested .wt builds and their resources.
-        $resourcePaths = @(& git -c core.quotepath=false -C $repoRoot ls-files --cached --others --exclude-standard -- '*.rc')
+        $resourcePaths = @(Invoke-RSTestFixtureGit -Arguments @('-c'; 'core.quotepath=false'; '-C'; $repoRoot; 'ls-files'; '--cached'; '--others'; '--exclude-standard'; '--'; '*.rc'))
         if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate active RC source inputs.' }
         $unexpectedRoots = @(
             $resourcePaths |

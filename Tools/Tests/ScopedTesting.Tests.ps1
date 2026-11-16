@@ -24,16 +24,16 @@ $global:LASTEXITCODE=2
         $fragment=Join-Path $fixture 'Changes/2026-11-09-example.md'
         '- Valid fixture change.' | Set-Content -LiteralPath $fragment
         $child=Join-Path $PSHOME 'pwsh.exe'
-        & $child -NoProfile -File (Join-Path $fixture 'Test-Changes.ps1') *> (Join-Path $fixture 'valid.log')
+        Invoke-RSTestFixtureNative -FilePath $child -Arguments @('-NoProfile'; '-File'; (Join-Path $fixture 'Test-Changes.ps1')) *> (Join-Path $fixture 'valid.log')
         $LASTEXITCODE | Should Be 2
         $launched=Join-Path $fixture 'launched.txt'
         (Test-Path -LiteralPath $launched) | Should Be $true
         Remove-Item -LiteralPath $launched
         'Malformed fixture with no bullet.' | Set-Content -LiteralPath $fragment
-        & $child -NoProfile -File (Join-Path $fixture 'Test-Changes.ps1') *> (Join-Path $fixture 'invalid.log')
+        Invoke-RSTestFixtureNative -FilePath $child -Arguments @('-NoProfile'; '-File'; (Join-Path $fixture 'Test-Changes.ps1')) *> (Join-Path $fixture 'invalid.log')
         ($LASTEXITCODE -ne 0) | Should Be $true
         (Test-Path -LiteralPath $launched) | Should Be $false
-        & $child -NoProfile -File (Join-Path $fixture 'Test-Changes.ps1') -Explain *> (Join-Path $fixture 'explain.log')
+        Invoke-RSTestFixtureNative -FilePath $child -Arguments @('-NoProfile'; '-File'; (Join-Path $fixture 'Test-Changes.ps1'); '-Explain') *> (Join-Path $fixture 'explain.log')
         $LASTEXITCODE | Should Be 2
         (Test-Path -LiteralPath $launched) | Should Be $true
         $global:LASTEXITCODE=0
@@ -63,7 +63,7 @@ $global:LASTEXITCODE=2
                     if($focused){$arguments+=@('-Suite','FileOps','-CaseFilter','FileOps_IndependentVolumes')}
                     else{$arguments+=@('-Mode','Full')}
                     if($optIn){$arguments+='-AllowAlternateVolumeTestRoot'}
-                    & (Join-Path $PSHOME 'pwsh.exe') @arguments *> (Join-Path $fixture "child-$focused-$optIn.log")
+                    Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @($arguments) *> (Join-Path $fixture "child-$focused-$optIn.log")
                     $LASTEXITCODE | Should Be 2
                     $captured=Get-Content -LiteralPath (Join-Path $fixture 'captured.json') -Raw | ConvertFrom-Json
                     $captured.alternate | Should Be $optIn

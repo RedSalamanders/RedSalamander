@@ -295,7 +295,7 @@ exit 7
 
         $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
         $commandPath = Join-Path $repoRoot 'Tools\InvokeSolutionCloc.ps1'
-        & $pwsh -NoLogo -NoProfile -File $commandPath -ClocPath $fakeCloc *> $null
+        Invoke-RSTestFixtureNative -FilePath $pwsh -Arguments @('-NoLogo'; '-NoProfile'; '-File'; $commandPath; '-ClocPath'; $fakeCloc) *> $null
         $LASTEXITCODE | Should Be 7
     }
 }

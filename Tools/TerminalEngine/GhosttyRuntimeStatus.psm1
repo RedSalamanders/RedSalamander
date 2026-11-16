@@ -4,6 +4,7 @@ $lifecycleModule = Join-Path $PSScriptRoot 'GhosttyRuntimeLifecycle.psm1'
 $canonicalJsonModule = Join-Path (Split-Path -Parent $PSScriptRoot) 'Modules\Testing\ValidationFingerprint.psm1'
 Import-Module $lifecycleModule -ErrorAction Stop
 Import-Module $canonicalJsonModule -ErrorAction Stop
+Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'Modules\Testing\GitMetadataCapture.psm1') -ErrorAction Stop
 
 function Get-RSGhosttyStatusUtcText {
     param([Parameter(Mandatory = $true)][DateTime]$Value)
@@ -14,10 +15,10 @@ function Get-RSGhosttyStatusUtcText {
 function Get-RSGhosttyStatusRepositoryCommit {
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
 
-    $output = @(& git.exe -C $RepoRoot rev-parse HEAD 2>$null)
-    $exitCode = $LASTEXITCODE
-    $value = $output | Select-Object -First 1
-    if ($exitCode -ne 0 -or [string]$value -cnotmatch '^[0-9a-f]{40}$') {
+    $capture = Invoke-RSTestGitMetadataCapture -Root $RepoRoot -Arguments @('rev-parse','HEAD')
+    # Status intentionally discards Git diagnostics and retains its own failure.
+    $value = $capture.Output | Select-Object -First 1
+    if ($capture.ExitCode -ne 0 -or [string]$value -cnotmatch '^[0-9a-f]{40}$') {
         throw 'Unable to bind Ghostty status evidence to the current repository commit.'
     }
     return [string]$value

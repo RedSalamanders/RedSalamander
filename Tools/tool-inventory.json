@@ -6,14 +6,18 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Share the exact engine-independent Git line/stdin transport used by validation fingerprints and archive provenance; retain UTF8 stdout, inherited diagnostic/stdin encoding, ordered input presence and actual exit.",
-      "usage": "Internal export Invoke-RSTestGitMetadataCapture; thin domain callers forward only their actual PSBoundParameters. No imports, new public command, shell, window or artifact authority.",
+      "purpose": "Provide one internal import-free Git text/stdin transport for archive, fingerprint, formatter and Ghostty metadata; optional command-local PrefixArguments precede the target -C while defaults remain unchanged.",
+      "usage": "Internal export Invoke-RSTestGitMetadataCapture; thin domain callers retain bound input presence, diagnostic policy and read-only authority. Candidate metadata alone supplies its original local global-option prefix.",
       "usedBy": [
-        "Tools/Modules/Testing/ValidationFingerprint.psm1",
+        "format-all.ps1",
         "Tools/Modules/Testing/TestRunArchive.psm1",
-        "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Modules/Testing/ValidationFingerprint.psm1",
+        "Tools/TerminalEngine/GhosttyCandidateReview.psm1",
+        "Tools/TerminalEngine/GhosttyRuntimeStatus.psm1",
+        "Tools/Tests/GhosttyCandidateReview.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/TestRunArchive.Tests.ps1",
-        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
+        "Tools/Tests/ValidationFingerprint.Tests.ps1"
       ],
       "consumerClosure": "derived-references",
       "prerequisites": [
@@ -166,7 +170,7 @@
         "Downloads and writes the selected repository-local formatter cache",
         "Holds an exclusive .build/format/.install.lock lease; leaves the empty lease file after disposal"
       ],
-      "purpose": "Verify and extract the same provider-resolved wheel stream; preserve prior executable with guarded atomic publication under an exclusive cache lease.",
+      "purpose": "Acquire and checksum-verify the pinned native formatter; internal Invoke-RSClangFormatCapture owns engine-free no-window EXE version and explicitly admitted formatting calls with concurrent separate stream drains and actual exits.",
       "replacement": null,
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "prerequisites": [
@@ -175,8 +179,10 @@
         "Tools/Modules/Build/ArtifactOperationLock.psm1 guarded path/publication helpers"
       ],
       "usedBy": [
+        "format-all.ps1",
         "Tools/Install-ClangFormat.ps1",
-        "Tools/Tests/ClangFormat.Tests.ps1"
+        "Tools/Tests/ClangFormat.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "visibility": "internal",
       "path": "Tools/Modules/Build/ClangFormat.psm1",
@@ -184,7 +190,7 @@
       "tests": [
         "Tools/Tests/ClangFormat.Tests.ps1"
       ],
-      "usage": "Imported by the installer and exercised by offline/download/cache failure fixtures."
+      "usage": "Install-RSClangFormat retains its guarded offline/cache contract; Invoke-RSClangFormatCapture is an internal domain boundary whose caller owns ShouldProcess and source-write authority."
     },
     {
       "path": "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
@@ -4854,8 +4860,8 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide shared text/equality assertions, explicit positive test-block results, and hermetic Git/filesystem fixtures for Tools Pester suites. Explicit Invoke-RSTestFixtureGit routes only scheduled owned fixtures through existing prepared capture, preserving native arguments, CWD, redirected text and exit without a global Git shim.",
-      "usage": "Import from Tools tests instead of redefining shared assertions, positive exception handling, or dirty/staged/untracked/delete/rename fixture construction.",
+      "purpose": "Provide shared assertions and explicit owned fixture execution: Invoke-RSTestFixtureNative preserves native arguments, CWD, inherited decoding and exits through prepared capture; Invoke-RSTestFixtureGit is its UTF-8 specialization. New-RSTestFormatterFixture creates only an owned bounded native CUI formatter probe and audit records.",
+      "usage": "Import the explicit native/Git fixture helpers and formatter factory rather than replacing global commands or duplicating process/fixture machinery. Callers retain marked-root and ownership obligations.",
       "usedBy": [
         "Tools/Tests/*.Tests.ps1",
         "Tools/Tests/ScopedTesting.Tests.ps1",
@@ -4866,16 +4872,19 @@
       ],
       "prerequisites": [
         "Git when New-RSValidationGitFixture is used",
-        "Tools/Modules/Build/ProcessStreaming.psm1 for scheduled Git fixture setup in the engine-prepared harness"
+        "Tools/Modules/Build/ProcessStreaming.psm1 for scheduled Git fixture setup in the engine-prepared harness",
+        "Windows PowerShell 5.1 managed compilation only for New-RSTestFormatterFixture"
       ],
       "sideEffects": [
-        "New-RSValidationGitFixture creates and commits an isolated repository beneath its caller-selected test root"
+        "New-RSValidationGitFixture creates and commits an isolated repository beneath its caller-selected test root",
+        "Explicit native fixture calls execute only reviewed owned setup/query/payload work; formatter probe never formats source"
       ],
       "outputs": [
         "Shared Pester helper functions",
         "Explicit success/output/error results for positive test actions",
         "Hermetic validation Git fixture metadata",
-        "Unique marked run-archive filesystem fixtures"
+        "Unique marked run-archive filesystem fixtures",
+        "Owned native CUI formatter executable, compile logs and invocation/console audit"
       ],
       "ownerSpec": "Specs/Testing/Testing_ToolingGovernance.md",
       "tests": [

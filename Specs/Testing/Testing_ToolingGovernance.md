@@ -494,3 +494,29 @@ Scheduled compiler-free Git fixture calls use the named TestSupport fixture help
 in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
 No temporary/global Git shim substitutes for a production fix. Existing tests do not
 rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.
+### Scheduled native fixture execution
+
+The selected current tooling profile uses `Invoke-RSTestFixtureNative` in the existing
+`Tools/Tests/TestSupport.psm1` for synchronous native fixture work. It reuses the canonical
+prepared capture/streaming core, retaining literal argument vectors, filesystem working
+directory, separate native diagnostic records, actual exit status and caller-owned
+cleanup. Default stdout and stderr decoding remain unchanged. `Invoke-RSTestFixtureGit`
+is its explicit Git stdout UTF-8 specialization. These named functions are not global
+command shims and do not authorize product execution or arbitrary writes; callers retain
+their marked-fixture and locking obligations. No selected caller supplies pipeline stdin.
+
+Version-counter/lease fixtures retain asynchronous `Start-Process` and real process
+objects, concurrency, `PassThru` and ownership; their explicit Hidden disposition is not
+a claim that no console object exists. The tiny C++ dependency-warning fixture still
+executes its real rebuilds and assertions: that case is noninteractive qualification,
+not compiler-free validation.
+
+`New-RSTestFormatterFixture` creates only an owned native CUI probe beneath a marked
+sandbox, using the existing Windows PowerShell managed-compilation pattern. It enforces
+the managed-loader path budget before creation, verifies subsystem 3, records argv/CWD
+and owned-console observations and never formats source. This is a test prerequisite,
+not a compiler/engine prerequisite for production formatter preview. Real stderr larger
+than a pipe buffer, nonzero exits and engine-free metadata controls protect the actual
+formatter boundary. Intentional installer inheritance is tested through the private
+real-batch seam described in `Specs/Build/Build_Toolchain.md`; it is not blanket-routed
+through a read-only production projection.

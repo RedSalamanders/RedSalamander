@@ -761,3 +761,18 @@ or installer inheritance and does not identify a historical console creator.
 Background Git provenance and build-graph reads follow the existing no-window metadata boundary. Engine-independent scope/inventory/archive transports retain their raw, line or ordered-stdin contracts without importing the restored engine; the exact private exceptions are cataloged in Specs/Core/Core_SharedHelpers.md. Provisioning Git writes retain the existing dependency lock and delegated streaming authority; interactive installer/build payload routing is unchanged. Focused controls reject unsafe launch policy before a child starts. These changes establish no historical console creator or product/desktop acceptance.
 
 Known Git stdout uses explicit per-child UTF-8. The optional shared stdout decoder leaves non-Git/default and stderr behavior unchanged; no global console encoding is changed by production tooling. Unicode Git path controls cover CP437 and UTF-8 callers.
+### Native metadata and fixture launch boundaries
+
+Root formatter preview remains engine-free PowerShell 7 plus Git. The existing formatter
+module captures its native EXE metadata and admitted per-file payload after the unchanged
+`ShouldProcess` decision. The shared Git reader also serves read-only Ghostty status and
+candidate inventory, with an optional command-local global-option prefix and unchanged
+default transport semantics.
+
+Scheduled tooling fixtures use the explicit `TestSupport.psm1` native helper and its Git
+UTF-8 specialization. The native formatter factory creates an owned CUI probe and audit
+records, with Windows PowerShell managed compilation required only by those test cases.
+Versioning concurrency fixtures retain asynchronous Hidden launches and exact process
+ownership. The real installer batch keeps its inherited production routing; fixtures
+execute that same batch through the private no-window test seam. See the owning build
+and tooling governance contracts for authority and qualification boundaries.

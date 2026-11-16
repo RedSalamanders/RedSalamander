@@ -370,26 +370,19 @@ Describe 'Root format-all command ownership and preview' {
         [IO.File]::WriteAllText((Join-Path $fixture 'Dependencies/RedMonitor.lock.json'),
             $lockJson)
 
-        $gitOutput = @(& git -C $fixture init -q -b main 2>&1)
+        $gitOutput = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'init'; '-q'; '-b'; 'main') 2>&1)
         $LASTEXITCODE | Should Be 0
         foreach ($setting in @(@('user.name', 'Formatter fixture'), @('user.email', 'format@fixture.invalid'),
                 @('core.hooksPath', (Join-Path $fixture '.no-hooks')), @('core.autocrlf', 'false'))) {
-            [void](& git -C $fixture config @setting 2>&1)
+            [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'config'; $setting) 2>&1)
             $LASTEXITCODE | Should Be 0
         }
-        [void](& git -C $fixture add --all 2>&1)
+        [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'add'; '--all') 2>&1)
         $LASTEXITCODE | Should Be 0
 
-        $formatterPath = Join-Path $fixture 'fake-clang-format.cmd'
-        $formatterLog = Join-Path $fixture 'formatter-invocations.txt'
-        [IO.File]::WriteAllText($formatterPath,
-            '@echo off' + "`r`n" +
-            'if "%1"=="--version" (' + "`r`n" +
-            '  echo clang-format version 22.1.3' + "`r`n" +
-            '  exit /b 0' + "`r`n" +
-            ')' + "`r`n" +
-            'echo %*>>"%RS_FORMATTER_LOG%"' + "`r`n" +
-            'exit /b 0' + "`r`n")
+        $formatterFixture = New-RSTestFormatterFixture
+        $formatterPath = $formatterFixture.Executable
+        $formatterLog = $formatterFixture.LogPath
         $installerLog = Join-Path $fixture 'installer-invocations.txt'
         $installer = Join-Path $fixture 'Tools/Install-ClangFormat.ps1'
         [IO.File]::WriteAllText($installer,
@@ -411,6 +404,7 @@ Describe 'Root format-all command ownership and preview' {
                 & (Join-Path $repoRoot 'format-all.ps1') -RepositoryRoot $fixture -WhatIf
                 Test-Path -LiteralPath $installerLog | Should Be $false
                 Test-Path -LiteralPath $formatterLog | Should Be $false
+                Test-Path -LiteralPath $formatterFixture.AuditPath | Should Be $false
                 (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
                 (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() |
                     Should Be ((Get-Content -LiteralPath (Join-Path $fixture 'Dependencies/RedMonitor.lock.json') -Raw | ConvertFrom-Json).files[0].sha256)
@@ -421,6 +415,13 @@ Describe 'Root format-all command ownership and preview' {
                 $invocations | Should Match 'sample with spaces\.cpp'
                 $invocations | Should Not Match 'Client\.h|TestRuns|\.codex'
                 @($invocations -split '\r?\n' | Where-Object { $_ }).Count | Should Be 1
+                $nativeAudit = @(Get-Content -LiteralPath $formatterFixture.AuditPath | ForEach-Object { $_ | ConvertFrom-Json })
+                $nativeAudit.Count | Should Be 2
+                foreach ($row in $nativeAudit) {
+                    $row.consolePresent | Should Be $false
+                    $row.consoleVisible | Should Be $false
+                    $row.workingDirectory | Should Be $foreignDirectory
+                }
                 (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
             } finally {
                 Pop-Location
@@ -838,7 +839,7 @@ Describe 'Workflow-selected MSBuild identity' {
         $functions.Count | Should Be 1
         $find = $functions[0].Body.GetScriptBlock()
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath)[0]
+        $installation = @(Invoke-RSTestFixtureNative -FilePath $vswhere -Arguments @('-latest'; '-prerelease'; '-products'; '*'; '-requires'; 'Microsoft.Component.MSBuild'; '-property'; 'installationPath'))[0]
         $hostFolder = if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'){'arm64'}else{'amd64'}
         $real = Join-Path $installation ('MSBuild/Current/Bin/'+$hostFolder+'/MSBuild.exe')
         (Get-Item -LiteralPath $real).VersionInfo.FileMajorPart | Should BeGreaterThan 17

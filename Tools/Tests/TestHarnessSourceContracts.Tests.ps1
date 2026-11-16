@@ -6611,7 +6611,8 @@ Describe 'Background Git metadata launch closure' {
             @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedWorkflowMetadata'),
             @('Tools/Modules/Tooling/ToolInventory.psm1','Invoke-RSToolInventoryGitCapture'),
             @('Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Get-RSGitOutput'),
-            @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture')
+            @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture'),
+            @('Tools/Modules/Build/ClangFormat.psm1','Invoke-RSClangFormatCapture')
         )
         $valid={param([string]$body)
             $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($body,[ref]$t,[ref]$e)
@@ -6637,11 +6638,11 @@ Describe 'Background Git metadata launch closure' {
     }
     It 'admits only the reviewed captured caller paths and keeps vcpkg writes outside the read-only projection' {
         $paths=@('Tools/Run-AllTests.ps1','Tools/Modules/Testing/HostedTestDesktop.psm1','Tools/Modules/Build/VcpkgToolIdentity.psm1','Tools/Modules/Build/VcpkgInstallSafety.psm1',
-            'Tools/Modules/Testing/ScopedTesting.psm1','Tools/Modules/Tooling/ToolInventory.psm1','Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestRunArchive.psm1')
+            'Tools/Modules/Testing/ScopedTesting.psm1','Tools/Modules/Tooling/ToolInventory.psm1','Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestRunArchive.psm1','format-all.ps1','Tools/TerminalEngine/GhosttyRuntimeStatus.psm1','Tools/TerminalEngine/GhosttyCandidateReview.psm1')
         $noBare={param([string]$source)
             $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$t,[ref]$e)
             if($e.Count){return $false}
-            return @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','gh')},$true)).Count -eq 0
+            return @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','git.exe','gh','gh.exe')},$true)).Count -eq 0
         }
         foreach($path in $paths){(& $noBare (Get-RSText -Path $path))|Should Be $true}
         $runner=Get-RSText -Path 'Tools/Run-AllTests.ps1'
@@ -6676,11 +6677,18 @@ Describe 'Background Git metadata launch closure' {
         @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Import-Module'},$true)).Count|Should Be 0
         $shared|Should Match 'Export-ModuleMember -Function Invoke-RSTestGitMetadataCapture'
         $sharedFunction=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSTestGitMetadataCapture'},$true)
+        $prefix=@($sharedFunction.Body.ParamBlock.Parameters|Where-Object {$_.Name.VariablePath.UserPath -ceq 'PrefixArguments'})
+        $prefix.Count|Should Be 1
+        $prefix[0].StaticType.FullName|Should Be 'System.String[]'
+        $prefix[0].DefaultValue.Extent.Text|Should Be '@()'
         $validForwarder={param([string]$text,[string]$name)
             $tokens=$null;$errors=$null;$tree=[Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
             if($errors.Count){return $false}
             $function=$tree.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true)
-            if(!$function -or $function.Body.EndBlock.Statements.Count -ne 1 -or $function.Body.ParamBlock.Extent.Text -cne $sharedFunction.Body.ParamBlock.Extent.Text){return $false}
+            if(!$function -or $function.Body.EndBlock.Statements.Count -ne 1){return $false}
+            $baseParameters=@($sharedFunction.Body.ParamBlock.Parameters|Where-Object {$_.Name.VariablePath.UserPath -cne 'PrefixArguments'}|ForEach-Object {$_.Extent.Text})
+            $wrapperParameters=@($function.Body.ParamBlock.Parameters|ForEach-Object {$_.Extent.Text})
+            if($baseParameters.Count -ne 3 -or $wrapperParameters.Count -ne 3 -or ($baseParameters -join "`n") -cne ($wrapperParameters -join "`n")){return $false}
             $calls=@($function.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst]},$true))
             return $calls.Count -eq 1 -and $calls[0].GetCommandName() -ceq 'Invoke-RSTestGitMetadataCapture' -and $calls[0].CommandElements.Count -eq 2 -and
                 $calls[0].CommandElements[1] -is [Management.Automation.Language.VariableExpressionAst] -and $calls[0].CommandElements[1].Splatted -and
@@ -6694,7 +6702,7 @@ Describe 'Background Git metadata launch closure' {
         }
     }
     It 'keeps the scheduled fixture scope on explicit native argument vectors without a global Git shim' {
-        $files=@('ScopedTesting.Tests.ps1','ToolInventory.Tests.ps1','SpecInformationArchitecture.Tests.ps1','ValidationFingerprint.Tests.ps1','TestRunArchive.Tests.ps1','ToolingGovernance.Tests.ps1','DocumentationDriftContracts.Tests.ps1','TestHarnessSourceContracts.Tests.ps1','ProcessStreaming.Tests.ps1','DxUiDependency.Tests.ps1','VcpkgInstallSafety.Tests.ps1','TestSupport.psm1')
+        $files=@('ScopedTesting.Tests.ps1','ToolInventory.Tests.ps1','SpecInformationArchitecture.Tests.ps1','ValidationFingerprint.Tests.ps1','TestRunArchive.Tests.ps1','ToolingGovernance.Tests.ps1','DocumentationDriftContracts.Tests.ps1','TestHarnessSourceContracts.Tests.ps1','ProcessStreaming.Tests.ps1','DxUiDependency.Tests.ps1','VcpkgInstallSafety.Tests.ps1','TestSupport.psm1','BuildEvidence.Tests.ps1','BuildReproducibility.Tests.ps1','GhosttyCandidateReview.Tests.ps1','GhosttyRuntimeStatus.Tests.ps1','ReleaseWorkflowPolicy.Tests.ps1','ResourceLocalizationContracts.Tests.ps1','ValidationImpact.Tests.ps1','VcpkgBootstrap.Tests.ps1','CiDependencyWarnings.Tests.ps1','RemoveAds.Tests.ps1','RunAllTestsPlan.Tests.ps1','SharedToolingModules.Tests.ps1','Versioning.Tests.ps1','ClangFormat.Tests.ps1')
         foreach($file in $files){
             $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput((Get-RSText -Path ('Tools/Tests/'+$file)),[ref]$t,[ref]$e)
             @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','git.exe','gh')},$true)).Count|Should Be 0
@@ -6705,6 +6713,11 @@ Describe 'Background Git metadata launch closure' {
             }
         }
         $support=Get-RSText -Path 'Tools/Tests/TestSupport.psm1'
+        $support|Should Match 'function Invoke-RSTestFixtureNative'
+        $support|Should Match 'Invoke-RSTestFixtureNative -FilePath ''git'' -Arguments \$Arguments'
+        $support|Should Match '-StandardOutputEncoding \$StandardOutputEncoding -OutputLineCallback \$capture'
+        $support|Should Match 'New-RSTestFormatterFixture'
+        $support|Should Not Match 'UseShellExecute\s*=\s*\$true'
         $support|Should Match 'function Invoke-RSTestFixtureGit'
         $support|Should Match 'param\(\[string\[\]\]\$Arguments\)'
         $support|Should Match 'Invoke-RSStreamingProcess[\s\S]*-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\)'

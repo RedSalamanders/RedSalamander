@@ -114,7 +114,7 @@ $record = [ordered]@{ z = @($true, $null, 2); a = "e$([char]0x0301)" }
 [Convert]::ToBase64String((ConvertTo-RSCanonicalJsonBytes -InputObject $record))
 '@
         [IO.File]::WriteAllText($scriptPath, $scriptText, [Text.UTF8Encoding]::new($false))
-        $actual = & pwsh.exe -NoProfile -File $scriptPath -ModulePath $modulePath
+        $actual = Invoke-RSTestFixtureNative -FilePath 'pwsh.exe' -Arguments @('-NoProfile'; '-File'; $scriptPath; '-ModulePath'; $modulePath)
         $LASTEXITCODE | Should Be 0
         $actual | Should Be $expected
     }
@@ -145,7 +145,7 @@ $record = [ordered]@{ z = @($true, $null, 2); a = "e$([char]0x0301)" }
 
     It 'rejects Startrail evidence on Windows PowerShell 5.1 before evidence IO' {
         $modulePath = Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1'
-        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module '$modulePath' -Force; Assert-RSStartrailPowerShellHost" 2>&1
+        $output = Invoke-RSTestFixtureNative -FilePath 'powershell.exe' -Arguments @('-NoProfile'; '-ExecutionPolicy'; 'Bypass'; '-Command'; "Import-Module '$modulePath' -Force; Assert-RSStartrailPowerShellHost") 2>&1
         $LASTEXITCODE | Should Not Be 0
         ($output -join "`n") | Should Match 'requires PowerShell 7\.4 or newer'
     }

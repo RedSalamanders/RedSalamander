@@ -550,8 +550,8 @@ Describe 'Operation Startrail build receipt records' {
     It 'changes the source snapshot for dirty staged untracked delete and rename mutations' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'source-fixture')
         $mutated = Get-RSBuildSourceSnapshot -RepoRoot $fixture.Root
-        & git -C $fixture.Root reset --hard --quiet HEAD
-        & git -C $fixture.Root clean -fdq
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'reset'; '--hard'; '--quiet'; 'HEAD')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'clean'; '-fdq')
         $clean = Get-RSBuildSourceSnapshot -RepoRoot $fixture.Root
         $mutated.SnapshotId | Should Not Be $clean.SnapshotId
         $mutated.GitHead | Should Be $clean.GitHead
@@ -674,11 +674,11 @@ Describe 'Operation Startrail build receipt records' {
         [IO.File]::WriteAllText((Join-Path $root '.gitignore'), ".build/`n", [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText((Join-Path $root 'source.txt'), "source`n", [Text.UTF8Encoding]::new($false))
         Copy-Item -LiteralPath (Join-Path $repoRoot 'RuntimeDependencies.props') -Destination (Join-Path $root 'RuntimeDependencies.props')
-        & git -C $root init --quiet
-        & git -C $root config user.email 'startrail-fixture@invalid.example'
-        & git -C $root config user.name 'Startrail Fixture'
-        & git -C $root add -- .
-        & git -C $root commit --quiet -m 'portable fixture'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'startrail-fixture@invalid.example')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Startrail Fixture')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; '.')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'portable fixture')
         $source = Get-RSBuildSourceSnapshot -RepoRoot $root
         $output = Join-Path $root '.build\x64\Debug'
         [void](New-Item -ItemType Directory -Path $output -Force)

@@ -1,8 +1,8 @@
-# Internal engine-free Git line/stdin transport. Import through its two testing callers.
+# Internal engine-free Git line/stdin transport. Import through reviewed metadata callers.
 Set-StrictMode -Version Latest
 
 function Invoke-RSTestGitMetadataCapture {
-    param([string]$Root, [string[]]$Arguments, [AllowEmptyCollection()][string[]]$InputLines)
+    param([string]$Root, [string[]]$Arguments, [AllowEmptyCollection()][string[]]$InputLines, [string[]]$PrefixArguments = @())
     # Engine-free bootstrap projection: native pipeline text/stdin semantics differ
     # from the engine-dependent streaming factory. No public process surface.
     $start = [Diagnostics.ProcessStartInfo]::new('git')
@@ -16,7 +16,9 @@ function Invoke-RSTestGitMetadataCapture {
         $start.RedirectStandardInput = $true
         $start.StandardInputEncoding = $OutputEncoding
     }
-    foreach ($argument in @('-C', $Root) + $Arguments) { [void]$start.ArgumentList.Add($argument) }
+    # Preserve a caller's command-local global options before its target -C.
+    # Ordinary callers omit the prefix and retain the original argv exactly.
+    foreach ($argument in $PrefixArguments + @('-C', $Root) + $Arguments) { [void]$start.ArgumentList.Add($argument) }
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $start
     try {

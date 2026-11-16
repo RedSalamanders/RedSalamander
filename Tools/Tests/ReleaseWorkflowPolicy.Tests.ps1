@@ -535,9 +535,9 @@ Describe 'Release workflow source contracts' {
         [void][IO.Directory]::CreateDirectory((Split-Path -Parent $file))
         [IO.File]::WriteAllText($file, 'tracked deep-path fixture', [Text.UTF8Encoding]::new($false))
         $expectedHash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
-        & git -c core.longpaths=true -C $fixture init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-c'; 'core.longpaths=true'; '-C'; $fixture; 'init'; '--quiet')
         $LASTEXITCODE | Should Be 0
-        & git -c core.longpaths=true -C $fixture add -- $relative
+        Invoke-RSTestFixtureGit -Arguments @('-c'; 'core.longpaths=true'; '-C'; $fixture; 'add'; '--'; $relative)
         $LASTEXITCODE | Should Be 0
         [IO.File]::Delete($file)
         $directory = Split-Path -Parent $file
@@ -546,7 +546,7 @@ Describe 'Release workflow source contracts' {
             $directory = Split-Path -Parent $directory
         }
         [IO.File]::Exists($file) | Should Be $false
-        & git -c core.longpaths=true -C $fixture checkout -- $relative
+        Invoke-RSTestFixtureGit -Arguments @('-c'; 'core.longpaths=true'; '-C'; $fixture; 'checkout'; '--'; $relative)
         $LASTEXITCODE | Should Be 0
         (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash | Should Be $expectedHash
     }

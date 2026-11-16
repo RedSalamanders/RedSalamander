@@ -4,10 +4,43 @@
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'ArtifactOperationLock.psm1') -ErrorAction Stop
 
+function Invoke-RSClangFormatCapture {
+    param([Parameter(Mandatory)][string]$FilePath, [string[]]$Arguments, [string]$WorkingDirectory = (Get-Location).ProviderPath)
+    # Formatter bootstrap must work before the CI engine is restored. This domain
+    # transport also runs the explicitly admitted formatting payload; capture does
+    # not grant write authority or replace the caller's ShouldProcess decision.
+    $start = [Diagnostics.ProcessStartInfo]::new($FilePath)
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [Console]::OutputEncoding
+    $start.StandardErrorEncoding = [Console]::OutputEncoding
+    $start.WorkingDirectory = $WorkingDirectory
+    foreach ($argument in $Arguments) { [void]$start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    try {
+        if (-not $process.Start()) { throw 'Unable to start the native formatter.' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $global:LASTEXITCODE = $process.ExitCode
+        $lines = [Collections.Generic.List[string]]::new()
+        $reader = [IO.StringReader]::new($stdout)
+        try { while ($null -ne ($line = $reader.ReadLine())) { $lines.Add($line) } }
+        finally { $reader.Dispose() }
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; StdOut = [string[]]$lines.ToArray(); ErrorText = $stderr }
+    } finally { $process.Dispose() }
+}
+
 function Assert-RSClangFormatVersion {
     param([string]$Path, [string]$Version)
-    $reported = & $Path --version
-    if ($LASTEXITCODE -ne 0 -or ($reported -join "`n") -notmatch "^clang-format version $([regex]::Escape($Version))(?:\s|$)") {
+    $capture = Invoke-RSClangFormatCapture -FilePath $Path -Arguments @('--version')
+    if ($capture.ErrorText) { [Console]::Error.Write($capture.ErrorText) }
+    if ($capture.ExitCode -ne 0 -or ($capture.StdOut -join "`n") -notmatch "^clang-format version $([regex]::Escape($Version))(?:\s|$)") {
         throw "The extracted formatter does not report clang-format ${Version}: $Path"
     }
 }
@@ -105,4 +138,4 @@ function Install-RSClangFormat {
     return $executable
 }
 
-Export-ModuleMember -Function Install-RSClangFormat
+Export-ModuleMember -Function Install-RSClangFormat, Invoke-RSClangFormatCapture

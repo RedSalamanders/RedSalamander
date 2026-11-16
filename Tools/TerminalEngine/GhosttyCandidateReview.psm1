@@ -4,6 +4,7 @@ $validationModule = Join-Path (Split-Path -Parent $PSScriptRoot) 'Modules\Testin
 $lifecycleModule = Join-Path $PSScriptRoot 'GhosttyRuntimeLifecycle.psm1'
 Import-Module $validationModule -ErrorAction Stop
 Import-Module $lifecycleModule -ErrorAction Stop
+Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'Modules\Testing\GitMetadataCapture.psm1') -ErrorAction Stop
 
 $script:OfficialRepository = 'https://github.com/ghostty-org/ghostty.git'
 $script:ReviewPathFilter = @(
@@ -30,14 +31,17 @@ function Invoke-RSGhosttyCandidateGit {
 
     # Candidate file/metadata paths can exceed MAX_PATH; keep this override local
     # to the metadata query rather than changing repository or machine settings.
-    $output = @(& git.exe -c core.longpaths=true -C $RepositoryPath @Arguments 2>&1)
-    $exitCode = $LASTEXITCODE
-    # PowerShell preserves redirected native stderr as ErrorRecord objects.
-    # Metadata parsers consume stdout only; successful Git warnings still surface.
-    $diagnostics = @($output | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object ToString)
-    $lines = @($output | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] })
+    $capture = Invoke-RSTestGitMetadataCapture -Root $RepositoryPath -PrefixArguments @('-c','core.longpaths=true') -Arguments $Arguments
+    $exitCode = $capture.ExitCode
+    # Parsers consume stdout only. Capture preserves separate diagnostic strings;
+    # failure text groups stdout then stderr, without a cross-stream order claim.
+    $lines = @($capture.Output)
+    $diagnostics = [Collections.Generic.List[string]]::new()
+    $reader = [IO.StringReader]::new($capture.ErrorText)
+    try { while ($null -ne ($line = $reader.ReadLine())) { $diagnostics.Add($line) } }
+    finally { $reader.Dispose() }
     if (-not $AllowFailure -and $exitCode -ne 0) {
-        throw "${Context} failed with git exit ${exitCode}: $($output -join "`n")"
+        throw "${Context} failed with git exit ${exitCode}: $(@($lines) + @($diagnostics) -join "`n")"
     }
     if ($exitCode -eq 0 -and $diagnostics.Count -gt 0) {
         Write-Warning "${Context}: $($diagnostics -join "`n")"

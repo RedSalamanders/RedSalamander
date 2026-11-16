@@ -1229,3 +1229,28 @@ Scheduled compiler-free Git fixture calls use the named TestSupport fixture help
 in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
 No temporary/global Git shim substitutes for a production fix. Existing tests do not
 rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.
+### Silent formatter metadata and explicit fixture payloads
+
+`format-all.ps1 -WhatIf` retains its PowerShell 7 and Git bootstrap contract: tracked-file
+enumeration uses the import-free Git metadata transport and does not restore the CI
+engine, acquire a formatter or rewrite source. The formatter module's internal
+`Invoke-RSClangFormatCapture` owns native EXE version queries and the already-admitted
+per-file formatting invocation. It preserves arguments, caller working directory,
+diagnostic decoding and actual exits while disabling shell/window creation and draining
+both streams concurrently. The root command retains its existing `ShouldProcess`
+boundary, exact pin check, one invocation per selected file and complete failure list.
+Capture does not grant source-write authority. No CMD fallback is part of this formatter
+contract.
+
+The shared engine-free Git transport's optional `PrefixArguments` retains command-local
+global options before `-C <root>`; its default is empty. The Ghostty candidate metadata
+adapter uses this only to preserve its existing `-c core.longpaths=true` order. Status
+HEAD lookup and candidate inventory remain read-only; no Ghostty runtime pin, build,
+package or publication behavior changes.
+
+The real vcpkg bootstrap batch remains an inherited interactive installer payload.
+`Invoke-RSVcpkgBootstrapPayload` is a private invocation seam with the original routing
+and actual returned exit; the initializer retains its managed-path locks, executable
+marker check and nonzero failure. Test fixtures replace only that launcher with an
+explicit owned no-window `cmd.exe` boundary that executes the real batch and preserves
+its arguments, marker and exit, including failure 19.

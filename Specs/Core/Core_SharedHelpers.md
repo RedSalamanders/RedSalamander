@@ -403,3 +403,18 @@ setup/readback, never product provisioning and never a global Git shim. Actual
 fixture-helper controls in ToolInventory.Tests cover empty/Unicode output, nonzero
 exit, redirects, both streams, owned starts and cleanup. Missing-engine modules
 remain independently tested; the fixture setup harness itself is engine-prepared.
+### Final native fixture and formatter reuse
+
+| Responsibility | Canonical helper | Boundary |
+|---|---|---|
+| Synchronous native fixture calls | `Invoke-RSTestFixtureNative` in `Tools/Tests/TestSupport.psm1` | Prepared canonical capture with caller-owned marked fixtures, literal vectors/CWD, inherited defaults and actual exits. Git is the thin UTF-8 specialization; no global command replacement or stdin expansion. |
+| Owned native formatter probe | `New-RSTestFormatterFixture` in the same module | Reuses managed fixture compilation; bounded native CUI executable and audit data, no actual formatting or production compiler dependency. |
+| Engine-free native formatter boundary | `Invoke-RSClangFormatCapture` in `Tools/Modules/Build/ClangFormat.psm1` | Native EXE metadata and explicitly admitted formatting payload, no shell/window, concurrent separate drains; `ShouldProcess` and source-write authority stay with the caller. |
+| Real installer test seam | Private `Invoke-RSVcpkgBootstrapPayload` in `VcpkgInstallSafety.psm1` | Default inherited installer invocation remains unchanged. Only tests bind the actual owned batch to an explicit no-window CMD invocation. |
+
+`Testing/GitMetadataCapture.psm1` also serves root formatter enumeration and the two
+Ghostty metadata adapters. Its optional command-local `PrefixArguments` precede the
+existing target `-C`; default argv/CWD/stdin/diagnostic behavior and the thin archive and
+fingerprint interfaces remain unchanged. Owner contracts are the build and tooling
+governance specifications; these narrow existing-module extensions are not a new public
+process framework.

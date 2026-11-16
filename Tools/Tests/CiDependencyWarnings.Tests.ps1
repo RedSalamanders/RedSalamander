@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 $ciWarningRepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $ciWarningRepoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Scope Local
 Import-Module (Join-Path $ciWarningRepoRoot 'Build/BuildConsole.psm1') -Scope Local
@@ -65,13 +66,13 @@ Describe 'CI dependency header warning classification' {
                     "/p:VCToolsVersion=$version", '/p:VcpkgEnabled=false', "/p:DirectoryBuildPropsPath=$($emptyImports.DirectoryProps)", "/p:DirectoryBuildTargetsPath=$($emptyImports.DirectoryTargets)",
                     "/p:ForceImportBeforeCppTargets=$($emptyImports.BeforeCppTargets)", "/p:ForceImportAfterCppTargets=$($emptyImports.AfterCppTargets)")
                 $arguments = $profileArguments + @('/v:minimal', '/t:Rebuild')
-                & $msbuild @arguments *> $log
+                Invoke-RSTestFixtureNative -FilePath $msbuild -Arguments @($arguments) *> $log
                 $LASTEXITCODE | Should Be 0
                 $diagnostics = Get-NativeBuildDiagnostics -LogPath $log
                 $diagnostics.ErrorCount | Should Be 0
                 $text = Get-Content -LiteralPath $log -Raw
                 if ($phase -in 'before', 'external') {
-                    $profileText = @(& $msbuild @profileArguments -getProperty:ExternalIncludePath)
+                    $profileText = @(Invoke-RSTestFixtureNative -FilePath $msbuild -Arguments @($profileArguments; '-getProperty:ExternalIncludePath'))
                     $LASTEXITCODE | Should Be 0
                     $profile = $profileText -join "`n"
                     $paths = @($profile.Split(';') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })

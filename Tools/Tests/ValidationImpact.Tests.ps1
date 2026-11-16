@@ -247,7 +247,7 @@ Describe 'Operation Startrail governed impact graph' {
     }
 
     It 'governs every tracked project import and runtime graph input' {
-        $tracked = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+        $tracked = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'ls-files'; '*.sln'; '*.slnx'; '*.vcxproj'; '*.props'; '*.targets'; 'RuntimeDependencies.props'))
         $governance = Test-RSValidationImpactGovernance -Manifest $manifest -TrackedPaths $tracked -RepoRoot $repoRoot
         $governance.IsValid | Should Be $true
         $governance.UnmappedBuildInputs.Count | Should Be 0
