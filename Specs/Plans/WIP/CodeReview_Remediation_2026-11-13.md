@@ -384,3 +384,32 @@ These follow-up bytes require a new commit and canonical receipt refresh before
 SkipBuild PrePush. Immutable c842 receipts do not qualify the future HEAD. No actual
 PrePush execution, foreground work or publication is claimed here. I65 remains ACTIVE;
 the desktop clock is unstarted and Full/ARM/resource obligations retain their owners.
+
+### Actual 3ebf qualification failure and diagnostic-only follow-up (2026-11-16)
+
+Committed source 3ebf04d83abd705799fba44eae286c0c4a7ec047 completed test-enabled
+full-solution x64 Debug and Release Source refreshes with actual `/t:Rebuild`, four
+workers, build 1 and zero warnings/errors. Fresh receipts and independent byte checks
+bound the exact H8/API4 headers, archive, toolchain and CRT; these results do not
+qualify later source. Both corrected wrappers propagated actual exits and restored
+an absent build-test environment key as absent.
+
+Actual Debug noninteractive PrePush failed: 14 entries executed, 13 promoted and
+one incomplete; 1733 cases passed, one failed and 30 skipped. The archive transport
+test observed Git staging exit 128. Two immutable-baseline data skips were also
+rejected by aggregate acceptance. Original raw results, receipt bindings and the
+111 reported-only disk-audit inventory are retained unchanged. Release PrePush did
+not start; the four desktop obligations remain pending.
+
+The required immutable data was subsequently hydrated by one bounded fetch of nine
+missing blobs; the two unchanged data cases passed without skips. This is prerequisite
+preparation, not an acceptance-policy waiver. The historical Git 128 cause remains
+unproved: isolated exact-case execution passed, and path-length hypotheses were not
+validated. The only tracked test follow-up adds bounded failure-only diagnostics
+before the original staging assertion, with two pure diagnostic controls. It does
+not repair or reclassify that historical failure, alter workload/limits/assertions,
+or identify a failed process from a later command-resolution probe.
+
+Fresh current-source validation in the complete 68-file order remains pending after
+normal commit and compatible Debug/Release receipt refresh. I65 remains ACTIVE;
+there is no publication or Full/ARM acceptance, and the desktop clock is unstarted.

@@ -800,6 +800,59 @@ Describe 'TestRuns archive contract' {
     }
 }
 
+function Write-RSArchiveStagingFailureDiagnosticForTest {
+    param([string]$Fixture, $Staged)
+    if ($Staged.ExitCode -eq 0) { return }
+    # Exact fixture failure only: no new child, input payload, global config or
+    # environment dump. Diagnostic failure must not replace the original assertion.
+    try {
+        [void](Assert-RSTestSandboxContainedPath -TestRoot $env:REDSALAMANDER_TEST_ROOT -Path $Fixture -RequireDescendant)
+        $stderr = [string]$Staged.ErrorText
+        $tailLimit = 2048
+        $local = [ordered]@{}
+        $localError = $null
+        try {
+            $section = ''
+            foreach ($line in [IO.File]::ReadAllLines((Join-Path $Fixture '.git/config'))) {
+                if ($line -match '^\s*\[(?<section>[^]]+)\]\s*$') { $section = $Matches.section; continue }
+                if ($section -ieq 'core' -and $line -match '^\s*(?<name>autocrlf|longpaths|safecrlf|eol|ignorecase|symlinks|filemode)\s*=\s*(?<value>.*?)\s*$') {
+                    $local[$Matches.name.ToLowerInvariant()] = $Matches.value
+                }
+            }
+        } catch [System.Exception] { $localError = $_.Exception.GetType().FullName }
+        $flags = [ordered]@{}
+        foreach ($name in @('GIT_CONFIG_COUNT','GIT_CONFIG_NOSYSTEM','GIT_OPTIONAL_LOCKS','GIT_FLUSH','GIT_TERMINAL_PROMPT')) {
+            $value = [Environment]::GetEnvironmentVariable($name, 'Process')
+            $flags[$name] = if ($null -eq $value -or $value -match '^(?:[0-9]{1,9}|true|false)$') { $value } else { '<unexpected non-scalar>' }
+        }
+        $gitProbe = [ordered]@{provenance='Get-Command Application probe; not the failed process image identity'}
+        try {
+            $git = @(Get-Command git.exe -CommandType Application -ErrorAction Stop)[0].Source
+            $gitProbe.path = $git
+            $gitProbe.sha256 = (Get-FileHash -LiteralPath $git -Algorithm SHA256).Hash.ToLowerInvariant()
+        } catch [System.Exception] { $gitProbe.error_type = $_.Exception.GetType().FullName }
+        $record = [ordered]@{
+            schema = 'red-salamander.archive-fixture-staging-failure.v1'
+            exit_code = [int]$Staged.ExitCode
+            argv = @('-C',$Fixture,'add','--all')
+            stdin_bound = $false
+            fixture = $Fixture
+            fixture_length = $Fixture.Length
+            stderr_length = $stderr.Length
+            stderr_tail = $stderr.Substring([Math]::Max(0, $stderr.Length - $tailLimit))
+            local_core_config = $local
+            local_config_error_type = $localError
+            git_flags = $flags
+            git_application_probe = $gitProbe
+        }
+        [IO.File]::WriteAllText((Join-Path $Fixture 'staging-failure.json'), ($record | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
+        Write-Host "Archive fixture staging failed: exit $($Staged.ExitCode); stderr $($stderr.Length) characters; bounded diagnostic retained in staging-failure.json."
+        Write-Host $record.stderr_tail
+    } catch [System.Exception] {
+        Write-Host "Archive fixture staging diagnostic unavailable: $($_.Exception.GetType().FullName). Original exit assertion remains required."
+    }
+}
+
 Describe 'Engine-free archive metadata transport' {
     It 'drains large stderr and preserves ordered UTF8 stdin hashing and archive errors' {
         $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('archive-native-'+[guid]::NewGuid().ToString('N'))
@@ -818,6 +871,7 @@ Describe 'Engine-free archive metadata transport' {
             $paths[0]='fixture-é雪.txt'
             foreach($path in $paths){[IO.File]::WriteAllText((Join-Path $fixture $path),('payload'+[char]10),[Text.UTF8Encoding]::new($false))}
             $staged=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('add','--all')} $fixture
+            if ($staged.ExitCode -ne 0) { Write-RSArchiveStagingFailureDiagnosticForTest -Fixture $fixture -Staged $staged }
             $staged.ExitCode|Should Be 0
             ($staged.ErrorText.Length -gt 65536)|Should Be $true
             foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
@@ -873,5 +927,49 @@ Describe 'Engine-free archive metadata transport' {
             $audit.Arguments[3]|Should Be $audit.Path
             $audit.Hash|Should Be ('a'*40)
         } finally {Remove-Module $module}
+    }
+    It 'retains only bounded staging failure facts and leaves successful staging untouched' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('archive-diagnostic-'+[guid]::NewGuid().ToString('N'))
+        [void][IO.Directory]::CreateDirectory((Join-Path $fixture '.git'))
+        [IO.File]::WriteAllText((Join-Path $fixture '.git/config'), "[core]`nautocrlf = true`nlongpaths = false`n[http]`nextraHeader = private-config-not-recorded`n", [Text.UTF8Encoding]::new($false))
+        $file=Join-Path $fixture 'staging-failure.json'
+        Write-RSArchiveStagingFailureDiagnosticForTest -Fixture $fixture -Staged ([pscustomobject]@{ExitCode=0;Output=@('private-output-not-recorded');ErrorText=''})
+        (Test-Path -LiteralPath $file)|Should Be $false
+        $saved=[Environment]::GetEnvironmentVariable('GIT_OPTIONAL_LOCKS','Process')
+        try {
+            $env:GIT_OPTIONAL_LOCKS='0'
+            $stderr=('x'*70000)+'bounded-final-error'
+            Write-RSArchiveStagingFailureDiagnosticForTest -Fixture $fixture -Staged ([pscustomobject]@{ExitCode=128;Output=@('private-output-not-recorded');ErrorText=$stderr})
+            $text=[IO.File]::ReadAllText($file)
+            $proof=$text|ConvertFrom-Json
+            $proof.exit_code|Should Be 128
+            ($proof.argv -join '|')|Should Be ('-C|'+$fixture+'|add|--all')
+            $proof.stdin_bound|Should Be $false
+            $proof.stderr_length|Should Be $stderr.Length
+            $proof.stderr_tail.Length|Should Be 2048
+            $proof.stderr_tail.EndsWith('bounded-final-error')|Should Be $true
+            $proof.local_core_config.autocrlf|Should Be 'true'
+            $proof.local_core_config.longpaths|Should Be 'false'
+            $proof.git_flags.GIT_OPTIONAL_LOCKS|Should Be '0'
+            @($proof.git_flags.PSObject.Properties).Count|Should Be 5
+            $proof.git_application_probe.sha256|Should Match '^[0-9a-f]{64}$'
+            $text|Should Not Match 'private-config-not-recorded|private-output-not-recorded'
+        } finally {[Environment]::SetEnvironmentVariable('GIT_OPTIONAL_LOCKS',$saved,'Process')}
+    }
+    It 'retains the primary staging failure when local metadata is unavailable and omits opaque Git values' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('archive-diagnostic-missing-'+[guid]::NewGuid().ToString('N'))
+        $saved=[Environment]::GetEnvironmentVariable('GIT_CONFIG_COUNT','Process')
+        try {
+            $env:GIT_CONFIG_COUNT='private-opaque-not-recorded'
+            Write-RSArchiveStagingFailureDiagnosticForTest -Fixture $fixture -Staged ([pscustomobject]@{ExitCode=128;ErrorText='primary-error'})
+            $text=[IO.File]::ReadAllText((Join-Path $fixture 'staging-failure.json'))
+            $proof=$text|ConvertFrom-Json
+            $proof.exit_code|Should Be 128
+            $proof.stderr_length|Should Be 13
+            $proof.stderr_tail|Should Be 'primary-error'
+            $proof.local_config_error_type|Should Not BeNullOrEmpty
+            $proof.git_flags.GIT_CONFIG_COUNT|Should Be '<unexpected non-scalar>'
+            $text|Should Not Match 'private-opaque-not-recorded'
+        } finally {[Environment]::SetEnvironmentVariable('GIT_CONFIG_COUNT',$saved,'Process')}
     }
 }
