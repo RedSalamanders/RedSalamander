@@ -31,8 +31,8 @@ at forbidden old drive-root paths.
 ## Canonical Agent Guidance
 
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
-- Project skills live in `.github/skills/` (one directory per skill; table below).
-- Cross-tool meta-skills (`improve`, `red-salamander-crash-forensics`) live only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
+- Project skills live in `.github/skills/` (one directory per skill; table below). Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
+- Repository crash-forensics meta-skill (`red-salamander-crash-forensics`) lives only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
 - Agent/skill authority, package/example integrity, compatibility routes and truthful evaluation are governed by [Testing_AgentGuidance.md](Specs/Testing/Testing_AgentGuidance.md). Keep mutable machine facts and delivery history with their owners rather than copying them into instructions.
 
 ## Skills Reference
@@ -42,27 +42,21 @@ Detailed patterns and guidelines are available as Agent Skills in `.github/skill
 | Skill | Description |
 |-------|-------------|
 | [cpp-build](.github/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
-| [cpp-modern-style](.github/skills/cpp-modern-style/SKILL.md) | C++23 patterns, naming conventions, STL usage |
 | [perf-validation](.github/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
-| [wil-raii](.github/skills/wil-raii/SKILL.md) | WIL RAII wrappers for Windows resources |
 | [direct2d-rendering](.github/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
 | [icon-cache](.github/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
 | [win32-wndproc](.github/skills/win32-wndproc/SKILL.md) | Window procedure and message handling |
 | [plugin-callbacks](.github/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
-| [localization](.github/skills/localization/SKILL.md) | RC resources, STRINGTABLE, menus |
 | [file-actions](.github/skills/file-actions/SKILL.md) | File-action ID semantics, settings validation, direct dispatch, and regression coverage |
 | [build-preferences-pages](.github/skills/build-preferences-pages/SKILL.md) | End-to-end Preferences page workflow: draft state, dirty tracking, persistence, accessibility, specs, and tests |
 | [tooling-governance](.github/skills/tooling-governance/SKILL.md) | Inventory, placement, help, compatibility, caller, cache, and spec rules for scripts and tooling |
 | [theming](.github/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
-| [compiler-warnings](.github/skills/compiler-warnings/SKILL.md) | MSVC `/Wall` warning policy with documented PoC exceptions |
 | [async-threading](.github/skills/async-threading/SKILL.md) | Threading model and async patterns |
-| [error-handling](.github/skills/error-handling/SKILL.md) | Error handling, HRESULT, Debug logging |
-| [yyjson](.github/skills/yyjson/SKILL.md) | yyjson parsing/serialization patterns, ownership, and cleanup |
 
 ## Core Principles
 
 ### RAII is Mandatory
-All Windows resources MUST use WIL RAII wrappers. Manual cleanup (`DestroyIcon`, `DeleteObject`, `EndPaint`, etc.) is **PROHIBITED**. See [wil-raii skill](.github/skills/wil-raii/SKILL.md).
+All Windows resources MUST use WIL RAII wrappers. Manual cleanup (`DestroyIcon`, `DeleteObject`, `EndPaint`, etc.) is **PROHIBITED** (see `RedHome`'s `wil-raii` skill).
 
 ### Performance Validation is Mandatory
 Any new feature, hot-path change, or optimization that can affect responsiveness, throughput, queueing, rendering, startup, search, Compare Directories, File Operations, plugin I/O, or memory retention MUST integrate:
@@ -166,7 +160,7 @@ paths with thin compatibility shims when they may have external consumers.
 - **IconCache COM contract:** `IconCache::Initialize(...)` stays UI-thread/STA responsibility; any worker thread calling `IconCache::ExtractSystemIcon()` must initialize COM as MTA (`wil::CoInitializeEx(COINIT_MULTITHREADED)`).
 - **MTP/WPD worker contract:** portable-device workers must initialize COM as MTA before using WPD, serialize each device session, honor watchdog/cancel/quarantine teardown, and keep `GetCapabilities()` honest for read-only, writable, invalid-profile, and disconnected states.
 - **File-action IDs:** treat viewer/editor/user-menu action IDs as stable but case-insensitive identifiers. Uniqueness and lookup are case-insensitive, IDs that differ only by case are invalid duplicates, and parameterized command dispatch or association resolution must never require exact casing.
-- **yyjson mutable builders:** never pass temporary/stack strings to non-copy APIs (`yyjson_mut_obj_add_str`, `yyjson_mut_str`); for dynamic keys use `yyjson_mut_strncpy` + `yyjson_mut_obj_add`, and for string values prefer `*_strcpy`/`*_strncpy` (see `.github/skills/yyjson/SKILL.md`).
+- **yyjson mutable builders:** never pass temporary/stack strings to non-copy APIs (`yyjson_mut_obj_add_str`, `yyjson_mut_str`); for dynamic keys use `yyjson_mut_strncpy` + `yyjson_mut_obj_add`, and for string values prefer `*_strcpy`/`*_strncpy` (`RedHome` `yyjson` skill).
 - **Thread-safety:** never read/write shared non-atomic state without a lock (or use `std::atomic` with correct memory ordering).
 - **Exceptions / `catch (...)`:** `catch (...)` is **FORBIDDEN**. If exception handling is mandatory at an ABI boundary (`noexcept` methods, Win32 callbacks, thread entrypoints), catch only explicitly named exception types and add a short comment explaining why catching is required there and what the fallback is. Prefer non-throwing APIs (e.g. `std::filesystem` overloads with `std::error_code`). If you catch-and-fail, log once with `Debug::Error(...)`; if you catch-and-continue, document the fallback (avoid empty catch without an explanation). Treat `std::bad_alloc` as fatal (`std::terminate()`), and never let it be swallowed by a broader `catch (const std::exception&)`.
 - **Detached threads:** avoid `std::thread(...).detach()` in plugin DLLs; prefer `TrySubmitThreadpoolCallback` or `std::jthread` + `stop_token`. If detach is unavoidable, pin module lifetime with `AcquireModuleReferenceFromAddress(...)` and make thread start exception-safe (especially in `noexcept` code).
@@ -178,7 +172,7 @@ paths with thin compatibility shims when they may have external consumers.
 - `std::format` over string concatenation
 - `std::optional` with `.value()` or `.value_or()` (never `*`)
 - Range-based for loops and structured bindings
-- See [cpp-modern-style skill](.github/skills/cpp-modern-style/SKILL.md)
+- `WIN32_LEAN_AND_MEAN` and `NOMINMAX` before `<windows.h>` in its own include block before `bcrypt.h`/`wincodec.h`, and `objbase.h`/`objidl.h` in its own block before `UIAutomation.h`/`XmlLite.h` (`RedHome` `modern-cpp-windows` skill)
 
 ### Error Handling
 - Use HRESULT for Windows API calls
@@ -186,7 +180,6 @@ paths with thin compatibility shims when they may have external consumers.
 - `Debug::Error(...)` for unexpected failures
 - `Debug::Warning(...)` for recoverable failures
 - Don't log normal control-flow (window size 0, cancellation, device recreation)
-- See [error-handling skill](.github/skills/error-handling/SKILL.md)
 
 ## Patterns to Avoid
 
