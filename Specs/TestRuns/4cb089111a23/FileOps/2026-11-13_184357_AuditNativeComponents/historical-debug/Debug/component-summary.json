@@ -1,0 +1,493 @@
+{
+  "status": "DEBUG DIAGNOSTIC COMPONENT OBSERVATIONS ONLY; Release pending; whole repository not evaluated",
+  "queue_protocol": {
+    "pairs": 48,
+    "duration_rows": 96,
+    "capacity_rows": 48,
+    "calls_per_batch": 16,
+    "cohorts": [
+      {
+        "tasks": 4,
+        "storage": "ascending",
+        "order": "ascending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            151,
+            119,
+            124,
+            125
+          ],
+          "median": 124.5,
+          "min": 119,
+          "max": 151
+        },
+        "candidate_batch_us": {
+          "samples": [
+            85,
+            89,
+            83,
+            84
+          ],
+          "median": 84.5,
+          "min": 83,
+          "max": 89
+        },
+        "candidate_minus_baseline_median_us": -40.0,
+        "baseline_collection_capacity_bytes": [
+          256
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 4,
+        "storage": "ascending",
+        "order": "descending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            164,
+            145,
+            141,
+            86
+          ],
+          "median": 143.0,
+          "min": 86,
+          "max": 164
+        },
+        "candidate_batch_us": {
+          "samples": [
+            132,
+            129,
+            96,
+            74
+          ],
+          "median": 112.5,
+          "min": 74,
+          "max": 132
+        },
+        "candidate_minus_baseline_median_us": -30.5,
+        "baseline_collection_capacity_bytes": [
+          256
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 4,
+        "storage": "descending",
+        "order": "ascending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            84,
+            89,
+            84,
+            81
+          ],
+          "median": 84.0,
+          "min": 81,
+          "max": 89
+        },
+        "candidate_batch_us": {
+          "samples": [
+            112,
+            93,
+            74,
+            74
+          ],
+          "median": 83.5,
+          "min": 74,
+          "max": 112
+        },
+        "candidate_minus_baseline_median_us": -0.5,
+        "baseline_collection_capacity_bytes": [
+          256
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 4,
+        "storage": "descending",
+        "order": "descending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            88,
+            79,
+            78,
+            79
+          ],
+          "median": 79.0,
+          "min": 78,
+          "max": 88
+        },
+        "candidate_batch_us": {
+          "samples": [
+            50,
+            50,
+            50,
+            50
+          ],
+          "median": 50.0,
+          "min": 50,
+          "max": 50
+        },
+        "candidate_minus_baseline_median_us": -29.0,
+        "baseline_collection_capacity_bytes": [
+          256
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 64,
+        "storage": "ascending",
+        "order": "ascending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            2479,
+            2867,
+            2859,
+            2368
+          ],
+          "median": 2669.0,
+          "min": 2368,
+          "max": 2867
+        },
+        "candidate_batch_us": {
+          "samples": [
+            1995,
+            2059,
+            1942,
+            1757
+          ],
+          "median": 1968.5,
+          "min": 1757,
+          "max": 2059
+        },
+        "candidate_minus_baseline_median_us": -700.5,
+        "baseline_collection_capacity_bytes": [
+          4096
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 64,
+        "storage": "ascending",
+        "order": "descending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            2948,
+            2392,
+            2612,
+            3092
+          ],
+          "median": 2780.0,
+          "min": 2392,
+          "max": 3092
+        },
+        "candidate_batch_us": {
+          "samples": [
+            2109,
+            2099,
+            3451,
+            3699
+          ],
+          "median": 2780.0,
+          "min": 2099,
+          "max": 3699
+        },
+        "candidate_minus_baseline_median_us": 0.0,
+        "baseline_collection_capacity_bytes": [
+          4096
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 64,
+        "storage": "descending",
+        "order": "ascending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            1910,
+            2407,
+            3111,
+            2861
+          ],
+          "median": 2634.0,
+          "min": 1910,
+          "max": 3111
+        },
+        "candidate_batch_us": {
+          "samples": [
+            3637,
+            3680,
+            3710,
+            3115
+          ],
+          "median": 3658.5,
+          "min": 3115,
+          "max": 3710
+        },
+        "candidate_minus_baseline_median_us": 1024.5,
+        "baseline_collection_capacity_bytes": [
+          4096
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 64,
+        "storage": "descending",
+        "order": "descending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            2854,
+            2839,
+            2851,
+            2846
+          ],
+          "median": 2848.5,
+          "min": 2839,
+          "max": 2854
+        },
+        "candidate_batch_us": {
+          "samples": [
+            2035,
+            2069,
+            2027,
+            2042
+          ],
+          "median": 2038.5,
+          "min": 2027,
+          "max": 2069
+        },
+        "candidate_minus_baseline_median_us": -810.0,
+        "baseline_collection_capacity_bytes": [
+          4096
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 256,
+        "storage": "ascending",
+        "order": "ascending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            27006,
+            25236,
+            25926,
+            27598
+          ],
+          "median": 26466.0,
+          "min": 25236,
+          "max": 27598
+        },
+        "candidate_batch_us": {
+          "samples": [
+            20763,
+            20560,
+            17709,
+            18064
+          ],
+          "median": 19312.0,
+          "min": 17709,
+          "max": 20763
+        },
+        "candidate_minus_baseline_median_us": -7154.0,
+        "baseline_collection_capacity_bytes": [
+          16384
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 256,
+        "storage": "ascending",
+        "order": "descending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            26885,
+            28321,
+            28547,
+            23584
+          ],
+          "median": 27603.0,
+          "min": 23584,
+          "max": 28547
+        },
+        "candidate_batch_us": {
+          "samples": [
+            31741,
+            35033,
+            33046,
+            31909
+          ],
+          "median": 32477.5,
+          "min": 31741,
+          "max": 35033
+        },
+        "candidate_minus_baseline_median_us": 4874.5,
+        "baseline_collection_capacity_bytes": [
+          16384
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 256,
+        "storage": "descending",
+        "order": "ascending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            28280,
+            28182,
+            28312,
+            27182
+          ],
+          "median": 28231.0,
+          "min": 27182,
+          "max": 28312
+        },
+        "candidate_batch_us": {
+          "samples": [
+            34919,
+            36744,
+            36634,
+            36653
+          ],
+          "median": 36643.5,
+          "min": 34919,
+          "max": 36744
+        },
+        "candidate_minus_baseline_median_us": 8412.5,
+        "baseline_collection_capacity_bytes": [
+          16384
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      },
+      {
+        "tasks": 256,
+        "storage": "descending",
+        "order": "descending",
+        "pairs": 4,
+        "baseline_batch_us": {
+          "samples": [
+            26718,
+            27547,
+            27237,
+            26808
+          ],
+          "median": 27022.5,
+          "min": 26718,
+          "max": 27547
+        },
+        "candidate_batch_us": {
+          "samples": [
+            19177,
+            20535,
+            20625,
+            20967
+          ],
+          "median": 20580.0,
+          "min": 19177,
+          "max": 20967
+        },
+        "candidate_minus_baseline_median_us": -6442.5,
+        "baseline_collection_capacity_bytes": [
+          16384
+        ],
+        "candidate_collection_capacity_bytes": [
+          0
+        ]
+      }
+    ]
+  },
+  "guard_controls": [
+    {
+      "detail": "same-entry",
+      "diagnostic_us": 25351,
+      "prompt_count": 1,
+      "discard_offered": 0,
+      "hr": 0
+    },
+    {
+      "detail": "different-entry",
+      "diagnostic_us": 26116,
+      "prompt_count": 1,
+      "discard_offered": 0,
+      "hr": 0
+    },
+    {
+      "detail": "identityless-replace",
+      "diagnostic_us": 27890,
+      "prompt_count": 1,
+      "discard_offered": 0,
+      "hr": 0
+    }
+  ],
+  "power_controls": [
+    {
+      "control": 0,
+      "name": "Preanswered",
+      "wait_calls": 1,
+      "hr": 0
+    },
+    {
+      "control": 1,
+      "name": "Precancelled",
+      "wait_calls": 0,
+      "hr": 0
+    },
+    {
+      "control": 2,
+      "name": "QuietCancel",
+      "wait_calls": 2,
+      "hr": 0
+    },
+    {
+      "control": 3,
+      "name": "QuietResume",
+      "wait_calls": 4,
+      "hr": 0
+    },
+    {
+      "control": 4,
+      "name": "StopOnly",
+      "wait_calls": 2,
+      "hr": 0
+    },
+    {
+      "control": 5,
+      "name": "Spurious",
+      "wait_calls": 3,
+      "hr": 0
+    }
+  ],
+  "interpretation": "No p95, historical application speedup, allocator-call, heap-peak, queue-start or Release non-regression claim."
+}

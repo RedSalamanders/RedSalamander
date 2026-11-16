@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -22,7 +23,7 @@ function Invoke-RSAdsProcess {
         [string[]]$Arguments = @()
     )
 
-    $output = @(& $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1)
+    $output = @(Invoke-RSTestFixtureNative -FilePath $windowsPowerShell -Arguments @('-NoProfile'; '-ExecutionPolicy'; 'Bypass'; '-File'; $ScriptPath; $Arguments) 2>&1)
     return [pscustomobject]@{
         ExitCode = $LASTEXITCODE
         Output = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
@@ -56,7 +57,7 @@ function global:Remove-Item {
 & $env:RS_REMOVE_ADS_TEST_SCRIPT -Path $env:RS_REMOVE_ADS_TEST_PATH
 exit $LASTEXITCODE
 '@
-        $output = @(& $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -Command $command 2>&1)
+        $output = @(Invoke-RSTestFixtureNative -FilePath $windowsPowerShell -Arguments @('-NoProfile'; '-ExecutionPolicy'; 'Bypass'; '-Command'; $command) 2>&1)
         return [pscustomobject]@{
             ExitCode = $LASTEXITCODE
             Output = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine

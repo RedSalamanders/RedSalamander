@@ -7,7 +7,7 @@ Last reviewed: 2026-08-13
 
 This catalog defines which repository artifacts state current requirements, which record proposed work or evidence, and how a mismatch is resolved. Location alone does not make prose authoritative.
 
-Run `Tools/Get-SpecInventory.ps1` to classify the current tracked and non-ignored untracked tree, validate links and WIP ownership, reconcile the normative consistency ledger, protect completed-plan history, and emit disposable reports under `.build/SpecInventory/`. Run `Tools/Get-ToolInventory.ps1 -Validate` for the separate machine-enforced tooling catalog governed by `Testing/Testing_ToolingGovernance.md`.
+Run `Tools/Get-SpecInventory.ps1` to classify the current tracked and non-ignored untracked tree, validate links and WIP ownership, reconcile the normative consistency ledger, protect completed-plan history, and emit disposable catalog reports under `.build/SpecInventory/`. Validation uses `-FailOnFindings -NoReports`: it runs the same specification and test-inventory checks without creating report files or directories. `-PassThru` returns the same specification object in either mode; an explicit `-OutputRoot` cannot be combined with `-NoReports`. Validation logs and evidence remain in the existing marked test run, never the repository `.build`. Run `Tools/Get-ToolInventory.ps1 -Validate` for the separate machine-enforced tooling catalog governed by `Testing/Testing_ToolingGovernance.md`.
 
 ## Authority classes
 
@@ -117,7 +117,7 @@ These locations are consumed by build/runtime/test workflows and must not be mov
 Before closing specification-governance work:
 
 ```powershell
-.\Tools\Get-SpecInventory.ps1 -FailOnFindings
+.\Tools\Get-SpecInventory.ps1 -FailOnFindings -NoReports
 .\Tools\Get-ToolInventory.ps1 -Validate
 Invoke-Pester .\Tools\Tests\SpecInformationArchitecture.Tests.ps1 -PassThru
 Invoke-Pester .\Tools\Tests\DocumentationDriftContracts.Tests.ps1 -PassThru

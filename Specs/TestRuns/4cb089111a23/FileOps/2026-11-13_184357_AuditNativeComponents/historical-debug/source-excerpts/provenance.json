@@ -1,0 +1,23 @@
+{
+  "candidate_commit": "e83dd755f44cef4f720d3f439f5fbd06383a569a",
+  "baseline_commit": "78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e",
+  "baseline_path": "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp",
+  "baseline_git_blob": "1411f9e0cba58c108a31fe5fe91ea0ba8f90e019",
+  "baseline_canonical_lf_utf8_excerpt_sha256": "88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a",
+  "candidate_git_blobs": {
+    "RedSalamander/FolderWindow.FileOperations.State.Queue.cpp": "3dd667af96feb83b794ab591d29f46a1b2592b7e",
+    "RedSalamander/FolderWindow.FileOperations.State.cpp": "4dc83d6528074b65c82b51b7332cc76cef80b2a7",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.ItemResultReducer.cpp": "e9cb185973b651ca86c6fea1a35a0ddbf464efec",
+    "Common/Helpers.h": "79a3d72eb09afdffb06baa599d7386620c8a2929",
+    "Specs/Testing/Testing_PerformanceValidation.md": "7c0f7f8eb82a49fe743fd65a7a385a0908b6f6fd",
+    "Specs/FileSystem/FileSystem_FileOperations.md": "89b93cd4aefd70f295c4fbf64305f463a5d30a54"
+  },
+  "adaptations": "Frozen old lambda wrapped as a private member; one real capacity observation after collection. Current harness uses symmetric ID plus relaxed atomic capacity outputs, defaulted/deleted sample lifecycle, actual production selector helper.",
+  "observer_caveats": "Common scalar/atomic output stores, mutex, timer, compiler code-generation and baseline capacity/local adapter costs remain included. Tiny deltas cannot be attributed solely to selector logic. Fixtures/assertions/format/JSONL output are outside spans.",
+  "excerpt_hashes": {
+    "baseline-adapter-e83.txt": "1f8bdd68b67b8cd6bf0bcc1d312035e5a187458c70879b4a3480e4e1cb0cb238",
+    "baseline-selector-78a8a75c4.txt": "88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a",
+    "candidate-selector-e83.txt": "b83859d93cf345ecdef557ef9c8fb614714e411f5663cae41726f0c3517da4de",
+    "queue-witness-e83.txt": "d3fad110173d64dc594c3214dc5fb5879a876470cfc157da5ea9e8e7dc4610d2"
+  }
+}

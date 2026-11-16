@@ -10006,7 +10006,11 @@ struct ThroughputRestartSettingsSnapshot final
         restoreClipboard();
     };
     auto restorePathInput = wil::scope_exit([&]() noexcept { restoreInput(); });
-    state.Require(DirectedSelfTestInputWarning::TryActivateOwnedWindow(popup.get()), L"Path keyboard tests require the existing warning and owned foreground.");
+    DirectedSelfTestInputWarning::ForegroundAdmissionDiagnostics pathAdmission{};
+    state.Require(DirectedSelfTestInputWarning::TryActivateOwnedWindow(popup.get(), false, &pathAdmission),
+                  std::format(L"Path keyboard tests require the existing warning and owned foreground. admissionStage={}, error={}.",
+                              pathAdmission.stage,
+                              pathAdmission.win32Error));
     if (! state.failure.empty())
         return false;
     if (! TestFileOperationsClipboardSnapshotMediumContract(state, &clipboardGeneration))
@@ -10140,8 +10144,7 @@ struct ThroughputRestartSettingsSnapshot final
     task.currentSourcePath = longDetailPath;
     popupState->DebugSetVisualScenario({task}, false, true);
     redraw();
-    const std::wstring detailRowId    = std::format(L"FileOperations.Task.{}.Path.Source.0", task.taskId);
-    const HWND foregroundBeforeDetail = GetForegroundWindow();
+    const std::wstring detailRowId = std::format(L"FileOperations.Task.{}.Path.Source.0", task.taskId);
     LASTINPUTINFO detailInputBaseline{sizeof(LASTINPUTINFO)};
     const bool detailInputBaselineKnown = GetLastInputInfo(&detailInputBaseline) != FALSE;
     const size_t hostsBeforeDetail      = DxUi::DebugGetAttachedWindowHostCount();
@@ -10159,8 +10162,23 @@ struct ThroughputRestartSettingsSnapshot final
     requirePath(fromLabel, longDetailPath, L"Source.0");
     if (! state.failure.empty())
         return false;
-    const auto detailTraceStarted = std::chrono::steady_clock::now();
-    const auto traceDetailState   = [&](std::wstring_view phase)
+    // The positive Text-focus scenario must still own foreground after UIA/clipboard pumping.
+    // Losing that prerequisite is a fixture failure, never authority to reacquire foreign focus.
+    const CommandsWindowObservation detailForeground = CaptureCommandsWindowObservation(GetForegroundWindow());
+    const CommandsWindowObservation detailFocus      = CaptureCommandsWindowObservation(GetFocus());
+    const CommandsWindowObservation detailPopup      = CaptureCommandsWindowObservation(popup.get());
+    if (! state.Require(DebugCanRestoreFileOperationsPathDetailTextFocus(popup.get(), detailFocus.window, detailForeground.window),
+                        std::format(L"Path-detail positive text-focus prerequisite was lost before Enter. admissionStage={}, admissionError={}; "
+                                    L"popup [{}]; foreground [{}]; focus [{}]. No foreground reacquisition was attempted.",
+                                    pathAdmission.stage,
+                                    pathAdmission.win32Error,
+                                    DescribeCommandsWindowObservation(detailPopup),
+                                    DescribeCommandsWindowObservation(detailForeground),
+                                    DescribeCommandsWindowObservation(detailFocus))))
+        return false;
+    const HWND foregroundBeforeDetail = detailForeground.window;
+    const auto detailTraceStarted     = std::chrono::steady_clock::now();
+    const auto traceDetailState       = [&](std::wstring_view phase)
     {
         const auto detailSnapshot    = snapshot(task.taskId);
         auto* field                  = popupState->DebugPathDetailField();

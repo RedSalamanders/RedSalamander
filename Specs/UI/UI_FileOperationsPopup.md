@@ -1455,7 +1455,24 @@ before the join, where an early payload-less wake must return the owner heartbea
 `FileOps.PopupCadence.CompletedCopies` (projection rebuilds and issue scans per ticks),
 `FileOps.PopupCadence.PromptAnswerResumeUs` and `FileOps.PopupCadence.UiCpuUs`, and requires at
 most two ticks per 1.2 s while waiting, no per-tick projection rebuild, the 1 s owner heartbeat
-with no fallback pending, and a prompt resume of the 100 ms cadence. Evidence under
+with no fallback pending, and a prompt resume of the 100 ms cadence.
+The existing case may additionally opt into a default-off `ENABLE_TESTS` observer with
+1,024 preallocated scalar rows and a loss count. It samples actual pinned graph debug
+state, visibility, host invalidation and animation-subscription facts; output follows
+measurement as `FileOps.PopupCadence.ObserverRows` and scalar trace rows. Report run-local
+graph generations rather than addresses or content. Paused/known fields describe the
+last synchronized snapshot, not a fresh engine query; `graphQueried` distinguishes a
+suppressed reentrant query from an absent graph. Sample-transition state excludes the
+separate marker transition, whose displayed/target values and reduced-motion state remain
+observable. Capture stops before teardown and does not allocate, format or emit inside
+the observer. These instrumented timings include diagnostic overhead.
+
+A same-case synthetic control must establish a nonzero running marker, invoke the actual
+rate reducer for paused input while retaining the graph and sample history, and observe
+its zero paused marker target. Absent/already-paused input, default-off capture, stop and
+loss controls remain explicit. Existing 600 ms settle, 2,200 ms paused sample, cadence
+ceilings and resume assertions are unchanged; diagnostics alone neither identify a cause
+nor qualify a production animation fix. Historical evidence under
 `Specs/TestRuns/4cb089111a23/FileOps/` (Debug): before, all four fixes reverted,
 `20261009T170311Z-68736-578367ffe9ad3853a078d7cde206efcd` (waiting states 11-12 ticks and renders
 per 1.2 s, paused Copy 21 ticks and 18 owner wakes per 2.2 s, 22 projection copies and 11 issue
@@ -2194,7 +2211,19 @@ there; the popup keeps one set per card and removes it with the card (I63 slice 
   reports no overflow. Scrolling is never held back by a resize: a scroll request made while the
   bar is withheld (the wheel, a scrollbar message, or revealing the focused control) scrolls in
   the content's own range, and the bar is shown from the next frame for as long as the content
-  overflows the viewport.
+  overflows the viewport. An outer-list wheel delta smaller than a detent only accumulates
+  remainder; it neither clamps the model offset against a withheld native range nor cancels a
+  queued focus reveal. Four same-direction delta-30 messages consume exactly one detent.
+- **Pixel sizing and DPI.** Automatic height measurement compares the rounded-up content pixel
+  height and requires an exact target rectangle. A one-pixel required growth must resize instead
+  of leaving clipped content and a spurious scrollbar. Real overflow still exposes a scrollbar.
+  DPI invalidation discards pending/animated pixel resize targets, card height animations and
+  note/row reservations, remeasures on the next frame, and scales the scroll offset to the new DPI.
+  A pending expanded-geometry restore cannot suppress this measurement; a saved expanded rectangle
+  scales relative to the suggested monitor position so footer-only expansion also uses the new DPI.
+  It preserves the hosted focus transaction and the user's active sizing/moving state. Completed-group
+  disclosure and Clear are list controls even though their task ID is zero; their user focus queues
+  the same post-layout reveal as a task action.
 
 Reduced motion changes none of these: they are reservations, not animation. Not part of this
 contract yet: a reserved width for the widest form of each number, an eased height change, scroll
@@ -2206,7 +2235,20 @@ a card after its first measurement (eased or snapped); `FileOps.Popup.ScrollBarT
 time the list's scrollbar appears or disappears; `FileOps.Popup.WindowResizes`, once for each
 automatic window resize: an immediate one (reduced motion, footer-only), an eased one that starts,
 and a new target while one eases. A user's own resize is not counted. No self-test reads these
-counters yet.
+counters yet. The `PopupStableHostedTree` selftest additionally records
+`FileOps.Popup.StableTree.QuarterDetentSyncUs` for four delta-30 messages and the resulting frame
+with three running cards and two finished records in a collapsed completed group while the native
+range is withheld. The fixture must scroll the real group controls into view and prove actual
+logical focus transitions plus a pending reveal before testing quarter-detents; an unmet fixture
+prerequisite fails explicitly without claiming the dependent assertions ran. It checks subdetent
+state preservation, completed-group focus reveal, DPI-handler invalidation and one-pixel automatic
+growth. Scope-help controls use an explicit default-false, test-only source-removal capability routed
+through the real policy builder on unadmitted snapshots. They first verify the published action and
+checkbox, then compare tooltip and accessible help with the owning localized resource. Default Move
+and Copy controls must withhold that action/help; this fixture grants no live mutation authority.
+Its same-physical-DPI handler injection does not qualify native mixed-monitor
+transitions. Archive paired same-machine baseline/candidate runs and the existing resize/card-height/
+scrollbar counters before claiming responsiveness or layout-churn improvements.
 
 ## Motion
 
@@ -2234,7 +2276,9 @@ On a Move, a collision of two regular files may offer `Delete source` (see
 never the Escape action. It is published in the overflow list, so it appears under `More...` together
 with `Skip all`, or as its own button before Cancel when it is the only overflow action (no menu holds
 fewer than two commands). The repeat checkbox applies to it only when the prompt says `Same size and
-date`.
+date`. The checkbox's localized tooltip and accessible help explicitly state that `Delete source`
+applies to all only when both files have the same size and date; other offered choices keep their
+existing repeat scope.
 
 A finished Move in which every item ended this way reads `Already there; source removed`, never
 `Moved`. The facts block adds `N already there, source removed` on the Result line.
@@ -2462,6 +2506,12 @@ Path-detail reconstruction retains its full text, selection/caret and logical Te
 Native text-input restoration requires both foreground and focus ownership by the popup or its
 children. A background update retains the logical target for a later explicit focus return and MUST
 NOT activate a text session. The pinned host's non-text no-focus flag is not general text-focus authority.
+The Commands Enter/Text positive fixture rechecks the popup's owned foreground and native
+focus immediately before Enter, after message-pumping work, using the same captured HWND
+observations for admission and diagnostics. Lost ownership fails that prerequisite before
+input; it grants no foreground reacquisition or skip. The existing FileOps path-detail
+ownership matrix and background reconstruction controls retain their distinct negative
+no-activation contract. Production ownership policy is unchanged.
 
 Every active prompt has one persistent, nonanimated localized state indicator. While facts are
 being decorated, use one `Chargement des détails pour la décision…` indicator and expose no
@@ -2518,7 +2568,7 @@ count and/or bytes; unknown facts are omitted rather than estimated. The publish
 | Recycle failure on a location without file identities (I35 R7.3) | Delete by name / Skip / Delete all remaining by name (multi-item task) / Cancel; the question is "Recycle Bin delete failed. This location can only delete by name." with the by-name consent note | Cancel |
 
 Eligible non-Recycle risks may expose `Apply to all` only for the exact task/risk/destination-root
-scope. Recycle never exposes it; its only broader scope is the explicit More action above. The prompt snapshot includes the deferred-consent marker, known
+scope. Recycle never exposes it; its only broader scope is the explicit task-scoped primary action above. The prompt snapshot includes the deferred-consent marker, known
 item/byte facts, and optional source/destination identity so tests and assistive presentation can
 distinguish a consent gate from an ordinary conflict without reading path text. An action not present
 in that immutable snapshot is rejected as Cancel. Closing the popup does not grant consent, persist a
@@ -2979,6 +3029,9 @@ retains selection by stable identity; removal clears it without selecting a dest
 Retain existing copy, export, navigation and hide/restore lifecycle contracts.
 A collision row whose decision showed both items' facts (see `Item comparison`) shows them in the
 detail: the summary line under the Problem, and each item's line under its Source or Destination path.
+Copied detail preserves those per-item size/date facts below the exact provider path, even when
+the rendered path omits a duplicate leaf name; it uses the same localized section labels and CRLF
+normalization as the other copied detail.
 
 Decisions and outcomes require typed producer data with task, item/prompt identity and generation;
 do not parse translated messages or join records by path alone. Extend the existing bounded diagnostic
@@ -3251,3 +3304,5 @@ route uses 32 nonempty sibling folders beyond the four-directory listing lookahe
 defined positive count/size prefixes, and visible text ink. Its 32-file/33-folder/64-MiB fixture
 and 2-MiB/s limit do not alter the five paired reproduction routes. The capture must finish while
 the same independently expected prefix remains open and recorded at the actual paint site.
+
+Selected dirty-workspace x64 Debug/Release diagnostic observations are archived in [Popup cadence diagnostic component observations](../TestRuns/4cb089111a23/FileOps/2026-11-14_074108_PopupCadenceDiagnostics/README.md). They retain actual scalar observer/reducer witnesses and source/receipt joins; they do not prove the historical hosted 13-render cause, an animation fix, performance improvement or Full qualification.

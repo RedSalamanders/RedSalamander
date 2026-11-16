@@ -4113,10 +4113,6 @@ using MoveDiscoveryReporter = std::function<void(bool isFolder, uint64_t sizeByt
         {
             return hr;
         }
-        if (attempt != 0u)
-        {
-            backupLeaf.append(std::format(L"-{}", attempt));
-        }
 
         const std::wstring backupPath = JoinMicrosoftDrivePath(destinationParentPath, backupLeaf);
         ItemMetadata existingBackup{};
@@ -6825,6 +6821,7 @@ HRESULT FileSystemMicrosoftDrive::BuildFileSystemRouteDescriptor(const wchar_t* 
     descriptor.namespaceKind                  = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
     descriptor.componentComparison            = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
     descriptor.caseOnlyRename                 = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.maxComponentUtf16              = 255u;
     descriptor.copyMoveMaxConcurrency         = 1u;
     descriptor.deleteMaxConcurrency           = 4u;
     descriptor.deleteRecycleBinMaxConcurrency = 1u;
@@ -10526,6 +10523,97 @@ void RunDebugDeepMergeIterativeSelfTest(unsigned int& passed, unsigned int& fail
                failed);
 }
 
+struct RollbackCollisionDebugContext final
+{
+    DebugGraphDrive* graph           = nullptr;
+    unsigned int collisionsRemaining = 0u;
+    unsigned int collisionCount      = 0u;
+    std::wstring firstCollisionPath;
+    std::wstring publishedBackupLeaf;
+};
+
+[[nodiscard]] HRESULT RollbackCollisionDebugHook(void* cookie,
+                                                 std::wstring_view method,
+                                                 std::wstring_view url,
+                                                 std::span<const HttpHeader> headers,
+                                                 std::string_view bodyUtf8,
+                                                 bool allowRetry,
+                                                 HttpResponse& responseOut) noexcept
+{
+    auto* context = static_cast<RollbackCollisionDebugContext*>(cookie);
+    if (context == nullptr || context->graph == nullptr)
+    {
+        return E_POINTER;
+    }
+    if (method == L"GET" && context->collisionsRemaining != 0u)
+    {
+        const std::wstring path = ExtractRootPathFromDebugUrl(url);
+        if (path.starts_with(L"/.redsalamander-rollback-"))
+        {
+            --context->collisionsRemaining;
+            ++context->collisionCount;
+            if (context->firstCollisionPath.empty())
+            {
+                context->firstCollisionPath = path;
+            }
+            context->graph->AddFile(path);
+        }
+    }
+    if (method == L"PATCH")
+    {
+        std::wstring parent;
+        static_cast<void>(TryReadDebugMoveBody(bodyUtf8, context->publishedBackupLeaf, parent));
+    }
+    return DebugGraphHook(context->graph, method, url, headers, bodyUtf8, allowRetry, responseOut);
+}
+
+void RunDebugOverwriteBackupCollisionSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"rollback collision test allocates a Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    for (const unsigned int collisionLimit : {1u, 16u})
+    {
+        DebugGraphDrive graph;
+        graph.AddFile(L"/dst.txt");
+        const std::wstring originalId = graph.ItemId(L"/dst.txt");
+        RollbackCollisionDebugContext collisions{.graph = &graph, .collisionsRemaining = collisionLimit};
+        DebugHttpRequestHookScope hook(RollbackCollisionDebugHook, &collisions);
+        DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+        DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+        ItemMetadata destination{};
+        const HRESULT metadataHr = GetItemMetadata(*fs, context, L"/dst.txt", false, destination);
+        std::wstring backupId;
+        const HRESULT hr = FAILED(metadataHr) ? metadataHr : PrepareOverwriteBackup(*fs, context, destination, L"/dst.txt", L"/", backupId);
+        DebugCheck(collisions.collisionCount == collisionLimit && graph.Exists(collisions.firstCollisionPath, false),
+                   L"rollback collision retries preserve every occupied generated sibling",
+                   passed,
+                   failed);
+        if (collisionLimit == 1u)
+        {
+            constexpr std::wstring_view kMarker = L".redsalamander-rollback-";
+            DebugCheck(hr == S_OK && backupId == originalId && collisions.publishedBackupLeaf.starts_with(kMarker) &&
+                           collisions.publishedBackupLeaf.size() == kMarker.size() + 32u &&
+                           JoinMicrosoftDrivePath(L"/", collisions.publishedBackupLeaf) != collisions.firstCollisionPath &&
+                           graph.ItemId(JoinMicrosoftDrivePath(L"/", collisions.publishedBackupLeaf)) == originalId,
+                       L"retry uses a fresh recognized 32-hex rollback shape and preserves the original destination identity",
+                       passed,
+                       failed);
+        }
+        else
+        {
+            DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && backupId.empty() && graph.ItemId(L"/dst.txt") == originalId &&
+                           graph.CountRequests(L"PATCH") == 0u,
+                       L"sixteen occupied rollback names fail closed without mutating the destination",
+                       passed,
+                       failed);
+        }
+    }
+}
+
 void RunDebugOverwriteCancelRestoresDestinationSelfTest(unsigned int& passed, unsigned int& failed)
 {
     wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
@@ -11210,6 +11298,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveDe
     RunDebugMoveRejectsInvalidOptionsSizeSelfTest(*passed, *failed);
     RunDebugNativeOnlyMoveModeSelfTest(*passed, *failed);
     RunDebugDeepMergeIterativeSelfTest(*passed, *failed);
+    RunDebugOverwriteBackupCollisionSelfTest(*passed, *failed);
     RunDebugOverwriteCancelRestoresDestinationSelfTest(*passed, *failed);
     RunDebugCommittedMoveCleanupFailureIsWarningSelfTest(*passed, *failed);
     RunDebugCredentialUrlValidationSelfTest(*passed, *failed);

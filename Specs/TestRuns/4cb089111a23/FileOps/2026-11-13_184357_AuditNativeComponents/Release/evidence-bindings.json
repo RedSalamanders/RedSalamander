@@ -1,0 +1,118 @@
+{
+  "source_commit": "535ffa40bd87d8b070e22cb2aa15fc70d038326a",
+  "source_snapshot": "9e97ca50d1f2f6f142156fafd97fa20cc5337de2589cbf7f3eea60536151cbf2",
+  "profile": "x64 test-enabled Release",
+  "receipt_id": "2354fa6e57b4050d001c295d11a1e6f305eb11c6cc8ca21853006cfe3f5bf1ea",
+  "receipt_sha256": "7504f44067b32455831c748c9be8e132936c7e377a77a49ab2e3de27fda1659b",
+  "historical_executable_output_sha256": "3012d6e756ce9cd2b3c200869b491b2522cd1f3a8105403812f0770e1c2971fa",
+  "runs": {
+    "Review": {
+      "run_id": "20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03",
+      "case_filter": "FileOps_ReviewRemediationContracts",
+      "source_commit": "535ffa40bd87d8b070e22cb2aa15fc70d038326a",
+      "snapshot_id": "9e97ca50d1f2f6f142156fafd97fa20cc5337de2589cbf7f3eea60536151cbf2",
+      "receipt_id": "2354fa6e57b4050d001c295d11a1e6f305eb11c6cc8ca21853006cfe3f5bf1ea",
+      "fingerprints_digest": "8dd2cc6b7e3978ec30057866ba5a63772ca5c02d5332ccd36c9f2766838d4bc5",
+      "plan_digest": "08c081e180680be10d8310fbd4a71227ac97205bcc10edcc85f436e6c7d70b9d",
+      "artifact_epoch": 0,
+      "native_counts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      "native_pid": 87292,
+      "native_exit": 0,
+      "runner_exit": 2,
+      "repository_verdict": "NOT_EVALUATED; filtered v1 diagnostic",
+      "summary_sha256": "17a949c27990c75711b44d34abd9dd76fa199a25c6da6a92f60d531c67cc6c10",
+      "archive_intent_sha256": "17a9c38e4a6ee171a35c925b79e51acdad1236c687e5a28503185dd2386d4fe9",
+      "archive_complete_sha256": "bd20f96a4a145fe459f86c3d5f6e84c0470a77d42e08ca0e2bddb52e581be3c3",
+      "raw_metrics_sha256": "d31523f5dd54e3aa20d43ca075f441c8d283b169994f524faa338d573137e98e",
+      "raw_bytes": 15291662,
+      "raw_rows": 44361,
+      "raw_first_utc": "2026-11-13T18:37:57.417Z",
+      "raw_last_utc": "2026-11-13T18:39:30.490Z",
+      "outer_started_utc": "2026-11-13T18:37:57.2053542Z",
+      "outer_ended_utc": "2026-11-13T18:39:40.9521536Z",
+      "native_metric_commit": "",
+      "metric_counts": {
+        "FileOps.Transfer.InsideSourceProbeUs": 23,
+        "FileOps.Conflict.LocalDistinctnessUnproved": 3,
+        "FileOps.Conflict.WaitCalls": 68,
+        "FileOps.SelfTest.LocalCrossRootDistinctness": 3,
+        "FileOps.SelfTest.LocalAncestryProbe": 1,
+        "FileOps.Power.ConflictWaitCalls": 6
+      },
+      "audit": {
+        "is_clean": false,
+        "issue_count": 100,
+        "categories": {
+          "unexpected-test-root-child": 19,
+          "stale-test-run-dir": 8,
+          "unexpected-test-run-dir": 73
+        },
+        "ownership": "Unproven for unrelated residue; no cleanup/root-clean claim/waiver."
+      },
+      "join": "Immutable full receipt, archived prelaunch FP/plan/decision, matching initial/after/final workspace, owned PID/executable/exit, contained raw timestamps and archive hashes. Summary is post-archive: separately hashed, not an inventory member. Current mutable output is not historical launch proof."
+    },
+    "Identity": {
+      "run_id": "20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+      "case_filter": "FileOps_IdentityInterlockWaiting",
+      "source_commit": "535ffa40bd87d8b070e22cb2aa15fc70d038326a",
+      "snapshot_id": "9e97ca50d1f2f6f142156fafd97fa20cc5337de2589cbf7f3eea60536151cbf2",
+      "receipt_id": "2354fa6e57b4050d001c295d11a1e6f305eb11c6cc8ca21853006cfe3f5bf1ea",
+      "fingerprints_digest": "6f1d9f5babbb23d5abc2c90c11037eaf92961cbceb16bdc1f1b45e98958c3356",
+      "plan_digest": "8aaace6b5a392d8bfc872f21ae97d4fcbc1ba6633193efbe9b5c47e37148552b",
+      "artifact_epoch": 0,
+      "native_counts": {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      "native_pid": 82904,
+      "native_exit": 0,
+      "runner_exit": 2,
+      "repository_verdict": "NOT_EVALUATED; filtered v1 diagnostic",
+      "summary_sha256": "ee78995eabe1ceae11a222aa14c06f8c890aab0949f738f3125235959333be7e",
+      "archive_intent_sha256": "89d007a75829d4d680469174c634c12f996f367da735e71a6bacdb82e9386fa8",
+      "archive_complete_sha256": "8399abde33458a42b3b97a045454a6de5d8a3e8dab3861400945e723dd02419c",
+      "raw_metrics_sha256": "8c5faf3ca743606d3f5683c767234077485753d60b41dcc8a74aa7969757a1dd",
+      "raw_bytes": 6318083,
+      "raw_rows": 18083,
+      "raw_first_utc": "2026-11-13T18:41:22.941Z",
+      "raw_last_utc": "2026-11-13T18:41:41.928Z",
+      "outer_started_utc": "2026-11-13T18:41:22.8720519Z",
+      "outer_ended_utc": "2026-11-13T18:41:52.0128151Z",
+      "native_metric_commit": "",
+      "metric_counts": {
+        "FileOps.SelfTest.QueueStartOrder.Us": 1,
+        "FileOps.Queue.Selector.BaselineBatchUs": 48,
+        "FileOps.Queue.Selector.CandidateBatchUs": 48,
+        "FileOps.Queue.Selector.CollectionCapacityBytes": 48
+      },
+      "audit": {
+        "is_clean": false,
+        "issue_count": 100,
+        "categories": {
+          "unexpected-test-root-child": 19,
+          "stale-test-run-dir": 8,
+          "unexpected-test-run-dir": 73
+        },
+        "ownership": "Unproven for unrelated residue; no cleanup/root-clean claim/waiver."
+      },
+      "join": "Immutable full receipt, archived prelaunch FP/plan/decision, matching initial/after/final workspace, owned PID/executable/exit, contained raw timestamps and archive hashes. Summary is post-archive: separately hashed, not an inventory member. Current mutable output is not historical launch proof."
+    }
+  },
+  "protocol": "queue_head_selector_v1",
+  "counts": {
+    "ancestry": 21,
+    "power": 6,
+    "crossroot": 3,
+    "pairs": 48,
+    "duration_rows": 96,
+    "capacity_rows": 48,
+    "AB": 24,
+    "BA": 24
+  },
+  "limits": "Blank native commits unchanged. No live-output verification asserted as historical proof. No uniform/p95/production queue-start/historical app/allocator calls/heap peak claim."
+}

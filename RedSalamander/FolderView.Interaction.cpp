@@ -191,6 +191,12 @@ LRESULT FolderView::OnKillFocusMessage(HWND newFocus) noexcept
 void FolderView::OnContextMenuMessage(HWND hwnd, LPARAM lParam)
 {
     SetFocus(hwnd);
+    DisarmPotentialDrag();
+    {
+        std::lock_guard lock(_errorOverlayMutex);
+        if (_errorOverlay && _errorOverlay->blocksInput)
+            return;
+    }
 
     POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
     const bool keyboardInvocation = pt.x == -1 && pt.y == -1;
@@ -460,6 +466,11 @@ void FolderView::OnMouseWheel(int delta, bool horizontal)
 
 void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
 {
+    // Capture the pre-press state before focus notifications can activate this pane.
+    const bool activating = ! _paneFocused;
+    SetFocus(_hWnd.get());
+    DisarmPotentialDrag();
+
     ErrorOverlayState overlay{};
     bool hasOverlay = false;
     {
@@ -499,12 +510,9 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
         }
     }
 
-    // An activating press reaches a pane that is drawn as not active. It makes the pane active and
-    // moves the current item, and a plain one keeps the selection the pane had. _paneFocused still
-    // holds the state before this press: the focus change below reaches it through a posted message.
-    const bool activating = ! _paneFocused;
-    SetFocus(_hWnd.get());
-    DisarmPotentialDrag();
+    // A plain activating press keeps the selection the pane had.
+    if (hasOverlay && overlay.blocksInput)
+        return;
 
     const auto hit = HitTest(pt);
     if (hit.has_value())
@@ -585,10 +593,14 @@ void FolderView::OnMButtonDown() noexcept
 
 void FolderView::OnLButtonDblClk(POINT pt, WPARAM keys)
 {
-    ExitIncrementalSearch();
-
     SetFocus(_hWnd.get());
     DisarmPotentialDrag();
+    {
+        std::lock_guard lock(_errorOverlayMutex);
+        if (_errorOverlay && _errorOverlay->blocksInput)
+            return;
+    }
+    ExitIncrementalSearch();
 
     const std::optional<size_t> hit = HitTest(pt);
     if (! hit.has_value() || hit.value() >= _items.size())
@@ -647,6 +659,8 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
         hasOverlay = _errorOverlay.has_value();
     }
 
+    if (hasOverlay)
+        DisarmPotentialDrag();
     if (hasOverlay && _alertOverlay)
     {
         const float xDip   = DipFromPx(pt.x);

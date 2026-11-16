@@ -1,0 +1,190 @@
+param([Parameter(Mandatory)][string]$RepoRoot)
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+Import-Module (Join-Path $RepoRoot 'Tools/Modules/Testing/TestSandbox.psm1')
+$root=& (Get-Module TestSandbox) {param($r) Assert-RSTestSandboxRootAuthorized -TestRoot Z:\RedSalamander.Perf -RepoRoot $r -RequireMarker} $RepoRoot
+$context=New-RSTestRunContext -RepoRoot $RepoRoot -TestRootOverride $root
+$env:REDSALAMANDER_TEST_ROOT=$root;$env:REDSALAMANDER_TEST_RUN_ID=$context.RunId
+$raw=Join-Path $context.RunRoot 'scratch/perf02'
+$env:TEMP=Join-Path $raw 'process-temp';$env:TMP=$env:TEMP
+[void][IO.Directory]::CreateDirectory($env:TEMP)
+[IO.File]::Copy($PSCommandPath,(Join-Path $raw 'recipe.ps1'))
+Start-Transcript -Path (Join-Path $raw 'execution.txt')
+Write-Output ('PERF02_RAW='+$raw)
+Import-Module (Join-Path $RepoRoot 'Tools/Modules/Testing/ValidationImpact.psm1')
+Import-Module (Join-Path $RepoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1')
+Import-Module (Join-Path $RepoRoot 'Tools/Tests/TestSupport.psm1')
+Import-Module (Join-Path $RepoRoot 'Tools/TerminalEvidence.psm1')
+$fp=Get-Module ValidationFingerprint;$sandbox=Get-Module TestSandbox
+$base=(& git -C $RepoRoot rev-parse HEAD).Trim()
+$sources=@{}
+$bindings=[Collections.Generic.List[object]]::new()
+foreach($relative in @('Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestSandbox.psm1','Tools/Run-AllTests.ps1')) {
+    $bytes=& $fp {param($r,$p) Invoke-RSValidationGitBinary -RepoRoot $r -Argument @('show',$p)} $RepoRoot "${base}:$relative"
+    $baselinePath=Join-Path $raw ('baseline-'+[IO.Path]::GetFileName($relative)+'.txt')
+    [IO.File]::WriteAllBytes($baselinePath,$bytes)
+    $candidatePath=Join-Path $raw ('candidate-'+[IO.Path]::GetFileName($relative)+'.txt')
+    [IO.File]::Copy((Join-Path $RepoRoot $relative),$candidatePath)
+    $sources[$relative]=@{baseline=[IO.File]::ReadAllText($baselinePath);candidate=[IO.File]::ReadAllText($candidatePath)}
+    $bindings.Add(@{path=$relative;baseline_sha256=(Get-FileHash $baselinePath).Hash.ToLowerInvariant();candidate_sha256=(Get-FileHash $candidatePath).Hash.ToLowerInvariant()})
+}
+$closure=@(Get-RSValidationDependencyClosure -RepoRoot $RepoRoot -RootRelativePath 'Tools/Run-AllTests.ps1')
+$dependencyRows=@($closure | Sort-Object | ForEach-Object {@{path=$_;sha256=(Get-FileHash -LiteralPath (Join-Path $RepoRoot $_)).Hash.ToLowerInvariant()}})
+$dependencyDigest=Get-RSCanonicalJsonDigest -InputObject $dependencyRows
+function Get-FunctionText([string]$Text,[string]$Name) {
+    $tokens=$null;$errors=$null
+    $ast=[Management.Automation.Language.Parser]::ParseInput($Text,[ref]$tokens,[ref]$errors)
+    if($errors.Count){throw "Parse failed: $Name"}
+    $definition=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $Name},$true)
+    if($null -eq $definition){throw "Function not found: $Name"}
+    return $definition.Extent.Text
+}
+$rows=[Collections.Generic.List[object]]::new()
+$fixture=Join-Path $raw 'git-fixture'
+[void][IO.Directory]::CreateDirectory($fixture)
+foreach($index in 0..255){[IO.File]::WriteAllText((Join-Path $fixture ('item-{0:000}.txt' -f $index)),('fixture-'+$index))}
+& git -C $fixture init --quiet
+& git -C $fixture -c user.name='Owned fixture' -c user.email='fixture@invalid.example' add -- .
+& git -C $fixture -c user.name='Owned fixture' -c user.email='fixture@invalid.example' commit --quiet -m 'immutable fixture'
+if($LASTEXITCODE){throw 'Fixture Git initialization failed'}
+$tree=(& git -C $fixture rev-parse HEAD).Trim()
+$baselineMap=Get-FunctionText $sources['Tools/Modules/Testing/ValidationFingerprint.psm1'].baseline 'Get-RSValidationGitObjectMap'
+$treeRows=& $fp {
+    param($BaselineText,$Fixture,$Tree)
+    Invoke-Expression ($BaselineText.Replace('function Get-RSValidationGitObjectMap','function Get-RSBaselineGitObjectMap'))
+    $script:perfOriginalGit=(Get-Item Function:Invoke-RSValidationGitBinary).ScriptBlock
+    $script:perfGitCounts=@{}
+    Set-Item Function:script:Invoke-RSValidationGitBinary {
+        param([string]$RepoRoot,[string[]]$Argument)
+        $operation=$Argument[0]
+        if(-not $script:perfGitCounts.ContainsKey($operation)){$script:perfGitCounts[$operation]=0}
+        $script:perfGitCounts[$operation]++
+        return ,(& $script:perfOriginalGit -RepoRoot $RepoRoot -Argument $Argument)
+    }
+    try {
+        foreach($block in 0..3){
+            $order=if($block%2 -eq 0){@('baseline','candidate')}else{@('candidate','baseline')}
+            foreach($variant in $order){
+                $script:HistoricalTreeMapCache.Clear();$script:perfGitCounts=@{}
+                $command=if($variant -eq 'baseline'){'Get-RSBaselineGitObjectMap'}else{'Get-RSValidationGitObjectMap'}
+                $watch=[Diagnostics.Stopwatch]::StartNew()
+                $historical1=& $command -RepoRoot $Fixture -Tree $Tree
+                $index1=& $command -RepoRoot $Fixture
+                [IO.File]::WriteAllText((Join-Path $Fixture 'new-index.txt'),'same staged mutation')
+                & git -C $Fixture add -- new-index.txt
+                if($LASTEXITCODE){throw 'Index mutation failed'}
+                $historical2=& $command -RepoRoot $Fixture -Tree $Tree
+                $index2=& $command -RepoRoot $Fixture
+                $watch.Stop()
+                if($historical1.Count -ne 256 -or $historical2.Count -ne 256 -or $index1.ContainsKey('new-index.txt') -or -not $index2.ContainsKey('new-index.txt')){throw 'Historical/index outcome mismatch'}
+                $projection=@($historical2.Keys | Sort-Object | ForEach-Object {@{path=$_;oid=$historical2[$_].Oid;mode=$historical2[$_].Mode;type=$historical2[$_].Type}})
+                [pscustomobject]@{scenario='immutable-tree-and-mutable-index';block=$block;variant=$variant;elapsed_ms=$watch.Elapsed.TotalMilliseconds;ls_tree_calls=$script:perfGitCounts['ls-tree'];ls_files_calls=$script:perfGitCounts['ls-files'];historical_rows=$historical2.Count;index_rows_before=$index1.Count;index_rows_after=$index2.Count;historical_digest=(Get-RSCanonicalJsonDigest -InputObject $projection);outcome='passed'}
+                & git -C $Fixture reset --quiet HEAD -- new-index.txt
+                Remove-Item -LiteralPath (Join-Path $Fixture 'new-index.txt')
+                if($LASTEXITCODE){throw 'Fixture index restore failed'}
+            }
+        }
+    } finally {Set-Item Function:script:Invoke-RSValidationGitBinary $script:perfOriginalGit}
+} $baselineMap $fixture $tree
+foreach($row in $treeRows){$rows.Add($row)}
+$treeRows | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $raw 'tree-rows.json')
+
+$baselineArchive=Get-FunctionText $sources['Tools/Modules/Testing/TestSandbox.psm1'].baseline 'Save-RSTestSandboxRunEvidence'
+$archiveRows=& $sandbox {
+    param($BaselineText,$Root,$Repository)
+    Invoke-Expression ($BaselineText.Replace('function Save-RSTestSandboxRunEvidence','function Save-RSBaselineRunEvidence'))
+    $script:perfOriginalInventory=(Get-Item Function:Get-RSTestRunArchiveInventory).ScriptBlock
+    $script:perfOriginalWrite=(Get-Item Function:Write-RSTestRunArchiveRecord).ScriptBlock
+    $script:perfScanCount=0;$script:perfFaultIntent=$false
+    Set-Item Function:script:Get-RSTestRunArchiveInventory {param([string]$RunRoot) $script:perfScanCount++; & $script:perfOriginalInventory -RunRoot $RunRoot}
+    Set-Item Function:script:Write-RSTestRunArchiveRecord {
+        param([string]$Path,[string]$Json)
+        & $script:perfOriginalWrite -Path $Path -Json $Json
+        if($script:perfFaultIntent -and [IO.Path]::GetFileName($Path) -ceq 'intent.json'){throw 'PERF02 injected interruption after durable intent'}
+    }
+    try {
+        foreach($block in 0..2){
+            $order=if($block%2 -eq 0){@('baseline','candidate')}else{@('candidate','baseline')}
+            foreach($variant in $order){
+                foreach($mode in @('fresh','recovery')){
+                    $fixture=New-RSTestRunContext -RepoRoot $Repository -TestRootOverride $Root
+                    [void][IO.Directory]::CreateDirectory((Join-Path $fixture.RunRoot 'payload'))
+                    foreach($index in 0..31){[IO.File]::WriteAllText((Join-Path $fixture.RunRoot ('payload/item-{0:00}.txt' -f $index)),('p'*4096))}
+                    [IO.File]::WriteAllText((Join-Path $fixture.RunRoot 'payload/empty.txt'),'')
+                    $command=if($variant -eq 'baseline'){'Save-RSBaselineRunEvidence'}else{'Save-RSTestSandboxRunEvidence'}
+                    $interruption=$null
+                    if($mode -eq 'recovery'){
+                        $script:perfFaultIntent=$true
+                        try {& $command -TestRoot $Root -RunId $fixture.RunId | Out-Null} catch {$interruption=$_.Exception.Message}
+                        finally {$script:perfFaultIntent=$false}
+                        if($interruption -notlike '*PERF02 injected interruption*'){throw 'Recovery precondition was not exercised'}
+                    }
+                    $script:perfScanCount=0
+                    $watch=[Diagnostics.Stopwatch]::StartNew()
+                    $saved=& $command -TestRoot $Root -RunId $fixture.RunId
+                    $watch.Stop()
+                    $scans=$script:perfScanCount
+                    $records=Join-Path $Root "evidence/run-archive-records/$($fixture.RunId)"
+                    $intent=Get-Content (Join-Path $records 'intent.json') -Raw | ConvertFrom-Json
+                    $complete=Get-Content (Join-Path $records 'complete.json') -Raw | ConvertFrom-Json
+                    $actual=@(& $script:perfOriginalInventory -RunRoot $saved.RunRoot)
+                    $intended=ConvertTo-Json -InputObject @($intent.inventory) -Depth 16 -Compress
+                    $observed=ConvertTo-Json -InputObject $actual -Depth 16 -Compress
+                    if($intended -cne $observed -or (Test-Path -LiteralPath $fixture.RunRoot) -or $complete.intent_sha256 -ine (Get-FileHash (Join-Path $records 'intent.json')).Hash){throw 'Archive outcome/inventory mismatch'}
+                    [pscustomobject]@{scenario=('archive-'+$mode);block=$block;variant=$variant;elapsed_ms=$watch.Elapsed.TotalMilliseconds;inventory_scans=$scans;inventory_rows=$actual.Count;run_id=$fixture.RunId;intent_sha256=$complete.intent_sha256;source_absent=$true;destination_verified=$true;interruption=$interruption;outcome='passed'}
+                }
+            }
+        }
+    } finally {Set-Item Function:script:Get-RSTestRunArchiveInventory $script:perfOriginalInventory;Set-Item Function:script:Write-RSTestRunArchiveRecord $script:perfOriginalWrite}
+} $baselineArchive $root $RepoRoot
+foreach($row in $archiveRows){$rows.Add($row)}
+$archiveRows | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $raw 'archive-rows.json')
+
+# Execute the actual post-build production block, including real manifest/schema
+# and native project XML validation. Prebuild validation is outside measured work.
+$beforeSnapshot=Get-RSWorkspaceSnapshot -RepoRoot $fixture
+[IO.File]::WriteAllText((Join-Path $fixture 'changed-snapshot.txt'),'changed owned snapshot')
+$afterSnapshot=Get-RSWorkspaceSnapshot -RepoRoot $fixture
+if($beforeSnapshot.snapshot_id -ceq $afterSnapshot.snapshot_id){throw 'Changed snapshot control did not change identity'}
+$prebuiltManifest=Read-RSValidationImpactManifest -Path (Join-Path $RepoRoot 'Tools/validation-impact.json') -SchemaPath (Join-Path $RepoRoot 'Specs/Testing/ValidationImpact.schema.json') -RepoRoot $RepoRoot
+$graphPaths=@(& git -C $RepoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+$prebuiltGovernance=Test-RSValidationImpactGovernance -Manifest $prebuiltManifest -TrackedPaths $graphPaths -RepoRoot $RepoRoot
+if(-not $prebuiltGovernance.IsValid){throw 'Actual repository governance precondition failed'}
+$blocks=@{}
+foreach($variant in @('baseline','candidate')) {
+    $text=$sources['Tools/Run-AllTests.ps1'][$variant]
+    $anchor=$text.IndexOf('$entryFingerprintRows = @($entryFingerprintRecord.entries)')
+    if($anchor -lt 0){throw 'Post-build entry fingerprint anchor absent'}
+    $start=if($variant -eq 'baseline'){$text.IndexOf('$impactManifest = Read-RSValidationImpactManifest',$anchor)}else{$text.IndexOf('if ($null -ne $prebuildWorkspaceSnapshot -and',$anchor)}
+    $end=$text.IndexOf('$durationEstimates = Get-RSValidationDurationEstimates',$start)
+    if($start -lt 0 -or $end -le $start){throw 'Governance production block was not found'}
+    $blocks[$variant]=[scriptblock]::Create($text.Substring($start,$end-$start))
+}
+$originalRead=Get-Command Read-RSValidationImpactManifest
+$originalGovernance=Get-Command Test-RSValidationImpactGovernance
+function Read-RSValidationImpactManifest {param($Path,$SchemaPath,$RepoRoot) $script:readCount++; & $originalRead @PSBoundParameters}
+function Test-RSValidationImpactGovernance {param($Manifest,$TrackedPaths,$RepoRoot) $script:governanceCount++; & $originalGovernance @PSBoundParameters}
+function Exit-RSInvalidRunnerInvocation {param($Message) throw $Message}
+foreach($block in 0..2){
+    $order=if($block%2 -eq 0){@('baseline','candidate')}else{@('candidate','baseline')}
+    foreach($variant in $order){
+        foreach($mode in @('identical','changed')){
+            $repoRoot=$RepoRoot;$prebuildWorkspaceSnapshot=$beforeSnapshot;$prebuildManifest=$prebuiltManifest
+            $initialWorkspaceSnapshot=if($mode -eq 'identical'){$beforeSnapshot}else{$afterSnapshot}
+            $script:readCount=0;$script:governanceCount=0
+            $watch=[Diagnostics.Stopwatch]::StartNew()
+            . $blocks[$variant]
+            $watch.Stop()
+            $manifestDigest=Get-RSCanonicalJsonDigest -InputObject $impactManifest
+            $rows.Add([pscustomobject]@{scenario=('governance-'+$mode);block=$block;variant=$variant;elapsed_ms=$watch.Elapsed.TotalMilliseconds;manifest_reads=$script:readCount;governance_evaluations=$script:governanceCount;manifest_digest=$manifestDigest;tracked_graph_inputs=$graphPaths.Count;outcome='passed'})
+        }
+    }
+}
+$summary=@{schema='red-salamander.perf02-component-pair.v1';base_commit=$base;machine_hash=(Get-RSTestMachineHash);pwsh_version=$PSVersionTable.PSVersion.ToString();os_architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString();run_id=$context.RunId;dependency_closure_digest=$dependencyDigest;dependency_rows=$dependencyRows;target_bindings=@($bindings);fixture_commit=$tree;rows=@($rows);scope='component operations and exact production governance block; no native build or full-run speedup claim'}
+$summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $raw 'results.json') -Encoding utf8
+foreach($binding in $bindings){if((Get-FileHash (Join-Path $RepoRoot $binding.path)).Hash -ine $binding.candidate_sha256){throw "Frozen target changed: $($binding.path)"}}
+$afterDependencies=@($closure | Sort-Object | ForEach-Object {@{path=$_;sha256=(Get-FileHash -LiteralPath (Join-Path $RepoRoot $_)).Hash.ToLowerInvariant()}})
+if((Get-RSCanonicalJsonDigest -InputObject $afterDependencies) -cne $dependencyDigest){throw 'Imported dependency closure changed during pair'}
+Write-Output ('ROWS='+$rows.Count)
+Write-Output ('RESULTS='+ (Join-Path $raw 'results.json'))
+Stop-Transcript

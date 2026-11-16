@@ -1,5 +1,33 @@
 # Official Build Toolchain Identity
 
+## Build discovery and preparation failures
+
+Every guarded standalone resource-satellite ProjectReference must have the same
+satellite in its owning solution project's ProjectDependencies. Solution builds
+disable those references when CurrentSolutionConfigurationContents is populated,
+so the explicit solution graph must preserve all locales for selected application,
+configuration, plugin and test builds.
+
+Host-ordered MSBuild executable discovery is shared by the ordinary build and DxUi
+SDK artifact reopener. Within one selected installation it prefers native 64-bit,
+then runnable 64-bit emulation, then x86; x64 hosts never select ARM64 executables.
+Explicit GitHub workflow-selected MSBuild remains independently validated and bound
+to its original receipt hash. SDK consumer preflight uses the same sanitized,
+contained, dependency-scoped invocation and `/nr:false` policy as compilation.
+The shared workflow-selection helper gives an explicit `MSBUILD_EXE_PATH` priority
+and refuses invalid selections without fallback. With that variable absent, a valid
+PATH-selected MSBuild chooses its own installation and host-ordered executable before
+latest-instance discovery. Build, SDK reopen and vcpkg dependency installation preserve
+that same PATH-only installation even when another registered instance is newer.
+Direct vcpkg callers retain their existing explicit-path installation parser; executable
+admission for builds and SDK artifacts remains subject to the stricter shared helper.
+
+Pinned DxUi restoration uses the current PowerShell executable, performs read-only
+Git status checks without optional index locks, and serializes the complete native
+policy identity without truncating its nested fields. A failed explicit Clean stops
+the build before compilation and receipt publication. Rebuild already cleans its
+selected graph and must not receive a second preceding Clean pass.
+
 ## Explicit local SDK application builds
 
 `Tools/Build-LocalSdkCandidate.ps1` builds the Release application and its plugin
@@ -31,6 +59,21 @@ caller-supplied shared endpoint aliases cannot couple independent owned jobs.
 The existing contained-process environment block transports that endpoint without
 changing native arguments, flags, process identity or ownership/cleanup rules.
 Low-level controlled service-lifetime probes retain their explicit fixture PSI.
+
+Background dependency installation and the sanitized SDK/MSBuild wrapper use the
+existing `Invoke-RSStreamingProcess` route with both streams captured and
+`CreateNoWindow=true`, retaining artifact-operation delegation, dependency/profile
+locks, literal arguments, child environment and exact exit status. Do not send
+these callers through the uncaptured interactive `Invoke-RSProcess` route: a
+console child of a no-console parent can otherwise create a secondary console
+window/default-terminal UX. A hidden inbox console-server association may remain
+with a no-window launch; its process count is diagnostic, not a zero-count gate. The
+ordinary interactive `build.ps1` path and shared helper defaults remain unchanged.
+Receipt vcpkg identity and hosted cache keys cover the complete installer/manifest,
+safety/tool/discovery/lock/streaming/environment and pinned-engine policy dependency
+closure; source mutation controls and the workflow parity guard keep those sets
+aligned. The launch suppresses that secondary window/handoff path, but does not identify
+the creator or payload of a historical foreign terminal or grant cleanup rights.
 
 Local tools require `.ci-engine` restored at the exact `.ci/project.json` commit,
 including Source builds. CI restores this pinned dependency automatically. Shared
@@ -141,6 +184,38 @@ Consumers import `Build/RedSalamander.DxUi.props` and `.targets`; they never enu
 The root build restores the exact source with `Tools/Modules/Build/DxUiDependency.psm1`, or developers
 can use `Tools/Restore-DxUi.ps1` before an IDE build. Restore owns the repository/platform dependency
 lease, contains its native child processes and leaves sibling repositories unchanged.
+Read-only source identity (HEAD, status and public-header tree) and post-checkout status use the existing
+contained `Invoke-RSStreamingProcess` boundary, never bare PowerShell native-command invocation.
+The private `Invoke-RSDxUiSourceGitCapture` projection resolves the first Git Application, forwards literal
+arguments and an explicit working directory, captures stdout/stderr as separate silent line arrays, and
+returns the actual child exit code. Status retains `--no-optional-locks` and normal untracked-file checks;
+pin, dirty-source and failed-restore rules remain fail-closed. These queries do not delegate artifact-write
+authority or alter the parent environment. Canonical child decoding/line normalization is reused; callers
+join and trim only the HEAD/tree values. No secondary console window/default-terminal UX is requested;
+an inbox console-server association may still exist. This launch-policy guarantee does not identify the
+creator of a historical foreground process. Candidate-only guarded Git controls and counterfactual source
+guards live in `Tools/Tests/DxUiDependency.Tests.ps1` and `Tools/Tests/TestHarnessSourceContracts.Tests.ps1`.
+The captured-Git fixture enters strict test scope and requires one real canonical Script
+module resolved in the consumer session, its expected normalized path, and a FunctionInfo
+export whose owner is that exact PSModuleInfo by reference. Missing, lookalike, foreign or
+ambiguous candidates fail before interception/launch; module GUIDs and Pester proxy ownership
+are not loaded-instance identity. All five recorded safe starts remain the independent
+behavioral routing proof, with no dependency reimport over the hook.
+The same private `Invoke-RSDxUiReadOnlyCapture` backend serves the consumer compiler-host
+MSBuild query and the test-local VSwhere/MSBuild metadata probes. It preserves literal
+arguments and filesystem working directory, returns actual exit status, and keeps silent
+stdout separate from stderr so diagnostics cannot become a compiler-host value or JSON.
+The Git wrapper alone resolves the first Git Application. Metadata fixture controls preflight
+the actual contained starter before each launch, retain exact job/PSI observations, and
+evaluate imports or an owned definition-list target without compiling product code.
+Fixture diagnostic retention requires active script-owned audit state and the canonical
+containment check for each derived recorder file. An inherited record-path variable grants
+no output authority; cleanup restores the prior audit state and environment.
+The restore fixture supplies its own synthetic consumer-identity module; these controls do
+not execute the pinned upstream identity helper. H8's producer-owned capture/backend closure is
+qualified separately by producer validation; fresh byte-verified consumer builds remain pending.
+Neither local fixtures nor producer success alone establish complete consumer build-launch acceptance. No hidden
+console-server absence, historical creator or foreground-restoration guarantee is inferred.
 The clone enables Git long paths twice: a process-level `-c core.longpaths=true` covers `git init`, which copies its
 template hooks before the new repository has a configuration, and `clone -c` stores the setting in that repository so every
 later git command on the checkout (the clean-source check) works from a deep consumer root. User and global Git
@@ -286,7 +361,8 @@ Ghostty lifecycle module and its complete direct/indirect helper closure, the
 canonical Ghostty product lock and schema, the current private-runtime patch, the
 complete notice-input set, and `RuntimeDependencies.props`.
 This includes `ArtifactOperationLock.psm1` for closed-package path guards and
-`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation.
+`DxUiDependency.psm1`/`ProcessStreaming.psm1` imported by canonical JSON validation,
+and `MSBuildInvocation.psm1` imported by the dependency owner.
 `Get-RSGhosttyRuntimeIdentityInputPaths` owns that exact closure and
 `ReleaseWorkflowPolicy.Tests.ps1` compares it with the workflow key; adding or
 removing a behavioral input
@@ -566,6 +642,20 @@ graph, runtime dependency identity, output sizes/digests, and declared runtime c
 Any missing, malformed, incompatible, aliased, reparse-routed, semantically inconsistent,
 or byte-mismatched artifact fails closed.
 
+Repeated successful publication with the same complete governing identity is idempotent.
+The candidate must pass complete canonical-object/schema and receipt-semantic validation,
+including excluded timing and diagnostic fields. The existing record must independently
+pass the canonical reader and the same semantic checks. Compare the complete canonical
+governing projections, not only receipt IDs or projection hashes. When they match, retain
+the first immutable record and atomically republish that exact canonical record to the
+pointer; do not replace its original timestamps, duration or diagnostic path spelling with
+the later candidate's metadata. Actual later build intervals remain in their build logs.
+First publication uses create-only record I/O, so a concurrent winner causes failure rather
+than replacement. Malformed/noncanonical stored bytes, invalid candidates or different
+governing projections fail before pointer mutation. `Read-RSBuildReceipt` retains its full
+record and byte-for-byte pointer equality check; idempotency grants no artifact, source,
+profile, portable or qualification exception.
+
 When an official workflow builds in one job and tests a downloaded artifact in another,
 the producer first revalidates every receipt output's regular-file status, size, and
 SHA-256, verifies the receipt-bound canonical toolchain record, then copies exactly those
@@ -733,6 +823,10 @@ Updating vcpkg dependencies is therefore a manual, single reviewed change:
 3. Prove availability with the governed installer gate: `vcpkg-install.ps1` against the new tool and baseline on a clean
    restore, and the offline pin contract (`Tools/Tests/VcpkgInstallSafety.Tests.ps1`), which checks each floor and
    override against the immutable builtin-baseline version database; those data checks do not attest a live executable checkout.
+   Their offline object reader may reuse the existing DxUi consumer output's vcpkg object store through the
+   canonical resolved-output helper after checking the complete dependency source pin, output identity and pinned
+   microsoft/vcpkg origin. The store's active checkout is not the baseline authority: the exact requested
+   RedSalamander baseline, tree and blob IDs must be present and verified without fetching or moving refs.
 4. Merge only with a green CI build.
 
 The governed installer pins every triplet it builds to the Visual Studio installation and the default MSVC toolset the
@@ -934,13 +1028,12 @@ DxUi is public: exact-pin HTTPS source restore requires no PAT or Actions secret
 public Actions API access were verified on 2026-09-09. CI can use its automatic read-only job token
 for advisory API rate limits; unavailable/rate-limited advisory queries never change or reject the pin.
 
-The native matrix is selected per event: pull requests build x64 Debug and ARM64 Debug,
-pushes to `main` add both Release profiles, and ASan Debug runs from `asan.yml`. Each
-job builds the test-enabled solution, verifies the ASAN defect probe where selected,
-then uses the receipt-gated runner in that same job with the suite named by the
-reusable workflow's `test_suite` input (`PR` on pull requests and pushes to `main`;
-`CI` on the nightly `nightly-ci.yml` matrix and the weekly ASan lane, which never runs
-on pull requests; `Full` remains the local closeout gate). Cross-job nightly/package handoffs still require portable attestation.
+Hosted scheduling and scope selection follow [Build_UnifiedCI.md](Build_UnifiedCI.md).
+Pull requests run compiler-free checks; admitted main native Release regression runs on
+x64 and ARM64 before production. Explicit manual native and ASan qualification use
+their configured profiles and architectures without advancing main qualification.
+In-product tests require test-enabled receipt-bound artifacts; ASan retains its
+seeded detector requirement. Cross-job/package handoffs still require portable attestation.
 Runtime execution is rejected if host architecture differs from the selected target.
 No custom DxUi secret is required; the public pin restores through HTTPS.
 
@@ -1052,3 +1145,112 @@ and Terminal satellite producers. A selected build may consequently build the
 application when it is a real test input. Existing warm output is never evidence
 that an undeclared dependency is available on a clean profile. Runtime staging
 continues through `RuntimeDependencies.props` and the shared MSBuild targets.
+
+### Captured local Visual Studio metadata
+
+The VSwhere probes in Tools/Restore-DxUi.ps1, build.ps1 Find-MSBuild and
+Get-RSVcpkgVisualStudioInstallation are metadata, including when their parent is
+noninteractive. They use Invoke-RSCapturedProcess over the canonical contained
+Invoke-RSStreamingProcess boundary: literal arguments, explicit current filesystem
+working directory, separate silent stdout/stderr and actual exit, with no artifact
+write delegation. Public restore and vcpkg discovery refuse a nonzero query exit;
+root build discovery retains its documented next-strategy fallback. Preserve
+workflow-selected fast paths, query selection and native-host preference.
+This metadata policy does not change real interactive MSBuild or installer
+console inheritance. The shared projection cannot establish that an executable
+is read-only; its callers own that bounded policy. A repaired launch path is not
+proof of the creator or cause of a historical foreground surface.
+
+### Qualified API4 process-capture Source consumption
+
+`Dependencies/DxUi.lock.json` selects API revision 4 at qualified DxUi
+[`7fb2ab71852087d93b3a3e5b3ba504c37f56267c`](https://github.com/RedSalamanders/DxUi/tree/7fb2ab71852087d93b3a3e5b3ba504c37f56267c).
+Exact-source [producer validation](https://github.com/RedSalamanders/DxUi/actions/runs/43769081609)
+and [formatting](https://github.com/RedSalamanders/DxUi/actions/runs/43769081636)
+passed. Its complete normal paired P/T8 study retained all 144 reports and passed
+the trusted-policy gate with all 24 exact-budget slots held. These producer results
+establish the source-adoption prerequisite; they do not qualify this consumer's ABI,
+headers/archive combination, build outputs, platform behavior or desktop/Full suites.
+
+The pinned CI engine has no distributed qualified SDK for this immutable source
+(SDK NotDistributed). Use canonical Source restore/build, without `-SdkRoot`, and
+resolve its checkout through the existing source helper and 16-character directory
+key. Do not reuse another source's SDK, add a descriptor/allowlist exception, or
+change the native toolchain or CI engine to obtain it. Restore matching public
+headers and build the archive using this consumer's actual compiler, CRT and
+configuration. API revision equality is not ABI or consumer qualification.
+Fresh full-solution receipts and exact header/archive/output-byte verification,
+native ARM64 evidence and separate desktop/Full acceptance remain required.
+The API4 policy seed grants no cooking API5/version6 qualification; no cooking
+port is part of this adoption.
+
+### Background Git metadata and provisioning launch closure
+
+Run-AllTests' three tracked build-graph reads, hosted stock-preparation HEAD and
+vcpkg-tool HEAD/probe queries use the canonical contained, sanitized no-window
+capture boundary, with literal arguments, concurrent separate streams and actual
+exit checks. Failed graph discovery refuses governance admission rather than
+silently supplying an empty graph. Stock preparation gains no additional desktop
+or foreign-window authority from its HEAD query.
+
+Scoped planning, tool/spec inventories and snapshot/archive provenance also remain
+usable for their existing bootstrap queries without a restored CI engine. Their
+finite private transport exceptions are cataloged in Core_SharedHelpers and guarded
+before launch: no shell/window, both pipes drained, exact exit and owned process
+cleanup. Raw JSON/NUL/binary readers are not converted to line projections; ordered
+stdin batches retain their existing encoding, newline and EOF contract. These
+exceptions preserve inherited environments and introduce no public process API.
+
+The vcpkg provisioning wrapper can clone, fetch and checkout under its existing
+provisioning/dependency locks. It uses delegated streaming, retaining inherited
+artifact-write authority and its existing merged diagnostic projection; never
+route those writes through the read-only/no-delegation projection. The optional
+cat-file existence query uses actual captured exit to preserve fetch/recheck behavior.
+Real MSBuild/installer interactive console inheritance is unchanged. Full cache and
+receipt closures already include the changed safety/identity/streaming dependencies;
+source identity invalidates reuse without a new key, cache purge or engine change.
+No launch-policy correction establishes a historical Terminal creator or a speedup.
+
+Known Git text stdout is UTF-8 independently of the caller's console code page.
+The specialized engine-independent transports select that stdout decoder explicitly.
+Canonical Invoke-RSCapturedProcess/Invoke-RSStreamingProcess expose one optional
+per-child StandardOutputEncoding override, selected by known Git callers (including
+the DxUi Git projection and delegated vcpkg provisioning). The default remains
+unchanged for MSBuild, VSwhere, installers and arbitrary metadata; stderr decoding,
+ordered stdin encoding, inherited environment and raw binary readers are unchanged.
+Production code never changes global Console.OutputEncoding to decode a child.
+Actual Unicode Git path controls run under CP437 and UTF-8 and restore the caller;
+an earlier controlled UTF-8-only pass did not establish the CP437 path contract.
+
+Fingerprint/archive line-and-stdin queries share the one internal, import-free
+Testing/GitMetadataCapture.psm1 transport. Domain wrappers forward @PSBoundParameters
+unchanged, preserving omitted versus empty stdin; other distinct policies stay local.
+Scheduled compiler-free Git fixture calls use the named TestSupport fixture helper
+in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
+No temporary/global Git shim substitutes for a production fix. Existing tests do not
+rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.
+### Silent formatter metadata and explicit fixture payloads
+
+`format-all.ps1 -WhatIf` retains its PowerShell 7 and Git bootstrap contract: tracked-file
+enumeration uses the import-free Git metadata transport and does not restore the CI
+engine, acquire a formatter or rewrite source. The formatter module's internal
+`Invoke-RSClangFormatCapture` owns native EXE version queries and the already-admitted
+per-file formatting invocation. It preserves arguments, caller working directory,
+diagnostic decoding and actual exits while disabling shell/window creation and draining
+both streams concurrently. The root command retains its existing `ShouldProcess`
+boundary, exact pin check, one invocation per selected file and complete failure list.
+Capture does not grant source-write authority. No CMD fallback is part of this formatter
+contract.
+
+The shared engine-free Git transport's optional `PrefixArguments` retains command-local
+global options before `-C <root>`; its default is empty. The Ghostty candidate metadata
+adapter uses this only to preserve its existing `-c core.longpaths=true` order. Status
+HEAD lookup and candidate inventory remain read-only; no Ghostty runtime pin, build,
+package or publication behavior changes.
+
+The real vcpkg bootstrap batch remains an inherited interactive installer payload.
+`Invoke-RSVcpkgBootstrapPayload` is a private invocation seam with the original routing
+and actual returned exit; the initializer retains its managed-path locks, executable
+marker check and nonzero failure. Test fixtures replace only that launcher with an
+explicit owned no-window `cmd.exe` boundary that executes the real batch and preserves
+its arguments, marker and exit, including failure 19.

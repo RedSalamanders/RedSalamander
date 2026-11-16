@@ -1324,7 +1324,8 @@ function Save-RSTestSandboxRunEvidence {
                 }
             }
         }
-        if ([IO.File]::Exists($intentPath)) {
+        $intentExistedBefore = [IO.File]::Exists($intentPath)
+        if ($intentExistedBefore) {
             $intent = Get-Content -LiteralPath $intentPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             if ($intent.schema -ne 'red-salamander.run-archive.v1' -or $intent.source -cne $source -or $intent.destination -cne $destination) {
                 throw "Run archive intent does not match the selected sandbox/run: $intentPath"
@@ -1341,8 +1342,10 @@ function Save-RSTestSandboxRunEvidence {
         }
         $expected = ConvertTo-Json -InputObject @($intent.inventory) -Depth 16 -Compress
         if ([IO.Directory]::Exists($source)) {
-            $actual = ConvertTo-Json -InputObject @(Get-RSTestRunArchiveInventory -RunRoot $source) -Depth 16 -Compress
-            if ($actual -cne $expected) { throw "Run archive source changed after intent; retaining it: $source" }
+            if ($intentExistedBefore) {
+                $actual = ConvertTo-Json -InputObject @(Get-RSTestRunArchiveInventory -RunRoot $source) -Depth 16 -Compress
+                if ($actual -cne $expected) { throw "Run archive source changed after intent; retaining it: $source" }
+            }
             # Fresh checks, no recursive move/copy or overwrite. Both endpoints are on the same marked volume.
             foreach ($path in @($source, $destination)) {
                 [void](Assert-RSTestSandboxContainedPath -TestRoot $root -Path $path -RequireDescendant)

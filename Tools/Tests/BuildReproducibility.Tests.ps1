@@ -9,6 +9,8 @@ Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Fo
 Import-Module (Join-Path $repoRoot 'Tools\Tests\TestSupport.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1') -ErrorAction Stop
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\ProcessStreaming.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\MSBuildInvocation.psm1') -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\BuildEvidence.psm1') -ErrorAction Stop
 
 function Assert-RSThrowsMatching {
     param(
@@ -368,26 +370,19 @@ Describe 'Root format-all command ownership and preview' {
         [IO.File]::WriteAllText((Join-Path $fixture 'Dependencies/RedMonitor.lock.json'),
             $lockJson)
 
-        $gitOutput = @(& git -C $fixture init -q -b main 2>&1)
+        $gitOutput = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'init'; '-q'; '-b'; 'main') 2>&1)
         $LASTEXITCODE | Should Be 0
         foreach ($setting in @(@('user.name', 'Formatter fixture'), @('user.email', 'format@fixture.invalid'),
                 @('core.hooksPath', (Join-Path $fixture '.no-hooks')), @('core.autocrlf', 'false'))) {
-            [void](& git -C $fixture config @setting 2>&1)
+            [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'config'; $setting) 2>&1)
             $LASTEXITCODE | Should Be 0
         }
-        [void](& git -C $fixture add --all 2>&1)
+        [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'add'; '--all') 2>&1)
         $LASTEXITCODE | Should Be 0
 
-        $formatterPath = Join-Path $fixture 'fake-clang-format.cmd'
-        $formatterLog = Join-Path $fixture 'formatter-invocations.txt'
-        [IO.File]::WriteAllText($formatterPath,
-            '@echo off' + "`r`n" +
-            'if "%1"=="--version" (' + "`r`n" +
-            '  echo clang-format version 22.1.3' + "`r`n" +
-            '  exit /b 0' + "`r`n" +
-            ')' + "`r`n" +
-            'echo %*>>"%RS_FORMATTER_LOG%"' + "`r`n" +
-            'exit /b 0' + "`r`n")
+        $formatterFixture = New-RSTestFormatterFixture
+        $formatterPath = $formatterFixture.Executable
+        $formatterLog = $formatterFixture.LogPath
         $installerLog = Join-Path $fixture 'installer-invocations.txt'
         $installer = Join-Path $fixture 'Tools/Install-ClangFormat.ps1'
         [IO.File]::WriteAllText($installer,
@@ -409,6 +404,7 @@ Describe 'Root format-all command ownership and preview' {
                 & (Join-Path $repoRoot 'format-all.ps1') -RepositoryRoot $fixture -WhatIf
                 Test-Path -LiteralPath $installerLog | Should Be $false
                 Test-Path -LiteralPath $formatterLog | Should Be $false
+                Test-Path -LiteralPath $formatterFixture.AuditPath | Should Be $false
                 (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
                 (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() |
                     Should Be ((Get-Content -LiteralPath (Join-Path $fixture 'Dependencies/RedMonitor.lock.json') -Raw | ConvertFrom-Json).files[0].sha256)
@@ -419,6 +415,13 @@ Describe 'Root format-all command ownership and preview' {
                 $invocations | Should Match 'sample with spaces\.cpp'
                 $invocations | Should Not Match 'Client\.h|TestRuns|\.codex'
                 @($invocations -split '\r?\n' | Where-Object { $_ }).Count | Should Be 1
+                $nativeAudit = @(Get-Content -LiteralPath $formatterFixture.AuditPath | ForEach-Object { $_ | ConvertFrom-Json })
+                $nativeAudit.Count | Should Be 2
+                foreach ($row in $nativeAudit) {
+                    $row.consolePresent | Should Be $false
+                    $row.consoleVisible | Should Be $false
+                    $row.workingDirectory | Should Be $foreignDirectory
+                }
                 (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
             } finally {
                 Pop-Location
@@ -659,7 +662,7 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '''--x-install-root'',\s*\$env:VCPKG_INSTALLED_DIR'
         $ci | Should Match '&\s+"\$env:VCPKG_ROOT\\vcpkg\.exe"\s+@vcpkgArguments'
         $ci | Should Match '\$vcpkgRoot\s*=\s*Join-Path \$env:VCPKG_INSTALLED_DIR \$triplet'
-        $ci | Should Match "hashFiles\('vcpkg\.json', 'vcpkg-tool\.json', 'vcpkg-install\.ps1', 'Tools/Modules/Build/VcpkgInstallSafety\.psm1', 'Build/vcpkg-ports/\*\*'\)"
+        $ci | Should Match "hashFiles\('vcpkg\.json',\ 'vcpkg-configuration\.json',\ 'vcpkg-tool\.json',\ 'vcpkg-install\.ps1',\ 'Tools/Modules/Build/VcpkgInstallSafety\.psm1',\ 'Tools/Modules/Build/VcpkgToolIdentity\.psm1',\ 'Tools/Modules/Build/MSBuildInvocation\.psm1',\ 'Tools/Modules/Build/ArtifactOperationLock\.psm1',\ 'Tools/Modules/Build/ProcessStreaming\.psm1',\ 'Tools/Modules/Build/SanitizedEnvironment\.psm1',\ '\.ci/project\.json',\ 'Build/vcpkg-ports/\*\*'\)"
         $ci | Should Match 'id:\s*toolchain_identity'
         $ci | Should Match 'Get-RSBuildToolchainIdentity'
         @($ci | Select-String -Pattern 'steps\.toolchain_identity\.outputs\.digest' -AllMatches).Matches.Count | Should Be 2
@@ -708,7 +711,8 @@ Describe 'Pinned build-tool and CI identity' {
 
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
         $buildScript | Should Match '(?s)Get-RSBuildIdentityBundle.+?-Platform\s+\$Platform\s+-Configuration\s+\$Configuration'
-        $buildScript | Should Match '(?s)GITHUB_ACTIONS.+?MSBUILD_EXE_PATH.+?GetFullPath.+?return\s+@\{.+?Method\s*=\s*"MSBUILD_EXE_PATH"'
+        $buildScript | Should Match '\$workflowSelected = Get-RSWorkflowSelectedMSBuild'
+        $buildScript | Should Match 'if \(\$null -ne \$workflowSelected\) \{ return \$workflowSelected \}'
         $buildScript | Should Match 'Publish-RSBuildToolchainIdentity'
         $buildScript | Should Match 'ToolchainIdentity\.schema\.json'
         $buildScript | Should Match '(?s)New-RSBuildArtifactRecord.+?-LiteralPath\s+\$toolchainIdentityPath'
@@ -749,7 +753,17 @@ Describe 'Pinned build-tool and CI identity' {
         $adapter | Should Match 'Import-Module.*HostedTestDesktop'
         $nightly = Get-Content (Join-Path $repoRoot '.github/workflows/nightly-ci.yml') -Raw
         $nightly | Should Match 'workflow_dispatch:'
-        $nightly | Should Match 'options: \[Full, CommandsHandoff, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]'
+        $scopeInput = '(?m-i)^      scope:\r?\n        description:[^\r\n]+\r?\n        type: choice\r?\n        options: \[Full, CommandsHandoff, CommandsUiAttribution, FileOpsVolumes, ViewerSpaceCapture, R0ePaired, DesktopProbe\]\r?\n        default: Full\s*$'
+        $platformInput = '(?m-i)^      platform:\r?\n        description:[^\r\n]+\r?\n        type: choice\r?\n        options: \[All, x64, ARM64\]\r?\n        default: All\s*$'
+        $platformForward = '(?m-i)^      platform: \$\{\{ inputs\.platform \}\}\s*$'
+        $nightly | Should Match $scopeInput
+        $nightly | Should Match $platformInput
+        $nightly | Should Match $platformForward
+        $nightly.Replace(', CommandsUiAttribution', '') | Should Not Match $scopeInput
+        $nightly.Replace('DesktopProbe]', 'DesktopProbe, UnreviewedScope]') | Should Not Match $scopeInput
+        $nightly.Replace('All, x64, ARM64]', 'All, x64, ARM64, Win32]') | Should Not Match $platformInput
+        $nightly.Replace('default: All', 'default: ARM64') | Should Not Match $platformInput
+        $nightly.Replace('platform: '+[char]36+'{{ inputs.platform }}', 'platform: ARM64') | Should Not Match $platformForward
         $nightly | Should Match '(?m)^        default: Full\s*$'
         $nightly | Should Match '(?m)^      scope: \$\{\{ inputs\.scope \}\}\s*$'
         $nightly | Should Not Match 'schedule:|pull_request:|push:'
@@ -825,7 +839,7 @@ Describe 'Workflow-selected MSBuild identity' {
         $functions.Count | Should Be 1
         $find = $functions[0].Body.GetScriptBlock()
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath)[0]
+        $installation = @(Invoke-RSTestFixtureNative -FilePath $vswhere -Arguments @('-latest'; '-prerelease'; '-products'; '*'; '-requires'; 'Microsoft.Component.MSBuild'; '-property'; 'installationPath'))[0]
         $hostFolder = if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'){'arm64'}else{'amd64'}
         $real = Join-Path $installation ('MSBuild/Current/Bin/'+$hostFolder+'/MSBuild.exe')
         (Get-Item -LiteralPath $real).VersionInfo.FileMajorPart | Should BeGreaterThan 17
@@ -844,7 +858,7 @@ Describe 'Workflow-selected MSBuild identity' {
             [void][IO.Directory]::CreateDirectory((Split-Path $wrongLayout))
             Copy-Item -LiteralPath $real -Destination $wrongLayout
             $env:MSBUILD_EXE_PATH = $wrongLayout
-            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            Assert-RSThrowsMatching { & $find } 'not an existing Visual Studio 2026 executable'
             # Keep valid version metadata but use a different binary identity.
             # Native ARM64 installs can keep task hosts/managed assemblies in the
             # parent Bin directory. Require a real VS18 counterexample there too.
@@ -865,12 +879,80 @@ Describe 'Workflow-selected MSBuild identity' {
             (Get-Item -LiteralPath $other).VersionInfo.OriginalFilename | Should Not Be 'MSBuild.exe'
             Copy-Item -LiteralPath $other -Destination $fixture -Force
             $env:MSBUILD_EXE_PATH = $fixture
-            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            Assert-RSThrowsMatching { & $find } 'not an existing Visual Studio 2026 executable'
             $env:MSBUILD_EXE_PATH = Join-Path $TestDrive 'missing/MSBuild.exe'
-            Assert-RSThrowsMatching { & $find } 'does not exist'
+            Assert-RSThrowsMatching { & $find } 'not an existing Visual Studio 2026 executable'
         } finally {
             $env:GITHUB_ACTIONS = $savedActions
             $env:MSBUILD_EXE_PATH = $savedMsbuild
         }
+    }
+}
+
+Describe 'Vcpkg captured-launch cache closure' {
+    BeforeAll {
+        $script:vcpkgCommonInputs = @(
+            'vcpkg.json'
+            'vcpkg-configuration.json'
+            'vcpkg-tool.json'
+            'vcpkg-install.ps1'
+            'Tools/Modules/Build/VcpkgInstallSafety.psm1'
+            'Tools/Modules/Build/VcpkgToolIdentity.psm1'
+            'Tools/Modules/Build/MSBuildInvocation.psm1'
+            'Tools/Modules/Build/ArtifactOperationLock.psm1'
+            'Tools/Modules/Build/ProcessStreaming.psm1'
+            'Tools/Modules/Build/SanitizedEnvironment.psm1'
+            '.ci/project.json'
+        )
+    }
+    BeforeEach {
+        Mock Get-RSBuildToolchainIdentity -ModuleName BuildEvidence { [pscustomobject]@{ Record=@{}; Digest=('0' * 64) } }
+        Mock Get-RSGitSourcePaths -ModuleName BuildEvidence { @() }
+        Mock Get-RSGhosttyRuntimeIdentityDigest -ModuleName BuildEvidence { '0' * 64 }
+    }
+
+    It 'keeps the local common inputs and workflow cache bound to the full installer import closure' {
+        $tokens=$null; $errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Modules/Build/BuildEvidence.psm1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $function=$ast.Find({param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Get-RSBuildIdentityBundle'
+        },$true)
+        $assignment=$function.Find({param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+            $node.Left.VariablePath.UserPath -ceq 'vcpkgInputs' -and $node.Operator -eq 'Equals'
+        },$true)
+        $actual=@($assignment.Right.FindAll({param($node)
+            $node -is [Management.Automation.Language.StringConstantExpressionAst]
+        },$true) | ForEach-Object Value)
+        ($actual -join '|') | Should Be ($script:vcpkgCommonInputs -join '|')
+        $workflow=[IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/build-reusable.yml'))
+        $cache=[regex]::Match($workflow,'(?m)^\s*key:.*-vcpkg-.*hashFiles\((?<inputs>[^\r\n]+?)\)')
+        $cache.Success | Should Be $true
+        $cacheInputs=@([regex]::Matches($cache.Groups['inputs'].Value,"'(?<path>[^']+)'") | ForEach-Object { $_.Groups['path'].Value })
+        ($cacheInputs -join '|') | Should Be ((@($script:vcpkgCommonInputs)+@('Build/vcpkg-ports/**')) -join '|')
+    }
+
+    It 'changes the actual vcpkg identity when any installer launcher dependency or pin changes' {
+        $fixture=Join-Path $TestDrive 'vcpkg-launch-closure'
+        foreach($relative in $script:vcpkgCommonInputs) {
+            $path=Join-Path $fixture $relative
+            [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
+            [IO.File]::WriteAllText($path,'initial fixture input')
+        }
+        $baseline=(Get-RSBuildIdentityBundle -RepoRoot $fixture -MSBuildPath 'fixture-not-executed.exe' -Platform x64 -Configuration Debug).VcpkgIdentityDigest
+        foreach($relative in $script:vcpkgCommonInputs) {
+            $path=Join-Path $fixture $relative
+            try {
+                [IO.File]::WriteAllText($path,'changed fixture input')
+                $changed=(Get-RSBuildIdentityBundle -RepoRoot $fixture -MSBuildPath 'fixture-not-executed.exe' -Platform x64 -Configuration Debug).VcpkgIdentityDigest
+                $changed | Should Not Be $baseline
+            } finally {
+                [IO.File]::WriteAllText($path,'initial fixture input')
+            }
+        }
+        (Get-RSBuildIdentityBundle -RepoRoot $fixture -MSBuildPath 'fixture-not-executed.exe' -Platform x64 -Configuration Debug).VcpkgIdentityDigest | Should Be $baseline
+        Assert-MockCalled Get-RSBuildToolchainIdentity -ModuleName BuildEvidence -Times 13 -Exactly -Scope It
     }
 }

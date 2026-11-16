@@ -234,11 +234,98 @@ function Write-RSMSBuildStreamingLine {
     }
 }
 
+function Get-RSHostOrderedMSBuildRelativePaths {
+    # Bin\MSBuild.exe is the 32-bit x86 MSBuild. The VC toolset derives the compiler host from the
+    # MSBuild process architecture and downgrades arm64/x64 hosts it cannot see, so every discovery
+    # strategy prefers the native 64-bit MSBuild of this host, then every other 64-bit executable
+    # the host can run (ARM64 Windows emulates x64; x64 Windows cannot run arm64\), and only then
+    # an x86 executable.
+    $isArm64Host = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'
+    [string[]]$candidates = if ($isArm64Host) {
+        @('MSBuild\Current\Bin\arm64\MSBuild.exe', 'MSBuild\Current\Bin\amd64\MSBuild.exe')
+    } else {
+        @('MSBuild\Current\Bin\amd64\MSBuild.exe')
+    }
+    return $candidates + [string[]]@(
+        'MSBuild\15.0\Bin\amd64\MSBuild.exe',
+        'MSBuild\Current\Bin\MSBuild.exe',
+        'MSBuild\15.0\Bin\MSBuild.exe'
+    )
+}
+
+function Resolve-RSHostOrderedMSBuildPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    # A PATH hit from a developer prompt is usually the x86 MSBuild\Current\Bin\MSBuild.exe; map
+    # it to the best host-ordered executable of the same installation when one exists.
+    $match = [regex]::Match($Path, '^(?<root>.+?)\\MSBuild\\(?:Current|15\.0)\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$', 'IgnoreCase')
+    if (-not $match.Success) { return $Path }
+    foreach ($relative in Get-RSHostOrderedMSBuildRelativePaths) {
+        $candidate = Join-Path $match.Groups['root'].Value $relative
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return $Path
+}
+
+function Find-RSHostOrderedMSBuildInInstallation {
+    param([Parameter(Mandatory = $true)][string]$InstallationPath)
+
+    foreach ($relative in Get-RSHostOrderedMSBuildRelativePaths) {
+        $candidate = Join-Path $InstallationPath $relative
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Get-RSMSBuildFileVersion {
+    param([Parameter(Mandatory)][string]$Path)
+    return [Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+}
+
+function Get-RSWorkflowSelectedMSBuild {
+    # Workflow selection precedes discovery. An explicit selection is authoritative
+    # and fails closed; a PATH-only compatibility candidate must pass the same
+    # binary/layout checks after applying host ordering within its own installation.
+    if ($env:GITHUB_ACTIONS -ne 'true') { return $null }
+    $explicit = -not [string]::IsNullOrWhiteSpace($env:MSBUILD_EXE_PATH)
+    if ($explicit) {
+        $candidate = [IO.Path]::GetFullPath($env:MSBUILD_EXE_PATH)
+    } else {
+        $command = Get-Command msbuild.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $command -or -not $command.Source) { return $null }
+        $candidate = Resolve-RSHostOrderedMSBuildPath -Path $command.Source
+    }
+    $layout = [regex]::Match($candidate, '^(?<root>.+?)\\MSBuild\\Current\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$', 'IgnoreCase')
+    $version = $null
+    if ($layout.Success -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        try { $version = Get-RSMSBuildFileVersion -Path $candidate }
+        catch { if ($explicit) { throw "Cannot identify workflow-selected MSBuild: $candidate. $($_.Exception.Message)" } }
+    }
+    if (-not $layout.Success -or $null -eq $version -or $version.FileMajorPart -lt 18 -or
+        $version.OriginalFilename -ine 'MSBuild.exe') {
+        if ($explicit) { throw "Workflow-selected MSBuild is not an existing Visual Studio 2026 executable: $candidate" }
+        return $null
+    }
+    $method = if ($explicit) { 'MSBUILD_EXE_PATH' } else { 'PATH' }
+    return @{
+        Path = $candidate
+        InstallationPath = $layout.Groups['root'].Value
+        Version = "MSBuild $($version.FileMajorPart) ($method)"
+        Method = $method
+    }
+}
+
 Export-ModuleMember -Function @(
     'Test-RSInteractiveTerminal',
     'Get-RSMSBuildInvocationPlan',
     'Get-RSMSBuildDiagnosticSummary',
     'Write-RSMSBuildDiagnosticSummary',
     'Get-RSMSBuildLineForegroundColor',
-    'Write-RSMSBuildStreamingLine'
+    'Write-RSMSBuildStreamingLine',
+    'Get-RSHostOrderedMSBuildRelativePaths',
+    'Resolve-RSHostOrderedMSBuildPath',
+    'Find-RSHostOrderedMSBuildInInstallation',
+    'Get-RSWorkflowSelectedMSBuild'
 )

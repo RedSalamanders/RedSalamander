@@ -1,0 +1,45 @@
+{
+  "kind": "Derived queue selector component evidence",
+  "protocol": "queue_head_selector_v1",
+  "source": "535ffa40bd87d8b070e22cb2aa15fc70d038326a",
+  "sourceSnapshot": "9e97ca50d1f2f6f142156fafd97fa20cc5337de2589cbf7f3eea60536151cbf2",
+  "buildFlavor": "Release",
+  "platform": "x64",
+  "receipt": "2354fa6e57b4050d001c295d11a1e6f305eb11c6cc8ca21853006cfe3f5bf1ea",
+  "receiptPath": "Z:\\src\\.worktrees\\RS-audit20261113\\.build\\x64\\Release\\receipts\\2354fa6e57b4050d001c295d11a1e6f305eb11c6cc8ca21853006cfe3f5bf1ea.json",
+  "executableSha256": "3012d6e756ce9cd2b3c200869b491b2522cd1f3a8105403812f0770e1c2971fa",
+  "nativeRunId": "20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae",
+  "nativeProcessId": 82904,
+  "nativeProcessExit": 0,
+  "runnerExit": 2,
+  "selectedCase": "FileOps_IdentityInterlockWaiting",
+  "machineHash": [
+    "4cb089111a23"
+  ],
+  "nativeCommitFields": [
+    ""
+  ],
+  "rawPerfPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "rawPerfSha256": "8c5faf3ca743606d3f5683c767234077485753d60b41dcc8a74aa7969757a1dd",
+  "summaryPath": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "summarySha256": "ee78995eabe1ceae11a222aa14c06f8c890aab0949f738f3125235959333be7e",
+  "pairCount": 48,
+  "durationRows": 96,
+  "capacityRows": 48,
+  "baselineFirstPairs": 24,
+  "candidateFirstPairs": 24,
+  "candidateSlowerPairs": 6,
+  "equalPairs": 3,
+  "baselineZeroUsSamples": 0,
+  "candidateZeroUsSamples": 1,
+  "auditIsClean": false,
+  "auditIssueCount": 100,
+  "caveats": [
+    "Same-binary component comparison against the frozen baseline implementation; not a reconstructed historical application.",
+    "Capacity bytes are observed temporary collection capacity, not allocation calls, heap peak, or latency.",
+    "Includes common stores/locks/timer and baseline capacity adapter overhead; tiny samples can be timer/code-generation dominated.",
+    "All four samples per cohort, including zeros and regressions, are retained; no p95 or production queue-start latency conclusion.",
+    "Native commit fields are retained verbatim; source binds through the verified full receipt and sealed runner evidence.",
+    "Sandbox audit false/list is retained, not waived; repository qualification remains NOT_EVALUATED."
+  ]
+}

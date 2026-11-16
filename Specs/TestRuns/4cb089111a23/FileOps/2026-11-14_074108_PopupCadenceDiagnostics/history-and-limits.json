@@ -1,0 +1,67 @@
+{
+  "kind": "Historical failures and component limits; original custody is unchanged",
+  "hosted084": {
+    "packet_index_sha256": "3606a0dde2cd1fdeddc91a12018c4b2273d9cc7a3110b1ab985dff5f9a7dbc11",
+    "ARM64": {
+      "commands_skipped": 5,
+      "commands_failed": 3,
+      "boundary_aborted": true,
+      "commands_passed": 963,
+      "fileops_executed": false,
+      "native_run": "20261114T030036Z-10376-933320090bf647dcb0ff10718d18fd3c",
+      "final_full_summary": false,
+      "assertion_probe_executed": false
+    },
+    "run": 43544978035,
+    "result": "Both native architectures FAILED",
+    "comparison": "Different hosted hardware/process/order, no observer: not an equal-work baseline",
+    "x64": {
+      "passed": 2875,
+      "skipped": 65,
+      "perf_sha256": "e3f84de700179050840dfbaa1147a950c764e485c55b1950dd1ff6687148e4ae",
+      "v2_sha256": "262069c8ee6b5a67f6ac47b6226b346a1e479ebb0ace356a6cdd096bfb08f878",
+      "paused_copy": {
+        "ticks": 2,
+        "renders": 13,
+        "owner_ticks": 2
+      },
+      "failed_case": "FileOps_PopupIdleCadence",
+      "native_run": "20261114T030412Z-7736-9f40edcaa6f245ba85842c51deb2a3ba",
+      "failed": 1
+    },
+    "head": "084085b367f7905e74d98b3252f83ccf68bd329d"
+  },
+  "canonical_admission_failure": {
+    "cause": "Missing TestRunPlan facade export for Assert-RSTestQuarantineClean",
+    "run": "20261114T070511Z-4236-770e331975cf4d97a751ec9cc0a92bf3",
+    "callback_launched": false,
+    "native_launched": false,
+    "proof_sha256": "1e1cbb3ca2b6553d3ba1f8be8f52ffa7c03008d0fe3f8d11e788283c96b19507",
+    "source": "dirty28 snapshot89fef7"
+  },
+  "private_driver_setup_failures": {
+    "native_case_launched": false,
+    "distinct_from_canonical_failure": true,
+    "causes": [
+      "Global helper hidden after nested Force import",
+      "Get-Module without All found no top-level module"
+    ]
+  },
+  "other_history": "Earlier source726 Full failures and compiler-free development failures remain in the ACTIVE I65 ledger and original immutable custody; this packet does not supersede them",
+  "limits": [
+    "Two single x64 profile observations, not a timing pair",
+    "Historical13-render cause not proved or fixed; no animation fix or speedup",
+    "Observer overhead and reducedMotionfalse only",
+    "Blank native metric commit preserved; source joins use actual dirty snapshot/receipt/archive",
+    "No Full, ARM64, production, actor attribution, future-commit or portable receipt acceptance",
+    "Four broad local desktop gates, SMB and applicable I60 NAS remain pending; expired focus window grants no new authority"
+  ],
+  "publication_semantic_check": {
+    "failed_context": "20261114T080451Z-49616-6573ddffb55f477782aded659c77d865",
+    "stage": "Strict original archive member join,before archive gates",
+    "finding": "Two v1 aggregates are generated after original native archive; they were absent from its intent",
+    "native_or_writer_change": false,
+    "repair": "Authored projection distinguishes34original inventory members and2separately retained late controls with current-time exact-copy custody",
+    "native_execution": "none"
+  }
+}

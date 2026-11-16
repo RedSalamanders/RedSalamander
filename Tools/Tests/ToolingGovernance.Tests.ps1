@@ -388,8 +388,11 @@ Describe 'Repository tooling governance' {
             $failures.Add("Tools/GenerateDebugIcons.ps1: executable source must declare exactly the reviewed locally owned debug-icon output.")
         }
         $trackedOutputPaths = @($expectedDebugOutputs | ForEach-Object { $_ -replace '\\+', '/' })
-        $trackedDebugOutputs = @(& git -C $script:RepoRoot ls-files -- $trackedOutputPaths)
-        if ($LASTEXITCODE -ne 0 -or $trackedDebugOutputs.Count -ne 1) {
+        Import-Module (Join-Path $script:RepoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
+        $trackedOutputCapture = Invoke-RSCapturedProcess -FilePath 'git' -WorkingDirectory $script:RepoRoot `
+            -Arguments (@('-C', $script:RepoRoot, 'ls-files', '--') + $trackedOutputPaths) -StandardOutputEncoding ([Text.UTF8Encoding]::new($false))
+        $trackedDebugOutputs = @($trackedOutputCapture.StdOut)
+        if ($trackedOutputCapture.ExitCode -ne 0 -or $trackedDebugOutputs.Count -ne 1) {
             $failures.Add('Tools/GenerateDebugIcons.ps1: the reviewed local debug-icon output must remain tracked.')
         }
         if ($iconSource -notmatch '(?s)if\s*\(\s*-not\s*\(Test-Path\s+\$InputIconPath\)\s*\)\s*\{\s*throw\s+"Input icon not found:') {

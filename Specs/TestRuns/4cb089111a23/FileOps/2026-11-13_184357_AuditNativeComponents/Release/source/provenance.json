@@ -1,0 +1,9 @@
+{
+  "candidate_commit": "535ffa40bd87d8b070e22cb2aa15fc70d038326a",
+  "candidate_queue_git_blob": "3dd667af96feb83b794ab591d29f46a1b2592b7e",
+  "candidate_queue_source_sha256": "dd4424a1ee9daced584b5d07bf186eacc9e942f91f2c71125a6d2ee4f82710fb",
+  "baseline_commit": "78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e",
+  "baseline_excerpt": "historical-debug/source-excerpts/baseline-selector-78a8a75c4.txt",
+  "baseline_excerpt_sha256": "88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a",
+  "adaptation": "Actual production helper candidate versus private frozen allocation/dedup/sort baseline. Symmetric per-call ID plus relaxed atomic capacity outputs. Baseline capacity/local adapter, common stores, nested mutex, timer and compiler costs included. Setup/assertion/format/emission outside spans."
+}

@@ -5869,12 +5869,71 @@ private:
                       compactExecutorSource.find("RefuseByNameRootHeldByAnotherTask(") != std::string::npos,
                   L"A delete by name (I35 R7.3) must start only from an Unsupported root binding, pin corroboration facts through the identity-delete "
                   L"contract, ask its own card, refuse a path another live task holds, and delete only through DeleteIfIdentity.");
-    state.Require(executorSource.find("cleanupRecord.authority.kind == FILESYSTEM_BOUND_DIRECTORY") != std::string::npos &&
-                      executorSource.find("cleanupError.value() == static_cast<DWORD>(ERROR_DIR_NOT_EMPTY)") != std::string::npos &&
-                      executorSource.find("source directory gained or retained an unselected child") != std::string::npos &&
-                      executorSource.find("managedMove && mutationResult.managedSourceRetained && SUCCEEDED(itemHr)") != std::string::npos,
-                  L"Managed Move must retain a bound source directory whose membership changed after discovery, avoid a misleading cleanup prompt, and "
-                  L"propagate source-kept through successful nested results.");
+    const std::vector<std::string_view> managedCleanupBodies = SourceFunctionBodies(compactExecutorSource, "HRESULTFinalizeManagedSourceCleanup(");
+    const std::string_view managedCleanupBody                = managedCleanupBodies.size() == 1u ? managedCleanupBodies.front() : std::string_view{};
+    const std::vector<std::string_view> retainedDirectoryBodies =
+        SourceFunctionBodies(managedCleanupBody,
+                             "if(cleanupRecord.authority.kind==FILESYSTEM_BOUND_DIRECTORY&&cleanupError.has_value()&&"
+                             "cleanupError.value()==static_cast<DWORD>(ERROR_DIR_NOT_EMPTY))");
+    const std::string_view retainedDirectoryBody = retainedDirectoryBodies.size() == 1u ? retainedDirectoryBodies.front() : std::string_view{};
+    const size_t cleanupPrompt                   = managedCleanupBody.find("BeginConflictPrompt(");
+    const size_t retainedDirectory               = managedCleanupBody.find(retainedDirectoryBody);
+    state.Require(
+        managedCleanupBodies.size() == 1u && retainedDirectoryBodies.size() == 1u && cleanupPrompt != std::string_view::npos &&
+            retainedDirectory < cleanupPrompt && retainedDirectoryBody.size() <= cleanupPrompt - retainedDirectory &&
+            retainedDirectoryBody.find("MarkManagedSourceRetained(sourcePath,destinationPath,deleteHr,"
+                                       "FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_FOLDER_CHILDREN});"
+                                       "cleanupRecord.armed=false;cleanupRecord.authority={};returnS_OK;") != std::string_view::npos &&
+            retainedDirectoryBody.find("BeginConflictPrompt(") == std::string_view::npos,
+        L"Managed Move must retain a bound source directory whose membership changed after discovery, record its localized reason, disarm and release its "
+        L"cleanup authority, and return before any cleanup prompt.");
+
+    const std::vector<std::string_view> retainedSourceBodies   = SourceFunctionBodies(compactExecutorSource, "voidMarkManagedSourceRetained(");
+    const std::vector<std::string_view> sequentialFinishBodies = SourceFunctionBodies(compactExecutorSource, "HRESULTFinishSequentialDirectoryFrame(");
+    const std::vector<std::string_view> sequentialChildBodies  = SourceFunctionBodies(compactExecutorSource, "HRESULTAcceptSequentialChildResult(");
+    const std::string_view sequentialRetainedBranch =
+        sequentialFinishBodies.size() == 1u
+            ? SourceBetween(sequentialFinishBodies.front(), "if(frame.hadRetainedChild||", "RestoreSequentialDirectoryMetadata(frame);")
+            : std::string_view{};
+    state.Require(retainedSourceBodies.size() == 1u &&
+                      retainedSourceBodies.front().find("managedSourceRetained.store(true,std::memory_order_release);"
+                                                        "managedSourceRetentionGeneration.fetch_add(1,std::memory_order_acq_rel);") != std::string_view::npos &&
+                      sequentialFinishBodies.size() == 1u &&
+                      sequentialRetainedBranch.find("managedSourceRetentionGeneration.load(std::memory_order_acquire)!=frame.retentionGenerationBefore)") !=
+                          std::string_view::npos &&
+                      sequentialRetainedBranch.find("returnS_FALSE;") != std::string_view::npos &&
+                      sequentialRetainedBranch.find("FinalizeManagedSourceCleanup(") == std::string_view::npos && sequentialChildBodies.size() == 1u &&
+                      sequentialChildBodies.front().find("if(hr==S_FALSE){parent.hadRetainedChild=true;returnS_OK;}") != std::string_view::npos,
+                  L"Managed source retention must advance its generation and propagate successful retained children through sequential ancestors without "
+                  L"another cleanup.");
+
+    const std::vector<std::string_view> parallelReleaseBodies = SourceFunctionBodies(compactExecutorSource, "constautoreleaseDirectory=");
+    state.Require(
+        parallelReleaseBodies.size() == 1u &&
+            parallelReleaseBodies.front().find(
+                "if(sourceCleanupPermitted&&managedSourceRetentionGeneration.load(std::memory_order_acquire)!=directory->retentionGenerationBefore)"
+                "directory->complete.store(false,std::memory_order_release);if(directory->complete.load(std::memory_order_acquire)&&sourceCleanupPermitted)") !=
+                std::string_view::npos &&
+            parallelReleaseBodies.front().find("if(managedSourceRetentionGeneration.load(std::memory_order_acquire)!=directory->retentionGenerationBefore)"
+                                               "directory->complete.store(false,std::memory_order_release);") != std::string_view::npos &&
+            parallelReleaseBodies.front().find("elseif(directory->parent)directory->parent->complete.store(false,std::memory_order_release);") !=
+                std::string_view::npos,
+        L"Parallel Managed Move must observe retention before and after exact directory cleanup and keep containing source directories.");
+
+    const std::vector<std::string_view> managedSourceKeptBodies =
+        SourceFunctionBodies(compactExecutorSource, "elseif(managedMove&&mutationResult.managedSourceRetained&&SUCCEEDED(itemHr))");
+    const std::vector<std::string_view> qualifiedResultBodies = SourceFunctionBodies(compactExecutorSource, "constautostoreQualifiedItemResult=");
+    const std::vector<std::string_view> successfulRetainedResultBodies =
+        qualifiedResultBodies.size() == 1u
+            ? SourceFunctionBodies(qualifiedResultBodies.front(), "elseif(succeeded||(managedSourceRetained&&SUCCEEDED(status)))")
+            : std::vector<std::string_view>{};
+    state.Require(managedSourceKeptBodies.size() == 1u &&
+                      managedSourceKeptBodies.front().find("hadCopyOnly.store(true,std::memory_order_release);itemHr=S_FALSE;") != std::string_view::npos &&
+                      qualifiedResultBodies.size() == 1u && successfulRetainedResultBodies.size() == 1u &&
+                      successfulRetainedResultBodies.front().find(
+                          "if(_operation==FILESYSTEM_COPY||strategy==FileOperations::OperationStrategy::CopyOnly||managedSourceRetained)"
+                          "{result.sourceDisposition=FileOperations::SourceDisposition::Retained;}") != std::string_view::npos,
+                  L"Successful Managed Move source retention must become S_FALSE and preserve the typed Retained source disposition in its item result.");
     state.Require(
         executorSource.find("CreateOwnedLinkStage") != std::string::npos && executorSource.find("sourceBinding->ReadBoundLink") != std::string::npos &&
             executorSource.find("destinationBinding->CreateExclusiveLink") != std::string::npos &&

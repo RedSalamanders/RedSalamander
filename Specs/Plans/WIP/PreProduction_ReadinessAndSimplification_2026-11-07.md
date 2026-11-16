@@ -1,10 +1,10 @@
 # I60 Pre-production readiness, defect remediation, and bounded simplification
 
-> **NON-NORMATIVE ACTIVE PLAN.** Execution roadmap and implementation-ready remediation specification for the 2026-11-07 pre-production review across `main`, active release-blocking pull requests (`PR #200` and `PR #201`), and `origin/ci-state`. Current product behavior, build/release gates, ABI stability, and testing contracts remain governed by [AGENTS.md](../../../AGENTS.md), the [Specification Authority Catalog](../../README.md), public headers under `Common/PlugInterfaces/`, machine schemas/manifests, and the normative domain contracts linked below.
+> **NON-NORMATIVE ACTIVE PLAN.** Execution roadmap and implementation-ready remediation specification for the 2026-11-07 pre-production review across `main`, then-active release-blocking pull requests (`PR #200` and `PR #201`), and `origin/ci-state`. Current product behavior, build/release gates, ABI stability, and testing contracts remain governed by [AGENTS.md](../../../AGENTS.md), the [Specification Authority Catalog](../../README.md), public headers under `Common/PlugInterfaces/`, machine schemas/manifests, and the normative domain contracts linked below.
 
 ## Status and scope
 
-- **State:** ACTIVE — owner design review complete (`D-01`–`D-12` locked in); ready for implementation; implementation has not started.
+- **State:** ACTIVE — owner design review complete (`D-01`–`D-12` locked in). PR #201 has since merged; that merge does not establish the required W5.1–W5.4 local and physical NAS qualification or close the pre-production gate. Reconcile each wave and its evidence before changing any gate state.
 - **Priority:** P0 pre-production release gate.
 - **Owner:** release engineering and subsystem maintainers (coordinate per wave with the existing indexed owners listed in [Section 2](#2-ownership-and-coordination-with-active-plans)).
 - **Planned at:** `main` commit `79d861652d065b3559f6a23eb7ff9e98e476e0f5` (2026-11-07) and revised at `main` commit `56dc3d74c117cec0205ffefbd5d2eb79eb032f5a` (2026-11-07, clean checkout), cross-checked against remote CI state `origin/ci-state` (`3ea5d9b66c26f70bb3b8745ac48da33e22e34c6e`), open `PR #200` (`ej/ci-public-native-closeout-20261031` at `fb9fb829fd7a52c03ae83ea85d5434dc3e417529`), open `PR #201` (`ej/fileops-waiting-state-20261031` at `76cd4ab12a14c0cdb8c52c8663fc927317050394`), diagnostic probe branch `ej/pr200-wgc-api-probe-20261107` (`239f41963`), and archived NAS qualification evidence `ej/pr200-201-qualification-evidence-20261103` (`bac7836ba`).
@@ -85,10 +85,14 @@ flowchart TD
 
 - **Rule 1 — Stabilize `main` + `PR #200` before `PR #201`**: Land `Wave 0` (`RedLauncher`, packaging/Winget/PDB fixes, and repaired `PR #200` including `P-06` doc-drift repair) first so CI and hosted desktop self-tests become trustworthy.
 - **Rule 2 — Ship waves as small, reviewable PRs**: Each wave (`W0`–`W5`) may be split into 1–3 focused PRs per subsystem so failures isolate cleanly and `nativeDigest` advances with real native fixes.
-- **Rule 3 — Gate `PR #201` merge on `Wave 5` (`D-01`)**: Ship `PR #201` in this production cut, but do **not** merge `PR #201` onto `main` until `W5.1` (`B-03` NAS scale delete), `W5.2` (`P-01` `QueueLifecycleState` FIFO fairness), `W5.3` (`P-02` pause-only transfer-slot yield), and `W5.4` (`P-03` per-item deferred delete authority) are implemented and verified on NAS.
+- **Rule 3 — Historical `PR #201` merge gate (`D-01`; reconciled 2026-11-13)**: The original decision was to ship PR #201 in this cut only after `W5.1` (`B-03` NAS scale delete), `W5.2` (`P-01` `QueueLifecycleState` FIFO fairness), `W5.3` (`P-02` pause-only transfer-slot yield), and `W5.4` (`P-03` per-item deferred delete authority) were implemented and verified on NAS. PR #201 has since merged; this historical gate cannot be applied retroactively. Its W5 qualification requirements remain release gates until exact evidence is reconciled below.
 - **Rule 4 — Enforce `AGENTS.md` C++/Win32 invariants in every fix**:
   - **Never** call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner ([AGENTS.md](../../../AGENTS.md)). Inside `WndProc(HWND hwnd, ...)`, pass `hwnd` to `DestroyWindow(hwnd)` and release smart-pointer ownership in `WM_NCDESTROY` via `if (_hWnd.get() == hwnd) { _hWnd.release(); }`; outside `WndProc`, call `_hWnd.reset()`.
   - **Never** write `catch (...)` ([AGENTS.md](../../../AGENTS.md)). Catch specific named exception types (`const std::runtime_error&`, `const std::system_error&`, `const std::exception&`) and allow `std::bad_alloc` to terminate cleanly in `noexcept` boundaries.
+
+### Current reconciliation (2026-11-13)
+
+GitHub and local history confirm PR #201 merged on 2026-11-08 at `a9e366240d2083484a12aa6177c5864d8e617164`. The D-01/Rule 3 merge condition therefore records a historical gate that has already been crossed. The archived managed-controls README at `Specs/TestRuns/4cb089111a23/Validation/2026-11-07_055500_managed-controls/README.md` records a preceding PR201 head (`73d562a6`) scale-3 Fresh Full pass, but its `Delete_IdentityLessPinnedTreeScale` case took 398,235 ms; the same README retains default NAS deadline failures and says qualification at the current candidate heads was pending. The live merged-PR check rollup shows tooling/format/CodeQL and `ci-gate`, not a native W5 NAS gate. This result does not meet W5.1's stated under-60-second NAS target or verify W5.1–W5.4 on the final merged head. Keep I60 ACTIVE and retain all unverified Wave 5 and release-qualification requirements until exact per-wave evidence is reconciled. Do not interpret PR #201's merge or CI checks as a waiver.
 
 ---
 

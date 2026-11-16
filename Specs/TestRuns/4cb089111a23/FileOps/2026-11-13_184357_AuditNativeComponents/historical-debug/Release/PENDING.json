@@ -1,0 +1,4 @@
+{
+  "status": "PENDING; no Release build/run/receipt/measurement in this packet",
+  "required": "After current Affected native operation reaches its terminal owned-process quiet point, use fresh exact test-enabled Release receipt and governed exact noactivation filters. Preserve every attempt, same source/protocol/fixture/machine, new process IDs and hashes; append rather than relabel Debug rows."
+}

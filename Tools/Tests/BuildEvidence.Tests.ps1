@@ -127,6 +127,7 @@ Describe 'Ghostty build evidence identity closure' {
             'Tools\Build-GhosttyTerminalRuntime.ps1',
             'Tools\Modules\Build\ArtifactOperationLock.psm1',
             'Tools\Modules\Build\DxUiDependency.psm1',
+            'Tools\Modules\Build\MSBuildInvocation.psm1',
             'Tools\Modules\Build\ProcessStreaming.psm1',
             'Tools\Modules\Build\SanitizedEnvironment.psm1',
             'Tools\Modules\Testing\ValidationFingerprint.psm1',
@@ -549,8 +550,8 @@ Describe 'Operation Startrail build receipt records' {
     It 'changes the source snapshot for dirty staged untracked delete and rename mutations' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'source-fixture')
         $mutated = Get-RSBuildSourceSnapshot -RepoRoot $fixture.Root
-        & git -C $fixture.Root reset --hard --quiet HEAD
-        & git -C $fixture.Root clean -fdq
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'reset'; '--hard'; '--quiet'; 'HEAD')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'clean'; '-fdq')
         $clean = Get-RSBuildSourceSnapshot -RepoRoot $fixture.Root
         $mutated.SnapshotId | Should Not Be $clean.SnapshotId
         $mutated.GitHead | Should Be $clean.GitHead
@@ -673,11 +674,11 @@ Describe 'Operation Startrail build receipt records' {
         [IO.File]::WriteAllText((Join-Path $root '.gitignore'), ".build/`n", [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText((Join-Path $root 'source.txt'), "source`n", [Text.UTF8Encoding]::new($false))
         Copy-Item -LiteralPath (Join-Path $repoRoot 'RuntimeDependencies.props') -Destination (Join-Path $root 'RuntimeDependencies.props')
-        & git -C $root init --quiet
-        & git -C $root config user.email 'startrail-fixture@invalid.example'
-        & git -C $root config user.name 'Startrail Fixture'
-        & git -C $root add -- .
-        & git -C $root commit --quiet -m 'portable fixture'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'startrail-fixture@invalid.example')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Startrail Fixture')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; '.')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'portable fixture')
         $source = Get-RSBuildSourceSnapshot -RepoRoot $root
         $output = Join-Path $root '.build\x64\Debug'
         [void](New-Item -ItemType Directory -Path $output -Force)
@@ -849,5 +850,156 @@ Describe 'Operation Startrail build receipt records' {
         $lines[3] | Should Be 'Build time: 02:49'
         $lines[-2] | Should Match '^Output: "C:\\a\.dll"'
         $lines[-1] | Should Match '^& "C:\\b\.exe"'
+    }
+}
+
+
+Describe 'Idempotent immutable build receipt publication' {
+    function New-RSIdempotentReceiptFixture {
+        param([string]$Root)
+        $output = Join-Path $Root '.build/x64/Debug'
+        [void][IO.Directory]::CreateDirectory($output)
+        $artifact = Join-Path $output 'App.exe'
+        [IO.File]::WriteAllBytes($artifact, [byte[]](1,2,3,4))
+        $outputs = @(New-RSBuildArtifactRecord -RepoRoot $Root -LiteralPath $artifact -RuntimeClosure @('.build/x64/Debug/App.exe'))
+        $source = [pscustomobject]@{SnapshotId=('a'*64);GitHead=('b'*40)}
+        $identity = [pscustomobject]@{
+            RepoIdentity=('c'*64);ToolchainIdentityDigest=('d'*64);VcpkgIdentityDigest=('e'*64)
+            GhosttyRuntimeIdentity=('f'*64);ProjectGraphDigest=('1'*64);RuntimeDependencyDigest=('2'*64)
+        }
+        $started = [datetime]'2026-11-14T12:00:00Z'
+        $arguments = @{
+            SourceSnapshot=$source;Identity=$identity;Platform='x64';Configuration='Debug'
+            Target='solution';ProjectSelection=@('RedSalamander.sln');BuildArguments=@('/t:Build')
+            TestsEnabled=$true;OfficialRelease=$false;StartedUtc=$started;EndedUtc=$started.AddSeconds(2)
+            Duration=([timespan]::FromSeconds(2));Outputs=$outputs
+        }
+        $receipt = New-RSBuildReceipt @arguments
+        $schema = Join-Path $repoRoot 'Specs/Build/BuildReceipt.schema.json'
+        $stored = Publish-RSBuildReceipt -BuildOutputDir $output -Receipt $receipt -SchemaPath $schema
+        return [pscustomobject]@{
+            Root=$Root;Output=$output;Arguments=$arguments;Receipt=$receipt;Schema=$schema
+            Record=(Join-Path $output ('receipts/'+$stored.receipt_id+'.json'))
+            Pointer=(Join-Path $output 'build-receipt.json')
+        }
+    }
+
+    It 'retains the first immutable bytes when the same governing identity has a new build interval and diagnostic spelling' {
+        $fixture = New-RSIdempotentReceiptFixture (Join-Path $TestDrive 'repeat-receipt')
+        $original = [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record))
+        $arguments = $fixture.Arguments.Clone()
+        $arguments.Outputs = @($fixture.Receipt.outputs | ConvertTo-Json -Depth 10 | ConvertFrom-Json -DateKind String)
+        $arguments.Outputs[0].absolute_path_diagnostic = 'C:\fixture\other-spelling\App.exe'
+        $arguments.StartedUtc = $arguments.StartedUtc.AddMinutes(10)
+        $arguments.EndedUtc = $arguments.StartedUtc.AddSeconds(7)
+        $arguments.Duration = [timespan]::FromSeconds(7)
+        $second = New-RSBuildReceipt @arguments
+        $second.receipt_id | Should Be $fixture.Receipt.receipt_id
+        $second.started_utc | Should Not Be $fixture.Receipt.started_utc
+        $second.duration_ms | Should Not Be $fixture.Receipt.duration_ms
+        Suspend-RSBuildReceipt -BuildOutputDir $fixture.Output
+        $stored = Publish-RSBuildReceipt -BuildOutputDir $fixture.Output -Receipt $second -SchemaPath $fixture.Schema
+        $stored.started_utc | Should Be $fixture.Receipt.started_utc
+        $stored.outputs[0].absolute_path_diagnostic | Should Be $fixture.Receipt.outputs[0].absolute_path_diagnostic
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record)) | Should Be $original
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Pointer)) | Should Be $original
+        (Read-RSBuildReceipt -BuildOutputDir $fixture.Output -SchemaPath $fixture.Schema).receipt_id | Should Be $second.receipt_id
+    }
+
+    It 'rejects the complete malformed candidate <Mutation> before reusing its otherwise identical projection' -TestCases @(
+        @{Mutation='missing-start'}, @{Mutation='invalid-duration'}, @{Mutation='missing-diagnostic'},
+        @{Mutation='wrong-diagnostic-type'}, @{Mutation='unknown-root'}, @{Mutation='unknown-output'}
+    ) {
+        param($Mutation)
+        $fixture = New-RSIdempotentReceiptFixture (Join-Path $TestDrive $Mutation)
+        $candidate = ConvertTo-RSCanonicalJson $fixture.Receipt | ConvertFrom-Json -DateKind String
+        switch($Mutation) {
+            'missing-start' { $candidate.PSObject.Properties.Remove('started_utc') }
+            'invalid-duration' { $candidate.duration_ms = -1 }
+            'missing-diagnostic' { $candidate.outputs[0].PSObject.Properties.Remove('absolute_path_diagnostic') }
+            'wrong-diagnostic-type' { $candidate.outputs[0].absolute_path_diagnostic = 123 }
+            'unknown-root' { $candidate | Add-Member unknown_control $true }
+            'unknown-output' { $candidate.outputs[0] | Add-Member unknown_control $true }
+        }
+        $before = [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record))
+        $message = ''
+        try { Publish-RSBuildReceipt -BuildOutputDir $fixture.Output -Receipt $candidate -SchemaPath $fixture.Schema | Out-Null }
+        catch { $message = $_.Exception.Message }
+        $message | Should Match 'does not satisfy schema'
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record)) | Should Be $before
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Pointer)) | Should Be $before
+    }
+
+    It 'refuses a same-ID governing mutation <Mutation> without changing either published file' -TestCases @(
+        @{Mutation='source'}, @{Mutation='profile'}, @{Mutation='output'}, @{Mutation='closure'}
+    ) {
+        param($Mutation)
+        $fixture = New-RSIdempotentReceiptFixture (Join-Path $TestDrive ('identity-'+$Mutation))
+        $candidate = ConvertTo-RSCanonicalJson $fixture.Receipt | ConvertFrom-Json -DateKind String
+        switch($Mutation) {
+            'source' { $candidate.source_snapshot_id = '3'*64 }
+            'profile' { $candidate.configuration = 'Release' }
+            'output' { $candidate.outputs[0].sha256 = '4'*64 }
+            'closure' { $candidate.outputs[0].runtime_closure = @('.build/x64/Debug/absent.dll') }
+        }
+        $before = [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record))
+        (Test-RSActionThrows {Publish-RSBuildReceipt -BuildOutputDir $fixture.Output -Receipt $candidate -SchemaPath $fixture.Schema}) | Should Be $true
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record)) | Should Be $before
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Pointer)) | Should Be $before
+    }
+
+    It 'compares full governing projections even when a simulated digest collision gives them the same ID' {
+        $fixture = New-RSIdempotentReceiptFixture (Join-Path $TestDrive 'collision')
+        $candidate = ConvertTo-RSCanonicalJson $fixture.Receipt | ConvertFrom-Json -DateKind String
+        $candidate.source_snapshot_id = '3'*64
+        $prior = $env:RS_RECEIPT_TEST_COLLISION
+        $before = [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record))
+        Mock Assert-RSBuildReceiptSemantics -ModuleName BuildEvidence {
+            return $true
+        } -ParameterFilter { -not [string]::IsNullOrEmpty($env:RS_RECEIPT_TEST_COLLISION) }
+        try {
+            # Isolate the collision assumption at the ID/semantics boundary;
+            # retain actual full projection comparison and schema/record parsing.
+            $env:RS_RECEIPT_TEST_COLLISION = $fixture.Receipt.receipt_id
+            (Test-RSActionThrows {Publish-RSBuildReceipt -BuildOutputDir $fixture.Output -Receipt $candidate -SchemaPath $fixture.Schema}) | Should Be $true
+            Assert-MockCalled Assert-RSBuildReceiptSemantics -ModuleName BuildEvidence -Times 2 -Exactly -Scope It
+        } finally { $env:RS_RECEIPT_TEST_COLLISION = $prior }
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record)) | Should Be $before
+        [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Pointer)) | Should Be $before
+    }
+
+    It 'refuses stored <Mutation> bytes before replacing the pointer or rewriting the immutable record' -TestCases @(
+        @{Mutation='noncanonical-whitespace'}, @{Mutation='extra-newline'}, @{Mutation='invalid-schema'},
+        @{Mutation='wrong-valid-identity'}, @{Mutation='malformed-json'}
+    ) {
+        param($Mutation)
+        $fixture = New-RSIdempotentReceiptFixture (Join-Path $TestDrive ('stored-'+$Mutation))
+        $original = [IO.File]::ReadAllBytes($fixture.Record)
+        $pointer = [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Pointer))
+        $text = [Text.Encoding]::UTF8.GetString($original)
+        switch($Mutation) {
+            'noncanonical-whitespace' { $text = ' '+$text }
+            'extra-newline' { $text += [char]10 }
+            'invalid-schema' {
+                $invalid = $text | ConvertFrom-Json -DateKind String
+                $invalid | Add-Member unknown_control $true
+                $text = (ConvertTo-RSCanonicalJson $invalid)+[char]10
+            }
+            'wrong-valid-identity' {
+                $invalid = $text | ConvertFrom-Json -DateKind String
+                $invalid.source_snapshot_id = '3'*64
+                $module = Get-Module BuildEvidence
+                $invalid.receipt_id = &$module {param($r) Get-RSCanonicalJsonDigest (Get-RSBuildReceiptProjection $r)} $invalid
+                $text = (ConvertTo-RSCanonicalJson $invalid)+[char]10
+            }
+            'malformed-json' { $text = '{'+[char]10 }
+        }
+        [IO.File]::WriteAllText($fixture.Record, $text, [Text.UTF8Encoding]::new($false))
+        $unsupported = [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record))
+        try {
+            (Test-RSActionThrows {Publish-RSBuildReceipt -BuildOutputDir $fixture.Output -Receipt $fixture.Receipt -SchemaPath $fixture.Schema}) | Should Be $true
+            [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Record)) | Should Be $unsupported
+            [Convert]::ToHexString([IO.File]::ReadAllBytes($fixture.Pointer)) | Should Be $pointer
+        } finally { [IO.File]::WriteAllBytes($fixture.Record, $original) }
     }
 }

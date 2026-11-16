@@ -62,6 +62,7 @@ Export-ModuleMember -Function @(
     'Get-RSTestQuarantineDate',
     'Get-RSTestQuarantineStatus',
     'Read-RSTestQuarantineFile',
+    'Assert-RSTestQuarantineClean',
     'Get-RSTestQuarantineRepairPlan',
     'Convert-RSTestCaseForRunSummary',
     'Convert-RSTestRetryAttemptForRunSummary',

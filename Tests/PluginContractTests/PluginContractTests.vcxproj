@@ -159,7 +159,7 @@
       <Project>{99C8E460-477C-4D1F-9E13-5BC361E37A74}</Project>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>
-    <ProjectReference Include="..\..\Plugins\Terminal\Lang\ja-JP\Terminal-ja-JP.vcxproj">
+    <ProjectReference Include="..\..\Plugins\Terminal\Lang\ja-JP\Terminal-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{BE8C925A-AB47-5D0E-9E5B-CEB488F2A102}</Project>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>

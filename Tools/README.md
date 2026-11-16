@@ -1,5 +1,18 @@
 # Repository tooling
 
+Build and SDK reopen share host-ordered MSBuild discovery through
+`Modules/Build/MSBuildInvocation.psm1`. Explicit Clean failure stops the build;
+combined Clean/Rebuild performs the Rebuild clean once. DxUi restore preserves the
+current PowerShell host and complete nested policy identity.
+In GitHub Actions, build and SDK reopen share explicit workflow selection validation
+and the PATH-only fallback. Dependency installation uses that same PATH-selected
+installation; a newer registered installation cannot silently replace it.
+
+Filtered Ghostty Commands qualification verifies archived native case bytes and
+selection, current source/artifact receipt, both aggregate summaries and invocation
+identity before accepting directed exit 2. Repository coverage remains NOT_EVALUATED.
+ScopedTesting retains planning/delegation only; canonical Startrail owns receipts.
+
 Native startup diagnostics print the start and elapsed time of File Operations
 profile/volume setup, the existing interactive lease wait, and contained process
 launch. Keep the parent console log when investigating a delay. The rows do not
@@ -64,6 +77,10 @@ private compiler metadata-service endpoint to each child without changing its
 parent. Restore `.ci-engine` at `.ci/project.json`'s exact commit before local
 process/build tooling. Both direct and streaming routes keep their existing
 contained ownership and environment transport.
+Background dependency and sanitized SDK/MSBuild invocations use the canonical
+captured streaming route with no console window and the same operation delegation,
+locks, arguments and exit status. Interactive builds retain their existing route.
+See `Specs/Build/Build_Toolchain.md` for the caller policy and complete identity/cache closure.
 Missing policy/API preparation now reports the recovery instructions in
 `Specs/Build/Build_Toolchain.md`. After restoration in the same PowerShell session,
 the factory refreshes changed cached policy definitions and retains unchanged
@@ -82,6 +99,20 @@ ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapte
 after checking exact archived native results, quarantine state and source-bound receipt.
 These choices leave repository coverage NOT_EVALUATED and publish no regression receipt.
 
+The existing manual workflow also accepts platform All (default), x64 or ARM64.
+`CommandsUiAttribution` runs the existing help/observer-control case first and three
+fixed Preferences, path-detail and menu-hover cases once each, using one test-enabled
+build and independent canonical Commands/Fresh/SkipBuild processes. The module owns
+their marked-sandbox context, independent streams/coverage, unique child IDs and
+archive-relative index. Changed source/receipt bytes, retries/repair, missing proof or
+unsafe retirement stop later launches; an ordinary fully proven case failure remains
+failed, and any failed/unexecuted row fails the job. This is filtered attribution,
+not Full or production qualification; see `Specs/Build/Build_UnifiedCI.md` for the exact list.
+Each child passes `-RequireCleanQuarantine`; the canonical reader refuses blocking or
+invalid ledgers before native work and the runner cannot dispatch a repair under this
+opt-in. Preflight and post-run checks do not replace that guard. Ordinary callers keep
+the existing default repair behavior.
+
 Hosted native interactive entries use the rendered `WinSta0\Default` desktop on this project's
 GitHub-hosted runner. Paired comparisons retain the original fixture on both sources.
 A thread-owned neutral window must prove real foreground and focus before child launch,
@@ -93,8 +124,18 @@ After an accepted return request it tolerates a transient null foreground within
 while still rejecting another window and requiring the original foreground and focus.
 Each interactive entry holds its existing mutex, explicitly directs contained children to Default,
 and uses the existing native warning and assertions. No input desktop is created or switched.
-Boundary setup and restoration errors remain failures; retirement logs include the complete
-exception chain before the error propagates. A filtered diagnostic remains
+Boundary setup and restoration errors remain failures. Setup logs retain a bounded captured
+ErrorRecord/exception traversal and emitted text, including visited nonaggregate messages,
+omitted aggregate-summary markers, existing HResult/Win32 codes and truncation markers,
+without fresh observations or replacing the original error after nonfatal diagnostic failure.
+The underlying failed focus query separately saves its original error before a single read-only
+window/thread/process/foreground sample. Its context records the actual arguments, input structure
+size and call stage; the sample is non-atomic and failed GUI output fields remain unspecified.
+Fresh facts precede the older identity under the same field cap; observer capture is created
+only in the failure helper, without adding its closure to a successful query.
+It grants no retry, focus or qualification authority. A private normalized inline-source identity
+rejects stale Add-Type reuse and requires a fresh PowerShell process on mismatch.
+Retirement logs retain the complete exception chain; existing fatal diagnostic propagation stays binding. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 
 The project adapter selects approved stock-surface preparation only for its hosted native ARM64
@@ -108,6 +149,14 @@ retirement. The exact same-session GitHub compute-agent console may be observed 
 request; it remains subject to the owned boundary's foreground, focus and restoration checks.
 Unknown surfaces fail closed; local, x64, self-hosted, other-repository and paired
 studies do not perform these actions. Native focus, input and capture assertions are unchanged.
+Stock audit completion retains first/last foreground-instance snapshots and observation counts.
+Minimal creation identity comes from the original held query lease. Unknown refusal adds
+failure-only canonical process facts on that exact captured tuple and borrowed lease, with
+creation matching and a final relation recheck; it never reopens the captured PID.
+Unavailable facts, parent compatibility and any-job membership grant no ownership or close
+authority. Foreground snapshots cannot prove background absence or creator identity.
+No new raw image-path, title or command-line diagnostics are added; existing private stock
+records retain their original fields. Observation errors cannot replace the primary refusal.
 
 When direct foreground acquisition is refused, the selected hosted native x64 role or the opted-in native ARM64 role may use one
 registered Alt+F24 handoff to the owned neutral fixture window within 500 ms. The inline
@@ -120,6 +169,21 @@ The explicit DesktopProbe choice reads window-station, calling/input/foreground 
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display
 changes. Missing names remain unknown, and its result is NOT_EVALUATED for native coverage.
+The same evidence contains exactly one explicit-thread/foreground-zero GUI comparison inside four
+foreground identity samples, one bounded window-class read and actual process/OS architecture.
+Null or changed identities prohibit interpretation. Errors and successful-query outputs are retained
+separately; no unavailable focus, console class or error code grants activation, retries or acceptance.
+This non-atomic observation changes no `ReadFocus` or restoration behavior. Toolchain/cache setup may
+precede the adapter's early return even though dependency installation and product builds do not.
+
+The separate hosted foreground fixture samples the original focus through the documented foreground
+queue (`GetGUIThreadInfo(0)`) with strict before/after original identity and returned active/focus-root
+checks. A successful null focus is distinct from unavailable GUI state. Saved focus identity never
+rebases. Related cross-owner focus is observable but cannot grant write admission: the fixture refuses
+before acquiring foreground when that saved state cannot satisfy the conservative restoration predicate.
+Owned-window `GetFocus` readiness, the one original-HWND restoration request and existing waits remain;
+no original-focus query runs while the owned/null handoff is settling. No console compatibility or
+historical-error repair is established without the separate actual runtime witness.
 
 The explicit Release R0ePaired choice requires an immutable `baseline_ref` and runs
 `Invoke-R0ePairedValidation.ps1` on each matching native architecture. It retains an isolated
@@ -463,7 +527,7 @@ cost without invoking the C++ compiler.
 | Freeze and review an exact Ghostty candidate | `./Tools/New-GhosttyTerminalRuntimeCandidateReview.ps1` |
 | Validate a rederived Ghostty candidate overlay | `./Tools/New-GhosttyTerminalRuntimeCandidateOverlayReview.ps1` |
 | Inspect test coverage | `./Tools/Get-TestInventory.ps1` |
-| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings` |
+| Validate specification governance | `./Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports` |
 | Validate this inventory | `./Tools/Get-ToolInventory.ps1 -FailOnFindings` |
 | Run raw cloc for solution directories | `./Tools/InvokeSolutionCloc.ps1` |
 | Review archived performance runs | `./Tools/Show-PerfRuns.ps1` |
@@ -490,7 +554,7 @@ contract and is authoritative when the table is intentionally brief.
 | `Fold-Changelog.ps1` | Public changelog command | Folds pending fragments in the checkout it is given: the default branch's fold, normally through `Submit-ChangelogFold.ps1`, never part of a feature change; supports read-only -Check and -WhatIf preview. |
 | `GenerateDebugIcons.ps1` | Internal asset generator | Regenerates checked-in debug-badged icon resources. |
 | `Get-GhosttyTerminalRuntimeStatus.ps1` | Public read-only runtime status command | Validates the lock without network, observes official upstream/advisories, or freezes one explicit candidate; writes only below `.build`. |
-| `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and writes derived reports below `.build`. |
+| `Get-SpecInventory.ps1` | Public governance command | Validates specs/WIP/links and test inventory. Validation uses `-NoReports`; default catalog generation retains four reports below `.build`. |
 | `Get-TerminalDependencyStatus.ps1` | Dormant generic lifecycle command | Explicit-lock validation and opt-in advisory checks for a reviewed future upgrade. |
 | `Get-TestInventory.ps1` | Public discovery command | Derives test registrations, projects, Pester cases, and run-plan coverage. |
 | `Get-ToolInventory.ps1` | Public governance command | Validates and renders `tool-inventory.json`. |
@@ -544,9 +608,9 @@ and focused tests.
 | `Modules/Documentation/Changelog.psm1` | Shared Changes validation, exact-fold comparison with a base, deterministic merge, duplicate-pending-entry refusal, staged publication and retry-safe cleanup. |
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
-| `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
+| `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts with idempotent same-projection publication that retains first-record bytes, receipt-derived portable payload staging/import, and final output rendering. |
 | `Modules/Build/ClangFormat.psm1` | Native formatter package/cache validation, exclusive cache lease and guarded atomic executable publication without Python. |
-| `Modules/Build/DxUiDependency.psm1` | Exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. |
+| `Modules/Build/DxUiDependency.psm1` | Silent captured no-window read-only Git identity/status and local consumer compiler-host metadata without artifact delegation; exact-pin public restore (Git long paths, sparse checkout, failed-restore cleanup), API-revision gate, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. The pinned upstream identity helper has a separate native-launch contract. |
 | `Modules/Build/DxUiPaths.psm1` | Short source/output locators with full-identity collision refusal and native compiler-policy digests. |
 | `Modules/Build/RedMonitorDependency.psm1` | Resolves consumer-owned source-contract paths and rejects obsolete viewer ownership. |
 | `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
@@ -562,6 +626,7 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
+| `Modules/Testing/GitMetadataCapture.psm1` | Internal engine-free Git line/stdin capture shared by archive and fingerprint metadata; explicit UTF-8 stdout, inherited stdin and diagnostic decoding, no imports or artifact authority. |
 | `Modules/Testing/HostedTestDesktop.psm1` | Hosted desktop/access diagnostics, display restoration, pure input-fixture selection and a leased owned input desktop with verified restoration. |
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
 | `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source, closed raw sample archives and fixed same-machine paired comparison. |
@@ -572,7 +637,7 @@ and focused tests.
 | `Modules/Testing/TestMachineResources.psm1` | Schema validation, non-secret capability digesting, and scoped environment projection for per-machine Connection Manager, SMB, MTP, and alternate local-root resources. |
 | `Modules/Testing/TestRunArchive.psm1` | Archived evidence structure/content validation, area-schema dispatch, complete JSONL validation, and paired Terminal VT admission comparison. |
 | `Modules/Testing/TestRunPlan.Common.psm1` | Stable plan entries, canonical validation-plan digests, path normalization, run identities, and process snapshots. |
-| `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface. |
+| `Modules/Testing/TestRunPlan.psm1` | Canonical compatibility facade that preserves the established exported function surface, including `Assert-RSTestQuarantineClean` for runner admission. |
 | `Modules/Testing/TestRunSummary.psm1` | Legacy v1 plus verified composite v2 summaries, verdict axes, the canonical 0..5 terminal-state mapping, case history, dashboard, JSONL, and step-summary rendering. |
 | `Modules/Testing/TestSandbox.psm1` | Fail-closed exact `X:\RedSalamander.Perf` authorization, ownership markers, fresh uncached reparse-component checks, `New-RSTestSandboxLink` (the only governed creator of test junctions, symbolic links and hard links, refusing any link that would live or point outside one marked sandbox), run contexts, cleanup planning, stale-run removal that never follows reparse points (links are unlinked; a run with a volume mount point is retained whole), the per-run test-owned VHDX fixture (elevated provisioning that proves the attached disk is the blank file-backed VHDX before formatting and the volume is its own before mounting, a durable receipt before mounting, reverse-order teardown that can keep a detached VHDX as evidence, and receipt-aware cleanup that retains a run when not elevated unless its disk is already detached), and live-owner-consistent disk audits. |
 | `Modules/Testing/TestSuitePlan.psm1` | Declarative stable-ID suite construction, governed Commands families, exact reviewed no-activation owned witnesses including identity-interlock waiting, and selected-profile artifact-mutating Pester coverage. |
@@ -711,3 +776,28 @@ Production-only builds consume BuildProjectSelection.psm1's complete SolutionTar
 names, retaining nested localization/resource and plugin targets. The helper rejects
 invalid nesting and target collisions before compilation. Focused tests include an
 actual MSBuild solution traversal with nested and reserved-name fixture projects.
+
+Visual Studio metadata queries in the standalone DxUi restorer, root build discovery, and
+vcpkg installation discovery use the existing contained no-window streaming backend
+through Invoke-RSCapturedProcess. Stdout, stderr and actual exit remain separate;
+the root build retains discovery fallback. This does not change interactive MSBuild
+or installer inheritance and does not identify a historical console creator.
+
+Background Git provenance and build-graph reads follow the existing no-window metadata boundary. Engine-independent scope/inventory/archive transports retain their raw, line or ordered-stdin contracts without importing the restored engine; the exact private exceptions are cataloged in Specs/Core/Core_SharedHelpers.md. Provisioning Git writes retain the existing dependency lock and delegated streaming authority; interactive installer/build payload routing is unchanged. Focused controls reject unsafe launch policy before a child starts. These changes establish no historical console creator or product/desktop acceptance.
+
+Known Git stdout uses explicit per-child UTF-8. The optional shared stdout decoder leaves non-Git/default and stderr behavior unchanged; no global console encoding is changed by production tooling. Unicode Git path controls cover CP437 and UTF-8 callers.
+### Native metadata and fixture launch boundaries
+
+Root formatter preview remains engine-free PowerShell 7 plus Git. The existing formatter
+module captures its native EXE metadata and admitted per-file payload after the unchanged
+`ShouldProcess` decision. The shared Git reader also serves read-only Ghostty status and
+candidate inventory, with an optional command-local global-option prefix and unchanged
+default transport semantics.
+
+Scheduled tooling fixtures use the explicit `TestSupport.psm1` native helper and its Git
+UTF-8 specialization. The native formatter factory creates an owned CUI probe and audit
+records, with Windows PowerShell managed compilation required only by those test cases.
+Versioning concurrency fixtures retain asynchronous Hidden launches and exact process
+ownership. The real installer batch keeps its inherited production routing; fixtures
+execute that same batch through the private no-window test seam. See the owning build
+and tooling governance contracts for authority and qualification boundaries.

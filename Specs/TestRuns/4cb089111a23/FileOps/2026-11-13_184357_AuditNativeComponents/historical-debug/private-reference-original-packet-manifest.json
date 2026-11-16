@@ -1,0 +1,249 @@
+{
+  "packet": "Z:\\RedSalamander.Perf\\runs\\20261113T165916Z-85544-28c630baf5bc472486fecfd9cdbba833\\scratch\\NativeComponentEvidence\\packet-debug-v3",
+  "status": "PREPARED, NOT ARCHIVE-VALIDATED",
+  "files": [
+    {
+      "path": "Debug/component-summary.json",
+      "bytes": 10602,
+      "sha256": "26b8a44a47011860286191bc7df972081804c3ac2b05d4eb14d5f7b752fbcc51"
+    },
+    {
+      "path": "Debug/Identity/archive-complete.json",
+      "bytes": 399,
+      "sha256": "0ea5bb3c9ceeaa5a7635eee54adae1f184cf038c100d0ae8726d4893fb8bddc3"
+    },
+    {
+      "path": "Debug/Identity/archive-intent.json",
+      "bytes": 38989,
+      "sha256": "c01ed60126172296e54ad24cc187f9d00753929eb1e18872043a34cd4082b989"
+    },
+    {
+      "path": "Debug/Identity/fileops/results.json",
+      "bytes": 889,
+      "sha256": "5e19a08dc4b17ff961840d4137cecfa71cf15ca86ec57b642590225317a8fdad"
+    },
+    {
+      "path": "Debug/Identity/fileops/trace.txt",
+      "bytes": 12520,
+      "sha256": "e101762f42499c7d2937cd1f440fb553b4d678158337df8fd5dce1f64e66a7ff"
+    },
+    {
+      "path": "Debug/Identity/native-process-exit.json",
+      "bytes": 223,
+      "sha256": "b11a085207394daa621a88aa6d9122c089aeda2410b167681e192de994bc6331"
+    },
+    {
+      "path": "Debug/Identity/perf/perf_metrics.jsonl",
+      "bytes": 63448,
+      "sha256": "619ce1dd0a8bef8bc3269af12d5b3a4e6869d68aefcdd46280d34c0a78217ddf"
+    },
+    {
+      "path": "Debug/Identity/perf/raw-row-index.json",
+      "bytes": 36007,
+      "sha256": "a91767ce154e8f35b9f1dd232b3fc181dd91689e716eb073bc7e26b4be1d98bc"
+    },
+    {
+      "path": "Debug/Identity/prelaunch/entry-fingerprints.json",
+      "bytes": 1696,
+      "sha256": "e3d83dc063f5ea423627b6060fc3564aba5343211657abbb1dfb2c54e2dbf0bd"
+    },
+    {
+      "path": "Debug/Identity/prelaunch/validation-plan-decision.json",
+      "bytes": 878,
+      "sha256": "b03ecc5fec8d7c2f7229f51953d6d7f15a0dcb2e90a9823d88201d6503365b98"
+    },
+    {
+      "path": "Debug/Identity/prelaunch/validation-plan.json",
+      "bytes": 1662,
+      "sha256": "247fbcacb7d7a2bcf4bc82209815742eaa3daad987ed08a0142367cc8aff5564"
+    },
+    {
+      "path": "Debug/Identity/results.json",
+      "bytes": 1432,
+      "sha256": "ea164c208b9d85636e32f06d48acb562400ca8935805a2b9dae278886f42af24"
+    },
+    {
+      "path": "Debug/Identity/run-all-tests-case-history.jsonl",
+      "bytes": 1078,
+      "sha256": "98198083fbc2faf8954b22ca033441071db120a3c4802e0f479a58e388bae388"
+    },
+    {
+      "path": "Debug/Identity/run-all-tests-results.json",
+      "bytes": 29760,
+      "sha256": "2ffbf73da443db4de2179bde10c45139d4492d47911050781b56d253423c3e59"
+    },
+    {
+      "path": "Debug/Identity/sandbox-audit.json",
+      "bytes": 25953,
+      "sha256": "4b382afd193d5a5e83c6b08ac8f63afde73eb5bde1f27c0f482065043fa704ec"
+    },
+    {
+      "path": "Debug/Identity/trace.txt",
+      "bytes": 46222,
+      "sha256": "8f095ce9eb39ffcc345e12f2049631529e462ae2ddd8c2467e63dd052b1386d9"
+    },
+    {
+      "path": "Debug/Identity/workspace-after-selftest.file-operations.json",
+      "bytes": 801,
+      "sha256": "5b4b83a551831ddc4e0d3b4bb4c98ed8445f9f54bdb8f24c398e67285e95a5f1"
+    },
+    {
+      "path": "Debug/Identity/workspace-final.json",
+      "bytes": 801,
+      "sha256": "a5d40b657577bec76df945e28cfd3d061e8e1bf2b906af25860f900ffcc0965d"
+    },
+    {
+      "path": "Debug/queue-pairs.csv",
+      "bytes": 2978,
+      "sha256": "d78be93f4bda86a7671cc95513ee5b5e8a92fc46840f95072412f11771189b24"
+    },
+    {
+      "path": "Debug/Review/archive-complete.json",
+      "bytes": 399,
+      "sha256": "5ffc5c40afe48d91516fa379a4f426a505a9225ec37d87513406337bee8c2214"
+    },
+    {
+      "path": "Debug/Review/archive-intent.json",
+      "bytes": 112700,
+      "sha256": "b3422641853dab4331d38c4d4b532a19ebb1572336de251931e2763617d94883"
+    },
+    {
+      "path": "Debug/Review/fileops/results.json",
+      "bytes": 891,
+      "sha256": "bd1964c04de7af87fd2432169dadb8800fd14c98a5ecc3741e6c88d1b016beb6"
+    },
+    {
+      "path": "Debug/Review/fileops/trace.txt",
+      "bytes": 149288,
+      "sha256": "0917c0379d7ce0dad407bd63572ff52cf686cc499441cb07be7d1194b123b161"
+    },
+    {
+      "path": "Debug/Review/native-process-exit.json",
+      "bytes": 223,
+      "sha256": "3aa69e28cb9c8afe25789ecb79ca9c66fccea401a86d188294ce4a17991f9ff1"
+    },
+    {
+      "path": "Debug/Review/perf/perf_metrics.jsonl",
+      "bytes": 36067,
+      "sha256": "865048f5512ffb40f8170da7bf963dbd10810b6257f01d4f6020739dae0a6e6a"
+    },
+    {
+      "path": "Debug/Review/perf/raw-row-index.json",
+      "bytes": 24940,
+      "sha256": "faccc06c958af92ca4816c50e427d8a649e4216209ce24b434fd836f17120634"
+    },
+    {
+      "path": "Debug/Review/prelaunch/entry-fingerprints.json",
+      "bytes": 1696,
+      "sha256": "11832e36d5dd4b6506e1a63117446f4b73dc32fad09e086f68bef0f361cea837"
+    },
+    {
+      "path": "Debug/Review/prelaunch/validation-plan-decision.json",
+      "bytes": 878,
+      "sha256": "73b18afa3cdafff7fe92993d3d2261bf6e8b2f85c1bb3f6e359166a7a118fc30"
+    },
+    {
+      "path": "Debug/Review/prelaunch/validation-plan.json",
+      "bytes": 1664,
+      "sha256": "3babaf360e62f3fd639d984cb74059b6a693490deb28a4a7da9a42499dc4ea83"
+    },
+    {
+      "path": "Debug/Review/results.json",
+      "bytes": 1438,
+      "sha256": "a9743a2354b31842b0b6fae53fad124ac03f118d04071a2223b7113b44916851"
+    },
+    {
+      "path": "Debug/Review/run-all-tests-case-history.jsonl",
+      "bytes": 1080,
+      "sha256": "d676111f1a7869061a1b2f0ca75f757460ba717207e8d6057d8ccbff9297c54e"
+    },
+    {
+      "path": "Debug/Review/run-all-tests-results.json",
+      "bytes": 30121,
+      "sha256": "4dd1e213de0544efcc7262a0e689b23fdec3fc3f1b57ccb7327bf4d39fb4c6d8"
+    },
+    {
+      "path": "Debug/Review/sandbox-audit.json",
+      "bytes": 26295,
+      "sha256": "5f8c1b15240db90a67e0d1dd3d7bef75db82075b85365eccac57ff748f178ec3"
+    },
+    {
+      "path": "Debug/Review/trace.txt",
+      "bytes": 177074,
+      "sha256": "0869129f88a9baf5b08d99f425385abc27d9db1df2a488e106b66a28a78e7486"
+    },
+    {
+      "path": "Debug/Review/workspace-after-selftest.file-operations.json",
+      "bytes": 801,
+      "sha256": "71aac156e7bd2b9275c3bd00048ab7fe2e80017e1b24c59158355fbe169a7404"
+    },
+    {
+      "path": "Debug/Review/workspace-final.json",
+      "bytes": 801,
+      "sha256": "7b5715959934e3f84cc42e27286ad40ca53caaf9599bc97cc581717b04c6e869"
+    },
+    {
+      "path": "evidence-bindings.json",
+      "bytes": 20672,
+      "sha256": "f0f1739dfcbaee83f3e41cf5078ddfda6ec2506ec6695088c8f6ab9834819c66"
+    },
+    {
+      "path": "provenance/build-receipt.json",
+      "bytes": 84985,
+      "sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed"
+    },
+    {
+      "path": "provenance/sealed-build-receipt.json",
+      "bytes": 84985,
+      "sha256": "d0f26a8a500396c812046cbd163cf87bc5a4db4d9f50f971e923b4999b5b3aed"
+    },
+    {
+      "path": "provenance/sealed-build-result.json",
+      "bytes": 671,
+      "sha256": "c81f290d3cefe70973be49403f2a371c7fba0a8ff10f1440c41f2c52bdbac0d0"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5851,
+      "sha256": "017dbcbc457e8e6f4f603b7bf8f076996f2f6bf1aa9243a0073dbed9dc6d4f61"
+    },
+    {
+      "path": "recipe.txt",
+      "bytes": 719,
+      "sha256": "c0559e6d54717c00852409de8f7f00b250ee276c781843686033b12bb9a0df37"
+    },
+    {
+      "path": "Release/PENDING.json",
+      "bytes": 403,
+      "sha256": "4388308dde339db4fe8979306b490d8fa672eab8df7ff1aa88388a7b0940f995"
+    },
+    {
+      "path": "source-excerpts/baseline-adapter-e83.txt",
+      "bytes": 3006,
+      "sha256": "1f8bdd68b67b8cd6bf0bcc1d312035e5a187458c70879b4a3480e4e1cb0cb238"
+    },
+    {
+      "path": "source-excerpts/baseline-selector-78a8a75c4.txt",
+      "bytes": 3108,
+      "sha256": "88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a"
+    },
+    {
+      "path": "source-excerpts/candidate-selector-e83.txt",
+      "bytes": 2667,
+      "sha256": "b83859d93cf345ecdef557ef9c8fb614714e411f5663cae41726f0c3517da4de"
+    },
+    {
+      "path": "source-excerpts/provenance.json",
+      "bytes": 2014,
+      "sha256": "4f1320de5173fa90762732730d5bfb8bd197af0070eda187d307d6f2d775fb5c"
+    },
+    {
+      "path": "source-excerpts/queue-witness-e83.txt",
+      "bytes": 11375,
+      "sha256": "d3fad110173d64dc594c3214dc5fb5879a876470cfc157da5ea9e8e7dc4610d2"
+    }
+  ],
+  "file_count": 48,
+  "total_bytes": 1063150,
+  "source_unchanged_after": true
+}

@@ -2252,6 +2252,130 @@ FileOperations::SameHostOverlapProblem FileOperations::DebugClassifySameHostOver
 }
 #endif
 
+// Caller holds _queueMutex; _mutex nests inside it to keep admitted tasks alive.
+uint64_t FolderWindow::FileOperationState::FirstUnblockedQueuedTaskIdLocked() noexcept
+{
+    // _queueMutex is held. _mutex nests inside it, as in the queue insert below, and keeps
+    // every admitted task alive for the walk.
+    std::scoped_lock tasksLock(_mutex);
+    // Select the minimum eligible place directly. No vector allocation, de-duplication
+    // or full sort is needed on every condition-variable predicate evaluation.
+    std::optional<std::pair<uint64_t, uint64_t>> firstOrder;
+    uint64_t firstId    = 0u;
+    const auto consider = [&](Task* holder, const bool waiting) noexcept
+    {
+        if (holder == nullptr || holder->_awaitingUserDecision.load(std::memory_order_acquire))
+            return;
+        const std::pair order{holder->GetQueueOrderKey(), holder->GetId()};
+        if (firstOrder.has_value() && order >= firstOrder.value())
+            return;
+        const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
+                                                   [&](const ActiveMutationInterlock& published) noexcept
+        {
+            if (published.taskId != holder->GetId() || ! published.task || ! published.admission)
+                return false;
+            const auto selected = published.task->LoadSelectedAdmission();
+            return selected->interlock && selected->interlock->key == published.admission->key;
+        });
+        if (prepared == _preparedMutationInterlocks.end() || ! prepared->admission->relations.advisoryDecided)
+        {
+            if (waiting)
+                return;
+            firstOrder = order;
+            firstId    = 0u; // Still Preparing: it holds the queue.
+            return;
+        }
+        if (! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+        {
+            firstOrder = order;
+            firstId    = holder->GetId();
+        }
+    };
+    for (const auto& owned : _tasks)
+    {
+        if (owned && owned->_holdsQueuePlace.load(std::memory_order_acquire) && ! owned->_cancelled.load(std::memory_order_acquire))
+            consider(owned.get(), std::ranges::find(_queue, owned->GetId()) != _queue.end());
+    }
+    // Directly driven waiters may have no entry in _tasks. Duplicate candidates are
+    // harmless: both observations share the same locked key and queue membership.
+    for (const uint64_t queuedId : _queue)
+    {
+        const auto published = std::ranges::find(_preparedMutationInterlocks, queuedId, &ActiveMutationInterlock::taskId);
+        if (published != _preparedMutationInterlocks.end())
+            consider(published->task, true);
+    }
+    return firstId;
+}
+
+#ifdef ENABLE_TESTS
+// Frozen selector component from 78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e,
+// State.Queue.cpp firstUnblockedQueuedTaskId. Canonical LF/UTF-8 excerpt SHA-256:
+// 88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a
+// Mechanical changes: member-function wrapper and capacity observation after collection.
+// This host-private legacy policy control deliberately preserves allocation/dedup/sort.
+uint64_t FolderWindow::FileOperationState::DebugBaselineQueueHeadLocked(uint64_t& scratchCapacityBytes) noexcept
+{
+    struct QueuePlace final
+    {
+        uint64_t orderKey = 0u;
+        uint64_t taskId   = 0u;
+        Task* holder      = nullptr;
+        bool waiting      = false; // inside this function's wait, as _queue records
+    };
+    // _queueMutex is held. _mutex nests inside it, as in the queue insert below, and keeps
+    // every admitted task alive for the walk.
+    std::scoped_lock tasksLock(_mutex);
+    std::vector<QueuePlace> places;
+    places.reserve(_tasks.size() + _queue.size());
+    const auto add = [&](Task* holder, const bool waiting) noexcept
+    {
+        if (holder != nullptr && std::ranges::find(places, holder->GetId(), &QueuePlace::taskId) == places.end())
+            places.push_back(QueuePlace{.orderKey = holder->GetQueueOrderKey(), .taskId = holder->GetId(), .holder = holder, .waiting = waiting});
+    };
+    for (const auto& owned : _tasks)
+    {
+        if (owned && owned->_holdsQueuePlace.load(std::memory_order_acquire) && ! owned->_cancelled.load(std::memory_order_acquire))
+            add(owned.get(), std::ranges::find(_queue, owned->GetId()) != _queue.end());
+    }
+    // A waiter that is not an admitted task (an entry driven directly) is known only by its
+    // published admission.
+    for (const uint64_t queuedId : _queue)
+    {
+        const auto published = std::ranges::find(_preparedMutationInterlocks, queuedId, &ActiveMutationInterlock::taskId);
+        if (published != _preparedMutationInterlocks.end())
+            add(published->task, true);
+    }
+    scratchCapacityBytes = static_cast<uint64_t>(places.capacity()) * sizeof(QueuePlace);
+    std::ranges::sort(places, [](const QueuePlace& left, const QueuePlace& right) noexcept {
+        return std::pair{left.orderKey, left.taskId} < std::pair{right.orderKey, right.taskId};
+    });
+
+    for (const QueuePlace& place : places)
+    {
+        if (place.holder->_awaitingUserDecision.load(std::memory_order_acquire))
+            continue;
+        const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
+                                                   [&](const ActiveMutationInterlock& published) noexcept
+        {
+            if (published.taskId != place.taskId || ! published.task || ! published.admission)
+                return false;
+            const auto selected = published.task->LoadSelectedAdmission();
+            return selected->interlock && selected->interlock->key == published.admission->key;
+        });
+        if (prepared == _preparedMutationInterlocks.end() || ! prepared->admission->relations.advisoryDecided)
+        {
+            if (place.waiting)
+                continue;
+            // Still Preparing: it holds the queue.
+            return 0u;
+        }
+        if (! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+            return place.taskId;
+    }
+    return 0u;
+}
+#endif
+
 FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_token stopToken) noexcept
 {
     std::shared_ptr<const SelectedAdmissionView> selectedAdmission;
@@ -2271,66 +2395,6 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
     // enters or leaves without entering, so a task that is still Preparing holds the queue: nothing
     // behind it starts. A place holder is passed only while it waits for its user's answer on its
     // own card or is queued behind a named task; it then starts next once that reason clears.
-    const auto firstUnblockedQueuedTaskId = [&]() noexcept -> uint64_t
-    {
-        struct QueuePlace final
-        {
-            uint64_t orderKey = 0u;
-            uint64_t taskId   = 0u;
-            Task* holder      = nullptr;
-            bool waiting      = false; // inside this function's wait, as _queue records
-        };
-        // _queueMutex is held. _mutex nests inside it, as in the queue insert below, and keeps
-        // every admitted task alive for the walk.
-        std::scoped_lock tasksLock(_mutex);
-        std::vector<QueuePlace> places;
-        places.reserve(_tasks.size() + _queue.size());
-        const auto add = [&](Task* holder, const bool waiting) noexcept
-        {
-            if (holder != nullptr && std::ranges::find(places, holder->GetId(), &QueuePlace::taskId) == places.end())
-                places.push_back(QueuePlace{.orderKey = holder->GetQueueOrderKey(), .taskId = holder->GetId(), .holder = holder, .waiting = waiting});
-        };
-        for (const auto& owned : _tasks)
-        {
-            if (owned && owned->_holdsQueuePlace.load(std::memory_order_acquire) && ! owned->_cancelled.load(std::memory_order_acquire))
-                add(owned.get(), std::ranges::find(_queue, owned->GetId()) != _queue.end());
-        }
-        // A waiter that is not an admitted task (an entry driven directly) is known only by its
-        // published admission.
-        for (const uint64_t queuedId : _queue)
-        {
-            const auto published = std::ranges::find(_preparedMutationInterlocks, queuedId, &ActiveMutationInterlock::taskId);
-            if (published != _preparedMutationInterlocks.end())
-                add(published->task, true);
-        }
-        std::ranges::sort(places, [](const QueuePlace& left, const QueuePlace& right) noexcept {
-            return std::pair{left.orderKey, left.taskId} < std::pair{right.orderKey, right.taskId};
-        });
-
-        for (const QueuePlace& place : places)
-        {
-            if (place.holder->_awaitingUserDecision.load(std::memory_order_acquire))
-                continue;
-            const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
-                                                       [&](const ActiveMutationInterlock& published) noexcept
-            {
-                if (published.taskId != place.taskId || ! published.task || ! published.admission)
-                    return false;
-                const auto selected = published.task->LoadSelectedAdmission();
-                return selected->interlock && selected->interlock->key == published.admission->key;
-            });
-            if (prepared == _preparedMutationInterlocks.end() || ! prepared->admission->relations.advisoryDecided)
-            {
-                if (place.waiting)
-                    continue;
-                // Still Preparing: it holds the queue.
-                return 0u;
-            }
-            if (! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
-                return place.taskId;
-        }
-        return 0u;
-    };
     const auto interlockAvailable = [&]() noexcept
     {
         task._waitingForParallelTransferSlot.store(false, std::memory_order_release);
@@ -2447,7 +2511,7 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
         }
 
         const bool ready =
-            waitForOthers ? _activeOperations == 0u && firstUnblockedQueuedTaskId() == task._taskId && interlockAvailable() : interlockAvailable();
+            waitForOthers ? _activeOperations == 0u && FirstUnblockedQueuedTaskIdLocked() == task._taskId && interlockAvailable() : interlockAvailable();
         if (ready)
         {
             RemoveFromQueue(task._taskId);
@@ -2498,7 +2562,8 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
         {
             return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) ||
                    task._waitForOthers.load(std::memory_order_acquire) != waitForOthers ||
-                   (waitForOthers ? _activeOperations == 0u && firstUnblockedQueuedTaskId() == task._taskId && interlockAvailable() : interlockAvailable());
+                   (waitForOthers ? _activeOperations == 0u && FirstUnblockedQueuedTaskIdLocked() == task._taskId && interlockAvailable()
+                                  : interlockAvailable());
         };
         // A global Preferences change can come from another owned workspace. Capacity
         // waits observe it without a process-wide HWND registry or new cross-thread posts.
@@ -3448,7 +3513,200 @@ bool FolderWindow::FileOperationState::DebugValidateQueueStartOrderForSelfTest(s
         if (! scenarioSettles(kScenario))
             return false;
     }
+    // A failed worker launch withdraws its still-Preparing place and wakes a later waiter.
+    {
+        constexpr std::wstring_view kScenario = L"failed worker launch withdraws Preparing place";
+        Task* const taskA                     = addTask(81u, 1u);
+        Task* const taskB                     = addTask(82u, 2u);
+        publishDecided(*taskB, MutationInterlockRelations{});
+        startWorker(taskB);
+        if (! reachesQueueWait(*taskB) || startCountReaches(1u, kMustNotStart))
+            return fail(kScenario, L"B must wait behind the unpublished Preparing worker.");
+        state.WithdrawUnstartedTask(taskA);
+        if (! startCountReaches(1u, kMustStart) || ! startOrderIs({82u}))
+            return fail(kScenario, L"B must wake and enter after the launch rollback without a later notification.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
+    {
+        constexpr std::wstring_view kScenario = L"reorder chooses the current adjacent place and respects overlap edges";
+        Task* const taskA                     = addTask(91u, 1u);
+        Task* const taskB                     = addTask(92u, 2u);
+        Task* const taskC                     = addTask(93u, 3u);
+        if (! state.MoveQueuedTask(93u, true) || taskC->GetQueueOrderKey() != 2u || taskB->GetQueueOrderKey() != 3u || taskA->GetQueueOrderKey() != 1u)
+            return fail(kScenario, L"the current neighbour's key alone must swap with the requested task.");
+        {
+            std::scoped_lock lock(state._queueMutex);
+            taskC->_overlapQueued.store(true, std::memory_order_release);
+            taskC->_queueOrderKey.store(4u, std::memory_order_release);
+        }
+        if (state.MoveQueuedTask(92u, false) || taskB->GetQueueOrderKey() != 3u || taskC->GetQueueOrderKey() != 4u)
+            return fail(kScenario, L"a late overlap edge must be observed before adjacency and prevent crossing it.");
+        if (! scenarioSettles(kScenario))
+            return false;
+    }
     Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.QueueStartOrder.Us", L"", PerfElapsedUs(startedUs), scenarioCount, 0u, S_OK);
+
+    // queue_head_selector_v1: same-binary component comparison, not historical app latency.
+    // Reuse this case's private admission fixtures; neither selector acquires provider authority.
+    constexpr size_t kPairs          = 4u;
+    constexpr size_t kCallsPerSample = 16u;
+    struct SelectorSample final
+    {
+        SelectorSample() noexcept                        = default;
+        SelectorSample(const SelectorSample&)            = delete;
+        SelectorSample(SelectorSample&&)                 = delete;
+        SelectorSample& operator=(const SelectorSample&) = delete;
+        SelectorSample& operator=(SelectorSample&&)      = delete;
+
+        uint64_t baselineUs  = 0u;
+        uint64_t candidateUs = 0u;
+        std::array<uint64_t, kCallsPerSample> baselineIds{};
+        std::array<uint64_t, kCallsPerSample> candidateIds{};
+        std::array<std::atomic<uint64_t>, kCallsPerSample> baselineCapacityBytes{};
+        std::array<std::atomic<uint64_t>, kCallsPerSample> candidateCapacityBytes{};
+    };
+    for (const uint64_t count : {4u, 64u, 256u})
+        for (const bool reverseStorage : {false, true})
+            for (const bool reverseOrder : {false, true})
+            {
+                // Fixture setup and output storage are outside every measured span.
+                std::array<SelectorSample, kPairs> samples{};
+                for (uint64_t offset = 0u; offset < count; ++offset)
+                {
+                    const uint64_t id = reverseStorage ? count - offset : offset + 1u;
+                    Task* const task  = addTask(id, reverseOrder ? count + 1u - id : id);
+                    publishDecided(*task, MutationInterlockRelations{});
+                    state._queue.push_back(id);
+                }
+                const uint64_t expectedId = reverseOrder ? count : 1u;
+                const uint64_t nextId     = reverseOrder ? count - 1u : 2u;
+                Task* const head          = state.FindTask(expectedId);
+                const auto agrees         = [&](uint64_t expected) noexcept
+                {
+                    uint64_t scratch = 0u;
+                    std::scoped_lock queueLock(state._queueMutex);
+                    return state.FirstUnblockedQueuedTaskIdLocked() == expected && state.DebugBaselineQueueHeadLocked(scratch) == expected;
+                };
+                if (! agrees(expectedId))
+                    return fail(L"selector component", L"both selectors must choose the independently known least ready key");
+                head->_awaitingUserDecision.store(true, std::memory_order_release);
+                if (! agrees(nextId))
+                    return fail(L"selector component", L"a head awaiting its user's answer must be passed");
+                head->_awaitingUserDecision.store(false, std::memory_order_release);
+                // A canceled admission that withdrew queue membership cannot hold the head.
+                std::erase(state._queue, expectedId);
+                head->_cancelled.store(true, std::memory_order_release);
+                if (! agrees(nextId))
+                    return fail(L"selector component", L"a canceled withdrawn head must be passed");
+                head->_cancelled.store(false, std::memory_order_release);
+                std::erase_if(state._preparedMutationInterlocks, [&](const ActiveMutationInterlock& entry) noexcept { return entry.taskId == expectedId; });
+                if (! agrees(0u))
+                    return fail(L"selector component", L"an unpublished Preparing admission must keep its place");
+                state._queue.push_back(expectedId);
+                if (! agrees(nextId))
+                    return fail(L"selector component", L"a direct queue waiter without a decided publication must be passed");
+                publishDecided(*head, MutationInterlockRelations{});
+                MutationInterlockRelations predecessor{};
+                predecessor.predecessorKeys[0] = nextId;
+                predecessor.predecessorCount   = 1u;
+                publishDecided(*head, predecessor);
+                if (! agrees(nextId))
+                    return fail(L"selector component", L"a published predecessor must be chosen before its blocked head");
+                publishDecided(*head, MutationInterlockRelations{});
+                {
+                    // A directly driven waiter lives outside _tasks but owns a published admission.
+                    auto direct     = std::make_unique<Task>(state);
+                    direct->_taskId = count + 1u;
+                    direct->_admissionKey.store(count + 1u, std::memory_order_release);
+                    direct->_queueOrderKey.store(0u, std::memory_order_release);
+                    direct->InstallPreparedMutationInterlockScopes(makeScopes(count + 1u), false);
+                    publishDecided(*direct, MutationInterlockRelations{});
+                    state._queue.push_back(direct->GetId());
+                    if (! agrees(direct->GetId()))
+                        return fail(L"selector component", L"a published direct waiter outside the owning task collection must be considered");
+                    std::erase(state._queue, direct->GetId());
+                    std::erase_if(state._preparedMutationInterlocks,
+                                  [&](const ActiveMutationInterlock& entry) noexcept { return entry.taskId == direct->GetId(); });
+                }
+                // Restore the same storage order after correctness controls removed/reinserted head.
+                std::ranges::sort(state._queue,
+                                  [reverseStorage](uint64_t left, uint64_t right) noexcept { return reverseStorage ? left > right : left < right; });
+                std::ranges::sort(state._preparedMutationInterlocks,
+                                  [reverseStorage](const ActiveMutationInterlock& left, const ActiveMutationInterlock& right) noexcept
+                { return reverseStorage ? left.taskId > right.taskId : left.taskId < right.taskId; });
+                {
+                    // Warm both paths once, then AB/BA/AB/BA (reversed for descending storage).
+                    // The queue lock is held before timing; both helpers include their own _mutex.
+                    std::scoped_lock queueLock(state._queueMutex);
+                    uint64_t warmCapacity = 0u;
+                    if (state.DebugBaselineQueueHeadLocked(warmCapacity) != expectedId || state.FirstUnblockedQueuedTaskIdLocked() != expectedId)
+                        return fail(L"selector component", L"the restored immutable timing fixture must retain its expected head");
+                    const auto measure = [&](SelectorSample& sample, bool baseline) noexcept
+                    {
+                        // Both paths publish one ID and one capacity output per call. Relaxed
+                        // atomic capacity slots preserve the candidate's constant-zero stores.
+                        // The baseline's capacity lookup/local adapter cost remains in its span.
+                        if (baseline)
+                        {
+                            const uint64_t begin = PerfNowUs();
+                            for (size_t call = 0u; call < kCallsPerSample; ++call)
+                            {
+                                uint64_t capacity        = 0u;
+                                sample.baselineIds[call] = state.DebugBaselineQueueHeadLocked(capacity);
+                                sample.baselineCapacityBytes[call].store(capacity, std::memory_order_relaxed);
+                            }
+                            sample.baselineUs = PerfElapsedUs(begin);
+                        }
+                        else
+                        {
+                            const uint64_t begin = PerfNowUs();
+                            for (size_t call = 0u; call < kCallsPerSample; ++call)
+                            {
+                                sample.candidateIds[call] = state.FirstUnblockedQueuedTaskIdLocked();
+                                sample.candidateCapacityBytes[call].store(0u, std::memory_order_relaxed);
+                            }
+                            sample.candidateUs = PerfElapsedUs(begin);
+                        }
+                    };
+                    for (size_t pair = 0u; pair < kPairs; ++pair)
+                    {
+                        const bool baselineFirst = ((pair % 2u) == 0u) != reverseStorage;
+                        measure(samples[pair], baselineFirst);
+                        measure(samples[pair], ! baselineFirst);
+                    }
+                }
+                // Assertions and JSONL writes happen only after both timed paths finish.
+                for (size_t pair = 0u; pair < kPairs; ++pair)
+                {
+                    const auto& sample      = samples[pair];
+                    const uint64_t capacity = sample.baselineCapacityBytes.front().load(std::memory_order_relaxed);
+                    if (capacity == 0u || ! std::ranges::all_of(sample.baselineIds, [expectedId](uint64_t id) noexcept { return id == expectedId; }) ||
+                        ! std::ranges::all_of(sample.candidateIds, [expectedId](uint64_t id) noexcept { return id == expectedId; }) ||
+                        ! std::ranges::all_of(sample.baselineCapacityBytes,
+                                              [capacity](const std::atomic<uint64_t>& bytes) noexcept
+                    { return bytes.load(std::memory_order_relaxed) == capacity; }) ||
+                        ! std::ranges::all_of(sample.candidateCapacityBytes,
+                                              [](const std::atomic<uint64_t>& bytes) noexcept { return bytes.load(std::memory_order_relaxed) == 0u; }))
+                        return fail(L"selector component", L"every timed selection must agree with the expected head and stable observed baseline capacity");
+                    const std::wstring detail = std::format(L"queue_head_selector_v1;storage={};order={};pair={};first={};calls={}",
+                                                            reverseStorage ? L"descending" : L"ascending",
+                                                            reverseOrder ? L"descending" : L"ascending",
+                                                            pair,
+                                                            (((pair % 2u) == 0u) != reverseStorage) ? L"baseline" : L"candidate",
+                                                            kCallsPerSample);
+                    Debug::Perf::EmitDurationUs(L"FileOps.Queue.Selector.BaselineBatchUs", detail, sample.baselineUs, count, expectedId, S_OK);
+                    Debug::Perf::EmitDurationUs(L"FileOps.Queue.Selector.CandidateBatchUs", detail, sample.candidateUs, count, expectedId, S_OK);
+                    // Actual temporary collection capacity; not allocator calls, heap peak or task storage.
+                    Debug::Perf::Emit(L"FileOps.Queue.Selector.CollectionCapacityBytes",
+                                      detail,
+                                      0u,
+                                      capacity,
+                                      sample.candidateCapacityBytes.front().load(std::memory_order_relaxed),
+                                      S_OK);
+                }
+                removeTasks();
+            }
     return true;
 }
 

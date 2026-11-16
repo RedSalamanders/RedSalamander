@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -114,7 +115,7 @@ Describe 'Tools inventory contract' {
         Set-Content -LiteralPath (Join-Path $fixtureRoot $moduleRelative) -Value 'function Get-Fixture { $true }' -Encoding utf8
         Set-Content -LiteralPath (Join-Path $fixtureRoot $consumerRelative) `
             -Value "Import-Module (Join-Path `$PSScriptRoot 'Modules\Dependency.psm1')" -Encoding utf8
-        & git -C $fixtureRoot init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'init'; '--quiet')
 
         $moduleEntry = New-RSToolInventoryFixtureMetadata -Path $moduleRelative
         $moduleEntry.kind = 'module'
@@ -163,11 +164,11 @@ Describe 'Tools inventory contract' {
         $deletedPath = Join-Path $toolsRoot 'Deleted.ps1'
         Set-Content -LiteralPath $deletedPath -Value '# deleted after indexing' -Encoding utf8
 
-        & git -C $fixtureRoot init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'init'; '--quiet')
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to initialize the deleted-working-tree-file Git fixture.'
         }
-        & git -C $fixtureRoot add -- Tools
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'add'; '--'; 'Tools')
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to index the deleted-working-tree-file Git fixture.'
         }
@@ -381,5 +382,120 @@ Describe 'Tools inventory contract' {
 
         $inventory = & $commandPath -Validate -Format Object
         Assert-RSToolInventoryEqual -Actual $inventory.Summary.BlockingFindings -Expected 0 -Message 'The Validate alias must execute strict inventory validation.'
+    }
+}
+
+Describe 'Engine-free tool inventory metadata transport' {
+    It 'keeps bootstrap independent and separates successful paths from native diagnostics' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('inventory-native-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'ToolBootstrap.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Tooling/ToolInventory.psm1') -Destination $copy
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix ToolBootstrap
+        $savedConsoleEncoding=[Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            (Test-Path (Join-Path $fixture '.ci-engine'))|Should Be $false
+            $value='first é雪'+[char]13+[char]10+'second'
+            $result=& $module {param($root,$value)Invoke-RSToolInventoryGitCapture -Root $root -Arguments @('-c',('fixture.payload='+$value),'config','--get','fixture.payload')} $fixture $value
+            $result.ExitCode|Should Be 0
+            ($result.Output -join '|')|Should Be 'first é雪|second'
+            $result.ErrorOutput.Count|Should Be 0
+            [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(437)
+            $legacy=& $module {param($root)Invoke-RSToolInventoryGitCapture -Root $root -Arguments @('-c','fixture.payload=é雪','config','--get','fixture.payload')} $fixture
+            $legacy.Output[0]|Should Be 'é雪'
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            $null=& $module {param($root)Invoke-RSToolInventoryGitCapture -Root $root -Arguments @('init','--quiet')} $fixture
+            $null=& $module {param($root)Invoke-RSToolInventoryGitCapture -Root $root -Arguments @('config','core.quotepath','false')} $fixture
+            [void][IO.Directory]::CreateDirectory((Join-Path $fixture 'Tools'))
+            $path='Tools/café-Δ-雪.ps1'
+            [IO.File]::WriteAllText((Join-Path $fixture $path),'# owned fixture',[Text.UTF8Encoding]::new($false))
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                [Console]::OutputEncoding=$encoding
+                $paths=@(& $module {param($root)Get-RSToolRepositoryFilePaths -RepositoryRoot $root} $fixture)
+                ($paths -ccontains $path)|Should Be $true
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $result=& $module {param($root)Invoke-RSToolInventoryGitCapture -Root $root -Arguments @('rev-parse','--verify','missing-object')} $fixture
+            ($result.ExitCode -ne 0)|Should Be $true
+            $result.Output.Count|Should Be 0
+            ($result.ErrorOutput.Count -gt 0)|Should Be $true
+            $failed=$false
+            try {& $module {param($root)Get-RSToolRepositoryFilePaths -RepositoryRoot $root} (Join-Path $fixture 'missing')}
+            catch {$failed=$_.Exception.Message.StartsWith('Failed to enumerate tracked and non-ignored Tools files from ')}
+            $failed|Should Be $true
+        } finally {[Console]::OutputEncoding=$savedConsoleEncoding;Remove-Module $module}
+    }
+}
+
+Describe 'Guarded scheduled Git fixtures' {
+    BeforeEach {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -ErrorAction Stop
+        $starterPath=Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+        $module=@(Get-Module -All|Where-Object Path -ceq $starterPath)
+        if($module.Count -ne 1){throw 'Expected the canonical fixture starter.'}
+        $script:fixtureGitAudit=[pscustomobject]@{Starter=$module[0].ExportedFunctions['Start-RSContainedProcess'];Rows=[Collections.Generic.List[object]]::new()}
+        $audit=$script:fixtureGitAudit
+        Mock Start-RSContainedProcess -ModuleName ProcessStreaming ({
+            param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
+            if($ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or -not $ProcessStartInfo.RedirectStandardOutput -or
+                -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation -or $ProcessStartInfo.StandardOutputEncoding.CodePage -ne 65001){throw 'Refusing unsafe scheduled fixture child before launch.'}
+            $owned=& $audit.Starter -ProcessStartInfo $ProcessStartInfo
+            $audit.Rows.Add(@{pid=$owned.Id;contained=$owned.IsInContainmentJob;argv=@($ProcessStartInfo.ArgumentList);cwd=$ProcessStartInfo.WorkingDirectory;noWindow=$ProcessStartInfo.CreateNoWindow})
+            return $owned
+        }.GetNewClosure())
+        $script:fixtureGitRoot=Join-Path $TestDrive ([guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($script:fixtureGitRoot)
+    }
+    AfterEach {
+        foreach($row in $script:fixtureGitAudit.Rows){$row.contained|Should Be $true;(Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty}
+        $script:fixtureGitAudit.Rows.Count|Should BeGreaterThan 0
+    }
+    It 'preserves literal argv, caller CWD, empty stdout and Unicode under both console encodings' {
+        $saved=[Console]::OutputEncoding
+        Push-Location $script:fixtureGitRoot
+        try {
+            Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'init'; '--quiet')
+            $LASTEXITCODE|Should Be 0
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))){
+                [Console]::OutputEncoding=$encoding
+                $nameAndValue=@('fixture.literal','literal * é雪')
+                $empty=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'config'; '--local'; '--'; $nameAndValue))
+                $empty.Count|Should Be 0;$LASTEXITCODE|Should Be 0
+                $value=Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'config'; '--get'; 'fixture.literal')
+                $value|Should Be 'literal * é雪';$LASTEXITCODE|Should Be 0
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $multiple=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'config'; '--add'; 'fixture.literal'; 'second * é雪'))
+            $multiple.Count|Should Be 0
+            $lines=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'config'; '--get-all'; 'fixture.literal'))
+            $LASTEXITCODE|Should Be 0;$lines.Count|Should Be 2
+            foreach($line in $lines){($line -is [string])|Should Be $true}
+            ($lines -join '|')|Should Be 'literal * é雪|second * é雪'
+            Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'config'; '--add'; 'fixture.blank'; '')
+            $LASTEXITCODE|Should Be 0
+            $blank=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'config'; '--get-all'; 'fixture.blank'))
+            $LASTEXITCODE|Should Be 0;$blank.Count|Should Be 1
+            ($blank[0] -is [string])|Should Be $true;$blank[0]|Should Be ''
+            $script:fixtureGitAudit.Rows.Count|Should Be 9
+            foreach($row in $script:fixtureGitAudit.Rows){$row.cwd|Should Be $script:fixtureGitRoot}
+            ($script:fixtureGitAudit.Rows[1].argv -join '|')|Should Be ('-C|'+$script:fixtureGitRoot+'|config|--local|--|fixture.literal|literal * é雪')
+        } finally {Pop-Location;[Console]::OutputEncoding=$saved}
+    }
+    It 'preserves nonzero native exit and stderr redirection without converting errors to stdout' {
+        $merged=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'rev-parse'; 'HEAD') 2>&1)
+        $LASTEXITCODE|Should Be 128
+        ($merged -join "`n")|Should Match 'not a git repository'
+        $suppressed=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'rev-parse'; 'HEAD') 2>$null)
+        $LASTEXITCODE|Should Be 128;$suppressed.Count|Should Be 0
+        $script:fixtureGitAudit.Rows.Count|Should Be 2
+    }
+    It 'retains both streams on a partial-output failure and keeps only owned fixture writes' {
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'init'; '--quiet')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; '-c'; 'user.name=Fixture'; '-c'; 'user.email=fixture@example.invalid'; '-c'; 'commit.gpgsign=false'; 'commit'; '--quiet'; '--allow-empty'; '-m'; 'fixture')
+        $LASTEXITCODE|Should Be 0
+        $result=@(Invoke-RSTestFixtureGit -Arguments @('-C'; $script:fixtureGitRoot; 'rev-parse'; 'HEAD'; 'HEAD:missing') 2>&1)
+        $LASTEXITCODE|Should Be 128
+        @($result|Where-Object {[string]$_ -match '^[0-9a-f]{40}$'}).Count|Should Be 1
+        ($result -join "`n")|Should Match 'fatal:'
+        $script:fixtureGitAudit.Rows.Count|Should Be 3
     }
 }

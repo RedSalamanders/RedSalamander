@@ -7,6 +7,461 @@
 #include <limits>
 #include <thread>
 
+[[nodiscard]] bool RunFileOperationLocalAncestryProbeSelfTest(SelfTestState& state) noexcept
+{
+    const auto root = state.tempRoot / L"local-ancestry-probe";
+    if (! RecreateEmptyDirectory(root / L"real" / L"tree" / L"inner") || ! RecreateEmptyDirectory(root / L"outside" / L"inner"))
+        return false;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    if (! TryCreateJunction(root / L"alias", root / L"real"))
+        return false;
+    const auto identity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+    const auto source   = root / L"alias" / L"tree";
+    const auto probe    = [&](const std::filesystem::path& destination, bool cancel = false) noexcept
+    { return FileOperations::ProbeLocalDirectoryTransferAncestry(source.native(), destination.native(), identity, [cancel]() noexcept { return cancel; }); };
+    const auto inside = [](const FileOperations::LocalDirectoryAncestryProbeResult& observation) noexcept
+    { return observation.destinationInsideSource && observation.status == HRESULT_FROM_WIN32(ERROR_INVALID_NAME); };
+    const auto outside = [](const FileOperations::LocalDirectoryAncestryProbeResult& observation) noexcept
+    { return ! observation.destinationInsideSource && observation.status == S_OK; };
+    const auto unanswered = [](const FileOperations::LocalDirectoryAncestryProbeResult& observation, HRESULT expectedStatus) noexcept
+    { return ! observation.destinationInsideSource && observation.status == expectedStatus; };
+    bool passed = inside(probe(root / L"real" / L"tree" / L"inner" / L"tree")) && inside(probe(root / L"real" / L"tree")) &&
+                  inside(probe(root / L"real" / L"tree" / L"missing-parent" / L"tree")) && outside(probe(root / L"outside" / L"inner" / L"tree")) &&
+                  unanswered(probe(root / L"outside" / L"inner" / L"tree", true), HRESULT_FROM_WIN32(ERROR_CANCELLED));
+    // The source's interior link points outward. A non-follow transfer cannot reach that
+    // marker by traversal and must not be rejected as a recursive self-copy.
+    if (! TryCreateJunction(root / L"real" / L"tree" / L"outside", root / L"outside"))
+        return false;
+    passed = passed && outside(probe(root / L"outside" / L"inner" / L"tree"));
+    if (! SelfTest::WriteTextFile(root / L"blocked-parent", "fixture"))
+        return false;
+    passed = passed && unanswered(probe(root / L"blocked-parent" / L"tree"), HRESULT_FROM_WIN32(ERROR_DIRECTORY));
+    // Exercise extended input and an ordinary spelling beyond MAX_PATH in the same sandbox.
+    auto deep = root / L"real" / L"tree";
+    for (unsigned int level = 0u; level < 6u; ++level)
+        deep /= L"synthetic-long-directory-component-0123456789";
+    std::error_code error;
+    std::filesystem::create_directories(std::filesystem::path(Common::Paths::ToExtendedWin32Path(deep.native())), error);
+    if (error)
+        return false;
+    passed = passed && inside(probe(deep / L"missing" / L"tree")) &&
+             inside(FileOperations::ProbeLocalDirectoryTransferAncestry(
+                 Common::Paths::ToExtendedWin32Path(source.native()), Common::Paths::ToExtendedWin32Path((deep / L"tree").native()), identity, []() noexcept {
+        return false;
+    }));
+    const auto fenceParent = root / L"control-fence";
+    if (! RecreateEmptyDirectory(fenceParent))
+        return false;
+    bool retirementAttempted = false;
+    bool retirementRefused   = false;
+    std::filesystem::path fencedControl;
+    const auto fenced = FileOperations::ProbeLocalDirectoryTransferAncestry(source.native(),
+                                                                            (fenceParent / L"target").native(),
+                                                                            identity,
+                                                                            [&]() noexcept
+    {
+        if (! retirementAttempted)
+        {
+            std::error_code listError;
+            std::filesystem::directory_iterator entry(fenceParent, listError);
+            const std::filesystem::directory_iterator end;
+            for (; ! listError && entry != end; entry.increment(listError))
+            {
+                if (! entry->path().filename().native().starts_with(L"inside-source-check."))
+                    continue;
+                fencedControl              = entry->path();
+                const std::wstring control = Common::Paths::ToExtendedWin32Path(fencedControl.native());
+                const BOOL deleted         = DeleteFileW(control.c_str());
+                const DWORD deleteError    = deleted ? ERROR_SUCCESS : GetLastError();
+                const std::wstring renamed = control + L".renamed";
+                const BOOL moved           = MoveFileW(control.c_str(), renamed.c_str());
+                const DWORD moveError      = moved ? ERROR_SUCCESS : GetLastError();
+                retirementAttempted        = true;
+                retirementRefused          = ! deleted && ! moved && deleteError == ERROR_SHARING_VIOLATION && moveError == ERROR_SHARING_VIOLATION;
+                break;
+            }
+        }
+        return false;
+    });
+    std::error_code fencedExistsError;
+    passed = passed && outside(fenced) && retirementAttempted && retirementRefused && ! std::filesystem::exists(fencedControl, fencedExistsError) &&
+             ! fencedExistsError;
+
+    const auto movedParent   = root / L"control-parent";
+    const auto renamedParent = root / L"control-parent-renamed";
+    if (! RecreateEmptyDirectory(movedParent))
+        return false;
+    bool parentAttempted  = false;
+    bool parentMoved      = false;
+    DWORD parentMoveError = ERROR_SUCCESS;
+    const auto moved      = FileOperations::ProbeLocalDirectoryTransferAncestry(source.native(),
+                                                                                (movedParent / L"target").native(),
+                                                                                identity,
+                                                                                [&]() noexcept
+    {
+        if (! parentAttempted)
+        {
+            std::error_code listError;
+            std::filesystem::directory_iterator entry(movedParent, listError);
+            const std::filesystem::directory_iterator end;
+            for (; ! listError && entry != end; entry.increment(listError))
+            {
+                if (! entry->path().filename().native().starts_with(L"inside-source-check."))
+                    continue;
+                const std::wstring from = Common::Paths::ToExtendedWin32Path(movedParent.native());
+                const std::wstring to   = Common::Paths::ToExtendedWin32Path(renamedParent.native());
+                parentMoved             = MoveFileW(from.c_str(), to.c_str()) != FALSE;
+                parentMoveError         = parentMoved ? ERROR_SUCCESS : GetLastError();
+                parentAttempted         = true;
+                break;
+            }
+        }
+        return false;
+    });
+    passed = passed && parentAttempted &&
+             (parentMoved ? unanswered(moved, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) || unanswered(moved, HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+                          : outside(moved) && (parentMoveError == ERROR_SHARING_VIOLATION || parentMoveError == ERROR_ACCESS_DENIED));
+    const auto missingSource = FileOperations::ProbeLocalDirectoryTransferAncestry(
+        (root / L"missing-source").native(), (fenceParent / L"target").native(), identity, []() noexcept { return false; });
+    passed = passed && unanswered(missingSource, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
+    // Drive the real task preflight too: no provider IDs, different source spelling, and a
+    // destination subtree that does not yet exist. Refusal precedes parent creation.
+    if (! state.fileOps || ! state.fsLocal)
+        return false;
+    const auto missingFolder = root / L"real" / L"tree" / L"not-created";
+    RedSalamander::TestSupport::ScopedEnvironmentVariable noIdentity(kSelfTestEnvBindIdentityUnsupportedPath, root.native());
+    FileOperations::QualifiedEndpoint endpoint{.pluginId                 = L"builtin/file-system",
+                                               .instanceId               = L"host/default",
+                                               .profileId                = L"local",
+                                               .rootId                   = L"fixture-ancestry-volume",
+                                               .pathIdentity             = identity,
+                                               .verificationHostReadback = true,
+                                               .cancellationRouteClass   = FileOperations::CancellationRouteClass::Bounded};
+    FileOperations::TransferPlan transfer{};
+    transfer.intent                         = FileOperations::TransferIntent::Move;
+    transfer.strategy                       = FileOperations::OperationStrategy::Managed;
+    transfer.sourceEndpoint                 = endpoint;
+    transfer.destinationEndpoint            = endpoint;
+    transfer.selectedItems                  = {{.providerPath = source.native()}};
+    transfer.destination.providerFolderPath = missingFolder.native();
+    using State                             = FolderWindow::FileOperationState;
+    State::Task task(*state.fileOps);
+    task._operation                = FILESYSTEM_MOVE;
+    task._executionMode            = State::ExecutionMode::PerItem;
+    task._fileSystem               = state.fsLocal;
+    task._sourcePaths              = {source};
+    task._sourcePluginId           = endpoint.pluginId;
+    task._sourcePluginShortId      = L"file";
+    task._sourceInstanceContext    = endpoint.instanceId;
+    task._sourcePathAttributesHint = {FILE_ATTRIBUTE_DIRECTORY};
+    task.InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+                                       FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}}),
+                                   {.fileSystem      = state.fsLocal,
+                                    .folder          = missingFolder,
+                                    .pluginId        = endpoint.pluginId,
+                                    .pluginShortId   = L"file",
+                                    .instanceContext = endpoint.instanceId});
+    task.InitializeSourceItemResultBuilders();
+    const auto diagnosticCleanup = wil::scope_exit([&]() noexcept { state.fileOps->DebugRemoveDiagnosticsForTask(task._taskId); });
+    const HRESULT prepareHr      = task.PrepareMutationInterlockScopes();
+    const HRESULT executeHr      = FAILED(prepareHr) ? prepareHr : task.ExecuteOperation();
+    std::error_code missingError;
+    passed = passed && executeHr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) && ! std::filesystem::exists(missingFolder, missingError) && ! missingError;
+    wil::com_ptr<IFileSystemIO> io;
+    if (! state.fsLocal.try_query_to(io.put()))
+        return false;
+    {
+        const auto realView                   = root / L"cross-view-real";
+        const auto aliasView                  = root / L"cross-view-alias";
+        const auto viewSource                 = aliasView / L"album";
+        const auto existingNested             = realView / L"album" / L"inside" / L"album";
+        const auto missingNestedParent        = realView / L"album" / L"not-created";
+        const auto distinctParent             = root / L"cross-view-distinct";
+        constexpr std::string_view kViewBytes = "bound-cross-view-source";
+        if (! RecreateEmptyDirectory(existingNested) || ! RecreateEmptyDirectory(distinctParent) || ! TryCreateJunction(aliasView, realView) ||
+            ! WriteFileTextFsIo(io, realView / L"album" / L"track.bin", std::string(kViewBytes)))
+            return false;
+        RedSalamander::TestSupport::ScopedEnvironmentVariable restoreIdentity(kSelfTestEnvBindIdentityUnsupportedPath, std::nullopt);
+        RedSalamander::TestSupport::ScopedEnvironmentVariable namespaceView(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_NAMESPACE_PATH", aliasView.native());
+        auto sourceEndpoint        = endpoint;
+        auto destinationEndpoint   = endpoint;
+        sourceEndpoint.rootId      = L"fixture-cross-view-source";
+        destinationEndpoint.rootId = L"fixture-cross-view-destination";
+        auto ready                 = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                                  state.fsLocal.get(),
+                                                                                  sourceEndpoint,
+                                                                                  destinationEndpoint,
+                                                                                  FileOperations::TransferIntent::Copy,
+                                                                                  viewSource.native(),
+                                                                                  (realView / L"album").native());
+        bool sameViewObject        = true;
+        bool sameViewRevision      = false;
+        const HRESULT crossCheckHr =
+            ready.destination.has_value()
+                ? FileOperations::CrossCheckBoundObjectIdentity(ready.source, ready.destination.value().authority, sameViewObject, sameViewRevision)
+                : E_UNEXPECTED;
+        constexpr FileSystemBindFlags viewBindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+        auto rebound =
+            FileOperations::RevalidateObjectAuthority(state.fsLocal.get(), viewSource.native(), sourceEndpoint.profileId, viewBindFlags, ready.source);
+        if (ready.state != FileOperations::TransferSafetyState::Ready || ! ready.source.boundObject || ! ready.destination.has_value() ||
+            ! ready.destination.value().authority.boundObject || FAILED(crossCheckHr) || sameViewObject ||
+            rebound.state != FileOperations::ObjectRevalidationState::Same)
+            return false;
+        // Drop this observation's pins before exercising the real task, as a remote view
+        // may enforce directory-handle sharing independently of its reported ID namespace.
+        ready                  = {};
+        rebound                = {};
+        const auto runViewTask = [&](const std::filesystem::path& destinationParent) noexcept
+        {
+            FileOperations::TransferPlan viewPlan{};
+            viewPlan.intent                         = FileOperations::TransferIntent::Copy;
+            viewPlan.strategy                       = FileOperations::OperationStrategy::Copy;
+            viewPlan.sourceEndpoint                 = sourceEndpoint;
+            viewPlan.destinationEndpoint            = destinationEndpoint;
+            viewPlan.selectedItems                  = {{.providerPath = viewSource.native()}};
+            viewPlan.destination.providerFolderPath = destinationParent.native();
+            State::Task viewTask(*state.fileOps);
+            viewTask._operation                = FILESYSTEM_COPY;
+            viewTask._executionMode            = State::ExecutionMode::PerItem;
+            viewTask._fileSystem               = state.fsLocal;
+            viewTask._sourcePaths              = {viewSource};
+            viewTask._sourcePluginId           = sourceEndpoint.pluginId;
+            viewTask._sourcePluginShortId      = L"file";
+            viewTask._sourceInstanceContext    = sourceEndpoint.instanceId;
+            viewTask._sourcePathAttributesHint = {FILE_ATTRIBUTE_DIRECTORY};
+            viewTask.InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+                                                   FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(viewPlan)}}),
+                                               {.fileSystem      = state.fsLocal,
+                                                .folder          = destinationParent,
+                                                .pluginId        = destinationEndpoint.pluginId,
+                                                .pluginShortId   = L"file",
+                                                .instanceContext = destinationEndpoint.instanceId});
+            viewTask.InitializeSourceItemResultBuilders();
+            const HRESULT prepared = viewTask.PrepareMutationInterlockScopes();
+            return FAILED(prepared) ? prepared : viewTask.ExecuteOperation();
+        };
+        const HRESULT nestedHr = runViewTask(missingNestedParent);
+        std::error_code nestedExistsError;
+        const bool nestedParentExists = std::filesystem::exists(missingNestedParent, nestedExistsError);
+        const HRESULT distinctHr      = runViewTask(distinctParent);
+        std::string sourceBytes;
+        std::string distinctBytes;
+        passed = passed && nestedHr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) && ! nestedParentExists && ! nestedExistsError && distinctHr == S_OK &&
+                 ReadFileTextFsIo(io, viewSource / L"track.bin", sourceBytes) && sourceBytes == kViewBytes &&
+                 ReadFileTextFsIo(io, distinctParent / L"album" / L"track.bin", distinctBytes) && distinctBytes == kViewBytes;
+
+        // Differing Local roots do not turn negative namespace IDs into destructive
+        // distinctness. Exercise the real Managed admission/prompt, never a copied predicate.
+        const auto distinctFileParent = distinctParent / L"file-collision";
+        if (! RecreateEmptyDirectory(distinctFileParent) || ! WriteFileTextFsIo(io, distinctFileParent / L"track.bin", "existing-destination"))
+            return false;
+        for (const unsigned int control : {0u, 1u, 2u})
+        {
+            const bool sameEntry           = control == 0u;
+            const bool identitylessCleanup = control == 2u;
+            const auto selectedFile        = viewSource / L"track.bin";
+            const auto targetParent        = sameEntry ? realView / L"album" : distinctFileParent;
+            const auto targetFile          = targetParent / selectedFile.filename();
+            RedSalamander::TestSupport::ScopedEnvironmentVariable sourceIdentity(
+                kSelfTestEnvBindIdentityUnsupportedPath, identitylessCleanup ? std::optional<std::wstring_view>(selectedFile.native()) : std::nullopt);
+            if (sameEntry)
+            {
+                RedSalamander::TestSupport::ScopedEnvironmentVariable comparableIds(L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_NAMESPACE_PATH", std::nullopt);
+                const auto positive = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                                   state.fsLocal.get(),
+                                                                                   sourceEndpoint,
+                                                                                   destinationEndpoint,
+                                                                                   FileOperations::TransferIntent::Move,
+                                                                                   selectedFile.native(),
+                                                                                   targetFile.native());
+                if (positive.state != FileOperations::TransferSafetyState::SameObject)
+                    return false;
+            }
+            auto fileGuard        = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                                 state.fsLocal.get(),
+                                                                                 sourceEndpoint,
+                                                                                 destinationEndpoint,
+                                                                                 FileOperations::TransferIntent::Move,
+                                                                                 selectedFile.native(),
+                                                                                 targetFile.native());
+            bool sameFileObject   = true;
+            bool sameFileRevision = false;
+            const HRESULT fileCheck =
+                fileGuard.destination.has_value()
+                    ? FileOperations::CrossCheckBoundObjectIdentity(fileGuard.source, fileGuard.destination.value().authority, sameFileObject, sameFileRevision)
+                    : E_UNEXPECTED;
+            if (identitylessCleanup ? fileGuard.state != FileOperations::TransferSafetyState::Unsupported || fileGuard.source.boundObject
+                                    : fileGuard.state != FileOperations::TransferSafetyState::Ready || ! fileGuard.source.boundObject ||
+                                          ! fileGuard.destination.has_value() || FAILED(fileCheck) || sameFileObject)
+                return false;
+            fileGuard = {};
+
+            FileOperations::TransferPlan filePlan{};
+            filePlan.intent                         = FileOperations::TransferIntent::Move;
+            filePlan.strategy                       = FileOperations::OperationStrategy::Managed;
+            filePlan.sourceEndpoint                 = sourceEndpoint;
+            filePlan.destinationEndpoint            = destinationEndpoint;
+            filePlan.selectedItems                  = {{.providerPath = selectedFile.native()}};
+            filePlan.destination.providerFolderPath = targetParent.native();
+            State::Task fileTask(*state.fileOps);
+            fileTask._operation                = FILESYSTEM_MOVE;
+            fileTask._executionMode            = State::ExecutionMode::PerItem;
+            fileTask._fileSystem               = state.fsLocal;
+            fileTask._sourcePaths              = {selectedFile};
+            fileTask._sourcePluginId           = sourceEndpoint.pluginId;
+            fileTask._sourcePluginShortId      = L"file";
+            fileTask._sourceInstanceContext    = sourceEndpoint.instanceId;
+            fileTask._sourcePathAttributesHint = {FILE_ATTRIBUTE_NORMAL};
+            fileTask._perItemMaxConcurrency    = 1u;
+            fileTask.InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+                                                   FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(filePlan)}}),
+                                               {.fileSystem      = state.fsLocal,
+                                                .folder          = targetParent,
+                                                .pluginId        = destinationEndpoint.pluginId,
+                                                .pluginShortId   = L"file",
+                                                .instanceContext = destinationEndpoint.instanceId});
+            fileTask.InitializeSourceItemResultBuilders();
+            const auto fileDiagnostics = wil::scope_exit([&]() noexcept { state.fileOps->DebugRemoveDiagnosticsForTask(fileTask._taskId); });
+            if (FAILED(fileTask.PrepareMutationInterlockScopes()))
+                return false;
+            using Action = State::Task::ConflictAction;
+            std::atomic<uint32_t> promptCount{0u};
+            std::atomic<bool> discardOffered{false};
+            std::atomic<bool> ordinaryActions{true};
+            HRESULT fileHr           = E_PENDING;
+            const auto fileStartedAt = std::chrono::steady_clock::now();
+            {
+                const std::jthread responder([&](std::stop_token stop) noexcept
+                {
+                    uint64_t answeredGeneration = 0u;
+                    const auto deadline         = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(5));
+                    while (! stop.stop_requested() && std::chrono::steady_clock::now() < deadline)
+                    {
+                        if (const auto prompt = TryGetConflictPromptCopy(&fileTask);
+                            prompt.has_value() && prompt->generation != answeredGeneration && ! prompt->metadataLoading && prompt->buttonsPublishable)
+                        {
+                            const auto end     = prompt->actions.begin() + static_cast<std::ptrdiff_t>(prompt->actionCount);
+                            const auto offered = [&](Action action) noexcept { return std::find(prompt->actions.begin(), end, action) != end; };
+                            discardOffered.store(offered(Action::DiscardSource), std::memory_order_release);
+                            ordinaryActions.store(offered(Action::Overwrite) && offered(Action::KeepBoth) && offered(Action::Skip) && offered(Action::Cancel),
+                                                  std::memory_order_release);
+                            // Alias controls always Cancel, even on a vulnerable baseline. Only the distinct-file
+                            // identityless control replaces bytes, then exercises the actual cleanup helper.
+                            if (fileTask.SubmitConflictDecision(prompt->generation, identitylessCleanup ? Action::Overwrite : Action::Cancel, false))
+                            {
+                                answeredGeneration = prompt->generation;
+                                promptCount.fetch_add(1u, std::memory_order_release);
+                            }
+                        }
+                        Sleep(2);
+                    }
+                    if (! stop.stop_requested())
+                        fileTask.RequestCancel();
+                });
+                fileHr = fileTask.ExecuteOperation();
+            }
+            const uint64_t fileElapsedUs  = Debug::Perf::ElapsedUs(fileStartedAt);
+            bool retainedAfterPublication = true;
+            if (identitylessCleanup)
+            {
+                static_cast<void>(fileTask.FinalizeTypedItemResults(fileHr));
+                const std::scoped_lock resultsLock(fileTask._sourceItemStatusMutex);
+                retainedAfterPublication = fileTask._sourceItemResultBuilders.size() == 1u && fileTask._sourceItemResultBuilders.front().terminal.has_value();
+                if (retainedAfterPublication)
+                {
+                    const auto& terminal     = fileTask._sourceItemResultBuilders.front().terminal.value();
+                    retainedAfterPublication = terminal.publication == FileOperations::PublicationState::Published &&
+                                               terminal.sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                                               terminal.completion == FileOperations::ItemCompletion::Completed && SUCCEEDED(terminal.status);
+                }
+            }
+            std::string retainedSource;
+            std::string retainedDestination;
+            const bool filePassed =
+                (identitylessCleanup ? SUCCEEDED(fileHr) : fileHr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) && retainedAfterPublication &&
+                promptCount.load(std::memory_order_acquire) == 1u && ! discardOffered.load(std::memory_order_acquire) &&
+                ordinaryActions.load(std::memory_order_acquire) && fileTask._alreadyThereSourceRemovedCount.load(std::memory_order_acquire) == 0u &&
+                ReadFileTextFsIo(io, selectedFile, retainedSource) && retainedSource == kViewBytes && ReadFileTextFsIo(io, targetFile, retainedDestination) &&
+                retainedDestination == (sameEntry || identitylessCleanup ? kViewBytes : std::string_view("existing-destination"));
+            Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.LocalCrossRootDistinctness",
+                                        identitylessCleanup ? L"identityless-replace" : (sameEntry ? L"same-entry" : L"different-entry"),
+                                        fileElapsedUs,
+                                        promptCount.load(std::memory_order_acquire),
+                                        discardOffered.load(std::memory_order_acquire) ? 1u : 0u,
+                                        filePassed ? S_OK : E_FAIL);
+            passed = filePassed && passed;
+        }
+    }
+    for (const bool unsupported : {true, false})
+    {
+        for (const FileSystemOperation operation : {FILESYSTEM_COPY, FILESYSTEM_MOVE})
+        {
+            const auto caseRoot               = root / std::format(L"same-path-{}-{}", unsupported, static_cast<unsigned int>(operation));
+            const auto selected               = caseRoot / L"album";
+            const auto originalFile           = selected / L"track.bin";
+            constexpr std::string_view kBytes = "same-path-folder-must-survive";
+            if (! RecreateEmptyDirectory(selected) || ! WriteFileTextFsIo(io, originalFile, std::string(kBytes)))
+                return false;
+            RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(
+                kSelfTestEnvBindIdentityUnsupportedPath, unsupported ? std::optional<std::wstring_view>(selected.native()) : std::nullopt);
+            FileOperations::TransferPlan samePathPlan{};
+            samePathPlan.intent         = operation == FILESYSTEM_COPY ? FileOperations::TransferIntent::Copy : FileOperations::TransferIntent::Move;
+            samePathPlan.strategy       = operation == FILESYSTEM_COPY ? FileOperations::OperationStrategy::Copy : FileOperations::OperationStrategy::Managed;
+            samePathPlan.sourceEndpoint = endpoint;
+            samePathPlan.destinationEndpoint            = endpoint;
+            samePathPlan.selectedItems                  = {{.providerPath = selected.native()}};
+            samePathPlan.destination.providerFolderPath = caseRoot.native();
+            State::Task samePathTask(*state.fileOps);
+            samePathTask._operation                = operation;
+            samePathTask._executionMode            = State::ExecutionMode::PerItem;
+            samePathTask._fileSystem               = state.fsLocal;
+            samePathTask._sourcePaths              = {selected};
+            samePathTask._sourcePluginId           = endpoint.pluginId;
+            samePathTask._sourcePluginShortId      = L"file";
+            samePathTask._sourceInstanceContext    = endpoint.instanceId;
+            samePathTask._sourcePathAttributesHint = {FILE_ATTRIBUTE_DIRECTORY};
+            samePathTask.InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+                                                       FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(samePathPlan)}}),
+                                                   {.fileSystem      = state.fsLocal,
+                                                    .folder          = caseRoot,
+                                                    .pluginId        = endpoint.pluginId,
+                                                    .pluginShortId   = L"file",
+                                                    .instanceContext = endpoint.instanceId});
+            samePathTask.InitializeSourceItemResultBuilders();
+            const HRESULT samePrepareHr = samePathTask.PrepareMutationInterlockScopes();
+            const HRESULT sameExecuteHr = FAILED(samePrepareHr) ? samePrepareHr : samePathTask.ExecuteOperation();
+            std::string originalBytes;
+            std::string copiedBytes;
+            std::wstring sibling;
+            const HRESULT siblingHr      = Common::Paths::BuildUniqueSiblingPathCandidate(selected.native(), true, 2u, sibling);
+            const HRESULT expectedMoveHr = HRESULT_FROM_WIN32(unsupported ? ERROR_ALREADY_EXISTS : ERROR_INVALID_NAME);
+            const bool preserved         = ReadFileTextFsIo(io, originalFile, originalBytes) && originalBytes == kBytes;
+            std::error_code siblingExistsError;
+            const bool siblingExists = std::filesystem::exists(std::filesystem::path(sibling), siblingExistsError);
+            const bool correct       = operation == FILESYSTEM_COPY
+                                           ? sameExecuteHr == S_OK && SUCCEEDED(siblingHr) &&
+                                                 ReadFileTextFsIo(io, std::filesystem::path(sibling) / L"track.bin", copiedBytes) && copiedBytes == kBytes
+                                           : sameExecuteHr == expectedMoveHr && ! siblingExists && ! siblingExistsError;
+            if (! preserved || ! correct)
+                AppendLog(std::format(L"Same-path folder unsupported={} operation={} prepare=0x{:08X} execute=0x{:08X} preserved={} correct={}",
+                                      unsupported,
+                                      static_cast<unsigned int>(operation),
+                                      static_cast<unsigned long>(samePrepareHr),
+                                      static_cast<unsigned long>(sameExecuteHr),
+                                      preserved,
+                                      correct));
+            passed = passed && preserved && correct;
+        }
+    }
+    Debug::Perf::Emit(L"FileOps.SelfTest.LocalAncestryProbe",
+                      L"alias;missing-parent;outward-link;long-path;cancel;invalid-control-parent;control-retirement;control-parent-rename;missing-source",
+                      0u,
+                      21u,
+                      0u,
+                      passed ? S_OK : E_FAIL);
+    return passed;
+}
+
 [[nodiscard]] bool RunFileOperationSharedTransferSelfTests(SelfTestState& state, std::wstring& failure) noexcept
 {
     using State = FolderWindow::FileOperationState;
@@ -1180,25 +1635,34 @@ struct KeepAwakeSelfTestApi final
     bool failCreate      = false;
     bool failSet         = false;
     bool failClear       = false;
+    HANDLE lastCreated   = nullptr; // borrowed observation only; PowerRequest owns and closes the event
 
-    [[nodiscard]] static wil::unique_handle Create(void* context, const wchar_t* reason) noexcept
+    [[nodiscard]] static wil::unique_handle Create(void* context, wchar_t* reason) noexcept
     {
         auto* const self = static_cast<KeepAwakeSelfTestApi*>(context);
         ++self->createCalls;
         if (self->failCreate || reason == nullptr || *reason == L'\0')
+        {
+            SetLastError(ERROR_ACCESS_DENIED);
             return {};
-        return wil::unique_handle(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        }
+        self->lastCreated = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        return wil::unique_handle(self->lastCreated);
     }
     [[nodiscard]] static bool Set(void* context, HANDLE request) noexcept
     {
         auto* const self = static_cast<KeepAwakeSelfTestApi*>(context);
         ++self->setCalls;
+        if (self->failSet)
+            SetLastError(ERROR_NOT_SUPPORTED);
         return ! self->failSet && request != nullptr;
     }
     [[nodiscard]] static bool Clear(void* context, HANDLE request) noexcept
     {
         auto* const self = static_cast<KeepAwakeSelfTestApi*>(context);
         ++self->clearCalls;
+        if (self->failClear)
+            SetLastError(ERROR_GEN_FAILURE);
         return ! self->failClear && request != nullptr;
     }
     [[nodiscard]] FileOperations::PowerRequestApi Api() noexcept
@@ -1417,7 +1881,7 @@ struct KeepAwakeSelfTestApi final
 // atomics the task already keeps and hands them to the lease, so the lease is driven with synthetic facts for two tasks.
 // What this does not prove: that each hook in the task code fires (admission, leaving the operation, pause, queue pause,
 // the wait for an answer, cancel, finish).
-[[nodiscard]] bool RunFileOperationKeepAwakeSelfTest() noexcept
+[[nodiscard]] bool RunFileOperationKeepAwakeSelfTest(FolderWindow::FileOperationState& owner) noexcept
 {
     using FileOperations::KeepAwakeFacts;
     using FileOperations::KeepAwakeLease;
@@ -1565,6 +2029,8 @@ struct KeepAwakeSelfTestApi final
         apply(lease, running);
         if (! counters(request, 1u, 1u, 0u, 1u, false) || fake.setCalls != 0u || ! lease.Held())
             return fail(L"a refused create is counted and not held");
+        if (request.GetCounters().lastError != ERROR_ACCESS_DENIED || ! request.GetCounters().failureLogged)
+            return fail(L"the exact create error is retained and the one diagnostic is recorded");
         ++step;
         apply(lease, finished);
         if (! counters(request, 0u, 1u, 1u, 1u, false) || fake.clearCalls != 0u)
@@ -1575,6 +2041,8 @@ struct KeepAwakeSelfTestApi final
         apply(lease, running);
         if (! counters(request, 1u, 2u, 1u, 2u, false) || fake.createCalls != 2u || fake.setCalls != 1u)
             return fail(L"a refused set is counted and not held");
+        if (request.GetCounters().lastError != ERROR_NOT_SUPPORTED || ! request.GetCounters().failureLogged)
+            return fail(L"the exact set error is retained without resetting the diagnostic guard");
         ++step;
         apply(lease, finished);
         if (! counters(request, 0u, 2u, 2u, 2u, false) || fake.clearCalls != 0u)
@@ -1589,6 +2057,18 @@ struct KeepAwakeSelfTestApi final
         apply(lease, finished);
         if (! counters(request, 0u, 3u, 3u, 3u, false) || fake.clearCalls != 1u)
             return fail(L"a refused clear is counted and the request is no longer claimed");
+        DWORD handleFlags = 0u;
+        if (request.GetCounters().lastError != ERROR_GEN_FAILURE || GetHandleInformation(fake.lastCreated, &handleFlags) != FALSE ||
+            GetLastError() != ERROR_INVALID_HANDLE)
+            return fail(L"a refused clear preserves its error and closes the kernel request handle");
+        ++step;
+        fake.failClear = false;
+        apply(lease, running);
+        if (! counters(request, 1u, 4u, 3u, 3u, true) || fake.createCalls != 3u || fake.setCalls != 3u)
+            return fail(L"an Acquire after failed clear creates a fresh request instead of reusing leaked kernel state");
+        apply(lease, finished);
+        if (! counters(request, 0u, 4u, 4u, 3u, false) || fake.clearCalls != 2u)
+            return fail(L"the replacement request clears normally with unchanged failure count");
     }
 
     // A set refused for the first holder is tried again for the next one, while the first still holds its share.
@@ -1616,6 +2096,121 @@ struct KeepAwakeSelfTestApi final
         apply(second, finished);
         if (! counters(request, 0u, 1u, 1u, 1u, false) || fake.clearCalls != 1u)
             return fail(L"the last holder releases the request the retry obtained");
+    }
+    // Deadline arithmetic is checked without a two-minute sleep.
+    ++step;
+    if (FileOperations::AwaitingAnswerWaitMilliseconds(0u) != FileOperations::kAwaitingAnswerQuietMs ||
+        FileOperations::AwaitingAnswerWaitMilliseconds(FileOperations::kAwaitingAnswerQuietMs - 1u) != 1u ||
+        FileOperations::AwaitingAnswerWaitMilliseconds(FileOperations::kAwaitingAnswerQuietMs) != INFINITE ||
+        FileOperations::AwaitingAnswerWaitMilliseconds(7u, 10u) != 3u)
+        return fail(L"quiet wait uses one remaining deadline and becomes event-only at the boundary");
+
+    using Task   = FolderWindow::FileOperationState::Task;
+    using Action = Task::ConflictAction;
+    enum class WaitControl : uint8_t
+    {
+        Preanswered,
+        Precancelled,
+        QuietCancel,
+        QuietResume,
+        StopOnly,
+        Spurious
+    };
+    for (const WaitControl control : {WaitControl::Preanswered,
+                                      WaitControl::Precancelled,
+                                      WaitControl::QuietCancel,
+                                      WaitControl::QuietResume,
+                                      WaitControl::StopOnly,
+                                      WaitControl::Spurious})
+    {
+        ++step;
+        Task task(owner);
+        // No operation slot, provider, real power request, owner posts or diagnostic publication.
+        task._state = nullptr;
+        task._dbgConflictQuietPeriodMs.store(25u, std::memory_order_relaxed);
+        if (! task._conflictArbiter.decisionEvent || ! task._keepAwakeWorkEvent)
+            return fail(L"owned conflict wait events could not be created");
+        {
+            std::scoped_lock lock(task._conflictArbiter.mutex);
+            auto& prompt              = task._conflictArbiter.prompt;
+            prompt.active             = true;
+            prompt.generation         = 1u;
+            prompt.buttonsPublishable = true;
+            prompt.actions[0]         = Action::Skip;
+            prompt.actions[1]         = Action::Cancel;
+            prompt.actionCount        = 2u;
+        }
+        const auto answer = [&]() noexcept
+        {
+            std::scoped_lock lock(task._conflictArbiter.mutex);
+            return FileOperations::ConflictBroker::TryAcceptLocked(
+                task._conflictArbiter, 1u, Action::Skip, false, FileOperations::ConflictBroker::Placement::Published);
+        };
+        if (control == WaitControl::Preanswered || control == WaitControl::Precancelled)
+        {
+            if (! answer())
+                return fail(L"the before-wait decision could not be published");
+            if (control == WaitControl::Precancelled)
+                task.RequestCancel();
+        }
+        if (control == WaitControl::Spurious)
+            static_cast<void>(SetEvent(task._conflictArbiter.decisionEvent.get()));
+
+        wil::unique_event_nothrow done;
+        done.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (! done)
+            return fail(L"owned completion event could not be created");
+        std::atomic<Action> result{Action::None};
+        std::jthread worker([&]() noexcept
+        {
+            const auto decision = FolderWindowFileOperationsStateInternal::WaitForConflictDecision(task, nullptr, Task::ConflictDecisionScope{}, nullptr);
+            result.store(decision.first, std::memory_order_release);
+            static_cast<void>(SetEvent(done.get()));
+        });
+        const auto drain = wil::scope_exit([&]() noexcept
+        {
+            task.RequestCancel();
+            if (worker.joinable())
+                worker.join();
+        });
+        if (control != WaitControl::Preanswered && control != WaitControl::Precancelled)
+        {
+            const auto quiet = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire) >= 1u;
+            }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"private conflict wait reaches quiet deadline"});
+            if (! quiet.conditionMet || ! task._awaitingAnswerQuiet.load(std::memory_order_acquire) || WaitForSingleObject(done.get(), 0u) != WAIT_TIMEOUT)
+                return fail(L"quiet conflict wait must remain asleep without accepting a spurious decision");
+            if (control == WaitControl::QuietResume)
+            {
+                task.NoteKeepAwakeWork(GetTickCount64());
+                const auto quietAgain = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                    return task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire) >= 2u;
+                }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"resumed stream rearms private conflict quiet deadline"});
+                if (! quietAgain.conditionMet || ! task._awaitingAnswerQuiet.load(std::memory_order_acquire) || ! answer())
+                    return fail(L"resumed work must rearm the deadline and retain its later decision");
+            }
+            else if (control == WaitControl::Spurious)
+            {
+                if (! answer())
+                    return fail(L"a real decision after a spurious wake must still be accepted");
+            }
+            else if (control == WaitControl::StopOnly)
+                task._stopSource.request_stop(); // No RequestCancel/decision-event signal: the stop callback must wake it.
+            else
+                task.RequestCancel();
+        }
+        if (WaitForSingleObject(done.get(), 5'000u) != WAIT_OBJECT_0)
+            return fail(L"decision or durable cancellation must wake the event-only wait");
+        worker.join();
+        const Action expected =
+            control == WaitControl::Preanswered || control == WaitControl::QuietResume || control == WaitControl::Spurious ? Action::Skip : Action::Cancel;
+        const uint32_t calls = task._dbgConflictDecisionWaitCount.load(std::memory_order_acquire);
+        if (result.load(std::memory_order_acquire) != expected || task._awaitingUserDecision.load(std::memory_order_acquire) ||
+            calls > (control == WaitControl::QuietResume ? 6u
+                     : control == WaitControl::Spurious  ? 3u
+                                                         : 2u))
+            return fail(L"event waits preserve exact decisions/cancellation with bounded deadline wakes");
+        Debug::Perf::Emit(L"FileOps.Power.ConflictWaitCalls", L"control,calls", 0u, static_cast<uint64_t>(control), calls, S_OK);
     }
     return true;
 }
@@ -2840,17 +3435,19 @@ struct KeepAwakeSelfTestApi final
     });
     enum class Shape : uint8_t
     {
-        FileUnchanged,     // removed after the publication proof
-        FileChanged,       // grows between the copy and its removal: kept
-        FileWithStream,    // carries an alternate data stream this route does not copy: kept
-        FileOpenFails,     // the location refuses the open: the refusal stays
-        FolderEmptied,     // a folder the Move empties: removed
-        FolderGainsItem,   // a folder that gains an item before its removal: kept with that item
-        ReplaceWithoutIds, // the destination cannot identify items either and holds another file: Replace, probe, removed
-        ReplaceWithIds,    // an ordinary destination holds another file: Replace, probe, removed
-        SkipExisting,      // the same collision answered Skip: both files stay
-        SameFileTwoNames,  // the source folder is a junction to the destination folder: one file, two names; never removed
-        SharingUnenforced, // Replace where the location does not enforce sharing: the probe cannot answer, so the source is kept
+        FileUnchanged,           // removed after the publication proof
+        FileChanged,             // grows between the copy and its removal: kept
+        FileWithStream,          // carries an alternate data stream this route does not copy: kept
+        FileOpenFails,           // the location refuses the open: the refusal stays
+        FolderEmptied,           // a folder the Move empties: removed
+        FolderGainsItem,         // a folder that gains an item before its removal: kept with that item
+        ReplaceWithoutIds,       // the destination cannot identify items either and holds another file: Replace, probe, removed
+        ReplaceWithoutIdsLong,   // the same corroboration beyond MAX_PATH
+        PreauthorizedWithoutIds, // ALLOW_OVERWRITE still obtains observed-facts consent when binding is unsupported
+        ReplaceWithIds,          // an ordinary destination holds another file: Replace, probe, removed
+        SkipExisting,            // the same collision answered Skip: both files stay
+        SameFileTwoNames,        // the source folder is a junction to the destination folder: one file, two names; never removed
+        SharingUnenforced,       // Replace where the location does not enforce sharing: the probe cannot answer, so the source is kept
     };
     struct Scenario final
     {
@@ -2865,6 +3462,8 @@ struct KeepAwakeSelfTestApi final
         Scenario{L"folder-emptied", Shape::FolderEmptied},
         Scenario{L"folder-gains-item", Shape::FolderGainsItem},
         Scenario{L"replace-without-ids", Shape::ReplaceWithoutIds},
+        Scenario{L"replace-without-ids-long", Shape::ReplaceWithoutIdsLong},
+        Scenario{L"preauthorized-without-ids", Shape::PreauthorizedWithoutIds},
         Scenario{L"replace-with-ids", Shape::ReplaceWithIds},
         Scenario{L"skip-existing", Shape::SkipExisting},
         Scenario{L"same-file-two-names", Shape::SameFileTwoNames},
@@ -2906,19 +3505,29 @@ struct KeepAwakeSelfTestApi final
     unsigned int caseIndex = 0u;
     for (const Scenario& scenario : kScenarios)
     {
-        const bool folder            = scenario.shape == Shape::FolderEmptied || scenario.shape == Shape::FolderGainsItem;
-        const bool unenforced        = scenario.shape == Shape::SharingUnenforced;
-        const bool replace           = scenario.shape == Shape::ReplaceWithoutIds || scenario.shape == Shape::ReplaceWithIds || unenforced;
-        const bool sameFile          = scenario.shape == Shape::SameFileTwoNames;
-        const bool collides          = replace || sameFile || scenario.shape == Shape::SkipExisting;
-        const bool pauseAtCleanup    = scenario.shape == Shape::FileChanged || scenario.shape == Shape::FolderGainsItem;
-        const auto caseRoot          = root / std::format(L"case-{}", caseIndex++);
-        const auto sourceFolder      = caseRoot / L"source";
-        const auto destinationFolder = caseRoot / L"destination";
-        const auto selected          = folder ? sourceFolder / L"album" : sourceFolder / L"harbor.bin";
-        const auto sourceFile        = folder ? selected / L"track-01.bin" : selected;
-        const auto publishedFile     = folder ? destinationFolder / selected.filename() / sourceFile.filename() : destinationFolder / selected.filename();
-        const auto addedFile         = selected / L"added.bin";
+        const bool folder           = scenario.shape == Shape::FolderEmptied || scenario.shape == Shape::FolderGainsItem;
+        const bool unenforced       = scenario.shape == Shape::SharingUnenforced;
+        const bool noDestinationIds = scenario.shape == Shape::ReplaceWithoutIds || scenario.shape == Shape::ReplaceWithoutIdsLong ||
+                                      scenario.shape == Shape::PreauthorizedWithoutIds || unenforced;
+        const bool replace          = noDestinationIds || scenario.shape == Shape::ReplaceWithIds;
+        const bool sameFile         = scenario.shape == Shape::SameFileTwoNames;
+        const bool collides         = replace || sameFile || scenario.shape == Shape::SkipExisting;
+        const bool pauseAtCleanup   = scenario.shape == Shape::FileChanged || scenario.shape == Shape::FolderGainsItem;
+        const auto caseRoot         = root / std::format(L"case-{}", caseIndex++);
+        auto sourceFolder           = caseRoot / L"source";
+        auto destinationFolder      = caseRoot / L"destination";
+        if (scenario.shape == Shape::ReplaceWithoutIdsLong)
+        {
+            for (unsigned int level = 0u; level < 6u; ++level)
+            {
+                sourceFolder /= L"source-component-012345678901234567890123456789";
+                destinationFolder /= L"destination-component-012345678901234567890123";
+            }
+        }
+        const auto selected      = folder ? sourceFolder / L"album" : sourceFolder / L"harbor.bin";
+        const auto sourceFile    = folder ? selected / L"track-01.bin" : selected;
+        const auto publishedFile = folder ? destinationFolder / selected.filename() / sourceFile.filename() : destinationFolder / selected.filename();
+        const auto addedFile     = selected / L"added.bin";
         if (sameFile)
         {
             // One file in the destination folder; the source folder is a junction to that folder, inside this case's
@@ -2932,8 +3541,8 @@ struct KeepAwakeSelfTestApi final
                  (scenario.shape == Shape::FileWithStream && ! addStream(sourceFile)))
             return false;
         // Only the source's location cannot identify items; for one Replace case neither location can.
-        RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(
-            kSelfTestEnvBindIdentityUnsupportedPath, (scenario.shape == Shape::ReplaceWithoutIds || unenforced ? caseRoot : sourceFolder).native());
+        RedSalamander::TestSupport::ScopedEnvironmentVariable identitySupport(kSelfTestEnvBindIdentityUnsupportedPath,
+                                                                              (noDestinationIds ? caseRoot : sourceFolder).native());
         // The probe's control answers as a location that admits a second open of a held file would.
         SetFileOpsSameFileProbeSharingUnenforcedForSelfTest(unenforced);
         const auto restoreSharing = wil::scope_exit([]() noexcept { SetFileOpsSameFileProbeSharingUnenforcedForSelfTest(false); });
@@ -2960,15 +3569,17 @@ struct KeepAwakeSelfTestApi final
         const auto plans                        = std::make_shared<const FileOperations::FileOperationPlanGroup>(
             FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(transfer)}});
         State::Task task(fileOperations);
-        task._operation                = FILESYSTEM_MOVE;
-        task._executionMode            = State::ExecutionMode::PerItem;
-        task._fileSystem               = localFileSystem;
-        task._sourcePaths              = {selected};
-        task._sourcePluginId           = endpoint.pluginId;
-        task._sourcePluginShortId      = L"file";
-        task._sourceInstanceContext    = endpoint.instanceId;
-        task._sourcePathAttributesHint = {GetFileAttributesW(selected.c_str())};
-        task._perItemMaxConcurrency    = 1u;
+        task._operation                     = FILESYSTEM_MOVE;
+        task._flags                         = scenario.shape == Shape::PreauthorizedWithoutIds ? FILESYSTEM_FLAG_ALLOW_OVERWRITE : FILESYSTEM_FLAG_NONE;
+        task._executionMode                 = State::ExecutionMode::PerItem;
+        task._fileSystem                    = localFileSystem;
+        task._sourcePaths                   = {selected};
+        task._sourcePluginId                = endpoint.pluginId;
+        task._sourcePluginShortId           = L"file";
+        task._sourceInstanceContext         = endpoint.instanceId;
+        const std::wstring extendedSelected = Common::Paths::ToExtendedWin32Path(selected.native());
+        task._sourcePathAttributesHint      = {GetFileAttributesW(extendedSelected.c_str())};
+        task._perItemMaxConcurrency         = 1u;
         task.InitializeAdmissionInputs(plans,
                                        {.fileSystem      = localFileSystem,
                                         .folder          = destinationFolder,
@@ -3067,6 +3678,8 @@ struct KeepAwakeSelfTestApi final
                           summary.retainedSourceCount == 1u && summary.failedItemCount == 0u;
                 break;
             case Shape::ReplaceWithoutIds:
+            case Shape::ReplaceWithoutIdsLong:
+            case Shape::PreauthorizedWithoutIds:
             case Shape::ReplaceWithIds:
                 outcome = prompts == 1u && answerOffered.load(std::memory_order_acquire) && absent(sourceFile) && holds(publishedFile, sourceBytes) &&
                           summary.publishedItemCount == 1u && summary.removedSourceCount == 1u && summary.failedItemCount == 0u && SUCCEEDED(finalHr);
@@ -3089,7 +3702,12 @@ struct KeepAwakeSelfTestApi final
                 outcome = holds(publishedFile, sourceBytes) && holds(sourceFile, sourceBytes) && summary.removedSourceCount == 0u;
                 break;
         }
-        const bool matches = outcome && (pauseAtCleanup ? paused : true);
+        std::vector<State::TaskDiagnosticEntry> retentionDiagnostics;
+        fileOperations.CollectDiagnostics(retentionDiagnostics);
+        const bool retentionReasonsLocalized = std::ranges::all_of(retentionDiagnostics, [&](const State::TaskDiagnosticEntry& entry) noexcept {
+            return entry.taskId != task._taskId || entry.category != L"bridge.move.sourceRetained" || entry.userText.messageId != 0u;
+        });
+        const bool matches                   = outcome && (pauseAtCleanup ? paused : true) && retentionReasonsLocalized;
         AppendLog(std::format(L"Identity-less source Move {}: execute=0x{:08X} final=0x{:08X} prompts={} paused={} published={} removed={} retained={} "
                               L"failed={} passed={}",
                               scenario.name,
@@ -4910,4 +5528,303 @@ struct KeepAwakeSelfTestApi final
                           summary->resultSummary));
     passed = true;
     return true;
+}
+
+// BUG-09: a same-binary component observation, not a transfer-authority bypass or throughput benchmark.
+[[nodiscard]] SelfTest::SelfTestCaseResult RunFileOpsLocalAncestryMarkerProofCost(SelfTestState& state) noexcept
+{
+    const auto reject = [](std::wstring_view reason) noexcept -> SelfTest::SelfTestCaseResult
+    { return {.status = SelfTest::SelfTestCaseResult::Status::failed, .reason = std::wstring(reason)}; };
+    if (! state.fileOps || ! state.fsLocal || ! Debug::Perf::HasJsonlOutput() || ! CancelOutstandingSelfTestOperations(state.fileOps))
+        return reject(L"ancestry component owner, Local provider, JSONL sink or quiet point unavailable");
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return reject(L"ancestry component no-activation guard unavailable; ordinary runner desktop lease is still required");
+    // Never fall through to the allocator's optional volume scan: this case requires the configured,
+    // already marked alternate resource. The existing explicit runner opt-in remains independently required.
+    const std::wstring configuredAlternate = GetEnvVarTrimmed(kAlternateTestRootEnvVar);
+    if (configuredAlternate.empty())
+        return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+                .reason = L"BUG-09 paired cost needs the configured marked alternate root; no paired evidence"};
+    std::wstring alternateReason;
+    const auto alternateBase = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateReason);
+    if (! alternateBase.has_value())
+        return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+                .reason = std::format(L"BUG-09 paired cost unavailable: {}; no paired evidence", alternateReason)};
+    const auto primary      = state.tempRoot / L"ancestry-cost";
+    const auto alternate    = alternateBase.value() / L"ancestry-cost";
+    const auto cleanupRoots = [&]() noexcept
+    {
+        const bool primaryRemoved   = SelfTest::RemoveAll(primary);
+        const bool alternateRemoved = SelfTest::RemoveAll(alternate);
+        if (alternateRemoved)
+        {
+            // The allocator returns a shared case wrapper, not an RAII owner. Only remove
+            // this exact acquired allocation when empty; never recurse into sibling data.
+            const auto authorizedRoot = Common::Testing::GetDedicatedExternalTestSandboxBase(alternateBase.value(), Common::Testing::kTestSandboxDirectoryName);
+            std::error_code cleanupError;
+            if (! authorizedRoot.has_value() || ! Common::Testing::TestSandboxPathEquals(std::filesystem::path(configuredAlternate), authorizedRoot.value()) ||
+                Common::Testing::TestSandboxPathEquals(alternateBase.value(), authorizedRoot.value()) ||
+                ! Common::Testing::IsSameOrDescendantTestSandboxPath(alternateBase.value(), authorizedRoot.value()) ||
+                ! Common::Testing::HasValidTestSandboxMarker(authorizedRoot.value()) ||
+                ! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase.value(), cleanupError) || cleanupError)
+                return false;
+            if (std::filesystem::is_empty(alternateBase.value(), cleanupError) && ! cleanupError)
+                static_cast<void>(std::filesystem::remove(alternateBase.value(), cleanupError));
+            if (cleanupError)
+                return false;
+            PruneEmptyAlternateVolumeSandboxParents(alternateBase.value());
+        }
+        return primaryRemoved && alternateRemoved;
+    };
+    bool rootsRemoved  = false;
+    const auto cleanup = wil::scope_exit([&]() noexcept
+    {
+        if (! rootsRemoved && ! cleanupRoots())
+            AppendLog(L"BUG-09 component cleanup failed; inspect the owned case roots");
+    });
+    if (! RecreateEmptyDirectory(primary) || ! RecreateEmptyDirectory(alternate))
+        return reject(L"owned ancestry component roots unavailable");
+    std::array<wchar_t, 64> primaryFs{};
+    std::array<wchar_t, 64> alternateFs{};
+    if (! GetVolumeInformationW(primary.root_path().c_str(), nullptr, 0u, nullptr, nullptr, nullptr, primaryFs.data(), static_cast<DWORD>(primaryFs.size())) ||
+        ! GetVolumeInformationW(
+            alternate.root_path().c_str(), nullptr, 0u, nullptr, nullptr, nullptr, alternateFs.data(), static_cast<DWORD>(alternateFs.size())))
+        return reject(L"ancestry component filesystem provenance unavailable");
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.AncestryGateFilesystems", std::format(L"primary={};alternate={}", primaryFs.data(), alternateFs.data()), 0u, 0u, 0u, S_OK);
+    wil::com_ptr<IFileSystemIO> io;
+    if (! state.fsLocal.try_query_to(io.put()))
+        return reject(L"Local IO unavailable for ancestry component witnesses");
+    constexpr size_t kDirections     = 2u;
+    constexpr size_t kIdentityModes  = 2u;
+    constexpr size_t kShapes         = 4u;
+    constexpr size_t kCallsPerWindow = 4u;
+    // false=A observation-only identity guard; true=B the same guard plus real marker proof.
+    constexpr std::array<std::array<bool, 4>, 6> kSchedule{{
+        {{false, true, true, false}},
+        {{true, false, false, true}},
+        {{false, true, true, false}},
+        {{true, false, false, true}},
+        {{false, true, true, false}},
+        {{true, false, false, true}},
+    }};
+    constexpr size_t kTimedGuards = kDirections * kIdentityModes * kShapes * kSchedule.size() * 4u * kCallsPerWindow;
+    static_assert(kTimedGuards == 1536u);
+    static_assert(kTimedGuards / 2u == 768u);
+    constexpr std::array<std::wstring_view, kShapes> kShapeNames{L"shallow-existing", L"deep32-existing", L"deep32-missing8", L"deep32-extended"};
+    const std::string bytes(4096u, 'a');
+    uint64_t timedGuards   = 0u;
+    uint64_t timedProofs   = 0u;
+    uint64_t copyWitnesses = 0u;
+    for (size_t direction = 0u; direction < kDirections; ++direction)
+    {
+        for (size_t identityMode = 0u; identityMode < kIdentityModes; ++identityMode)
+        {
+            for (size_t shape = 0u; shape < kShapes; ++shape)
+            {
+                const std::wstring cohort = std::format(L"d{}-i{}-{}", direction, identityMode, kShapeNames[shape]);
+                auto sourceParent         = (direction == 0u ? primary : alternate) / cohort / L"src";
+                auto destinationParent    = (direction == 0u ? alternate : primary) / cohort / L"dst";
+                if (! RecreateEmptyDirectory(sourceParent) || ! RecreateEmptyDirectory(destinationParent))
+                    return reject(L"ancestry cohort fixture creation failed");
+                if (shape != 0u)
+                {
+                    for (size_t depth = 0u; depth < 32u; ++depth)
+                    {
+                        const auto component = std::format(L"level-{:02}-abcdefgh", depth);
+                        sourceParent /= component;
+                        // Leave exactly eight destination components missing in the missing-parent shape.
+                        destinationParent /= component;
+                        if (! RecreateEmptyDirectory(sourceParent) || ((shape != 2u || depth < 24u) && ! RecreateEmptyDirectory(destinationParent)))
+                            return reject(L"deep ancestry cohort fixture creation failed");
+                    }
+                }
+                const auto selected = sourceParent / L"selection";
+                const auto target   = destinationParent / L"selection";
+                if (! RecreateEmptyDirectory(selected) || ! WriteFileTextFsIo(io, selected / L"payload.bin", bytes))
+                    return reject(L"ancestry cohort source unavailable");
+                auto existingDestinationParent = destinationParent;
+                if (shape == 2u)
+                    for (size_t missing = 0u; missing < 8u; ++missing)
+                        existingDestinationParent = existingDestinationParent.parent_path();
+                const DWORD sourceAttributes      = GetFileAttributesW(Common::Paths::ToExtendedWin32Path(selected.native()).c_str());
+                const DWORD destinationAttributes = GetFileAttributesW(Common::Paths::ToExtendedWin32Path(existingDestinationParent.native()).c_str());
+                if (sourceAttributes == INVALID_FILE_ATTRIBUTES || destinationAttributes == INVALID_FILE_ATTRIBUTES ||
+                    (sourceAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY ||
+                    (destinationAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != FILE_ATTRIBUTE_DIRECTORY)
+                    return reject(L"ancestry component endpoints must be ordinary owned directories");
+                FileOperations::QualifiedEndpoint sourceEndpoint{};
+                FileOperations::QualifiedEndpoint destinationEndpoint{};
+                if (! FileOperations::TryQualifyEndpointForSelfTest(
+                        state.fsLocal, selected.native(), FILESYSTEM_COPY, L"builtin/file-system", L"host/default", sourceEndpoint) ||
+                    ! FileOperations::TryQualifyEndpointForSelfTest(
+                        state.fsLocal, existingDestinationParent.native(), FILESYSTEM_COPY, L"builtin/file-system", L"host/default", destinationEndpoint) ||
+                    sourceEndpoint.rootId.empty() || destinationEndpoint.rootId.empty() || sourceEndpoint.rootId == destinationEndpoint.rootId ||
+                    ! sourceEndpoint.pathIdentity.has_value() || ! destinationEndpoint.pathIdentity.has_value())
+                    return reject(L"the two actual Local endpoints did not qualify as distinct roots");
+                const std::wstring sourceText = shape == 3u ? Common::Paths::ToExtendedWin32Path(selected.native()) : selected.native();
+                const std::wstring targetText = shape == 3u ? Common::Paths::ToExtendedWin32Path(target.native()) : target.native();
+                if (shape != 0u && (selected.native().size() <= static_cast<size_t>(MAX_PATH) || target.native().size() <= static_cast<size_t>(MAX_PATH)))
+                    return reject(L"deep ancestry fixture did not actually exceed MAX_PATH");
+                // Existing test-only identity-less fixture wrapper; no production policy switch or new hook.
+                RedSalamander::TestSupport::ScopedEnvironmentVariable identityTreatment(
+                    kSelfTestEnvBindIdentityUnsupportedPath, identityMode == 1u ? std::optional<std::wstring_view>(selected.native()) : std::nullopt);
+                Debug::Perf::Emit(L"FileOps.SelfTest.AncestryGateFixture", cohort, 0u, sourceText.size(), targetText.size(), S_OK);
+                const auto observe = [&](bool withProof, bool timed, size_t block, size_t window, size_t iteration) noexcept
+                {
+                    const std::wstring detail =
+                        std::format(L"{}-{}-b{}-w{}-n{}-{}", cohort, timed ? L"timed" : L"warm", block, window, iteration, withProof ? L"B" : L"A");
+                    FileOperations::TransferSafetyState guardState{};
+                    HRESULT guardStatus    = E_UNEXPECTED;
+                    HRESULT proofStatus    = S_FALSE;
+                    bool sourceBound       = false;
+                    bool sourceIsDirectory = false;
+                    bool inside            = false;
+                    const auto sinkBefore  = Debug::Perf::GetJsonlDebugSnapshotForSelfTest();
+                    const auto started     = std::chrono::steady_clock::now();
+                    {
+                        auto guard        = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                                         state.fsLocal.get(),
+                                                                                         sourceEndpoint,
+                                                                                         destinationEndpoint,
+                                                                                         FileOperations::TransferIntent::Copy,
+                                                                                         sourceText,
+                                                                                         targetText);
+                        guardState        = guard.state;
+                        guardStatus       = guard.status;
+                        sourceBound       = static_cast<bool>(guard.source.boundObject);
+                        sourceIsDirectory = guard.source.kind == FILESYSTEM_BOUND_DIRECTORY;
+                        if (withProof &&
+                            (guardState == FileOperations::TransferSafetyState::Ready || guardState == FileOperations::TransferSafetyState::Unsupported))
+                        {
+                            const auto proof = FileOperations::ProbeLocalDirectoryTransferAncestry(
+                                sourceText, targetText, destinationEndpoint.pathIdentity.value(), []() noexcept { return false; });
+                            proofStatus = proof.status;
+                            inside      = proof.destinationInsideSource;
+                        }
+                        // A stops here: no ExecuteOperation, result publication or transfer authority.
+                        // Both paths release the same guard bindings inside the measured lifetime.
+                    }
+                    const uint64_t elapsed  = Debug::Perf::ElapsedUs(started);
+                    const auto sinkAfter    = Debug::Perf::GetJsonlDebugSnapshotForSelfTest();
+                    const bool correctGuard = identityMode == 0u ? guardState == FileOperations::TransferSafetyState::Ready && sourceBound && sourceIsDirectory
+                                                                 : guardState == FileOperations::TransferSafetyState::Unsupported && ! sourceBound;
+                    const bool correct      = correctGuard && (! withProof || (proofStatus == S_OK && ! inside));
+                    Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.AncestryGateCallUs",
+                                                detail,
+                                                elapsed,
+                                                static_cast<uint64_t>(guardState),
+                                                withProof ? 1u : 0u,
+                                                correct ? S_OK : E_FAIL);
+                    Debug::Perf::EmitDurationUs(L"FileOps.SelfTest.AncestryGateJsonlUs",
+                                                detail,
+                                                sinkAfter.threadWriteElapsedUs - sinkBefore.threadWriteElapsedUs,
+                                                sinkAfter.threadWriteCalls - sinkBefore.threadWriteCalls,
+                                                0u,
+                                                S_OK);
+                    Debug::Perf::Emit(
+                        L"FileOps.SelfTest.AncestryGateGuardStatus", detail, 0u, static_cast<uint64_t>(guardState), sourceBound ? 1u : 0u, guardStatus);
+                    if (timed)
+                    {
+                        ++timedGuards;
+                        if (withProof &&
+                            (guardState == FileOperations::TransferSafetyState::Ready || guardState == FileOperations::TransferSafetyState::Unsupported))
+                            ++timedProofs;
+                    }
+                    return correct;
+                };
+                std::vector<PerfMetricSample> proofBefore;
+                std::vector<PerfMetricSample> injectedBefore;
+                if (! TryReadPerfMetricSamples("FileOps.Transfer.InsideSourceProbeUs", proofBefore) ||
+                    ! TryReadPerfMetricSamples("FileOps.Local.BindIdentityUnsupportedInjected", injectedBefore))
+                    return reject(L"ancestry component metric admission failed");
+                if (! observe(false, false, 0u, 0u, 0u) || ! observe(true, false, 0u, 1u, 0u))
+                    return reject(L"ancestry component warmup did not establish its expected guard/proof treatment");
+                for (size_t block = 0u; block < kSchedule.size(); ++block)
+                    for (size_t window = 0u; window < kSchedule[block].size(); ++window)
+                        for (size_t iteration = 0u; iteration < kCallsPerWindow; ++iteration)
+                            if (! observe(kSchedule[block][window], true, block, window, iteration))
+                                return reject(L"ancestry component treatment changed guard state or outside-proof outcome");
+                std::vector<PerfMetricSample> proofAfter;
+                std::vector<PerfMetricSample> injectedAfter;
+                constexpr size_t kProofsPerCohortWithWarmup = 1u + kSchedule.size() * 2u * kCallsPerWindow;
+                constexpr size_t kGuardsPerCohortWithWarmup = 2u + kSchedule.size() * 4u * kCallsPerWindow;
+                if (! TryReadPerfMetricSamples("FileOps.Transfer.InsideSourceProbeUs", proofAfter) ||
+                    proofAfter.size() != proofBefore.size() + kProofsPerCohortWithWarmup ||
+                    ! TryReadPerfMetricSamples("FileOps.Local.BindIdentityUnsupportedInjected", injectedAfter) ||
+                    injectedAfter.size() != injectedBefore.size() + (identityMode == 1u ? kGuardsPerCohortWithWarmup : 0u))
+                    return reject(L"actual marker-proof or legitimate identity-less injection counts differ from the fixed treatment");
+                for (size_t row = proofBefore.size(); row < proofAfter.size(); ++row)
+                {
+                    const auto& sample          = proofAfter[row];
+                    const uint64_t fixedLookups = shape == 2u ? 13u : 5u;
+                    if (sample.hr != S_OK || sample.value1 == 0u || sample.value1 > 1024u || sample.value0 != sample.value1 + fixedLookups)
+                        return reject(L"outside-marker status, candidate-probe or attribute-lookup accounting changed");
+                }
+                // Untimed actual task routing witness, only after both observation treatments have finished.
+                // No baseline observation is passed to this task: it must run its own production gate.
+                using State = FolderWindow::FileOperationState;
+                FileOperations::TransferPlan plan{};
+                plan.intent                         = FileOperations::TransferIntent::Copy;
+                plan.strategy                       = FileOperations::OperationStrategy::Copy;
+                plan.sourceEndpoint                 = sourceEndpoint;
+                plan.destinationEndpoint            = destinationEndpoint;
+                plan.selectedItems                  = {{.providerPath = sourceText}};
+                plan.destination.providerFolderPath = shape == 3u ? Common::Paths::ToExtendedWin32Path(destinationParent.native()) : destinationParent.native();
+                State::Task task(*state.fileOps);
+                task._operation                = FILESYSTEM_COPY;
+                task._executionMode            = State::ExecutionMode::PerItem;
+                task._fileSystem               = state.fsLocal;
+                task._sourcePaths              = {std::filesystem::path(sourceText)};
+                task._sourcePluginId           = sourceEndpoint.pluginId;
+                task._sourcePluginShortId      = L"file";
+                task._sourceInstanceContext    = sourceEndpoint.instanceId;
+                task._sourcePathAttributesHint = {FILE_ATTRIBUTE_DIRECTORY};
+                task.InitializeAdmissionInputs(std::make_shared<const FileOperations::FileOperationPlanGroup>(
+                                                   FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(plan)}}),
+                                               {.fileSystem      = state.fsLocal,
+                                                .folder          = destinationParent,
+                                                .pluginId        = destinationEndpoint.pluginId,
+                                                .pluginShortId   = L"file",
+                                                .instanceContext = destinationEndpoint.instanceId});
+                task.InitializeSourceItemResultBuilders();
+                const auto diagnosticCleanup = wil::scope_exit([&]() noexcept { state.fileOps->DebugRemoveDiagnosticsForTask(task._taskId); });
+                const HRESULT prepared       = task.PrepareMutationInterlockScopes();
+                const HRESULT copied         = FAILED(prepared) ? prepared : task.ExecuteOperation();
+                std::string sourceBytes;
+                std::string copiedBytes;
+                if (copied != S_OK || ! ReadFileTextFsIo(io, selected / L"payload.bin", sourceBytes) || sourceBytes != bytes ||
+                    ! ReadFileTextFsIo(io, target / L"payload.bin", copiedBytes) || copiedBytes != bytes)
+                    return reject(L"untimed actual Copy did not publish exact bytes while retaining its source");
+                std::vector<PerfMetricSample> witnessProof;
+                if (! TryReadPerfMetricSamples("FileOps.Transfer.InsideSourceProbeUs", witnessProof) || witnessProof.size() <= proofAfter.size())
+                    return reject(L"untimed Copy did not actually traverse the production marker-proof gate");
+                for (size_t row = proofAfter.size(); row < witnessProof.size(); ++row)
+                    if (witnessProof[row].hr != S_OK || witnessProof[row].value1 == 0u)
+                        return reject(L"untimed Copy marker-proof routing witness failed");
+                std::error_code listError;
+                for (std::filesystem::directory_iterator entry(existingDestinationParent, listError), end; ! listError && entry != end;
+                     entry.increment(listError))
+                    if (entry->path().filename().native().starts_with(L"inside-source-check."))
+                        return reject(L"ancestry marker survived its owned handle lifetime");
+                if (listError)
+                    return reject(L"ancestry control-parent cleanup observation failed");
+                ++copyWitnesses;
+                Debug::Perf::Emit(L"FileOps.SelfTest.AncestryGateCopyWitness", cohort, 0u, 1u, 0u, copied);
+            }
+        }
+    }
+    const bool complete = timedGuards == kTimedGuards && timedProofs == kTimedGuards / 2u && copyWitnesses == 16u;
+    Debug::Perf::Emit(L"FileOps.SelfTest.AncestryGateTotals",
+                      L"six-ABBA-BAAB-blocks;four-calls-per-window;warm-and-witness-excluded",
+                      0u,
+                      timedGuards,
+                      timedProofs,
+                      complete ? S_OK : E_FAIL);
+    rootsRemoved = cleanupRoots();
+    if (! rootsRemoved)
+        return reject(L"ancestry component root cleanup failed");
+    return complete ? SelfTest::SelfTestCaseResult{.status = SelfTest::SelfTestCaseResult::Status::passed}
+                    : reject(L"ancestry component sample/witness counts incomplete");
 }

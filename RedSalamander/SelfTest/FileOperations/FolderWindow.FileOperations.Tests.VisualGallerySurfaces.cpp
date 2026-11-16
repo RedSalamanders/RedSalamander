@@ -665,6 +665,12 @@ void CALLBACK CaptureFileOpsGalleryConfirmation(HWND, UINT, UINT_PTR timerId, DW
         pending.conflictPrompt->sourceParentPath      = L"C:\\Photographies\\Archives familiales";
         pending.conflictPrompt->destinationName       = L"Portrait original.raw";
         pending.conflictPrompt->destinationParentPath = L"D:\\Sauvegardes";
+        FileOperations::ConflictObservedComparison observed{};
+        observed.source.sizeKnown                = true;
+        observed.source.sizeBytes                = 1'234'567u;
+        observed.destination.sizeKnown           = true;
+        observed.destination.sizeBytes           = 7'654'321u;
+        pending.conflictPrompt.value().itemFacts = observed;
         operations->EnqueueTaskDiagnostic(pending);
         auto decision                        = pending;
         decision.severity                    = FolderWindow::FileOperationState::DiagnosticSeverity::Info;
@@ -693,6 +699,18 @@ void CALLBACK CaptureFileOpsGalleryConfirmation(HWND, UINT, UINT_PTR timerId, DW
                                  {{FluentIcons::kWarning, FluentIcons::kForward, 0}},
                                  {{FluentIcons::kFallbackWarning, FluentIcons::kFallbackForward, L'?'}}))
             return false;
+        // Copy retains exact provider paths plus the comparison facts shown underneath.
+        for (const size_t sectionIndex : {4u, 5u})
+        {
+            const auto& text         = typedSnapshot.detailTexts[sectionIndex];
+            const size_t factsStart  = text.rfind(L'\n');
+            const std::wstring facts = factsStart == std::wstring::npos ? std::wstring{} : text.substr(factsStart + 1u);
+            if (facts.empty() || typedSnapshot.detailCopyText.find(facts) == std::wstring::npos)
+            {
+                Fail(L"Issues copied detail omitted the displayed source or destination comparison facts.");
+                return false;
+            }
+        }
         const uint64_t pendingRowId = typedSnapshot.primarySelectedRowId;
         if (! SaveFileOpsGallerySurface(
                 typedIssues.get(), output, manifest, L"124-issues-accepted-pending", display, L"production-issues-accepted-result-unknown"))

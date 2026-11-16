@@ -19,7 +19,8 @@
     Requires PowerShell 7 and Git. A first run may download the pinned formatter wheel from
     PyPI; later runs use the verified repository-local cache. Does not format vendored files,
     archived specification evidence, or untracked files. Use -WhatIf to preview without
-    acquiring the formatter or changing source files. Primary consumer: local source formatting.
+    acquiring the formatter or changing source files. Metadata and native formatter children
+    use captured no-window execution without a restored CI engine. Primary consumer: local source formatting.
 
 .EXAMPLE
     .\format-all.ps1 -WhatIf
@@ -41,10 +42,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
-$trackedPaths = @(& git -C $repositoryRoot ls-files --cached -- '*.cpp' '*.h')
-if ($LASTEXITCODE -ne 0) {
+Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/GitMetadataCapture.psm1') -ErrorAction Stop
+$tracked = Invoke-RSTestGitMetadataCapture -Root $repositoryRoot -Arguments @('ls-files','--cached','--','*.cpp','*.h')
+if ($tracked.ErrorText) { [Console]::Error.Write($tracked.ErrorText) }
+if ($tracked.ExitCode -ne 0) {
     throw 'Could not enumerate tracked C++ source files with Git.'
 }
+$trackedPaths = @($tracked.Output)
 
 $sourcePaths = @(
     $trackedPaths |
@@ -84,17 +88,21 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$formatterPath)
     throw 'The pinned clang-format installer did not return a usable executable path.'
 }
 $formatterPath = [IO.Path]::GetFullPath([string]$formatterPath)
-$versionOutput = @(& $formatterPath --version)
-if ($LASTEXITCODE -ne 0 -or ($versionOutput -join "`n") -notmatch "^clang-format version $([regex]::Escape([string]$pin.version))(?:\s|$)") {
+Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Build/ClangFormat.psm1') -ErrorAction Stop
+$version = Invoke-RSClangFormatCapture -FilePath $formatterPath -Arguments @('--version')
+if ($version.ErrorText) { [Console]::Error.Write($version.ErrorText) }
+if ($version.ExitCode -ne 0 -or ($version.StdOut -join "`n") -notmatch "^clang-format version $([regex]::Escape([string]$pin.version))(?:\s|$)") {
     throw "The formatter executable does not match pinned version $($pin.version): $formatterPath"
 }
 
 $failures = [Collections.Generic.List[string]]::new()
 foreach ($sourcePath in $sourcePaths) {
     Write-Host "Formatting: $([IO.Path]::GetRelativePath($repositoryRoot, $sourcePath))"
-    & $formatterPath -i --style=file $sourcePath
-    if ($LASTEXITCODE -ne 0) {
-        $failures.Add("$sourcePath (exit $LASTEXITCODE)")
+    $formatted = Invoke-RSClangFormatCapture -FilePath $formatterPath -Arguments @('-i','--style=file',$sourcePath)
+    $formatted.StdOut | Write-Output
+    if ($formatted.ErrorText) { [Console]::Error.Write($formatted.ErrorText) }
+    if ($formatted.ExitCode -ne 0) {
+        $failures.Add("$sourcePath (exit $($formatted.ExitCode))")
     }
 }
 if ($failures.Count -gt 0) {

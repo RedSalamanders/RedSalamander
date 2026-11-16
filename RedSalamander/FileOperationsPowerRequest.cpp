@@ -13,15 +13,16 @@ namespace FileOperations
 {
 namespace
 {
-wil::unique_handle CreateWindowsPowerRequest(void* /*context*/, const wchar_t* reason) noexcept
+wil::unique_handle CreateWindowsPowerRequest(void* /*context*/, wchar_t* reason) noexcept
 {
-    // PowerCreateRequest takes a writable string; the request copies it before the call returns.
-    std::wstring text(reason != nullptr ? reason : L"");
+    // PowerCreateRequest copies the object's preallocated writable reason. Preserve the
+    // API's exact last error through return-value construction and any local teardown.
     REASON_CONTEXT context{};
     context.Version                   = POWER_REQUEST_CONTEXT_VERSION;
     context.Flags                     = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
-    context.Reason.SimpleReasonString = text.data();
+    context.Reason.SimpleReasonString = reason;
     const HANDLE handle               = PowerCreateRequest(&context);
+    [[maybe_unused]] const wil::last_error_context preserveError;
     if (handle == INVALID_HANDLE_VALUE || handle == nullptr)
         return {};
     return wil::unique_handle(handle);
@@ -47,13 +48,16 @@ bool ClearWindowsPowerRequest(void* /*context*/, HANDLE request) noexcept
 }
 } // namespace
 
-PowerRequest::PowerRequest() noexcept : _api(WindowsPowerRequestApi())
+PowerRequest::PowerRequest() noexcept : PowerRequest(WindowsPowerRequestApi())
 {
 }
 
 PowerRequest::PowerRequest(const PowerRequestApi& api) noexcept
-    : _api(api.create != nullptr && api.set != nullptr && api.clear != nullptr ? api : WindowsPowerRequestApi())
+    : _api(api.create != nullptr && api.set != nullptr && api.clear != nullptr ? api : WindowsPowerRequestApi()),
+      _reason(LoadStringResource(nullptr, IDS_FILEOPS_KEEP_AWAKE_REASON))
 {
+    if (_reason.empty())
+        _reason = L"File operation in progress"; // Windows requires a non-empty reason even when the resource is unavailable.
 }
 
 PowerRequest::~PowerRequest()
@@ -104,7 +108,9 @@ PowerRequest::Counters PowerRequest::GetCounters() const noexcept
     counters.acquireTransitions = _acquireTransitions;
     counters.releaseTransitions = _releaseTransitions;
     counters.failures           = _failures;
+    counters.lastError          = _lastError;
     counters.held               = _held;
+    counters.failureLogged      = _failureLogged;
     return counters;
 }
 
@@ -112,10 +118,7 @@ void PowerRequest::SetLocked() noexcept
 {
     if (! _request)
     {
-        std::wstring reason = LoadStringResource(nullptr, IDS_FILEOPS_KEEP_AWAKE_REASON);
-        if (reason.empty())
-            reason = L"File operation in progress"; // only if the resource cannot be loaded; Windows needs a non-empty reason
-        _request = _api.create(_api.context, reason.c_str());
+        _request = _api.create(_api.context, _reason.data());
         if (! _request)
         {
             NoteFailureLocked(L"create", GetLastError());
@@ -134,15 +137,21 @@ void PowerRequest::ClearLocked() noexcept
 {
     if (! _held)
         return;
-    // Whatever the call returns, this object no longer claims the request.
-    _held = false;
     if (! _api.clear(_api.context, _request.get()))
-        NoteFailureLocked(L"clear", GetLastError());
+    {
+        const DWORD error = GetLastError();
+        // A failed clear may leave the kernel reference active. Closing its owning
+        // handle ends that request; a later Acquire must create a new one.
+        _request.reset();
+        NoteFailureLocked(L"clear", error);
+    }
+    _held = false;
 }
 
 void PowerRequest::NoteFailureLocked(const wchar_t* const step, const DWORD error) noexcept
 {
     ++_failures;
+    _lastError = error;
     // One line per object: a machine that refuses the request would otherwise log it for every task.
     if (_failureLogged)
         return;

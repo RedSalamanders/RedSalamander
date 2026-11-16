@@ -1,0 +1,73 @@
+{
+  "counter_assertions": "passed for all32rows; equal immutable-tree and governance result digests",
+  "archive_completion_sha256": "4585f81fe8f06512a25a0c7c9a6e61d71ce2a2ea131e1d3024271c4335ef55db",
+  "archive_completion": "Z:\\RedSalamander.Perf\\evidence\\run-archive-records\\20261113T150237Z-80972-67cf83b7d4824ceab5eb873ffbfa1cf7\\complete.json",
+  "failure": {
+    "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T150205Z-4140-f364c0827d8143eeba0fd00efa2c3f55\\scratch\\perf02",
+    "recipe_sha256": "2c75ba25faa9b2696ee21d9e1d65de5aa1c66f10de129246a376e77b08a2d62e",
+    "transcript_sha256": "bff8970d8ca1f2c932372744ed29a065fd925680b091f36473fa0c9f5c9f71fc",
+    "status": "rejected recipe extraction attempt; no rows promoted"
+  },
+  "raw_root": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T150237Z-80972-67cf83b7d4824ceab5eb873ffbfa1cf7\\scratch\\perf02",
+  "raw_files": [
+    {
+      "file": "archive-rows.json",
+      "sha256": "d12a887f18e8681ab8ddb7ff5f6828848a8d0b0d49b3cd6bd0eb0d6057a6c33e",
+      "bytes": 5724
+    },
+    {
+      "file": "baseline-Run-AllTests.ps1.txt",
+      "sha256": "3793bab57d4fcddfc4681b47c06269f4208f4afc5c403691dc785e2608a34fca",
+      "bytes": 141772
+    },
+    {
+      "file": "baseline-TestSandbox.psm1.txt",
+      "sha256": "6adb1279c0c424781bd1d27acd82d9f5149df1747b60274ab85fc8927c7cc745",
+      "bytes": 76416
+    },
+    {
+      "file": "baseline-ValidationFingerprint.psm1.txt",
+      "sha256": "38ca3ee1d8979da436eb2a1e0848f6f427fbfcbfd76506d251394049ec93ed13",
+      "bytes": 57070
+    },
+    {
+      "file": "candidate-Run-AllTests.ps1.txt",
+      "sha256": "8ba63ed4af3b8f55611240e486a8d9de89324b78e7faa0be59c2cc54ddd909a7",
+      "bytes": 144890
+    },
+    {
+      "file": "candidate-TestSandbox.psm1.txt",
+      "sha256": "7cfe9076ba7dc170006a6cdea96c2cca881a8a71d1353b9a2c3902de2b17121b",
+      "bytes": 78142
+    },
+    {
+      "file": "candidate-ValidationFingerprint.psm1.txt",
+      "sha256": "37eb8187c048f5a66205c5398d2bccb2d628146ddaac458835e940181a1d424b",
+      "bytes": 59487
+    },
+    {
+      "file": "execution.txt",
+      "sha256": "a558b4cb0c51b3d582f1591fd7f5f0cd14a6e942ebf6077f5ad34d3cb5fe9b41",
+      "bytes": 2311
+    },
+    {
+      "file": "recipe.ps1",
+      "sha256": "cd08d5876859d7751e5202a1c1e6fc74d57c4caf1dda7b8d6919dc24a3cdff63",
+      "bytes": 15293
+    },
+    {
+      "file": "results.json",
+      "sha256": "efc200dd924d8efe67b55ce5b340a6fdbf673b0c17694ef4a4a7f062780626a2",
+      "bytes": 47432
+    },
+    {
+      "file": "tree-rows.json",
+      "sha256": "f883d7d8bb44fd5828c4cba5b3f07084653466d82308b459d5963c7734731147",
+      "bytes": 3192
+    }
+  ],
+  "scan_control": {
+    "sha256": "bfc01c27114ba8e56b3fa4f2fe2aaadd1587e44d319c9178a304d1f5513a0abe",
+    "path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T150526Z-63728-628ee3da9739484f97333bcc995a53a0\\scratch\\scan-control\\scan-callers.json"
+  }
+}

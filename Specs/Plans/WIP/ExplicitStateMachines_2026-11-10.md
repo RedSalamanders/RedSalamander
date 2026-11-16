@@ -4,11 +4,13 @@
 
 ## Status, priority, and drift check
 
-- **Status:** `ACTIVE` (design complete; implementation not started; plan-only PR).
+- **Status:** `ACTIVE` (design complete; no I62 slice completion is established). `main` has advanced since the planned-at commit and changed files that overlap this plan; revalidate each RS-SM item, cited implementation, and test before deciding whether a slice has started or remains open.
 - **Rank:** `I62` (`I61` remains reserved for the organization-owned testing and integration acceleration plan in [`RedSalamanders/.github`](https://github.com/RedSalamanders/.github/blob/main/Specs/Plans/WIP/TestingAndIntegrationAcceleration_2026-11-09.md)).
 - **Priority:** Post-cut / parallelizable bounded slices (`Slice 1` P0 service/archive/OAuth/pipe safety items may also be pulled forward alongside [I60](PreProduction_ReadinessAndSimplification_2026-11-07.md) waves where files do not collide).
 - **Planned-at commit:** `99624c5385c6c0d42f8d1c6f8be54cbe69f506ef` (`origin/main`, clean checkout, 2026-11-10).
 - **Drift command:** Run before starting any slice and re-read cited line ranges for any modified path:
+
+  Current source anchors are a routing aid, not proof that the 2026-11-10 findings remain unchanged. Follow the owning function/section links and refresh evidence against the current worktree before implementation; changes merged through PR #214, PR #221, and later main commits did not by themselves close I62's seven-slice roadmap.
 
 ```powershell
 git status --short

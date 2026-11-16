@@ -3,6 +3,7 @@
 #include "FileOperationArtifactRegistry.h"
 
 #include "Helpers.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 #include <chrono>
@@ -22,23 +23,27 @@ namespace
     return ! value.empty() && std::ranges::all_of(value, IsAsciiHex);
 }
 
-[[nodiscard]] bool HasTail(const std::wstring_view leaf, const std::wstring_view marker, bool (*matches)(std::wstring_view) noexcept) noexcept
-{
-    const size_t offset = leaf.rfind(marker);
-    return offset != std::wstring_view::npos && matches(leaf.substr(offset + marker.size()));
-}
-
 // I35 R7.6: `<32 hex>.tmp`, the tail of the MTP writer temp (`.<leaf>.rs-mtp-overwrite-`).
-[[nodiscard]] bool IsHexTmpTail(const std::wstring_view value) noexcept
+[[nodiscard]] bool IsMtpOverwriteLeaf(const std::wstring_view leaf) noexcept
 {
-    return value.size() == 36u && IsAsciiHexRun(value.substr(0u, 32u)) && value.substr(32u) == L".tmp";
+    constexpr std::wstring_view kMarker = L".rs-mtp-overwrite-";
+    constexpr size_t kTailSize          = 36u;
+    if (leaf.size() < kMarker.size() + kTailSize)
+    {
+        return false;
+    }
+    // The fixed-width tail locates the marker without scanning a potentially long provider leaf.
+    const size_t offset          = leaf.size() - kMarker.size() - kTailSize;
+    const std::wstring_view tail = leaf.substr(leaf.size() - kTailSize);
+    return Common::Paths::StartsWithAsciiNoCase(leaf.substr(offset), kMarker) && IsAsciiHexRun(tail.substr(0u, 32u)) &&
+           Common::Paths::StartsWithAsciiNoCase(tail.substr(32u), L".tmp");
 }
 
 // I35 R7.6: an S3 hidden backup key, `.rs-bak-<32 hex>`, then `-<leaf>` unless the backed-up key was a folder.
 [[nodiscard]] bool IsS3BackupLeaf(const std::wstring_view leaf) noexcept
 {
     constexpr std::wstring_view kMarker = L".rs-bak-";
-    if (! leaf.starts_with(kMarker) || leaf.size() < kMarker.size() + 32u || ! IsAsciiHexRun(leaf.substr(kMarker.size(), 32u)))
+    if (! Common::Paths::StartsWithAsciiNoCase(leaf, kMarker) || leaf.size() < kMarker.size() + 32u || ! IsAsciiHexRun(leaf.substr(kMarker.size(), 32u)))
     {
         return false;
     }
@@ -49,7 +54,7 @@ namespace
 // (`.redsalamander-<purpose>-`).
 [[nodiscard]] bool IsWholeLeafHexName(const std::wstring_view leaf, const std::wstring_view marker) noexcept
 {
-    return leaf.size() == marker.size() + 32u && leaf.starts_with(marker) && IsAsciiHexRun(leaf.substr(marker.size()));
+    return leaf.size() == marker.size() + 32u && Common::Paths::StartsWithAsciiNoCase(leaf, marker) && IsAsciiHexRun(leaf.substr(marker.size()));
 }
 
 // I63: a staging artifact created on a Win32 path ends in a real extension, after a 32-hex token:
@@ -63,7 +68,7 @@ namespace
 
 [[nodiscard]] bool HasTokenBeforeExtension(std::wstring_view leaf, const std::wstring_view extension, const bool allowStream) noexcept
 {
-    if (! leaf.ends_with(extension))
+    if (leaf.size() < extension.size() || ! Common::Paths::StartsWithAsciiNoCase(leaf.substr(leaf.size() - extension.size()), extension))
     {
         return false;
     }
@@ -118,8 +123,8 @@ bool HasPossibleArtifactName(const std::wstring_view leaf) noexcept
     // Only the names the current generators write: the Win32 stages (`.rs-tmp`), the provider
     // staging names (I35 R7.6: the Curl upload and writer siblings, the MTP writer temp) and the
     // possible originals above. A name an earlier version wrote is an ordinary file.
-    return HasTokenBeforeExtension(leaf, L".rs-tmp", true) || HasTail(leaf, L".rs-mtp-overwrite-", IsHexTmpTail) ||
-           IsWholeLeafHexName(leaf, L".redsalamander-upload-") || IsWholeLeafHexName(leaf, L".redsalamander-writer-") || HasPossibleOriginalArtifactName(leaf);
+    return HasTokenBeforeExtension(leaf, L".rs-tmp", true) || IsMtpOverwriteLeaf(leaf) || IsWholeLeafHexName(leaf, L".redsalamander-upload-") ||
+           IsWholeLeafHexName(leaf, L".redsalamander-writer-") || HasPossibleOriginalArtifactName(leaf);
 }
 
 bool IsDeleteHandoffCandidate(const Candidate& candidate) noexcept

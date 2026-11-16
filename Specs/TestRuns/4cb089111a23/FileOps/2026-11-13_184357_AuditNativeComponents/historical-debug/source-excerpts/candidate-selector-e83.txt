@@ -1,0 +1,53 @@
+uint64_t FolderWindow::FileOperationState::FirstUnblockedQueuedTaskIdLocked() noexcept
+{
+    // _queueMutex is held. _mutex nests inside it, as in the queue insert below, and keeps
+    // every admitted task alive for the walk.
+    std::scoped_lock tasksLock(_mutex);
+    // Select the minimum eligible place directly. No vector allocation, de-duplication
+    // or full sort is needed on every condition-variable predicate evaluation.
+    std::optional<std::pair<uint64_t, uint64_t>> firstOrder;
+    uint64_t firstId    = 0u;
+    const auto consider = [&](Task* holder, const bool waiting) noexcept
+    {
+        if (holder == nullptr || holder->_awaitingUserDecision.load(std::memory_order_acquire))
+            return;
+        const std::pair order{holder->GetQueueOrderKey(), holder->GetId()};
+        if (firstOrder.has_value() && order >= firstOrder.value())
+            return;
+        const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
+                                                   [&](const ActiveMutationInterlock& published) noexcept
+        {
+            if (published.taskId != holder->GetId() || ! published.task || ! published.admission)
+                return false;
+            const auto selected = published.task->LoadSelectedAdmission();
+            return selected->interlock && selected->interlock->key == published.admission->key;
+        });
+        if (prepared == _preparedMutationInterlocks.end() || ! prepared->admission->relations.advisoryDecided)
+        {
+            if (waiting)
+                return;
+            firstOrder = order;
+            firstId    = 0u; // Still Preparing: it holds the queue.
+            return;
+        }
+        if (! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+        {
+            firstOrder = order;
+            firstId    = holder->GetId();
+        }
+    };
+    for (const auto& owned : _tasks)
+    {
+        if (owned && owned->_holdsQueuePlace.load(std::memory_order_acquire) && ! owned->_cancelled.load(std::memory_order_acquire))
+            consider(owned.get(), std::ranges::find(_queue, owned->GetId()) != _queue.end());
+    }
+    // Directly driven waiters may have no entry in _tasks. Duplicate candidates are
+    // harmless: both observations share the same locked key and queue membership.
+    for (const uint64_t queuedId : _queue)
+    {
+        const auto published = std::ranges::find(_preparedMutationInterlocks, queuedId, &ActiveMutationInterlock::taskId);
+        if (published != _preparedMutationInterlocks.end())
+            consider(published->task, true);
+    }
+    return firstId;
+}

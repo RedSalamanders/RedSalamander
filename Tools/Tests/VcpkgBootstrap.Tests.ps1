@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -6,7 +7,7 @@ Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1'
 
 function Invoke-BootstrapFixtureGit {
     param([string]$Root,[string[]]$Arguments)
-    $output = @(& git -C $Root @Arguments 2>&1)
+    $output = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $Root; $Arguments) 2>&1)
     if ($LASTEXITCODE -ne 0) { throw ($output -join [Environment]::NewLine) }
     return ($output -join [Environment]::NewLine)
 }
@@ -42,6 +43,65 @@ function Get-BootstrapFailure {
 }
 
 Describe 'Pinned cold-runner vcpkg provisioning' {
+    BeforeAll {
+        $script:bootstrapModule = Get-Module VcpkgInstallSafety
+        $script:originalBootstrapPayload = & $script:bootstrapModule { (Get-Command Invoke-RSVcpkgBootstrapPayload).ScriptBlock }
+        $native = Get-Command Invoke-RSTestFixtureNative
+        $newContext = Get-Command New-RSTestRunContext
+        $contained = Get-Command Assert-RSTestSandboxContainedPath
+        $repository = $repoRoot
+        $launcher = {
+            param([string]$BootstrapPath)
+            $context = & $newContext -RepoRoot $repository
+            $owned = & $contained -TestRoot $context.TestRoot -Path $BootstrapPath -RequireDescendant
+            if ([IO.Path]::GetExtension($owned) -ine '.bat' -or $owned.IndexOfAny([char[]]'"%&|<>^!') -ge 0 -or $owned.Contains("`r") -or $owned.Contains("`n")) {
+                throw 'The owned batch fixture requires a literal safe path.'
+            }
+            # CALL makes a spaced batch path a normal quoted argument after /c;
+            # the real batch executes inside this explicitly no-window cmd process.
+            & $native -FilePath $env:ComSpec -Arguments @('/d','/s','/c','call',$owned,'-disableMetrics') -WorkingDirectory (Get-Location).ProviderPath | Out-Host
+            return [int]$global:LASTEXITCODE
+        }.GetNewClosure()
+        & $script:bootstrapModule { param($invoke) $script:RSBootstrapFixtureLauncher = $invoke } $launcher
+        Mock Invoke-RSVcpkgBootstrapPayload -ModuleName VcpkgInstallSafety {
+            param($BootstrapPath)
+            return (& $script:RSBootstrapFixtureLauncher $BootstrapPath)
+        }
+    }
+
+    AfterAll {
+        & $script:bootstrapModule {
+            param($original)
+            Set-Item -LiteralPath Function:script:Invoke-RSVcpkgBootstrapPayload -Value $original
+            Remove-Variable -Name RSBootstrapFixtureLauncher -Scope Script -ErrorAction SilentlyContinue
+        } $script:originalBootstrapPayload
+    }
+
+    It 'preserves the production inherited payload and real initializer exit checks' {
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Raw
+        $tokens = $null; $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should Be 0
+        $payload = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSVcpkgBootstrapPayload'}, $true)
+        $payload.Extent.Text | Should Match '& \$BootstrapPath -disableMetrics \| Out-Host'
+        $payload.Extent.Text | Should Match 'return \[int\]\$LASTEXITCODE'
+        $payload.Extent.Text | Should Not Match 'Invoke-RSTestFixture|Invoke-RSCapturedProcess|Invoke-RSStreamingProcess|cmd\.exe'
+        $source | Should Match '\$bootstrapExit = Invoke-RSVcpkgBootstrapPayload -BootstrapPath \$bootstrap'
+        $source | Should Match 'if \(\$bootstrapExit -ne 0\) \{ throw "Pinned vcpkg bootstrap failed with exit code \$bootstrapExit\." \}'
+    }
+
+    It 'executes an owned spaced batch with actual arguments marker and exit 19' {
+        $root = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('quoted-bootstrap-' + [Guid]::NewGuid().ToString('N'))
+        $directory = Join-Path $root 'owned batch with spaces'
+        [void][IO.Directory]::CreateDirectory($directory)
+        $batch = Join-Path $directory 'bootstrap-vcpkg.bat'
+        [IO.File]::WriteAllLines($batch, @('@echo off','echo %~1>"%~dp0received.args"','echo real-payload>"%~dp0marker.txt"','exit /b 19'))
+        $code = & $script:bootstrapModule { param($path) Invoke-RSVcpkgBootstrapPayload -BootstrapPath $path } $batch
+        $code | Should Be 19
+        [IO.File]::ReadAllText((Join-Path $directory 'received.args')).Trim() | Should Be '-disableMetrics'
+        [IO.File]::ReadAllText((Join-Path $directory 'marker.txt')).Trim() | Should Be 'real-payload'
+    }
+
     It 'restores separate exact tool and baseline identities while preserving download-only cache state' {
         $fixture = New-VcpkgBootstrapFixture
         $downloads = Join-Path $fixture.Consumer '.build/vcpkg-tool/downloads'

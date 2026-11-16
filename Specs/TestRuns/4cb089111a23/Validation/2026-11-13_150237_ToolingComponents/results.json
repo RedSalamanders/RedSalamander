@@ -1,0 +1,1216 @@
+{
+  "scope": "component operations and exact production governance block; no native build or full-run speedup claim",
+  "base_commit": "78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e",
+  "os_architecture": "X64",
+  "target_bindings": [
+    {
+      "path": "Tools/Modules/Testing/ValidationFingerprint.psm1",
+      "baseline_sha256": "38ca3ee1d8979da436eb2a1e0848f6f427fbfcbfd76506d251394049ec93ed13",
+      "candidate_sha256": "37eb8187c048f5a66205c5398d2bccb2d628146ddaac458835e940181a1d424b"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestSandbox.psm1",
+      "baseline_sha256": "6adb1279c0c424781bd1d27acd82d9f5149df1747b60274ab85fc8927c7cc745",
+      "candidate_sha256": "7cfe9076ba7dc170006a6cdea96c2cca881a8a71d1353b9a2c3902de2b17121b"
+    },
+    {
+      "path": "Tools/Run-AllTests.ps1",
+      "baseline_sha256": "3793bab57d4fcddfc4681b47c06269f4208f4afc5c403691dc785e2608a34fca",
+      "candidate_sha256": "8ba63ed4af3b8f55611240e486a8d9de89324b78e7faa0be59c2cc54ddd909a7"
+    }
+  ],
+  "run_id": "20261113T150237Z-80972-67cf83b7d4824ceab5eb873ffbfa1cf7",
+  "rows": [
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 0,
+      "variant": "baseline",
+      "elapsed_ms": 357.8064,
+      "ls_tree_calls": 2,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 0,
+      "variant": "candidate",
+      "elapsed_ms": 268.3883,
+      "ls_tree_calls": 1,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 1,
+      "variant": "candidate",
+      "elapsed_ms": 217.314,
+      "ls_tree_calls": 1,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 1,
+      "variant": "baseline",
+      "elapsed_ms": 312.3674,
+      "ls_tree_calls": 2,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 2,
+      "variant": "baseline",
+      "elapsed_ms": 291.5127,
+      "ls_tree_calls": 2,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 2,
+      "variant": "candidate",
+      "elapsed_ms": 243.9796,
+      "ls_tree_calls": 1,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 3,
+      "variant": "candidate",
+      "elapsed_ms": 237.3503,
+      "ls_tree_calls": 1,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "immutable-tree-and-mutable-index",
+      "block": 3,
+      "variant": "baseline",
+      "elapsed_ms": 300.0964,
+      "ls_tree_calls": 2,
+      "ls_files_calls": 2,
+      "historical_rows": 256,
+      "index_rows_before": 256,
+      "index_rows_after": 257,
+      "historical_digest": "81aa49d102e194b1b8f53f696efb2bc39d147e6a3ae6ab9945a1f1911c389a5f",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-fresh",
+      "block": 0,
+      "variant": "baseline",
+      "elapsed_ms": 178.4541,
+      "inventory_scans": 5,
+      "inventory_rows": 35,
+      "run_id": "20261113T150246Z-80972-f55cdaac96a644aeb6f93a4aec3a7414",
+      "intent_sha256": "ECDAD04878FBBD6DC5C18E16D9A9194C282E47C0E39910F6596EBC0AC2CD55E7",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": null,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-recovery",
+      "block": 0,
+      "variant": "baseline",
+      "elapsed_ms": 53.5426,
+      "inventory_scans": 2,
+      "inventory_rows": 35,
+      "run_id": "20261113T150246Z-80972-eda4ff90401548b393051d7be0afe169",
+      "intent_sha256": "1032CB0830F3464272A5C9CBE572368D450D0C852B101B909C4FD4168EA7F79D",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": "PERF02 injected interruption after durable intent",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-fresh",
+      "block": 0,
+      "variant": "candidate",
+      "elapsed_ms": 105.5053,
+      "inventory_scans": 4,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-778f02edcc9e4313bfde9cac4320afd1",
+      "intent_sha256": "CAA5DB7495739DE6F7E47BC320801AA1322CBF6CD1C1FA0BAA465B02762D09AA",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": null,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-recovery",
+      "block": 0,
+      "variant": "candidate",
+      "elapsed_ms": 47.4331,
+      "inventory_scans": 2,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-2298422f9d9f47cca00f39b4d78c8220",
+      "intent_sha256": "9B58304C59B9BC48A3A8D6EB1E4C7992BC26D163598DD1A8E5937EB3438F5ABC",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": "PERF02 injected interruption after durable intent",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-fresh",
+      "block": 1,
+      "variant": "candidate",
+      "elapsed_ms": 66.2093,
+      "inventory_scans": 4,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-f101845580a3419295d4298e40d3dcd8",
+      "intent_sha256": "C75C695CC1A80034F30A93846DB0984C06C60EE0A7A9271EE81A6E45FCCBA681",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": null,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-recovery",
+      "block": 1,
+      "variant": "candidate",
+      "elapsed_ms": 36.5904,
+      "inventory_scans": 2,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-e72a441a33c94158a79e20e25e164f66",
+      "intent_sha256": "58741F151ACC92BD4DF10E544886B66852A3368613ACDD01E633BE358E708E17",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": "PERF02 injected interruption after durable intent",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-fresh",
+      "block": 1,
+      "variant": "baseline",
+      "elapsed_ms": 73.4518,
+      "inventory_scans": 5,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-bdcaf8d7a70c4a0586d800ab1a038b68",
+      "intent_sha256": "CCBC8675909CA08D7730B3D2516BADEE4B4C240CF20A0B3C20301582A84A6CDC",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": null,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-recovery",
+      "block": 1,
+      "variant": "baseline",
+      "elapsed_ms": 37.062,
+      "inventory_scans": 2,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-90fd4b19ac084678b614b722d8665c32",
+      "intent_sha256": "4E8902F713A702AB6E938EDF7E27C5AE3AF469F0F59EFF77559B6AAB6FECEC8F",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": "PERF02 injected interruption after durable intent",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-fresh",
+      "block": 2,
+      "variant": "baseline",
+      "elapsed_ms": 73.4637,
+      "inventory_scans": 5,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-7759ba717d7b4ea68d7cc3dd33610c03",
+      "intent_sha256": "E9BFF85460C6FC38D8A01C517322B4C3105FCA2987B326787BE8D1609E9C4AF1",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": null,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-recovery",
+      "block": 2,
+      "variant": "baseline",
+      "elapsed_ms": 44.3512,
+      "inventory_scans": 2,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-accd1b4a345549c09e4681abf75c2a5f",
+      "intent_sha256": "A638BDF514903706EE6AC1C0971FB7944E59BBF1D53C8EEB8F7812CCBF49CFA2",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": "PERF02 injected interruption after durable intent",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-fresh",
+      "block": 2,
+      "variant": "candidate",
+      "elapsed_ms": 66.9313,
+      "inventory_scans": 4,
+      "inventory_rows": 35,
+      "run_id": "20261113T150247Z-80972-45fd0cd1f2fa480288ff82357e470dcd",
+      "intent_sha256": "C6BF6A60CC9143157504F7478E127CE71546BC57D3D736AE6C90F01EA992CFE7",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": null,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "archive-recovery",
+      "block": 2,
+      "variant": "candidate",
+      "elapsed_ms": 37.3277,
+      "inventory_scans": 2,
+      "inventory_rows": 35,
+      "run_id": "20261113T150248Z-80972-b9105c55757b40208a8bbcb02f4b21dc",
+      "intent_sha256": "A72C0901F618B3E38F37114AFDD32D84025FA48CADABA711FF3293F123BC9CA0",
+      "source_absent": true,
+      "destination_verified": true,
+      "interruption": "PERF02 injected interruption after durable intent",
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-identical",
+      "block": 0,
+      "variant": "baseline",
+      "elapsed_ms": 432.5084,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-changed",
+      "block": 0,
+      "variant": "baseline",
+      "elapsed_ms": 465.3245,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-identical",
+      "block": 0,
+      "variant": "candidate",
+      "elapsed_ms": 10.4125,
+      "manifest_reads": 0,
+      "governance_evaluations": 0,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-changed",
+      "block": 0,
+      "variant": "candidate",
+      "elapsed_ms": 484.4703,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-identical",
+      "block": 1,
+      "variant": "candidate",
+      "elapsed_ms": 0.0479,
+      "manifest_reads": 0,
+      "governance_evaluations": 0,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-changed",
+      "block": 1,
+      "variant": "candidate",
+      "elapsed_ms": 437.579,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-identical",
+      "block": 1,
+      "variant": "baseline",
+      "elapsed_ms": 400.7927,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-changed",
+      "block": 1,
+      "variant": "baseline",
+      "elapsed_ms": 446.4663,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-identical",
+      "block": 2,
+      "variant": "baseline",
+      "elapsed_ms": 452.8582,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-changed",
+      "block": 2,
+      "variant": "baseline",
+      "elapsed_ms": 430.1527,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-identical",
+      "block": 2,
+      "variant": "candidate",
+      "elapsed_ms": 0.0377,
+      "manifest_reads": 0,
+      "governance_evaluations": 0,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    },
+    {
+      "scenario": "governance-changed",
+      "block": 2,
+      "variant": "candidate",
+      "elapsed_ms": 437.1101,
+      "manifest_reads": 1,
+      "governance_evaluations": 1,
+      "manifest_digest": "ef8fc775248a13faf043ff7d700a52844b39c19f90e4cd9dc901eeac80aa63ad",
+      "tracked_graph_inputs": 126,
+      "outcome": "passed"
+    }
+  ],
+  "dependency_closure_digest": "d3480fa3579f728d3f2c4b07bd83b6d11aa3e6e9a70878bc42b32757ff0fc2f8",
+  "machine_hash": "4cb089111a23",
+  "schema": "red-salamander.perf02-component-pair.v1",
+  "dependency_rows": [
+    {
+      "sha256": "032ec9d0987cba236c0401ea660fef63d9446091d0f47f10d70fe94dd8addd38",
+      "path": "build.ps1"
+    },
+    {
+      "sha256": "cd4477e0d4430758f150baa37de247446bccb3901851f38c2e378d8d60efc818",
+      "path": "Build/BuildConsole.psm1"
+    },
+    {
+      "sha256": "a0dfbac695d76433c98f63a6830aef18618b8f2291afe3bd559af812f58e0149",
+      "path": "Build/NativeBuildPolicy.targets"
+    },
+    {
+      "sha256": "0236e49767fcd1dc091802b24151cefeab4fefc8e5e0682cb80214b58b05df06",
+      "path": "Build/PinnedDxUiPolicy.targets"
+    },
+    {
+      "sha256": "f5b69485e3a6b53b2a8b3a8af3a8dacce10d7264dec132e764ffc154b7fedbdb",
+      "path": "Dependencies/DxUi.lock.json"
+    },
+    {
+      "sha256": "6853ee1c907a964d616239b4d616145b26c17d251acfb695be471c82a26dbc15",
+      "path": "Dependencies/RedMonitor.lock.json"
+    },
+    {
+      "sha256": "dfd2d6bdf1b9006615b25e9ee75a50320da521ed2c252653d5febbd489b8b147",
+      "path": "External/TerminalEngine/GhosttyRuntimeLock.v1.json"
+    },
+    {
+      "sha256": "b67f63f103a3b591bc72302e6cac60bbaf8298459337f8f316ee2fbfbc041829",
+      "path": "Installer/winget/generate-manifest.ps1"
+    },
+    {
+      "sha256": "65062f48e5604d57d87cfe9555b0c5d6b02278aad2fc14f422be86c89a72676f",
+      "path": "Installer/winget/WingetValidation.ps1"
+    },
+    {
+      "sha256": "72e6dfcd3866c0176ddc2ebb9edeb4745e16c4b6f5bcf339c4f385c902bdccff",
+      "path": "Installer/zip/build-zip.ps1"
+    },
+    {
+      "sha256": "e9cedf2f1032ef3ff81ffc816e9551cbd9174637809a168c2bcaa435a0f9634e",
+      "path": "Installer/zip/VcRuntime.ps1"
+    },
+    {
+      "sha256": "a08823a2a2034c653ee877dd4a8efe696a5b29846c1e5a7bd1717219a003ac44",
+      "path": "RuntimeDependencies.props"
+    },
+    {
+      "sha256": "6487a3b4f5f8f573397348cbe7280db4fba294ebc4fca6ca48501a9b763ba9b4",
+      "path": "Specs/Build/Build_DxUiSdkInput.schema.json"
+    },
+    {
+      "sha256": "113dc81f2bafebc83101d0c61b8def02634ac122a4c9962b21131fb4bea0ac17",
+      "path": "Specs/Build/BuildReceipt.schema.json"
+    },
+    {
+      "sha256": "2ed47f8ffc6056af2a75dd554fc299eb2f3a1bfcfd4049671efbddd5698b779f",
+      "path": "Specs/Build/ToolchainIdentity.schema.json"
+    },
+    {
+      "sha256": "077949836b8c02df4061823840fabb13d658cf6152d3e15ce602d76683d0fff8",
+      "path": "Specs/NormativeConsistency.json"
+    },
+    {
+      "sha256": "bc5e529a620d0ab8317b4a3776aaa97356ec2301a70f2c57e4b638dd2f1045a4",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/fileops/results.json"
+    },
+    {
+      "sha256": "01151e11f1a6ec23eb4c9e3f17caf8dc643f8d0fb44e2b394b76c81e2d335b3d",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/gallery-publication-manifest.json"
+    },
+    {
+      "sha256": "0e77adb74e0eeadeec99646a91f76698e2bb719ca5273347573ac966ae8b642d",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/immutable-receipt.json"
+    },
+    {
+      "sha256": "a4c8d84790aaa2e6219b16cdbfd140379e4676fc493dd19d83e4363ab65b18b9",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/invocation-plan.json"
+    },
+    {
+      "sha256": "d891e026a2320b9751fa20c3e74570b38d1edb9ee912635d9a333c6ac290f429",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/invocation.json"
+    },
+    {
+      "sha256": "a56d6cb37e756a3d9d1ee567687e0921ad0a0d23f160b763181eb65edf54cb68",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/previous-run/entry-fingerprints.json"
+    },
+    {
+      "sha256": "4536e4469b020cb07a44c5d8a95c6d771ebd4225c2d134bdda5bac502835f6f9",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/previous-run/validation-plan-decision.json"
+    },
+    {
+      "sha256": "9b338c295d1f6ebde38c0de5cfe105bc2317e77f0eaf69f2a7bcf8239364e9ce",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/previous-run/validation-plan.json"
+    },
+    {
+      "sha256": "49f5606a0d3defb7418bb8356cebd92f07a63ae0f15d426830f29659924b2994",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/previous-run/workspace-initial.json"
+    },
+    {
+      "sha256": "def30c982859d595be63571a3c535493aa2a12e82ffe66af5db59b1a668b5147",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/receipt-component-binding.readonly-review.json"
+    },
+    {
+      "sha256": "ac2cd0647d86ed32300196be8eb713bafa64d1f45b0734e36a7b2706fff54b4d",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/receipt-retention.json"
+    },
+    {
+      "sha256": "fcaedccbde62652a8c22d61edf743783278dc8c784fbef31a348b21b4b26153c",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/root-native-provenance-review-notes.json"
+    },
+    {
+      "sha256": "35bcf4e2f84fb5f662cf2d9d9fe156de6c41dda026c5ca97fbcdc777710f136c",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/summary.json"
+    },
+    {
+      "sha256": "074cb8a26e0e3edae7343b7f9b4b9fac6fdc084077caf2ab75aea95e94c1b4a0",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/provenance/whole-archive-manifest.json"
+    },
+    {
+      "sha256": "8af3c08326e4d4dd1c209e395bb466653517c299d8e0ca4f24fb402505207f10",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/publication-review.json"
+    },
+    {
+      "sha256": "01be523b2cb649a776e375dc881ffbfd00c2640110a3f3aa766e021bf2c1f3cc",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/results.json"
+    },
+    {
+      "sha256": "a5981e63085b84ed540cc5b2d76c2e84b57e34c42486d7366fccbae3cd34b559",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/run-all-tests-results.json"
+    },
+    {
+      "sha256": "9de0885f54dd0fc7a36ce551bfe56fb6a298bc161f21508ab9dc22a56f828657",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/workspace-after-selftest.file-operations.json"
+    },
+    {
+      "sha256": "83fafb8d679ca3663f7b2879a282fe02d78b4080584a56c813e617528b6c3644",
+      "path": "Specs/Plans/Done/I27/implementation/g/g1/workspace-final.json"
+    },
+    {
+      "sha256": "399893d5451cc6d9b5d9ae73f8f98babd957bd99bf05efbe4930fd8bb42fe72d",
+      "path": "Specs/SettingsStore.schema.json"
+    },
+    {
+      "sha256": "776aa2647d9e348eff0a1015a21bae27c6d5634d7ed0ab20396c427adb1790c7",
+      "path": "Specs/Terminal/GhosttyRuntimeLock.schema.json"
+    },
+    {
+      "sha256": "a7de70e6ce6f45a1f6995af5643f32b16080714bb0b5121e6a5a1f44a9b83f9d",
+      "path": "Specs/Terminal/TerminalEngineC7Proof.schema.json"
+    },
+    {
+      "sha256": "7d1ab5a6c1c2510ae6ded86c37d26ef0b051b3e92f460784fe49e1e7264bbab1",
+      "path": "Specs/Terminal/TerminalEngineC7ProofContract.v1.json"
+    },
+    {
+      "sha256": "fa6b6f8e09e61751a8d3e794992a6eb6ed04a46253f68dd53531e91db167b036",
+      "path": "Specs/Terminal/TerminalEngineCandidateAssessment.schema.json"
+    },
+    {
+      "sha256": "adf5ae89c3c90fd6018652f9ebd88aa809048a849ba29f49b04a4fde6d20343e",
+      "path": "Specs/Terminal/TerminalEngineCandidateAssessment.v1.json"
+    },
+    {
+      "sha256": "7e4567beda31976b9554ae53958bb4820b755bc79a4c252dcc8c6ed845e312da",
+      "path": "Specs/Terminal/TerminalEngineCandidateReview.schema.json"
+    },
+    {
+      "sha256": "ba2942c7abe8f94b6f50be22ddb78570eaade5f60a152a8b0cca48dcea91542d",
+      "path": "Specs/Terminal/TerminalEngineCandidateReview.v1.json"
+    },
+    {
+      "sha256": "1a6a778e98da723d6c830ffcd0546de1f4f111d6d682d4de2d2905f3d473fed9",
+      "path": "Specs/Terminal/TerminalEngineCandidateSet.schema.json"
+    },
+    {
+      "sha256": "fb240d3ef838daea0740417fafd2d7d44b9536295f16c607e45fe57e64d11f4d",
+      "path": "Specs/Terminal/TerminalEngineCandidateSet.v1.json"
+    },
+    {
+      "sha256": "7ee9c917f1f48347ad3ec31ddafb3720c281478aeaa5506fc93914ad17480761",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverse.schema.json"
+    },
+    {
+      "sha256": "eef3e91e61694e30a123d9f53d1aee124112f6af3177db1c315c50ac3d22b3af",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverse.v1.json"
+    },
+    {
+      "sha256": "bad4a1c439e471d6dffa64fc40b97cfafbe51f7a31e0914ddfb3380a8bf3ff87",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverse.v2.json"
+    },
+    {
+      "sha256": "5c38444417ad246148928206c95acef9d84238d5f3f8116bb88fdc5fa115f63e",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverse.v3.json"
+    },
+    {
+      "sha256": "7621ab8562cb4b1d530d24355c67d90c905781a5d4f6bbc3364699ac059cb740",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverse.v4.json"
+    },
+    {
+      "sha256": "5ec0485f70f52f6bb308a3998b5eb53e1a26e2b4b1de9747b66274b3125c3a24",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.schema.json"
+    },
+    {
+      "sha256": "b5472481d8014171b53074e4eb8d34bcbf9d481d3959ff3a039cb41dd76d656d",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.v3.schema.json"
+    },
+    {
+      "sha256": "bbc532cec13fe3842f7a60421d8d2a9502c4b3175ce430b323c22a91259e309b",
+      "path": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.v4.schema.json"
+    },
+    {
+      "sha256": "d3138476aa24a0dd7e939053e9f85c42c0978def3fa2036835d915d2a150cf9d",
+      "path": "Specs/Terminal/TerminalEngineCollectionDescriptor.schema.json"
+    },
+    {
+      "sha256": "382db2bc7dd9e4e0e5cd41ba2e340fb74f43469cbc939b60821a4d900c2b1340",
+      "path": "Specs/Terminal/TerminalEngineCollectionNeutrality.schema.json"
+    },
+    {
+      "sha256": "7f9eee4b83576357a9407c39681c5d3f6a0d25a0d13bd30b3fb6885286863d77",
+      "path": "Specs/Terminal/TerminalEngineCollectionNeutrality.v1.json"
+    },
+    {
+      "sha256": "872a5eba72165da1a270ad64e94c602347abff6a7ff4a63d41cc0e6fa9ed5a4c",
+      "path": "Specs/Terminal/TerminalEngineConcernMapping.schema.json"
+    },
+    {
+      "sha256": "91ffb9fd3f98eb247ef61902725fc02963fefd3af0984b590f6d250919dea31e",
+      "path": "Specs/Terminal/TerminalEngineEvidence.schema.json"
+    },
+    {
+      "sha256": "a3158a88d5b9f3c2b237b5c2fdcf60ff1af8228228e880363362be64d5ae91e0",
+      "path": "Specs/Terminal/TerminalEngineEvidenceCorpus/positive.collection.json"
+    },
+    {
+      "sha256": "18fd3c478116b2f54d0c55dd150a0092e031f1fe24704451736aa9b6c0a8469f",
+      "path": "Specs/Terminal/TerminalEngineEvidenceCorpus/positive.finalization.json"
+    },
+    {
+      "sha256": "afb197f83966016cb3733d9aa4407dd74042a7f31178dac1aa5b3b02e1372109",
+      "path": "Specs/Terminal/TerminalEngineFixtureCorpus.v1.json"
+    },
+    {
+      "sha256": "8c57755b75d0befbdb8410b25d0cf7d4913a663757c002cb423b1d60664b7bfb",
+      "path": "Specs/Terminal/TerminalEngineLock.schema.json"
+    },
+    {
+      "sha256": "cad0d34dd20fe466e3d04be16aa5ff0b033de6207f1a0575dee4a9ced3a56627",
+      "path": "Specs/Terminal/TerminalEngineMeasurementProtocol.v1.json"
+    },
+    {
+      "sha256": "8c4119c6d4429af73d12178f58440609b6e5379ccc2c6bfaa5d9b18788e66366",
+      "path": "Specs/Terminal/TerminalEngineRequirements.v1.json"
+    },
+    {
+      "sha256": "5dd79066be00e5de4106625263c9ba6c5588a08c169b7693aff230ac512e3007",
+      "path": "Specs/Terminal/TerminalEngineScoreAnchors.v1.json"
+    },
+    {
+      "sha256": "252216f61e77303666518e27463e1ef8fd7396e63e8a94566c98996d4a215ec9",
+      "path": "Specs/Testing/ProtectedPathRelocations.json"
+    },
+    {
+      "sha256": "93f609391d433d283684c926243461984d85407fdaa438aa33a728e165dd233d",
+      "path": "Specs/Testing/RunAllTestsSummary.schema.json"
+    },
+    {
+      "sha256": "46e9d132fab4abf5b9b0b655eab6cd6931d4cdcfcae3b763aa71b9acb3afd5bd",
+      "path": "Specs/Testing/RunResultReference.schema.json"
+    },
+    {
+      "sha256": "5e77b3fe4d34ba86f4a1ab2f6f487f14c880cf77388b8d0f926b624ab3fd4882",
+      "path": "Specs/Testing/TestMachineResources.schema.json"
+    },
+    {
+      "sha256": "e0eea7546990125ba05fe613ee66542e8de679b5da704b75055e9a0124a9c3db",
+      "path": "Specs/Testing/ValidationEntryEvidence.schema.json"
+    },
+    {
+      "sha256": "8a7c16c30c897f5eb8ca404a32df3ad4dbdec260a7b105bdad1623eb35356d9a",
+      "path": "Specs/Testing/ValidationEntryFingerprints.schema.json"
+    },
+    {
+      "sha256": "871c96ec34fa02f1e2a7e22436379e944cede050e0078347601efdece850d526",
+      "path": "Specs/Testing/ValidationImpact.schema.json"
+    },
+    {
+      "sha256": "d4257e83959637ea96c423c91e0bc7f19875b6c533a5672be535b0f0f4a2212a",
+      "path": "Specs/Testing/ValidationPlan.schema.json"
+    },
+    {
+      "sha256": "f4abc833b50845f45f2ecd4aea4e28d7221b821a289881874883d80ca8b22ebf",
+      "path": "Specs/Testing/ValidationPlanDecision.schema.json"
+    },
+    {
+      "sha256": "ab545e06f2a3cbd043e58306ca7d11e632d6b0bc184e6f105807c7f03bc78376",
+      "path": "Specs/Testing/ValidationPromotion.schema.json"
+    },
+    {
+      "sha256": "413d659a961f0803283a59aed75570412c76c5a2228676a91513def266e7a3e4",
+      "path": "Specs/Testing/ValidationRunState.schema.json"
+    },
+    {
+      "sha256": "99aa6f07c546ab8685e1a7733f98224e9db196642286dec10bbc5cf0616d7e70",
+      "path": "Specs/Testing/ValidationTerminalResult.schema.json"
+    },
+    {
+      "sha256": "f8ea76dc29b5119e071c487df22953ad70faeac13fb7f56b3e3a8c22bff5be5b",
+      "path": "Specs/Testing/WorkspaceSnapshot.schema.json"
+    },
+    {
+      "sha256": "a1418b0befab7446b6f9dfd195a418b34b08f0bce7b45be462ad74dc3d2de220",
+      "path": "Tests/vcpkg-merge-lock-validation.ps1"
+    },
+    {
+      "sha256": "a215d0bb90bd770e879d2c2204cdad7a9527662f19059b64d4d3a932548f19d3",
+      "path": "Tests/vcpkg-merge-synthetic-test.ps1"
+    },
+    {
+      "sha256": "99c2d07b3c8885eff6ed2fc1425f607c9d749a4868d2d9c5e706aac7a1ed9dd9",
+      "path": "Tools/Audit-ComctlReportSurfaces.ps1"
+    },
+    {
+      "sha256": "722eeef3afc403fad17063f8b44500a963a153f3a7c23cdbb5f68c8612d1ddd3",
+      "path": "Tools/Audit-VisibleNativeSurfaces.ps1"
+    },
+    {
+      "sha256": "d48f938e804725171e6141d5d98a3ab43cbf9f02654c699492b7b91cf9d834b0",
+      "path": "Tools/Build-GhosttyTerminalRuntime.ps1"
+    },
+    {
+      "sha256": "b0bdf98d3582d1c4d54fc65444b92b7131e41c40d33665f7cec2d29bb951d6e4",
+      "path": "Tools/Clean-TestSandbox.ps1"
+    },
+    {
+      "sha256": "ef8ec2c59d3edd22bf3b8a58fb791ef472513a2b5038d1f45a7dbaac4aa0eb77",
+      "path": "Tools/Evaluate-TerminalEngines.ps1"
+    },
+    {
+      "sha256": "8d1af2e311114cd1f6240cfa9ea01851d201b62b92d9226b11c0e94ae0c30055",
+      "path": "Tools/Get-SpecInventory.ps1"
+    },
+    {
+      "sha256": "f562d0d714edd09299418154c98234f0dc534036e2bcd0b1e54293d391aa3cf3",
+      "path": "Tools/Get-TestInventory.ps1"
+    },
+    {
+      "sha256": "d81c371077f686eda70a6f676c0f763b37a0129df029066f77a36ad724a57e4c",
+      "path": "Tools/Get-ToolInventory.ps1"
+    },
+    {
+      "sha256": "660e0a56ecc3972321d3a6f2bf96993f4616cf9d3679c54329b7b4631ecd6d21",
+      "path": "Tools/Invoke-ProjectCi.ps1"
+    },
+    {
+      "sha256": "0f46432a5f122470c3635540139c76fd17ad927b0680b66c7b7e783a30991156",
+      "path": "Tools/Invoke-R0ePairedValidation.ps1"
+    },
+    {
+      "sha256": "e3b1471bc92506f6caba450ab59d7180579b13c3811a879e2ba32c2c82332c48",
+      "path": "Tools/Invoke-SanitizedMsbuild.ps1"
+    },
+    {
+      "sha256": "1b40464705eda6d12233b042722a66dc2a508439d06218a3f55ed0aa8a81a4a9",
+      "path": "Tools/Modules/Auditing/RepositorySourceScanner.psm1"
+    },
+    {
+      "sha256": "ebb2f0026b52b2f2b6a7a8c4adb575b10ac7cd44f2ecd0a0e56aec022fd7d258",
+      "path": "Tools/Modules/Build/ArtifactOperationLock.psm1"
+    },
+    {
+      "sha256": "d3d4fbce9e78be906e12c97e337f91423e41a4e688cfe400dd37646b40bff548",
+      "path": "Tools/Modules/Build/BuildEvidence.psm1"
+    },
+    {
+      "sha256": "1082d49120218c20b03d5d04449e0cebc7be06311bc99d0f0ac9d3f5c8734d29",
+      "path": "Tools/Modules/Build/BuildProjectSelection.psm1"
+    },
+    {
+      "sha256": "181161626b254acb97d15422a11b5f06116215c519f36d26377fcd2d7ed99be2",
+      "path": "Tools/Modules/Build/DxUiDependency.psm1"
+    },
+    {
+      "sha256": "b675528cff33ad0015736fe9c2dfce2258ebf94a0f3ae8b2e813ef66e0340f5b",
+      "path": "Tools/Modules/Build/DxUiPaths.psm1"
+    },
+    {
+      "sha256": "07a04d18b9ed0a02da37b7bd01493f8da54dedcfafc2533e423b82f0995dfa1d",
+      "path": "Tools/Modules/Build/MSBuildInvocation.psm1"
+    },
+    {
+      "sha256": "9da9cdf3c7f1e14d76d1406405cd3bfa372a8b116d34673955718290c084a358",
+      "path": "Tools/Modules/Build/ProcessStreaming.psm1"
+    },
+    {
+      "sha256": "f6cc86eff84c42c4eb3e8722d6b43152552824f06323eea80637a6bbe0efe599",
+      "path": "Tools/Modules/Build/RedMonitorDependency.psm1"
+    },
+    {
+      "sha256": "48ccd7718ed55a0c19c308556342e8f9186d013886a49ad8875b63cad1b03d4b",
+      "path": "Tools/Modules/Build/SanitizedEnvironment.psm1"
+    },
+    {
+      "sha256": "71dd5fc3fe166cbb8efea3e92494caa8b449d1f21b54ab3b8b0537183866ce38",
+      "path": "Tools/Modules/Build/VcpkgInstallSafety.psm1"
+    },
+    {
+      "sha256": "872e4184d2027042422d401273afd918e17dcd953782692da9140c917f8e3209",
+      "path": "Tools/Modules/Build/VcpkgToolIdentity.psm1"
+    },
+    {
+      "sha256": "ba57f2cbdefaf0ad1694320a142e3aa5bfd0c1fe72e6856eb91bad9c9717e1e9",
+      "path": "Tools/Modules/Build/Versioning.psm1"
+    },
+    {
+      "sha256": "a3b71704b3878bdc10cdb710b5fcc6849a1a6f4af5f2a595d1862d0a73007ae4",
+      "path": "Tools/Modules/Documentation/Changelog.psm1"
+    },
+    {
+      "sha256": "9ea1f200120dee7c4e36388d2d8cc378f9496017e1d5d303b8cdcbd419a10810",
+      "path": "Tools/Modules/Packaging/PortablePackageSmoke.psm1"
+    },
+    {
+      "sha256": "1a64980ab53b6b18421a1d5653a9f727010da8808109eb4cd7a7cb5cc889e964",
+      "path": "Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1"
+    },
+    {
+      "sha256": "34bdaf440e980160f9788206f4a30cd9aaab09d2d4859515b123d25683a40add",
+      "path": "Tools/Modules/Packaging/RuntimeDependencies.psm1"
+    },
+    {
+      "sha256": "1d697a94bd16f0ca95b4105bace512e1708a81c30f00becd16533c6bb17df554",
+      "path": "Tools/Modules/Packaging/WingetPrPublication.psm1"
+    },
+    {
+      "sha256": "51a26f720345dab9872000e4f71bd4efb6692291fd0e1bb239b75a66d565efb4",
+      "path": "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
+    },
+    {
+      "sha256": "a25be770330afd3fc149307b19086fef2c204a26ce26efa554e7494d3c9e3739",
+      "path": "Tools/Modules/Testing/HostedTestDesktop.psm1"
+    },
+    {
+      "sha256": "505be9fcb96af7348f724ae61f0586aa5e1260dab05054d81abb311264ac7770",
+      "path": "Tools/Modules/Testing/R0ePairedValidation.psm1"
+    },
+    {
+      "sha256": "aad11df3879ed2d1617b447813cd1659101e7fbfc305617854ccfffb1d332f9b",
+      "path": "Tools/Modules/Testing/TestInventory.psm1"
+    },
+    {
+      "sha256": "ce2256c41518cc777ef72302a8c4257498b8a07ca25231a386efb2ac61f8b5da",
+      "path": "Tools/Modules/Testing/TestInvocation.psm1"
+    },
+    {
+      "sha256": "e33131d26083afa17c976a10a95c984649060c67afd8cbbf366ae0e2daa61f43",
+      "path": "Tools/Modules/Testing/TestMachineResources.psm1"
+    },
+    {
+      "sha256": "2e2f47dd56061be9dde23ad4bf7b5e2fc7450b632c6e439dc0a5b7cffdf076bb",
+      "path": "Tools/Modules/Testing/TestQuarantine.psm1"
+    },
+    {
+      "sha256": "a480c4b6ff2d8666eefebc3dcdd868edde04f35e3dda57e2b2b7a3d2e3ee4ec5",
+      "path": "Tools/Modules/Testing/TestRunPlan.Common.psm1"
+    },
+    {
+      "sha256": "211fd44378210515a4726bb4a0e5d60aafd58f77df11e755a2020292de3d137d",
+      "path": "Tools/Modules/Testing/TestRunPlan.psm1"
+    },
+    {
+      "sha256": "f3737fb22fc1c77721d5deebfa1fe902cdbd8a1a95c80c1f0a4fa56180aa839a",
+      "path": "Tools/Modules/Testing/TestRunSummary.psm1"
+    },
+    {
+      "sha256": "7cfe9076ba7dc170006a6cdea96c2cca881a8a71d1353b9a2c3902de2b17121b",
+      "path": "Tools/Modules/Testing/TestSandbox.psm1"
+    },
+    {
+      "sha256": "bf8d0c1ebe716d66c6c98726096408098a45d9e955d24221a40dbc8e3a283a5b",
+      "path": "Tools/Modules/Testing/TestSuitePlan.psm1"
+    },
+    {
+      "sha256": "f266a33960451471c8bab1a856b4d1207f056e42c8c9206219ab3ea7ffd1deff",
+      "path": "Tools/Modules/Testing/ValidationEvidence.psm1"
+    },
+    {
+      "sha256": "37eb8187c048f5a66205c5398d2bccb2d628146ddaac458835e940181a1d424b",
+      "path": "Tools/Modules/Testing/ValidationFingerprint.psm1"
+    },
+    {
+      "sha256": "3ec2c0ed87fcfe127fc27e5d640b0fff7d3dc699109c2b188b7c199552d4971d",
+      "path": "Tools/Modules/Testing/ValidationImpact.psm1"
+    },
+    {
+      "sha256": "e751a670440ffe3841a5a48c3ea6c4d55004b84a61e671d674c20143d4170565",
+      "path": "Tools/Modules/Tooling/SpecInformationArchitecture.psm1"
+    },
+    {
+      "sha256": "2ba30ddea4512b82fa289c105c4a313f0e72dffcd19835b9b1cc654667c70208",
+      "path": "Tools/Modules/Tooling/ToolInventory.psm1"
+    },
+    {
+      "sha256": "d67dfa129337d97e809c9d13fe5ecd2be7357629b86fe6af0c2f22ec3fd20537",
+      "path": "Tools/New-TerminalEngineNotices.ps1"
+    },
+    {
+      "sha256": "2282f500b69c6168135756c4451373aa2daf42e0fdfd7da2e6724e3abca5ace0",
+      "path": "Tools/Restore-DxUi.ps1"
+    },
+    {
+      "sha256": "8ba63ed4af3b8f55611240e486a8d9de89324b78e7faa0be59c2cc54ddd909a7",
+      "path": "Tools/Run-AllTests.ps1"
+    },
+    {
+      "sha256": "f38a88d8abe1534f57a4bc5991323e521bd8252acaca3cbf16514c4bb840db74",
+      "path": "Tools/SanitizedEnvironment.ps1"
+    },
+    {
+      "sha256": "3940b470e276de9b7d65e28dc3a02d9a3d2231f7333cc6c42d2f33bf4fc9770e",
+      "path": "Tools/Show-PerfRuns.ps1"
+    },
+    {
+      "sha256": "781639bd5f51e92f6515745900ceebee2ba745977cc82524719b87db59e8fe09",
+      "path": "Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1"
+    },
+    {
+      "sha256": "ede50e5c8fdd1bc3f076c6fa401676932bacdf948dc0c89c58a0085eb8136d1d",
+      "path": "Tools/TerminalEngine/Generate-TerminalEngineFixtures.ps1"
+    },
+    {
+      "sha256": "bc09c227e7765162086da8b49df51e1740b987a6be21c551c760cf145b3d685c",
+      "path": "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1"
+    },
+    {
+      "sha256": "2156ae96faff3a465edac94ec141c9b2658daf15c4a7766b5685140ac1d1c2b5",
+      "path": "Tools/TerminalEngine/HistoricalTerminalProfiles.json"
+    },
+    {
+      "sha256": "8aff483f7dbad01f1d9a3771b407811dc79edb4a473e35cbaed77c5ed9f313e1",
+      "path": "Tools/TerminalEngine/Invoke-HistoricalTerminalTests.ps1"
+    },
+    {
+      "sha256": "7584725499db0ed78c8a5ba884ec759dbdca735fe96ee9776ef3f6c8af86510d",
+      "path": "Tools/TerminalEngine/Invoke-RSIsolatedProcess.ps1"
+    },
+    {
+      "sha256": "141db6d7f94de7559da4b6a4864e8cec8e0c9dd8a9ff2edf1a1d1ee72cc14e67",
+      "path": "Tools/TerminalEngine/Invoke-TerminalEngineCollectionProvider.ps1"
+    },
+    {
+      "sha256": "49f4c5460457424788c14700e16b557b49a03eabb97bc9db422bbfcd2162da4a",
+      "path": "Tools/TerminalEngine/Invoke-TerminalEngineGate0Harness.ps1"
+    },
+    {
+      "sha256": "f2f6f67c1c313c9dac4fa711a3b671dd2b58f14511d618540722a71b3a3f2931",
+      "path": "Tools/TerminalEngine/Invoke-TerminalEngineGate0Probe.ps1"
+    },
+    {
+      "sha256": "86ea68eb2992b3e8327fe53e06841ab3527fbc900ea8a4d1c6036f30d34a1611",
+      "path": "Tools/TerminalEngine/TerminalEngineArchive.psm1"
+    },
+    {
+      "sha256": "141f4a3a45f18ee9b177a22e6b2d0b82a396795e7343f14b27d1cc7cc3447ea8",
+      "path": "Tools/TerminalEngine/TerminalEngineC7Proof.psm1"
+    },
+    {
+      "sha256": "8f8e8361e68678fd7d6f85b72da1bed14e31a86c5fccd4211b02af524d9aa60a",
+      "path": "Tools/TerminalEngine/TerminalEngineCandidateAssessment.psm1"
+    },
+    {
+      "sha256": "f057132dab71e605095ce0abe9ff25476f1d443fcdc17b91bdeebdc78acb7025",
+      "path": "Tools/TerminalEngine/TerminalEngineCollectionDescriptor.psm1"
+    },
+    {
+      "sha256": "28b2f4fc2e1c876ecac94aa59417b8381ccb66255628149e9bb836dd7edd397e",
+      "path": "Tools/TerminalEngine/TerminalEngineCollectionDriverInput.schema.json"
+    },
+    {
+      "sha256": "b88a78a4f0184d2d2c08da779e4d6c288ff519a7ec6218da7c607eb41bcea0b9",
+      "path": "Tools/TerminalEngine/TerminalEngineCollectionDriverResult.schema.json"
+    },
+    {
+      "sha256": "39254b2bbe3f9c785c5823ccd823703f1c6015d6d19b321d76f0857aa376e89a",
+      "path": "Tools/TerminalEngine/TerminalEngineCollectionNeutrality.psm1"
+    },
+    {
+      "sha256": "1a0e9d6e1ae928f15ffbbc9fc07005910902b6c7e31c30298696c92c13670a03",
+      "path": "Tools/TerminalEngine/TerminalEngineLifecycle.psm1"
+    },
+    {
+      "sha256": "f698d195a8b522c6fa37d087be339f6a8a6b804d025f094c5625bcc2ed0d4381",
+      "path": "Tools/TerminalEngine/TerminalEngineNotices.psm1"
+    },
+    {
+      "sha256": "908e79f85c88668aa773eb11f0b712b3107eebb953a69553358ccc7d2e0dc1c3",
+      "path": "Tools/TerminalEngine/TerminalEnginePeIdentity.psm1"
+    },
+    {
+      "sha256": "bb8467dde0a36b468ec7e4899bdb1a6aba4e4d46b0d3c6c4d28d8d22b985800e",
+      "path": "Tools/TerminalEngine/TerminalEngineSourceReview.psm1"
+    },
+    {
+      "sha256": "8a81a3699cafb2ac9d22edfe829921de3ded0dad74ad4e433c94a258a33de66f",
+      "path": "Tools/TerminalEngine/TerminalEngineTextIdentity.psm1"
+    },
+    {
+      "sha256": "5c09358d1fe769ff2758e71c55ad4656abe807cf63b2262c17121bfd9424212a",
+      "path": "Tools/TerminalEngine/TerminalRuntimeExportIdentity.psm1"
+    },
+    {
+      "sha256": "f0212e0989ac9b966ebebb0701d3499871a3c066f6640943d7323cd61cfd8e70",
+      "path": "Tools/TerminalEngine/TerminalRuntimeImportPolicy.psm1"
+    },
+    {
+      "sha256": "fd1d1e6cd5586987780b968ad3e756cf5e231f81a91a590a47e154db50e1eea0",
+      "path": "Tools/TerminalEngine/Test-TerminalEngineCandidatePatch.ps1"
+    },
+    {
+      "sha256": "1e66c7da94286dee3f59aea35b306543d76b9bcdea814c62f89a631a175cf3dc",
+      "path": "Tools/TerminalEngine/Test-TerminalEngineCollectionNeutrality.ps1"
+    },
+    {
+      "sha256": "af63d51d3ebbd09a6c1e5e2130e7391a0043deaec56d3552587836a51b8e90b6",
+      "path": "Tools/TerminalEngineEvaluator.psm1"
+    },
+    {
+      "sha256": "44981f41d766880e0ed74a614af07e9e32aa097be055fb1961422ffbccc59c45",
+      "path": "Tools/TerminalEvidence.psm1"
+    },
+    {
+      "sha256": "0215738bb9561302d1435bc06492e24e2878fc7934bdd1b694e8869d2697df55",
+      "path": "Tools/Test-Changelog.ps1"
+    },
+    {
+      "sha256": "1aa4cf1570a01549beaa46d582830a6327e90cc2f2d91b2d4f73376d08523522",
+      "path": "Tools/Test-TerminalEngineRound4Closeout.ps1"
+    },
+    {
+      "sha256": "7a067541832acb4edc90d179aabb9066a38c0798d502e6be4e003af9807d10c6",
+      "path": "Tools/TestRunPlan.ps1"
+    },
+    {
+      "sha256": "f5f1d9f3e5c3e671e336a2615de5d8000a318aba73df491e7cb8ed231bdffe5c",
+      "path": "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1"
+    },
+    {
+      "sha256": "f5431748d49b96139c455948fe083dd4fcaecd018a5cef374480f5298cc8489b",
+      "path": "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
+    },
+    {
+      "sha256": "09b6888bf74d2c52525f4c7b09da68acb4f9a40092d6ddb50978c4c66d20b4ac",
+      "path": "Tools/Tests/RunAllTestsPlan.Tests.ps1"
+    },
+    {
+      "sha256": "904fe2c92e48070708cd67b5ccad97ecb31bf92e0262d2aa516a05c3baa0ca8b",
+      "path": "Tools/Tests/ShowPerfRuns.Tests.ps1"
+    },
+    {
+      "sha256": "c9ba194a058711bd20108871ea1cdf922fb4600bc5fb8aff666ddb675a9d3730",
+      "path": "Tools/Tests/SpecInformationArchitecture.Tests.ps1"
+    },
+    {
+      "sha256": "b1e4b3ab8272eb9dbe47e441bb457052026793cdaf59736913bc226083633954",
+      "path": "Tools/Tests/TerminalEngineArchive.Tests.ps1"
+    },
+    {
+      "sha256": "c455ebdb1ed47e42f46a4a9df7869cf35c19849bce34dc4efa369ffea60fb5a8",
+      "path": "Tools/Tests/TerminalEngineC7Proof.Tests.ps1"
+    },
+    {
+      "sha256": "e0bf4dcda4c491e1f9b45d21c31d9d18d5349281a54018e93748436714a78d0d",
+      "path": "Tools/Tests/TerminalEngineCandidateAssessment.Tests.ps1"
+    },
+    {
+      "sha256": "89150d5bcc26e936277bc7b50833830fac2cef015af583a37fe97075ae1ff705",
+      "path": "Tools/Tests/TerminalEngineCandidatePatch.Tests.ps1"
+    },
+    {
+      "sha256": "74f556edd53c19bc4cd2f804a53a4a37911ed0742671b6608d09a04dfcfd9462",
+      "path": "Tools/Tests/TerminalEngineCandidateUniverseTransition.Tests.ps1"
+    },
+    {
+      "sha256": "6f101f899a23e4df2972184094611d9e2670462c9114cbf85631872f8bd7e04c",
+      "path": "Tools/Tests/TerminalEngineCollectionDescriptor.Tests.ps1"
+    },
+    {
+      "sha256": "91a6a611829910b63be642625d1bfde86ccbd779509a1caee1392655eb899dd0",
+      "path": "Tools/Tests/TerminalEngineCollectionDriver.Tests.ps1"
+    },
+    {
+      "sha256": "6b845e411181dfc7b718709247f26cee7453e9fc08ec230a56b24bcffb27b47e",
+      "path": "Tools/Tests/TerminalEngineCollectionNeutrality.Tests.ps1"
+    },
+    {
+      "sha256": "4844fd853f02bd3fa82bfcfdc8012f05e07d130828e19921866f8061b1260b1e",
+      "path": "Tools/Tests/TerminalEngineCollectionProvider.Tests.ps1"
+    },
+    {
+      "sha256": "3431f08e595368e3a924e1c4295255ba9718a7868c63ef7b138ff299df452fcd",
+      "path": "Tools/Tests/TerminalEngineEvaluator.Tests.ps1"
+    },
+    {
+      "sha256": "3cb43131900406591cbc9aa4b2acf634d3c50efad06b0fe43d056e9dea93779e",
+      "path": "Tools/Tests/TerminalEngineFixtureGenerator.Tests.ps1"
+    },
+    {
+      "sha256": "501327dc0033bd5a9814bdf4b9ac92c89894cc3004971af68154e92acb280088",
+      "path": "Tools/Tests/TerminalEngineGate0Harness.Tests.ps1"
+    },
+    {
+      "sha256": "df020dbd5eb9f3c9652c1cc3c34192c67ea6127595bab94dff7546d3599464c3",
+      "path": "Tools/Tests/TerminalEngineGate0Probe.Tests.ps1"
+    },
+    {
+      "sha256": "837305f3fe4f52240ee982e6869a4abce2ecd1ab796ef87578260dd4224e16b7",
+      "path": "Tools/Tests/TerminalEngineNetworkIsolation.Tests.ps1"
+    },
+    {
+      "sha256": "d16cb796519d8939e1bee950b6994249d2b9f9efba5519ae1627b275728909bb",
+      "path": "Tools/Tests/TerminalEngineNotices.Tests.ps1"
+    },
+    {
+      "sha256": "4f45b022e63dfb3beb88b8dd8dbdebc3bda941b4de0b0193ccd9267fe6e09f6d",
+      "path": "Tools/Tests/TerminalEnginePeIdentity.Tests.ps1"
+    },
+    {
+      "sha256": "acc5d3957cc8a9882a53c24ba74dff3bda70e892fa5f5fd8abc401dde8c815fe",
+      "path": "Tools/Tests/TerminalEngineSourceReview.Tests.ps1"
+    },
+    {
+      "sha256": "9cf61fdea11408bdc6beadf8540e2af18dbe0544353b740c3600c53b77d48e40",
+      "path": "Tools/Tests/TerminalEvidence.Tests.ps1"
+    },
+    {
+      "sha256": "09b795603d4862f6b061b02e42a20abd98aa803ca49c1efa19d05524070c931c",
+      "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
+    },
+    {
+      "sha256": "d9d01be459300ba620ab860bd8be4184a735228216556f55da9bd398c7a0c7c8",
+      "path": "Tools/Tests/TestSandboxContainment.Tests.ps1"
+    },
+    {
+      "sha256": "81cc886c62705e8a7d2745bc1174768c981ef2e56a9ad9891b6f1437a7f8d75b",
+      "path": "Tools/Tests/TestSupport.psm1"
+    },
+    {
+      "sha256": "17bc9bba791c702a87cd83e1cf3bdb45375d92cd433c8cd67b35fbb0ce01ceaa",
+      "path": "Tools/Tests/VcpkgInstallSafety.Tests.ps1"
+    },
+    {
+      "sha256": "a2d7e85bd6cd07e952158f697226fb1923e00e2593c3e61228a81263ec32cf56",
+      "path": "Tools/Tests/WingetValidation.Tests.ps1"
+    },
+    {
+      "sha256": "0c842cf54c907c38541969d0af2cfd3e12fb0b3212ce0dacc4d373c68f9f7326",
+      "path": "Tools/tool-inventory.json"
+    },
+    {
+      "sha256": "640e60eb48200415db824ecd1e0d7988d385643f406379d294e164ac5511cc64",
+      "path": "Tools/validation-impact.json"
+    },
+    {
+      "sha256": "75359132988199bd5a344ea82b227dd60a66aef42ea49d009c242bbdb71fa71b",
+      "path": "Tools/Verify-NoSubclassManager.ps1"
+    },
+    {
+      "sha256": "d683effe051c173700f9ebefef83d4f813de983c2630d6ace6b9f064941eb1a4",
+      "path": "Tools/Verify-RedMonitorClient.ps1"
+    },
+    {
+      "sha256": "a96199e26f09b422e7d37c89344af45b78d3dcdb7534f6e8ca8a2ea7e211dc16",
+      "path": "vcpkg-install.ps1"
+    },
+    {
+      "sha256": "ecccc5a8227064abe6d8fb6048df99f42f5961d4440e32b87360d8a64d1dfd94",
+      "path": "vcpkg-tool.json"
+    }
+  ],
+  "pwsh_version": "7.6.9",
+  "fixture_commit": "5cd04e1b96702a3b74a1eacc41139d51d9482a2e"
+}

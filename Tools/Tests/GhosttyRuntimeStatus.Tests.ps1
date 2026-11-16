@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -92,8 +93,7 @@ Describe 'Ghostty runtime read-only observation status' {
         $root = New-RSGhosttyStatusTestOutput
         $outputPath = Join-Path $root 'fresh-process.json'
         try {
-            $output = & pwsh.exe -NoProfile -File $commandPath -Mode Locked `
-                -GeneratedUtc $fixedUtc.ToString('o') -OutputPath $outputPath 2>&1
+            $output = Invoke-RSTestFixtureNative -FilePath 'pwsh.exe' -Arguments @('-NoProfile'; '-File'; $commandPath; '-Mode'; 'Locked'; '-GeneratedUtc'; $fixedUtc.ToString('o'); '-OutputPath'; $outputPath) 2>&1
             $exitCode = $LASTEXITCODE
             $exitCode | Should Be 0
             ($output -join "`n") | Should Match 'mode=Locked result=current'
@@ -230,7 +230,7 @@ Describe 'Ghostty runtime read-only observation status' {
     }
 
     It 'binds release evidence to the exact checked-out source commit' {
-        $actual = (& git.exe -C $repoRoot rev-parse HEAD).Trim()
+        $actual = (Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'rev-parse'; 'HEAD')).Trim()
         $bound = New-RSGhosttyRuntimeStatusReport -RepoRoot $repoRoot -Mode Locked -GeneratedUtc $fixedUtc -ExpectedSourceCommit $actual
         $bound.sourceBinding.repositoryCommit | Should Be $actual
         Assert-RSGhosttyStatusRejected {
@@ -241,9 +241,9 @@ Describe 'Ghostty runtime read-only observation status' {
     It 'writes only ignored build evidence and leaves tracked status unchanged' {
         $root = New-RSGhosttyStatusTestOutput
         try {
-            $before = (& git.exe -C $repoRoot status --porcelain=v1 --untracked-files=no) -join "`n"
+            $before = (Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'status'; '--porcelain=v1'; '--untracked-files=no')) -join "`n"
             & $commandPath -Mode Online -NetworkFixturePath (New-RSGhosttyStatusFixture) -GeneratedUtc $fixedUtc -OutputPath (Join-Path $root 'status.json')
-            $after = (& git.exe -C $repoRoot status --porcelain=v1 --untracked-files=no) -join "`n"
+            $after = (Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'status'; '--porcelain=v1'; '--untracked-files=no')) -join "`n"
             $after | Should Be $before
             Test-Path -LiteralPath (Join-Path $root 'status.json') -PathType Leaf | Should Be $true
         }

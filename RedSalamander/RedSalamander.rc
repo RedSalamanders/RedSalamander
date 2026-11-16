@@ -622,6 +622,19 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP "Delete source applies to all only when both files have the same size and date."
+    IDS_FILEOPS_RETAINED_DESTINATION_AUTHORITY "Copied; source kept because the destination cannot retain exact publication authority."
+    IDS_FILEOPS_RETAINED_SOURCE_FACTS "Copied; source kept because its name, size and dates could not be read."
+    IDS_FILEOPS_RETAINED_SOURCE_AUTHORITY "Copied; source kept because its exact identity is unavailable."
+    IDS_FILEOPS_RETAINED_FOLDER_CHILDREN "The source folder was kept because it contains an unselected or newly added item."
+    IDS_FILEOPS_RETAINED_SOURCE_CLEANUP "Copied; source kept because its conditional removal did not complete."
+    IDS_FILEOPS_RETAINED_SOURCE_PLACEHOLDER "Copied; source kept as requested for the cloud placeholder."
+    IDS_FILEOPS_RETAINED_SOURCE_EFS "Copied; source kept because EFS encryption could not be preserved."
+    IDS_FILEOPS_RETAINED_SOURCE_SPARSE "Copied; source kept because sparse allocation could not be preserved."
+    IDS_FILEOPS_RETAINED_SOURCE_SECURITY_METADATA "Copied; source kept because security metadata was not preserved."
+    IDS_FILEOPS_RETAINED_DESTINATION_CONTENT_PROOF "Copied; source kept because the destination could not prove the published content."
+    IDS_FILEOPS_RETAINED_FOLDER_INCOMPLETE "The source folder was kept because at least one child item did not complete."
+    IDS_FILEOPS_DIAG_DESTINATION_ANCESTRY_UNPROVED "Cannot verify that the destination is outside the source folder. Nothing was copied or moved."
     IDS_FMT_FILEOPS_TRANSFER_AMOUNT "{0} of {1}"
     IDS_FMT_FILEOPS_OPERATION_SUBJECT "{0} — {1}"
     IDS_FMT_FILEOPS_SELECTION_KINDS "{0:L} files, {1:L} folders"

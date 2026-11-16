@@ -485,6 +485,19 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP "Odstránenie zdroja sa použije pre všetky iba vtedy, ak majú oba súbory rovnakú veľkosť a dátum."
+    IDS_FILEOPS_RETAINED_DESTINATION_AUTHORITY "Skopírované; zdroj ponechaný, pretože cieľ nemôže uchovať presnú identitu zverejnenej položky."
+    IDS_FILEOPS_RETAINED_SOURCE_FACTS "Skopírované; zdroj ponechaný, pretože nemožno prečítať jeho názov, veľkosť a dátumy."
+    IDS_FILEOPS_RETAINED_SOURCE_AUTHORITY "Skopírované; zdroj ponechaný, pretože jeho presná identita nie je dostupná."
+    IDS_FILEOPS_RETAINED_FOLDER_CHILDREN "Zdrojový priečinok bol ponechaný, pretože obsahuje nevybranú alebo novo pridanú položku."
+    IDS_FILEOPS_RETAINED_SOURCE_CLEANUP "Skopírované; zdroj ponechaný, pretože jeho podmienené odstránenie nebolo dokončené."
+    IDS_FILEOPS_RETAINED_SOURCE_PLACEHOLDER "Skopírované; zdroj ponechaný podľa voľby pre cloudový zástupný súbor."
+    IDS_FILEOPS_RETAINED_SOURCE_EFS "Skopírované; zdroj ponechaný, pretože nemožno zachovať šifrovanie EFS."
+    IDS_FILEOPS_RETAINED_SOURCE_SPARSE "Skopírované; zdroj ponechaný, pretože nemožno zachovať riedke pridelenie priestoru."
+    IDS_FILEOPS_RETAINED_SOURCE_SECURITY_METADATA "Skopírované; zdroj ponechaný, pretože metadáta zabezpečenia neboli zachované."
+    IDS_FILEOPS_RETAINED_DESTINATION_CONTENT_PROOF "Skopírované; zdroj ponechaný, pretože cieľ nemohol overiť zverejnený obsah."
+    IDS_FILEOPS_RETAINED_FOLDER_INCOMPLETE "Zdrojový priečinok bol ponechaný, pretože aspoň jedna podradená položka nebola dokončená."
+    IDS_FILEOPS_DIAG_DESTINATION_ANCESTRY_UNPROVED "Nemožno overiť, že cieľ leží mimo zdrojového priečinka. Nič nebolo skopírované ani presunuté."
     IDS_FILEOPS_WAITING_IDENTITY_INTERLOCK "Čaká sa na dokončenie konfliktných operácií. Identifikátory súborov nie sú pre túto operáciu dostupné, preto sa musí vykonať samostatne."
     IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE "&Paralelné prenosy"
     IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC "Zdieľaný limit pre operácie so súbormi (1–16; predvolené 4). Rôzne súbory s novými cieľovými názvami možno prenášať súčasne. Prepísania a konfliktné operácie zostávajú postupné."

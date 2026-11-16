@@ -1,0 +1,408 @@
+{
+  "schema": "red-salamander.hosted-stock-fake-work.v1",
+  "run_id": "20261114T181221Z-106388-bcb8bdefe1754f749767db431e92cd3a",
+  "clock_frequency": 10000000,
+  "scope": "managed fake readers only; not native-query or pipeline performance",
+  "rows": [
+    {
+      "scenario": "matching",
+      "iteration": 1,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 23354
+    },
+    {
+      "scenario": "matching",
+      "iteration": 2,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 22307
+    },
+    {
+      "scenario": "matching",
+      "iteration": 3,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 183102
+    },
+    {
+      "scenario": "matching",
+      "iteration": 4,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 21060
+    },
+    {
+      "scenario": "matching",
+      "iteration": 5,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18326
+    },
+    {
+      "scenario": "matching",
+      "iteration": 6,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20435
+    },
+    {
+      "scenario": "matching",
+      "iteration": 7,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 17258
+    },
+    {
+      "scenario": "matching",
+      "iteration": 8,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19833
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 1,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19034
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 2,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19137
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 3,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19536
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 4,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19262
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 5,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18941
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 6,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19004
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 7,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19540
+    },
+    {
+      "scenario": "changed-creation",
+      "iteration": 8,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20011
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 1,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20117
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 2,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20574
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 3,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 22808
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 4,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 21795
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 5,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 22729
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 6,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 22039
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 7,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 21869
+    },
+    {
+      "scenario": "changed-window",
+      "iteration": 8,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 22483
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 1,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 23047
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 2,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 21091
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 3,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20125
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 4,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19196
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 5,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18674
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 6,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20185
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 7,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 20167
+    },
+    {
+      "scenario": "newer-parent",
+      "iteration": 8,
+      "held_child_reads": 1,
+      "parent_reads": 1,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19301
+    },
+    {
+      "scenario": "denied",
+      "iteration": 1,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18450
+    },
+    {
+      "scenario": "denied",
+      "iteration": 2,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18818
+    },
+    {
+      "scenario": "denied",
+      "iteration": 3,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18957
+    },
+    {
+      "scenario": "denied",
+      "iteration": 4,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 19958
+    },
+    {
+      "scenario": "denied",
+      "iteration": 5,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18612
+    },
+    {
+      "scenario": "denied",
+      "iteration": 6,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 18332
+    },
+    {
+      "scenario": "denied",
+      "iteration": 7,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 21464
+    },
+    {
+      "scenario": "denied",
+      "iteration": 8,
+      "held_child_reads": 1,
+      "parent_reads": 0,
+      "final_relation_reads": 1,
+      "same_lease": true,
+      "lease_live": true,
+      "elapsed_ticks": 21145
+    }
+  ]
+}

@@ -587,6 +587,11 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_COMMAND: OnCommand(LOWORD(wp), reinterpret_cast<HWND>(lp), HIWORD(wp)); return 0;
         case WM_CTLCOLOREDIT: return OnCtlColorEdit(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+            if (! _embeddedDestinationMode)
+                RequestOwnerPaneFocus();
+            return 0;
         case WM_LBUTTONDOWN:
         {
             if (auto event = DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())

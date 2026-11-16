@@ -1,0 +1,75 @@
+{
+  "files": [
+    {
+      "bytes": 11242,
+      "path": "Debug/cadence-metrics.json",
+      "sha256": "5a5b95961376630abe7e95ceff940da99404de562d5829723f21194e09a9a1d8"
+    },
+    {
+      "bytes": 3327,
+      "path": "Debug/cadence-notes.txt",
+      "sha256": "0ce70e67f8901107ac7bf7b12f71301a1a64c0a349b3198db6a9dd450e5d334d"
+    },
+    {
+      "bytes": 2565,
+      "path": "Debug/case-results.projection.json",
+      "sha256": "6c67ec1eec532a69500e860f41d7801ba536e88cd0c3cc198d50d373cd33c7df"
+    },
+    {
+      "bytes": 106685,
+      "path": "Debug/observer-rows.json",
+      "sha256": "f30d5ad9c1b16b56f4b3a4206545ff56209254503963bff69c1e4b063d7a6930"
+    },
+    {
+      "bytes": 3465,
+      "path": "derivation.txt",
+      "sha256": "887095e41eae6f2fc3cb0771770638f07251a08327149258ee55ad75766b1566"
+    },
+    {
+      "bytes": 35290,
+      "path": "evidence-bindings.json",
+      "sha256": "eb97c379fd3e1d99c423db99e5aac38d10fde40eb59d3f980f782a963399d193"
+    },
+    {
+      "bytes": 3217,
+      "path": "history-and-limits.json",
+      "sha256": "902ff80ba5a6b5d6ba962162e6d62d63e1d95e2ce532efa68d0557c3cd68e173"
+    },
+    {
+      "bytes": 9746,
+      "path": "publication-provenance.json",
+      "sha256": "d45f5e147cfa7e6f61bcb6630eafbbbe3c956e03dad413764635874fb693d404"
+    },
+    {
+      "bytes": 5698,
+      "path": "README.md",
+      "sha256": "abacf5f1edbdbe9ee010c6016608b6e3986ceed900220d8f305c1ba53cd6a8f0"
+    },
+    {
+      "bytes": 11283,
+      "path": "Release/cadence-metrics.json",
+      "sha256": "bf12c81b77146450feb426da094541e328f2fb874a26a75bf1ab110abd45a687"
+    },
+    {
+      "bytes": 3331,
+      "path": "Release/cadence-notes.txt",
+      "sha256": "917e43218c628b7b99e387d7ccc53ccd2dcfee004b60296e28dfc077811a9a60"
+    },
+    {
+      "bytes": 2569,
+      "path": "Release/case-results.projection.json",
+      "sha256": "56fab56deab1400002a247010834215cade4b41204d3d805b3b9f85de93dbdde"
+    },
+    {
+      "bytes": 106399,
+      "path": "Release/observer-rows.json",
+      "sha256": "b07d113a5bf9463051e4cf34a62042352794f86c69b6ea2e04d8ad0e71f7feff"
+    },
+    {
+      "bytes": 4423,
+      "path": "source-targets.json",
+      "sha256": "ce5789c5b8cfe5cbd531f00da35e9b7a654136c5aaed2ec4a4aac3d58897346f"
+    }
+  ],
+  "kind": "Public payload manifest,self excluded; externally hash-bound privately"
+}

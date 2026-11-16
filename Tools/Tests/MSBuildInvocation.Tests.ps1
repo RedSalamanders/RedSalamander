@@ -6,9 +6,103 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Build\MSBuildInvocation.psm1'
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -ErrorAction Stop
 
+Describe 'Workflow-selected MSBuild identity' {
+    BeforeAll {
+        Import-Module $helperModule -Force -ErrorAction Stop
+        # Rebind the consumer after replacing the shared module, so its nested
+        # commands and Pester's module mocks use the same module instance.
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -Force -ErrorAction Stop
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'),[ref]$tokens,[ref]$errors)
+        $function=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Find-MSBuild'},$true)
+        Invoke-Expression $function.Extent.Text
+    }
+    BeforeEach {
+        $script:savedActions=$env:GITHUB_ACTIONS;$script:savedSelected=$env:MSBUILD_EXE_PATH
+        $env:GITHUB_ACTIONS='true';$env:MSBUILD_EXE_PATH=$null
+        $root=Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+        $global:rsMsbuildSelectionFixture=@{A=(Join-Path $root 'selected older instance');B=(Join-Path $root 'latest competing instance')}
+        foreach($installation in @($global:rsMsbuildSelectionFixture.A,$global:rsMsbuildSelectionFixture.B)) {
+            foreach($relative in @(Get-RSHostOrderedMSBuildRelativePaths)) {
+                $path=Join-Path $installation $relative
+                [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
+                [IO.File]::WriteAllText($path,'synthetic discovery fixture; never executed')
+            }
+        }
+        Mock Get-RSMSBuildFileVersion { [pscustomobject]@{FileMajorPart=18;OriginalFilename='MSBuild.exe'} } -ModuleName MSBuildInvocation
+        Mock Get-Command { [pscustomobject]@{Source=(Join-Path $global:rsMsbuildSelectionFixture.A 'MSBuild/Current/Bin/MSBuild.exe')} } `
+            -ModuleName MSBuildInvocation -ParameterFilter { $Name -eq 'msbuild.exe' }
+    }
+    AfterEach {
+        $env:GITHUB_ACTIONS=$script:savedActions;$env:MSBUILD_EXE_PATH=$script:savedSelected
+        Remove-Variable rsMsbuildSelectionFixture -Scope Global -ErrorAction SilentlyContinue
+    }
+    It 'keeps PATH-only build and dependency selection in the selected installation despite a competitor' {
+        $nestedHelper = & (Get-Module VcpkgInstallSafety) { (Get-Command Get-RSWorkflowSelectedMSBuild).Module }
+        [object]::ReferenceEquals((Get-Command Get-RSWorkflowSelectedMSBuild).Module, $nestedHelper) | Should Be $true
+        $expected=Join-Path $global:rsMsbuildSelectionFixture.A @(Get-RSHostOrderedMSBuildRelativePaths)[0]
+        $selected=Get-RSWorkflowSelectedMSBuild
+        $selected.Path | Should Be $expected
+        $selected.Method | Should Be 'PATH'
+        (Find-MSBuild).Path | Should Be $expected
+        Get-RSVcpkgVisualStudioInstallation | Should Be $global:rsMsbuildSelectionFixture.A
+    }
+    It 'gives explicit workflow selection priority over PATH without silently changing its executable' {
+        $env:MSBUILD_EXE_PATH=Join-Path $global:rsMsbuildSelectionFixture.B 'MSBuild/Current/Bin/MSBuild.exe'
+        (Get-RSWorkflowSelectedMSBuild).Path | Should Be $env:MSBUILD_EXE_PATH
+        (Find-MSBuild).Path | Should Be $env:MSBUILD_EXE_PATH
+        Get-RSVcpkgVisualStudioInstallation | Should Be $global:rsMsbuildSelectionFixture.B
+        Assert-MockCalled Get-Command -ModuleName MSBuildInvocation -Times 0 -Exactly -Scope It -ParameterFilter { $Name -eq 'msbuild.exe' }
+    }
+    It 'fails closed for missing, foreign and wrong-version explicit selections' {
+        foreach($path in @((Join-Path $global:rsMsbuildSelectionFixture.B 'MSBuild/Current/Bin/missing/MSBuild.exe'),(Join-Path $TestDrive 'foreign/MSBuild.exe'))) {
+            $env:MSBUILD_EXE_PATH=$path
+            { Get-RSWorkflowSelectedMSBuild } | Should Throw 'not an existing Visual Studio 2026 executable'
+        }
+        $env:MSBUILD_EXE_PATH=Join-Path $global:rsMsbuildSelectionFixture.B 'MSBuild/Current/Bin/MSBuild.exe'
+        Mock Get-RSMSBuildFileVersion { [pscustomobject]@{FileMajorPart=17;OriginalFilename='MSBuild.exe'} } -ModuleName MSBuildInvocation
+        { Get-RSWorkflowSelectedMSBuild } | Should Throw 'not an existing Visual Studio 2026 executable'
+        Assert-MockCalled Get-Command -ModuleName MSBuildInvocation -Times 0 -Exactly -Scope It -ParameterFilter { $Name -eq 'msbuild.exe' }
+    }
+    It 'leaves invalid PATH candidates to ordinary discovery and ignores workflow hints outside Actions' {
+        Mock Get-RSMSBuildFileVersion { [pscustomobject]@{FileMajorPart=17;OriginalFilename='MSBuild.exe'} } -ModuleName MSBuildInvocation
+        ($null -eq (Get-RSWorkflowSelectedMSBuild)) | Should Be $true
+        $env:GITHUB_ACTIONS=$null
+        $env:MSBUILD_EXE_PATH=Join-Path $TestDrive 'unavailable/MSBuild.exe'
+        ($null -eq (Get-RSWorkflowSelectedMSBuild)) | Should Be $true
+    }
+}
+
 Describe 'MSBuild invocation helper' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop
+    }
+
+    It 'shares host-ordered discovery for installation and developer-prompt paths' {
+        $installation = Join-Path $TestDrive 'Visual Studio'
+        $relatives = @(Get-RSHostOrderedMSBuildRelativePaths)
+        foreach ($relative in $relatives) {
+            $candidate = Join-Path $installation $relative
+            [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($candidate))
+            [IO.File]::WriteAllText($candidate, 'synthetic path fixture; never executed')
+        }
+        $expected = Join-Path $installation $relatives[0]
+        (Find-RSHostOrderedMSBuildInInstallation -InstallationPath $installation) | Should Be $expected
+        (Resolve-RSHostOrderedMSBuildPath -Path (Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe')) | Should Be $expected
+        Remove-Item -LiteralPath $expected
+        (Find-RSHostOrderedMSBuildInInstallation -InstallationPath $installation) | Should Be (Join-Path $installation $relatives[1])
+    }
+
+    It 'does not invent an MSBuild executable or rewrite unrelated explicit paths' {
+        $installation = Join-Path $TestDrive 'Missing Visual Studio'
+        ($null -eq (Find-RSHostOrderedMSBuildInInstallation -InstallationPath $installation)) | Should Be $true
+        $unrelated = Join-Path $TestDrive 'explicit/MSBuild.exe'
+        (Resolve-RSHostOrderedMSBuildPath -Path $unrelated) | Should Be $unrelated
+        $relatives = @(Get-RSHostOrderedMSBuildRelativePaths)
+        $relatives[0] | Should Match 'Bin\\(amd64|arm64)\\MSBuild\.exe$'
+        if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -cne 'Arm64') {
+            @($relatives | Where-Object { $_ -match '\\arm64\\' }).Count | Should Be 0
+        }
     }
 
     It 'keeps CI-style redirected shells on the streaming path' {

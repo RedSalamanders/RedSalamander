@@ -414,8 +414,16 @@ public:
     // reinterpret a DOS device component as an ordinary NT filesystem name.
     [[nodiscard]] static bool IsReservedWindowsLeaf(std::wstring_view name) noexcept
     {
-        const size_t dot             = name.find(L'.');
-        const std::wstring_view stem = name.substr(0u, dot);
+        while (! name.empty() && (name.back() == L' ' || name.back() == L'.'))
+        {
+            name.remove_suffix(1u);
+        }
+        const size_t dot       = name.find(L'.');
+        std::wstring_view stem = name.substr(0u, dot);
+        while (! stem.empty() && stem.back() == L' ')
+        {
+            stem.remove_suffix(1u);
+        }
         if (stem.empty() || stem.size() > 7u)
         {
             return false;

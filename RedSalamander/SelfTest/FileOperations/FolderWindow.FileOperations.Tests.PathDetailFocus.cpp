@@ -1561,6 +1561,206 @@
                       scrollReconcile.maxStructuralUs);
     note(std::format(L"scroll timing: rebuild baseline {}; reconcile {}", describeTiming(scrollRebuild), describeTiming(scrollReconcile)));
 
+    // Audit wheel/DPI regression: focus on a global completed-group action is a
+    // deferred list reveal too. Quarter-detents may not consume it or clamp an
+    // offset against the intentionally empty native scroll range.
+    TaskSnapshot terminal   = makeCopy(copyId + 9u, L"C:\\Stable\\Finished");
+    terminal.finished       = true;
+    terminal.lifecyclePhase = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Terminal);
+    terminal.statusKind     = TaskSnapshot::StatusKind::Done;
+    terminal.completedBytes = terminal.totalBytes;
+    terminal.completedItems = terminal.totalItems;
+    cards.push_back(terminal);
+    TaskSnapshot secondTerminal           = terminal;
+    secondTerminal.taskId                 = copyId + 7u;
+    secondTerminal.currentSourcePath      = L"C:\\Stable\\FinishedAgain\\Source\\first.bin";
+    secondTerminal.currentDestinationPath = L"C:\\Stable\\FinishedAgain\\Destination\\first.bin";
+    secondTerminal.destinationFolder      = L"C:\\Stable\\FinishedAgain\\Destination";
+    cards.push_back(std::move(secondTerminal));
+    // The real completed group requires two records. Keep it collapsed so its
+    // header is the final row, then use normal scrolling to host its controls.
+    popupState->DebugSetVisualScenario(cards, false, false);
+    paint();
+    paint();
+    SendMessageW(popup.get(), WM_VSCROLL, MAKEWPARAM(SB_BOTTOM, 0), 0);
+    paint();
+    paint();
+    const auto groupLayout = layoutFor(firstCardId);
+    if (! groupLayout.found || ! groupLayout.completedGroupVisible || groupLayout.completedGroupCount != 2u || groupLayout.completedGroupExpanded ||
+        ! groupLayout.completedGroupToggleVisible || ! groupLayout.completedGroupClearVisible)
+    {
+        fail(std::format(L"completed-group fixture unavailable: found={} visible={} count={} expanded={} toggle={} clear={}; "
+                         L"focus and quarter-detent checks were not executed",
+                         groupLayout.found,
+                         groupLayout.completedGroupVisible,
+                         groupLayout.completedGroupCount,
+                         groupLayout.completedGroupExpanded,
+                         groupLayout.completedGroupToggleVisible,
+                         groupLayout.completedGroupClearVisible));
+        return false;
+    }
+    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), {}))
+    {
+        fail(L"completed-group fixture could not clear the earlier logical focus; focus and quarter-detent checks were not executed");
+        return false;
+    }
+    const auto focusCompletedGroup = [&](PopupHitTest::Kind kind) noexcept
+    {
+        const std::wstring target = actionId(kind, 0u);
+        const auto beforeFocus    = layoutFor(firstCardId);
+        const bool focused        = popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), target);
+        const auto afterFocus     = layoutFor(firstCardId);
+        if (! focused || beforeFocus.hostedFocusedAutomationId == target || afterFocus.hostedFocusedAutomationId != target || ! afterFocus.pendingFocusReveal)
+        {
+            fail(std::format(L"completed-group focus prerequisite: target='{}' accepted={} before='{}' after='{}' pending={}; "
+                             L"quarter-detent checks were not executed",
+                             target,
+                             focused,
+                             beforeFocus.hostedFocusedAutomationId,
+                             afterFocus.hostedFocusedAutomationId,
+                             afterFocus.pendingFocusReveal));
+            return false;
+        }
+        return true;
+    };
+    if (! focusCompletedGroup(PopupHitTest::Kind::CompletedGroupClear) || ! focusCompletedGroup(PopupHitTest::Kind::CompletedGroupToggle))
+        return false;
+    popupState->DebugWithholdScrollBarForSelfTest(popup.get(), 72);
+    const auto beforeQuarterDetents = layoutFor(firstCardId);
+    if (beforeQuarterDetents.scrollPosition != 72 || ! beforeQuarterDetents.pendingFocusReveal)
+    {
+        fail(std::format(L"withheld-range fixture prerequisite: offset={} pending={}; quarter-detent checks were not executed",
+                         beforeQuarterDetents.scrollPosition,
+                         beforeQuarterDetents.pendingFocusReveal));
+        return false;
+    }
+    const auto quarterDetentsStarted = std::chrono::steady_clock::now();
+    for (size_t quarter = 0u; quarter < 3u; ++quarter)
+    {
+        SendMessageW(popup.get(), WM_MOUSEWHEEL, MAKEWPARAM(0, 30), 0);
+        const auto observed = layoutFor(firstCardId);
+        if (observed.scrollPosition != beforeQuarterDetents.scrollPosition || ! observed.pendingFocusReveal)
+            fail(std::format(L"quarter-detent {} changed withheld-range state: offset={} expected={} pending={}",
+                             quarter + 1u,
+                             observed.scrollPosition,
+                             beforeQuarterDetents.scrollPosition,
+                             observed.pendingFocusReveal));
+    }
+    SendMessageW(popup.get(), WM_MOUSEWHEEL, MAKEWPARAM(0, 30), 0);
+    const auto afterDetent          = layoutFor(firstCardId);
+    const int expectedWheelPosition = std::max(0, beforeQuarterDetents.scrollPosition - std::max(1, MulDiv(36, static_cast<int>(dpi), 96)));
+    if (afterDetent.scrollPosition != expectedWheelPosition || afterDetent.pendingFocusReveal)
+        fail(L"four quarter-detents did not consume exactly one model-range scroll step");
+    paint();
+    const auto quarterDetentsUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - quarterDetentsStarted).count());
+    Debug::Perf::Emit(L"FileOps.Popup.StableTree.QuarterDetentSyncUs",
+                      L"3 running cards and 2 finished records in a collapsed completed group; four delta-30 messages; withheld native range",
+                      quarterDetentsUs,
+                      4u,
+                      static_cast<uint64_t>(afterDetent.scrollPosition));
+
+    // This exercises DPI invalidation at the real current monitor DPI; it does
+    // not claim native mixed-monitor/DPI qualification. The old pending target
+    // must be gone before the next paint can resize the window.
+    if (! popupState->DebugSetHostedButtonFocusForSelfTest(popup.get(), firstToggleId))
+        fail(L"DPI fixture could not change hosted focus before invalidation");
+    const auto beforeDpi = layoutFor(firstCardId);
+    popupState->DebugArmAutoResizeMotionForSelfTest();
+    RECT suggested{};
+    GetWindowRect(popup.get(), &suggested);
+    RECT savedExpanded = suggested;
+    savedExpanded.bottom += 100;
+    popupState->SetExpandedPlacementForRestore(savedExpanded, true);
+    OffsetRect(&suggested, 1, 1);
+    SendMessageW(popup.get(), WM_DPICHANGED, MAKEWPARAM(dpi, dpi), reinterpret_cast<LPARAM>(&suggested));
+    const auto afterDpi = layoutFor(firstCardId);
+    if (afterDpi.autoResizeMotionActive || afterDpi.expandedPlacementRestorePending || afterDpi.expandedPlacementRestoreRect.left != savedExpanded.left + 1 ||
+        afterDpi.expandedPlacementRestoreRect.top != savedExpanded.top + 1 ||
+        afterDpi.expandedPlacementRestoreRect.bottom - afterDpi.expandedPlacementRestoreRect.top != savedExpanded.bottom - savedExpanded.top ||
+        afterDpi.taskReservedStreamRows != 0u || afterDpi.hostedFocusedAutomationId != beforeDpi.hostedFocusedAutomationId ||
+        afterDpi.pendingFocusReveal != beforeDpi.pendingFocusReveal)
+        fail(L"DPI invalidation retained old pixel resize/reservation state or lost the hosted focus transaction");
+    paint();
+    paint();
+    if (layoutFor(firstCardId).taskReservedStreamRows == 0u)
+        fail(L"DPI invalidation did not remeasure the running card's stream reservations");
+    RECT clientBeforeGrowth{};
+    GetClientRect(popup.get(), &clientBeforeGrowth);
+    const bool fixedGeometryBeforeGrowth = popupState->debugFixedGeometry;
+    popupState->debugFixedGeometry       = false;
+    popupState->DebugAutoResizeClientHeightForSelfTest(popup.get(), clientBeforeGrowth.bottom);
+    popupState->DebugAutoResizeClientHeightForSelfTest(popup.get(), clientBeforeGrowth.bottom + 1);
+    popupState->debugFixedGeometry = fixedGeometryBeforeGrowth;
+    RECT clientAfterGrowth{};
+    GetClientRect(popup.get(), &clientAfterGrowth);
+    if (clientAfterGrowth.bottom != clientBeforeGrowth.bottom + 1)
+        fail(L"one-pixel auto-size growth was suppressed or rounded to an overflowing viewport");
+
+    TaskSnapshot scopePrompt                           = makeCopy(copyId + 8u, L"C:\\Stable\\Scope");
+    scopePrompt.operation                              = FILESYSTEM_MOVE;
+    scopePrompt.conflict.active                        = true;
+    scopePrompt.conflict.generation                    = 500u;
+    scopePrompt.conflict.bucket                        = static_cast<uint8_t>(FileOperations::ConflictClass::RegularFileExists);
+    scopePrompt.conflict.status                        = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+    scopePrompt.conflict.destinationMetadata.available = true;
+    const std::wstring expectedScopeHelp               = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP);
+    if (expectedScopeHelp.empty())
+    {
+        fail(L"the owning localized Delete source scope-help resource is empty; scope-help controls were not executed");
+        return false;
+    }
+    const auto checkScopeHelp = [&](bool allowDiscardSource, bool expectedOffer, std::wstring_view label) noexcept
+    {
+        if (allowDiscardSource)
+            popupState->DebugSetVisualScenario({scopePrompt}, false, true, true);
+        else
+            popupState->DebugSetVisualScenario({scopePrompt}, false, true); // Exercise the default-false fixture capability.
+        paint();
+        paint();
+        const auto layout = layoutFor(scopePrompt.taskId);
+        const std::span<const uint8_t> primary(layout.conflictPrimaryActions.data(),
+                                               std::min(layout.conflictPrimaryActionCount, layout.conflictPrimaryActions.size()));
+        const std::span<const uint8_t> overflow(layout.conflictOverflowActions.data(),
+                                                std::min(layout.conflictOverflowActionCount, layout.conflictOverflowActions.size()));
+        const uint8_t discard = static_cast<uint8_t>(FileOperations::ConflictAction::DiscardSource);
+        const bool offered    = std::ranges::find(primary, discard) != primary.end() || std::ranges::find(overflow, discard) != overflow.end();
+        if (! layout.found || ! layout.conflictButtonsPublishable || ! layout.conflictApplyToAllVisible || ! layout.conflictApplyToAllIsCheckbox ||
+            offered != expectedOffer)
+        {
+            fail(std::format(L"{} scope fixture prerequisite: found={} publishable={} checkboxVisible={} isCheckbox={} discardOffered={} expected={} "
+                             L"primary={} overflow={}; tooltip/help assertion was not executed",
+                             label,
+                             layout.found,
+                             layout.conflictButtonsPublishable,
+                             layout.conflictApplyToAllVisible,
+                             layout.conflictApplyToAllIsCheckbox,
+                             offered,
+                             expectedOffer,
+                             primary.size(),
+                             overflow.size()));
+            return false;
+        }
+        const bool helpMatches = expectedOffer ? layout.conflictApplyToAllHasDiscardSourceHelp : layout.conflictApplyToAllScopeHelpEmpty;
+        if (! helpMatches)
+        {
+            fail(std::format(L"{} scope tooltip/accessible-help mismatch: discardOffered={} localizedResource={} expectedHelp='{}' actualMatch={} bothEmpty={}",
+                             label,
+                             offered,
+                             IDS_FILEOPS_CONFLICT_DISCARD_SOURCE_SCOPE_HELP,
+                             expectedScopeHelp,
+                             layout.conflictApplyToAllHasDiscardSourceHelp,
+                             layout.conflictApplyToAllScopeHelpEmpty));
+            return false;
+        }
+        return true;
+    };
+    if (! checkScopeHelp(true, true, L"prequalified Move") || ! checkScopeHelp(false, false, L"default unqualified Move"))
+        return false;
+    scopePrompt.operation = FILESYSTEM_COPY;
+    if (! checkScopeHelp(true, false, L"Copy with a synthetic source-removal request"))
+        return false;
+
     // 3. popup-b#5: a visible conflict body with no comparison children (no paths, no last note)
     // reaches a stable hosted tree; repainting it changes nothing.
     TaskSnapshot bare = makeCopy(copyId + 10u, L"C:\\Stable\\Bare");

@@ -34,7 +34,7 @@ The live inventory authorities are:
   `TestRunPlan.psm1` facade) for CI and Full execution membership;
 - suite result artifacts for what actually ran, passed, failed, crashed, or skipped.
 
-`Tools/Get-SpecInventory.ps1` publishes the source-derived manifest as `.build/SpecInventory/test-inventory.json` beside the specification inventory. Generated `.build` output is disposable and must not be checked in. Current totals must not be copied into normative prose.
+`Tools/Get-SpecInventory.ps1` publishes the source-derived manifest as `.build/SpecInventory/test-inventory.json` beside the specification inventory. Default catalog output is disposable and must not be checked in. Validation callers use `-FailOnFindings -NoReports`, which still performs specification and test-inventory reconciliation without creating reports; their logs/evidence stay beneath the existing marked test root. Current totals must not be copied into normative prose.
 
 `Testing_SelfTests.md` owns result, skip, repeat, shuffle, sandbox, and runner aggregation semantics. `Testing_PerformanceValidation.md` owns metrics, sample quality, budgets, baselines, and archived performance evidence. `Testing_SelfTestRemoteCredentials.md` owns opt-in live remote prerequisites.
 
@@ -89,6 +89,17 @@ Structural source guards must tolerate formatter whitespace without weakening re
 call boundaries, ordering or forbidden APIs. The File Operations durable-store guard matches the
 complete publication call and fail-if-exists/replace policy; native durable-store cases remain the
 authority for atomic publication, rejected paths and recovery behavior.
+
+The explicit hosted UI-attribution campaign is component evidence: one existing help
+case executes the native process-observer fake controls before the three fixed UI cases.
+Compiler-free source/managed controls do not prove their native execution or the cause
+of a historical clipboard or foreign-foreground failure. Its child runner's stricter
+`-RequireCleanQuarantine` uses the canonical shared clean-state assertion before native
+work and at repair dispatch; active, invalid or malformed quarantine cannot trigger a
+repair under that opt-in. Default callers retain their ordinary blocking repair lane.
+The runner's `TestRunPlan.psm1` facade must re-export this assertion. A fresh-process
+control imports that actual facade and invokes the canonical reader/assertion on clean,
+active, invalid and malformed ledgers; isolated function fragments do not prove caller visibility.
 
 Application production foreground requests route through `Common::RequestForegroundWindow`.
 The source contract rejects direct bypasses, and physical-input/activation-write bans recognize
@@ -302,7 +313,7 @@ Use these commands for review:
 
 ```powershell
 .\Tools\Get-TestInventory.ps1 -Format Json
-.\Tools\Get-SpecInventory.ps1 -FailOnFindings
+.\Tools\Get-SpecInventory.ps1 -FailOnFindings -NoReports
 .\.build\x64\Debug\RedSalamander.exe --selftest-list-cases
 .\Tools\Run-AllTests.ps1 -Suite Full
 ```

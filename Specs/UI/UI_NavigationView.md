@@ -9,6 +9,16 @@ ViewerSpace's private owner) use the same Windows natural policy. Regression:
 `cmd_natural_name_sorting_contracts`, `cmd_navigation_sibling_natural_sorting` and the
 ViewerSpace analysis-host navigation fixture.
 
+## Pane activation
+
+Pane-hosted navigation bars establish their owning pane before handling a right or middle press,
+blank-padding left press, or non-control left press while address-bar editing. These gestures do
+not navigate or select a file. Breadcrumb and navigation-button actions retain their existing focus
+and edit lifecycle. Embedded destination bars retain their existing owner callbacks and do not
+request a pane activation for these otherwise non-action gestures.
+`cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane` covers non-action right/middle
+presses as well as ordinary breadcrumb navigation under the existing desktop-lease contract.
+
 ## Overview
 
 **NavigationView** is a navigation bar component displayed at the top of FolderView, providing quick access to path navigation, history, disk switching, and storage information.

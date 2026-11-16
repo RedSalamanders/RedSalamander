@@ -198,6 +198,10 @@ Behavior notes:
   destination, an inconclusive validation read, or Graph `412 Precondition Failed` maps to the normal conflict result
   and performs no source move or backup DELETE. The paired path validation and conditional PATCH are the
   mutation-time boundary; a fresh GET alone is not sufficient.
+  Every rollback-name collision consumes a new cryptographic token, with at most sixteen attempts.
+  Each candidate remains exactly `.redsalamander-rollback-<32 hex>`; do not append a retry suffix,
+  because a retained backup must still match the shared Possible-original artifact grammar.
+  Exhaustion preserves the observed destination and returns the ordinary conflict result before PATCH.
 - Source-item, source-parent, and destination-parent by-path metadata reads are intentional freshness checks and are
   not reused from directory enumeration. Removing them requires a separate conditional-mutation/path-identity design.
 - Merge perf capture emits one aggregate set per operation: `FileOps.MicrosoftDrive.Merge.MetadataGetCount`,
@@ -257,6 +261,12 @@ The plugin caches resolved drive metadata per connection name for the current ap
 - `IFileSystemSearch` is not implemented.
 
 ## Test coverage
+
+The typed route and diagnostic names contract both declare a maximum of 255 UTF-16 code units per
+component. Proposed-name validation accepts the boundary and returns `ERROR_FILENAME_EXCED_RANGE`
+above it. Generic provider contracts exercise both lengths. The embedded fake-Graph rollback-name
+test injects one collision and sixteen collisions: occupied siblings remain untouched, a successful
+retry preserves the exact original ID under the recognized backup shape, and exhaustion issues no PATCH.
 
 The deterministic R0d contracts reject non-Recycle public Delete before Graph I/O, prove that
 Recycle removes only the path-resolved stable item ID while preserving a same-path replacement,

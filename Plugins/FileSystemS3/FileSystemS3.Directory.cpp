@@ -2053,6 +2053,35 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
 {
     constexpr std::string_view prefix = "folder/.rs-bak-";
     constexpr std::string_view suffix = "-file.txt";
+    // Producer-test grammar preserves this route's parent and caller leaf suffix.
+    // The shared builder allows arbitrary markers/suffixes, so it is not this oracle.
+    const auto hasExpectedGrammar = [](std::string_view key, std::string_view expectedPrefix, std::string_view expectedSuffix) noexcept
+    {
+        return key.starts_with(expectedPrefix) && key.ends_with(expectedSuffix) && key.size() == expectedPrefix.size() + 32u + expectedSuffix.size() &&
+               IsHexToken(key.substr(expectedPrefix.size(), 32u));
+    };
+
+    constexpr std::string_view fictionalPid       = "1234";
+    constexpr std::string_view tokenWithPidDigits = "0123456789abcdef0123456789abcdef";
+    const std::string validPidDigits              = std::format("{}{}{}", prefix, tokenWithPidDigits, suffix);
+    DebugCheck(validPidDigits.find(fictionalPid) != std::string::npos && hasExpectedGrammar(validPidDigits, prefix, suffix),
+               L"valid hidden sibling entropy may incidentally contain decimal PID digits",
+               passed,
+               failed);
+    const std::string shortToken = std::format("{}{}{}", prefix, tokenWithPidDigits.substr(1u), suffix);
+    DebugCheck(! hasExpectedGrammar(shortToken, prefix, suffix), L"hidden sibling grammar rejects a short entropy token", passed, failed);
+    std::string nonHex    = validPidDigits;
+    nonHex[prefix.size()] = 'g';
+    DebugCheck(! hasExpectedGrammar(nonHex, prefix, suffix), L"hidden sibling grammar rejects a non-hex entropy token", passed, failed);
+    const std::string extraField = std::format("{}{}-{}{}", prefix, fictionalPid, tokenWithPidDigits, suffix);
+    DebugCheck(! hasExpectedGrammar(extraField, prefix, suffix), L"hidden sibling grammar rejects an extra PID-shaped component", passed, failed);
+
+    std::string callerPidDigits;
+    const HRESULT callerHr = BuildHiddenSiblingKey("folder/file-1234.txt", "bak", callerPidDigits);
+    DebugCheck(SUCCEEDED(callerHr) && hasExpectedGrammar(callerPidDigits, prefix, "-file-1234.txt"),
+               L"hidden sibling key preserves caller basename PID digits without rejecting valid entropy",
+               passed,
+               failed);
 
     std::vector<std::string> keys;
     keys.reserve(8u);
@@ -2068,12 +2097,12 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         }
     }
 
-    const std::string processIdText = std::to_string(GetCurrentProcessId());
     for (const std::string& key : keys)
     {
         DebugCheck(key.starts_with(prefix), L"hidden sibling key should keep the destination parent and staging prefix", passed, failed);
         DebugCheck(key.ends_with(suffix), L"hidden sibling key should preserve the destination leaf suffix", passed, failed);
-        DebugCheck(key.find(processIdText) == std::string::npos, L"hidden sibling key should not contain the process id", passed, failed);
+        DebugCheck(
+            hasExpectedGrammar(key, prefix, suffix), L"hidden sibling key should use exactly the parent, marker, 128-bit hex token and suffix", passed, failed);
 
         if (key.starts_with(prefix) && key.ends_with(suffix) && key.size() >= prefix.size() + suffix.size())
         {

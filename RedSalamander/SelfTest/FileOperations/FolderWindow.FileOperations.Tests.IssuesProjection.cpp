@@ -2528,6 +2528,33 @@
                                   restored.presentationRebuildCount - shown.presentationRebuildCount,
                                   restored.presentationApplyCount - shown.presentationApplyCount));
 
+    Diagnostic collision     = copyFailure;
+    collision.taskId         = taskBase + 3u;
+    collision.category       = L"item.conflict.prompt";
+    collision.status         = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+    collision.conflictPrompt = FileOperations::ConflictPromptObservation{1u, FileOperations::ConflictClass::RegularFileExists, 0u};
+    FileOperations::ConflictObservedComparison observed{};
+    observed.source.sizeKnown                  = true;
+    observed.source.sizeBytes                  = 1'234'567u;
+    observed.destination.sizeKnown             = true;
+    observed.destination.sizeBytes             = 7'654'321u;
+    collision.conflictPrompt.value().itemFacts = observed;
+    operations.EnqueueTaskDiagnostic(collision);
+    if (! FileOperationsIssuesPane::SelfTestRefresh(pane, false) ||
+        ! FileOperationsIssuesPane::SelfTestSelectDiagnostic(pane, collision.taskId, collision.category, collision.status) ||
+        ! FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane, detail, true))
+        return reject(L"the collision's size/date detail could not be read");
+    for (const size_t sectionIndex : {4u, 5u})
+    {
+        const auto& text         = detail.detailTexts[sectionIndex];
+        const size_t factsStart  = text.rfind(L'\n');
+        const std::wstring facts = factsStart == std::wstring::npos ? std::wstring{} : text.substr(factsStart + 1u);
+        if (facts.empty() || detail.detailCopyText.find(facts) == std::wstring::npos)
+            return reject(L"copied detail omitted the displayed source or destination size/date facts");
+    }
+    if (! contains(detail.detailCopyText, collision.sourcePath) || ! contains(detail.detailCopyText, collision.destinationPath))
+        return reject(L"copied comparison facts replaced an exact provider path");
+
     AppendLog(std::format(L"FileOps Issues pane UX: chronological and numeric order, applicable facts only, empty first open, revision gating "
                           L"({} system-message lookups), single selection, CRLF copy, named detail region and minimize/restore verified.",
                           reprojected.systemMessageLookupCount));

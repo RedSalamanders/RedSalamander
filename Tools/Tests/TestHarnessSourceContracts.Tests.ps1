@@ -181,6 +181,318 @@ Describe 'Product documentation capture fixtures' {
     }
 }
 
+Describe 'Popup cadence diagnostic source contracts' {
+    It 'keeps the bounded observer default-off test-only and free of emission or allocation inside capture' {
+        $header=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.h'
+        $source=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.cpp'
+        $header|Should Match '(?s)#ifdef ENABLE_TESTS(?:(?!#endif).)*DebugStartCadenceCaptureForSelfTest'
+        $header|Should Match 'kCadenceObservationCapacity\s*=\s*1024u'
+        $header|Should Match 'std::array<PopupCadenceDebugObservation, kCadenceObservationCapacity>'
+        $header|Should Match '_debugCadenceEnabled\s*=\s*false;'
+        $capture=[regex]::Match($source,'(?ms)^void FileOperationsPopupInternal::FileOperationsPopupState::DebugRecordCadenceObservation\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $capture.Success|Should Be $true
+        $capture.Value|Should Match '(?s)if \(! _debugCadenceEnabled\)\s*return;.*if \(_debugCadenceCount == _debugCadenceObservations->size\(\)\).*\+\+_debugCadenceLost;\s*return;'
+        $capture.Value|Should Match '_controlsHost\.DebugGetInvalidateCount\(\)'
+        $capture.Value|Should Match '_controlsHost\.DebugHasActiveAnimationSubscription\(\)'
+        $capture.Value|Should Match 'row\.publishedPaused\s*=\s*_debugCadencePublishedPaused'
+        $capture.Value|Should Match 'row\.publishedStateKnown\s*=\s*_debugCadencePublishedStateKnown'
+        $capture.Value|Should Match '(?s)_debugCadenceRendering.*return;\s*row\.graphQueried = true;.*graph->IsVisible\(\).*graph->GetDebugState\(\)'
+        $capture.Value|Should Not Match '\b(?:new|make_unique|malloc|realloc|format|Emit|AppendLog|WriteFile|SetTimer|InvalidateRect|SendMessageW|PostMessageW)\b'
+        $destroy=[regex]::Match($source,'(?ms)^LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $destroy.Success|Should Be $true
+        $destroy.Value.IndexOf('_debugCadenceEnabled = false;')|Should BeLessThan $destroy.Value.IndexOf('_controlsHost.Detach()')
+    }
+    It 'uses the actual retained rate reducer and preserves the original case activation and sampling boundaries' {
+        $source=Get-RSText 'RedSalamander/FolderWindow.FileOperations.Popup.cpp'
+        $reducer=[regex]::Match($source,'(?ms)^bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVisualRateForSelfTest\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $reducer.Success|Should Be $true
+        $reducer.Value|Should Match 'task->paused \|\| history->second\.displayedBytesPerSec <= 0\.0'
+        $reducer.Value|Should Match 'AdvanceRateHistory\(history->second, rate, rate\.progressStateChangeTick, totals\)'
+        $reducer.Value|Should Not Match 'DebugSetVisualScenario|_rates\.clear|_controlsHost\.Detach|SetTimer'
+        $runner=Get-RSText 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'
+        $case=[regex]::Match($runner,'(?ms)^\[\[nodiscard\]\] bool RunFileOpsPopupIdleCadenceChecks\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success|Should Be $true
+        $case.Value|Should Match 'ScopedWindowActivationBlocker blocker'
+        $case.Value|Should Match 'SW_SHOWNOACTIVATE'
+        $case.Value|Should Match '(?s)pumpFor\(600ms\).*DebugCadenceObservationsForSelfTest\(\)\.empty\(\).*DebugStartCadenceCaptureForSelfTest\(taskId\)'
+        $case.Value|Should Match '(?s)runningGraph == 0u.*DebugPauseRetainedVisualRateForSelfTest\(taskId\).*pumpFor\(2200ms\).*DebugStopCadenceCaptureForSelfTest\(\)'
+        $case.Value|Should Match 'row\.graphIdentity == runningGraph && row\.graph\.targetCurrentValue == 0\.0 && row\.graph\.sampleCount == runningSamples'
+        $case.Value|Should Match 'DebugCadenceLostForSelfTest\(\) != 0u'
+        $case.Value|Should Match 'stopCadenceCapture\.release\(\)'
+        $case.Value|Should Match 'FileOps\.PopupCadence\.ObserverRows'
+        $case.Value|Should Match 'sampleTransition excludes the separate marker transition'
+        $case.Value|Should Match 'graphGeneration=\{\} graphQueried=\{\}'
+        $case.Value|Should Not Match 'graphIdentity=\{[^}]*\}|address=\{[^}]*\}'
+    }
+}
+
+Describe 'Commands attribution and UI prerequisite source contracts' {
+    It 'keeps process enrichment query-only with held identity, canonical digests and no raw identity text' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $read=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessFacts ReadCommandsProcessFacts\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $capture=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessObservation CaptureCommandsProcessObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $observe=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] CommandsProcessObservation ObserveCommandsProcess\([^\r\n]+\)\s*\{.*?^\}')
+        $describe=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsProcessObservation\([^\r\n]+\)\s*\{.*?^\}')
+        foreach($body in @($read,$capture,$observe,$describe)){$body.Success|Should Be $true}
+        $capture.Value|Should Match 'wil::unique_handle child\(OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, window\.process\)\)'
+        $capture.Value|Should Match '(?s)wil::unique_handle parent;.*parent\.reset\(OpenProcess\(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId\)\).*return ObserveCommandsProcess\(window,'
+        $observe.Value|Should Match '(?s)readProcess\(window\.process, true\).*readProcess\(result\.process\.parentProcess, false\).*readWindow\(window\.window, result\.finalProcess, result\.relationError\)'
+        $observe.Value|Should Match 'result\.parent\.creationTime <= result\.process\.creationTime'
+        $observe.Value|Should Match 'result\.finalThread == window\.thread && result\.finalProcess == window\.process'
+        $read.Value|Should Match 'GetProcessTimes\(process,'
+        $read.Value|Should Match '(?s)if \(! extended\)\s*return result;.*QueryFullProcessImageNameW'
+        $read.Value|Should Match '(?s)ComputeContentDigest\(Common::Crypto::ContentDigestAlgorithm::Sha256,\s*std::as_bytes\(std::span<const wchar_t>\(path\.data\(\), path\.size\(\)\)\)'
+        $read.Value|Should Match 'IsProcessInJob\(process, nullptr, &inJob\)'
+        $read.Value|Should Match 'result\.parentStatus = query\(process, 0u,'
+        $describe.Value|Should Match 'pathDigestAlgorithm=SHA256-UTF16LE'
+        $describe.Value|Should Match 'exactTestJob=unavailable'
+        $describe.Value|Should Match 'parent compatibility is not creator/ownership proof'
+        $describe.Value|Should Match 'CommandsProcessImageKind\(p\.imageKind\)'
+        $describe.Value|Should Not Match '\b(?:QueryFullProcessImageNameW|GetWindowTextW|GetCommandLineW)\s*\(|\b(?:leaf|imagePath|commandLine)\b'
+        $callPattern='(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $captureCalls=@('CaptureCommandsProcessObservation','if','child','OpenProcess','GetLastError','ReadCommandsProcessFacts','get','reset','ObserveCommandsProcess','SetLastError','GetWindowThreadProcessId')
+        @([regex]::Matches($capture.Value,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $captureCalls}).Count|Should Be 0
+        $formatCalls=@('DescribeCommandsProcessObservation','if','Common::Crypto::AppendHexToken','std::format','CommandsProcessImageKind')
+        @([regex]::Matches($describe.Value,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $formatCalls}).Count|Should Be 0
+        ($read.Value+$capture.Value+$observe.Value+$describe.Value)|Should Not Match '\b(?:TerminateProcess|SendInput|SetForegroundWindow|RequestForegroundWindow|SetFocus|SetActiveWindow|PostMessageW|SendMessageW|CreateToolhelp32Snapshot)\s*\('
+        $registration=[regex]::Match($source,'(?s)L"red_salamander_help_lists_diagnostics_options".*?\}\);')
+        $registration.Value|Should Match '(?s)if \(! TestCommandsProcessObservationControls\(state\)\)\s*return false;\s*return TestRedSalamanderHelpListsDiagnosticsOptions\(state\);'
+    }
+    It 'keeps the managed observer failure-only except minimal original entry identity and releases held handles after relation checks' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $source|Should Match '(?s)DescribeWindowIdentity\(IntPtr window\).*?DescribeWindowIdentityCore\(window, true\)'
+        $source|Should Match '(?s)DescribeEntryWindowIdentity\(IntPtr window\).*?DescribeWindowIdentityCore\(window, false\)'
+        $source|Should Match 'CaptureIdentityForDiagnostics\(original, HostedDesktopNative\.DescribeEntryWindowIdentity\)'
+        $body=[regex]::Match($source,'(?ms)^        private static string DescribeWindowIdentityCore\(.*?^        \}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'OpenProcess\(0x1000, false, pid\)'
+        $body.Value|Should Match '(?s)SafeProcessHandle childLease = null, parentLease = null;.*ObserveProcessForWindow\(window, thread, process, extended, read, ReadWindowProcessIdentity\).*finally.*parentLease\.Dispose\(\).*childLease\.Dispose\(\)'
+        $source|Should Match '(?s)ProcessImageDigest\(string path\).*?Buffer\.BlockCopy\(path\.ToCharArray\(\), 0, bytes, 0, bytes\.Length\).*?System\.Security\.Cryptography\.SHA256\.Create\(\)'
+        $source|Should Match 'exactTestJob=unavailable'
+        $body.Value|Should Not Match 'Process\.GetProcesses|MainWindowTitle|GetWindowText|CommandLine|SetForegroundWindow|SendInput|\.Kill\('
+    }
+    It 'borrows the stock capture lease without reopening its PID and rejects changed creation before parent enrichment' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $held=[regex]::Match($source,'(?ms)^        internal static string ObserveHeldProcessForWindow\(.*?^        \}')
+        $held.Success|Should Be $true
+        $valid={param($text)
+            $text -cmatch '(?s)lease\.DangerousAddRef\(ref borrowed\).*return readHeld\(lease, pid, full\).*ObserveCapturedProcessForWindow\(window, thread, process, capturedCreation.*finally.*lease\.DangerousRelease\(\)' -and
+            $text -cnotmatch '\bOpenProcess\s*\(|GetForegroundWindow\s*\('
+        }
+        (& $valid $held.Value)|Should Be $true
+        (& $valid ($held.Value.Replace('return readHeld(lease, pid, full)','return readHeld(null, pid, full)')))|Should Be $false
+        (& $valid ($held.Value.Replace('lease.DangerousRelease()','OpenProcess(0x1000, false, process)')))|Should Be $false
+        $core=[regex]::Match($source,'(?ms)^        internal static string ObserveCapturedProcessForWindow\(.*?^        \}')
+        $core.Value|Should Match '(?s)child\.CreationTime == capturedCreation;.*if \(capturedCreation != 0\) instance = instance && creationMatch;.*if \(extended && instance && child\.ParentAvailable'
+        $bridge=[regex]::Match($source,'(?ms)^        public string DescribeCapturedProcess\(.*?^        \}')
+        $bridge.Value|Should Match 'observe\(window,Thread,Process,process,CreationKnown && CreationFileTime100ns > 0 \? CreationFileTime100ns : -1,true\)'
+        $bridge.Value|Should Not Match 'GetForegroundWindow|OpenProcess|Title|Image|ApplicationId|RequestClose|PostMessage|SetForeground|SendInput'
+        $bridge.Value|Should Match 'unavailable="\+error.GetType\(\).Name'
+    }
+    It 'keeps stock baseline snapshots minimal and enriches only the captured Unknown refusal with unchanged authority' {
+        $source=Get-RSText 'Tools/Modules/Testing/HostedTestDesktop.psm1'
+        $capture=[regex]::Match($source,'(?ms)^        public static HostedStockSurface Capture\(\).*?^        \}')
+        $capture.Value|Should Match '(?s)GetProcessTimes\(p,out created.*GetWindowThreadProcessId\(h,out currentPid\).*GetProcessId\(p\)!=pid.*GetForegroundWindow\(\)!=h'
+        $first=[regex]::Match($source,'(?ms)^            if\(\$null -eq \$firstObservation\).*?^            \}')
+        $first.Value|Should Match 'creation_file_time_100ns=\$surface.CreationFileTime100ns'
+        $first.Value|Should Not Match '\b(?:title|image|application_id|process_diagnostic)='
+        $unknown=[regex]::Match($source,'(?ms)^            if\(\$surface.Kind -cnotin.*?^            \}')
+        $unknown.Value|Should Match '\$surface.Kind -cnotin @\(''Empty'',''Shell'',''RunnerConsole'',''Account'',''Search'',''WslStartup''\)'
+        $unknown.Value|Should Match '(?s)CreateDelegate\(.*?\$extendedCount\+\+.*DescribeCapturedProcess\(\$observer\).*throw ''An unapproved foreground surface prevents hosted preparation\.'''
+        $unknown.Value|Should Not Match 'RequestClose|Start-Sleep|SetForeground|SendInput|GetForegroundWindow|Process\.GetProcesses|Get-CimInstance'
+        $source|Should Match 'absence is not background-process absence or creator proof'
+        $source|Should Match '\$timer=\[Diagnostics.Stopwatch\]::StartNew\(\)'
+        $source|Should Match 'Start-Sleep -Milliseconds 100'
+    }
+    It 'fails the exact path-detail positive prerequisite before Enter while preserving text and focus assertions' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp'
+        $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestFileOperationsPopupThroughputDisclosure\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'detailForeground = CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $body.Value|Should Match 'detailFocus\s*= CaptureCommandsWindowObservation\(GetFocus\(\)\)'
+        $gate=[regex]::Match($body.Value,'(?s)if \(! state\.Require\(DebugCanRestoreFileOperationsPathDetailTextFocus\(popup\.get\(\), detailFocus\.window, detailForeground\.window\),.*?DescribeCommandsWindowObservation\(detailForeground\).*?DescribeCommandsWindowObservation\(detailFocus\)\)\)\)\s*return false;')
+        $gate.Success|Should Be $true
+        $enter=$body.Value.IndexOf('SendMessageW(popup.get(), WM_KEYDOWN, VK_RETURN, 0)', $gate.Index)
+        $enter|Should BeGreaterThan ($gate.Index+$gate.Length)
+        $body.Value|Should Match 'Enter must place hosted focus on the path-detail text'
+        $body.Value|Should Match 'read.only'
+        $body.Value|Should Match 'multiline|multi.line'
+        $body.Value|Should Match 'Unicode'
+        $gate.Value|Should Not Match 'TryActivateOwnedWindow|RequestForegroundWindow|SetForegroundWindow|state\.Skip|sleep_for'
+    }
+    It 'guards the pinned bounded menu metadata variant and requires readiness before queuing the first hover' {
+        $source=Get-RSText 'RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp'
+        $body=[regex]::Match($source,'(?ms)^\[\[nodiscard\]\] bool TestMainMenuPersistentViewToPluginsHoverSwitchesPopup\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $body.Success|Should Be $true
+        $body.Value|Should Match 'std::array<wchar_t, 1024u> text'
+        $body.Value|Should Match 'std::array<MenuMetadataRecord, 64u> records'
+        $body.Value|Should Match 'static thread_local MenuMetadataCapture\* currentMenuMetadata'
+        $body.Value|Should Match '(?s)std::make_unique<MenuMetadataCapture>\(\).*wil::scope_exit.*DxUi::Diagnostics::sink = previousDiagnosticSink;.*currentMenuMetadata\s*= previousDiagnosticTarget;'
+        $callback=[regex]::Match($body.Value,'(?s)DxUi::Diagnostics::sink\s*= \[\]\(std::wstring_view, std::wstring_view message\) noexcept\s*\{.*?\r?\n    \};')
+        $callback.Success|Should Be $true
+        $allowed=@('menu.show-begin','menu.show-end','menu.popup-create-begin','menu.popup-create-end','menu.loop-dismiss-activation',
+            'menu.loop-nonpopup-pointer','menu.pointer','DxUi::MenuTrace Popup root-switch-probe','DxUi::MenuTrace Popup root-switch-accepted',
+            'DxUi::MenuTrace Popup root-switch-rejected','DxUi::MenuTrace Popup root-switch-stale-after-keyboard','DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted')
+        $events=@([regex]::Matches($callback.Value,'L"([^"]+)"')|ForEach-Object{$_.Groups[1].Value})
+        ($events -join '|')|Should Be ($allowed -join '|')
+        $callback.Value|Should Not Match '\b(?:new|malloc|realloc|format|AppendSuiteTrace|SendMessageW|PostMessageW|SendInput|SetForegroundWindow)\b|std::(?:w?fstream|w?cout)|WriteFile'
+        $callPattern='(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $allowedCallbackCalls=@('if','std::ranges::any_of','starts_with','size','std::min','GetTickCount64','std::copy_n','begin')
+        $unreviewedCallbackCalls={param($Text) @([regex]::Matches($Text,$callPattern)|ForEach-Object{$_.Groups['name'].Value}|Where-Object{$_ -cnotin $allowedCallbackCalls}).Count}
+        (& $unreviewedCallbackCalls $callback.Value)|Should Be 0
+        (& $unreviewedCallbackCalls ($callback.Value.Replace('auto* const capture = currentMenuMetadata;','::UnreviewedObserver(); auto* const capture = currentMenuMetadata;')))|Should Be 1
+        $callback.Value|Should Match 'capture->dropped'
+        $callback.Value|Should Match 'capture->truncated'
+        $body.Value|Should Match 'return owned && readable && ! popupState\.itemTexts\.empty\(\) && selected == static_cast<int>\(viewMapping->visualIndex\)'
+        $readiness='(?s)const bool hoverReady = traceMenuState\(L"before-first-hover", initialPopup\);\s*firstHoverReady\.store\(hoverReady, std::memory_order_release\);\s*if \(! hoverReady\)\s*return;'
+        $move='PostMessageW\(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM\(livePluginsClientPoint\.x, livePluginsClientPoint\.y\)\)'
+        $leave='PostMessageW\(menuBarWindow, WM_MOUSELEAVE, 0, 0\)'
+        $hasGuardedQueue={
+            param($Text)
+            $gate=[regex]::Match($Text,$readiness)
+            if (! $gate.Success) { return $false }
+            # Earlier View-open mouseleave is separate; bind only the Plugins hover branches after readiness.
+            $hoverBranches=$Text.Substring($gate.Index+$gate.Length)
+            $moves=@([regex]::Matches($hoverBranches,$move));$leaves=@([regex]::Matches($hoverBranches,$leave))
+            return $moves.Count -eq 1 -and $leaves.Count -eq 1
+        }
+        (& $hasGuardedQueue $body.Value)|Should Be $true
+        $withoutReadiness=[regex]::Replace($body.Value,'if \(! hoverReady\)\s*return;','')
+        (& $hasGuardedQueue $withoutReadiness)|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('PostMessageW(menuBarWindow, WM_MOUSEMOVE','PostMessageW(initialPopup, WM_MOUSEMOVE')))|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('PostMessageW(menuBarWindow, WM_MOUSELEAVE','PostMessageW(initialPopup, WM_MOUSELEAVE')))|Should Be $false
+        (& $hasGuardedQueue ($body.Value.Replace('MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)','MAKELPARAM(viewClientPoint.x, viewClientPoint.y)')))|Should Be $false
+        $body.Value|Should Match 'replacementPopupClosed'
+        $body.Value|Should Match 'hoverViaMouseLeaveRefresh'
+    }
+}
+
+Describe 'Commands boundary observation and clipboard source contracts' {
+    It 'keeps the narrow window observation metadata-only with explicit unavailable identity' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $capture = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] CommandsWindowObservation CaptureCommandsWindowObservation\(HWND window\) noexcept\s*\{.*?^\}')
+        $describe = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsWindowObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $capture.Success | Should Be $true
+        $describe.Success | Should Be $true
+        $capture.Value | Should Match 'result\.window\s*=\s*window;'
+        $capture.Value | Should Match 'GetWindowThreadProcessId\(window,\s*&result\.process\)'
+        $capture.Value | Should Match 'GetClassNameW\(window,\s*result\.className\.data\(\)'
+        $capture.Value | Should Match 'GetSystemTimePreciseAsFileTime\(&utc\)'
+        $capture.Value | Should Match 'result\.monotonicMs\s*=\s*GetTickCount64\(\)'
+        $capture.Value | Should Match '(?s)if \(! result\.valid\).*?result\.identityError\s*=\s*ERROR_INVALID_WINDOW_HANDLE;.*?result\.classError\s*=\s*ERROR_INVALID_WINDOW_HANDLE;.*?return result;'
+        $describe.Value | Should Match 'identityAvailable=\{\}.*classAvailable=\{\}.*classError=\{\}'
+        $describe.Value | Should Match 'value\.thread != 0u'
+        $describe.Value | Should Match 'value\.classAvailable \? value\.className\.data\(\) : L"<unavailable>"'
+        $describe.Value | Should Match 'utcFileTime100ns=\{\},monotonicMs=\{\}'
+
+        # This is the reviewed Commands-local variant: allow only synchronous metadata reads,
+        # diagnostic last-error bookkeeping and control syntax, not the broader desktop sampler.
+        $allowedCalls = @('CaptureCommandsWindowObservation', 'if', 'GetSystemTimePreciseAsFileTime', 'GetTickCount64',
+            'IsWindow', 'SetLastError', 'GetWindowThreadProcessId', 'GetClassNameW', 'GetLastError', 'data', 'size')
+        $callPattern = '(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        # Supported lexical call forms only; this guard does not parse arbitrary C++ syntax.
+        foreach ($counterfactual in @(
+            @{ Source='SomeHelper()'; Name='SomeHelper' },
+            @{ Source='SomeNamespace::SomeHelper()'; Name='SomeNamespace::SomeHelper' },
+            @{ Source='::SomeHelper()'; Name='::SomeHelper' },
+            @{ Source='::SomeNamespace::SomeHelper()'; Name='::SomeNamespace::SomeHelper' },
+            @{ Source='object.SomeHelper()'; Name='SomeHelper' },
+            @{ Source='object->SomeHelper()'; Name='SomeHelper' }
+        )) {
+            $unreviewedCalls = @([regex]::Matches($counterfactual.Source, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+            $unreviewedCalls.Count | Should Be 1
+            $unreviewedCalls[0] | Should Be $counterfactual.Name
+            @($unreviewedCalls | Where-Object { $_ -cnotin $allowedCalls }).Count | Should Be 1
+        }
+        $calls = @([regex]::Matches($capture.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($calls | Where-Object { $_ -cnotin $allowedCalls }).Count | Should Be 0
+        $describeCalls = @([regex]::Matches($describe.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($describeCalls | Where-Object { $_ -cnotin @('DescribeCommandsWindowObservation', 'std::format', 'data') }).Count | Should Be 0
+        $adapter = $capture.Value + $describe.Value
+        $adapter | Should Not Match '\b(?:GetCursorPos|GetPhysicalCursorPos|GetLastInputInfo|GetKeyboardState|GetKeyState|GetAsyncKeyState|GetRawInputData|SetCursorPos|SetPhysicalCursorPos|SendInput|mouse_event|keybd_event|ClipCursor|SetForegroundWindow|RequestForegroundWindow|SetActiveWindow|SetFocus|AttachThreadInput|SetWinEventHook|CaptureDesktopState|GetWindowText[AW]?|GetWindowTextLength[AW]?|SendMessage[AW]?|PostMessage[AW]?)\s*\('
+    }
+
+    It 'compares and reports the same captured foreground HWND at settling refusal' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $start = $source.IndexOf('[[nodiscard]] bool PrepareMainWindowForIsolatedUiCase')
+        $next = $source.IndexOf('void FocusFolderViewPane', $start)
+        $start | Should BeGreaterThan -1
+        $next | Should BeGreaterThan $start
+        $helper = $source.Substring($start, $next - $start)
+        $helper | Should Match 'foregroundBeforeObservation\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'foregroundAfterObservation\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'settledForeground\s*=\s*CaptureCommandsWindowObservation\(GetForegroundWindow\(\)\)'
+        $helper | Should Match 'expectedSettledForeground\s*=\s*CaptureCommandsWindowObservation\(inputWindow\)'
+        $helper | Should Match 'const bool foregroundOwned\s*=\s*settledForeground\.window == inputWindow;'
+        $helper | Should Match '(?s)state\.Require\(foregroundOwned,.*?stage=settled-validation; current.*?DescribeCommandsWindowObservation\(settledForeground\).*?DescribeCommandsWindowObservation\(expectedSettledForeground\)'
+        $helper | Should Match 'stage=before-admission.*stage=after-admission'
+        $helper | Should Not Match 'state\.Require\(GetForegroundWindow\(\)\s*=='
+        ([regex]::Matches($helper, 'WaitForFolderViewPaneFocus\(')).Count | Should Be 2
+        $helper | Should Match 'settleAttempt < 3u'
+    }
+
+    It 'requires clear and quiet setup before one copy attempt and stops dependent checks' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $case = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameWindowPreviewContextMenuCopiesRows\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success | Should Be $true
+        $action = [regex]::Match($case.Value, '(?s)const auto expectCopy\s*=.*?\r?\n    \};')
+        $action.Success | Should Be $true
+        $clear = $action.Value.IndexOf('ClearClipboardContents(batchWindow, &clearedAndQuiet, &setup)')
+        $prerequisite = [regex]::Match($action.Value, '(?s)if \(! state\.Require\(clearedAndQuiet,.*?\r?\n\s+return false;')
+        $prerequisite.Success | Should Be $true
+        $clear | Should BeGreaterThan -1
+        $prerequisite.Index | Should BeGreaterThan $clear
+        $copy = $action.Value.IndexOf('DebugCopyBatchRenameWindowPreview(kind, rowIndex)')
+        $copy | Should BeGreaterThan ($prerequisite.Index + $prerequisite.Length)
+        ([regex]::Matches($action.Value, '\bDebugCopyBatchRenameWindowPreview\s*\(')).Count | Should Be 1
+        $action.Value | Should Not Match '\b(?:for|while|do)\s*(?:\(|\{)|\bgoto\b|\bexpectCopy\s*\('
+        $failedCopy = [regex]::Match($action.Value, '(?s)if \(! state\.Require\(commandSucceeded,.*?\r?\n\s+return false;')
+        $failedCopy.Success | Should Be $true
+        $failedCopy.Index | Should BeGreaterThan $copy
+        $action.Value.IndexOf('ReadClipboardUnicodeText(batchWindow, &readProbe)') | Should BeGreaterThan ($failedCopy.Index + $failedCopy.Length)
+        $case.Value | Should Match '(?s)if \(! expectCopy\(BatchRenameDebugPreviewCopyKind::OriginalName,.*?\|\|\s*! expectCopy\(BatchRenameDebugPreviewCopyKind::NewName,.*?\|\|\s*! expectCopy\(BatchRenameDebugPreviewCopyKind::SourcePath,.*?\r?\n\s+return false;'
+        $case.Value | Should Match '(?s)if \(! expectCopy\(BatchRenameDebugPreviewCopyKind::PreviewRows,.*?\r?\n\s+return false;'
+
+        $settings = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $clearHelper = [regex]::Match($settings, '(?ms)^void ClearClipboardContents\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $clearHelper.Success | Should Be $true
+        $clearHelper.Value | Should Match 'bool\* outClearedAndQuiet = nullptr, ClipboardSetupProbe\* outProbe = nullptr'
+        $clearHelper.Value | Should Match '(?s)recordSetup\(L"OpenClipboard", openError, false, false\).*?recordSetup\(L"EmptyClipboard", clearError, false, false\).*?recordSetup\(L"quiet-point", ERROR_SUCCESS, true, false\).*?recordSetup\(L"cleared-and-quiet", ERROR_SUCCESS, true, true\)'
+    }
+
+    It 'keeps clipboard diagnostics content-free and identifies the readback source' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'
+        $case = [regex]::Match($source, '(?ms)^\[\[nodiscard\]\] bool TestBatchRenameWindowPreviewContextMenuCopiesRows\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $case.Success | Should Be $true
+        $action = [regex]::Match($case.Value, '(?s)const auto expectCopy\s*=.*?\r?\n    \};')
+        $action.Success | Should Be $true
+        $action.Value | Should Match 'CaptureCommandsClipboardObservation\(\)'
+        $action.Value | Should Match 'DescribeCommandsClipboardObservation\(beforeCopy\)'
+        $action.Value | Should Match 'DescribeCommandsClipboardObservation\(afterCopy\)'
+        $action.Value | Should Match 'readProbe\.readSystemClipboard'
+        $action.Value | Should Match 'readProbe\.usedFallback'
+        $action.Value | Should Match 'state\.Require\(copied == expected,'
+        $action.Value | Should Match 'contents omitted'
+        $action.Value | Should Not Match '\bGetLastError\s*\('
+        $settings = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $clipboardCapture = [regex]::Match($settings, '(?ms)^\[\[nodiscard\]\] CommandsClipboardObservation CaptureCommandsClipboardObservation\(\) noexcept\s*\{.*?^\}')
+        $clipboardDescribe = [regex]::Match($settings, '(?ms)^\[\[nodiscard\]\] std::wstring DescribeCommandsClipboardObservation\([^\r\n]+\)\s*\{.*?^\}')
+        $clipboardCapture.Success | Should Be $true
+        $clipboardDescribe.Success | Should Be $true
+        $callPattern = '(?<![\w:])(?<name>(?:::)?(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\('
+        $captureCalls = @([regex]::Matches($clipboardCapture.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($captureCalls | Where-Object { $_ -cnotin @('CaptureCommandsClipboardObservation', 'GetClipboardSequenceNumber',
+            'CaptureCommandsWindowObservation', 'GetClipboardOwner', 'GetOpenClipboardWindow') }).Count | Should Be 0
+        $describeCalls = @([regex]::Matches($clipboardDescribe.Value, $callPattern) | ForEach-Object { $_.Groups['name'].Value })
+        @($describeCalls | Where-Object { $_ -cnotin @('DescribeCommandsClipboardObservation', 'std::format', 'DescribeCommandsWindowObservation') }).Count | Should Be 0
+        # Permit content only for its declaration, equality Boolean and character counts. A new
+        # logging/formatting argument containing either value must fail this source-only contract.
+        $body = $action.Value.Substring($action.Value.IndexOf('{') + 1)
+        $withoutSafeUses = $body -replace 'const\s+std::wstring\s+copied\s*=', '' -replace 'copied\s*==\s*expected', '' -replace '\b(?:copied|expected)\.size\(\)', ''
+        $withoutSafeUses | Should Not Match '\b(?:copied|expected)\b'
+    }
+}
+
 Describe 'ViewerSpace nonactivating desktop observations' {
     It 'keeps UIA observations and synthetic desktop interference free of physical input writes' {
         $sources = @(
@@ -1924,7 +2236,7 @@ Describe 'Test harness source contracts' {
         $combined | Should Not Match '\[System\.IO\.Path\]::GetTempPath\(\)'
 
         $specInformationArchitecture | Should Match 'New-RSTestSandboxScratchDirectory'
-        $specInformationArchitecture | Should Match 'git\s+-C\s+\$root\s+config\s+core\.longpaths\s+true'
+        $specInformationArchitecture | Should Match 'Invoke-RSTestFixtureGit\s+-Arguments\s+@\(''-C'';\s*\$root;\s*''config'';\s*''core\.longpaths'';\s*''true''\)'
         $specInformationArchitecture | Should Match 'Failed to stage the specification information architecture fixture repository'
         $specInformationArchitecture | Should Match 'Failed to commit the specification information architecture fixture repository'
 
@@ -4100,10 +4412,13 @@ Specs\TestRuns\local_scratch
         $source | Should Match 'copyOnlyMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::CopyOnly'
         $source | Should Match 'managedMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::Managed'
         # Match the constructor statement, not a formatting-dependent character window. The
-        # admitted endpoint identities precede the one cleanup-permission argument.
+        # admitted endpoint identities and immutable Local guard precede the one cleanup-permission argument.
         $bridgeCall = [regex]::Match($source, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
         $bridgeCall.Success | Should Be $true
-        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*localCrossRootDistinctnessUnproved,\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $source | Should Match 'const\s+bool\s+localCrossRootDistinctnessUnproved\s*=\s*transferPlan\s*!=\s*nullptr\s*&&\s*FileOperations::IsLocalFileSystemEndpoint\(transferPlan->sourceEndpoint\)\s*&&\s*FileOperations::IsLocalFileSystemEndpoint\(transferPlan->destinationEndpoint\)\s*&&\s*!\s*FileOperations::QualifiedEndpointsReferToSameRoot\(transferPlan->sourceEndpoint,\s*transferPlan->destinationEndpoint\);'
+        $source | Should Match 'const\s+bool\s+localCrossRootDistinctnessUnproved;'
+        $source | Should Match 'destinationPathIdentity\(destinationPathIdentityIn\),\s*localCrossRootDistinctnessUnproved\(localCrossRootDistinctnessUnprovedIn\),\s*sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
         $source | Should Match 'sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
         # I35 R5.6: the message is one constant shared by the disclosed note and the undisclosed Warning.
         $source | Should Match 'kCopyOnlyMessage\s*=\s*L"Copied; source kept[\s\S]{0,900}L"move\.copyOnly\.sourceKept",\s*kCopyOnlyMessage'
@@ -4610,7 +4925,7 @@ Specs\TestRuns\local_scratch
         ([regex]::Matches($bridge, 'CrossFileSystemBridge\s+bridge\(')).Count | Should Be 1
         $bridgeCall = [regex]::Match($bridge, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
         $bridgeCall.Success | Should Be $true
-        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*localCrossRootDistinctnessUnproved,\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
         $bridge | Should Not Match 'moveBridge->cookie\s*=\s*static_cast<void\*>\(&cookie\);'
         $bridge | Should Match 'hasManagedMovePlans\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,420}OperationStrategy::Managed'
         $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\s*\|\|\s*\(selectedAdmission->interlock\s*&&\s*selectedAdmission->interlock->parallelNewFiles\)\)\s*&&'
@@ -5230,12 +5545,17 @@ Specs\TestRuns\local_scratch
         $streaming | Should Match 'Close-RSContainedProcess -Process \$process'
         $runner | Should Match 'function Invoke-RSSelfTestCaseList[\s\S]*?Start-RSContainedProcess -ProcessStartInfo \$startInfo'
         $runner | Should Match 'function Invoke-RSSelfTestProcess[\s\S]*?Start-RSContainedProcess -ProcessStartInfo \$startInfo'
-        $sanitizedMsbuild | Should Match '\$exitCode = Invoke-RSProcess'
+        $sanitizedMsbuild | Should Match '(?s)\$exitCode = Invoke-RSStreamingProcess\s+`\s*-FilePath \$resolvedMsbuildPath\s+`\s*-Arguments \$MSBuildArguments\s+`\s*-DelegateArtifactOperation\s+`\s*-WorkingDirectory \$repoRoot'
+        $sanitizedMsbuild | Should Match 'Modules\\Build\\ProcessStreaming\.psm1'
+        $sanitizedMsbuild | Should Match 'Import-Module \$processStreamingModule -ErrorAction Stop'
+        $sanitizedMsbuild | Should Not Match '\$exitCode = Invoke-RSProcess\b'
         $sanitizedMsbuild | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?finally\s*\{\s*Exit-RSArtifactOperationLock'
         $sanitizedMsbuild | Should Match 'coordination''\] = ''shared-dependency'''
         $sanitizedMsbuild | Should Match 'Get-RSMSBuildPropertyValue[\s\S]*?-Name ''Configuration'''
         $sanitizedMsbuild | Should Match 'Get-RSMSBuildPropertyValue[\s\S]*?-Name ''Platform'''
-        $vcpkgInstall | Should Match 'Invoke-RSProcess[\s\S]*?-FilePath \$vcpkgExePath'
+        $vcpkgInstall | Should Match '(?s)\$vcpkgExitCode = Invoke-RSStreamingProcess\s+`\s*-FilePath \$vcpkgExePath\s+`\s*-Arguments \$vcpkgArguments\.ToArray\(\)\s+`\s*-DelegateArtifactOperation\s+`\s*-WorkingDirectory \$repoRoot'
+        $vcpkgInstall | Should Match 'Import-Module \(Join-Path \$PSScriptRoot "Tools\\Modules\\Build\\ProcessStreaming\.psm1"\) -ErrorAction Stop'
+        $vcpkgInstall | Should Not Match '\$vcpkgExitCode = Invoke-RSProcess\b'
         $vcpkgInstall | Should Match "coordination = 'shared-dependency'"
         $vcpkgInstall | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
         $vcpkgInstall | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$sharedDependencyScope'
@@ -5244,6 +5564,58 @@ Specs\TestRuns\local_scratch
         $deploymentTest | Should Match '-OutputDrainTimeoutMilliseconds 5000'
         $deploymentTest | Should Not Match 'ReadToEndAsync|\.Result'
         $deploymentTest | Should Match 'Enter-RSArtifactOperationLock[\s\S]*?AfterAll[\s\S]*?Exit-RSArtifactOperationLock'
+    }
+
+    It 'keeps all DxUi source Git queries on the captured no-window boundary without write delegation' {
+        $source = Get-RSText 'Tools/Modules/Build/DxUiDependency.psm1'
+        # AST command names plus narrow helper-shape checks protect this reviewed
+        # module. This is not a general proof of arbitrary dynamic invocation.
+        $valid = { param($body)
+            $tokens = $null; $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseInput($body, [ref]$tokens, [ref]$errors)
+            $commands = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true))
+            $bareGit = @($commands | Where-Object { $_.GetCommandName() -imatch '(^|[\\/])git(?:\.exe)?$' })
+            $captures = @($commands | Where-Object { $_.GetCommandName() -ceq 'Invoke-RSDxUiSourceGitCapture' })
+            $helper = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSDxUiSourceGitCapture' }, $true))
+            if ($errors.Count -ne 0 -or $bareGit.Count -ne 0 -or $captures.Count -ne 4 -or $helper.Count -ne 1) { return $false }
+            $captureText = $helper[0].Body.Extent.Text
+            $backend = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-RSDxUiReadOnlyCapture' }, $true))
+            if ($backend.Count -ne 1) { return $false }
+            $backendText = $backend[0].Body.Extent.Text
+            return $captureText -match 'Get-Command git -CommandType Application -ErrorAction Stop \| Select-Object -First 1' -and
+                $captureText -match 'Invoke-RSDxUiReadOnlyCapture -WorkingDirectory \$WorkingDirectory -FilePath \$gitPath -Arguments \$Arguments' -and
+                $backendText -match 'Invoke-RSCapturedProcess -WorkingDirectory \$WorkingDirectory -FilePath \$FilePath -Arguments \$Arguments' -and
+                $backendText -notmatch 'DelegateArtifactOperation|Write-Host|2>&1' -and
+                ([regex]::Matches($body, "'--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'").Count -eq 2)
+        }
+        (& $valid $source) | Should Be $true
+        $unsafe = $source.Replace("Invoke-RSDxUiSourceGitCapture -WorkingDirectory `$RepoRoot -Arguments @('-C', `$source, 'rev-parse', 'HEAD')", "& git -C `$source rev-parse HEAD")
+        ($unsafe -cne $source) | Should Be $true
+        (& $valid $unsafe) | Should Be $false
+        (& $valid ($source.Replace('Invoke-RSCapturedProcess -WorkingDirectory', 'Invoke-RSCapturedProcess -DelegateArtifactOperation -WorkingDirectory'))) | Should Be $false
+        (& $valid ($source.Replace("'--no-optional-locks', 'status'", "'status'"))) | Should Be $false
+    }
+
+    It 'keeps the background console probe read-only and preflights windowless captured flags before launch' {
+        $source=Get-RSText 'Tools/Tests/ProcessStreaming.Tests.ps1'
+        $type=[regex]::Match($source,'(?ms)^public static class BackgroundBuildConsoleObservation\s*\{.*?^\}')
+        $type.Success|Should Be $true
+        $valid={param($body)
+            $calls=@([regex]::Matches($body,'\b(?<name>[A-Za-z_]\w*)\s*\(')|ForEach-Object{$_.Groups['name'].Value})
+            @($calls|Where-Object{$_ -cnotin @('DllImport','GetConsoleWindow','GetConsoleProcessList','GetStdHandle','GetFileType')}).Count -eq 0 -and
+            ([regex]::Matches($body,'DllImport\("kernel32\.dll"').Count -eq 4) -and
+            ([regex]::Matches($body,'public static extern').Count -eq 4)
+        }
+        (& $valid $type.Value)|Should Be $true
+        (& $valid ($type.Value.Replace('GetFileType','AllocConsole')))|Should Be $false
+        (& $valid ($type.Value.Replace('GetFileType','SetForegroundWindow')))|Should Be $false
+        $preflight=[regex]::Match($source,'(?s)if \(\$ProcessStartInfo.UseShellExecute -or -not \$ProcessStartInfo.CreateNoWindow -or\s*-not \$ProcessStartInfo.RedirectStandardOutput -or -not \$ProcessStartInfo.RedirectStandardError\)\s*\{\s*throw ''Refusing unsafe console-policy fixture launch\.'';?\s*\}')
+        $preflight.Success|Should Be $true
+        $launch=$source.IndexOf('$owned = & $starter -ProcessStartInfo $ProcessStartInfo -DelegateArtifactOperation:$DelegateArtifactOperation',[StringComparison]::Ordinal)
+        $launch|Should BeGreaterThan ($preflight.Index+$preflight.Length)
+        $source|Should Match '\$canonical.ExportedFunctions\[''Start-RSContainedProcess''\]'
+        $source|Should Match 'console_window \| Should Be 0'
+        $source|Should Not Match 'console_process_count \| Should Be 0'
     }
 
     It 'keeps IronLedger FolderView data-integrity guards wired' {
@@ -5275,11 +5647,22 @@ Specs\TestRuns\local_scratch
         $interaction | Should Match '!\s*_items\[hitIndex\]\.selected[\s\S]{0,100}SelectSingle\(hitIndex\)'
         $leftButtonDown = [regex]::Match(
             $interaction,
-            '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::OnLButtonDblClk\()').Value
+            '(?s)void\s+FolderView::OnLButtonDown\(.*?(?=\r?\nvoid\s+FolderView::)').Value
         $leftButtonDown.Length | Should BeGreaterThan 0
+        $leftButtonDown | Should Not Match 'void\s+FolderView::OnMButtonDown'
         # I63 slice A: the pane state is read before the press takes the focus, and a press in the pane
         # that was not active keeps its selection (no SelectSingle, no ClearSelection).
-        $leftButtonDown | Should Match 'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);\s*const\s+auto\s+hit\s*=\s*HitTest\(pt\)'
+        $focusCapture = [regex]::Match($leftButtonDown,
+            'const\s+bool\s+activating\s*=\s*!\s*_paneFocused;\s*SetFocus\(_hWnd\.get\(\)\);\s*DisarmPotentialDrag\(\);')
+        $blockingOverlayReturn = [regex]::Match($leftButtonDown, 'if\s*\(hasOverlay\s*&&\s*overlay\.blocksInput\)\s*return;')
+        $itemHit = [regex]::Match($leftButtonDown, 'const\s+auto\s+hit\s*=\s*HitTest\(pt\);')
+        $focusCapture.Success | Should Be $true
+        $blockingOverlayReturn.Success | Should Be $true
+        $itemHit.Success | Should Be $true
+        # BUG06 keeps the reviewed overlay close/cancel path ahead of item input.
+        # Focus state is captured first; a blocking overlay must return before hit testing.
+        ($focusCapture.Index + $focusCapture.Length) | Should BeLessThan $blockingOverlayReturn.Index
+        ($blockingOverlayReturn.Index + $blockingOverlayReturn.Length) | Should BeLessThan $itemHit.Index
         # The index is read once through value(); the optional is not dereferenced with '*'.
         $leftButtonDown | Should Match 'if\s*\(hit\.has_value\(\)\)\s*\{\s*const\s+size_t\s+hitIndex\s*=\s*hit\.value\(\);'
         $leftButtonDown | Should Not Match '\*hit\b'
@@ -5741,7 +6124,7 @@ Describe 'Test-owned volume mount source contracts' {
     It 'never mounts a volume from native code and lets F7 consume only the harness-proved test-owned VHDX' {
         # Q12: a test never mounts a volume it did not create. The only mount is the harness's
         # Add-PartitionAccessPath on the VHDX volume it created and proved.
-        $mountCallers = @(git -C $repoRoot grep -l -E 'SetVolumeMountPoint[AW]?[[:space:]]*\(' -- '*.cpp' '*.h' '*.hpp' '*.inl')
+        $mountCallers = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'grep'; '-l'; '-E'; 'SetVolumeMountPoint[AW]?[[:space:]]*\('; '--'; '*.cpp'; '*.h'; '*.hpp'; '*.inl'))
         $mountCallers | Should BeNullOrEmpty
         $f7 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp'
         $helper = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.OwnedVirtualDisk.h'
@@ -5872,9 +6255,7 @@ $script:RSTestExposureAllowlist = @(
 )
 
 function Get-RSTestExposureSourcePaths {
-    $files = @(git -C $repoRoot ls-files -- `
-            'RedSalamander/SelfTest/**' 'RedSalamander/**/*.Tests.*' 'Tests/**' 'Plugins/**/*.Tests.*' 'Common/Common.Tests.*' `
-            'Tools/Tests/**' 'Tools/**/*.Tests.ps1' 'Tools/Modules/Testing/**' 'Tools/Run-AllTests.ps1' 'Tools/Test-Changes.ps1' 'Tools/Clean-TestSandbox.ps1')
+    $files = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'ls-files'; '--'; 'RedSalamander/SelfTest/**'; 'RedSalamander/**/*.Tests.*'; 'Tests/**'; 'Plugins/**/*.Tests.*'; 'Common/Common.Tests.*'; 'Tools/Tests/**'; 'Tools/**/*.Tests.ps1'; 'Tools/Modules/Testing/**'; 'Tools/Run-AllTests.ps1'; 'Tools/Test-Changes.ps1'; 'Tools/Clean-TestSandbox.ps1'))
     if ($LASTEXITCODE -ne 0) { throw "git ls-files failed with exit $LASTEXITCODE." }
     # This contract file spells every pattern it forbids, so it is the one exclusion.
     return @($files | Where-Object { $_ -match '\.(?:cpp|h|hpp|inl|c|cs|ps1|psm1)$' -and $_ -ne 'Tools/Tests/TestHarnessSourceContracts.Tests.ps1' } | Sort-Object -Unique)
@@ -5977,9 +6358,9 @@ Describe 'Test link, mount and share exposure source contracts' {
         }
 
         # The real pre-fix F7 source, when this clone has that history (hosted clones may be shallow).
-        & git -C $repoRoot cat-file -e "fc222f854^:$f7" 2>$null
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'cat-file'; '-e'; "fc222f854^:$f7") 2>$null
         if ($LASTEXITCODE -eq 0) {
-            $old = (& git -C $repoRoot show "fc222f854^:$f7") -join "`n"
+            $old = (Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'show'; "fc222f854^:$f7")) -join "`n"
             $oldViolations = @(Get-RSTestExposureViolations -Sources @{ $f7 = $old } -Allowlist $script:RSTestExposureAllowlist)
             @($oldViolations | Where-Object { $_ -match 'SetVolumeMountPointW\(' }).Count | Should Be 1
         }
@@ -6186,5 +6567,161 @@ Describe 'Leftover scan worker retirement contract' {
         $identityLess | Should Match 'provider->ReferenceCountForSelfTest\(\)\s*!=\s*2u'
         $identityLess | Should Match 'probe\.delivered\.load\(std::memory_order_acquire\)\s*!=\s*0u'
         $runner | Should Match 'SetBlockReadDirectoryInfoForSelfTest'
+    }
+}
+
+Describe 'Captured DxUi metadata process source contracts' {
+    It 'keeps compiler-host and fixture metadata off bare native invocation' {
+        $source = Get-RSText 'Tools/Modules/Build/DxUiDependency.psm1'
+        $tests = Get-RSText 'Tools/Tests/DxUiDependency.Tests.ps1'
+        $backend = [regex]::Match($source,'(?ms)^function Invoke-RSDxUiReadOnlyCapture \{.*?^\}')
+        $backend.Success | Should Be $true
+        $backend.Value | Should Match 'Invoke-RSCapturedProcess -WorkingDirectory \$WorkingDirectory -FilePath \$FilePath -Arguments \$Arguments'
+        $backend.Value | Should Not Match 'DelegateArtifactOperation|Write-Host|2>&1'
+        $hostProbe = [regex]::Match($source,'(?ms)^function Get-RSDxUiConsumerCompilerHost \{.*?^\}')
+        $hostProbe.Success | Should Be $true
+        $validHost = {param($body) $body -match 'Invoke-RSDxUiReadOnlyCapture' -and $body -notmatch '&\s*\$MSBuildPath'}
+        (& $validHost $hostProbe.Value) | Should Be $true
+        (& $validHost ($hostProbe.Value.Replace('Invoke-RSDxUiReadOnlyCapture', '& $MSBuildPath'))) | Should Be $false
+        $validTests = {param($body) $body -match 'Invoke-RSDxUiTestMetadataCapture' -and $body -notmatch '&\s*\$(?:vswhere|msbuild)\b'}
+        (& $validTests $tests) | Should Be $true
+        (& $validTests ($tests.Replace('Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere', '& $vswhere'))) | Should Be $false
+        $audit = [regex]::Match($tests,'(?ms)^function Start-RSDxUiMetadataAudit \{.*?^\}')
+        $audit.Success | Should Be $true
+        $audit.Value | Should Match 'Refusing unsafe DxUi metadata fixture launch'
+        $audit.Value.IndexOf('Refusing unsafe DxUi metadata fixture launch') | Should BeLessThan $audit.Value.IndexOf('$owned = & $starter')
+        $gitFixture = [regex]::Match($tests,'(?ms)^function Invoke-RSDxUiTestGit \{.*?^\}')
+        $gitFixture.Value | Should Match '\$script:dxUiMetadataAudit\.Active'
+        $gitFixture.Value | Should Match 'Assert-RSTestSandboxContainedPath'
+        $gitFixture.Value | Should Not Match 'Add-Content[^\r\n]*\$env:'
+        $audit.Value | Should Match '\$state\.Active'
+        $audit.Value | Should Match 'Assert-RSTestSandboxContainedPath'
+        $audit.Value | Should Not Match 'Add-Content[^\r\n]*\$env:'
+        $tests | Should Match 'clone --config core\.longpaths=true --quiet --local --no-hardlinks --no-checkout \$origin \$source'
+        $tests | Should Match '-c core\.longpaths=true -C \$source checkout --quiet --detach \$head'
+        $tests | Should Match '\$predictedSource\.Length -gt 240'
+        $tests | Should Match '\$metadataPath\.Length \| Should BeGreaterThan 260'
+    }
+}
+
+Describe 'Background Git metadata launch closure' {
+    It 'keeps the finite engine-free transport exceptions no-window before either pipe or raw query starts' {
+        $helpers=@(
+            @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedGit'),
+            @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedWorkflowMetadata'),
+            @('Tools/Modules/Tooling/ToolInventory.psm1','Invoke-RSToolInventoryGitCapture'),
+            @('Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Get-RSGitOutput'),
+            @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture'),
+            @('Tools/Modules/Build/ClangFormat.psm1','Invoke-RSClangFormatCapture')
+        )
+        $valid={param([string]$body)
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($body,[ref]$t,[ref]$e)
+            if($e.Count){return $false}
+            $starts=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.InvokeMemberExpressionAst] -and $n.Member.Value -ceq 'Start'},$true))
+            if(!$starts.Count){return $false}
+            foreach($flag in @(@('UseShellExecute','$false'),@('CreateNoWindow','$true'),@('RedirectStandardOutput','$true'),@('RedirectStandardError','$true'))){
+                $assignment=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left -is [Management.Automation.Language.MemberExpressionAst] -and $n.Left.Member.Value -ceq $flag[0] -and $n.Right.Extent.Text -ceq $flag[1]},$true))
+                if($assignment.Count -ne 1 -or $assignment[0].Extent.EndOffset -gt $starts[0].Extent.StartOffset){return $false}
+            }
+            return $body.Contains('StandardOutput') -and $body.Contains('StandardError.ReadToEndAsync()') -and $body.Contains('ExitCode') -and $body.Contains('finally') -and $body.Contains('.Dispose()')
+        }
+        foreach($helper in $helpers){
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput((Get-RSText -Path $helper[0]),[ref]$t,[ref]$e)
+            $functions=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $helper[1]},$true))
+            $functions.Count|Should Be 1
+            $body=$functions[0].Extent.Text
+            (& $valid $body)|Should Be $true
+            $unsafe=$body.Replace('.CreateNoWindow = $true','.CreateNoWindow = $false')
+            ($unsafe -cne $body)|Should Be $true
+            (& $valid $unsafe)|Should Be $false
+        }
+    }
+    It 'admits only the reviewed captured caller paths and keeps vcpkg writes outside the read-only projection' {
+        $paths=@('Tools/Run-AllTests.ps1','Tools/Modules/Testing/HostedTestDesktop.psm1','Tools/Modules/Build/VcpkgToolIdentity.psm1','Tools/Modules/Build/VcpkgInstallSafety.psm1',
+            'Tools/Modules/Testing/ScopedTesting.psm1','Tools/Modules/Tooling/ToolInventory.psm1','Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestRunArchive.psm1','format-all.ps1','Tools/TerminalEngine/GhosttyRuntimeStatus.psm1','Tools/TerminalEngine/GhosttyCandidateReview.psm1')
+        $noBare={param([string]$source)
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$t,[ref]$e)
+            if($e.Count){return $false}
+            return @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','git.exe','gh','gh.exe')},$true)).Count -eq 0
+        }
+        foreach($path in $paths){(& $noBare (Get-RSText -Path $path))|Should Be $true}
+        $runner=Get-RSText -Path 'Tools/Run-AllTests.ps1'
+        ([regex]::Matches($runner,'\$graphInputsCapture = Invoke-RSCapturedProcess')).Count|Should Be 3
+        (& $noBare ($runner.Replace('Invoke-RSCapturedProcess','& git')))|Should Be $false
+        $vcpkg=Get-RSText -Path 'Tools/Modules/Build/VcpkgInstallSafety.psm1'
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($vcpkg,[ref]$t,[ref]$e)
+        $bootstrap=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSVcpkgBootstrapGit'},$true).Extent.Text
+        $bootstrap|Should Match 'Invoke-RSStreamingProcess[\s\S]*-DelegateArtifactOperation'
+        $bootstrap|Should Not Match 'Invoke-RSCapturedProcess'
+        $vcpkg|Should Match '\$commitProbe\.ExitCode -ne 0'
+    }
+    It 'limits the optional decoder override to known Git stdout without changing defaults or stderr' {
+        $stream=Get-RSText -Path 'Tools/Modules/Build/ProcessStreaming.psm1'
+        $stream|Should Match '\[System.Text.Encoding\]\$StandardOutputEncoding'
+        $stream|Should Match 'if \(\$null -ne \$StandardOutputEncoding\) \{ \$psi.StandardOutputEncoding = \$StandardOutputEncoding \}'
+        $stream|Should Not Match '\.StandardErrorEncoding\s*='
+        $stream|Should Not Match '\[Console\]::OutputEncoding\s*='
+        $dxui=Get-RSText -Path 'Tools/Modules/Build/DxUiDependency.psm1'
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($dxui,[ref]$t,[ref]$e)
+        $git=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSDxUiSourceGitCapture'},$true).Extent.Text
+        $git|Should Match '-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\)'
+        foreach($path in @('Tools/Run-AllTests.ps1','Tools/Modules/Testing/HostedTestDesktop.psm1','Tools/Modules/Build/VcpkgToolIdentity.psm1','Tools/Modules/Build/VcpkgInstallSafety.psm1')){
+            $source=Get-RSText -Path $path
+            $source|Should Match '-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\) -FilePath ''git'''
+            $source|Should Not Match '\[Console\]::OutputEncoding\s*='
+        }
+    }
+    It 'shares exactly one engine-free stdin transport while retaining thin parameter-preserving callers' {
+        $shared=Get-RSText -Path 'Tools/Modules/Testing/GitMetadataCapture.psm1'
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($shared,[ref]$t,[ref]$e)
+        @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Import-Module'},$true)).Count|Should Be 0
+        $shared|Should Match 'Export-ModuleMember -Function Invoke-RSTestGitMetadataCapture'
+        $sharedFunction=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSTestGitMetadataCapture'},$true)
+        $prefix=@($sharedFunction.Body.ParamBlock.Parameters|Where-Object {$_.Name.VariablePath.UserPath -ceq 'PrefixArguments'})
+        $prefix.Count|Should Be 1
+        $prefix[0].StaticType.FullName|Should Be 'System.String[]'
+        $prefix[0].DefaultValue.Extent.Text|Should Be '@()'
+        $validForwarder={param([string]$text,[string]$name)
+            $tokens=$null;$errors=$null;$tree=[Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+            if($errors.Count){return $false}
+            $function=$tree.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true)
+            if(!$function -or $function.Body.EndBlock.Statements.Count -ne 1){return $false}
+            $baseParameters=@($sharedFunction.Body.ParamBlock.Parameters|Where-Object {$_.Name.VariablePath.UserPath -cne 'PrefixArguments'}|ForEach-Object {$_.Extent.Text})
+            $wrapperParameters=@($function.Body.ParamBlock.Parameters|ForEach-Object {$_.Extent.Text})
+            if($baseParameters.Count -ne 3 -or $wrapperParameters.Count -ne 3 -or ($baseParameters -join "`n") -cne ($wrapperParameters -join "`n")){return $false}
+            $calls=@($function.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst]},$true))
+            return $calls.Count -eq 1 -and $calls[0].GetCommandName() -ceq 'Invoke-RSTestGitMetadataCapture' -and $calls[0].CommandElements.Count -eq 2 -and
+                $calls[0].CommandElements[1] -is [Management.Automation.Language.VariableExpressionAst] -and $calls[0].CommandElements[1].Splatted -and
+                $calls[0].CommandElements[1].VariablePath.UserPath -ceq 'PSBoundParameters'
+        }
+        foreach($item in @(@('Tools/Modules/Testing/ValidationFingerprint.psm1','Invoke-RSValidationGitLineCapture'),@('Tools/Modules/Testing/TestRunArchive.psm1','Invoke-RSTestRunArchiveGitCapture'))){
+            $source=Get-RSText -Path $item[0]
+            $source|Should Match 'Import-Module \(Join-Path \$PSScriptRoot ''GitMetadataCapture.psm1''\) -Scope Local -ErrorAction Stop'
+            (& $validForwarder $source $item[1])|Should Be $true
+            (& $validForwarder ($source.Replace('@PSBoundParameters','@()')) $item[1])|Should Be $false
+        }
+    }
+    It 'keeps the scheduled fixture scope on explicit native argument vectors without a global Git shim' {
+        $files=@('ScopedTesting.Tests.ps1','ToolInventory.Tests.ps1','SpecInformationArchitecture.Tests.ps1','ValidationFingerprint.Tests.ps1','TestRunArchive.Tests.ps1','ToolingGovernance.Tests.ps1','DocumentationDriftContracts.Tests.ps1','TestHarnessSourceContracts.Tests.ps1','ProcessStreaming.Tests.ps1','DxUiDependency.Tests.ps1','VcpkgInstallSafety.Tests.ps1','TestSupport.psm1','BuildEvidence.Tests.ps1','BuildReproducibility.Tests.ps1','GhosttyCandidateReview.Tests.ps1','GhosttyRuntimeStatus.Tests.ps1','ReleaseWorkflowPolicy.Tests.ps1','ResourceLocalizationContracts.Tests.ps1','ValidationImpact.Tests.ps1','VcpkgBootstrap.Tests.ps1','CiDependencyWarnings.Tests.ps1','RemoveAds.Tests.ps1','RunAllTestsPlan.Tests.ps1','SharedToolingModules.Tests.ps1','Versioning.Tests.ps1','ClangFormat.Tests.ps1')
+        foreach($file in $files){
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput((Get-RSText -Path ('Tools/Tests/'+$file)),[ref]$t,[ref]$e)
+            @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','git.exe','gh')},$true)).Count|Should Be 0
+            foreach($call in @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Invoke-RSTestFixtureGit'},$true))){
+                $call.CommandElements.Count|Should Be 3
+                $call.CommandElements[1].ParameterName|Should Be 'Arguments'
+                ($call.CommandElements[2] -is [Management.Automation.Language.ArrayExpressionAst])|Should Be $true
+            }
+        }
+        $support=Get-RSText -Path 'Tools/Tests/TestSupport.psm1'
+        $support|Should Match 'function Invoke-RSTestFixtureNative'
+        $support|Should Match 'Invoke-RSTestFixtureNative -FilePath ''git'' -Arguments \$Arguments'
+        $support|Should Match '-StandardOutputEncoding \$StandardOutputEncoding -OutputLineCallback \$capture'
+        $support|Should Match 'New-RSTestFormatterFixture'
+        $support|Should Not Match 'UseShellExecute\s*=\s*\$true'
+        $support|Should Match 'function Invoke-RSTestFixtureGit'
+        $support|Should Match 'param\(\[string\[\]\]\$Arguments\)'
+        $support|Should Match 'Invoke-RSStreamingProcess[\s\S]*-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\)'
+        $support|Should Not Match 'function (global:)?git\b'
+        $support|Should Match '\$global:LASTEXITCODE=\[int\]\$exitCode'
     }
 }

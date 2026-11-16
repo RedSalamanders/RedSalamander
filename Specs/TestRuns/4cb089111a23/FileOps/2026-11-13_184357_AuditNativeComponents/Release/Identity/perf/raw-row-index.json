@@ -1,0 +1,1041 @@
+{
+  "schema": "red-salamander.native-component-row-selection.v1",
+  "source_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T184042Z-70340-fd80e19498dd4084806ee24f654ae6ae\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_sha256": "8c5faf3ca743606d3f5683c767234077485753d60b41dcc8a74aa7969757a1dd",
+  "source_bytes": 6318083,
+  "source_physical_lines": 18083,
+  "source_nonblank_rows": 18083,
+  "metric_allowlist": [
+    "FileOps.Conflict.LocalDistinctnessUnproved",
+    "FileOps.Conflict.WaitCalls",
+    "FileOps.Power.ConflictWaitCalls",
+    "FileOps.Queue.Selector.BaselineBatchUs",
+    "FileOps.Queue.Selector.CandidateBatchUs",
+    "FileOps.Queue.Selector.CollectionCapacityBytes",
+    "FileOps.SelfTest.LocalAncestryProbe",
+    "FileOps.SelfTest.LocalCrossRootDistinctness",
+    "FileOps.SelfTest.QueueStartOrder.Us",
+    "FileOps.Transfer.InsideSourceProbeUs"
+  ],
+  "selection": "Exact original row bytes and order; blank native commit untouched.",
+  "excerpt_sha256": "3946247a3812e6d09fd55eca9d4d067bd240a315ffd68008f196a26786dc9c38",
+  "excerpt_bytes": 63410,
+  "excerpt_rows": 145,
+  "rows": [
+    {
+      "excerpt_line": 1,
+      "source_line": 1426,
+      "line_bytes": 350,
+      "line_sha256": "64f00639d6667db846388fb15f725ccca090524f4dc409a92fe977e92ec75982",
+      "metric": "FileOps.SelfTest.QueueStartOrder.Us"
+    },
+    {
+      "excerpt_line": 2,
+      "source_line": 1466,
+      "line_bytes": 428,
+      "line_sha256": "c328c3a701c6044ca4875b70e001970bc327f14e7b7f4aaa8028740bf167e2bd",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 3,
+      "source_line": 1467,
+      "line_bytes": 429,
+      "line_sha256": "a9e04697907830763c4b33d82d76d480f3dc24619e8cb664d30bde761fa6d88a",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 4,
+      "source_line": 1468,
+      "line_bytes": 443,
+      "line_sha256": "e118d4c575a3b5fbb9f0c8d762b46b3ee01afdc2b91846564ba56d7c83884b51",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 5,
+      "source_line": 1469,
+      "line_bytes": 429,
+      "line_sha256": "e570b007f09ee7d1c216108c708e05f6f406a87e51777bdd33c107ae6f9c5b6a",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 6,
+      "source_line": 1470,
+      "line_bytes": 430,
+      "line_sha256": "f928dd1eb31342a47b59372654c7acf07135fefb4b3a810385082dad21540f29",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 7,
+      "source_line": 1471,
+      "line_bytes": 444,
+      "line_sha256": "503291015208557d89c08db4480673cb7914a18c64400bd129e4bb6884939486",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 8,
+      "source_line": 1472,
+      "line_bytes": 428,
+      "line_sha256": "86e82127ff1d38d9b4220244c308c25b28ae8b1f500a9479f000a5d52482cd8a",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 9,
+      "source_line": 1473,
+      "line_bytes": 429,
+      "line_sha256": "fe0e257eb857fc10248895380ad1c9b23d13f855cf0b118897a73a94f515d077",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 10,
+      "source_line": 1474,
+      "line_bytes": 443,
+      "line_sha256": "b711f36d8088c04958f4d270191895bdc01c7b1e5ac00fbc2d225865c27313e7",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 11,
+      "source_line": 1475,
+      "line_bytes": 429,
+      "line_sha256": "683421729406742b644efa65f8ddf9c522495c9baf62719f1619e04e496dc5d2",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 12,
+      "source_line": 1476,
+      "line_bytes": 430,
+      "line_sha256": "4d01563123c310eb7254935f63ddac5fd66996f5516964dbfef7d99f63f6bc91",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 13,
+      "source_line": 1477,
+      "line_bytes": 444,
+      "line_sha256": "a769ab564cf708c479027faef3aa9495e4d0e26b88d36f61c871f2af50c63ac6",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 14,
+      "source_line": 1517,
+      "line_bytes": 429,
+      "line_sha256": "ed3ef6a5d9041b4cbcfea8ae5e2914c0c52dfd7d93fae6421735c0cbb354b9b7",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 15,
+      "source_line": 1518,
+      "line_bytes": 430,
+      "line_sha256": "fc241240bfd6f7442b0343a2986b1051b74db5afb62ee2f941749937d886ef67",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 16,
+      "source_line": 1519,
+      "line_bytes": 444,
+      "line_sha256": "af68900be097de47bb7feea62388dbdc482e3bffafba11d299ac6ac0d69ffd7a",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 17,
+      "source_line": 1520,
+      "line_bytes": 430,
+      "line_sha256": "31e5a938937d4c26c42099204dface49c5a649586fe9f917e91e606208bc3eae",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 18,
+      "source_line": 1521,
+      "line_bytes": 431,
+      "line_sha256": "11252caa122f6d59cdcc183fb162ec718d72cad3a8860137f73009057f2b6d63",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 19,
+      "source_line": 1522,
+      "line_bytes": 445,
+      "line_sha256": "9b5f0ce4b807c34ff1039ff12554f20bd1965f86e77ac31530ced6ad85942a80",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 20,
+      "source_line": 1523,
+      "line_bytes": 429,
+      "line_sha256": "3826d2190ab054b911c51c6af52f6ae9f56e2eab5fe226b2d9cab02c7caced46",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 21,
+      "source_line": 1524,
+      "line_bytes": 430,
+      "line_sha256": "08ada7450273b69a31dbc7af16f14b41fdc3dba0af2bbff447c53acd6ddc2a38",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 22,
+      "source_line": 1525,
+      "line_bytes": 444,
+      "line_sha256": "4752ea117e0845a90da517472903410d3697d72d32a1ad6f6eaed89c9d797d20",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 23,
+      "source_line": 1526,
+      "line_bytes": 430,
+      "line_sha256": "6cac7146eeb1211a141c660678f59d05a157b5f521e7e5d01b5d6d2f525173c5",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 24,
+      "source_line": 1527,
+      "line_bytes": 431,
+      "line_sha256": "a7eb95e5ab64319b91fc814bd751c2b72eaebc72d139fc7669b40d5074eaac08",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 25,
+      "source_line": 1528,
+      "line_bytes": 445,
+      "line_sha256": "3818381f2db601c01e7cceae6e33b573b5ed8fe8991e59e000ee1dd3ae86b779",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 26,
+      "source_line": 1568,
+      "line_bytes": 430,
+      "line_sha256": "9a7e03ad7fe1f0df0f93891cee21a0987974b2326c1ecf11a3fc949058749072",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 27,
+      "source_line": 1569,
+      "line_bytes": 431,
+      "line_sha256": "0b9fd0bb545be6f68b5a1a195028b1c6228fef2eb013e4f9a4f401107d8259ce",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 28,
+      "source_line": 1570,
+      "line_bytes": 445,
+      "line_sha256": "aafc5b014fddd09bc9e5a8aa84d462af76c4e153617b96fc937d32e7b18efd1e",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 29,
+      "source_line": 1571,
+      "line_bytes": 429,
+      "line_sha256": "e1f0632a620cd27a15febfd730c94911b331715e1fcf0a8125dad439fc491742",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 30,
+      "source_line": 1572,
+      "line_bytes": 430,
+      "line_sha256": "c486397e0eae475e932874223021aa466f00ad559c1004cc2df3231caa3a85db",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 31,
+      "source_line": 1573,
+      "line_bytes": 444,
+      "line_sha256": "6b76d8d89f262dea5bf41d71f4e672e3ff28c4a7a5231d17bdccf084cd6939d7",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 32,
+      "source_line": 1574,
+      "line_bytes": 430,
+      "line_sha256": "1ff258b0fe46bc2dfe7619e3a3008d2282200bc5212f015a12a937d2221343e7",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 33,
+      "source_line": 1575,
+      "line_bytes": 431,
+      "line_sha256": "59b4fbb368246f155d05747ea1028e5fef558faea8755bd12d441584902a3c24",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 34,
+      "source_line": 1576,
+      "line_bytes": 445,
+      "line_sha256": "b88cad47c06e4d418ce24057ef0e53006592120a2cf758335e0ab8a25d6e19c6",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 35,
+      "source_line": 1577,
+      "line_bytes": 429,
+      "line_sha256": "a604df6505abe8a8c26e86e1cd5079db622389a1c9c258930960cbba3ccb35c6",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 36,
+      "source_line": 1578,
+      "line_bytes": 430,
+      "line_sha256": "5e8bf8f11fea69f95fe843ef075f2314959f9195b62b138ebfeb2327d2a9defa",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 37,
+      "source_line": 1579,
+      "line_bytes": 444,
+      "line_sha256": "ea2415914c34464984ef4b2742f920daeb21f9dc12d600cf9d7c6043dfab3c5d",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 38,
+      "source_line": 1619,
+      "line_bytes": 431,
+      "line_sha256": "fd9092d1d453da16e496d823a8585409f1ed7cbe565b90b9db611adc051699d3",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 39,
+      "source_line": 1620,
+      "line_bytes": 432,
+      "line_sha256": "ce620448bac593e594d2d41799ff8e98b2ac9b81ea6197aade7aa88b94d37e7f",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 40,
+      "source_line": 1621,
+      "line_bytes": 446,
+      "line_sha256": "7aec53cc786d010f9d5dad8ba894127896d08b9b02ea40299fd560fa73ba15e6",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 41,
+      "source_line": 1622,
+      "line_bytes": 430,
+      "line_sha256": "e374952243aded6eed7fd557b01232c0d5d6a3eab272f8eeeaf7082f1b1d33e7",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 42,
+      "source_line": 1623,
+      "line_bytes": 431,
+      "line_sha256": "22d631d9709c7a9da36ef1d46d0167c7d3591cd7c17aa9b0638a76c60d0af3aa",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 43,
+      "source_line": 1624,
+      "line_bytes": 445,
+      "line_sha256": "2e84e1a6d6a963ea3b6f8a6eee7ca674b8c420e0396c357b9ea0cc278b8f83b3",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 44,
+      "source_line": 1625,
+      "line_bytes": 431,
+      "line_sha256": "6678a3b1e45cbcf4b110cc33be7a74a8b9540984d8c1b6cf9251a6be4cb83f2a",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 45,
+      "source_line": 1626,
+      "line_bytes": 432,
+      "line_sha256": "e1d09a556476b762e781392baeddbbe113e8a0985a1fdeb67633c33165b7cf6f",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 46,
+      "source_line": 1627,
+      "line_bytes": 446,
+      "line_sha256": "76c8e76ed15a0c65fc25a2b49e5c4ead8559f3764add2afc79347884ebbecb69",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 47,
+      "source_line": 1628,
+      "line_bytes": 430,
+      "line_sha256": "ef2c8c0eb6086efe2fa13fd4aceb3c975e7c5a528e29b62d86b7a9c5eb275635",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 48,
+      "source_line": 1629,
+      "line_bytes": 431,
+      "line_sha256": "138a312f243ceefb5b2cfb4f07dbc58f781bcade46e35b83782110097e772e58",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 49,
+      "source_line": 1630,
+      "line_bytes": 445,
+      "line_sha256": "ac1b1ebad85ab0bf26c4751eef2e12c8041202ebe7493603953cd39824f67467",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 50,
+      "source_line": 2030,
+      "line_bytes": 431,
+      "line_sha256": "06d09c45b339be2d46dc9fe5cf5a619778ac60664ba71f53d490b4f95e7c0755",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 51,
+      "source_line": 2031,
+      "line_bytes": 432,
+      "line_sha256": "74b15efbf87af53b64cdf6908548ab131d95c2a238666a849187b5e8806f5b32",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 52,
+      "source_line": 2032,
+      "line_bytes": 445,
+      "line_sha256": "2013c7038a9b03ce392b6dd3ad0413a90a0619f3f5e10da3769ce242c50a7e8f",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 53,
+      "source_line": 2033,
+      "line_bytes": 432,
+      "line_sha256": "639aa52414b4deefd0d83801e0a3d0e9fcf49c1cda5ddc5f4e101998c1494bba",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 54,
+      "source_line": 2034,
+      "line_bytes": 433,
+      "line_sha256": "0920cfb98d017ef72dba10f5939ce2af229b8154ba9afcc81719f62fa81afbd3",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 55,
+      "source_line": 2035,
+      "line_bytes": 446,
+      "line_sha256": "e9722298615cb9e3fb49058af662bceecfab26ee118c547f81332e5d17a07d46",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 56,
+      "source_line": 2036,
+      "line_bytes": 431,
+      "line_sha256": "0de285b537861d76aacb0bfaf95dd258a28ce61a8e66f8283bd71ce6c2009752",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 57,
+      "source_line": 2037,
+      "line_bytes": 432,
+      "line_sha256": "d21bc5a8c116edfebd2035b62118b81503aa1010b102fc36f064a149875d61ee",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 58,
+      "source_line": 2038,
+      "line_bytes": 445,
+      "line_sha256": "7a2af5d0346b4e319ca6649f5c375c312a3ef531e5c7217841af34b824907638",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 59,
+      "source_line": 2039,
+      "line_bytes": 432,
+      "line_sha256": "06c71bcfe21781909724928477e5e2b266d313273c27b2a3354a7eecdbfd0da4",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 60,
+      "source_line": 2040,
+      "line_bytes": 433,
+      "line_sha256": "d701f64599bdea81587c6561e94c28eac0d69f94059e11a807ade96f788e8b28",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 61,
+      "source_line": 2041,
+      "line_bytes": 446,
+      "line_sha256": "4ffe9262d01d6a851c6d25ac86801216b2e0715204bc473c3f35c873fac02426",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 62,
+      "source_line": 2441,
+      "line_bytes": 433,
+      "line_sha256": "fd9529327854d115f772ae69b788242b6d8d682dcb98f44d9e443fda6338e732",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 63,
+      "source_line": 2442,
+      "line_bytes": 434,
+      "line_sha256": "1278cc61b1f44d79b40e607dc7b71c49227577d24a4e208a4adc88b3e492ba8d",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 64,
+      "source_line": 2443,
+      "line_bytes": 446,
+      "line_sha256": "06a0d5ec0665bb51b317c0520217f3e85fba757f6440b41e563bf904296e75be",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 65,
+      "source_line": 2444,
+      "line_bytes": 434,
+      "line_sha256": "a43590e151b75c111b31e01c11fd4f9daa8cd52648a4cfdf8aa8d526901cd1b7",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 66,
+      "source_line": 2445,
+      "line_bytes": 435,
+      "line_sha256": "671de66e630cb1d6ba0b071323f26c4b45f1257bea9e0b80572d1e4693bcf4b0",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 67,
+      "source_line": 2446,
+      "line_bytes": 447,
+      "line_sha256": "8f55fb9de4403c239aafc560409c5f9f39b3ddbd30263c5b7a47ca3928fce002",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 68,
+      "source_line": 2447,
+      "line_bytes": 433,
+      "line_sha256": "d17d05fab2bade90dc69279d1e5fefecc0f828c260607ef42025b8ddaf3a0a69",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 69,
+      "source_line": 2448,
+      "line_bytes": 434,
+      "line_sha256": "09615656fd4599e9047f7d7055a1c6732e2cdc54d4aa69e128df634171f0af36",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 70,
+      "source_line": 2449,
+      "line_bytes": 446,
+      "line_sha256": "55d779b61df88ae819544f73751bbc7b2be8de532f7dbc89bb727233c2126ab1",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 71,
+      "source_line": 2450,
+      "line_bytes": 434,
+      "line_sha256": "2e4bac199e5870ac37338378c4f7ef2a39622e63375dc4ab90f68d1dd1228284",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 72,
+      "source_line": 2451,
+      "line_bytes": 435,
+      "line_sha256": "7fb56436f57941b6bf424f789322c223b899a16e9574ab90f783895ad14ae2b8",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 73,
+      "source_line": 2452,
+      "line_bytes": 447,
+      "line_sha256": "21f980ef395e32e6107303d1914dcab453f9a80d8defa0a6a666d5757a11b1e2",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 74,
+      "source_line": 2852,
+      "line_bytes": 433,
+      "line_sha256": "99795b69604a687d8c6209961d7beadc5bd0081b8e45125164db9657ee92c5ce",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 75,
+      "source_line": 2853,
+      "line_bytes": 434,
+      "line_sha256": "c30dae94f6bb3854f47ac6b7cbd15c4daa036d37e8c4cf1ccc899a0ecec0f22b",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 76,
+      "source_line": 2854,
+      "line_bytes": 447,
+      "line_sha256": "3d99ebbf046120db0169236176dfd8cbc625666d629f069d2a13b569125fccdc",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 77,
+      "source_line": 2855,
+      "line_bytes": 432,
+      "line_sha256": "b46a64743b6dde12caba4cf5e805ec87afc16d07d9521b4f6920b9503aa7a246",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 78,
+      "source_line": 2856,
+      "line_bytes": 433,
+      "line_sha256": "56ae3bceb60812a05a906bbea12d24eeb36af6f49e7592a24b14aa6ed80227a2",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 79,
+      "source_line": 2857,
+      "line_bytes": 446,
+      "line_sha256": "09525238c1f3f47dbd514bd121a41c66400ba25c3dcd40452aecb7271c341154",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 80,
+      "source_line": 2858,
+      "line_bytes": 433,
+      "line_sha256": "51d1ae22ef3511ef6caaede9c71c1f2d45e51fe4d5712dc2b7156f551e80f0b9",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 81,
+      "source_line": 2859,
+      "line_bytes": 434,
+      "line_sha256": "5251b8fc3843b455c789cc2ff1825aed24e530dc2abe0328d8d7d19a2ee65827",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 82,
+      "source_line": 2860,
+      "line_bytes": 447,
+      "line_sha256": "4188fc628d0158eb0d5197948d87a6379b86d016ec4697cd63c038c6d14a6849",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 83,
+      "source_line": 2861,
+      "line_bytes": 432,
+      "line_sha256": "469d3b874483a348dcc117905dffdec885c2db4b80408d328bf156870a5d062d",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 84,
+      "source_line": 2862,
+      "line_bytes": 433,
+      "line_sha256": "b899da93a622f6cb5dd3fa9fb0664eb7c397efc37aa00b78bb91dd68ad2a72bb",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 85,
+      "source_line": 2863,
+      "line_bytes": 446,
+      "line_sha256": "beb7dea0aceb6c9b1caf0a22beeddbf1cc7b8a938d590ee5c5ab4049060777f7",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 86,
+      "source_line": 3263,
+      "line_bytes": 435,
+      "line_sha256": "22278135c3fd1e60f307f609852964117c0016daeb63a2988e5142e46ad6883b",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 87,
+      "source_line": 3264,
+      "line_bytes": 436,
+      "line_sha256": "6961a8209e56a190464a49dfd3813e6efe80b7985fa10b22965d01f2aca0ac1e",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 88,
+      "source_line": 3265,
+      "line_bytes": 448,
+      "line_sha256": "3e74ef9b801c3517fcf62978172d6ed19b07092a6dbb2b669cb650d6896826f1",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 89,
+      "source_line": 3266,
+      "line_bytes": 434,
+      "line_sha256": "c889fa2c3d3ba9672d48b29a41920756e581a5a0f0458dc596c4f2b45ae9b900",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 90,
+      "source_line": 3267,
+      "line_bytes": 435,
+      "line_sha256": "32d61c5c110666d93697da1ae26e337c9fba0111c1ece238911f58432c021a90",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 91,
+      "source_line": 3268,
+      "line_bytes": 447,
+      "line_sha256": "268f24ec8daa7f6a0422059a1b91ae9b72886a7348848e619766e2e468988b84",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 92,
+      "source_line": 3269,
+      "line_bytes": 435,
+      "line_sha256": "f0355211a5840bbfbb086f8a5c8ee5bae8f73c5e575315d1b6a0ab48799948c0",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 93,
+      "source_line": 3270,
+      "line_bytes": 436,
+      "line_sha256": "c60e05b0d6ba81d48c87e940f4ae95173cdd4619026777d8cce775c40d4580cd",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 94,
+      "source_line": 3271,
+      "line_bytes": 448,
+      "line_sha256": "6d82d3c039f5356679e3b18477ac5eff5fe08a0bbfca85145d7766a8d5ede500",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 95,
+      "source_line": 3272,
+      "line_bytes": 434,
+      "line_sha256": "a1ccc8730184d2583e752c3a911e90a7444ebdb072207d7e21e648ec904b4572",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 96,
+      "source_line": 3273,
+      "line_bytes": 435,
+      "line_sha256": "44b07900c63710b755fb9c853f1fe142c0422fbf2c577b5a04caaa7d6c3acd08",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 97,
+      "source_line": 3274,
+      "line_bytes": 447,
+      "line_sha256": "46af023b0a44e8528d179f0938406b544039781bf1b856b6be24c3d729993c9c",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 98,
+      "source_line": 4826,
+      "line_bytes": 434,
+      "line_sha256": "fa06ac0396b81175fe2a75c42e225c63f68509ead7945b5addd2551f3d27328e",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 99,
+      "source_line": 4827,
+      "line_bytes": 435,
+      "line_sha256": "ef1a7530e38ec314ed7778b0d00677ff3245b23bf9ffe847a86b3d154fa5ee42",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 100,
+      "source_line": 4828,
+      "line_bytes": 447,
+      "line_sha256": "36d058591792714f2d3e4c22c1213946b399962347b2bde1fea7fae063eacf26",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 101,
+      "source_line": 4829,
+      "line_bytes": 435,
+      "line_sha256": "f5a672b3bd68ffea9522bcf19e9074667f36ef347a9e0683ff69245ce95bbf97",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 102,
+      "source_line": 4830,
+      "line_bytes": 436,
+      "line_sha256": "06ca9a5b5d9f8df89e507ae5baa006fc4811a6d77f44a210135b0fd6f8025340",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 103,
+      "source_line": 4831,
+      "line_bytes": 448,
+      "line_sha256": "13d4db3be5acacdd8f088bc6a5a86999309d864b0af986a1c4371796971fd49e",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 104,
+      "source_line": 4832,
+      "line_bytes": 434,
+      "line_sha256": "af8a7a6c9e8eb07108f22e92c7147dde1164e4e9d970798ad4f9af5c7693c6a9",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 105,
+      "source_line": 4833,
+      "line_bytes": 435,
+      "line_sha256": "52793d68f2c07ea05584dca71ca6be16e8400d42e5d94d74b8ce3416ee903b27",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 106,
+      "source_line": 4834,
+      "line_bytes": 447,
+      "line_sha256": "06d6c741ecba9805a2359642122a1a8932f5e068961d31c2a386e987ad798c13",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 107,
+      "source_line": 4835,
+      "line_bytes": 435,
+      "line_sha256": "401fcf05311a143ef1ca6f4c722ed96770a6ddee2b8b64bae04f015cf1fab761",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 108,
+      "source_line": 4836,
+      "line_bytes": 436,
+      "line_sha256": "7dcc3259422eba53e146d2ee6abf1ddf5f6d4e9d2cc5075e7ffe5814cfe1ac9c",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 109,
+      "source_line": 4837,
+      "line_bytes": 448,
+      "line_sha256": "63166324d9c8a3b3b11742f8c8028ff73efb25af77331a03700a81e1b0e6c165",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 110,
+      "source_line": 6389,
+      "line_bytes": 437,
+      "line_sha256": "3a92e3db120ee636128b771dfcf33033a9788552a6dc070c494fdd6d2591b301",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 111,
+      "source_line": 6390,
+      "line_bytes": 438,
+      "line_sha256": "4193224edc9a7ec27f8f40cb43e595d7cf2c1136213b3ccb3a9df0616ada9a15",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 112,
+      "source_line": 6391,
+      "line_bytes": 448,
+      "line_sha256": "53aa9c05ff520a3eec8ae1cc2fd8543de499734619334bd2c12cc56f92bf8b33",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 113,
+      "source_line": 6392,
+      "line_bytes": 438,
+      "line_sha256": "337ef6dfa6c20a30378e5d197a46270c651003f91c3711685ed4f77573fb6471",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 114,
+      "source_line": 6393,
+      "line_bytes": 439,
+      "line_sha256": "07e6f62f86b12a835bb286b02b5f82b9f09eefa07db6fa7c93f1d6ccf96721fe",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 115,
+      "source_line": 6394,
+      "line_bytes": 449,
+      "line_sha256": "93296d2c730b1eb44e0c65c489a82834f3ef0b4dfef11c7c3dba2ab62b93f32c",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 116,
+      "source_line": 6395,
+      "line_bytes": 439,
+      "line_sha256": "b3650b23247c041c201c3f0adc7de1ab0e55da726fbcd61504114a94d909e6ee",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 117,
+      "source_line": 6396,
+      "line_bytes": 438,
+      "line_sha256": "86ef41059fc1e1da3296425f8f21c79b7186a2761e5e947b9be060148ff7bd5e",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 118,
+      "source_line": 6397,
+      "line_bytes": 448,
+      "line_sha256": "6954627bb764326d85a9f65482a6540551002d1fb819549513dcc812322aceaf",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 119,
+      "source_line": 6398,
+      "line_bytes": 440,
+      "line_sha256": "048e63679521b445f4baa019bb2ffb53cac57e7e202a84538b4f25032747c753",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 120,
+      "source_line": 6399,
+      "line_bytes": 439,
+      "line_sha256": "e5a68bdf7ef58bf07fb0de2b49a3c3ea627ba0eb498755782abac48aaf4f0af0",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 121,
+      "source_line": 6400,
+      "line_bytes": 449,
+      "line_sha256": "6bd3e25db020afff6d99c78dedc08ff408fa8c23d38976e1a4749af12f2921e7",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 122,
+      "source_line": 7952,
+      "line_bytes": 436,
+      "line_sha256": "93cb148056cd290a6f2020b0f02beb36a2c754eb8feeba4046a3734559e95d12",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 123,
+      "source_line": 7953,
+      "line_bytes": 437,
+      "line_sha256": "a4f66b07929c28233f3341bf47225da11e288d1214095f43caa8d40faa414286",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 124,
+      "source_line": 7954,
+      "line_bytes": 449,
+      "line_sha256": "9e1873414c93e09113213b04d273230e89be3daf61345200aaaae05b0e3b4efe",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 125,
+      "source_line": 7955,
+      "line_bytes": 435,
+      "line_sha256": "8cb23e18e5f023cbca7963ae6fb00e8fdc8b2f45c3b5ffd141beae2b9821ab31",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 126,
+      "source_line": 7956,
+      "line_bytes": 436,
+      "line_sha256": "1bc7bfd57a5cfb7c7502e9f70b5479a242b249c76f395fce53ea15376ad2ba14",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 127,
+      "source_line": 7957,
+      "line_bytes": 448,
+      "line_sha256": "527a34f7fb8219a1618f9b3be57f6b95ae9a6029a6cf4fe9be47a6ae22dbad4c",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 128,
+      "source_line": 7958,
+      "line_bytes": 438,
+      "line_sha256": "19b3b30df0e25e661354f4d34ec0d177bbbac0b535b8241f40b59c32ed3a0350",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 129,
+      "source_line": 7959,
+      "line_bytes": 437,
+      "line_sha256": "4450a025bd33c166f99251f2ebb2827a2586ee46e152370c15a9fb6a65b55fe1",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 130,
+      "source_line": 7960,
+      "line_bytes": 449,
+      "line_sha256": "f012e063093412902d30cd0f3c7b8294b8aa5904858974379f08844fd504231e",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 131,
+      "source_line": 7961,
+      "line_bytes": 437,
+      "line_sha256": "8954b18d2dd92f30efe0d5a9673f47b021a806704061816f41415b14d5a4c64f",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 132,
+      "source_line": 7962,
+      "line_bytes": 436,
+      "line_sha256": "5dd0beddba7ddc4d0f9304fb2bd20c53cb6fc447601881b332fb76dbf047ac02",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 133,
+      "source_line": 7963,
+      "line_bytes": 448,
+      "line_sha256": "021c45955c2f2113bfa93a6fe93e98eaaf979f5989aad948c1890206ddb75b9b",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 134,
+      "source_line": 9515,
+      "line_bytes": 441,
+      "line_sha256": "5449985a8049a9a1ec112e4ec746687208a62ca647133d562d6d95597cc3f3c0",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 135,
+      "source_line": 9516,
+      "line_bytes": 440,
+      "line_sha256": "9ab910421bc56f5fc970d506e31fe8985f67d586623b3512e67f4a4c4679cb16",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 136,
+      "source_line": 9517,
+      "line_bytes": 450,
+      "line_sha256": "f88055d763e68da6bf4e9eee254eebf57f84eaa6963e01bc95cdfe911c63c250",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 137,
+      "source_line": 9518,
+      "line_bytes": 440,
+      "line_sha256": "d2af4fd13ca07079616aa364d23edf549c1791b31f2b3babf4e62cd661fab3e6",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 138,
+      "source_line": 9519,
+      "line_bytes": 439,
+      "line_sha256": "2ee1594ee1fc7d129bb303bead6a78ccf2f3bee3135ae3a24bc16c4e23f836ce",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 139,
+      "source_line": 9520,
+      "line_bytes": 449,
+      "line_sha256": "d4e4a93965336413fa7e40497e0e45801d4a623b9ec5391bae224cc183c7c99b",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 140,
+      "source_line": 9521,
+      "line_bytes": 439,
+      "line_sha256": "959e1f94e4d6241a26e6e38d61435791e56c6c5a5ca8634b21a98d3faff70af8",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 141,
+      "source_line": 9522,
+      "line_bytes": 440,
+      "line_sha256": "c25de30406cfc3b61c5b00e60219319c8382a7c5b045e2d7bb86f88743ccb44a",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 142,
+      "source_line": 9523,
+      "line_bytes": 450,
+      "line_sha256": "2fc18bb6ce3f3bf51b7cb34c5c1c21c1aeed171661be7a6be1d4f4a5413dde98",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    },
+    {
+      "excerpt_line": 143,
+      "source_line": 9524,
+      "line_bytes": 438,
+      "line_sha256": "69e797952cd86f6dcc521b7598733829b02e8bba3e18fb036d9d5fe68a6f5b0c",
+      "metric": "FileOps.Queue.Selector.BaselineBatchUs"
+    },
+    {
+      "excerpt_line": 144,
+      "source_line": 9525,
+      "line_bytes": 439,
+      "line_sha256": "5a0c5febf077c00d178647743fa4f699134655520e9588c02d94d0dfe14fb7f2",
+      "metric": "FileOps.Queue.Selector.CandidateBatchUs"
+    },
+    {
+      "excerpt_line": 145,
+      "source_line": 9526,
+      "line_bytes": 449,
+      "line_sha256": "659aa8103efc8586bcccd87c814f37496af0751cbeae50d87eaf48e448d6dd81",
+      "metric": "FileOps.Queue.Selector.CollectionCapacityBytes"
+    }
+  ]
+}

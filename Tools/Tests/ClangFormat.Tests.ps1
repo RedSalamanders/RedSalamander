@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $rsFormatterRepository = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $rsFormatterRepository 'Tools/Modules/Testing/TestSandbox.psm1') -Force
 Import-Module (Join-Path $rsFormatterRepository 'Tools/Modules/Build/ClangFormat.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -ErrorAction Stop
 
 InModuleScope ClangFormat {
     function New-FormatterFixture {
@@ -192,6 +193,119 @@ InModuleScope ClangFormat {
                 Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
                 Assert-MockCalled Assert-RSClangFormatVersion -Times 0 -Exactly -Scope It
             } finally { $lease.Dispose() }
+        }
+    }
+
+    Describe 'Engine-free native formatter capture' {
+        It 'rejects unsafe capture flags in the actual transport before launching a child' {
+            $body = (Get-Command Invoke-RSClangFormatCapture).ScriptBlock.ToString()
+            $validate = {
+                param($text)
+                $start = $text.IndexOf('$process.Start()', [StringComparison]::Ordinal)
+                if ($start -lt 0) { throw 'Missing formatter child start.' }
+                foreach ($required in @('$start.UseShellExecute = $false', '$start.CreateNoWindow = $true',
+                        '$start.RedirectStandardOutput = $true', '$start.RedirectStandardError = $true')) {
+                    $position = $text.IndexOf($required, [StringComparison]::Ordinal)
+                    if ($position -lt 0 -or $position -ge $start) { throw 'Unsafe formatter child configuration.' }
+                }
+            }
+            & $validate $body
+            foreach ($mutation in @(
+                    @('$start.CreateNoWindow = $true', '$start.CreateNoWindow = $false'),
+                    @('$start.UseShellExecute = $false', '$start.UseShellExecute = $true'),
+                    @('$start.RedirectStandardError = $true', '$start.RedirectStandardError = $false'))) {
+                { & $validate ($body.Replace($mutation[0], $mutation[1])) } | Should Throw 'Unsafe formatter child configuration'
+            }
+        }
+
+        It 'retains the pinned version failure for a mismatch or nonzero native exit' {
+            $original = (Get-Command Invoke-RSClangFormatCapture).ScriptBlock
+            try {
+                Mock Invoke-RSClangFormatCapture { [pscustomobject]@{ExitCode=0;StdOut=@('clang-format version 21.0.0');ErrorText=''} }
+                { Assert-RSClangFormatVersion -Path 'owned-formatter.exe' -Version '22.1.3' } | Should Throw 'does not report clang-format 22.1.3'
+                Mock Invoke-RSClangFormatCapture { [pscustomobject]@{ExitCode=17;StdOut=@('clang-format version 22.1.3');ErrorText=''} }
+                { Assert-RSClangFormatVersion -Path 'owned-formatter.exe' -Version '22.1.3' } | Should Throw 'does not report clang-format 22.1.3'
+                Assert-MockCalled Invoke-RSClangFormatCapture -Times 2 -Exactly -Scope It -ParameterFilter { $Arguments.Count -eq 1 -and $Arguments[0] -ceq '--version' }
+            } finally {
+                # Pester3 can retain a module-local mock after its It finishes.
+                Set-Item -LiteralPath Function:script:Invoke-RSClangFormatCapture -Value $original
+            }
+        }
+
+        It 'captures native formatter metadata and admitted payload without a console or lost stderr' {
+            $fixture = New-RSTestFormatterFixture
+            $names = @('RS_FORMATTER_VERSION','RS_FORMATTER_EXIT','RS_FORMATTER_STDERR_COUNT','RS_FORMATTER_STDOUT','RS_FORMATTER_LOG')
+            $saved = @{}
+            foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+            $savedConsole = [Console]::OutputEncoding
+            $savedInput = $global:OutputEncoding
+            $cwd = (Get-Location).Path
+            try {
+                $env:RS_FORMATTER_VERSION = '22.1.3'; $env:RS_FORMATTER_EXIT = '0'
+                $env:RS_FORMATTER_STDERR_COUNT = '0'; $env:RS_FORMATTER_STDOUT = $null
+                $env:RS_FORMATTER_LOG = $fixture.LogPath
+                $version = Invoke-RSClangFormatCapture -FilePath $fixture.Executable -Arguments @('--version') -WorkingDirectory $fixture.Root
+                $version.ExitCode | Should Be 0
+                ($version.StdOut -join ',') | Should Be 'clang-format version 22.1.3'
+                $version.ErrorText | Should Be ''
+                $global:LASTEXITCODE | Should Be 0
+                $source = Join-Path $fixture.Root 'owned source with spaces.cpp'
+                [IO.File]::WriteAllText($source, 'owned fixture; never formatted')
+                $sourceHash = (Get-FileHash -LiteralPath $source).Hash
+                $payload = Invoke-RSClangFormatCapture -FilePath $fixture.Executable -Arguments @('-i','--style=file',$source) -WorkingDirectory $fixture.Root
+                $payload.ExitCode | Should Be 0
+                (Get-FileHash -LiteralPath $source).Hash | Should Be $sourceHash
+                $arguments = @(Get-Content -LiteralPath $fixture.LogPath | ForEach-Object { ,($_ | ConvertFrom-Json -NoEnumerate) })
+                $arguments.Count | Should Be 1
+                ($arguments[0] -join '|') | Should Be ('-i|--style=file|' + $source)
+                $env:RS_FORMATTER_STDERR_COUNT = '131072'; $env:RS_FORMATTER_STDOUT = 'separate-stdout'
+                $env:RS_FORMATTER_EXIT = '19'
+                $failed = Invoke-RSClangFormatCapture -FilePath $fixture.Executable -Arguments @('--version') -WorkingDirectory $fixture.Root
+                $failed.ExitCode | Should Be 19
+                $global:LASTEXITCODE | Should Be 19
+                ($failed.ErrorText.Length -ge 131072) | Should Be $true
+                ($failed.StdOut -contains 'separate-stdout') | Should Be $true
+                $audit = @(Get-Content -LiteralPath $fixture.AuditPath | ForEach-Object { $_ | ConvertFrom-Json })
+                $audit.Count | Should Be 3
+                foreach ($row in $audit) {
+                    $row.consolePresent | Should Be $false
+                    $row.consoleVisible | Should Be $false
+                    $row.workingDirectory | Should Be $fixture.Root
+                }
+                [object]::ReferenceEquals([Console]::OutputEncoding, $savedConsole) | Should Be $true
+                [object]::ReferenceEquals($global:OutputEncoding, $savedInput) | Should Be $true
+                (Get-Location).Path | Should Be $cwd
+            } finally {
+                foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
+            }
+        }
+
+        It 'runs the same transport from its bootstrap module without a restored engine' {
+            $fixture = New-RSTestFormatterFixture
+            $copyRoot = Join-Path $fixture.Root 'engine-free'
+            $build = Join-Path $copyRoot 'Tools/Modules/Build'
+            [void][IO.Directory]::CreateDirectory($build)
+            $owner = Split-Path (Get-Module ClangFormat).Path
+            foreach ($name in @('ClangFormat.psm1','ArtifactOperationLock.psm1')) {
+                [IO.File]::Copy((Join-Path $owner $name), (Join-Path $build $name))
+            }
+            (Test-Path (Join-Path $copyRoot '.ci-engine')) | Should Be $false
+            $script = Join-Path $fixture.Root 'engine-free-probe.ps1'
+            @'
+param($ModulePath,$Executable,$WorkingDirectory)
+$ErrorActionPreference='Stop'
+Import-Module $ModulePath -ErrorAction Stop
+$env:RS_FORMATTER_VERSION='22.1.3';$env:RS_FORMATTER_EXIT='0'
+$env:RS_FORMATTER_STDERR_COUNT='0';$env:RS_FORMATTER_STDOUT=$null
+$result=Invoke-RSClangFormatCapture -FilePath $Executable -Arguments @('--version') -WorkingDirectory $WorkingDirectory
+if($result.ExitCode -ne 0 -or ($result.StdOut -join ',') -cne 'clang-format version 22.1.3'){throw 'Engine-free formatter capture failed.'}
+[pscustomobject]@{exit=$result.ExitCode;enginePresent=(Test-Path (Join-Path (Split-Path (Split-Path (Split-Path (Split-Path $ModulePath)))) '.ci-engine'))}|ConvertTo-Json -Compress
+'@ | Set-Content -LiteralPath $script -Encoding utf8NoBOM
+            $result = Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @('-NoLogo','-NoProfile','-NonInteractive','-File',$script,(Join-Path $build 'ClangFormat.psm1'),$fixture.Executable,$fixture.Root) -WorkingDirectory $fixture.Root
+            $global:LASTEXITCODE | Should Be 0
+            $proof = ($result -join [Environment]::NewLine) | ConvertFrom-Json
+            $proof.exit | Should Be 0
+            $proof.enginePresent | Should Be $false
         }
     }
 }

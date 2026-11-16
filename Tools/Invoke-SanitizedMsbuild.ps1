@@ -9,8 +9,9 @@
 
     This wrapper merges Path segments across Machine/User/Process, removes the duplicate
     PATH alias, resolves MSBuild via vswhere when not provided, and then forwards the
-    remaining arguments to MSBuild unchanged. Artifact-mutating invocations must include
-    explicit /p:Configuration and /p:Platform properties so coordination is scoped to
+    remaining arguments to MSBuild unchanged.
+    Captures stdout/stderr without creating a secondary console window/default-terminal UX for background callers.
+    Explicit /p:Configuration and /p:Platform properties are required and keep coordination scoped to
     the exact repository output profile.
 .PARAMETER MSBuildArguments
     Supplies the project/solution, targets, properties, and other arguments forwarded
@@ -41,13 +42,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$sanitizedEnvironmentModule = Join-Path $PSScriptRoot 'Modules\Build\SanitizedEnvironment.psm1'
+$processStreamingModule = Join-Path $PSScriptRoot 'Modules\Build\ProcessStreaming.psm1'
 $artifactOperationLockModule = Join-Path $PSScriptRoot 'Modules\Build\ArtifactOperationLock.psm1'
-if (-not (Test-Path $sanitizedEnvironmentModule)) {
-    throw "Sanitized environment helper not found: $sanitizedEnvironmentModule"
+if (-not (Test-Path $processStreamingModule)) {
+    throw "Process streaming helper not found: $processStreamingModule"
 }
 
-Import-Module $sanitizedEnvironmentModule -Force -ErrorAction Stop
+Import-Module $processStreamingModule -ErrorAction Stop
 if (-not (Test-Path $artifactOperationLockModule)) {
     throw "Artifact operation lock helper not found: $artifactOperationLockModule"
 }
@@ -171,9 +172,10 @@ try {
         -Scope $sharedDependencyScope
 
     $resolvedMsbuildPath = Resolve-MSBuildPath
-    $exitCode = Invoke-RSProcess `
+    $exitCode = Invoke-RSStreamingProcess `
         -FilePath $resolvedMsbuildPath `
         -Arguments $MSBuildArguments `
+        -DelegateArtifactOperation `
         -WorkingDirectory $repoRoot
     exit $exitCode
 }

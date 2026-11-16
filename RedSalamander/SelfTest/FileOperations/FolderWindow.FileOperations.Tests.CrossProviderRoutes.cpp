@@ -707,16 +707,19 @@ private:
                               ReadFileTextFsIo(state.fsLocal.query<IFileSystemIO>(), changedSource, expectedTempBytes) && tempBytes.size() == 4'097u &&
                               tempBytes == expectedTempBytes;
     std::error_code changedSourceError;
-    const bool changedSourceExists = std::filesystem::exists(changedSource, changedSourceError);
-    if (! changedSummary.has_value() || changedSummary->skippedItemCount != 1u || changedSummary->errorCount == 0u || ! changedIdentity || changedSourceError ||
-        ! changedSourceExists || ! ReadFileTextFsIo(changedIo, changedDestination, changedBytes) || changedBytes != "replaced occupant" || ! exactChildren ||
-        ! tempContents || ! recoveryMetricsValid)
+    const bool changedSourceExists       = std::filesystem::exists(changedSource, changedSourceError);
+    const bool changedDestinationRead    = ReadFileTextFsIo(changedIo, changedDestination, changedBytes);
+    const bool changedDestinationMatches = changedDestinationRead && changedBytes == "replaced occupant";
+    if (! changedSummary.has_value() || changedSummary->skippedItemCount != 1u || changedSummary->errorCount != 0u || ! changedIdentity || changedSourceError ||
+        ! changedSourceExists || ! changedDestinationMatches || ! exactChildren || ! tempContents || ! recoveryMetricsValid)
     {
-        AppendLog(std::format(L"XP-01 changed occupant: summary={} skipped={} errors={} changedIdentity={} bytes={} children={}",
+        AppendLog(std::format(L"XP-01 changed occupant: summary={} skipped={} errors={} changedIdentity={} read={} matches={} bytes={} children={}",
                               changedSummary.has_value(),
                               changedSummary.has_value() ? changedSummary->skippedItemCount : 0u,
                               changedSummary.has_value() ? changedSummary->errorCount : 0u,
                               changedIdentity,
+                              changedDestinationRead,
+                              changedDestinationMatches,
                               changedBytes.size(),
                               changedChildren.size()));
         return reject(L"changed PUID must be re-prompted and the newer occupant preserved after Skip");

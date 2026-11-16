@@ -1,0 +1,25 @@
+[78254468] Popup idle cadence: synthetic-running: elapsedMs=1209 timerTicks=11 renders=11 intervalMs=100
+[78256328] Popup idle cadence: synthetic-paused: elapsedMs=1211 timerTicks=1 renders=1 intervalMs=1000
+[78258328] Popup idle cadence: synthetic-paused-unknown: elapsedMs=1208 timerTicks=1 renders=1 intervalMs=1000
+[78260156] Popup idle cadence: synthetic-prompting: elapsedMs=1209 timerTicks=1 renders=1 intervalMs=1000
+[78262390] Popup idle cadence: synthetic-queued: elapsedMs=1209 timerTicks=1 renders=1 intervalMs=1000
+[78264234] Popup idle cadence: synthetic-completed-idle: elapsedMs=1209 timerTicks=0 renders=0 intervalMs=0
+[78267109] Popup idle cadence: synthetic-retained-running-paused observer: rows=50 lost=0 (opt-in fixed storage; graph/host queries add diagnostic overhead; output follows measurement)
+[78267109] Popup idle cadence: observer events: 0=before graph sync, 1=after graph sync, 2=paint begin, 3=paint end, 4=message, 5=host handled; sampleTransition excludes the separate marker transition; displayed/target marker values remain observable
+[78267765] Popup idle cadence: finished-after-idle: barPresent=true barValue=100.0
+[78267781] Popup idle cadence: finished Verify On cards: agree
+[78267812] Popup idle cadence: late tick: stale=true frameRequested=true unsettledAfter=false
+[78269656] Popup idle cadence: synthetic-paused-path-detail: settled=true timerTicks=1 renders=1 intervalMs=1000 visibleMotion=false
+[78269687] Popup idle cadence: issues snapshot: completedIssues=512 history=512 copiedAgain=false
+[78272531] Popup idle cadence: engine-prompting: elapsedMs=1209 timerTicks=1 renders=1 intervalMs=1000 ownerTicks=1 heartbeatMs=1000 presentationBuilds=0 projectableScans=0 uiCpuUs=15625
+[78272531] Popup idle cadence: engine-prompting snapshot callers (Popup.cpp line:calls): [9638:1] unattributed=0
+[78272937] Popup idle cadence: queued: work=1 intervalReached=true canceledWork=2
+[78275593] Popup idle cadence: answer restored the 100 ms cadence: true in 30 ms (intervalMs=100, aligned=true, popupTicks=0, renders=0, ownerRefreshes=1)
+[78278015] Popup idle cadence: engine-running: elapsedMs=1209 timerTicks=11 renders=61 intervalMs=100 ownerTicks=1 heartbeatMs=1000 presentationBuilds=0 projectableScans=0 uiCpuUs=156250
+[78278015] Popup idle cadence: engine-running snapshot callers (Popup.cpp line:calls): [9638:61] unattributed=0
+[78281625] Popup idle cadence: engine-paused: elapsedMs=2203 timerTicks=2 renders=2 intervalMs=1000 ownerTicks=2 heartbeatMs=1000 presentationBuilds=0 projectableScans=0 uiCpuUs=15625
+[78281640] Popup idle cadence: engine-paused snapshot callers (Popup.cpp line:calls): [9638:2] unattributed=0
+[78281640] Popup idle cadence: resume re-armed the 100 ms cadence in 0 ms
+[78281640] Popup idle cadence: engine-paused-through-resume observer: rows=97 lost=0 (opt-in fixed storage; graph/host queries add diagnostic overhead; output follows measurement)
+[78281640] Popup idle cadence: observer events: 0=before graph sync, 1=after graph sync, 2=paint begin, 3=paint end, 4=message, 5=host handled; sampleTransition excludes the separate marker transition; displayed/target marker values remain observable
+[78282281] Popup idle cadence: fallback wake: parked=true parkedAfterMs=16 heartbeatBefore=1000 ownerTicks=3 heartbeatAfter=100

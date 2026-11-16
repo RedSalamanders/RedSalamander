@@ -1,13 +1,14 @@
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot '../Build/ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 
 function Initialize-RSHostedDesktopNative {
-    if ('RedSalamander.Testing.HostedDesktopNative' -as [type]) { return }
-    Add-Type -TypeDefinition @'
+    $nativeSource = @'
 using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using Microsoft.Win32.SafeHandles;
 namespace RedSalamander.Testing {
     // DEVMODEW is a fixed 220-byte public Win32 structure. Preserve the complete
     // enumerated mode, including fields the test fixture does not change.
@@ -36,6 +37,14 @@ namespace RedSalamander.Testing {
     // A launcher-owned foreground window on the rendered Default desktop. WGC
     // on the hosted images cannot capture alternate Win32 desktops. All window
     // operations and its live message queue remain on one dedicated thread.
+    // Diagnostic data only: no path/title/command line and no process-control authority.
+    public sealed class HostedProcessFacts {
+        public uint HandleProcess, ParentProcess, Session;
+        public long CreationTime;
+        public int OpenError, IdentityError, CreationError, ImageError, SessionError, JobError, ParentError, ParentStatus;
+        public bool Opened, CreationAvailable, ImageAvailable, DigestAvailable, SessionAvailable, AnyJobAvailable, AnyJob, ParentAvailable;
+        public string ImageKind = "other", ImageDigest = "";
+    }
     internal sealed class HostedForegroundBoundary : IDisposable {
         private sealed class SafeWindowHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid {
             public SafeWindowHandle() : base(true) {}
@@ -97,6 +106,7 @@ namespace RedSalamander.Testing {
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
         [DllImport("user32.dll", ExactSpelling = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
         [DllImport("user32.dll", ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr window);
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
@@ -121,7 +131,8 @@ namespace RedSalamander.Testing {
         private readonly BoundarySubclassProcedure subclassProcedure;
         private static readonly UIntPtr BoundarySubclassId = new UIntPtr(0x52534244u);
         private const int BoundaryHotkeyId = 0x5253;
-        private IntPtr activationWindow, activationOriginal, activationOriginalFocus;
+        private IntPtr activationWindow, activationOriginal;
+        private OriginalForegroundFocus activationOriginalFocus;
         private uint activationOriginalThread, activationOriginalProcess;
         private bool hotkeyArmed, hotkeyHandled, hotkeyAcquired;
         private Exception hotkeyCallbackFailure;
@@ -160,22 +171,233 @@ namespace RedSalamander.Testing {
             canceled = true;
             stop.Set();
         }
-        private static void VerifyOriginalForeground(IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+        // Immutable observation, not ownership of either HWND and not write authority.
+        internal sealed class OriginalForegroundFocus {
+            internal readonly IntPtr Original, Focus, FocusRoot;
+            internal readonly uint OriginalThread, OriginalProcess, FocusThread, FocusProcess;
+            internal OriginalForegroundFocus(IntPtr original, uint thread, uint process, IntPtr focus, uint focusThread, uint focusProcess, IntPtr root) {
+                Original = original; OriginalThread = thread; OriginalProcess = process;
+                Focus = focus; FocusThread = focusThread; FocusProcess = focusProcess; FocusRoot = root;
+            }
+        }
+        private static Tuple<uint, uint, IntPtr, bool> ReadFocusWindowIdentity(IntPtr window) {
+            bool valid = window != IntPtr.Zero && IsWindow(window);
+            uint process = 0;
+            uint thread = window == IntPtr.Zero ? 0 : GetWindowThreadProcessId(window, out process);
+            return Tuple.Create(thread, process, window == IntPtr.Zero ? IntPtr.Zero : GetAncestor(window, 2), valid);
+        }
+        private static bool ValidFocusWindow(Tuple<uint, uint, IntPtr, bool> value, IntPtr original) {
+            return value.Item4 && value.Item1 != 0 && value.Item2 != 0 && value.Item3 == original;
+        }
+        private static bool SameFocusWindow(Tuple<uint, uint, IntPtr, bool> a, Tuple<uint, uint, IntPtr, bool> b) {
+            return a.Item1 == b.Item1 && a.Item2 == b.Item2 && a.Item3 == b.Item3 && a.Item4 == b.Item4;
+        }
+        private static bool MatchesOriginal(Tuple<IntPtr, uint, uint> value, IntPtr original, uint thread, uint process) {
+            return original != IntPtr.Zero && thread != 0 && process != 0 &&
+                value.Item1 == original && value.Item2 == thread && value.Item3 == process;
+        }
+        // Original-foreground semantics: the HWND-derived thread can be a remapped
+        // console identity. The documented foreground queue is queried directly.
+        internal static OriginalForegroundFocus CaptureOriginalForegroundFocus(IntPtr original, uint thread, uint process,
+            Func<Tuple<IntPtr, uint, uint>> foreground, Func<uint, Tuple<IntPtr, IntPtr>> query,
+            Func<IntPtr, Tuple<uint, uint, IntPtr, bool>> windowIdentity) {
+            var before = foreground();
+            var originalBefore = windowIdentity(original);
+            if (!MatchesOriginal(before, original, thread, process) || !ValidFocusWindow(originalBefore, original) ||
+                originalBefore.Item1 != thread || originalBefore.Item2 != process)
+                throw new InvalidOperationException("The original foreground identity is unavailable before focus sampling.");
+            var gui = query(0);
+            // Invalid/transitional active values cannot establish this exact boundary.
+            // This is a conservative witness, not a claim that the API always returns it.
+            if (gui.Item1 != original)
+                throw new InvalidOperationException("The foreground GUI active window does not identify the saved original.");
+            var focusBefore = gui.Item2 == IntPtr.Zero ? null : windowIdentity(gui.Item2);
+            var focusAfter = gui.Item2 == IntPtr.Zero ? null : windowIdentity(gui.Item2);
+            var originalAfter = windowIdentity(original);
+            var after = foreground();
+            if (!MatchesOriginal(after, original, thread, process) || !SameFocusWindow(originalBefore, originalAfter))
+                throw new InvalidOperationException("The original foreground identity changed during focus sampling.");
+            if (gui.Item2 != IntPtr.Zero && (!ValidFocusWindow(focusBefore, original) || !SameFocusWindow(focusBefore, focusAfter)))
+                throw new InvalidOperationException("The foreground focus identity or parent root is unavailable or changed.");
+            return new OriginalForegroundFocus(original, thread, process, gui.Item2,
+                focusBefore == null ? 0 : focusBefore.Item1, focusBefore == null ? 0 : focusBefore.Item2,
+                focusBefore == null ? IntPtr.Zero : focusBefore.Item3);
+        }
+        internal static bool SameOriginalForegroundFocus(OriginalForegroundFocus saved, OriginalForegroundFocus observed) {
+            return saved != null && observed != null && saved.Original == observed.Original &&
+                saved.OriginalThread == observed.OriginalThread && saved.OriginalProcess == observed.OriginalProcess &&
+                saved.Focus == observed.Focus && saved.FocusThread == observed.FocusThread &&
+                saved.FocusProcess == observed.FocusProcess && saved.FocusRoot == observed.FocusRoot;
+        }
+        // Conservative hosted admission follows the native ViewerPE distinction:
+        // a related cross-owner focus can be observed already restored, but cannot
+        // grant a restoration write or permission to acquire our boundary first.
+        internal static bool MayWriteOriginalForeground(OriginalForegroundFocus saved) {
+            return saved != null && (saved.Original == IntPtr.Zero || saved.Focus == IntPtr.Zero ||
+                (saved.FocusThread == saved.OriginalThread && saved.FocusProcess == saved.OriginalProcess));
+        }
+        private static OriginalForegroundFocus ReadOriginalForegroundFocus(uint thread, IntPtr original, uint process,
+            string stage, string originalAtCapture) {
+            return CaptureOriginalForegroundFocus(original, thread, process, ReadForegroundIdentityForDiagnostics,
+                queryThread => {
+                    if (queryThread != 0) throw new InvalidOperationException("Original focus must use the foreground queue.");
+                    var gui = ReadFocus(thread, original, process, stage, originalAtCapture);
+                    return Tuple.Create(gui.Active, gui.Focus);
+                }, ReadFocusWindowIdentity);
+        }
+        private static void ValidateSavedOriginalFocus(OriginalForegroundFocus saved, bool afterWait) {
+            if ((!afterWait && HostedDesktopNative.InputDesktopName() != "Default") ||
+                (afterWait && !IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0))))
+                throw new InvalidOperationException("The hosted desktop changed before original foreground restoration.");
+            if (!IsSavedOriginalFocusLive(saved, ReadFocusWindowIdentity))
+                throw new InvalidOperationException("The saved hosted original or focus window changed identity or root.");
+        }
+        internal static bool IsSavedOriginalFocusLive(OriginalForegroundFocus saved,
+            Func<IntPtr, Tuple<uint, uint, IntPtr, bool>> identity) {
+            if (saved.Original == IntPtr.Zero) return true;
+            var original = identity(saved.Original);
+            if (!ValidFocusWindow(original, saved.Original) || original.Item1 != saved.OriginalThread || original.Item2 != saved.OriginalProcess)
+                return false;
+            if (saved.Focus != IntPtr.Zero) {
+                var focus = identity(saved.Focus);
+                if (!ValidFocusWindow(focus, saved.Original) || focus.Item1 != saved.FocusThread || focus.Item2 != saved.FocusProcess || focus.Item3 != saved.FocusRoot)
+                    return false;
+            }
+            return true;
+        }
+        private static void VerifyOriginalForeground(IntPtr original, uint originalThread, uint originalProcess, OriginalForegroundFocus originalFocus) {
             if (HostedDesktopNative.InputDesktopName() != "Default" || GetForegroundWindow() != original)
                 throw new InvalidOperationException("The hosted desktop or foreground changed before boundary acquisition.");
             if (original != IntPtr.Zero) {
                 uint process;
                 if (!IsWindow(original) || GetWindowThreadProcessId(original, out process) != originalThread || process != originalProcess ||
-                    ReadFocus(originalThread).Focus != originalFocus || GetForegroundWindow() != original)
+                    !SameOriginalForegroundFocus(originalFocus, ReadOriginalForegroundFocus(originalThread, original, originalProcess, "verify-original-focus", null)) || GetForegroundWindow() != original)
                     throw new InvalidOperationException("The hosted foreground identity or focus changed before boundary acquisition.");
             }
         }
-        private static GuiThreadInfo ReadFocus(uint thread) {
-            var info = new GuiThreadInfo { Size = (uint)Marshal.SizeOf<GuiThreadInfo>() };
+        private static GuiThreadInfo ReadFocus(uint thread, IntPtr original, uint originalProcess, string stage, string originalAtCapture) {
+            uint size = (uint)Marshal.SizeOf<GuiThreadInfo>();
+            var info = new GuiThreadInfo { Size = size };
             if (thread == 0) throw new InvalidOperationException("The original hosted foreground thread is unavailable.");
-            if (!GetGUIThreadInfo(thread, ref info))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot verify the original hosted foreground focus.");
+            if (!GetGUIThreadInfo(0, ref info)) {
+                int error = Marshal.GetLastWin32Error();
+                throw CaptureFocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture);
+            }
             return info;
+        }
+        // DesktopProbe only: unlike ReadFocus, this cold sampler reports unavailable
+        // GUI state without authorizing acquisition, restoration or qualification.
+        private static Tuple<IntPtr, uint, uint> ReadForegroundIdentityForDiagnostics() {
+            IntPtr window = GetForegroundWindow();
+            uint process = 0;
+            uint thread = window == IntPtr.Zero ? 0 : GetWindowThreadProcessId(window, out process);
+            return Tuple.Create(window, thread, process);
+        }
+        private static object ReadForegroundGuiForDiagnostics(uint thread) {
+            uint size = (uint)Marshal.SizeOf<GuiThreadInfo>();
+            var info = new GuiThreadInfo { Size = size };
+            bool success = GetGUIThreadInfo(thread, ref info);
+            int error = success ? 0 : Marshal.GetLastWin32Error();
+            // The output structure is unspecified on failure: never inspect it there.
+            object outputs = success ? new System.Collections.Generic.Dictionary<string, object> {
+                { "active", HexWindow(info.Active) }, { "focus", HexWindow(info.Focus) },
+                { "capture", HexWindow(info.Capture) }, { "menuOwner", HexWindow(info.MenuOwner) },
+                { "moveSize", HexWindow(info.MoveSize) }, { "caret", HexWindow(info.Caret) }, { "flags", info.Flags }
+            } : null;
+            return new System.Collections.Generic.Dictionary<string, object> {
+                { "requestedThread", thread }, { "inputSize", size }, { "attempted", true },
+                { "success", success }, { "savedError", success ? null : (object)error }, { "outputs", outputs }
+            };
+        }
+        private static Tuple<string, int> ReadForegroundClassForDiagnostics(IntPtr window) {
+            if (window == IntPtr.Zero) return Tuple.Create<string, int>(null, 0);
+            var text = new StringBuilder(256);
+            int length = HostedDesktopNative.GetClassNameW(window, text, text.Capacity);
+            int error = length > 0 ? 0 : Marshal.GetLastWin32Error();
+            return Tuple.Create(length > 0 ? text.ToString() : null, error);
+        }
+        private static string HexWindow(IntPtr window) {
+            return "0x" + window.ToInt64().ToString("X", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        private static object ForegroundIdentityData(Tuple<IntPtr, uint, uint> identity) {
+            return new System.Collections.Generic.Dictionary<string, object> {
+                { "hwnd", HexWindow(identity.Item1) }, { "thread", identity.Item2 }, { "process", identity.Item3 }
+            };
+        }
+        private static bool SameForegroundIdentity(Tuple<IntPtr, uint, uint> left, Tuple<IntPtr, uint, uint> right) {
+            return left.Item1 == right.Item1 && left.Item2 == right.Item2 && left.Item3 == right.Item3;
+        }
+        // Managed readers exercise the actual fixed orchestration without native UI.
+        // No returned fact grants permission or substitutes for ReadFocus.
+        internal static object ObserveForegroundQueueForDiagnostics(
+            Func<Tuple<IntPtr, uint, uint>> readIdentity, Func<uint, object> readGui,
+            Func<IntPtr, Tuple<string, int>> readClass) {
+            DateTimeOffset started = DateTimeOffset.UtcNow;
+            var explicitBefore = readIdentity();
+            var originalClass = readClass(explicitBefore.Item1);
+            object explicitQuery = explicitBefore.Item2 == 0 ?
+                new System.Collections.Generic.Dictionary<string, object> {
+                    { "requestedThread", 0u }, { "inputSize", (uint)Marshal.SizeOf<GuiThreadInfo>() },
+                    { "attempted", false }, { "success", false }, { "savedError", null }, { "outputs", null }
+                } : readGui(explicitBefore.Item2);
+            var explicitAfter = readIdentity();
+            var zeroBefore = readIdentity();
+            object zeroQuery = readGui(0);
+            var zeroAfter = readIdentity();
+            bool stable = explicitBefore.Item1 != IntPtr.Zero && explicitBefore.Item2 != 0 && explicitBefore.Item3 != 0 &&
+                SameForegroundIdentity(explicitBefore, explicitAfter) && SameForegroundIdentity(explicitBefore, zeroBefore) &&
+                SameForegroundIdentity(explicitBefore, zeroAfter);
+            bool classKnown = originalClass.Item1 != null;
+            return new System.Collections.Generic.Dictionary<string, object> {
+                { "schema", "red-salamander.foreground-queue-observation.v1" },
+                { "startedUtc", started.ToString("o") }, { "completedUtc", DateTimeOffset.UtcNow.ToString("o") },
+                { "processArchitecture", RuntimeInformation.ProcessArchitecture.ToString() },
+                { "osArchitecture", RuntimeInformation.OSArchitecture.ToString() }, { "pointerBytes", IntPtr.Size },
+                { "explicitBefore", ForegroundIdentityData(explicitBefore) }, { "explicitQuery", explicitQuery },
+                { "explicitAfter", ForegroundIdentityData(explicitAfter) }, { "zeroBefore", ForegroundIdentityData(zeroBefore) },
+                { "zeroQuery", zeroQuery }, { "zeroAfter", ForegroundIdentityData(zeroAfter) },
+                { "originalClass", new System.Collections.Generic.Dictionary<string, object> {
+                    { "attempted", explicitBefore.Item1 != IntPtr.Zero }, { "known", classKnown },
+                    { "value", originalClass.Item1 }, { "savedError", classKnown || explicitBefore.Item1 == IntPtr.Zero ? null : (object)originalClass.Item2 },
+                    { "correlated", stable }, { "isConsoleWindowClass", stable && classKnown ?
+                        (object)String.Equals(originalClass.Item1, "ConsoleWindowClass", StringComparison.Ordinal) : null }
+                } },
+                { "fourSampleIdentityStable", stable }, { "interpretationPermitted", stable },
+                { "nonAtomic", true }, { "acceptanceAuthority", false }
+            };
+        }
+        internal static object CaptureForegroundQueueForDiagnostics() {
+            return ObserveForegroundQueueForDiagnostics(ReadForegroundIdentityForDiagnostics,
+                ReadForegroundGuiForDiagnostics, ReadForegroundClassForDiagnostics);
+        }
+        // Failure-only observations cannot authorize a retry or replace the saved query error.
+        internal static Win32Exception FocusReadFailure(int error, uint thread, uint size, IntPtr original, uint originalProcess,
+            string stage, string originalAtCapture, Func<IntPtr, string> observe) {
+            string observation = CaptureIdentityForDiagnostics(original, observe);
+            return new Win32Exception(error, String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "Cannot verify the original hosted foreground focus. stage={0}; queryThread=0; expectedOriginalThread={1}; requestedPid={2}; " +
+                "requestedHwnd=0x{3:X}; cbSize={4}; pointerBytes={5}; failureObservation={{{6}}}; " +
+                "nonAtomic=True; failedGuiFields=unspecified; originalAtCapture={{{7}}}",
+                stage, thread, originalProcess, original.ToInt64(), size, IntPtr.Size, observation, originalAtCapture ?? "unavailable"));
+        }
+        private static Win32Exception CaptureFocusReadFailure(int error, uint thread, uint size, IntPtr original, uint originalProcess,
+            string stage, string originalAtCapture) {
+            // Keep captured-parameter storage and delegate creation out of the successful query method.
+            return FocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture,
+                window => ObserveFocusFailureWindow(window, thread, originalProcess));
+        }
+        // Unlike DescribeWindowIdentityCore, this fixed failure sample opens no
+        // process handles and reads only the original HWND relation and foreground.
+        private static string ObserveFocusFailureWindow(IntPtr original, uint expectedThread, uint expectedProcess) {
+            bool valid = IsWindow(original);
+            uint process = 0;
+            uint thread = original == IntPtr.Zero ? 0 : GetWindowThreadProcessId(original, out process);
+            IntPtr foreground = GetForegroundWindow();
+            return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "originalWindowValid={0}; observedThread={1}; observedPid={2}; threadMatches={3}; processMatches={4}; " +
+                "currentForeground=0x{5:X}; foregroundMatches={6}; capturedUtc={7:o}",
+                valid, thread, process, thread != 0 && thread == expectedThread, process != 0 && process == expectedProcess,
+                foreground.ToInt64(), foreground == original, DateTimeOffset.UtcNow);
         }
         internal static ushort[] RemainingOwnedChordKeyUps(uint downs, uint ups) {
             if (downs > 2) throw new ArgumentOutOfRangeException("downs");
@@ -213,13 +435,14 @@ namespace RedSalamander.Testing {
                             }
                         }
                     }
-                } catch (Win32Exception error) { hotkeyCallbackFailure = error; }
-                  catch (InvalidOperationException error) { hotkeyCallbackFailure = error; }
+                // Native callback boundary: retain every managed failure for the owning thread;
+                // none may unwind through the unmanaged window procedure.
+                } catch (Exception error) { hotkeyCallbackFailure = error; }
                 return IntPtr.Zero;
             }
             return DefSubclassProc(window, message, wParam, lParam);
         }
-        private void AcquireWithOwnedHotkey(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+        private void AcquireWithOwnedHotkey(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, OriginalForegroundFocus originalFocus) {
             if (!AllowsOwnedBoundaryChord(Environment.GetEnvironmentVariable("REDSALAMANDER_HOSTED_TEST_DESKTOP"),
                 Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION"),
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT"),
@@ -357,48 +580,83 @@ namespace RedSalamander.Testing {
                 }
             }
         }
-        private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+        internal static string CaptureIdentityForDiagnostics(IntPtr window, Func<IntPtr, string> observe) {
+            // Identity enrichment cannot replace an ownership refusal. Fatal CLR failures
+            // retain their fatal behavior; neither titles nor exception messages are logged.
+            try { return observe(window) ?? "unavailable"; }
+            catch (Exception error) when (!(error is OutOfMemoryException) && !(error is StackOverflowException) && !(error is AccessViolationException)) {
+                return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "hwnd=0x{0:X}; capturedUtc={1:o}; unavailable={2}", window.ToInt64(), DateTimeOffset.UtcNow, error.GetType().Name);
+            }
+        }
+        internal static InvalidOperationException ForeignForegroundRefusal(IntPtr current, IntPtr original, IntPtr boundary,
+            string originalAtCapture, Func<IntPtr, string> observe) {
+            var refusal = new InvalidOperationException("A foreign foreground change must not be replaced by the hosted fixture.");
+            try {
+                string details = String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    " capturedUtc={0:o}; current={{{1}}}; originalAtCapture={{{2}}}; originalNow={{{3}}}; boundary={{{4}}}",
+                    DateTimeOffset.UtcNow, CaptureIdentityForDiagnostics(current, observe), originalAtCapture ?? "unavailable",
+                    CaptureIdentityForDiagnostics(original, observe), CaptureIdentityForDiagnostics(boundary, observe));
+                return new InvalidOperationException(refusal.Message + details);
+            }
+            catch (Exception error) when (!(error is OutOfMemoryException) && !(error is StackOverflowException) && !(error is AccessViolationException)) {
+                return refusal;
+            }
+        }
+        private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, OriginalForegroundFocus originalFocus,
+            string originalAtCapture) {
             if (HostedDesktopNative.InputDesktopName() != "Default")
                 throw new InvalidOperationException("A foreign input-desktop change must not be replaced by the hosted fixture.");
-            IntPtr current = GetForegroundWindow();
-            if (original != IntPtr.Zero) {
-                uint ownerProcess;
-                if (!IsWindow(original) || GetWindowThreadProcessId(original, out ownerProcess) != originalThread ||
-                    ownerProcess != originalProcess)
-                    throw new InvalidOperationException("The original hosted foreground window changed identity.");
-            }
+            RestoreOriginalForeground(handle, originalFocus, GetForegroundWindow,
+                afterWait => ValidateSavedOriginalFocus(originalFocus, afterWait),
+                () => ReadOriginalForegroundFocus(originalThread, original, originalProcess, "restore-original-focus", originalAtCapture),
+                SetForegroundWindow, WaitOneRestoreMessage, timer => timer.ElapsedMilliseconds,
+                current => ForeignForegroundRefusal(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity));
+        }
+        // Dedicated hosted-fixture orchestration seam. Production binds the same
+        // native readers, one writer, message-aware wait and Stopwatch as before.
+        // Expected focus is immutable; a later observation can never rebase it.
+        internal static void RestoreOriginalForeground(IntPtr handle, OriginalForegroundFocus saved,
+            Func<IntPtr> foreground, Action<bool> validateSaved, Func<object> observeOriginal,
+            Func<IntPtr, bool> requestOriginal, Action<System.Diagnostics.Stopwatch> waitMessage,
+            Func<System.Diagnostics.Stopwatch, long> elapsed, Func<IntPtr, Exception> foreignRefusal) {
+            IntPtr original = saved.Original;
+            validateSaved(false);
+            IntPtr current = foreground();
             if (current == handle && original != IntPtr.Zero) {
-                if (!SetForegroundWindow(original))
+                if (!MayWriteOriginalForeground(saved))
+                    throw new InvalidOperationException("The saved related focus grants no hosted restoration-write authority.");
+                validateSaved(false);
+                current = foreground();
+                if (current != handle) throw foreignRefusal(current);
+                if (!requestOriginal(original))
                     throw new InvalidOperationException("Cannot restore the original hosted foreground window.");
                 var timer = System.Diagnostics.Stopwatch.StartNew();
                 do {
-                    current = GetForegroundWindow();
+                    current = foreground();
                     if (current == original) break;
-                    long elapsed = timer.ElapsedMilliseconds;
-                    if (!CanWaitForForegroundRestore(current, handle, elapsed))
+                    long waited = elapsed(timer);
+                    if (!CanWaitForForegroundRestore(current, handle, waited))
                         throw new InvalidOperationException("The original hosted foreground window was not restored. current=" + current.ToInt64() +
-                            "; original=" + original.ToInt64() + "; handle=" + handle.ToInt64() + "; elapsedMs=" + elapsed);
-                    WaitOneRestoreMessage(timer);
-                    uint checkedProcess;
-                    if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
-                        GetWindowThreadProcessId(original, out checkedProcess) != originalThread || checkedProcess != originalProcess)
-                        throw new InvalidOperationException("The hosted desktop or original identity changed during restoration.");
+                            "; original=" + original.ToInt64() + "; handle=" + handle.ToInt64() + "; elapsedMs=" + waited);
+                    waitMessage(timer);
+                    validateSaved(true);
                 } while (true);
             }
             // A previously empty foreground is verified after retiring our HWND.
             if (original == IntPtr.Zero && current == handle) return;
             if (current != original)
-                throw new InvalidOperationException("A foreign foreground change must not be replaced by the hosted fixture.");
+                throw foreignRefusal(current);
             if (original != IntPtr.Zero) {
                 var timer = System.Diagnostics.Stopwatch.StartNew();
-                while (ReadFocus(originalThread).Focus != originalFocus) {
-                    if (GetForegroundWindow() != original || timer.ElapsedMilliseconds >= 1500)
+                while (true) {
+                    if (foreground() != original)
+                        throw new InvalidOperationException("The original hosted foreground changed before native focus observation.");
+                    if (SameOriginalForegroundFocus(saved, (OriginalForegroundFocus)observeOriginal())) break;
+                    if (foreground() != original || elapsed(timer) >= 1500)
                         throw new InvalidOperationException("The original hosted native focus was not restored.");
-                    WaitOneRestoreMessage(timer);
-                    uint checkedProcess;
-                    if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
-                        GetWindowThreadProcessId(original, out checkedProcess) != originalThread || checkedProcess != originalProcess)
-                        throw new InvalidOperationException("The hosted desktop or original identity changed during focus restoration.");
+                    waitMessage(timer);
+                    validateSaved(true);
                 }
             }
         }
@@ -417,7 +675,14 @@ namespace RedSalamander.Testing {
                 IntPtr original = GetForegroundWindow();
                 uint originalProcess = 0;
                 uint originalThread = original == IntPtr.Zero ? 0 : GetWindowThreadProcessId(original, out originalProcess);
-                IntPtr originalFocus = original == IntPtr.Zero ? IntPtr.Zero : ReadFocus(originalThread).Focus;
+                // This minimal entry-time creation query is intentional. A retirement-time
+                // query cannot retroactively identify the process instance saved at entry.
+                string originalAtCapture = CaptureIdentityForDiagnostics(original, HostedDesktopNative.DescribeEntryWindowIdentity);
+                OriginalForegroundFocus originalFocus = original == IntPtr.Zero ?
+                    new OriginalForegroundFocus(IntPtr.Zero, 0, 0, IntPtr.Zero, 0, 0, IntPtr.Zero) :
+                    ReadOriginalForegroundFocus(originalThread, original, originalProcess, "entry-original-focus", originalAtCapture);
+                if (!MayWriteOriginalForeground(originalFocus))
+                    throw new InvalidOperationException("The saved related focus cannot authorize hosted boundary acquisition and restoration.");
                 if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before window creation.");
                 var window = CreateWindowExW(0x08040080, "STATIC", "RedSalamander hosted test boundary", 0x90000000,
                     Math.Max(0, GetSystemMetrics(0) - 8), Math.Max(0, GetSystemMetrics(1) - 8), 8, 8,
@@ -453,12 +718,12 @@ namespace RedSalamander.Testing {
                                 DispatchMessageW(ref message);
                             }
                         }
-                    } catch (Win32Exception error) { actionFailure = error; }
-                      catch (InvalidOperationException error) { actionFailure = error; }
+                    // Owner-thread boundary: retire the fixture even for an unexpected managed
+                    // failure, then propagate it together with any restoration failure.
+                    } catch (Exception error) { actionFailure = error; }
                     finally {
-                        try { RestoreForeground(handle, original, originalThread, originalProcess, originalFocus); }
-                        catch (Win32Exception error) { restoreFailure = error; }
-                        catch (InvalidOperationException error) { restoreFailure = error; }
+                        try { RestoreForeground(handle, original, originalThread, originalProcess, originalFocus, originalAtCapture); }
+                        catch (Exception error) { restoreFailure = error; }
                     }
                 }
                 var failures = new System.Collections.Generic.List<Exception>();
@@ -469,9 +734,7 @@ namespace RedSalamander.Testing {
                     throw new AggregateException("Hosted boundary operation or retirement failed.", failures);
                 Restored = GetForegroundWindow() == original;
                 if (!Restored) throw new InvalidOperationException("The hosted foreground restoration did not match its original window.");
-            } catch (Win32Exception error) { failure = error; }
-              catch (InvalidOperationException error) { failure = error; }
-              catch (AggregateException error) { failure = error; }
+            } catch (Exception error) { failure = error; }
             finally { ready.Set(); }
         }
         public void Dispose() {
@@ -551,6 +814,10 @@ namespace RedSalamander.Testing {
         public int ForegroundDesktopError;
     }
     public static class HostedDesktopNative {
+        private const string ImplementationSourceHash = "__RS_HOSTED_NATIVE_SOURCE_HASH__";
+        public static object ReadForegroundQueueDiagnostics() {
+            return HostedForegroundBoundary.CaptureForegroundQueueForDiagnostics();
+        }
         [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentThreadId();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetProcessWindowStation();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint thread);
@@ -626,6 +893,195 @@ namespace RedSalamander.Testing {
                 result.ForegroundDesktop = ObjectName(GetThreadDesktop(foregroundThread), out result.ForegroundDesktopError);
             return result;
         }
+        internal static string FormatWindowIdentity(IntPtr window, uint thread, uint process, string className, bool classKnown,
+            DateTimeOffset capturedUtc) {
+            string safeClass = (className ?? "").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\"", "\\\"");
+            return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "hwnd=0x{0:X}; thread={1}; pid={2}; classKnown={3}; class=\"{4}\"; capturedUtc={5:o}",
+                window.ToInt64(), thread, process, classKnown, safeClass, capturedUtc);
+        }
+        internal static string DescribeWindowIdentity(IntPtr window) {
+            return DescribeWindowIdentityCore(window, true);
+        }
+        internal static string DescribeEntryWindowIdentity(IntPtr window) {
+            return DescribeWindowIdentityCore(window, false);
+        }
+        private static string DescribeWindowIdentityCore(IntPtr window, bool extended) {
+            DateTimeOffset capturedUtc = DateTimeOffset.UtcNow;
+            uint process = 0;
+            uint thread = window == IntPtr.Zero ? 0 : GetWindowThreadProcessId(window, out process);
+            var className = new StringBuilder(256);
+            bool classKnown = window != IntPtr.Zero && GetClassNameW(window, className, className.Capacity) > 0;
+            string identity = FormatWindowIdentity(window, thread, process, className.ToString(), classKnown, capturedUtc);
+            SafeProcessHandle childLease = null, parentLease = null;
+            try {
+                int queries = 0;
+                Func<uint, bool, HostedProcessFacts> read = (pid, full) => {
+                    var lease = OpenProcess(0x1000, false, pid);
+                    int error = lease == null || lease.IsInvalid ? Marshal.GetLastWin32Error() : 0;
+                    if (++queries == 1) childLease = lease; else parentLease = lease;
+                    return ReadProcessFacts(lease, pid, full, error);
+                };
+                return identity + "; process={" + ObserveProcessForWindow(window, thread, process, extended, read, ReadWindowProcessIdentity) + "}";
+            } finally {
+                // Pin both process instances through the final HWND relation sample, even on exceptions.
+                if (parentLease != null) parentLease.Dispose();
+                if (childLease != null) childLease.Dispose();
+            }
+        }
+        // ABI/layer exception: the inline managed harness cannot consume the C++
+        // Commands adapter. Reuse the same query-only held-handle pattern as
+        // HostedStockSurface and the bounded basic-information query from SanitizedEnvironment.
+        // Both adapters hash the exact queried UTF-16LE path bytes with SHA-256.
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ProcessBasicInformation {
+            public IntPtr Reserved1, PebBaseAddress, Reserved2_0, Reserved2_1, UniqueProcessId, InheritedFromUniqueProcessId;
+        }
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        private static extern SafeProcessHandle OpenProcess(uint access, bool inherit, uint process);
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)] private static extern uint GetProcessId(SafeProcessHandle process);
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetProcessTimes(SafeProcessHandle process, out long created, out long exited, out long kernel, out long user);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool QueryFullProcessImageNameW(SafeProcessHandle process, uint flags, StringBuilder image, ref uint length);
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ProcessIdToSessionId(uint process, out uint session);
+        [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsProcessInJob(SafeProcessHandle process, IntPtr job, out bool member);
+        [DllImport("ntdll.dll", ExactSpelling = true)] private static extern int NtQueryInformationProcess(SafeProcessHandle process, uint informationClass,
+            out ProcessBasicInformation information, uint length, IntPtr returnedLength);
+        internal static string ProcessImageKind(string path) {
+            int separator = Math.Max(path.LastIndexOf('\\'), path.LastIndexOf('/'));
+            string leaf = path.Substring(separator + 1);
+            foreach (string known in new[] { "WindowsTerminal.exe", "OpenConsole.exe", "conhost.exe", "pwsh.exe", "powershell.exe", "cmd.exe",
+                "hosted-compute-agent", "hosted-compute-agent.exe", "RedSalamander.exe", "RedSalamanderSearchService.exe" })
+                if (String.Equals(leaf, known, StringComparison.OrdinalIgnoreCase)) return known;
+            return "other";
+        }
+        internal static string ProcessImageDigest(string path) {
+            // Encoding.Unicode's default fallback would replace unpaired surrogates.
+            // Windows chars are UTF-16LE code units; copy them verbatim, without a BOM/terminator.
+            byte[] bytes = new byte[checked(path.Length * 2)];
+            Buffer.BlockCopy(path.ToCharArray(), 0, bytes, 0, bytes.Length);
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+        }
+        private static HostedProcessFacts ReadProcessFacts(SafeProcessHandle process, uint processId, bool extended, int openError) {
+            var result = new HostedProcessFacts();
+            if (process == null || process.IsInvalid) { result.OpenError = openError; return result; }
+            result.Opened = true;
+            result.HandleProcess = GetProcessId(process);
+            if (result.HandleProcess == 0) result.IdentityError = Marshal.GetLastWin32Error();
+            if (result.HandleProcess != processId) return result;
+            long exited, kernel, user;
+            result.CreationAvailable = GetProcessTimes(process, out result.CreationTime, out exited, out kernel, out user);
+            if (!result.CreationAvailable) result.CreationError = Marshal.GetLastWin32Error();
+            if (!extended) return result;
+            var image = new StringBuilder(4096); uint length = (uint)image.Capacity;
+            result.ImageAvailable = QueryFullProcessImageNameW(process, 0, image, ref length);
+            if (result.ImageAvailable) {
+                string path = image.ToString();
+                result.ImageKind = ProcessImageKind(path);
+                result.ImageDigest = ProcessImageDigest(path);
+                result.DigestAvailable = true;
+            } else result.ImageError = Marshal.GetLastWin32Error();
+            result.SessionAvailable = ProcessIdToSessionId(processId, out result.Session);
+            if (!result.SessionAvailable) result.SessionError = Marshal.GetLastWin32Error();
+            result.AnyJobAvailable = IsProcessInJob(process, IntPtr.Zero, out result.AnyJob);
+            if (!result.AnyJobAvailable) result.JobError = Marshal.GetLastWin32Error();
+            ProcessBasicInformation information;
+            result.ParentStatus = NtQueryInformationProcess(process, 0, out information, (uint)Marshal.SizeOf<ProcessBasicInformation>(), IntPtr.Zero);
+            long parent = information.InheritedFromUniqueProcessId.ToInt64();
+            if (result.ParentStatus >= 0 && information.UniqueProcessId.ToInt64() == processId && parent > 0 && parent <= UInt32.MaxValue) {
+                result.ParentAvailable = true; result.ParentProcess = (uint)parent;
+            } else if (result.ParentStatus >= 0) result.ParentError = 13;
+            return result;
+        }
+        // Synchronous bridge for stock preparation: the caller owns the captured
+        // query-only lease. Never reopen the captured PID or select another HWND.
+        public static string DescribeHeldProcess(IntPtr window, uint thread, uint process, SafeProcessHandle lease,
+            long capturedCreation, bool extended) {
+            SafeProcessHandle parentLease = null;
+            try {
+                Func<SafeProcessHandle, uint, bool, HostedProcessFacts> readHeld = (held, pid, full) => ReadProcessFacts(held, pid, full, 0);
+                Func<uint, bool, HostedProcessFacts> readParent = (pid, full) => {
+                    parentLease = OpenProcess(0x1000, false, pid);
+                    int error = parentLease == null || parentLease.IsInvalid ? Marshal.GetLastWin32Error() : 0;
+                    return ReadProcessFacts(parentLease, pid, full, error);
+                };
+                return ObserveHeldProcessForWindow(window, thread, process, lease, capturedCreation, extended, readHeld, readParent, ReadWindowProcessIdentity);
+            } finally {
+                if (parentLease != null) parentLease.Dispose();
+            }
+        }
+        // Fake readers exercise the real borrowed-lease path without live desktop calls.
+        internal static string ObserveHeldProcessForWindow(IntPtr window, uint thread, uint process, SafeProcessHandle lease,
+            long capturedCreation, bool extended, Func<SafeProcessHandle,uint,bool,HostedProcessFacts> readHeld,
+            Func<uint,bool,HostedProcessFacts> readParent, Func<IntPtr,Tuple<uint,uint,int>> readWindow) {
+            bool borrowed = false;
+            try {
+                if (lease != null && !lease.IsInvalid) lease.DangerousAddRef(ref borrowed);
+                int reads = 0;
+                Func<uint,bool,HostedProcessFacts> read = (pid, full) => {
+                    if (++reads == 1) {
+                        if (pid != process) throw new InvalidOperationException("Captured process query mismatch.");
+                        return readHeld(lease, pid, full);
+                    }
+                    return readParent(pid, full);
+                };
+                return ObserveCapturedProcessForWindow(window, thread, process, capturedCreation, extended, read, readWindow);
+            } finally { if (borrowed) lease.DangerousRelease(); }
+        }
+        private static Tuple<uint, uint, int> ReadWindowProcessIdentity(IntPtr window) {
+            uint process; uint thread = GetWindowThreadProcessId(window, out process);
+            return Tuple.Create(thread, process, thread == 0 ? Marshal.GetLastWin32Error() : 0);
+        }
+        private static string FormatProcessFacts(HostedProcessFacts value, bool extended) {
+            string basic = String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "opened={0}; openError={1}; handlePid={2}; identityError={3}; creationKnown={4}; creationFileTime100ns={5}; creationError={6}",
+                value.Opened, value.OpenError, value.HandleProcess, value.IdentityError, value.CreationAvailable, value.CreationTime, value.CreationError);
+            if (!extended) return basic;
+            string digest = value.ImageDigest ?? "";
+            bool digestKnown = value.DigestAvailable && digest.Length == 64;
+            foreach (char c in digest) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) digestKnown = false;
+            // Even an injected backend cannot put a raw path or arbitrary name into diagnostics.
+            string kind = ProcessImageKind(value.ImageKind ?? "");
+            return basic + String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "; imageKnown={0}; imageError={1}; imageKind={2}; pathDigestAlgorithm=SHA256-UTF16LE; pathDigestKnown={3}; pathDigest={4}; " +
+                "sessionKnown={5}; session={6}; sessionError={7}; anyJobKnown={8}; anyJob={9}; jobError={10}; exactTestJob=unavailable; " +
+                "parentKnown={11}; parentPid={12}; parentError={13}; parentNtStatus=0x{14:X8}",
+                value.ImageAvailable, value.ImageError, kind, digestKnown, digestKnown ? digest : "unavailable",
+                value.SessionAvailable, value.Session, value.SessionError, value.AnyJobAvailable, value.AnyJob, value.JobError,
+                value.ParentAvailable, value.ParentProcess, value.ParentError, unchecked((uint)value.ParentStatus));
+        }
+        // Fake readers exercise the actual orchestration; this is not a process-control seam.
+        internal static string ObserveProcessForWindow(IntPtr window, uint thread, uint process, bool extended,
+            Func<uint, bool, HostedProcessFacts> readProcess, Func<IntPtr, Tuple<uint, uint, int>> readWindow) {
+            return ObserveCapturedProcessForWindow(window, thread, process, 0, extended, readProcess, readWindow);
+        }
+        internal static string ObserveCapturedProcessForWindow(IntPtr window, uint thread, uint process, long capturedCreation, bool extended,
+            Func<uint, bool, HostedProcessFacts> readProcess, Func<IntPtr, Tuple<uint, uint, int>> readWindow) {
+            DateTimeOffset observedUtc = DateTimeOffset.UtcNow;
+            if (thread == 0 || process == 0) return "instanceAvailable=False; unavailable=InvalidWindowIdentity";
+            HostedProcessFacts child = readProcess(process, extended);
+            bool instance = child.Opened && child.HandleProcess == process && child.CreationAvailable && child.CreationTime > 0;
+            bool creationMatch = capturedCreation > 0 && instance && child.CreationTime == capturedCreation;
+            if (capturedCreation != 0) instance = instance && creationMatch;
+            HostedProcessFacts parent = new HostedProcessFacts(); bool parentQueried = false, compatible = false;
+            if (extended && instance && child.ParentAvailable && child.ParentProcess != 0 && child.ParentProcess != process) {
+                parentQueried = true; parent = readProcess(child.ParentProcess, false);
+                compatible = parent.Opened && parent.HandleProcess == child.ParentProcess && parent.CreationAvailable &&
+                    parent.CreationTime > 0 && parent.CreationTime <= child.CreationTime;
+            }
+            var final = readWindow(window);
+            bool stable = final.Item1 != 0 && final.Item1 == thread && final.Item2 == process;
+            return String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "observedUtc={0:o}; extended={1}; instanceAvailable={2}; {3}; parentQueried={4}; parent={{{5}}}; parentCreationCompatible={6}; " +
+                "relationStable={7}; finalPid={8}; finalThread={9}; relationError={10}; capturedCreationFileTime100ns={11}; creationMatchesCapture={12}; " +
+                "childReads=1; parentReads={13}; relationReads=1; sequential observations only; parent compatibility is not creator/ownership proof",
+                observedUtc, extended, instance, FormatProcessFacts(child, extended), parentQueried, FormatProcessFacts(parent, false), compatible,
+                stable, final.Item2, final.Item1, final.Item3, capturedCreation, creationMatch, parentQueried ? 1 : 0);
+        }
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool EnumDisplaySettingsW(string device, int index, ref DisplayMode mode);
@@ -636,17 +1092,32 @@ namespace RedSalamander.Testing {
         public static extern bool GetWorkArea(uint action, uint parameter, ref Rectangle area, uint flags);
         [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
-        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+        [DllImport("user32.dll", SetLastError = true)] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         public static extern int GetClassNameW(IntPtr window, StringBuilder name, int count);
     }
 }
 '@
+    # Add-Type cannot replace an existing type. Bind the normalized template before
+    # accepting a cached type; reflection of a literal field invokes no native code.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $sourceHash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($nativeSource.Replace("`r`n", "`n")))).Replace('-', '').ToLowerInvariant()
+    } finally { $sha.Dispose() }
+    $loaded = 'RedSalamander.Testing.HostedDesktopNative' -as [type]
+    if ($null -ne $loaded) {
+        $field = $loaded.GetField('ImplementationSourceHash', [Reflection.BindingFlags]::Static -bor [Reflection.BindingFlags]::NonPublic)
+        if ($null -eq $field -or [string]$field.GetRawConstantValue() -cne $sourceHash) {
+            throw 'Hosted desktop native source differs from the loaded type; start a fresh PowerShell process.'
+        }
+        return
+    }
+    Add-Type -TypeDefinition ($nativeSource.Replace('__RS_HOSTED_NATIVE_SOURCE_HASH__', $sourceHash))
 }
 
 function Initialize-RSHostedStockSurfaceNative {
-    if ('RedSalamander.Testing.HostedStockSurface' -as [type]) { return }
     Initialize-RSHostedDesktopNative
+    if ('RedSalamander.Testing.HostedStockSurface' -as [type]) { return }
     Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
@@ -694,6 +1165,10 @@ namespace RedSalamander.Testing {
         private readonly IntPtr window;
         private bool closed, wslAuthorized;
         private long wslCreationFileTime;
+        public string CapturedUtc { get; private set; }
+        public bool CreationKnown { get; private set; }
+        public long CreationFileTime100ns { get; private set; }
+        public int CreationError { get; private set; }
         public bool CloseRequested { get { return closed; } }
         public int WslArgumentCount { get; private set; }
         public bool WslArgumentMatch { get; private set; }
@@ -713,6 +1188,14 @@ namespace RedSalamander.Testing {
         public int ForegroundDesktopError { get; private set; }
         private HostedStockSurface(IntPtr h,uint tid,uint pid,uint session,SafeProcessHandle p,string title,string cls,string image,string app,string kind) {
             window=h;Thread=tid;Process=pid;Session=session;process=p;Title=title;Class=cls;Image=image;ApplicationId=app;Kind=kind;
+        }
+        // This bridge borrows the original lease synchronously; only the canonical
+        // observer may interpret process facts. Diagnostics never change classification.
+        public string DescribeCapturedProcess(Func<IntPtr,uint,uint,SafeProcessHandle,long,bool,string> observe) {
+            try { return observe(window,Thread,Process,process,CreationKnown && CreationFileTime100ns > 0 ? CreationFileTime100ns : -1,true); }
+            catch(Exception error) when (!(error is OutOfMemoryException) && !(error is StackOverflowException) && !(error is AccessViolationException)) {
+                return "instanceAvailable=False; unavailable="+error.GetType().Name;
+            }
         }
         private static void RequireHostedArm64() {
             if(Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION")!="1" ||
@@ -793,11 +1276,19 @@ namespace RedSalamander.Testing {
             bool transferred=false;
             try {
                 int appStatus;string title=ReadTitle(h),cls=ReadClass(h),image=ReadImage(p),app=ReadApp(p,out appStatus);
+                string capturedUtc=DateTimeOffset.UtcNow.ToString("o",System.Globalization.CultureInfo.InvariantCulture);
+                long created,exited,kernel,user;
+                bool creationKnown=GetProcessTimes(p,out created,out exited,out kernel,out user);
+                int creationError=creationKnown ? 0 : Marshal.GetLastWin32Error();
                 uint currentPid;uint currentTid=GetWindowThreadProcessId(h,out currentPid);
                 if(GetProcessId(p)!=pid || GetForegroundWindow()!=h || currentPid!=pid || currentTid!=tid)throw new InvalidOperationException("Foreground changed while captured.");
                 string kind=Classify(h,title,cls,image,app,appStatus);
                 if(kind=="WslStartup" && !IsWindowVisible(h))throw new InvalidOperationException("WSL startup console is not visible.");
                 var result=new HostedStockSurface(h,tid,pid,session,p,title,cls,image,app,kind);result.ApplicationIdStatus=appStatus;
+                result.CapturedUtc=capturedUtc;
+                result.CreationKnown=creationKnown;
+                result.CreationFileTime100ns=created;
+                result.CreationError=creationError;
                 // Foreign thread desktop access is often denied by hosted Windows. It is
                 // diagnostic only; WinSta0, caller/input Default and session are required.
                 IntPtr foregroundDesktop=GetThreadDesktop(tid);
@@ -879,6 +1370,12 @@ function Get-RSHostedDesktopState {
     }
 }
 
+function Get-RSHostedForegroundQueueDiagnostics {
+    # Private cold DesktopProbe seam; never used by acquisition or restoration.
+    Initialize-RSHostedDesktopNative
+    [RedSalamander.Testing.HostedDesktopNative]::ReadForegroundQueueDiagnostics()
+}
+
 function Get-RSHostedDesktopDiagnostics {
     <#
     .SYNOPSIS
@@ -888,6 +1385,9 @@ function Get-RSHostedDesktopDiagnostics {
         input desktop and foreground thread desktop, alongside display/session facts.
         Unavailable names retain their Windows error; they do not establish a mismatch.
         Does not send input, activate windows or change display/session settings.
+        Adds one non-atomic, four-identity-sample comparison of the HWND-derived
+        thread and documented foreground-zero GUI query. Errors and bounded class
+        observations are evidence only; changed identities prohibit interpretation.
     .OUTPUTS
         A diagnostic object, excluding the native display-mode restoration structure.
     .NOTES
@@ -898,7 +1398,9 @@ function Get-RSHostedDesktopDiagnostics {
     [CmdletBinding()]
     param()
     if ($env:GITHUB_ACTIONS -cne 'true') { throw 'Hosted desktop diagnostics are restricted to GitHub Actions.' }
-    Get-RSHostedDesktopState | Select-Object * -ExcludeProperty Mode
+    $diagnostics = Get-RSHostedDesktopState | Select-Object * -ExcludeProperty Mode
+    $diagnostics | Add-Member -NotePropertyName ForegroundQueue -NotePropertyValue (Get-RSHostedForegroundQueueDiagnostics)
+    $diagnostics
 }
 
 function Get-RSHostedDisplayModes {
@@ -968,7 +1470,7 @@ function Get-RSHostedStockPreparationRequest {
        $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted' -or
        $env:GITHUB_REPOSITORY -cne 'RedSalamanders/RedSalamander' -or
        $QualificationScope -cin @('R0ePaired','DesktopProbe') -or
-       ($Phase -cne 'ReleaseTest' -and ($Phase -cne 'Qualification' -or $QualificationScope -cnotin @('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture')))) {return $null}
+       ($Phase -cne 'ReleaseTest' -and ($Phase -cne 'Qualification' -or $QualificationScope -cnotin @('Normal','Full','CommandsHandoff','FileOpsVolumes','ViewerSpaceCapture','CommandsUiAttribution')))) {return $null}
     '1'
 }
 
@@ -1019,8 +1521,9 @@ function Invoke-RSHostedArm64StockPreparation {
     $directory=Assert-RSTestSandboxContainedPath -TestRoot $root -Path (Join-Path $root ('evidence/hosted-stock-preparation/'+[guid]::NewGuid().ToString('N'))) -RequireDescendant
     if(Test-Path -LiteralPath $directory){throw 'Stock preparation audit directory already exists.'}
     [void][IO.Directory]::CreateDirectory($directory)
-    $sourceHead = (& git -C $RepoRoot rev-parse HEAD | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $sourceHead -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot bind stock preparation to the exact checkout head.' }
+    $headCapture = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -WorkingDirectory $RepoRoot
+    $sourceHead = ($headCapture.StdOut | Out-String).Trim()
+    if ($headCapture.ExitCode -ne 0 -or $sourceHead -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot bind stock preparation to the exact checkout head.' }
     Invoke-RSHostedStockPreparationCore -Directory $directory -SourceHead $sourceHead
     Write-Host ("Hosted ARM64 stock preparation audit: $directory")
     return $directory
@@ -1030,7 +1533,7 @@ function Invoke-RSHostedArm64StockPreparation {
 # the guarded entry above always supplies the fixed five-second observation window.
 function Invoke-RSHostedStockPreparationCore {
     param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$SourceHead,[int]$ObservationMilliseconds=5000)
-    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$failure=$null;$wslCloseRequested=$false
+    $seen=@{};$timer=[Diagnostics.Stopwatch]::StartNew();$preparationError=$null;$completed=$false;$lastObservation=$null;$firstObservation=$null;$observationCount=0;$extendedCount=0;$failure=$null;$wslCloseRequested=$false
     $start=[ordered]@{schema='red-salamander.hosted-stock-preparation.v1';source_head=$SourceHead;started_utc=[DateTimeOffset]::UtcNow.ToString('o')}
     $startBytes=[Text.UTF8Encoding]::new($false).GetBytes(($start|ConvertTo-Json));$startStream=[IO.File]::Open((Join-Path $directory 'start.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
     try{$startStream.Write($startBytes,0,$startBytes.Length);$startStream.Flush($true)}finally{$startStream.Dispose()}
@@ -1038,7 +1541,25 @@ function Invoke-RSHostedStockPreparationCore {
         $surface=Get-RSHostedStockSurface
         try {
             $lastObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;title=$surface.Title;class=$surface.Class;image=$surface.Image;application_id=$surface.ApplicationId;foreground_desktop=$surface.ForegroundDesktop;foreground_desktop_error=$surface.ForegroundDesktopError}
-            if($surface.Kind -cnotin @('Empty','Shell','RunnerConsole','Account','Search','WslStartup')){throw 'An unapproved foreground surface prevents hosted preparation.'}
+            $lastObservation['captured_utc']=$surface.CapturedUtc
+            $lastObservation['creation_known']=$surface.CreationKnown
+            $lastObservation['creation_file_time_100ns']=$surface.CreationFileTime100ns
+            $lastObservation['creation_error']=$surface.CreationError
+            $observationCount++
+            if($null -eq $firstObservation){
+                $firstObservation=[ordered]@{kind=$surface.Kind;window=$surface.Window;thread=$surface.Thread;process=$surface.Process;session=$surface.Session;
+                    captured_utc=$surface.CapturedUtc;creation_known=$surface.CreationKnown;creation_file_time_100ns=$surface.CreationFileTime100ns;creation_error=$surface.CreationError}
+            }
+            if($surface.Kind -cnotin @('Empty','Shell','RunnerConsole','Account','Search','WslStartup')){
+                # The direct managed delegate preserves fatal CLR propagation. It borrows
+                # the captured lease; no current-foreground/PID lookup selects a new target.
+                Initialize-RSHostedDesktopNative
+                $observer=[RedSalamander.Testing.HostedDesktopNative].GetMethod('DescribeHeldProcess').CreateDelegate(
+                    [Func[IntPtr,uint32,uint32,Microsoft.Win32.SafeHandles.SafeProcessHandle,long,bool,string]])
+                $extendedCount++
+                $lastObservation['process_diagnostic']=$surface.DescribeCapturedProcess($observer)
+                throw 'An unapproved foreground surface prevents hosted preparation.'
+            }
             if($surface.Kind -cin @('Account','Search','WslStartup')){
                 if($seen.ContainsKey($surface.Kind)){throw 'An approved stock surface reappeared after its one permitted close.'}
                 $seen[$surface.Kind]=$true
@@ -1083,7 +1604,9 @@ function Invoke-RSHostedStockPreparationCore {
     };$completed=$true } catch {$failure=$_;$preparationError=$_.Exception.Message}
     try {
         $completion=[ordered]@{schema='red-salamander.hosted-stock-preparation-result.v1';completed=$completed;error=$preparationError;
-            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');wsl_startup_close_requested=$wslCloseRequested;last_observation=$lastObservation;finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
+            account_close_requested=$seen.ContainsKey('Account');search_close_requested=$seen.ContainsKey('Search');wsl_startup_close_requested=$wslCloseRequested;
+            first_observation=$firstObservation;last_observation=$lastObservation;observation_count=$observationCount;extended_observations=$extendedCount;
+            observation_limit='foreground snapshots only; absence is not background-process absence or creator proof';finished_utc=[DateTimeOffset]::UtcNow.ToString('o')}
         $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($completion|ConvertTo-Json -Depth 5));$stream=[IO.File]::Open((Join-Path $directory 'completion.json'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
         try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
     } catch {
@@ -1105,6 +1628,90 @@ function New-RSHostedDesktopProcessScope {
     [RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop()
 }
 
+function Write-RSHostedSetupFailureDiagnostic {
+    param([Parameter(Mandatory)][System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+    # Domain-local captured-error formatting: no generic ErrorRecord tree formatter
+    # exists at this compiler-free layer. It performs no desktop/native observation
+    # and is called only after setup failed; logging must not replace that failure.
+    try {
+        $maximumDepth = 8; $maximumNodes = 32; $maximumFieldCharacters = 1024
+        $maximumOutputCharacters = 16384; $payloadLimit = $maximumOutputCharacters - 160
+        $output = [Text.StringBuilder]::new()
+        $truncation = [Collections.Generic.List[string]]::new()
+        $appendField = {
+            param([string]$Label, [AllowNull()][string]$Value)
+            if ($null -eq $Value) { $Value = '<unavailable>' }
+            if ($Value.Length -gt $maximumFieldCharacters) {
+                $Value = $Value.Substring(0, $maximumFieldCharacters)
+                [void]$truncation.Add('field-string')
+            }
+            $line = $Label + $Value + [Environment]::NewLine
+            $remaining = $payloadLimit - $output.Length
+            if ($remaining -lt $line.Length) { [void]$truncation.Add('output-string') }
+            if ($remaining -gt 0) { [void]$output.Append($line, 0, [Math]::Min($remaining, $line.Length)) }
+        }
+        & $appendField '' 'Hosted Default desktop setup exception: captured ErrorRecord'
+        & $appendField 'limits=' 'depth8,nodes32,field1024,total16384 UTF-16 characters'
+        & $appendField 'errorId=' ([string]$ErrorRecord.FullyQualifiedErrorId)
+        & $appendField 'category=' ([string]$ErrorRecord.CategoryInfo)
+        $pending = [Collections.Generic.Queue[object]]::new()
+        $pending.Enqueue([pscustomobject]@{ Exception=$ErrorRecord.Exception; Depth=0; Path='root' })
+        $stacks = [Collections.Generic.List[object]]::new()
+        $visited = 0
+        while ($pending.Count -gt 0) {
+            $node = $pending.Dequeue(); $exception = $node.Exception; $visited++
+            & $appendField ('exception['+$node.Path+'].type=') $exception.GetType().FullName
+            & $appendField ('exception['+$node.Path+'].HResult=') ('0x'+$exception.HResult.ToString('X8'))
+            if ($exception -is [ComponentModel.Win32Exception]) {
+                & $appendField ('exception['+$node.Path+'].NativeErrorCode=') ([string]$exception.NativeErrorCode)
+            }
+            if ($exception -is [AggregateException]) {
+                # Its composite Message recursively reads excluded descendants before clipping.
+                & $appendField ('exception['+$node.Path+'].message=') '[aggregate-summary-omitted]'
+            } else {
+                & $appendField ('exception['+$node.Path+'].message=') $exception.Message
+            }
+            $stack = [string]$exception.StackTrace
+            if ($stack.Length -gt $maximumFieldCharacters) {
+                $stack = $stack.Substring(0, $maximumFieldCharacters)
+                [void]$truncation.Add('field-string')
+            }
+            $stacks.Add([pscustomobject]@{ Path=$node.Path; Text=$stack })
+            if ($exception -is [AggregateException]) {
+                $children = $exception.InnerExceptions
+            } elseif ($null -ne $exception.InnerException) {
+                $children = @($exception.InnerException)
+            } else { $children = @() }
+            if ($children.Count -gt 0 -and $node.Depth -ge $maximumDepth) {
+                [void]$truncation.Add('depth')
+                continue
+            }
+            for ($index = 0; $index -lt $children.Count; ++$index) {
+                if ($visited + $pending.Count -ge $maximumNodes) {
+                    [void]$truncation.Add('node-count')
+                    break
+                }
+                $pending.Enqueue([pscustomobject]@{
+                    Exception=$children[$index]; Depth=($node.Depth+1); Path=($node.Path+'.'+$index)
+                })
+            }
+        }
+        & $appendField 'scriptStack=' ([string]$ErrorRecord.ScriptStackTrace)
+        foreach ($stack in $stacks) { & $appendField ('exception['+$stack.Path+'].stack=') $stack.Text }
+        if ($truncation.Count -gt 0) {
+            [void]$output.Append('[diagnostic-truncated: '+(($truncation | Sort-Object -Unique) -join ',')+']')
+        }
+        Write-Host -Object $output.ToString()
+    } catch [OutOfMemoryException] { throw }
+      catch [StackOverflowException] { throw }
+      catch [AccessViolationException] { throw }
+      catch {
+        # Mirror the existing hosted observer fatal exclusions above. At this
+        # nonfatal diagnostic boundary the caller rethrows its original setup
+        # ErrorRecord if formatting or the diagnostic sink fails.
+    }
+}
 function Invoke-RSWithHostedDefaultDesktop {
     <#
     .SYNOPSIS
@@ -1133,12 +1740,20 @@ function Invoke-RSWithHostedDefaultDesktop {
         Synchronous entry operation that closes its containment job before returning.
     .OUTPUTS
         Action output and boundary/readiness/restoration diagnostics, including the
-        complete exception chain when retirement fails. Failure remains fatal.
+        bounded captured setup traversal/emitted text with visited nonaggregate messages, aggregate-summary-omitted markers, existing HResult and Win32 codes,
+        and the complete exception chain when retirement fails. Original failures remain fatal.
     .NOTES
         Owns only a neutral foreground window on the ephemeral hosted runner's Default desktop.
         With the project adapter's approved ARM64 opt-in, prepares only the three identified
         stock foreground surfaces before creating the boundary. Other windows, processes,
         hooks and foreground-lock settings are unchanged.
+        Foreign-foreground refusal reports current, saved/original and boundary window
+        identities with capture times. Diagnostic failure never grants restoration authority.
+        Stock preparation records first/last minimal captured process identities. Unknown
+        refusal enriches the exact held process instance through the canonical observer,
+        without reopening its PID or selecting another foreground target. Query errors
+        and nonpositive captured creation remain unavailable; snapshots do not establish
+        creator or background absence.
     .EXAMPLE
         Invoke-RSWithHostedDefaultDesktop -Action { Invoke-OwnedNativeTestEntry }
     #>
@@ -1153,7 +1768,12 @@ function Invoke-RSWithHostedDefaultDesktop {
         if ($env:RS_HOSTED_ARM64_STOCK_PREPARATION -ceq '1') {
             [void](Invoke-RSHostedArm64StockPreparation -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))))
         }
-        $desktop = New-RSHostedDefaultDesktop
+        try {
+            $desktop = New-RSHostedDefaultDesktop
+        } catch {
+            Write-RSHostedSetupFailureDiagnostic -ErrorRecord $_
+            throw
+        }
         if ($desktop.ForegroundBoundaryReady -cne $true) { throw 'The hosted Default desktop has no verified foreground boundary.' }
         Write-Host ('Hosted Default desktop entered: ' + $desktop.Name + '; foregroundBoundaryReady=' + $desktop.ForegroundBoundaryReady)
         $processScope = New-RSHostedDesktopProcessScope -Name $desktop.Name
@@ -1218,6 +1838,8 @@ function Invoke-RSWithHostedTestDesktop {
     $before = Get-RSHostedDesktopState
     Write-Host ('Hosted desktop before: ' + ($before | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
     $changed = $false
+    $actionError = $null
+    $restoreError = $null
     try {
         $minimumWidth = [Math]::Ceiling(1920 * $before.CoordinateScale)
         $minimumHeight = [Math]::Ceiling(1080 * $before.CoordinateScale)
@@ -1239,14 +1861,25 @@ function Invoke-RSWithHostedTestDesktop {
         Write-Host ('Hosted desktop ready: ' + ($ready | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
         if ($ready.WorkWidth -lt 1800 -or $ready.WorkHeight -lt 1000) { throw 'The hosted desktop work area cannot contain the required native UI fixtures.' }
         & $Action
+    } catch {
+        $actionError = $_
     } finally {
         if ($changed) {
-            Set-RSHostedDisplayMode -Mode $before.Mode
-            $restored = Get-RSHostedDesktopState
-            if ($restored.Width -ne $before.Width -or $restored.Height -ne $before.Height) { throw 'Hosted desktop display restoration did not converge.' }
-            Write-Host ('Hosted desktop restored: ' + ($restored | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
+            try {
+                Set-RSHostedDisplayMode -Mode $before.Mode
+                $restored = Get-RSHostedDesktopState
+                if ($restored.Width -ne $before.Width -or $restored.Height -ne $before.Height) { throw 'Hosted desktop display restoration did not converge.' }
+                Write-Host ('Hosted desktop restored: ' + ($restored | Select-Object * -ExcludeProperty Mode | ConvertTo-Json -Compress))
+            } catch {
+                $restoreError = $_
+            }
         }
     }
+    if ($null -ne $actionError -and $null -ne $restoreError) {
+        throw [System.AggregateException]::new('Hosted desktop action and display restoration both failed.', @($actionError.Exception, $restoreError.Exception))
+    }
+    if ($null -ne $actionError) { throw $actionError }
+    if ($null -ne $restoreError) { throw $restoreError }
 }
 
 Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest

@@ -1,0 +1,61 @@
+uint64_t FolderWindow::FileOperationState::DebugBaselineQueueHeadLocked(uint64_t& scratchCapacityBytes) noexcept
+{
+    struct QueuePlace final
+    {
+        uint64_t orderKey = 0u;
+        uint64_t taskId   = 0u;
+        Task* holder      = nullptr;
+        bool waiting      = false; // inside this function's wait, as _queue records
+    };
+    // _queueMutex is held. _mutex nests inside it, as in the queue insert below, and keeps
+    // every admitted task alive for the walk.
+    std::scoped_lock tasksLock(_mutex);
+    std::vector<QueuePlace> places;
+    places.reserve(_tasks.size() + _queue.size());
+    const auto add = [&](Task* holder, const bool waiting) noexcept
+    {
+        if (holder != nullptr && std::ranges::find(places, holder->GetId(), &QueuePlace::taskId) == places.end())
+            places.push_back(QueuePlace{.orderKey = holder->GetQueueOrderKey(), .taskId = holder->GetId(), .holder = holder, .waiting = waiting});
+    };
+    for (const auto& owned : _tasks)
+    {
+        if (owned && owned->_holdsQueuePlace.load(std::memory_order_acquire) && ! owned->_cancelled.load(std::memory_order_acquire))
+            add(owned.get(), std::ranges::find(_queue, owned->GetId()) != _queue.end());
+    }
+    // A waiter that is not an admitted task (an entry driven directly) is known only by its
+    // published admission.
+    for (const uint64_t queuedId : _queue)
+    {
+        const auto published = std::ranges::find(_preparedMutationInterlocks, queuedId, &ActiveMutationInterlock::taskId);
+        if (published != _preparedMutationInterlocks.end())
+            add(published->task, true);
+    }
+    scratchCapacityBytes = static_cast<uint64_t>(places.capacity()) * sizeof(QueuePlace);
+    std::ranges::sort(places, [](const QueuePlace& left, const QueuePlace& right) noexcept {
+        return std::pair{left.orderKey, left.taskId} < std::pair{right.orderKey, right.taskId};
+    });
+
+    for (const QueuePlace& place : places)
+    {
+        if (place.holder->_awaitingUserDecision.load(std::memory_order_acquire))
+            continue;
+        const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
+                                                   [&](const ActiveMutationInterlock& published) noexcept
+        {
+            if (published.taskId != place.taskId || ! published.task || ! published.admission)
+                return false;
+            const auto selected = published.task->LoadSelectedAdmission();
+            return selected->interlock && selected->interlock->key == published.admission->key;
+        });
+        if (prepared == _preparedMutationInterlocks.end() || ! prepared->admission->relations.advisoryDecided)
+        {
+            if (place.waiting)
+                continue;
+            // Still Preparing: it holds the queue.
+            return 0u;
+        }
+        if (! HasPublishedOverlapPredecessor(*prepared->admission, _preparedMutationInterlocks, _activeMutationInterlocks))
+            return place.taskId;
+    }
+    return 0u;
+}

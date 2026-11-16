@@ -1582,6 +1582,64 @@ Related documents:
 - `Specs/TestRuns/README.md`
 - `Specs/Plans/WIP/Operation_PerfMeasurementContract_2026-07-06.md`
 
+### Local cross-root destructive distinctness
+
+The early private controls in `FileOps_ReviewRemediationContracts` protect Managed regular-file
+collision admission across differing qualified Local roots. They run the production guard, admission
+and prompt with the existing test-only reported-identity namespace seam. The same-entry and distinct-file
+controls must both withhold Delete source while preserving ordinary collision actions; both answer
+Cancel and verify unchanged bytes. Comparable positive identity remains an independent refusal control.
+`FileOps.SelfTest.LocalCrossRootDistinctness` records diagnostic execution plus responder-drain duration,
+prompt count (`value0`) and whether Delete source was offered (`value1`); setup, byte verification and
+JSONL emission are outside its span. The expected offered count is zero, not a wall-time budget.
+`FileOps.Conflict.LocalDistinctnessUnproved` counts actual helper refusals, including a third early
+identityless-overwrite control, which must publish the new bytes and retain its source with a completed
+typed result. All three controls precede queued-admission prerequisite skips in that exact case.
+Archive these treatment/correctness observations with source/receipt/profile identity; they establish
+neither a historical speedup nor physical NAS/export identity or cross-system sharing qualification.
+
+### Queue head selector component comparison (`queue_head_selector_v1`)
+
+`FileOps_IdentityInterlockWaiting` reuses its private owned queue/admission fixtures to compare
+the actual production `FirstUnblockedQueuedTaskIdLocked` with the frozen selector from
+`78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e` (`FolderWindow.FileOperations.State.Queue.cpp`,
+`firstUnblockedQueuedTaskId`; canonical LF/UTF-8 complete-lambda excerpt SHA-256
+`88662a7c5611143f0778969a56e7b5427298ff78fef4c43c718dab9f7e60b75a`). Mechanical adaptations are the member-function wrapper
+and observing vector capacity after collection; allocation, de-duplication, sorting and selection
+remain inside the baseline. This host-private control deliberately retains the old policy;
+it is not a generic helper, production switch or reconstructed historical application binary.
+
+Both paths consume the same immutable 4/64/256-task fixture, with all four combinations of
+ascending/descending task storage and queue-order keys. Independent expectations check ready,
+Preparing, waiting-for-user, withdrawn cancellation, overlap predecessor and direct-waiter cases.
+Only the restored all-ready fixture is timed. One untimed warm call per selector precedes four
+counterbalanced AB/BA pairs per fixture (order reversed for descending storage); each sample
+contains 16 selections. Output arrays, fixtures, assertions and metric emission are outside the
+timed spans. The queue lock is held before timing; both selector calls include their same nested
+task-lifetime mutex. Each timed call writes a selected ID and a relaxed atomic capacity-output
+slot on both paths; the candidate explicitly stores zero rather than omitting that observation.
+The common output-store cost is included. The baseline additionally reads its actual vector
+capacity through a local scalar adapter; this mechanical observation cost is included in its
+duration. Compiler code generation, adapter and timer costs can dominate tiny differences, which
+must never be attributed solely to selector logic. No workers, provider I/O, physical desktop
+input or public task admission run.
+
+`FileOps.Queue.Selector.BaselineBatchUs` and `CandidateBatchUs` report the exclusive 16-call
+component duration in microseconds; `value0` is fixture task count and `value1` the independently
+expected task ID. Detail binds protocol, storage/key direction, pair index, execution order and
+call count. `CollectionCapacityBytes` reports the baseline's actual vector capacity times element
+size in `value0` and candidate temporary collection capacity zero in `value1`. These are neither
+allocator-call counts nor heap/process peaks; all existing task/admission storage is excluded.
+Retain all 48 pairs (96 duration rows and 48 capacity rows), zero-duration samples and regressions.
+Report raw samples and medians/ranges; no p95, fixed speedup or wall-time acceptance threshold applies.
+
+Archive results, trace and raw metrics with exact source/binary/build receipt, build flavor,
+machine/root, fixture/protocol and frozen-baseline identities. Debug first establishes correctness
+and diagnostic costs; measured latency conclusions require test-enabled Release. This same-binary
+component A/B can establish selector cost and temporary-collection differences under its declared
+fixture, never historical whole-application speedup, production queue-start latency, NAS throughput
+or complete queue non-regression. Existing start-order/cancellation tests remain required.
+
 ## Validation-planner scenario contract
 
 Operation Startrail is itself performance-sensitive tooling. Its implementation must
@@ -2621,3 +2679,54 @@ The checked directory decoder and random destination-bound payload adoption prot
 Protect the existing 2000-direct-file analysis cohort and synthetic lifecycle captures when changing workspace actions. Preserve all 32 natural sibling-query samples per fresh process, identify the exact binary/receipt and compare only that unchanged query span with its baseline; added scenario work is not a whole-case speed comparison. Record viewer.space.exclusions.bind_us, viewer.space.workspace.facts_us, viewer.space.export.prepare_us and existing layout/render/input timings. Exclusion/facts/export preparation targets 1.2-ms cooperative turns; publication, shared recorder overhead and overruns remain in the evidence rather than being trimmed. Record owned projection/export reservation bytes separately from process working set. These focused fixtures do not close the large-drive/provider/platform or 150/310-ms end-to-end targets.
 
 The native export integration runs the production snapshot and atomic writer without showing a Save dialog, through a test-only marked-sandbox gateway. Its publication fault must preserve an existing destination. The close-during-writer gate duplicates owned events, has a bounded worker timeout, proves Close returns without joining, and keeps plugin unload blocked until the pinned callback completes. Lifecycle captures assert the renderer's DPI agrees with its window after live theme updates and wait for both table and map publication before capturing review/exclusion states.
+
+### BUG-09 Local ancestry marker-proof component pairing
+
+`FileOps_LocalAncestryMarkerProofCost` is an ordinary FileOps phase in unfiltered Full
+and the existing safety-remediation family. It retains the ordinary runner desktop lease;
+its internal activation blocker prevents focus-taking but grants no no-lease classification.
+Release Full can supply the paired component data without a duplicate filtered campaign.
+An unavailable configured, already marked alternate-root resource or absent explicit
+alternate-volume opt-in yields a recorded prerequisite skip, never paired qualification.
+The case never falls through to volume discovery, initializes a root, or creates links,
+shares or mounts. On the approved local setup record the actual primary ReFS/alternate
+NTFS route; other machines must retain their actual filesystem provenance.
+
+Sixteen cohorts are the product of primary-to-alternate/alternate-to-primary, normal
+Ready/source-identityless, and shallow-existing/deep32-existing/deep32-missing8/
+deep32-extended shapes. Both A and B consume the identical source directory, absent
+final target, actual qualified distinct Local roots and identity treatment in a cohort.
+Deep shapes contain 32 fixed components and must really exceed MAX_PATH; missing8
+leaves the last eight destination parents absent. Source identitylessness uses only the
+existing scoped unsupported-binding fixture and must produce its real injected counter
+and Unsupported/no-bound-source observation; normal mode must remain Ready/bound-directory.
+
+A invokes the current production identity guard for observation and releases its bindings;
+it never executes a task, authorizes a transfer or claims a negative ancestry result.
+B invokes that same guard and the actual marker proof. One untimed A/B warmup precedes
+six literal alternating ABBA/BAAB blocks, four calls per window: 1,536 timed guard calls
+and 768 timed proofs. Warmups and 16 subsequent untimed actual Copy routing/byte witnesses
+are separately labelled and excluded. The Copy constructs its own production task/gate;
+no observation from A grants it authority. Source and destination bytes must match the
+synthetic 4 KiB payload with source retained, and owned markers/fixture roots must retire.
+
+`FileOps.SelfTest.AncestryGateCallUs` retains every outer lifetime sample, block/window/
+iteration/order/role, guard state and outcome; `AncestryGateGuardStatus` retains actual
+status/binding observations. Existing `FileOps.Transfer.InsideSourceProbeUs` retains
+individual proof duration, lookup/probe counts and HRESULT. Exactly 49 proof rows per
+cohort include its one warmup; all must be S_OK/outside with positive bounded probes and
+the existing outside-path lookup accounting (probe count plus five, or plus thirteen for
+missing8). The actual identity-less injected count must match its 98 guard calls including
+warmups; normal mode adds none. Copy routing must add actual successful proof rows.
+PID/thread/file order and the surrounding per-call rows bind raw observations. Missing
+or inconsistent rows fail the case; counters are not reconstructed from elapsed time.
+
+`AncestryGateJsonlUs` records the existing JSONL observer's inclusive thread-write time
+and count around each measured lifetime. The outer B span includes its extra inner
+instrumentation; retain this overhead separately and never silently subtract it or
+attribute all difference to filesystem I/O. Setup, payload checks, parsing, assertions
+and summary emission stay outside the timed spans. Retain all paired differences and
+median/range/p95 distributions, including zeros and slower samples, with source/profile/
+receipt and fixture bindings. No numeric acceptance threshold is introduced. This is a
+within-build bounded proof-stage cost observation, not historical speedup, full-transfer
+throughput, NAS/export alias qualification or repository/desktop/Full acceptance by itself.

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <string>
 
 // I63 G7 (D-14): keep the computer awake while a File Operations task runs.
 //
@@ -42,6 +43,17 @@ static_assert(! AwaitingAnswerIsQuiet(0u));
 static_assert(! AwaitingAnswerIsQuiet(kAwaitingAnswerQuietMs - 1u));
 static_assert(AwaitingAnswerIsQuiet(kAwaitingAnswerQuietMs));
 
+// One deadline until the task becomes quiet; once quiet, only a decision, cancellation
+// or resumed work should wake its worker. The shorter budget is a deterministic test seam.
+[[nodiscard]] constexpr DWORD AwaitingAnswerWaitMilliseconds(const uint64_t msSinceLastProgress,
+                                                             const DWORD quietPeriodMs = static_cast<DWORD>(kAwaitingAnswerQuietMs)) noexcept
+{
+    return msSinceLastProgress >= quietPeriodMs ? INFINITE : quietPeriodMs - static_cast<DWORD>(msSinceLastProgress);
+}
+static_assert(AwaitingAnswerWaitMilliseconds(0u) == kAwaitingAnswerQuietMs);
+static_assert(AwaitingAnswerWaitMilliseconds(kAwaitingAnswerQuietMs - 1u) == 1u);
+static_assert(AwaitingAnswerWaitMilliseconds(kAwaitingAnswerQuietMs) == INFINITE);
+
 // A task needs the machine awake when it is admitted, not finished, and either stopping or neither paused nor quietly
 // waiting for an answer. A task that is only queued behind another task is not admitted and never counts.
 [[nodiscard]] constexpr bool TaskNeedsMachineAwake(const KeepAwakeFacts& facts) noexcept
@@ -53,14 +65,15 @@ static_assert(AwaitingAnswerIsQuiet(kAwaitingAnswerQuietMs));
 // create returns an empty handle when the request cannot be created. set and clear return false on failure.
 struct PowerRequestApi final
 {
-    wil::unique_handle (*create)(void* context, const wchar_t* reason) noexcept = nullptr;
-    bool (*set)(void* context, HANDLE request) noexcept                         = nullptr;
-    bool (*clear)(void* context, HANDLE request) noexcept                       = nullptr;
-    void* context                                                               = nullptr;
+    wil::unique_handle (*create)(void* context, wchar_t* reason) noexcept = nullptr;
+    bool (*set)(void* context, HANDLE request) noexcept                   = nullptr;
+    bool (*clear)(void* context, HANDLE request) noexcept                 = nullptr;
+    void* context                                                         = nullptr;
 };
 
 // Counted holders around one power request. The first Acquire sets PowerRequestSystemRequired, the Release that drops
-// the last holder clears it. The request handle is created on the first Acquire and kept until the object is destroyed.
+// the last holder clears it. The request handle is created on the first Acquire and kept until destruction, except that
+// a failed clear retires it to end any outstanding kernel request before another Acquire can create a fresh handle.
 // Thread-safe; its mutex is a leaf (no other lock is taken or any callback made while it is held, apart from the three
 // API calls).
 class PowerRequest final
@@ -68,11 +81,13 @@ class PowerRequest final
 public:
     struct Counters final
     {
-        uint32_t holders            = 0u;    // Acquire calls not yet matched by a Release
-        uint32_t acquireTransitions = 0u;    // changes from no holder to one holder
-        uint32_t releaseTransitions = 0u;    // changes from one holder to no holder
-        uint32_t failures           = 0u;    // power API calls that failed
+        uint32_t holders            = 0u; // Acquire calls not yet matched by a Release
+        uint32_t acquireTransitions = 0u; // changes from no holder to one holder
+        uint32_t releaseTransitions = 0u; // changes from one holder to no holder
+        uint32_t failures           = 0u; // power API calls that failed
+        DWORD lastError             = ERROR_SUCCESS;
         bool held                   = false; // the system-required request is set right now
+        bool failureLogged          = false; // at most one diagnostic per object
     };
 
     PowerRequest() noexcept;
@@ -99,11 +114,14 @@ private:
 
     mutable std::mutex _mutex;
     PowerRequestApi _api;
+    // Capture localization and allocate writable API storage before entering the leaf mutex.
+    std::wstring _reason;
     wil::unique_handle _request;
     uint32_t _holders            = 0u;
     uint32_t _acquireTransitions = 0u;
     uint32_t _releaseTransitions = 0u;
     uint32_t _failures           = 0u;
+    DWORD _lastError             = ERROR_SUCCESS;
     bool _held                   = false;
     bool _failureLogged          = false;
 };

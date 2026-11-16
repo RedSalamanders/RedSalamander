@@ -1,0 +1,21 @@
+# PERF02 paired tooling component evidence
+
+32 observations passed on one Windows x64 host using PowerShell 7.6.9. Baseline target functions/blocks came from `78a8a75c46b784c52c5aeb82c0a3bf0773e61f6e`; candidate target bytes and the 195-file imported dependency closure are recorded in [results.json](results.json). Both sides used the same current dependency implementations, source data and process. This compares the changed components, not two complete repository revisions or native builds.
+
+| Executed scenario | Baseline work | Candidate work | Baseline/candidate median ms |
+|---|---|---|---|
+| Two historical-tree and two mutable-index reads, with a staged addition | 2 `ls-tree`, 2 `ls-files` | 1 `ls-tree`, 2 `ls-files` | 306.232 / 240.665 |
+| Fresh same-volume archive, 33 payload files | 5 complete inventory helper calls | 4 complete inventory helper calls | 73.464 / 66.931 |
+| Recovery after injected failure following durable intent | 2 inventory helper calls | 2 inventory helper calls | 44.351 / 37.328 |
+| Exact production governance block, identical snapshot | 1 manifest read and governance evaluation | 0 repeated reads/evaluations | 432.508 / 0.048 |
+| Same block, changed snapshot | 1 manifest read and governance evaluation | 1 manifest read and governance evaluation | 446.466 / 437.579 |
+
+Git observations used four counterbalanced pairs; archive and governance scenarios used three pairs each. Full elapsed samples, including first-use costs and ranges, remain in the JSON. The Git span includes the same staged mutation on each side. Governance timing excludes the validated prebuild manifest acquisition and uses the actual current 126-input repository build graph. Measured targets, imported dependencies and those graph inputs were held stable; target/dependency hashes were verified across execution and graph hashes were captured afterward. Concurrent native review edits occurred outside this measured input set; this is not a whole-repository source freeze claim. Elapsed values are component diagnostics; no end-to-end planning, Full-run, native throughput or uniform speedup claim follows from them. The Git target also contains the reviewed parser change, so elapsed differences cannot be attributed solely to caching.
+
+The archive counter measures every actual call to `Get-RSTestRunArchiveInventory` inside the operation. [scan-callers.json](scan-callers.json) confirms three stable-source acquisitions on this fixture, then a baseline-only source recheck and the mandatory destination verification: **5 to 4**, not the audit's conceptual four-to-three count assuming two stable acquisitions. Interrupted-intent recovery retained its source and destination verification on both sides.
+
+Every Git observation preserved one historical-tree digest and observed mutable-index rows increasing from 256 to 257. Every archive completed with the source absent, destination inventory exactly equal to its intent, and a matching completion/intent hash. Every governance observation returned the same manifest digest; the changed-snapshot negative control reran validation. All 32 rows passed explicit counter and outcome assertions. Target and imported-dependency hashes were unchanged across the successful execution.
+
+[recipe.txt](recipe.txt) contains the exact executed recipe. It executes the real baseline/current functions with counting wrappers around their actual Git/inventory operations, and the exact extracted production governance blocks with real manifest/schema/graph validation. It introduces no simulated IO result and no production instrumentation patch. [raw-bindings.json](raw-bindings.json) binds the full retained source capsules, recipe, rows and transcript beneath the existing marked sandbox. The successful raw run and rejected first attempt were subsequently preserved through the canonical verified archive transaction. The first attempt failed while selecting a governance block; its results are excluded, its error/recipe retained, and the complete pair was rerun fresh.
+
+This is focused component evidence. Cold complete workspace/planner acquisition, Full-resume avoidance, production/native acceptance and machine power behavior remain unqualified. No artifact receipt or source requalification is manufactured here.

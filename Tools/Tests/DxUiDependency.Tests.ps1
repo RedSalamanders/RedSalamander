@@ -1,7 +1,308 @@
+Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiDependency.psm1') -Force
+$script:dxUiTestModule = Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/DxUiDependency.psm1') -Force -PassThru
+$script:dxUiMetadataAudit = $null
+
+function Invoke-RSDxUiTestGit {
+    # Fixture setup may write only its sandbox repository; use the same safe
+    # capture boundary rather than executing a legacy bare-CUI baseline.
+    $capture = & $script:dxUiTestModule {
+        param($Directory, $GitArguments)
+        Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Directory -Arguments $GitArguments
+    } $repoRoot ([string[]]$args)
+    if ($null -ne $script:dxUiMetadataAudit -and $script:dxUiMetadataAudit.Active) {
+        $record = Assert-RSTestSandboxContainedPath -TestRoot $script:dxUiMetadataAudit.TestRoot `
+            -Path (Join-Path $script:dxUiMetadataAudit.Directory 'git-captures.jsonl') -RequireDescendant
+        [ordered]@{arguments=@($args);cwd=$repoRoot;exit=$capture.ExitCode;stdout=@($capture.StdOut);stderr=@($capture.StdErr)} |
+            ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath $record -Encoding utf8
+    }
+    $global:LASTEXITCODE = $capture.ExitCode
+    return $capture.StdOut
+}
+
+
+
+function Invoke-RSDxUiTestMetadataCapture {
+    param([string]$FilePath, [string[]]$Arguments, [string]$WorkingDirectory=$repoRoot)
+    return & $script:dxUiTestModule {
+        param($File,$Values,$Directory)
+        Invoke-RSDxUiReadOnlyCapture -FilePath $File -Arguments $Values -WorkingDirectory $Directory
+    } $FilePath $Arguments $WorkingDirectory
+}
+
+function Start-RSDxUiMetadataAudit {
+    # Test-only interception; canonical starter still owns launch and lifetime.
+    $directory = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('metadata-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+    $testRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+    $record = Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path $directory 'launches.jsonl') -RequireDescendant
+    $state = [pscustomobject]@{PreviousRecord=$env:RS_DXUI_METADATA_RECORD;PreviousStarter=$env:RS_DXUI_METADATA_STARTER;
+        PreviousAudit=$script:dxUiMetadataAudit;Directory=$directory;TestRoot=$testRoot;Active=$true;
+        Record=$record;Starter=(Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')}
+    $script:dxUiMetadataAudit = $state
+    $env:RS_DXUI_METADATA_RECORD = Join-Path $directory 'launches.jsonl'
+    $env:RS_DXUI_METADATA_STARTER = Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+    $installed = $false
+    try {
+    Mock Start-RSContainedProcess -ModuleName ProcessStreaming ({
+        param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
+        if(-not $state.Active){throw 'Metadata audit lease is inactive.'}
+        if($ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or
+            -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation){
+            throw 'Refusing unsafe DxUi metadata fixture launch.'
+        }
+        $modules = @(Get-Module -All | Where-Object { $_.Path -ceq $state.Starter })
+        if($modules.Count -ne 1){throw 'Expected one canonical metadata starter module.'}
+        $starter = $modules[0].ExportedFunctions['Start-RSContainedProcess']
+        $record = Assert-RSTestSandboxContainedPath -TestRoot $state.TestRoot -Path (Join-Path $state.Directory 'launches.jsonl') -RequireDescendant
+        $owned = & $starter -ProcessStartInfo $ProcessStartInfo
+        $transferred = $false
+        try {
+            [ordered]@{process=$owned.Id;exact_job=$owned.IsInContainmentJob;file=$ProcessStartInfo.FileName;cwd=$ProcessStartInfo.WorkingDirectory;
+                arguments=@($ProcessStartInfo.ArgumentList);no_window=$ProcessStartInfo.CreateNoWindow;stdout=$ProcessStartInfo.RedirectStandardOutput;
+                stderr=$ProcessStartInfo.RedirectStandardError;delegated=[bool]$DelegateArtifactOperation} |
+                ConvertTo-Json -Compress | Add-Content -LiteralPath $record -Encoding utf8
+            $transferred = $true
+            return $owned
+        } finally {if(-not $transferred){$owned.Dispose()}}
+    }.GetNewClosure())
+        $installed = $true
+        return $state
+    } finally {
+        if(-not $installed){Stop-RSDxUiMetadataAudit -State $state}
+    }
+}
+
+function Stop-RSDxUiMetadataAudit {
+    param($State)
+    try {
+        $State.Active = $false
+        $script:dxUiMetadataAudit = $State.PreviousAudit
+    } finally {
+        $env:RS_DXUI_METADATA_RECORD = $State.PreviousRecord
+        $env:RS_DXUI_METADATA_STARTER = $State.PreviousStarter
+    }
+}
+
+function Assert-RSDxUiMetadataAudit {
+    param($State, [int]$ExpectedMSBuild)
+    $rows=@(Get-Content (Join-Path $State.Directory 'launches.jsonl')|ForEach-Object{$_|ConvertFrom-Json})
+    @($rows|Where-Object{[IO.Path]::GetFileName($_.file) -ieq 'MSBuild.exe'}).Count|Should Be $ExpectedMSBuild
+    @($rows|Where-Object{[IO.Path]::GetFileName($_.file) -ieq 'vswhere.exe'}).Count|Should Be 1
+    @($rows|Where-Object{-not $_.no_window -or -not $_.stdout -or -not $_.stderr -or -not $_.exact_job -or $_.delegated}).Count|Should Be 0
+}
+
+Describe 'Captured DxUi source Git identity' {
+    function New-RSDxUiCaptureFixture {
+        param([string]$Root)
+        [void][IO.Directory]::CreateDirectory((Join-Path $Root 'Dependencies'))
+        $commit = 'a' * 40
+        @{repository='https://github.com/RedSalamanders/DxUi';commit=$commit;apiRevision=3;targets=@('DxUi')} |
+            ConvertTo-Json | Set-Content (Join-Path $Root 'Dependencies/DxUi.lock.json') -Encoding utf8
+        [void][IO.Directory]::CreateDirectory((Join-Path $Root ('.build/dependencies/DxUi/source/' + $commit.Substring(0,16))))
+        return $Root
+    }
+
+    It 'captures separate line arrays and actual exit using the first Git application without host output or delegation' {
+        $captureRoot = Join-Path $TestDrive 'capture-streams'
+        [void][IO.Directory]::CreateDirectory($captureRoot)
+        Mock Get-Command -ModuleName DxUiDependency {
+            @([pscustomobject]@{Source='C:\first Git\git.exe'},[pscustomobject]@{Source='C:\second Git\git.exe'})
+        } -ParameterFilter { $Name -ceq 'git' -and $CommandType -eq 'Application' -and $env:RS_DXUI_FAKE_GIT -ceq '1' }
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
+            @{file=$FilePath;arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation} |
+                ConvertTo-Json -Compress | Set-Content (Join-Path $WorkingDirectory 'recording.json') -Encoding utf8
+            & $OutputLineCallback 'first line' $false
+            & $OutputLineCallback '' $false
+            & $OutputLineCallback 'snow 雪' $false
+            & $OutputLineCallback 'separate error' $true
+            return 17
+        } -ParameterFilter { $WorkingDirectory -like '*capture-streams' }
+        $priorFake = $env:RS_DXUI_FAKE_GIT
+        try {
+            $env:RS_DXUI_FAKE_GIT = '1'
+            $result = @(& $script:dxUiTestModule {
+                param($Root)
+                Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('literal space','snow 雪','$notAnExpression')
+            } $captureRoot)
+        } finally { $env:RS_DXUI_FAKE_GIT = $priorFake }
+        $result.Count | Should Be 1
+        $result[0].ExitCode | Should Be 17
+        ($result[0].StdOut -join '|') | Should Be 'first line||snow 雪'
+        ($result[0].StdErr -join '|') | Should Be 'separate error'
+        $record = Get-Content (Join-Path $captureRoot 'recording.json') -Raw | ConvertFrom-Json
+        $record.file | Should Be 'C:\first Git\git.exe'
+        ($record.arguments -join '|') | Should Be 'literal space|snow 雪|$notAnExpression'
+        $record.cwd | Should Be $captureRoot
+        $record.delegated | Should Be $false
+    }
+
+    It 'keeps the three literal identity queries and clean empty output separate from stderr' {
+        $root = New-RSDxUiCaptureFixture (Join-Path $TestDrive 'capture identity root')
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
+            [IO.File]::AppendAllText((Join-Path $WorkingDirectory 'queries.jsonl'), ((@{arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation}|ConvertTo-Json -Compress)+"`n"))
+            if ($Arguments[-1] -ceq 'HEAD') { & $OutputLineCallback ('a'*40) $false }
+            elseif ($Arguments[-1] -ceq 'HEAD:include') { & $OutputLineCallback ('b'*40) $false }
+            else { & $OutputLineCallback 'warning is not a dirty stdout row' $true }
+            return 0
+        } -ParameterFilter { $WorkingDirectory -like '*capture identity root' }
+        $identity = Get-RSDxUiSourceIdentity -RepoRoot $root
+        $identity.Pin.commit | Should Be ('a'*40)
+        $identity.PublicHeadersGitTree | Should Be ('b'*40)
+        $queries = @(Get-Content (Join-Path $root 'queries.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
+        $queries.Count | Should Be 3
+        ($queries[0].arguments -join '|') | Should Be ('-C|'+$identity.Source+'|rev-parse|HEAD')
+        ($queries[1].arguments -join '|') | Should Be ('-C|'+$identity.Source+'|--no-optional-locks|status|--porcelain|--untracked-files=normal')
+        ($queries[2].arguments -join '|') | Should Be ('-C|'+$identity.Source+'|rev-parse|HEAD:include')
+        @($queries | Where-Object { $_.cwd -cne $root }).Count | Should Be 0
+        @($queries | Where-Object delegated).Count | Should Be 0
+        $work = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('identity-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+        $queries | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $work 'identity-queries.json') -Encoding utf8
+    }
+
+    It 'fails closed on <Mode> without accepting captured stdout as success' -TestCases @(
+        @{Mode='head-exit'}, @{Mode='pin-mismatch'}, @{Mode='dirty-status'}, @{Mode='status-exit'}, @{Mode='tree-exit'}
+    ) {
+        param($Mode)
+        $root = New-RSDxUiCaptureFixture (Join-Path $TestDrive ('capture-'+$Mode))
+        $Mode | Set-Content (Join-Path $root 'query-mode')
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback)
+            $mode = (Get-Content (Join-Path $WorkingDirectory 'query-mode') -Raw).Trim()
+            if ($Arguments[-1] -ceq 'HEAD') {
+                & $OutputLineCallback ($(if($mode -ceq 'pin-mismatch'){'c'*40}else{'a'*40})) $false
+                if($mode -ceq 'head-exit'){return 128}
+            } elseif ($Arguments[-1] -ceq 'HEAD:include') {
+                if($mode -ceq 'tree-exit'){& $OutputLineCallback 'missing include tree' $true;return 128}
+                & $OutputLineCallback ('b'*40) $false
+            } else {
+                if($mode -ceq 'dirty-status'){& $OutputLineCallback '?? untracked 雪.txt' $false}
+                if($mode -ceq 'status-exit'){return 17}
+            }
+            return 0
+        } -ParameterFilter { (Test-Path -LiteralPath (Join-Path $WorkingDirectory 'query-mode')) }
+        $message = ''
+        try { Get-RSDxUiSourceIdentity -RepoRoot $root | Out-Null } catch { $message = $_.Exception.Message }
+        $expected = if($Mode -in @('head-exit','pin-mismatch')){'does not match the product pin'}elseif($Mode -eq 'tree-exit'){'Cannot identify the pinned DxUi public headers'}else{'restored DxUi source is dirty'}
+        $message | Should Match ([regex]::Escape($expected))
+    }
+
+    It 'preflights actual Git PSI before launching and preserves Unicode, exit, environment and owned-job facts' {
+        $expectedStreamPath = [IO.Path]::GetFullPath((Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1'))
+        # Resolve in the actual consumer session. Its current Get-Command can be
+        # a legitimate Pester proxy; validate the canonical export owner instead.
+        $streamCandidates = @(& $script:dxUiTestModule {
+            Get-Module -Name ProcessStreaming -All | Where-Object { $_.ModuleType -eq 'Script' }
+        })
+        $streamCandidates.Count | Should Be 1
+        $stream = $streamCandidates[0]
+        $export = $stream.ExportedFunctions['Invoke-RSStreamingProcess']
+        $validOwner = { param([object[]]$Candidates, [string]$ExpectedPath, $Command)
+            if ($null -eq $Candidates -or $Candidates.Count -ne 1) { return $false }
+            $module = $Candidates[0]
+            if ($module -isnot [Management.Automation.PSModuleInfo] -or
+                $module.ModuleType -ne 'Script' -or [string]::IsNullOrEmpty($module.Path)) { return $false }
+            return [string]::Equals([IO.Path]::GetFullPath($module.Path), $ExpectedPath, [StringComparison]::OrdinalIgnoreCase) -and
+                $Command -is [Management.Automation.FunctionInfo] -and [object]::ReferenceEquals($Command.Module, $module)
+        }
+        (& $validOwner $streamCandidates $expectedStreamPath $export) | Should Be $true
+        (& $validOwner @() $expectedStreamPath $export) | Should Be $false
+        (& $validOwner @($null) $expectedStreamPath $export) | Should Be $false
+        (& $validOwner @([pscustomobject]@{Path=$expectedStreamPath;ModuleType='Script'}) $expectedStreamPath $export) | Should Be $false
+        (& $validOwner $streamCandidates ($expectedStreamPath+'.other') $export) | Should Be $false
+        (& $validOwner $streamCandidates $expectedStreamPath $script:dxUiTestModule.ExportedFunctions['Get-RSDxUiPin']) | Should Be $false
+        (& $validOwner $streamCandidates $expectedStreamPath ([pscustomobject]@{Module=$stream})) | Should Be $false
+        (& $validOwner @($stream,$stream) $expectedStreamPath $export) | Should Be $false
+        $sandbox = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('git-'+[guid]::NewGuid().ToString('N').Substring(0,8))
+        [ordered]@{strict_entry='Latest';canonical_candidates=$streamCandidates.Count;export_owner_reference_match=[object]::ReferenceEquals($export.Module,$stream);
+            missing_lookalike_wrongpath_wrongowner_proxy_ambiguity_rejected=$true} |
+            ConvertTo-Json | Set-Content (Join-Path $sandbox 'module-ownership.json') -Encoding utf8
+        $origin = Join-Path $sandbox 'origin 雪'
+        [void][IO.Directory]::CreateDirectory((Join-Path $origin 'include'))
+        $priorRecord = $env:RS_DXUI_CAPTURE_RECORD
+        $priorModule = $env:RS_DXUI_CAPTURE_STARTER
+        $priorSentinel = $env:RS_DXUI_CAPTURE_SENTINEL
+        try {
+            $env:RS_DXUI_CAPTURE_RECORD = Join-Path $sandbox 'launches.jsonl'
+            $env:RS_DXUI_CAPTURE_STARTER = Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+            $env:RS_DXUI_CAPTURE_SENTINEL = 'literal inherited 雪'
+            Mock Start-RSContainedProcess -ModuleName ProcessStreaming {
+                param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
+                if($ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or
+                    -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation) {
+                    throw 'Refusing unsafe DxUi Git fixture launch.'
+                }
+                if ($null -eq $ProcessStartInfo.StandardOutputEncoding -or $ProcessStartInfo.StandardOutputEncoding.CodePage -ne 65001 -or $null -ne $ProcessStartInfo.StandardErrorEncoding) { throw 'Git stdout must be UTF8 without changing stderr decoding.' }
+                # Resolve the already-loaded canonical module without importing it
+                # over this module-scoped interception after the first child.
+                $starterModule = @(Get-Module -All | Where-Object { $_.Path -ceq $env:RS_DXUI_CAPTURE_STARTER })
+                if ($starterModule.Count -ne 1) { throw 'Expected one canonical contained-process module.' }
+                $starter = $starterModule[0].ExportedFunctions['Start-RSContainedProcess']
+                $owned = & $starter -ProcessStartInfo $ProcessStartInfo
+                $transferred = $false
+                try {
+                    [ordered]@{process=$owned.Id;exact_job=$owned.IsInContainmentJob;file=$ProcessStartInfo.FileName;
+                        cwd=$ProcessStartInfo.WorkingDirectory;arguments=@($ProcessStartInfo.ArgumentList);no_window=$ProcessStartInfo.CreateNoWindow;
+                        stdout=$ProcessStartInfo.RedirectStandardOutput;stderr=$ProcessStartInfo.RedirectStandardError;delegated=[bool]$DelegateArtifactOperation;
+                        inherited_sentinel=$ProcessStartInfo.Environment['RS_DXUI_CAPTURE_SENTINEL']} |
+                        ConvertTo-Json -Compress | Add-Content -LiteralPath $env:RS_DXUI_CAPTURE_RECORD -Encoding utf8
+                    $transferred = $true
+                    return $owned
+                } finally { if(-not $transferred){$owned.Dispose()} }
+            }
+            # Assert the hook is in the actual module before any real fixture child.
+            (& $stream { (Get-Command Start-RSContainedProcess).Definition }) | Should Match 'Invoke-Mock'
+            $unsafe = [Diagnostics.ProcessStartInfo]::new()
+            $unsafe.FileName = (Get-Command git -CommandType Application | Select-Object -First 1).Source
+            $unsafe.UseShellExecute = $false
+            $refused = $false
+            try { & $stream {param($Psi) Start-RSContainedProcess -ProcessStartInfo $Psi} $unsafe | Out-Null }
+            catch { $refused = $_.Exception.Message -like '*Refusing unsafe DxUi Git fixture*' }
+            $refused | Should Be $true
+            (Test-Path $env:RS_DXUI_CAPTURE_RECORD) | Should Be $false
+            '// synthetic header' | Set-Content (Join-Path $origin 'include/Example.h') -Encoding utf8
+            '// synthetic Unicode-name fixture' | Set-Content (Join-Path $origin 'include/資料 雪.sln') -Encoding utf8
+            Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $origin
+            Invoke-RSDxUiTestGit -C $origin add .
+            Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m 'Unicode 雪 fixture'
+            $LASTEXITCODE | Should Be 0
+            $unicode = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-C',$Root,'log','-1','--format=%s')} $origin
+            $unicode.ExitCode | Should Be 0
+            ($unicode.StdOut -join "`n") | Should Be 'Unicode 雪 fixture'
+            $savedConsoleEncoding=[Console]::OutputEncoding
+            $unicodeObservations=[Collections.Generic.List[object]]::new()
+            try {
+                foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                    [Console]::OutputEncoding=$encoding
+                    $paths = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-c','core.quotepath=false','-C',$Root,'ls-files')} $origin
+                    $paths.ExitCode | Should Be 0
+                    (@($paths.StdOut) -ccontains 'include/資料 雪.sln') | Should Be $true
+                    [Console]::OutputEncoding.CodePage | Should Be $encoding.CodePage
+                    $unicodeObservations.Add(@{parentCodePage=$encoding.CodePage;stdout=@($paths.StdOut);exit=$paths.ExitCode})
+                }
+            } finally { [Console]::OutputEncoding=$savedConsoleEncoding }
+            $unicodeObservations | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $sandbox 'git-stdout-unicode-codepages.json') -Encoding utf8
+            $failure = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-C',$Root,'rev-parse','HEAD:missing')} $origin
+            ($failure.ExitCode -ne 0) | Should Be $true
+            @($failure.StdErr).Count | Should BeGreaterThan 0
+            $env:RS_DXUI_CAPTURE_SENTINEL | Should Be 'literal inherited 雪'
+            $rows = @(Get-Content $env:RS_DXUI_CAPTURE_RECORD | ForEach-Object { $_ | ConvertFrom-Json })
+            $rows.Count | Should Be 7
+            @($rows | Where-Object { -not $_.no_window -or -not $_.stdout -or -not $_.stderr -or -not $_.exact_job -or $_.delegated }).Count | Should Be 0
+            @($rows | Where-Object { $_.inherited_sentinel -cne 'literal inherited 雪' }).Count | Should Be 0
+            $rows | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $sandbox 'safe-git-observations.json') -Encoding utf8
+        } finally {
+            $env:RS_DXUI_CAPTURE_RECORD=$priorRecord
+            $env:RS_DXUI_CAPTURE_STARTER=$priorModule
+            $env:RS_DXUI_CAPTURE_SENTINEL=$priorSentinel
+        }
+    }
+}
 
 Describe 'SDK consumer Windows header policy' {
+    BeforeEach { $script:dxUiMetadataAuditLease = $null; $script:dxUiMetadataAuditLease = Start-RSDxUiMetadataAudit }
+    AfterEach { if($null -ne $script:dxUiMetadataAuditLease){Stop-RSDxUiMetadataAudit -State $script:dxUiMetadataAuditLease} }
     It 'retains application macro semantics and the shared ABI guards in both native Release profiles' {
         $sdk = Join-Path $TestDrive 'sdk-profile'
         [void][IO.Directory]::CreateDirectory($sdk)
@@ -12,7 +313,9 @@ Describe 'SDK consumer Windows header policy' {
 </Project>
 '@ | Set-Content -LiteralPath (Join-Path $sdk 'DxUi.Sdk.props')
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $installationCapture = Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath')
+        if($installationCapture.ExitCode -ne 0){throw ('Cannot locate the metadata fixture toolchain: '+($installationCapture.StdErr -join [Environment]::NewLine))}
+        $installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
         $hostFolder = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ceq 'Arm64') {'arm64'} else {'amd64'}
         $msbuild = Join-Path $installation "MSBuild/Current/Bin/$hostFolder/MSBuild.exe"
         $taskProbe = Join-Path $sdk 'definition-list.targets'
@@ -24,9 +327,9 @@ Describe 'SDK consumer Windows header policy' {
 </Project>
 '@ | Set-Content -LiteralPath $taskProbe
         foreach ($platform in @('x64','ARM64')) {
-            $json = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo /p:Configuration=Release "/p:Platform=$platform" "/p:RSDxUiSdkRoot=$sdk" "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')" '-getItem:ClCompile,ProjectReference'
-            if ($LASTEXITCODE) {throw "Cannot evaluate SDK Windows macro policy for $platform."}
-            $evaluated = ($json -join "`n") | ConvertFrom-Json
+            $json = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', '/p:Configuration=Release', "/p:Platform=$platform", "/p:RSDxUiSdkRoot=$sdk", "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')", '-getItem:ClCompile,ProjectReference')
+            if ($json.ExitCode -ne 0) {throw "Cannot evaluate SDK Windows macro policy for $platform."}
+            $evaluated = ($json.StdOut -join "`n") | ConvertFrom-Json
             @($evaluated.Items.ClCompile).Count | Should BeGreaterThan 0
             foreach ($item in $evaluated.Items.ClCompile) {
                 $item.PreprocessorDefinitions | Should Not Match '(^|;)(WIN32_LEAN_AND_MEAN|NOMINMAX)(=1)?(;|$)'
@@ -38,8 +341,8 @@ Describe 'SDK consumer Windows header policy' {
             # A getItem string hides escaped delimiters. Exercise an actual
             # MSBuild task's list binding, as the compiler task consumes it.
             $lines = Join-Path $sdk ("definitions-$platform.txt")
-            $probeOutput = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo /p:Configuration=Release "/p:Platform=$platform" "/p:RSDxUiSdkRoot=$sdk" "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')" "/p:ForceImportAfterCppTargets=$taskProbe" "/p:I61DefinitionLines=$lines" /t:I61DefinitionListProbe 2>&1
-            if ($LASTEXITCODE) {throw "Cannot probe actual MSBuild definition list binding for $platform`: $($probeOutput -join [Environment]::NewLine)"}
+            $probeOutput = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', '/p:Configuration=Release', "/p:Platform=$platform", "/p:RSDxUiSdkRoot=$sdk", "/p:RSCiEngineRoot=$(Join-Path $repoRoot '.ci-engine')", "/p:ForceImportAfterCppTargets=$taskProbe", "/p:I61DefinitionLines=$lines", '/t:I61DefinitionListProbe')
+            if ($probeOutput.ExitCode -ne 0) {throw "Cannot probe actual MSBuild definition list binding for $platform`: $((@($probeOutput.StdOut)+@($probeOutput.StdErr)) -join [Environment]::NewLine)"}
             $definitions = @(Get-Content -LiteralPath $lines)
             $definitions.Count | Should BeGreaterThan 4
             foreach ($definition in $definitions) {$definition | Should Not Match ';'}
@@ -50,6 +353,7 @@ Describe 'SDK consumer Windows header policy' {
         # Metadata evaluation above grants no build/ABI verdict. Actual SDK builds
         # must still execute the shared live-reader and per-TU admission targets.
         [IO.File]::ReadAllText((Join-Path $repoRoot 'Build/RedSalamander.DxUi.props')) | Should Match 'Ci\.SdkConsumer\.targets'
+        Assert-RSDxUiMetadataAudit -State $script:dxUiMetadataAudit -ExpectedMSBuild 4
     }
 }
 
@@ -69,7 +373,7 @@ Describe 'Folded DxUi change notes' {
 Describe 'Canonical DxUi source ownership' {
     It 'keeps the shared implementation and control suites out of the consumer tracked tree' {
         foreach ($relative in @('Common/DxUi', 'Tests/DxUiTests')) {
-            $tracked = @(& git -C $repoRoot ls-files -- $relative)
+            $tracked = @(Invoke-RSDxUiTestGit -C $repoRoot ls-files -- $relative)
             if ($LASTEXITCODE -ne 0) { throw "Cannot enumerate tracked legacy path: $relative" }
             $tracked.Count | Should Be 0
         }
@@ -79,7 +383,7 @@ Describe 'Canonical DxUi source ownership' {
     }
 
     It 'keeps owned project inputs separate from the restored library implementation' {
-        $projects = @(& git -C $repoRoot ls-files -- '*.vcxproj')
+        $projects = @(Invoke-RSDxUiTestGit -C $repoRoot ls-files -- '*.vcxproj')
         if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate owned projects.' }
         $projects.Count | Should BeGreaterThan 0
         foreach ($project in $projects) {
@@ -134,18 +438,18 @@ Describe 'Exact DxUi consumer dependency' {
         [void](New-Item -ItemType Directory -Path (Join-Path $origin 'include') -Force)
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'Dependencies') -Force)
         'synthetic public header' | Set-Content -LiteralPath (Join-Path $origin 'include/Example.h')
-        & git init --quiet $origin
-        & git -C $origin add .
-        & git -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit init --quiet $origin
+        Invoke-RSDxUiTestGit -C $origin add .
+        Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize isolated source fixture.' }
-        $head = (& git -C $origin rev-parse HEAD).Trim()
+        $head = (Invoke-RSDxUiTestGit -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $rejected=$false; try { Get-RSDxUiSourceIdentity -RepoRoot $root | Out-Null } catch { $rejected=$true }; $rejected | Should Be $true
         Get-RSDxUiSourceIdentity -RepoRoot $root -AllowMissing | Should BeNullOrEmpty
         $source = Join-Path $root ".build/dependencies/DxUi/source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
-        & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated source fixture.' }
         (Get-RSDxUiSourceIdentity -RepoRoot $root).Pin.commit | Should Be $head
         $header = Join-Path $source 'include/Example.h'
@@ -164,17 +468,17 @@ Describe 'Exact DxUi consumer dependency' {
         [void](New-Item -ItemType Directory -Path (Join-Path $origin 'include') -Force)
         [void](New-Item -ItemType Directory -Path (Join-Path $root 'Dependencies') -Force)
         'synthetic public header' | Set-Content -LiteralPath (Join-Path $origin 'include/Example.h')
-        & git init --quiet $origin
-        & git -C $origin add .
-        & git -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit init --quiet $origin
+        Invoke-RSDxUiTestGit -C $origin add .
+        Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize isolated provenance fixture.' }
-        $head = (& git -C $origin rev-parse HEAD).Trim()
+        $head = (Invoke-RSDxUiTestGit -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
         $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
-        & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone isolated provenance fixture.' }
         $identity = @{Fingerprint=('b'*64);Identity=@{commit=$head;apiRevision=3;platform='x64';disableStlAnnotations=$true}}
         $identityPath = Join-Path $dependency 'DxUi.identity.x64.json'
@@ -250,15 +554,15 @@ Describe 'Lighter DxUi source restore' {
             [void](New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force)
             [IO.File]::WriteAllText($target, $files[$relative])
         }
-        & git -c core.longpaths=true init --quiet $Path
+        Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $Path
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        & git -C $Path config core.longpaths true
+        Invoke-RSDxUiTestGit -C $Path config core.longpaths true
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        & git -C $Path add .
+        Invoke-RSDxUiTestGit -C $Path add .
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        & git -C $Path -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit -C $Path -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the restore fixture.' }
-        return (& git -C $Path rev-parse HEAD).Trim()
+        return (Invoke-RSDxUiTestGit -C $Path rev-parse HEAD).Trim()
     }
 
     It 'restores beneath a deep root with Git long paths, without measurements, specifications or gallery sheets' {
@@ -285,10 +589,10 @@ Describe 'Lighter DxUi source restore' {
             Test-Path -LiteralPath (Join-Path $source $kept) | Should Be $true
         }
         # Long paths live in the checkout's own configuration; no user or global configuration is involved.
-        (& git -C $source config --local --get core.longpaths) | Should Be 'true'
+        (Invoke-RSDxUiTestGit -C $source config --local --get core.longpaths) | Should Be 'true'
         # The omitted paths are not deletions: the restore's own clean-source check accepts the sparse checkout.
         (Get-RSDxUiSourceIdentity -RepoRoot $root).Pin.commit | Should Be $head
-        (& git -C $source rev-parse HEAD).Trim() | Should Be $head
+        (Invoke-RSDxUiTestGit -C $source rev-parse HEAD).Trim() | Should Be $head
     }
 
     It 'removes the partial checkout it created when the restore fails, and never one it did not' {
@@ -314,13 +618,25 @@ Describe 'Lighter DxUi source restore' {
 }
 
 Describe 'DxUi consumer profile evaluation' {
+    BeforeEach { $script:dxUiMetadataAuditLease = $null; $script:dxUiMetadataAuditLease = Start-RSDxUiMetadataAudit }
+    AfterEach { if($null -ne $script:dxUiMetadataAuditLease){Stop-RSDxUiMetadataAudit -State $script:dxUiMetadataAuditLease} }
     It 'uses the first-party host during restore and restores the caller environment after success or failure' {
-        $root = Join-Path $TestDrive ('host-restore-' + [guid]::NewGuid().ToString('N'))
+        $root = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness d -Case ('host-' + [guid]::NewGuid().ToString('N').Substring(0,8))
         # Exercise a genuinely long Git metadata path in both focused and deeper Full sandboxes.
         # Size the padding from the shortened source locator rather than the old 40-character folder.
         $metadataSuffix = '.build/dependencies/DxUi/source/' + ('0' * 16) + '/.git/hooks/fsmonitor-watchman.sample'
         $metadataPath = Join-Path $root $metadataSuffix
-        if ($metadataPath.Length -lt 280) { $root = Join-Path $root ('x' * (280 - $metadataPath.Length)) }
+        # The contract is long Git metadata, not a >260-character Git -C directory.
+        if ($metadataPath.Length -lt 270) { $root = Join-Path $root ('x' * (270 - $metadataPath.Length)) }
+        $predictedSource = Join-Path $root ('.build/dependencies/DxUi/source/' + ('0' * 16))
+        $metadataPath = Join-Path $root $metadataSuffix
+        if ($predictedSource.Length -gt 240) { throw 'Compiler-host fixture exceeds the safe Git -C directory budget (240).' }
+        $metadataPath.Length | Should BeGreaterThan 260
+        $budgetRecord = Assert-RSTestSandboxContainedPath -TestRoot $script:dxUiMetadataAudit.TestRoot `
+            -Path (Join-Path $script:dxUiMetadataAudit.Directory 'fixture-path-budget.json') -RequireDescendant
+        @{source_length=$predictedSource.Length;source_limit=240;metadata_length=$metadataPath.Length;metadata_minimum_exclusive=260;
+            placement='owned shallow source with long metadata; not Git -C>=265 support'} |
+            ConvertTo-Json | Set-Content $budgetRecord -Encoding utf8
         $origin = Join-Path $root 'fixture-origin'
         foreach ($relative in @('RedSalamander','Dependencies','Build','fixture-origin/include','fixture-origin/Tools')) {
             [void](New-Item -ItemType Directory -Path (Join-Path $root $relative) -Force)
@@ -358,26 +674,34 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
 '@ | Set-Content -LiteralPath (Join-Path $origin 'Tools/ConsumerBuild.psm1')
         # The fixture intentionally exceeds MAX_PATH, including Git's own object database.
         # Configure each bootstrap command before it can read a repository-local setting.
-        & git -c core.longpaths=true init --quiet $origin
+        Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $origin
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize long-path compiler-host fixture.' }
-        & git -c core.longpaths=true -C $origin config core.longpaths true
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $origin config core.longpaths true
         if ($LASTEXITCODE -ne 0) { throw 'Cannot configure long-path compiler-host fixture.' }
-        & git -c core.longpaths=true -C $origin add .
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $origin add .
         if ($LASTEXITCODE -ne 0) { throw 'Cannot stage long-path compiler-host fixture.' }
-        & git -c core.longpaths=true -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
         if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize compiler-host fixture.' }
-        $head = (& git -C $origin rev-parse HEAD).Trim()
+        $head = (Invoke-RSDxUiTestGit -C $origin rev-parse HEAD).Trim()
         @{repository='https://github.com/RedSalamanders/DxUi';commit=$head;apiRevision=3;targets=@('DxUi')} |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'Dependencies/DxUi.lock.json')
         $dependency = Join-Path $root '.build/dependencies/DxUi'
         $source = Join-Path $dependency "source/$($head.Substring(0,16))"
         [void](New-Item -ItemType Directory -Path (Split-Path $source) -Force)
         (Join-Path $source '.git/hooks/fsmonitor-watchman.sample').Length | Should BeGreaterThan 260
-        & git -c core.longpaths=true clone --config core.longpaths=true --quiet --local $origin $source
+        # Match the canonical restore's two phases: initialize the long-path
+        # repository before explicitly selecting its worktree and pinned commit.
+        # Copy fixture objects rather than retaining links to the origin.
+        Invoke-RSDxUiTestGit -c core.longpaths=true clone --config core.longpaths=true --quiet --local --no-hardlinks --no-checkout $origin $source
         if ($LASTEXITCODE -ne 0) { throw 'Cannot clone compiler-host fixture.' }
+        Invoke-RSDxUiTestGit -c core.longpaths=true -C $source checkout --quiet --detach $head
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot check out compiler-host fixture.' }
+        (Invoke-RSDxUiTestGit -c core.longpaths=true -C $source rev-parse HEAD).Trim() | Should Be $head
         Mock Invoke-RSDxUiRestoreProcess {} -ModuleName DxUiDependency
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $installationCapture = Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath')
+        if($installationCapture.ExitCode -ne 0){throw ('Cannot locate the metadata fixture toolchain: '+($installationCapture.StdErr -join [Environment]::NewLine))}
+        $installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
         $msbuild = Join-Path $installation 'MSBuild/Current/Bin/MSBuild.exe'
         $previousHost = $env:PreferredToolArchitecture
         try {
@@ -412,11 +736,14 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
             { Restore-RSDxUiDependency -RepoRoot $root -MSBuildPath $msbuild -Platform ARM64 -Configuration Debug } | Should Throw 'Injected identity failure'
             [string]$env:PreferredToolArchitecture | Should Be ''
         } finally { $env:PreferredToolArchitecture = $previousHost }
+        Assert-RSDxUiMetadataAudit -State $script:dxUiMetadataAudit -ExpectedMSBuild 15
     }
 
     It 'evaluates the six real consumer profiles with sanitizer settings and a 64-bit cross-compiler host' {
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-        $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
+        $installationCapture = Invoke-RSDxUiTestMetadataCapture -FilePath $vswhere -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath')
+        if($installationCapture.ExitCode -ne 0){throw ('Cannot locate the metadata fixture toolchain: '+($installationCapture.StdErr -join [Environment]::NewLine))}
+        $installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
         $relative = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
             'MSBuild/Current/Bin/arm64/MSBuild.exe'
         } else { 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
@@ -432,9 +759,9 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
             $env:PreferredToolArchitecture = $null
             foreach ($platform in @('x64','ARM64')) {
                 foreach ($configuration in @('Debug','Release','ASan Debug')) {
-                    $json = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo "/p:Configuration=$configuration" "/p:Platform=$platform" "/p:DxUiRoot=$dxuiFixture" '-getProperty:EnableASAN,PreferredToolArchitecture' '-getItem:ClCompile,ProjectReference'
-                    if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate consumer profile $platform/$configuration." }
-                    $evaluated = ($json -join "`n") | ConvertFrom-Json
+                    $json = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', "/p:Configuration=$configuration", "/p:Platform=$platform", "/p:DxUiRoot=$dxuiFixture", '-getProperty:EnableASAN,PreferredToolArchitecture', '-getItem:ClCompile,ProjectReference')
+                    if ($json.ExitCode -ne 0) { throw "Cannot evaluate consumer profile $platform/$configuration." }
+                    $evaluated = ($json.StdOut -join "`n") | ConvertFrom-Json
                     $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
                     if ($hostArchitecture -eq 'X64') {
                         $evaluated.Properties.PreferredToolArchitecture | Should Be 'x64'
@@ -463,9 +790,9 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                             $item.ForcedIncludeFiles | Should Not Match 'RequireAddressSanitizer\.h'
                         }
                     }
-                    $explicitHost = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo "/p:Configuration=$configuration" "/p:Platform=$platform" "/p:DxUiRoot=$dxuiFixture" '/p:PreferredToolArchitecture=x86' '-getProperty:PreferredToolArchitecture' '-getItem:ProjectReference'
-                    if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate explicit compiler host for $platform/$configuration." }
-                    $explicitEvaluation = ($explicitHost -join "`n") | ConvertFrom-Json
+                    $explicitHost = Invoke-RSDxUiTestMetadataCapture -FilePath $msbuild -Arguments @((Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj'), '/nologo', "/p:Configuration=$configuration", "/p:Platform=$platform", "/p:DxUiRoot=$dxuiFixture", '/p:PreferredToolArchitecture=x86', '-getProperty:PreferredToolArchitecture', '-getItem:ProjectReference')
+                    if ($explicitHost.ExitCode -ne 0) { throw "Cannot evaluate explicit compiler host for $platform/$configuration." }
+                    $explicitEvaluation = ($explicitHost.StdOut -join "`n") | ConvertFrom-Json
                     $explicitEvaluation.Properties.PreferredToolArchitecture | Should Be 'x86'
                     $explicitReference = @($explicitEvaluation.Items.ProjectReference | Where-Object { [IO.Path]::GetFileName($_.Identity) -eq 'DxUi.vcxproj' })
                     $explicitReference.Count | Should Be 1
@@ -481,6 +808,7 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                 }
             }
         } finally { $env:PreferredToolArchitecture = $previousHost }
+        Assert-RSDxUiMetadataAudit -State $script:dxUiMetadataAudit -ExpectedMSBuild 24
     }
 }
 
@@ -512,7 +840,7 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
             'if($Phase -ceq ''Production''){' + $production[0].Extent.Text + '}' + "`n" +
             'if($Phase -cin @(''ReleaseTestBuild'',''Qualification'')){' + $testBuild[0].Extent.Text + '}')
         $pin=Get-Content (Join-Path $repoRoot 'Dependencies/DxUi.lock.json') -Raw|ConvertFrom-Json
-        $pin.commit | Should Be '4cdf1ce52c7785446698e346b8aec058ed6a9283'
+        $pin.commit | Should Be '7fb2ab71852087d93b3a3e5b3ba504c37f56267c'
         $pin.apiRevision | Should Be 4
         $count=0
         foreach($phase in @('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')){
@@ -666,5 +994,115 @@ Describe 'Packaged DxUi module provenance' {
         $record | ConvertTo-Json | Set-Content -LiteralPath $sidecar
         Add-Content -LiteralPath (Join-Path $package 'Plugins/ViewerText.dll') -Value 'changed after build'
         $rejected=$false; try { Copy-RSDxUiPackageProvenance @arguments } catch { $rejected=$true }; $rejected | Should Be $true
+    }
+}
+
+
+Describe 'Captured DxUi metadata probes' {
+    It 'does not grant Git recording authority to an inherited ambient path' {
+        $root = Join-Path $TestDrive 'metadata-ambient-record'
+        [void][IO.Directory]::CreateDirectory($root)
+        $sentinel = Join-Path $root 'owned-sentinel'
+        'unchanged' | Set-Content $sentinel -Encoding utf8
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming { return 0 } -ParameterFilter { $env:RS_DXUI_METADATA_AMBIENT_TEST -ceq '1' }
+        $previousRecord = $env:RS_DXUI_METADATA_RECORD
+        $previousAudit = $script:dxUiMetadataAudit
+        $previousFixtureFlag = $env:RS_DXUI_METADATA_AMBIENT_TEST
+        try {
+            $env:RS_DXUI_METADATA_AMBIENT_TEST = '1'
+            $env:RS_DXUI_METADATA_RECORD = $sentinel
+            foreach($audit in @($null,[pscustomobject]@{Active=$false})) {
+                $script:dxUiMetadataAudit = $audit
+                Invoke-RSDxUiTestGit --version | Out-Null
+                (Get-Content $sentinel -Raw).Trim() | Should Be 'unchanged'
+                (Test-Path ($sentinel + '.git-captures.jsonl')) | Should Be $false
+            }
+        } finally {
+            $script:dxUiMetadataAudit = $previousAudit
+            $env:RS_DXUI_METADATA_RECORD = $previousRecord
+            $env:RS_DXUI_METADATA_AMBIENT_TEST = $previousFixtureFlag
+        }
+    }
+
+    It 'refuses unsafe metadata PSI before the actual starter receives a child' {
+        $state = Start-RSDxUiMetadataAudit
+        try {
+            $stream = & $script:dxUiTestModule { Get-Module -Name ProcessStreaming }
+            (& $stream { (Get-Command Start-RSContainedProcess).Definition }) | Should Match 'Invoke-Mock'
+            $unsafe = [Diagnostics.ProcessStartInfo]::new()
+            # A nonexistent file also prevents a child if the hook were absent.
+            $unsafe.FileName = Join-Path $state.Directory 'must-not-start.exe'
+            $unsafe.UseShellExecute = $false
+            $message = ''
+            try { & $stream {param($Psi) Start-RSContainedProcess -ProcessStartInfo $Psi} $unsafe | Out-Null }
+            catch { $message = $_.Exception.Message }
+            $message | Should Match 'Refusing unsafe DxUi metadata fixture launch'
+            (Test-Path $env:RS_DXUI_METADATA_RECORD) | Should Be $false
+        } finally { Stop-RSDxUiMetadataAudit -State $state }
+    }
+
+    It 'keeps compiler host <HostValue> arguments, CWD, stderr and parent environment independent' -TestCases @(
+        @{HostValue='x86'},@{HostValue='x64'},@{HostValue='arm64'}
+    ) {
+        param($HostValue)
+        $root=Join-Path $TestDrive ('metadata-host-'+$HostValue)
+        [void][IO.Directory]::CreateDirectory($root)
+        $HostValue|Set-Content (Join-Path $root 'metadata-mode')
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
+            @{file=$FilePath;arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation;parent_host=$env:PreferredToolArchitecture} |
+                ConvertTo-Json -Depth 5|Set-Content (Join-Path $WorkingDirectory 'metadata-record.json') -Encoding utf8
+            & $OutputLineCallback (' '+(Get-Content (Join-Path $WorkingDirectory 'metadata-mode') -Raw).Trim()+' ') $false
+            & $OutputLineCallback 'stderr is not a host value' $true
+            return 0
+        } -ParameterFilter { Test-Path -LiteralPath (Join-Path $WorkingDirectory 'metadata-mode') }
+        $previousHost=$env:PreferredToolArchitecture;$previousExit=$global:LASTEXITCODE
+        try {
+            $env:PreferredToolArchitecture='literal & inherited';$global:LASTEXITCODE=73
+            $actual=&$script:dxUiTestModule {param($r) Get-RSDxUiConsumerCompilerHost -RepoRoot $r -MSBuildPath 'C:\fixture\MSBuild.exe' -Platform ARM64 -Configuration 'ASan Debug'} $root
+            $actual|Should Be $HostValue
+            $env:PreferredToolArchitecture|Should Be 'literal & inherited'
+            $record=Get-Content (Join-Path $root 'metadata-record.json') -Raw|ConvertFrom-Json
+            $record.file|Should Be 'C:\fixture\MSBuild.exe'
+            $record.cwd|Should Be $root
+            ($record.arguments -join '|')|Should Be ((Join-Path $root 'RedSalamander/RedSalamander.vcxproj')+'|/nologo|/p:Configuration=ASan Debug|/p:Platform=ARM64|-getProperty:PreferredToolArchitecture')
+            $record.delegated|Should Be $false
+            $record.parent_host|Should Be 'literal & inherited'
+        } finally {$env:PreferredToolArchitecture=$previousHost;$global:LASTEXITCODE=$previousExit}
+    }
+
+    It 'refuses metadata failure <Mode> with its actual exit and supported-host checks' -TestCases @(
+        @{Mode='nonzero'},@{Mode='unsupported'}
+    ) {
+        param($Mode)
+        $root=Join-Path $TestDrive ('metadata-refusal-'+$Mode)
+        [void][IO.Directory]::CreateDirectory($root)
+        $Mode|Set-Content (Join-Path $root 'metadata-failure')
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
+            param($WorkingDirectory,$OutputLineCallback)
+            $mode=(Get-Content (Join-Path $WorkingDirectory 'metadata-failure') -Raw).Trim()
+            & $OutputLineCallback ($(if($mode -eq 'nonzero'){'x64'}else{'foreign-host'})) $false
+            & $OutputLineCallback 'metadata failure detail' $true
+            if($mode -eq 'nonzero'){return 17}else{return 0}
+        } -ParameterFilter { Test-Path -LiteralPath (Join-Path $WorkingDirectory 'metadata-failure') }
+        $message=''
+        try { &$script:dxUiTestModule {param($r) Get-RSDxUiConsumerCompilerHost -RepoRoot $r -MSBuildPath 'C:\fixture\MSBuild.exe' -Platform x64 -Configuration Debug} $root|Out-Null }
+        catch {$message=$_.Exception.Message}
+        $message|Should Match ($(if($Mode -eq 'nonzero'){'(?s)Cannot evaluate the consumer compiler host.*metadata failure detail'}else{'Unsupported consumer compiler host: foreign-host'}))
+    }
+
+    It 'preserves JSON stdout separately from stderr and retains the exact nonzero exit' {
+        $root=Join-Path $TestDrive 'metadata-json'
+        [void][IO.Directory]::CreateDirectory($root)
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
+            param($OutputLineCallback)
+            & $OutputLineCallback '{"Properties":{"Value":"Unicode 雪"}}' $false
+            & $OutputLineCallback 'not JSON: diagnostic stderr' $true
+            return 29
+        } -ParameterFilter { $WorkingDirectory -like '*metadata-json' }
+        $capture=Invoke-RSDxUiTestMetadataCapture -FilePath 'C:\fixture\vswhere.exe' -Arguments @('literal space','*') -WorkingDirectory $root
+        $capture.ExitCode|Should Be 29
+        (($capture.StdOut -join [Environment]::NewLine)|ConvertFrom-Json).Properties.Value|Should Be 'Unicode 雪'
+        ($capture.StdErr -join '|')|Should Be 'not JSON: diagnostic stderr'
     }
 }

@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -16,7 +17,7 @@ function Invoke-RSGhosttyCandidateTestGit {
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
 
-    $output = @(& git.exe -c core.longpaths=true -C $Root @Arguments 2>&1)
+    $output = @(Invoke-RSTestFixtureGit -Arguments @('-c'; 'core.longpaths=true'; '-C'; $Root; $Arguments) 2>&1)
     if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') in '$Root' failed: $($output -join "`n")" }
     return [string[]]$output
 }
@@ -66,27 +67,102 @@ typedef enum {
 
 Describe 'Ghostty exact candidate review' {
     It 'keeps successful Git stderr out of metadata and retains nonzero diagnostics' {
-        $fixture = New-RSGhosttyCandidateReviewRepository
+        # Exercise the adapter's actual capture boundary; a Git !alias would
+        # introduce a shell child unrelated to the metadata transport contract.
+        Mock Invoke-RSTestGitMetadataCapture -ModuleName GhosttyCandidateReview {
+            param($Root,$Arguments,$PrefixArguments)
+            if ($Root -cne 'owned-fixture' -or ($PrefixArguments -join '|') -cne '-c|core.longpaths=true') { throw 'Candidate lost its exact Git option prefix.' }
+            if ($Arguments[0] -ceq 'owned-success') {
+                return [pscustomobject]@{ExitCode=0;Output=@('synthetic-result');ErrorText=('synthetic-warning'+[Environment]::NewLine)}
+            }
+            return [pscustomobject]@{ExitCode=7;Output=@();ErrorText=('synthetic-failure'+[Environment]::NewLine)}
+        }
         $module = Get-Module GhosttyCandidateReview
         $result = & $module {
-            param($root)
-            Invoke-RSGhosttyCandidateGit -RepositoryPath $root -Context 'Synthetic stream witness' -Arguments @(
-                '-c', 'alias.rs-review-streams=!echo synthetic-result && echo synthetic-warning 1>&2', 'rs-review-streams')
-        } $fixture.Root
+            Invoke-RSGhosttyCandidateGit -RepositoryPath 'owned-fixture' -Context 'Synthetic stream witness' -Arguments @('owned-success')
+        }
         $result.ExitCode | Should Be 0
         ($result.Lines -join ',') | Should Be 'synthetic-result'
         ($result.Diagnostics -join ',') | Should Be 'synthetic-warning'
         $failure = $null
         try {
             & $module {
-                param($root)
-                Invoke-RSGhosttyCandidateGit -RepositoryPath $root -Context 'Synthetic failure witness' -Arguments @(
-                    '-c', 'alias.rs-review-failure=!echo synthetic-failure 1>&2 && exit 7', 'rs-review-failure')
-            } $fixture.Root
+                Invoke-RSGhosttyCandidateGit -RepositoryPath 'owned-fixture' -Context 'Synthetic failure witness' -Arguments @('owned-failure')
+            }
         }
         catch { $failure = $_ }
         $failure | Should Not BeNullOrEmpty
         $failure.Exception.Message | Should Match 'git exit 7: synthetic-failure'
+    }
+
+    It 'preserves both streams and actual exit for allowed or rejected mixed-stream failures' {
+        Mock Invoke-RSTestGitMetadataCapture -ModuleName GhosttyCandidateReview {
+            [pscustomobject]@{ExitCode=7;Output=@('stdout-one','stdout-two');ErrorText=('stderr-one'+[char]10+'stderr-two'+[char]10)}
+        }
+        $module = Get-Module GhosttyCandidateReview
+        $result = & $module { Invoke-RSGhosttyCandidateGit -RepositoryPath owned-fixture -Arguments status -Context 'Mixed stream witness' -AllowFailure }
+        $result.ExitCode | Should Be 7
+        ($result.Lines -join '|') | Should Be 'stdout-one|stdout-two'
+        ($result.Diagnostics -join '|') | Should Be 'stderr-one|stderr-two'
+        $failure = $null
+        try { & $module { Invoke-RSGhosttyCandidateGit -RepositoryPath owned-fixture -Arguments status -Context 'Mixed stream witness' } }
+        catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $failure.Exception.Message | Should Be ('Mixed stream witness failed with git exit 7: stdout-one'+[char]10+'stdout-two'+[char]10+'stderr-one'+[char]10+'stderr-two')
+    }
+
+    It 'preserves exact optional-prefix argv and default or empty-prefix behavior before any child start' {
+        # Pester3's module-scoped mock binding can outlive the previous It. Restore
+        # this exact owner explicitly, without force-reimporting dependency state.
+        $owner = Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/GitMetadataCapture.psm1') -PassThru -Scope Local
+        $canonical = $owner.ExportedFunctions['Invoke-RSTestGitMetadataCapture'].ScriptBlock
+        & (Get-Module GhosttyCandidateReview) { param($body) Set-Item -LiteralPath Function:script:Invoke-RSTestGitMetadataCapture -Value $body } $canonical
+        $body = $canonical.ToString()
+        $probe = [scriptblock]::Create($body.Replace('$process = [Diagnostics.Process]::new()', '$process = New-ControlledCandidateGitProcess'))
+        function New-ControlledCandidateGitProcess {
+            $fake = [pscustomobject]@{StartInfo=$null}
+            $fake | Add-Member ScriptMethod Start {
+                if ($this.StartInfo.UseShellExecute -or -not $this.StartInfo.CreateNoWindow -or
+                    -not $this.StartInfo.RedirectStandardOutput -or -not $this.StartInfo.RedirectStandardError) { throw 'Unsafe launch refused before a real start.' }
+                $script:candidateGitArgv = @($this.StartInfo.ArgumentList)
+                return $false
+            }
+            $fake | Add-Member ScriptMethod Dispose { $script:candidateGitDisposed = $true }
+            return $fake
+        }
+        foreach ($mode in @('omitted','empty','prefix')) {
+            $arguments = @{Root='owned-root';Arguments=@('status','--porcelain=v1')}
+            if ($mode -eq 'empty') { $arguments.PrefixArguments = @() }
+            if ($mode -eq 'prefix') { $arguments.PrefixArguments = @('-c','core.longpaths=true') }
+            $script:candidateGitArgv = $null; $script:candidateGitDisposed = $false
+            { & $probe @arguments } | Should Throw 'Unable to start Git metadata query.'
+            $expected = if ($mode -eq 'prefix') { '-c|core.longpaths=true|-C|owned-root|status|--porcelain=v1' } else { '-C|owned-root|status|--porcelain=v1' }
+            ($script:candidateGitArgv -join '|') | Should Be $expected
+            $script:candidateGitDisposed | Should Be $true
+        }
+    }
+
+    It 'reads exact tracked paths beyond MAX_PATH from a supported owned root with command-local longpaths' {
+        # Ordinary Git -C roots beyond MAX_PATH are not promised by this contract.
+        # The guarded characterization retained that Git128 refusal separately.
+        $root = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('candidate-paths-'+[Guid]::NewGuid().ToString('N'))
+        while (($root.Length + 37) -lt 225) { $root = Join-Path $root ('owned-'+('r'*30)) }
+        [void][IO.Directory]::CreateDirectory($root)
+        Invoke-RSTestFixtureGit -Arguments @('-c','core.longpaths=true','-C',$root,'init','--quiet')
+        $LASTEXITCODE | Should Be 0
+        $relative = 'src/terminal/' + ('owned/'*20) + 'café-Δ-雪.txt'
+        $file = Join-Path $root $relative
+        ($file.Length -gt 260) | Should Be $true
+        [void][IO.Directory]::CreateDirectory((Split-Path $file))
+        [IO.File]::WriteAllText($file, 'owned candidate metadata')
+        Invoke-RSTestFixtureGit -Arguments @('-c','core.longpaths=true','-C',$root,'add','--',$relative)
+        $LASTEXITCODE | Should Be 0
+        $module = Get-Module GhosttyCandidateReview
+        $result = & $module { param($root) Invoke-RSGhosttyCandidateGit -RepositoryPath $root -Arguments @('-c','core.quotepath=false','ls-files','--cached','--') -Context 'Owned long file metadata' } $root
+        $result.ExitCode | Should Be 0
+        @($result.Lines).Count | Should Be 1
+        $result.Lines[0] | Should Be $relative
+        @($result.Diagnostics).Count | Should Be 0
     }
 
     It 'classifies every review category deterministically' {

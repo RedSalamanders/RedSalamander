@@ -1392,10 +1392,18 @@ void FileOperationsIssuesPaneState::UpdateDetail(bool resetScroll) noexcept
             if (! _detailCopyText.empty())
                 _detailCopyText += L"\r\n\r\n";
             // Display removes duplicate leaf names; copy retains each exact provider path.
-            if (row && i == 4u)
-                appendCopyText(section(IDS_FILEOPS_ISSUES_COL_SOURCE, row->sourcePathText));
-            else if (row && i == 5u)
-                appendCopyText(section(IDS_FILEOPS_ISSUES_COL_DESTINATION, row->destinationPathText));
+            if (row && (i == 4u || i == 5u))
+            {
+                const bool source = i == 4u;
+                appendCopyText(section(source ? IDS_FILEOPS_ISSUES_COL_SOURCE : IDS_FILEOPS_ISSUES_COL_DESTINATION,
+                                       source ? row->sourcePathText : row->destinationPathText));
+                const auto& facts = source ? row->sourceFactsText : row->destinationFactsText;
+                if (row->hasConflictFacts && ! facts.empty())
+                {
+                    appendCopyText(L"\n");
+                    appendCopyText(facts);
+                }
+            }
             else
                 appendCopyText(texts[i]);
         }

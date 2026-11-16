@@ -1,0 +1,52 @@
+[
+  {
+    "variant": "baseline",
+    "run_id": "20261113T150526Z-63728-1a6b47123a41482190d0bd137cb89c33",
+    "scans": [
+      {
+        "phase": "source",
+        "caller": "Get-RSTestRunArchiveStableInventory"
+      },
+      {
+        "phase": "source",
+        "caller": "Get-RSTestRunArchiveStableInventory"
+      },
+      {
+        "phase": "source",
+        "caller": "Get-RSTestRunArchiveStableInventory"
+      },
+      {
+        "phase": "source",
+        "caller": "Save-RSBaselineRunEvidence"
+      },
+      {
+        "phase": "destination",
+        "caller": "Save-RSBaselineRunEvidence"
+      }
+    ],
+    "status": "Archived"
+  },
+  {
+    "variant": "candidate",
+    "run_id": "20261113T150526Z-63728-e60ecfca79ed4c4ca4182ada96ea438a",
+    "scans": [
+      {
+        "phase": "source",
+        "caller": "Get-RSTestRunArchiveStableInventory"
+      },
+      {
+        "phase": "source",
+        "caller": "Get-RSTestRunArchiveStableInventory"
+      },
+      {
+        "phase": "source",
+        "caller": "Get-RSTestRunArchiveStableInventory"
+      },
+      {
+        "phase": "destination",
+        "caller": "Save-RSTestSandboxRunEvidence"
+      }
+    ],
+    "status": "Archived"
+  }
+]

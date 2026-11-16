@@ -1,0 +1,754 @@
+{
+  "schema": "red-salamander.native-component-row-selection.v1",
+  "source_path": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261113T183701Z-24404-ba0673e426fa487faa3302cc6cac5a03\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_sha256": "d31523f5dd54e3aa20d43ca075f441c8d283b169994f524faa338d573137e98e",
+  "source_bytes": 15291662,
+  "source_physical_lines": 44361,
+  "source_nonblank_rows": 44361,
+  "metric_allowlist": [
+    "FileOps.Conflict.LocalDistinctnessUnproved",
+    "FileOps.Conflict.WaitCalls",
+    "FileOps.Power.ConflictWaitCalls",
+    "FileOps.Queue.Selector.BaselineBatchUs",
+    "FileOps.Queue.Selector.CandidateBatchUs",
+    "FileOps.Queue.Selector.CollectionCapacityBytes",
+    "FileOps.SelfTest.LocalAncestryProbe",
+    "FileOps.SelfTest.LocalCrossRootDistinctness",
+    "FileOps.SelfTest.QueueStartOrder.Us",
+    "FileOps.Transfer.InsideSourceProbeUs"
+  ],
+  "selection": "Exact original row bytes and order; blank native commit untouched.",
+  "excerpt_sha256": "c074327759600b0b2d15d9c7896fc933ec86d4b17a5cefb17d181cf61917bb6c",
+  "excerpt_bytes": 36265,
+  "excerpt_rows": 104,
+  "rows": [
+    {
+      "excerpt_line": 1,
+      "source_line": 248,
+      "line_bytes": 352,
+      "line_sha256": "ae7267dc67824bcc8fdbe57bf9e3df4595001affb9e539e40ce0fed4c481819b",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 2,
+      "source_line": 249,
+      "line_bytes": 352,
+      "line_sha256": "30e2f30fe5acc28d810812e929f43eb7291ba0d8ca630eff6e06a2b2d4a91d25",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 3,
+      "source_line": 250,
+      "line_bytes": 352,
+      "line_sha256": "9a7b2b72694c20f0c63921f6863552d50f3a0cf99303f107576a26c295765b40",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 4,
+      "source_line": 251,
+      "line_bytes": 345,
+      "line_sha256": "484ea87d68aa54a683ca7ec4a311704f10bb7dcb2e449b29a59007cbb1f42d91",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 5,
+      "source_line": 252,
+      "line_bytes": 348,
+      "line_sha256": "78b66827ae2467d4cc119cacc6a8e88caf3df5c8335a09a70b7fa4b059b6d0ad",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 6,
+      "source_line": 253,
+      "line_bytes": 345,
+      "line_sha256": "d6775a5e7c6f0844f79d81f59f197a2395c922e2b9a9fa59199cfb6b98e886dc",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 7,
+      "source_line": 254,
+      "line_bytes": 350,
+      "line_sha256": "a1d6b99b64141c8c6caebc767eb986965ba65a7d57ca91d4fe45b50d3b6f5bf0",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 8,
+      "source_line": 255,
+      "line_bytes": 353,
+      "line_sha256": "20fc073ac8fe86f90b4cbd26cca6e8f5d8ff71b39cfa5b273785198b9a8d2ab9",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 9,
+      "source_line": 256,
+      "line_bytes": 353,
+      "line_sha256": "84e319dd9469e93ac27f4cb2ff56bbb9bd40c7ea6c6450aec17e7651795a728b",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 10,
+      "source_line": 257,
+      "line_bytes": 345,
+      "line_sha256": "40a8172ac8df875a9746204d6e0127d4f598e638bc5028ef819bcac98c4a6540",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 11,
+      "source_line": 258,
+      "line_bytes": 345,
+      "line_sha256": "f52af7756d82be838e140d734b25c88c8d53df7ce78c2ec06005f6f7460f7800",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 12,
+      "source_line": 259,
+      "line_bytes": 348,
+      "line_sha256": "907d4643b9749b31c66bf6f9eceea28d72c9f19b72bd85c1a9c397be78b0a425",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 13,
+      "source_line": 296,
+      "line_bytes": 352,
+      "line_sha256": "ea9c9a2d9556976c95addced2c2453bb03b4bd6f91ea704d33a590a69a94b19d",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 14,
+      "source_line": 383,
+      "line_bytes": 352,
+      "line_sha256": "f0449667345c6928f4ea8b901574539248903b1f8ce847cf305380a710830832",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 15,
+      "source_line": 450,
+      "line_bytes": 345,
+      "line_sha256": "8d4fd81fa0824940eae085380d7ab3b666808181d5b95843e08b6bc33b746ff1",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 16,
+      "source_line": 727,
+      "line_bytes": 355,
+      "line_sha256": "56dd0c49186ffb124a9e02b4a3ce9aadb2d6984e721f6aa3827ede3c9dd22706",
+      "metric": "FileOps.Conflict.LocalDistinctnessUnproved"
+    },
+    {
+      "excerpt_line": 17,
+      "source_line": 730,
+      "line_bytes": 346,
+      "line_sha256": "0329421ddba767cd16542bb9f7e718f5df2d4812aa23c39689eb5969e7513f97",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 18,
+      "source_line": 733,
+      "line_bytes": 364,
+      "line_sha256": "6d2f0da7f4710e7813ea50ffc46e432a56de9aa3ca6385be7d658ec2a114b798",
+      "metric": "FileOps.SelfTest.LocalCrossRootDistinctness"
+    },
+    {
+      "excerpt_line": 19,
+      "source_line": 868,
+      "line_bytes": 355,
+      "line_sha256": "1ede0c3839c5c7c485eaeb101c468f30bdfdf4972d8d6247a08a4f9be36d8b9e",
+      "metric": "FileOps.Conflict.LocalDistinctnessUnproved"
+    },
+    {
+      "excerpt_line": 20,
+      "source_line": 871,
+      "line_bytes": 346,
+      "line_sha256": "d762ba4e098df0fa964aae7af2c25e0eab113d30d22386d15658fe7859bc3ea0",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 21,
+      "source_line": 874,
+      "line_bytes": 369,
+      "line_sha256": "a29bbaac50867eb0488b69cff710afbdb42adabab6b86f92b7abe8966c7e755d",
+      "metric": "FileOps.SelfTest.LocalCrossRootDistinctness"
+    },
+    {
+      "excerpt_line": 22,
+      "source_line": 927,
+      "line_bytes": 346,
+      "line_sha256": "9cbfe45e359d4587f29d1e61c9dfaa3a17959e7ed567c7127b79ad59c79e78af",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 23,
+      "source_line": 939,
+      "line_bytes": 355,
+      "line_sha256": "15f3cc15b489ee5ac318f0c5906ef3fc3f8cde3b6e480d0942f296f735bb8207",
+      "metric": "FileOps.Conflict.LocalDistinctnessUnproved"
+    },
+    {
+      "excerpt_line": 24,
+      "source_line": 943,
+      "line_bytes": 374,
+      "line_sha256": "d6499de4cbe27a3c38ac0338989b4862b99ef0be4a40a62e399e8ffaa80cbc99",
+      "metric": "FileOps.SelfTest.LocalCrossRootDistinctness"
+    },
+    {
+      "excerpt_line": 25,
+      "source_line": 978,
+      "line_bytes": 345,
+      "line_sha256": "9c0c2b0a4654512bb7de20506ec7e551f4f0792480798f28e3021b0ced962715",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 26,
+      "source_line": 1320,
+      "line_bytes": 472,
+      "line_sha256": "35c3225e833d060a8243d548926d20fa98da4dc2c85f07f434fd909f3078b1af",
+      "metric": "FileOps.SelfTest.LocalAncestryProbe"
+    },
+    {
+      "excerpt_line": 27,
+      "source_line": 1322,
+      "line_bytes": 346,
+      "line_sha256": "6996ee1dd2486cd80c0d73915f895ed96f7bde05c52d3861fcc11490f928de0d",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 28,
+      "source_line": 1323,
+      "line_bytes": 350,
+      "line_sha256": "e9ba96ffcfabbae95a25e56b4fcd54c0389b6ab181d96727c6babc667dd35971",
+      "metric": "FileOps.Power.ConflictWaitCalls"
+    },
+    {
+      "excerpt_line": 29,
+      "source_line": 1325,
+      "line_bytes": 346,
+      "line_sha256": "f81ae08c9110e2e665c73f4a2879c92f2c82c361130942d2bc534927aa442e74",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 30,
+      "source_line": 1326,
+      "line_bytes": 350,
+      "line_sha256": "7db4b669fa1b2556c59ccd81e2a6c661f8b323735af5857408f7a4af2ff3cc4d",
+      "metric": "FileOps.Power.ConflictWaitCalls"
+    },
+    {
+      "excerpt_line": 31,
+      "source_line": 1386,
+      "line_bytes": 346,
+      "line_sha256": "b937cdefc8737c734caf98411a9be57042f7dac6c61045a45789dd35e8180292",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 32,
+      "source_line": 1387,
+      "line_bytes": 350,
+      "line_sha256": "1fc223ad54f2c47af1ac65492b571ae4d1a5df3179b85b5389e2f69b34f44268",
+      "metric": "FileOps.Power.ConflictWaitCalls"
+    },
+    {
+      "excerpt_line": 33,
+      "source_line": 1421,
+      "line_bytes": 346,
+      "line_sha256": "7fee8d2297bd9ffdf01093436f28ea88872714275105bdab1fcacce652a53053",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 34,
+      "source_line": 1422,
+      "line_bytes": 350,
+      "line_sha256": "f8b7814ff9c243cf69785077b185e56e39fa23572dcb32fca132517cfd37ac16",
+      "metric": "FileOps.Power.ConflictWaitCalls"
+    },
+    {
+      "excerpt_line": 35,
+      "source_line": 1453,
+      "line_bytes": 346,
+      "line_sha256": "4090def0915dbf0549f0ce297ea105a1ca5f214e28b69de115718b01dea32887",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 36,
+      "source_line": 1454,
+      "line_bytes": 350,
+      "line_sha256": "65ca8986c886627cdea72d5e02435d01e1242ffe735f1781c0c3cb34f3109233",
+      "metric": "FileOps.Power.ConflictWaitCalls"
+    },
+    {
+      "excerpt_line": 37,
+      "source_line": 1474,
+      "line_bytes": 346,
+      "line_sha256": "8f33292d8aebe220489aee826921a2ba4b4ab8a1ab7091dbad326f5319ff9623",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 38,
+      "source_line": 1475,
+      "line_bytes": 350,
+      "line_sha256": "08c50fe06073570bf0a9838348a658627402428d3cdf8009db64495ef8634725",
+      "metric": "FileOps.Power.ConflictWaitCalls"
+    },
+    {
+      "excerpt_line": 39,
+      "source_line": 5532,
+      "line_bytes": 345,
+      "line_sha256": "05b68ca8526f77bd2d235a1bcc7b5d2202b5e613709605e89602f60f819be88d",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 40,
+      "source_line": 5847,
+      "line_bytes": 346,
+      "line_sha256": "70b7abaad8713adadb0ac5ca9ccea2d64e9e89ed34e207b6aaac52f483d8b662",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 41,
+      "source_line": 5903,
+      "line_bytes": 346,
+      "line_sha256": "a6bfab7442a012dad5eae91bad09bd434edba83fa16aa26252c54fc4436ae2bc",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 42,
+      "source_line": 5969,
+      "line_bytes": 346,
+      "line_sha256": "6fa89c8110542a40ed65640135a9894f749d0afe3027f6017cddc632db2caf53",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 43,
+      "source_line": 6025,
+      "line_bytes": 346,
+      "line_sha256": "1358ecbf9cbf522b382c31779bb6cce14694bd81ff6ef1f2b06e81facd880772",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 44,
+      "source_line": 6092,
+      "line_bytes": 346,
+      "line_sha256": "eeeba1f40faf50ab873f0d4795f82889259f1a3f71fda11ad3fbd42e4801a22c",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 45,
+      "source_line": 6159,
+      "line_bytes": 346,
+      "line_sha256": "c74f631be561f243b780d944c82ab9033dfcd408bb06e03e6519764dec7b2311",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 46,
+      "source_line": 6175,
+      "line_bytes": 346,
+      "line_sha256": "c1a5ef34bd9cc44c5b1fd26813ea4041ea34d477cc818738ae86cede6e034051",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 47,
+      "source_line": 6231,
+      "line_bytes": 346,
+      "line_sha256": "7658d2bbe6026f3aabf1e86556913f5a7aeab85c9fb79c024536196466878066",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 48,
+      "source_line": 6243,
+      "line_bytes": 346,
+      "line_sha256": "70d9b55fed4d0df577810e4bf34b61419620b4bd595aa9d58555aa6e957a792a",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 49,
+      "source_line": 6299,
+      "line_bytes": 346,
+      "line_sha256": "0ff19d4c61e51fd8bbe745b8df1ec3152c9e905f4ae85f5f2d72b1829d36f5c5",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 50,
+      "source_line": 6355,
+      "line_bytes": 346,
+      "line_sha256": "7eac2ab485bba64b22ac371785adc1988e835e243d41ea52f9f4b8d385004537",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 51,
+      "source_line": 6421,
+      "line_bytes": 346,
+      "line_sha256": "7a019f83c534be030db6bb00d3719aff60574bed1fe6b3c89cecdfcb613e44c8",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 52,
+      "source_line": 6477,
+      "line_bytes": 346,
+      "line_sha256": "b47d49ba11d7a60556d14daf7403ad05e244d756560e55537e03f899dbee70d2",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 53,
+      "source_line": 6544,
+      "line_bytes": 346,
+      "line_sha256": "a656fc9dcd7911bd5430a58692f0d2937d2a0d2dd4e23d082600cab8865a58a8",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 54,
+      "source_line": 6611,
+      "line_bytes": 346,
+      "line_sha256": "b6cd7f2efea89bf9af07bacc3534872344de8948ef47c02ded129037bfb7834e",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 55,
+      "source_line": 6627,
+      "line_bytes": 346,
+      "line_sha256": "da5f063ae1f83a3aad8e7d45bf5c2e36d554099340f4c7aec37043cbe342a4f5",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 56,
+      "source_line": 6683,
+      "line_bytes": 346,
+      "line_sha256": "e0d0a09d36cb5ab443a14154b82968a9d32a31d2b6236814fdaeac01b0953603",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 57,
+      "source_line": 6695,
+      "line_bytes": 346,
+      "line_sha256": "7e0d24b866837242910665f31541b305bac1849992a7c3a8a966a7948968c1f1",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 58,
+      "source_line": 6744,
+      "line_bytes": 345,
+      "line_sha256": "d43948df749a7f76c633e4b53a742ed488d52d36503d7bbfdf181ef25cbb5c57",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 59,
+      "source_line": 6807,
+      "line_bytes": 345,
+      "line_sha256": "0ca2ec115dc7e1bb22452a617cce0c9d69bac6e35feb7ead9f561a75462c0136",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 60,
+      "source_line": 6883,
+      "line_bytes": 345,
+      "line_sha256": "df9816a36c8f1371082579d4f9ee0fbe951e775b1248ecec7e791e48d10ccf5e",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 61,
+      "source_line": 6954,
+      "line_bytes": 346,
+      "line_sha256": "3524ec54bfa4ed1d25e6c8b4fa4a2f014ed5454ca93809212005f2654e9e9923",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 62,
+      "source_line": 7027,
+      "line_bytes": 345,
+      "line_sha256": "b8452945d90c2a0a3e2fff95c4a63bd1ab295d1fa8a336dde210f0108a240c44",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 63,
+      "source_line": 7176,
+      "line_bytes": 345,
+      "line_sha256": "d0bfef78bf4dc1fcd4bc7f7acfe68a347ac67f01260499db1460d08dc0ab0177",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 64,
+      "source_line": 7458,
+      "line_bytes": 345,
+      "line_sha256": "3ca057b8d80fe53feaa68dedb3194670fbe548763b06dc46ac66a63a6f502e90",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 65,
+      "source_line": 7628,
+      "line_bytes": 345,
+      "line_sha256": "87f760920b9e2851c92ac5cfff5bb1c78a3a078ed1f41a390c6f30b5066d60f9",
+      "metric": "FileOps.Transfer.InsideSourceProbeUs"
+    },
+    {
+      "excerpt_line": 66,
+      "source_line": 7785,
+      "line_bytes": 346,
+      "line_sha256": "28a1dcd1aea49cffb9d1e538511c88b0a7d2b12e29f9af2b6d12f47b81a1bb32",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 67,
+      "source_line": 7867,
+      "line_bytes": 346,
+      "line_sha256": "afe196943b6d18608412d9b2872eaa981a656e3dfdbee64b1c59b886f1331d57",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 68,
+      "source_line": 7950,
+      "line_bytes": 346,
+      "line_sha256": "e53d431e498c248a0a85abc2fe228b64aede9bdd2d3a15bedd1abaf0672bdc91",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 69,
+      "source_line": 8042,
+      "line_bytes": 346,
+      "line_sha256": "68510775ca6ad73a58929ed30a04ecc6c9e82617e461b1e6d2042021ea8a13f4",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 70,
+      "source_line": 8132,
+      "line_bytes": 346,
+      "line_sha256": "b5d0be901e82a9cafeadd11bb738eb36a68ed5a8a8ca2b1c20ea4ef2c6754f47",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 71,
+      "source_line": 8185,
+      "line_bytes": 346,
+      "line_sha256": "16157d519102df5b3f6d749060d6edf94517e3f53a22055a834a634cd1dd609c",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 72,
+      "source_line": 8236,
+      "line_bytes": 346,
+      "line_sha256": "b6c575bfb45f66e9fea5c34e2ede7b50f78a194f76f734dae141ddae0c8db6d3",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 73,
+      "source_line": 8362,
+      "line_bytes": 346,
+      "line_sha256": "67ee5aafbf71b4b06f63eb597c40e1c3049cbf79b71edb1b0a2e70a791a49cdc",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 74,
+      "source_line": 8478,
+      "line_bytes": 346,
+      "line_sha256": "975a10c8d5223091b1455dfda8eb93c27a5a35deabb870e48ad0a5ff98ced131",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 75,
+      "source_line": 8594,
+      "line_bytes": 346,
+      "line_sha256": "bddeffe161d9dfb4fe9a90e772ecdbe904c21b75de5f152d981047559171937d",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 76,
+      "source_line": 8710,
+      "line_bytes": 346,
+      "line_sha256": "ff0946bee761874fb843082e65a9b923e1b446a2a86975e26167a7d76cbfeb85",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 77,
+      "source_line": 9101,
+      "line_bytes": 346,
+      "line_sha256": "6e9395dced7462dce4f99339eae66b530e9e31b810c6a4c9ca5581616a23bab6",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 78,
+      "source_line": 9158,
+      "line_bytes": 346,
+      "line_sha256": "9332eb422b8ce4bd07d74e60568f71febb8d2592df526ac5f45b9864f81becee",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 79,
+      "source_line": 9537,
+      "line_bytes": 345,
+      "line_sha256": "15176e8156fbdddc21001ffa4c9fa0214433d49b4a4f1aac0fada1aafc0739c2",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 80,
+      "source_line": 10163,
+      "line_bytes": 346,
+      "line_sha256": "32100f62909da3f49a37d5b212b243bfd90aea264c9be5e96834d84af44427d4",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 81,
+      "source_line": 10188,
+      "line_bytes": 346,
+      "line_sha256": "5118865397107becf74fdefb7322c0bd491838bf4fb9a2c3a21e547550cc0c8f",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 82,
+      "source_line": 10271,
+      "line_bytes": 346,
+      "line_sha256": "bab9f4f32761b10f10d59a45eb708b3a23750d210b3f21d70bd77d6983173d35",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 83,
+      "source_line": 10349,
+      "line_bytes": 345,
+      "line_sha256": "37cd1a163b5b0aaa12acd810a3049c86bf35925d6be1af6fc71fca476b52dd1a",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 84,
+      "source_line": 10548,
+      "line_bytes": 346,
+      "line_sha256": "aa98aeee971d013a28fe3f7ca539e147a92c23c018443e6880fcbbcbb0e3018c",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 85,
+      "source_line": 10949,
+      "line_bytes": 346,
+      "line_sha256": "955ef28174c61d12a118a43ebb3eae070bb8b9910bdb7dfc00c8204749ac1a1c",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 86,
+      "source_line": 10959,
+      "line_bytes": 346,
+      "line_sha256": "99ebc639da4eb5e749b5570cab200d12561611ba7204aebbdcff86b2125ac444",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 87,
+      "source_line": 11217,
+      "line_bytes": 346,
+      "line_sha256": "460db653299fab238ed10e9b1b3b3bc52815586a3f91257df59f5d33363d91d7",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 88,
+      "source_line": 11478,
+      "line_bytes": 346,
+      "line_sha256": "3f60cbcd095348af7c0ed32a428c56d9f11e1f56c1b186236669905ad096e561",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 89,
+      "source_line": 11491,
+      "line_bytes": 346,
+      "line_sha256": "0a6f2c6e5be0cfb169ed9a7cb1aa3577780562d1b9dcdfdedf3efcbad230c582",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 90,
+      "source_line": 11725,
+      "line_bytes": 346,
+      "line_sha256": "cec70b15793ee620f004bc330178117d80763b97240485ffbf1cc8922e5d3c69",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 91,
+      "source_line": 11739,
+      "line_bytes": 346,
+      "line_sha256": "4d69cdba4be0a6d7f8a5fee24a79d41d6b0d734ea333510ada6e5b83e8c25957",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 92,
+      "source_line": 11863,
+      "line_bytes": 346,
+      "line_sha256": "a67330f3279a82fddc6c117c375b5736312d1640a8c8a72edfa6f5c8689951ee",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 93,
+      "source_line": 11871,
+      "line_bytes": 346,
+      "line_sha256": "d631c5c6e10c77f3609a423e8d7faff69a2a39362545bed5795f90129acc5ff9",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 94,
+      "source_line": 11984,
+      "line_bytes": 346,
+      "line_sha256": "88708a96fe6b75d4697706200dd01e1df2e662e3e5a8f30ab3eb60b36f99f81b",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 95,
+      "source_line": 11992,
+      "line_bytes": 346,
+      "line_sha256": "9b26d323a434d97e61d67d07f11607a8c5d3355f5fbcedf13d46cdb95fabe9e3",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 96,
+      "source_line": 12203,
+      "line_bytes": 346,
+      "line_sha256": "deaf357e68d4d6b7319e22bd5ec24e5360db2aafdaef94d0df81264c5b126b6c",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 97,
+      "source_line": 12217,
+      "line_bytes": 346,
+      "line_sha256": "d50c3a390cdfe4787c3d2b3b48e95bdbd7c558bfaa204101e2fca9a4dfa39762",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 98,
+      "source_line": 12563,
+      "line_bytes": 346,
+      "line_sha256": "fae378ceacff89bf1e5b83e5090f27ccbf20fc386452fa4d5abe483b6f61ae8d",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 99,
+      "source_line": 12583,
+      "line_bytes": 346,
+      "line_sha256": "bcce35169e22ec5e79557127d76d8082b25ec90a00dcab8342189624fe45ae93",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 100,
+      "source_line": 12604,
+      "line_bytes": 346,
+      "line_sha256": "b5d60d73fee4b309450b7f8a7b67c3d75fe95882253817d071007ab3d48ae5d0",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 101,
+      "source_line": 12625,
+      "line_bytes": 346,
+      "line_sha256": "b1310d82e0d871b8bab0cbe4cd8284eb09fed8c4a63568739303e8895ff7f170",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 102,
+      "source_line": 13333,
+      "line_bytes": 346,
+      "line_sha256": "f2c6780d68a5c78f6227767b3598e72093effe65e10409b419d7deee474e25aa",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 103,
+      "source_line": 13353,
+      "line_bytes": 346,
+      "line_sha256": "e55700885124a57a380dc4c6437b7ca09a4a294fa399a463cf9e1622d28e21c8",
+      "metric": "FileOps.Conflict.WaitCalls"
+    },
+    {
+      "excerpt_line": 104,
+      "source_line": 13373,
+      "line_bytes": 345,
+      "line_sha256": "a93fe6afeeb4cfd5ab4ba40d90ae882d3cbd185dc6bcd91710278287bef9ba30",
+      "metric": "FileOps.Conflict.WaitCalls"
+    }
+  ]
+}

@@ -1655,12 +1655,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         // std::jthread reports OS thread-admission failure through std::system_error. Roll back
         // the unpublished worker and sequence receipt; the clipboard has not been touched yet.
         Debug::Error(L"File Operations could not create the admitted worker (taskId={}, code={}).", startedTaskId, error.code().value());
+        WithdrawUnstartedTask(rawTask);
         std::scoped_lock lock(_mutex);
-        const auto taskIt = std::ranges::find_if(_tasks, [rawTask](const auto& candidate) noexcept { return candidate.get() == rawTask; });
-        if (taskIt != _tasks.end())
-        {
-            _tasks.erase(taskIt);
-        }
         if (groupMoveClipboardSequence.has_value())
         {
             const auto sequenceIt = std::ranges::find(_acceptedMoveClipboardSequences, groupMoveClipboardSequence.value());
@@ -2924,6 +2920,25 @@ void FolderWindow::FileOperationState::CollectQueuedTaskOrder(std::vector<Queued
     }
 }
 
+void FolderWindow::FileOperationState::WithdrawUnstartedTask(Task* task) noexcept
+{
+    std::unique_ptr<Task> removed;
+    {
+        // Queue predicates nest _mutex inside _queueMutex. Publish removal under the same
+        // mutex as their final predicate check, then notify after unlocking both.
+        std::scoped_lock queueLock(_queueMutex);
+        std::scoped_lock tasksLock(_mutex);
+        const auto found = std::ranges::find_if(_tasks, [task](const auto& candidate) noexcept { return candidate.get() == task; });
+        if (found != _tasks.end())
+        {
+            task->_holdsQueuePlace.store(false, std::memory_order_release);
+            removed = std::move(*found);
+            _tasks.erase(found);
+        }
+    }
+    _queueCv.notify_all();
+}
+
 bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool moveUp) noexcept
 {
     const uint64_t startedUs = PerfNowUs();
@@ -2931,25 +2946,19 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
     CollectTasks(tasks);
 
     std::vector<Task*> waiting;
-    CollectWaitingTasksInQueueOrder(tasks, waiting);
-
-    const auto current = std::ranges::find(waiting, taskId, &Task::GetId);
-    if (current == waiting.end())
-    {
-        return false;
-    }
-
-    const size_t index = static_cast<size_t>(std::distance(waiting.begin(), current));
-    if ((moveUp && index == 0u) || (! moveUp && index + 1u >= waiting.size()))
-    {
-        return false;
-    }
-
-    const size_t adjacentIndex = moveUp ? index - 1u : index + 1u;
-    Task* const adjacent       = waiting[adjacentIndex];
-
+    size_t index = 0u;
     {
         std::scoped_lock lock(_queueMutex);
+        // Filtering, ordering and adjacency selection share the worker's queue lock with
+        // the swap; a late overlap key cannot turn this into a non-adjacent move.
+        CollectWaitingTasksInQueueOrder(tasks, waiting);
+        const auto current = std::ranges::find(waiting, taskId, &Task::GetId);
+        if (current == waiting.end())
+            return false;
+        index = static_cast<size_t>(std::distance(waiting.begin(), current));
+        if ((moveUp && index == 0u) || (! moveUp && index + 1u >= waiting.size()))
+            return false;
+        Task* const adjacent = waiting[moveUp ? index - 1u : index + 1u];
         // Never across an overlap edge: the same rule CollectQueuedTaskOrder publishes to the popup. The edge and both
         // keys are read under _queueMutex, where a worker's overlap answer takes its late key and sets the edge
         // (RunSameHostOverlapAdvisory); read before the lock, a swap could overwrite that late key with a stale one.

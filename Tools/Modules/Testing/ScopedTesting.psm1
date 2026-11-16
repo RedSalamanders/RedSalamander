@@ -8,6 +8,8 @@ function Invoke-ScopedGit {
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
+    $start.CreateNoWindow = $true
+    $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
     foreach ($argument in @('-c','core.quotepath=false','-C',$Root) + $Arguments) { $start.ArgumentList.Add($argument) }
     $process = [Diagnostics.Process]::Start($start)
     try {
@@ -17,6 +19,28 @@ function Invoke-ScopedGit {
         $errorText = $errors.GetAwaiter().GetResult()
         if ($process.ExitCode) { throw "Git scope discovery failed: $errorText" }
         return $output
+    } finally { $process.Dispose() }
+}
+
+function Invoke-ScopedWorkflowMetadata {
+    param([string] $Repository)
+    # Bootstrap planning remains engine-independent. Preserve raw JSON and inherited
+    # environment rather than the engine-dependent line-streaming projection.
+    $start = [Diagnostics.ProcessStartInfo]::new('gh')
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('api', "repos/$Repository/actions/workflows/ci.yml")) { $start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::Start($start)
+    try {
+        $output = $process.StandardOutput.ReadToEndAsync()
+        $errors = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $output.GetAwaiter().GetResult()
+        $null = $errors.GetAwaiter().GetResult()
+        $global:LASTEXITCODE = $process.ExitCode
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $stdout }
     } finally { $process.Dispose() }
 }
 
@@ -116,97 +140,6 @@ function Get-ScopedDigest {
     finally { $hash.Dispose() }
 }
 
-function Get-ScopedSourceIdentity {
-    param([string] $Root, [switch] $CompiledOnly)
-    $rows = [Collections.Generic.List[string]]::new()
-    foreach ($path in @(Get-ScopedTrackedPaths $Root)) {
-        # Validators read prose, skills and archived mappings too. Their full identity includes every versioned input.
-        if ($path -match '^\.build/') { continue }
-        # Build attestation excludes immutable evidence/prose, but has no extension whitelist: .inl and new generators count.
-        if ($CompiledOnly -and ($path -match '^(Measurements|docs|Changes|legacy|Specs/(Plans|Done|TestRuns|Reviews|Mockups))/' -or $path -match '\.md$')) { continue }
-        $full = Join-Path $Root $path
-        # Staging a deletion changes Git's index, not the current source tree. Removed files simply leave the closure.
-        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
-        $value = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash
-        $rows.Add("$path`0$value")
-    }
-    return Get-ScopedDigest ($rows -join "`n")
-}
-
-function Get-ScopedArtifactIdentity {
-    param([string] $Root, [string] $Platform, [string] $Configuration)
-    $directory = Join-Path $Root ".build/$Platform/$Configuration"
-    if (-not (Test-Path -LiteralPath $directory -PathType Container)) { throw "Missing build profile: $directory" }
-    $rows = @(Get-ChildItem -LiteralPath $directory -Recurse -File | Where-Object { $_.Extension -in @('.exe','.dll','.pdb') } | Sort-Object FullName | ForEach-Object {
-        [IO.Path]::GetRelativePath($directory,$_.FullName) + ':' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-    })
-    if (-not $rows.Count) { throw 'No executable build artifacts were found.' }
-    return Get-ScopedDigest ($rows -join "`n")
-}
-
-function Get-ScopedEnvironmentIdentity {
-    # No secrets are stored. Different machines, OS/PowerShell, graphics runtime or sanitizer options cannot reuse evidence.
-    $values = @([Environment]::MachineName,[Runtime.InteropServices.RuntimeInformation]::OSDescription,
-        [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(),$PSVersionTable.PSVersion.ToString(),
-        $env:ASAN_OPTIONS,$env:CI,$env:GITHUB_ACTIONS,$env:REDSALAMANDER_HOSTED_TEST_DESKTOP,$env:RS_HOSTED_ARM64_STOCK_PREPARATION,$env:PROCESSOR_IDENTIFIER,$env:PATH,
-        $env:VCToolsVersion,$env:WindowsSDKVersion)
-    foreach ($file in @('d3d10warp.dll','d3d11.dll','dwrite.dll')) {
-        if (-not $env:SystemRoot) { continue }
-        $path = Join-Path $env:SystemRoot "System32/$file"
-        if (Test-Path -LiteralPath $path) { $values += (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
-    }
-    # Tooling fixtures can discover or invoke the installed compiler. Updates must invalidate their receipts too.
-    $vswhere = @(${env:ProgramFiles(x86)},$env:ProgramFiles | Where-Object { $_ } | ForEach-Object {
-        Join-Path $_ 'Microsoft Visual Studio/Installer/vswhere.exe'
-    }) | Where-Object {Test-Path -LiteralPath $_} | Select-Object -First 1
-    if ($vswhere) {
-        $installations = & $vswhere -all -prerelease -products '*' -format json
-        if ($LASTEXITCODE) { throw 'Cannot attest the installed Visual Studio environment.' }
-        $values += ($installations -join "`n")
-        foreach ($installation in @($installations -join "`n" | ConvertFrom-Json)) {
-            $toolset = Join-Path $installation.installationPath 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt'
-            if (Test-Path -LiteralPath $toolset) { $values += (Get-FileHash -LiteralPath $toolset).Hash }
-        }
-    }
-    if ($env:SystemRoot -and (Test-Path 'HKLM:/SOFTWARE/Microsoft/Windows Kits/Installed Roots')) {
-        $values += (Get-ChildItem 'HKLM:/SOFTWARE/Microsoft/Windows Kits/Installed Roots' | Sort-Object Name | ForEach-Object Name) -join "`n"
-    }
-    return Get-ScopedDigest ($values -join "`n")
-}
-
-function Get-ScopedRunIdentity {
-    param([string] $Root, [string] $Platform, [string] $Configuration, [string] $Scope, [string] $Options = '')
-    return Get-ScopedDigest (@([IO.Path]::GetFullPath($Root),$Platform,$Configuration,$Scope,$Options,
-        (Get-ScopedSourceIdentity $Root -CompiledOnly),(Get-ScopedArtifactIdentity $Root $Platform $Configuration),
-        (Get-ScopedEnvironmentIdentity)) -join "`n")
-}
-
-function Test-ScopedReceipt {
-    param([string] $Path, [string] $Identity)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
-    try {
-        $receipt = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-        # PowerShell 7.5 parses ISO JSON strings into DateTime; preserve the canonical UTC spelling on earlier hosts too.
-        $completed = if ($receipt.completedUtc -is [DateTime]) { $receipt.completedUtc.ToUniversalTime().ToString('o') } else { [string]$receipt.completedUtc }
-        return $receipt.version -eq 1 -and $receipt.outcome -eq 'PASSED' -and $receipt.identity -ceq $Identity -and
-            $receipt.digest -ceq (Get-ScopedDigest ($receipt.identity + "`n" + $completed + "`nPASSED"))
-    } catch [ArgumentException] { return $false }
-    catch [System.Management.Automation.RuntimeException] { return $false }
-}
-
-function Write-ScopedReceipt {
-    param([string] $Path, [string] $Identity)
-    $completed = [DateTime]::UtcNow.ToString('o')
-    $receipt = [ordered]@{version=1; outcome='PASSED'; identity=$Identity; completedUtc=$completed;
-        digest=(Get-ScopedDigest ($Identity + "`n" + $completed + "`nPASSED"))}
-    [void](New-Item -ItemType Directory -Path (Split-Path $Path) -Force)
-    $temporary = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
-    try {
-        [IO.File]::WriteAllText($temporary,($receipt | ConvertTo-Json),[Text.UTF8Encoding]::new($false))
-        Move-Item -LiteralPath $temporary -Destination $Path -Force
-    } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary } }
-}
-
 function Get-ScopedPrCandidateScopes {
     param([string] $Root, [object] $Manifest, [string] $Platform, [string] $Configuration,
         [AllowEmptyCollection()][string[]] $ChangedPaths)
@@ -304,8 +237,10 @@ function Get-ScopedPrCoverage {
         if (Invoke-ScopedGit $Root @('status','--porcelain','--untracked-files=normal')) { return @() }
         $local = [IO.File]::ReadAllText((Join-Path $Root '.github/workflows/ci.yml')) -replace "`r`n","`n"
         if ((Get-ScopedPrWorkflowDigest $Root) -cne $Manifest.prWorkflowDigest -or $local -notmatch '(?m)^  pull_request:') { return @() }
-        $workflow = & gh api "repos/$($Manifest.repository)/actions/workflows/ci.yml" 2>$null | ConvertFrom-Json
-        if ($LASTEXITCODE -ne 0 -or $workflow.state -ne 'active') { return @() }
+        $workflowResult = Invoke-ScopedWorkflowMetadata -Repository $Manifest.repository
+        if ($workflowResult.ExitCode -ne 0) { return @() }
+        $workflow = $workflowResult.Output | ConvertFrom-Json
+        if ($workflow.state -ne 'active') { return @() }
         $paths = @(Get-ScopedChangedPaths $Root ('origin/' + $Manifest.defaultBranch))
         $covered = @(Get-ScopedPrCandidateScopes $Root $Manifest $Platform $Configuration $paths)
         if ((Invoke-ScopedGit $Root @('rev-parse','HEAD')).Trim() -cne $candidate -or
@@ -315,10 +250,6 @@ function Get-ScopedPrCoverage {
     catch [ArgumentException] { return @() }
 }
 
-Export-ModuleMember -Function Get-ScopedChangedPaths, Read-ScopedTestManifest, Assert-ScopedTestNames, Get-ScopedTestPlan,
-    Get-ScopedSourceIdentity, Get-ScopedArtifactIdentity, Get-ScopedRunIdentity, Get-ScopedDigest,
-    Test-ScopedReceipt, Write-ScopedReceipt, Get-ScopedPrWorkflowDigest, Get-ScopedPrCoverage, Get-ScopedPrCandidateScopes, Get-ScopedEnvironmentIdentity
-
 function Test-RSScheduledTestsRequired {
     param([string]$EventName,[string]$Commit,[AllowNull()][object]$PreviousRun)
     if ($EventName -ne 'schedule' -or -not $PreviousRun -or -not $Commit) {return $true}
@@ -326,4 +257,8 @@ function Test-RSScheduledTestsRequired {
     # Use the latest completed attempt, never an older success hidden behind a later failure or cancellation.
     return $PreviousRun.conclusion -ne 'success' -or $PreviousRun.head_sha -cne $Commit
 }
-Export-ModuleMember -Function Test-RSScheduledTestsRequired
+
+Export-ModuleMember -Function Get-ScopedChangedPaths, Read-ScopedTestManifest, Assert-ScopedTestNames, Get-ScopedTestPlan,
+    Get-ScopedDigest,
+    Get-ScopedPrWorkflowDigest, Get-ScopedPrCoverage, Get-ScopedPrCandidateScopes,
+    Test-RSScheduledTestsRequired

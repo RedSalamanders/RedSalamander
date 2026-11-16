@@ -1,0 +1,999 @@
+{
+  "schema": "red-salamander.public-archive-member-projection.v1",
+  "kind": "Authored selected-member projection, not canonical intent/completion/receipt/promotion",
+  "profiles": [
+    {
+      "quarantine": {
+        "active": 0,
+        "invalid": 0,
+        "repairs": 0
+      },
+      "outer_run": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768",
+      "limits": [
+        "single Debug observation, not Full acceptance",
+        "historical13-render failure not reproduced; no causalfix or performance improvement claim",
+        "observer adds diagnostic work",
+        "reduced motion false only",
+        "sampleTransition is distinct from marker transition",
+        "raw native metric commit is empty; source binds through workspace/receipt/archives"
+      ],
+      "profile": "Debug",
+      "source": {
+        "base": "084085b367f7905e74d98b3252f83ccf68bd329d",
+        "manifest_sha256": "ce5789c5b8cfe5cbd531f00da35e9b7a654136c5aaed2ec4a4aac3d58897346f",
+        "snapshot": "8ecc88a82986aa64ba3f2e9fd6fb27641367f704a25f3f0ca0f70ea81fbd9018",
+        "state": "uncommitted dirty29 observation",
+        "diff_sha256": "bdfa6292745c9b806840360cb5ceb3bb466834d2de3e8b474df6ff684c1dc502"
+      },
+      "native_run": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f",
+      "disk_audit": {
+        "nonblocking": true,
+        "is_clean": false,
+        "cleanup_performed": false,
+        "issue_count": 102
+      },
+      "private_driver_bookkeeping": {
+        "authority": "Actual canonical case results and owned native exit0; not private initialized flag",
+        "initialized_false_flag_stale_in_Debug": true
+      },
+      "archives": [
+        {
+          "complete": {
+            "sha256": "1cc0f17e52b4e87fa4634e4302b5ff1b9d94fe8e42840054156ae0b03727378f",
+            "bytes": 399
+          },
+          "bodies_published": false,
+          "intent": {
+            "sha256": "3e01ba2125fb2f13c5e83428791b6c5aa723b512cf2dff6f8709dd468b80edf6",
+            "bytes": 14266
+          },
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "complete": {
+            "sha256": "9464254c2ebbd5a45046737f341c349bc350abcda95b91789ff327aa72f99d36",
+            "bytes": 399
+          },
+          "bodies_published": false,
+          "intent": {
+            "sha256": "4b594285ebfc263f52561d44b0d542bae60faf028f6abfa477342e77ed4c2541",
+            "bytes": 25489
+          },
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "complete": {
+            "sha256": "305d99b5ff20ac35f6ac1b122878eaeafeb57b18bf474a18af403facb4a46f52",
+            "bytes": 399
+          },
+          "bodies_published": false,
+          "intent": {
+            "sha256": "42e2c7d8e4a24687ebb1d33196c271f598936fdc03506249f8adb19c56f52655",
+            "bytes": 4264
+          },
+          "run_id": "20261114T072828Z-89860-0fa0313bc7bc49e7ba25b2a2194aa1ee"
+        },
+        {
+          "run_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+          "bodies_published": false,
+          "kind": "Later current-time control-record evidence custody,not native execution",
+          "intent": {
+            "bytes": 14490,
+            "sha256": "167a8c2e268ce10189776ca21c8a5d04f2e95f981bde83330c5cee2607f80f92"
+          },
+          "complete": {
+            "bytes": 399,
+            "sha256": "a17e782d420498d368354bac5b0a7309a37d39de56855224e6ee72de61568f94"
+          }
+        }
+      ],
+      "measurement": "Unchanged600ms settle,2201ms realpaused sample:2timerTicks/2renders/2ownerTicks;1000msheartbeat;0presentationBuilds/0projectableScans;resume100mscadence0ms.",
+      "raw_trace": {
+        "sha256": "2215a0554105b79be16658092961a5f241fdd874c8b165df38dbb86d6e965039",
+        "bytes": 146534,
+        "total_lines": 220,
+        "selected_lines": [
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200
+        ],
+        "selected_count": 147
+      },
+      "observer_summary": [
+        {
+          "reduced_motion": [
+            "false"
+          ],
+          "first_paused_zero_marker_target_ms": "78",
+          "graph_generations": [
+            "1"
+          ],
+          "rows": 89,
+          "first_paused_zero_marker_display_ms": "266",
+          "first_paused_quiet_subscription_ms": "266",
+          "phase": "engine-paused-through-resume",
+          "sample_counts": [
+            "17"
+          ],
+          "graph_query_states": [
+            "true"
+          ]
+        },
+        {
+          "reduced_motion": [
+            "false"
+          ],
+          "first_paused_zero_marker_target_ms": "0",
+          "graph_generations": [
+            "1"
+          ],
+          "rows": 58,
+          "first_paused_zero_marker_display_ms": "219",
+          "first_paused_quiet_subscription_ms": "219",
+          "phase": "synthetic-retained-running-paused",
+          "sample_counts": [
+            "120"
+          ],
+          "graph_query_states": [
+            "true"
+          ]
+        }
+      ],
+      "proof_origin": {
+        "sha256": "c16b7b47e76d17d14cca0bc193cf3a49a5321f42051365024c6fd7822dcd799b",
+        "bytes": 9285,
+        "member": "scratch/audit-native/dirty29-cadence-debug-final-proof/final-cadence-proof.json",
+        "run_id": "20261114T072828Z-89860-0fa0313bc7bc49e7ba25b2a2194aa1ee"
+      },
+      "raw_metrics": {
+        "bytes": 1919062,
+        "commit": "",
+        "total_lines": 5592,
+        "selected_lines": [
+          716,
+          852,
+          962,
+          1000,
+          1194,
+          1220,
+          1668,
+          2222,
+          2828,
+          2829,
+          2830,
+          2831,
+          3537,
+          4797,
+          4798,
+          4799,
+          4800,
+          5101,
+          5102,
+          5103,
+          5104,
+          5106,
+          5574
+        ],
+        "sha256": "e55db8274cc4d62cd4646be10a33a9564da14f14c25a79edd512d3d34dbdc828",
+        "selected_count": 23,
+        "transformation": "Existing selected derivative normalizes11 total timestamp strings; exact UTC instant retained,other fields semantically exact. Six copied derivatives and raw streams remain unchanged."
+      },
+      "original_members": [
+        {
+          "sha256": "2215a0554105b79be16658092961a5f241fdd874c8b165df38dbb86d6e965039",
+          "bytes": 146534,
+          "member": "artifacts/selftest/last_run/fileops/trace.txt",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "6ebeb7e75dd5d0773ea5b26a2ad5a8821bc05583855a904d4ab4294eebc52f51",
+          "bytes": 881,
+          "member": "artifacts/selftest/last_run/fileops/results.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "e55db8274cc4d62cd4646be10a33a9564da14f14c25a79edd512d3d34dbdc828",
+          "bytes": 1919062,
+          "member": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "e43cc005b5c8c12ec3bc919c1f1aaf014e802a046208e46e29f531ff76085ec9",
+          "bytes": 2499,
+          "member": "scratch/audit-native/dirty29-cadence-debug/diagnosis-proof.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "88e4fb27dd68ddefff745411f1cc2e75b51d8b77a8aab6247995826b673229cd",
+          "bytes": 84985,
+          "member": "scratch/audit-native/dirty29-cadence-debug/build-receipt-before.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "88e4fb27dd68ddefff745411f1cc2e75b51d8b77a8aab6247995826b673229cd",
+          "bytes": 84985,
+          "member": "scratch/audit-native/dirty29-cadence-debug/build-receipt-after.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "b595a388313e544095b0bbe818b39057f98dd4f80fb97b3cf8ffa1e6e1516453",
+          "bytes": 16338,
+          "member": "scratch/audit-native/dirty29-cadence-debug/source-before.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "431cde21de5e9e63bdab756d8f26ed74dcaf2c2bb8440443e226dfa4a97a91c1",
+          "bytes": 16338,
+          "member": "scratch/audit-native/dirty29-cadence-debug/source-after.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "98db466ceb0939416ef452443a36e754333bcf6e055b8cf814f0ee4586942f2d",
+          "bytes": 2428,
+          "member": "scratch/audit-native/dirty29-cadence-debug/canonical-explain-decision.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "98ca4efb5128183079a58244ab0103376c72887f3b5076cc5625b7adc05cd080",
+          "bytes": 1699,
+          "member": "scratch/audit-native/dirty29-cadence-debug/actual-selected-plan.json",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "d93b92ff20a0a68e67b0b79c0805224f31e43dd42eb49dba7494e8db0a068c4c",
+          "bytes": 39685,
+          "member": "scratch/audit-native/dirty29-cadence-debug/msbuild-20261114_081732_936-pid36120-8942e0dd.log",
+          "run_id": "20261114T071657Z-75672-1c4a2dcbb6ed4e389f7ad8bf83720768"
+        },
+        {
+          "sha256": "386eaaf86fb1e75196a7fe04c0bfcb06c0a777be5c90631313e2ac2ef7d06ff1",
+          "bytes": 223,
+          "member": "artifacts/native-process-exits/9ca27408c8bc4bad815171c63020be20.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "7039dbf644abac5b47e541002ec1029d8c7f53dcfe3bb679cf229fa9e44c6b94",
+          "bytes": 1696,
+          "member": "artifacts/selftest/previous_run/entry-fingerprints.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "34cb01dd59aa7535f140b72f83c2b0e044be077fae83a9fbec26b158cc5c420c",
+          "bytes": 1654,
+          "member": "artifacts/selftest/previous_run/validation-plan.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "e107a5d8ebc6dc2fdf973718a2ad55b043aa76c85de2f2468593034217ea0a9d",
+          "bytes": 2428,
+          "member": "artifacts/selftest/previous_run/validation-plan-decision.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "f0dc1a992568bc89849b34eac97605168851ccfe290e2f8d38fd5847af19bc10",
+          "bytes": 12687,
+          "member": "artifacts/selftest/last_run/workspace-after-selftest.file-operations.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        },
+        {
+          "sha256": "cc08be0f5aca74a49c9bc1233951053a2186c9cdec90843dbdf6b1eaa466691b",
+          "bytes": 12688,
+          "member": "artifacts/selftest/last_run/workspace-final.json",
+          "run_id": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f"
+        }
+      ],
+      "prelaunch": {
+        "snapshot": "8ecc88a82986aa64ba3f2e9fd6fb27641367f704a25f3f0ca0f70ea81fbd9018",
+        "coverage_scope": "filtered",
+        "location": "previous_run",
+        "decision_digest": "bf8e9f8cb97e3cc36f155d3820d44552f97d260da57f8a51b0c63fec04d90627",
+        "fingerprints_digest": "8aa762f9f6f0169026039868ee28cb78bf947074f017d6da2bb9bde997cd3e99",
+        "arguments": [
+          "--fileops-selftest",
+          "--selftest-no-activate",
+          "--selftest-case=FileOps_PopupIdleCadence"
+        ],
+        "receipt_id": "ce7becae0418420d1d9724a75d0fdb9ed4200ac1e06636a6a5a2e4aac8195063",
+        "plan_digest": "3cd3b804f13e940f35ee5980ae2e9e99b6aaeea8f69f8019b1cc06f99c67f5c6"
+      },
+      "build": {
+        "bodies_published": false,
+        "executable": {
+          "sha256": "6f7cfa06edfcd14981bf36a32db3615face1cd55ad5cd9bbc0895b064b342ce7",
+          "bytes": 113285632,
+          "relative_path": ".build/x64/Debug/RedSalamander.exe"
+        },
+        "receipt_original_sha256": "88e4fb27dd68ddefff745411f1cc2e75b51d8b77a8aab6247995826b673229cd",
+        "errors": 0,
+        "warnings": 0,
+        "receipt_id": "ce7becae0418420d1d9724a75d0fdb9ed4200ac1e06636a6a5a2e4aac8195063",
+        "private_before_after_verified": true,
+        "receipt_original_bytes": 84985,
+        "tests_enabled": true
+      },
+      "late_control_records": [
+        {
+          "original_native_run": "20261114T072424Z-93752-ab406a3135fb42b185ef5fbef46f7d0f",
+          "sha256": "4077106939e7e4319b148853c12de5935a9a4005799dd156af3c408944e8f982",
+          "original_native_archive_member": false,
+          "semantics": "Runner v1 aggregate written after original native archival; earlier immutable proof pins its bytes,then a current-time exact copy is separately inventory-bound. Not an original native seal,test,rerun,promotion or portable qualification.",
+          "bytes": 30558,
+          "earlier_immutable_final_proof": {
+            "sha256": "c16b7b47e76d17d14cca0bc193cf3a49a5321f42051365024c6fd7822dcd799b",
+            "bytes": 9285,
+            "member": "scratch/audit-native/dirty29-cadence-debug-final-proof/final-cadence-proof.json",
+            "run_id": "20261114T072828Z-89860-0fa0313bc7bc49e7ba25b2a2194aa1ee"
+          },
+          "original_member": "artifacts/selftest/last_run/run-all-tests-results.json",
+          "later_custody": {
+            "capture_record_member": "scratch/tooling/cadence-publication/late-control-capture.json",
+            "capture_utc": "2026-11-14T08:10:58.3094020+00:00",
+            "context_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+            "capture_record_bytes": 2411,
+            "copy_member": "scratch/tooling/cadence-publication/late-control-records/Debug.runner-summary.v1.json",
+            "capture_record_sha256": "cf648a1e4443c38001a68282610e80b4e162460f5192c9cb094c15ad8fa4cbbb",
+            "actual_archive": {
+              "run_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+              "bodies_published": false,
+              "kind": "Later current-time control-record evidence custody,not native execution",
+              "intent": {
+                "bytes": 14490,
+                "sha256": "167a8c2e268ce10189776ca21c8a5d04f2e95f981bde83330c5cee2607f80f92"
+              },
+              "complete": {
+                "bytes": 399,
+                "sha256": "a17e782d420498d368354bac5b0a7309a37d39de56855224e6ee72de61568f94"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "quarantine": {
+        "active": 0,
+        "invalid": 0,
+        "repairs": 0
+      },
+      "outer_run": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1",
+      "limits": [
+        "single Release observation, not Full acceptance",
+        "historical13-render failure not reproduced; no causalfix or performance improvement claim",
+        "observer adds diagnostic work",
+        "reduced motion false only",
+        "sampleTransition is distinct from marker transition",
+        "raw native metric commit is empty; source binds through workspace/receipt/archives",
+        "Debug and Release are separate diagnostic observations; no aggregate timing comparison"
+      ],
+      "profile": "Release",
+      "source": {
+        "base": "084085b367f7905e74d98b3252f83ccf68bd329d",
+        "manifest_sha256": "ce5789c5b8cfe5cbd531f00da35e9b7a654136c5aaed2ec4a4aac3d58897346f",
+        "snapshot": "8ecc88a82986aa64ba3f2e9fd6fb27641367f704a25f3f0ca0f70ea81fbd9018",
+        "state": "uncommitted dirty29 observation",
+        "diff_sha256": "bdfa6292745c9b806840360cb5ceb3bb466834d2de3e8b474df6ff684c1dc502"
+      },
+      "native_run": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63",
+      "disk_audit": {
+        "nonblocking": true,
+        "is_clean": false,
+        "cleanup_performed": false,
+        "issue_count": 102
+      },
+      "private_driver_bookkeeping": {
+        "authority": "Actual canonical case results and owned native exit0; not private initialized flag",
+        "initialized_false_flag_stale_in_Debug": false
+      },
+      "archives": [
+        {
+          "complete": {
+            "sha256": "fcb7cbe3cfe02c05fda76dc4b8df30a0d1e308d94c96b6e8cb7bc37c21a0fd71",
+            "bytes": 399
+          },
+          "bodies_published": false,
+          "intent": {
+            "sha256": "5e037833f7d51b43c7ce5501621fcb5bac0fa7408075c8c6f5358a1963964df0",
+            "bytes": 13783
+          },
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "complete": {
+            "sha256": "06b0508d9ba62792fe9481af020c8c34ead6bad851dc15842ab97a1ce48c9d17",
+            "bytes": 399
+          },
+          "bodies_published": false,
+          "intent": {
+            "sha256": "fd1b75aa609006c60f499b0a8763f5fb7c6ec08c73e1d0d04ccc57aeabb11fb8",
+            "bytes": 25484
+          },
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "complete": {
+            "sha256": "142395de9c746dce216c8ffa2f671505c9b49027a9185b152596d59e5b553760",
+            "bytes": 399
+          },
+          "bodies_published": false,
+          "intent": {
+            "sha256": "15433eb001d2508192282a8400196eeac51cb7b7bb775e691d4f22cfbd4ddb6b",
+            "bytes": 4275
+          },
+          "run_id": "20261114T074322Z-83108-048ab667334d4cbea34e49c7ef239dba"
+        },
+        {
+          "run_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+          "bodies_published": false,
+          "kind": "Later current-time control-record evidence custody,not native execution",
+          "intent": {
+            "bytes": 14490,
+            "sha256": "167a8c2e268ce10189776ca21c8a5d04f2e95f981bde83330c5cee2607f80f92"
+          },
+          "complete": {
+            "bytes": 399,
+            "sha256": "a17e782d420498d368354bac5b0a7309a37d39de56855224e6ee72de61568f94"
+          }
+        }
+      ],
+      "measurement": "Unchanged600mssettle,2203msrealpaused:2timerTicks/2renders/2ownerTicks;1000msheartbeat;0presentationBuilds/0projectableScans;resume100mscadence0ms.",
+      "raw_trace": {
+        "sha256": "e01a31325f480cb44300da6e294a7c2b97533d0ddb1140e69591a69cd0383a05",
+        "bytes": 145954,
+        "total_lines": 220,
+        "selected_lines": [
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200
+        ],
+        "selected_count": 147
+      },
+      "observer_summary": [
+        {
+          "phase": "engine-paused-through-resume",
+          "graph_query_states": [
+            "true"
+          ],
+          "reduced_motion": [
+            "false"
+          ],
+          "graph_generations": [
+            "1"
+          ],
+          "first_paused_quiet_subscription_ms": "282",
+          "first_paused_zero_marker_target_ms": "79",
+          "first_paused_zero_marker_display_ms": "282",
+          "sample_counts": [
+            "16"
+          ],
+          "rows": 97
+        },
+        {
+          "phase": "synthetic-retained-running-paused",
+          "graph_query_states": [
+            "true"
+          ],
+          "reduced_motion": [
+            "false"
+          ],
+          "graph_generations": [
+            "1"
+          ],
+          "first_paused_quiet_subscription_ms": "203",
+          "first_paused_zero_marker_target_ms": "0",
+          "first_paused_zero_marker_display_ms": "203",
+          "sample_counts": [
+            "120"
+          ],
+          "rows": 50
+        }
+      ],
+      "proof_origin": {
+        "sha256": "f3072b9f5d141d2341b5704cc1b2ad48cff50bb634ce245265570cc533a52e97",
+        "bytes": 10160,
+        "member": "scratch/audit-native/dirty29-cadence-release-final-proof/final-cadence-proof.json",
+        "run_id": "20261114T074322Z-83108-048ab667334d4cbea34e49c7ef239dba"
+      },
+      "raw_metrics": {
+        "bytes": 1955535,
+        "commit": "",
+        "total_lines": 5672,
+        "selected_lines": [
+          754,
+          890,
+          952,
+          990,
+          1134,
+          1160,
+          1620,
+          2188,
+          2896,
+          2897,
+          2898,
+          2899,
+          3576,
+          4835,
+          4836,
+          4837,
+          4838,
+          5167,
+          5168,
+          5169,
+          5170,
+          5172,
+          5653
+        ],
+        "sha256": "eab98ee8ee9c28cb2d40e07710ff60414b2ffa598406099500b0e62018c8575a",
+        "selected_count": 23,
+        "transformation": "Existing selected derivative normalizes11 total timestamp strings; exact UTC instant retained,other fields semantically exact. Six copied derivatives and raw streams remain unchanged."
+      },
+      "original_members": [
+        {
+          "sha256": "e01a31325f480cb44300da6e294a7c2b97533d0ddb1140e69591a69cd0383a05",
+          "bytes": 145954,
+          "member": "artifacts/selftest/last_run/fileops/trace.txt",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "931401c0ca7e546fe73b290d1018b6d5b62d1de55a517694f0ae6930dfd21f77",
+          "bytes": 881,
+          "member": "artifacts/selftest/last_run/fileops/results.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "eab98ee8ee9c28cb2d40e07710ff60414b2ffa598406099500b0e62018c8575a",
+          "bytes": 1955535,
+          "member": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "93583109e41edb237bf65aa05a159fec6becbb01b360172c37d0fc1433a26c99",
+          "bytes": 12688,
+          "member": "artifacts/selftest/last_run/workspace-after-selftest.file-operations.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "66e1f033794e4b9740e9b9a2cc6eb0bf85e43c0938b7c2dbdd702c915c03a6c5",
+          "bytes": 12687,
+          "member": "artifacts/selftest/last_run/workspace-final.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "efc8c63c7a6f757f58235a276a92b07cff0536670db6571a83545575d56c432b",
+          "bytes": 3276,
+          "member": "scratch/audit-native/dirty29-cadence-release/diagnosis-proof.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "dad476f8da8b4039313975126966b8da4327c481d294a67bb4d9ee319b91aecc",
+          "bytes": 86418,
+          "member": "scratch/audit-native/dirty29-cadence-release/build-receipt-before.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "dad476f8da8b4039313975126966b8da4327c481d294a67bb4d9ee319b91aecc",
+          "bytes": 86418,
+          "member": "scratch/audit-native/dirty29-cadence-release/build-receipt-after.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "aa56d7f9ab6df56f0a28bb58ea6e2f2bfe06303239515b1f79de64514b789808",
+          "bytes": 16338,
+          "member": "scratch/audit-native/dirty29-cadence-release/source-before.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "36acfbe42d9377302f58aa8d2968e793a8fa31f05ca8f3921b9167a161ce0de2",
+          "bytes": 16338,
+          "member": "scratch/audit-native/dirty29-cadence-release/source-after.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "6eb86612e834038c1b678d4fcf2098d9773aa7adb0917ac256ed648a718a0642",
+          "bytes": 2428,
+          "member": "scratch/audit-native/dirty29-cadence-release/canonical-explain-decision.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "3b0ae868b4f701f68d6184eddcb5a39401b2d57c74b4a506624dd4228a05190c",
+          "bytes": 1701,
+          "member": "scratch/audit-native/dirty29-cadence-release/actual-selected-plan.json",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "4d189b75c8a5ee4ff04618736a36aa29a0032997c0b9abda3c08012708caadce",
+          "bytes": 41043,
+          "member": "scratch/audit-native/dirty29-cadence-release/msbuild-20261114_083106_611-pid84584-811aea05.log",
+          "run_id": "20261114T073030Z-83992-69ba88dcbe0147779d9bb132a98379d1"
+        },
+        {
+          "sha256": "e2a4b40f3931a33812c501b66e3f1e460a0b92d8ec4ec89107581c101a28e359",
+          "bytes": 225,
+          "member": "artifacts/native-process-exits/3bdee84ba40849c0ac3e668d50988b7f.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "ee3ea50fdb12282cc5698e1905357607dc3cc72a54455a15274d97471422d161",
+          "bytes": 1696,
+          "member": "artifacts/selftest/previous_run/entry-fingerprints.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "a6d0f19ed9b7a35198e4eb3a9efddc159963bb2b5a600f5415e6359fec80bf91",
+          "bytes": 1656,
+          "member": "artifacts/selftest/previous_run/validation-plan.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        },
+        {
+          "sha256": "2a9b65e9835759b8222c55290f1cfbec321769d3988634481ed270e59340bbbf",
+          "bytes": 2428,
+          "member": "artifacts/selftest/previous_run/validation-plan-decision.json",
+          "run_id": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63"
+        }
+      ],
+      "prelaunch": {
+        "snapshot": "8ecc88a82986aa64ba3f2e9fd6fb27641367f704a25f3f0ca0f70ea81fbd9018",
+        "coverage_scope": "filtered",
+        "location": "previous_run",
+        "decision_digest": "002dcc1f4327f8fea65701f0f27c794c53c9f9f68a04f9e78dd931391eba81e5",
+        "fingerprints_digest": "f47e40fef34115aac17e2a5b53b05f940f0fa5e2647aa00a074036b4090fe927",
+        "arguments": [
+          "--fileops-selftest",
+          "--selftest-no-activate",
+          "--selftest-case=FileOps_PopupIdleCadence"
+        ],
+        "receipt_id": "e76fc2419bf463636e06ff4d6480f74f6b6a6b30dc8229594b7050758923b949",
+        "plan_digest": "0f2c4b2689cc817ae8af49d17986a0a09033d581f46f524781cf37c8e851a3ba"
+      },
+      "build": {
+        "bodies_published": false,
+        "executable": {
+          "sha256": "dda175e326508f4a18d7cbfb49c9cc3e7a4b40d32920d772e2d806eaaf8141e0",
+          "bytes": 40863232,
+          "relative_path": ".build/x64/Release/RedSalamander.exe"
+        },
+        "receipt_original_sha256": "dad476f8da8b4039313975126966b8da4327c481d294a67bb4d9ee319b91aecc",
+        "errors": 0,
+        "warnings": 0,
+        "receipt_id": "e76fc2419bf463636e06ff4d6480f74f6b6a6b30dc8229594b7050758923b949",
+        "private_before_after_verified": true,
+        "receipt_original_bytes": 86418,
+        "tests_enabled": true
+      },
+      "late_control_records": [
+        {
+          "original_native_run": "20261114T073949Z-96064-a6d87d5fa3304f018e58fb712b71aa63",
+          "sha256": "3b8ba936fdf2982ff53d9a11a0f3ebbf92c6bfc050b0efe1db71c92ccb424537",
+          "original_native_archive_member": false,
+          "semantics": "Runner v1 aggregate written after original native archival; earlier immutable proof pins its bytes,then a current-time exact copy is separately inventory-bound. Not an original native seal,test,rerun,promotion or portable qualification.",
+          "bytes": 30562,
+          "earlier_immutable_final_proof": {
+            "sha256": "f3072b9f5d141d2341b5704cc1b2ad48cff50bb634ce245265570cc533a52e97",
+            "bytes": 10160,
+            "member": "scratch/audit-native/dirty29-cadence-release-final-proof/final-cadence-proof.json",
+            "run_id": "20261114T074322Z-83108-048ab667334d4cbea34e49c7ef239dba"
+          },
+          "original_member": "artifacts/selftest/last_run/run-all-tests-results.json",
+          "later_custody": {
+            "capture_record_member": "scratch/tooling/cadence-publication/late-control-capture.json",
+            "capture_utc": "2026-11-14T08:10:58.3280138+00:00",
+            "context_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+            "capture_record_bytes": 2411,
+            "copy_member": "scratch/tooling/cadence-publication/late-control-records/Release.runner-summary.v1.json",
+            "capture_record_sha256": "cf648a1e4443c38001a68282610e80b4e162460f5192c9cb094c15ad8fa4cbbb",
+            "actual_archive": {
+              "run_id": "20261114T081058Z-96284-754c8685aac44dba9432ce6141ea4eeb",
+              "bodies_published": false,
+              "kind": "Later current-time control-record evidence custody,not native execution",
+              "intent": {
+                "bytes": 14490,
+                "sha256": "167a8c2e268ce10189776ca21c8a5d04f2e95f981bde83330c5cee2607f80f92"
+              },
+              "complete": {
+                "bytes": 399,
+                "sha256": "a17e782d420498d368354bac5b0a7309a37d39de56855224e6ee72de61568f94"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "portable_receipt_qualification": false,
+  "full_acceptance": false,
+  "generic_archive_projection_semantic_validation": false,
+  "custody_distinction": {
+    "portable_or_original_native_seal_claim": false,
+    "late_control_records": 2,
+    "late_record_original_membership": false,
+    "later_copies_are_actual_current_time_inventory_members": true,
+    "strict_original_members": 34
+  }
+}

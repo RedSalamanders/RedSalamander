@@ -1,0 +1,172 @@
+{
+  "schema": "red-salamander.dxui-git-component-source.v1",
+  "source_base": "46939438b3a9101a73faec539bb4eaec93176bb7",
+  "workspace": "dirty candidate follow-up, not later committed qualification",
+  "measured_context": "20261114T231409Z-87496-d44e7ff3500b41a68b7319f3a7407328",
+  "measured_targets": [
+    {
+      "path": ".gitattributes",
+      "length": 59330,
+      "sha256": "81e262284429b5a66cf1142c56ec54d5f00872fc675fe73a61c697f3716d968d"
+    },
+    {
+      "path": "Changes/2026-11-13-10-day-audit-remediation.md",
+      "length": 1776,
+      "sha256": "a37886cfc6e54896f96e7738f121cb136fd23ea52ebf6580892a428e46240990"
+    },
+    {
+      "path": "Specs/Build/Build_Toolchain.md",
+      "length": 91395,
+      "sha256": "58882774c6ca68e7147249d1c6f66639ddcb72b7a9e8b2498a17ef614b53a53e"
+    },
+    {
+      "path": "Specs/Core/Core_SharedHelpers.md",
+      "length": 108466,
+      "sha256": "6e2511f3ad3550a98858a2abe196db4c255dfc10f133e46de31ad90da1eb4b35"
+    },
+    {
+      "path": "Tools/Modules/Build/DxUiDependency.psm1",
+      "length": 38071,
+      "sha256": "f1ad803a453ac9cdf7f3f4a5a132602f33436a5907ce0b5100112ff78962f694"
+    },
+    {
+      "path": "Tools/README.md",
+      "length": 67116,
+      "sha256": "af6c08990114409120136d6b5a917266e67f31efb67c871c33aa18b92cbcd624"
+    },
+    {
+      "path": "Tools/Tests/DxUiDependency.Tests.ps1",
+      "length": 65138,
+      "sha256": "72cce2bbe87e54301926ec52e1b64fa75a04e0899d60ddbb7f2e3f790d4a32f4"
+    },
+    {
+      "path": "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+      "length": 514919,
+      "sha256": "bfc5ab1deade7be5543676205c7c8704dffd432ce476744db7f50e5b07d480a0"
+    },
+    {
+      "path": "Tools/tool-inventory.json",
+      "length": 240516,
+      "sha256": "3810eeb8bf05406c3e21211fcf0ccb86553f4cd83e84f01d4c95f76b90d35660"
+    }
+  ],
+  "reporting_exclusions": "I65 and authored public packet metadata; no executable/test changes after measurement",
+  "controls": {
+    "passed": 325.0,
+    "failed": 0.0,
+    "skipped": 0.0,
+    "elapsed_seconds": 165.8936476,
+    "results": [
+      {
+        "passed": 21,
+        "selected_describes": [
+          "Captured DxUi source Git identity",
+          "Folded DxUi change notes",
+          "Canonical DxUi source ownership",
+          "Exact DxUi consumer dependency",
+          "Lighter DxUi source restore",
+          "Qualified SDK CI preparation routing",
+          "SDK input data records and fail-closed artifact routing",
+          "Packaged DxUi module provenance"
+        ],
+        "skipped": 0,
+        "seconds": 26.6190269,
+        "file": "DxUiDependency.Tests.ps1",
+        "failed": 0
+      },
+      {
+        "passed": 237,
+        "selected_describes": null,
+        "skipped": 0,
+        "seconds": 15.833822,
+        "file": "TestHarnessSourceContracts.Tests.ps1",
+        "failed": 0
+      },
+      {
+        "passed": 8,
+        "selected_describes": [
+          "Pinned build-tool and CI identity",
+          "Workflow-selected MSBuild identity",
+          "Vcpkg captured-launch cache closure"
+        ],
+        "skipped": 0,
+        "seconds": 1.006272,
+        "file": "BuildReproducibility.Tests.ps1",
+        "failed": 0
+      },
+      {
+        "passed": 17,
+        "selected_describes": null,
+        "skipped": 0,
+        "seconds": 9.3050636,
+        "file": "ToolInventory.Tests.ps1",
+        "failed": 0
+      },
+      {
+        "passed": 12,
+        "selected_describes": null,
+        "skipped": 0,
+        "seconds": 6.3475563,
+        "file": "ToolingGovernance.Tests.ps1",
+        "failed": 0
+      },
+      {
+        "passed": 30,
+        "selected_describes": null,
+        "skipped": 0,
+        "seconds": 102.2432704,
+        "file": "DocumentationDriftContracts.Tests.ps1",
+        "failed": 0
+      }
+    ],
+    "excluded": "SDK consumer Windows header policy; DxUi consumer profile evaluation; RequiresBuildToolchain; no product build/UI/bare-Git baseline"
+  },
+  "original_archive": {
+    "intent_sha256": "d1998a75963aadd98cb7134ecdc5b04b86f70ce27c05e3f50f5ecb2801350fdc",
+    "completion_sha256": "97752147f5412b2536c99f6dfdd89bb4d6773f4fc63e5ac671aeefce61becdd4",
+    "members": [
+      {
+        "member": "scratch/tooling/dxui-git-final-cf/summary.json",
+        "length": 3754,
+        "sha256": "12090612704bc6122cfd4cad42b51fda7eef013dc7038ba2970c07396cb862eb"
+      },
+      {
+        "member": "scratch/tooling/dxui-git-final-cf/targets-before.json",
+        "length": 1480,
+        "sha256": "0594b049c2027094f40b686894eb499dc2d8bfd0920198a5b3e22369712584bd"
+      },
+      {
+        "member": "scratch/tooling/dxui-git-final-cf/targets-after.json",
+        "length": 1480,
+        "sha256": "0594b049c2027094f40b686894eb499dc2d8bfd0920198a5b3e22369712584bd"
+      },
+      {
+        "member": "scratch/tooling/dxui-git-final-cf/DxUiDependency.Tests.ps1.xml",
+        "length": 10183,
+        "sha256": "bc65ef8b234ac05aab31a14737ac55625291d05d0dfb474db984f13b3906e5ca"
+      },
+      {
+        "member": "scratch/d/identity-4cef1ae5/identity-queries.json",
+        "length": 1753,
+        "sha256": "6761bfedfbe1e1705993e7cacad20fb88a1264c1a7a403ea47c8f4528cbe53fb"
+      },
+      {
+        "member": "scratch/d/git-fd931d88/safe-git-observations.json",
+        "length": 2935,
+        "sha256": "9f02dccec3a2598c5f0ec75759e2db2a940952fa239bc6ae78e2553d98b9d56e"
+      },
+      {
+        "member": "scratch/d/git-fd931d88/launches.jsonl",
+        "length": 2291,
+        "sha256": "c10d85bf7f8ef4810dc293664b029e5c48b8eea3536d4e09b36a0fd76c2399aa"
+      }
+    ]
+  },
+  "projection": {
+    "identity": "Retain ordered query label, one call, literal-argument/CWD/delegation equality; omit concrete fixture paths and original argv",
+    "safe_children": "Retain ordered operation and flag/job/inherited-value predicates; omit process IDs, executable/CWD paths, argv and inherited literal",
+    "originals": "Private original bytes unchanged; public work-counts is authored projection, not a raw-byte copy",
+    "unsafe_refusal": "Actual preflight counterfactual and Unicode/exit/stderr checks are proven by original passed Pester case, not additional per-launch raw fields"
+  },
+  "public_work_sha256": "a51811a4639ec0c22c5d207b90e2e619612135701b79922e7751834a1d773614"
+}

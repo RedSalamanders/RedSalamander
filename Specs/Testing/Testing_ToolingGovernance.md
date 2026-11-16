@@ -429,8 +429,10 @@ The minimum tooling-governance checks are:
 .\Tools\Get-ToolInventory.ps1 -Validate
 Invoke-Pester .\Tools\Tests\ToolInventory.Tests.ps1 -PassThru
 Invoke-Pester .\Tools\Tests\ToolingGovernance.Tests.ps1 -PassThru
-.\Tools\Get-SpecInventory.ps1 -FailOnFindings
+.\Tools\Get-SpecInventory.ps1 -FailOnFindings -NoReports
 ```
+
+Specification validation uses `Get-SpecInventory.ps1 -FailOnFindings -NoReports` so the canonical spec and test-inventory checks run without generating reports. Default catalog generation retains its four repository-local report paths for compatible non-validation consumers; it does not authorize validation evidence in `.build` or arbitrary external output. `-NoReports` rejects an explicit `-OutputRoot` and preserves `-PassThru` and blocking-finding failures.
 
 Run focused tests for each touched module or entrypoint. Use the owning scoped
 testing contract to select affected iteration and PrePush/local-versus-PR obligations.
@@ -454,3 +456,75 @@ repository root, so checkout ancestor names cannot suppress findings. Selected s
 roots must remain inside that root and cannot traverse reparse-point components. The
 repository root itself cannot be a reparse point; source
 discovery does not follow directory links and rejects included reparse-point files.
+
+## Background metadata transport exceptions
+
+Native background Git/workflow metadata must be non-shell and no-window before
+launch, drain stdout/stderr independently, preserve literal arguments, stdin and
+actual exit/error semantics, and close only the process it launched. Prefer the
+canonical captured/streaming helper. Engine-independent bootstrap and provenance
+readers retain only the exact private raw/line/stdin exceptions in Core_SharedHelpers;
+their dependency/environment/encoding distinction is documented at the definition
+and protected by the finite AST/source and owned-child controls. A caller-owned
+Git shim can diagnose an unsafe path but never constitutes its production fix.
+Provisioning writes retain the governing lock and delegated write authority; a
+read-only projection never silently acquires that authority. No generic factory
+or interactive installer/build policy is changed to make metadata silent.
+
+On the supported Pester3 host, successful Should assertions can emit Boolean values.
+Capture/exit-code doubles must keep assertions out of their returned pipeline (use
+equivalent terminating field checks or suppress assertion output), so the test does
+not replace an integer exit or capture object with a Boolean/object array.
+
+Known Git text stdout is UTF-8 independently of the caller's console code page.
+The specialized engine-independent transports select that stdout decoder explicitly.
+Canonical Invoke-RSCapturedProcess/Invoke-RSStreamingProcess expose one optional
+per-child StandardOutputEncoding override, selected by known Git callers (including
+the DxUi Git projection and delegated vcpkg provisioning). The default remains
+unchanged for MSBuild, VSwhere, installers and arbitrary metadata; stderr decoding,
+ordered stdin encoding, inherited environment and raw binary readers are unchanged.
+Production code never changes global Console.OutputEncoding to decode a child.
+Actual Unicode Git path controls run under CP437 and UTF-8 and restore the caller;
+an earlier controlled UTF-8-only pass did not establish the CP437 path contract.
+
+Fingerprint/archive line-and-stdin queries share the one internal, import-free
+Testing/GitMetadataCapture.psm1 transport. Domain wrappers forward @PSBoundParameters
+unchanged, preserving omitted versus empty stdin; other distinct policies stay local.
+Scheduled compiler-free Git fixture calls use the named TestSupport fixture helper
+in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
+No temporary/global Git shim substitutes for a production fix. Existing tests do not
+rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.
+### Scheduled native fixture execution
+
+The selected current tooling profile uses `Invoke-RSTestFixtureNative` in the existing
+`Tools/Tests/TestSupport.psm1` for synchronous native fixture work. It reuses the canonical
+prepared capture/streaming core, retaining literal argument vectors, filesystem working
+directory, separate native diagnostic records, actual exit status and caller-owned
+cleanup. Default stdout and stderr decoding remain unchanged. `Invoke-RSTestFixtureGit`
+is its explicit Git stdout UTF-8 specialization. These named functions are not global
+command shims and do not authorize product execution or arbitrary writes; callers retain
+their marked-fixture and locking obligations. No selected caller supplies pipeline stdin.
+
+The archive transport's large-stderr/UTF-8/ordered-hash fixture qualifies transport
+semantics, not Git long-path support. Acquire its unique housing through the existing
+marked short scratch layout (ps/ar-fullGUID), retain all 800 relative filenames and
+payloads, and assert that the maximum normalized full native data-file path is below
+260 characters before writing the workload. This bounds only housing; it does not
+reduce the pipe-buffer assertion, hashing count or error expectations. Do not depend
+on or alter user/global Git configuration. Native controls retain real path-limit
+failures at and above the old boundary separately from bounded-housing success.
+Version-counter/lease fixtures retain asynchronous `Start-Process` and real process
+objects, concurrency, `PassThru` and ownership; their explicit Hidden disposition is not
+a claim that no console object exists. The tiny C++ dependency-warning fixture still
+executes its real rebuilds and assertions: that case is noninteractive qualification,
+not compiler-free validation.
+
+`New-RSTestFormatterFixture` creates only an owned native CUI probe beneath a marked
+sandbox, using the existing Windows PowerShell managed-compilation pattern. It enforces
+the managed-loader path budget before creation, verifies subsystem 3, records argv/CWD
+and owned-console observations and never formats source. This is a test prerequisite,
+not a compiler/engine prerequisite for production formatter preview. Real stderr larger
+than a pipe buffer, nonzero exits and engine-free metadata controls protect the actual
+formatter boundary. Intentional installer inheritance is tested through the private
+real-batch seam described in `Specs/Build/Build_Toolchain.md`; it is not blanket-routed
+through a read-only production projection.

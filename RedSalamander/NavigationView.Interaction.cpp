@@ -190,6 +190,8 @@ void NavigationView::OnLButtonDown(POINT pt)
                                              (_showDiskInfoSection && PtInRect(&_sectionDiskInfoRect, pt));
         if (! clickOnNavigationButton)
         {
+            if (! _embeddedDestinationMode)
+                RequestOwnerPaneFocus();
             TraceNavigationViewMenuDiagnostics(
                 L"navigation.lbutton-down.ignored", L"hwnd={:#x} reason=edit-mode pt=({}, {})", reinterpret_cast<uintptr_t>(_hWnd.get()), pt.x, pt.y);
             return;
@@ -251,6 +253,8 @@ void NavigationView::OnLButtonDown(POINT pt)
     // Check if click is in Section 2 (breadcrumbs)
     if (! PtInRect(&_sectionPathRect, pt))
     {
+        if (! _embeddedDestinationMode)
+            RequestOwnerPaneFocus();
         TraceNavigationViewMenuDiagnostics(L"navigation.lbutton-down.ignored",
                                            L"hwnd={:#x} reason=outside-path pt=({}, {}) pathRect=({}, {}, {}, {})",
                                            reinterpret_cast<uintptr_t>(_hWnd.get()),

@@ -218,7 +218,7 @@ $context = Resolve-RSVersionContext -RepoRoot $RepoRoot -Configuration Debug -Pl
                 $resultPath = Join-Path $TestDrive "concurrent-result-$index.txt"
                 $processes += [pscustomobject]@{
                     ResultPath = $resultPath
-                    Process = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @(
+                    Process = Start-Process -WindowStyle Hidden -FilePath (Get-Process -Id $PID).Path -ArgumentList @(
                         '-NoLogo', '-NoProfile', '-File', $childScript, $helperModule, $testRepo, $resultPath
                     ) -PassThru
                 }
@@ -266,7 +266,7 @@ Import-Module $ModulePath -Force
 $context = Resolve-RSVersionContext -RepoRoot $RepoRoot -Configuration Debug -Platform x64
 [IO.File]::WriteAllText($ResultPath, [string]$context.BuildNumber, [Text.Encoding]::ASCII)
 '@ | Set-Content -LiteralPath $resolverScript -Encoding UTF8
-        $holder = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @(
+        $holder = Start-Process -WindowStyle Hidden -FilePath (Get-Process -Id $PID).Path -ArgumentList @(
             '-NoLogo', '-NoProfile', '-File', $holderScript, $lockPath, $readyPath, $releasePath
         ) -PassThru
         $resolver = $null
@@ -277,7 +277,7 @@ $context = Resolve-RSVersionContext -RepoRoot $RepoRoot -Configuration Debug -Pl
             }
             (Test-Path -LiteralPath $readyPath) | Should Be $true
 
-            $resolver = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @(
+            $resolver = Start-Process -WindowStyle Hidden -FilePath (Get-Process -Id $PID).Path -ArgumentList @(
                 '-NoLogo', '-NoProfile', '-File', $resolverScript, $helperModule, $testRepo, $resultPath
             ) -PassThru
             Start-Sleep -Milliseconds 300

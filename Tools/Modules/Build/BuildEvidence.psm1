@@ -722,6 +722,7 @@ function Get-RSGhosttyRuntimeIdentityInputPaths {
         'Tools\Build-GhosttyTerminalRuntime.ps1',
         'Tools\Modules\Build\ArtifactOperationLock.psm1',
         'Tools\Modules\Build\DxUiDependency.psm1',
+        'Tools\Modules\Build\MSBuildInvocation.psm1',
         'Tools\Modules\Build\ProcessStreaming.psm1',
         'Tools\Modules\Build\SanitizedEnvironment.psm1',
         'Tools\Modules\Testing\ValidationFingerprint.psm1',
@@ -768,7 +769,20 @@ function Get-RSBuildIdentityBundle {
     $runtimeFiles = @('RuntimeDependencies.props', 'Directory.Build.targets') + @($sourcePaths | Where-Object {
             $_.StartsWith('Specs/Themes/', [StringComparison]::OrdinalIgnoreCase)
         })
-    $vcpkgInputs = @('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-tool.json', 'vcpkg-install.ps1')
+    # Include the installer launch/import closure; the shared process policy is pinned by .ci/project.json.
+    $vcpkgInputs = @(
+        'vcpkg.json'
+        'vcpkg-configuration.json'
+        'vcpkg-tool.json'
+        'vcpkg-install.ps1'
+        'Tools/Modules/Build/VcpkgInstallSafety.psm1'
+        'Tools/Modules/Build/VcpkgToolIdentity.psm1'
+        'Tools/Modules/Build/MSBuildInvocation.psm1'
+        'Tools/Modules/Build/ArtifactOperationLock.psm1'
+        'Tools/Modules/Build/ProcessStreaming.psm1'
+        'Tools/Modules/Build/SanitizedEnvironment.psm1'
+        '.ci/project.json'
+    )
     if ($Platform -eq 'ARM64') {
         $vcpkgInputs += @($sourcePaths | Where-Object { $_.StartsWith('Build/vcpkg-ports/', [StringComparison]::OrdinalIgnoreCase) })
     }
@@ -924,6 +938,12 @@ function Publish-RSBuildReceipt {
         [Parameter(Mandatory = $true)][string]$SchemaPath
     )
 
+    # Even excluded diagnostic/timing metadata must satisfy the complete record
+    # schema before an existing governing identity can be reused.
+    $candidateJson = ConvertTo-RSCanonicalJson -InputObject $Receipt
+    if (-not (Test-Json -Json $candidateJson -SchemaFile $SchemaPath -ErrorAction SilentlyContinue)) {
+        throw "Build receipt does not satisfy schema '$SchemaPath'."
+    }
     $null = Assert-RSBuildReceiptSemantics -Receipt $Receipt
     $store = Get-RSBuildReceiptStore -BuildOutputDir $BuildOutputDir
     if (-not (Test-Path -LiteralPath $store.ReceiptDirectory -PathType Container)) {
@@ -931,13 +951,17 @@ function Publish-RSBuildReceipt {
     }
     $recordPath = Join-Path $store.ReceiptDirectory ($Receipt.receipt_id + '.json')
     if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) {
-        Write-RSAtomicCanonicalJsonFile -LiteralPath $recordPath -InputObject $Receipt -SchemaPath $SchemaPath -AllowedRoot $store.Root
+        Write-RSAtomicCanonicalJsonFile -LiteralPath $recordPath -InputObject $Receipt -SchemaPath $SchemaPath -AllowedRoot $store.Root -CreateNew
     }
     $stored = Read-RSValidationJsonFile -LiteralPath $recordPath -SchemaPath $SchemaPath -AllowedRoot $store.Root
     $null = Assert-RSBuildReceiptSemantics -Receipt $stored
-    if ((Get-RSCanonicalJsonDigest -InputObject $stored) -cne (Get-RSCanonicalJsonDigest -InputObject $Receipt)) {
-        throw "Stored build receipt record does not exactly match the receipt being published: $recordPath"
+    $storedProjection = ConvertTo-RSCanonicalJson -InputObject (Get-RSBuildReceiptProjection -Receipt $stored)
+    $candidateProjection = ConvertTo-RSCanonicalJson -InputObject (Get-RSBuildReceiptProjection -Receipt $Receipt)
+    if ($storedProjection -cne $candidateProjection) {
+        throw "Stored build receipt governing projection does not match the receipt being published: $recordPath"
     }
+    # The reader requires exact canonical UTF-8/LF bytes. Re-emitting this stored
+    # object therefore preserves its original bytes, including first-build metadata.
     Write-RSAtomicCanonicalJsonFile -LiteralPath $store.PointerPath -InputObject $stored -SchemaPath $SchemaPath -AllowedRoot $store.Root
     return $stored
 }

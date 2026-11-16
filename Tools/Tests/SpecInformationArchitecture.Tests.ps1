@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -26,17 +27,17 @@ function Set-RSFixtureFile {
 function New-RSSpecFixtureRepository {
     $root = Join-Path $fixtureParent ([Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $root -Force | Out-Null
-    & git -C $root init --quiet
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to initialize the specification information architecture fixture repository.'
     }
-    & git -C $root config core.longpaths true
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.longpaths'; 'true')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to enable long-path support for the specification information architecture fixture repository.'
     }
-    & git -C $root config user.email 'spec-ia-tests@example.invalid'
-    & git -C $root config user.name 'Spec IA Tests'
-    & git -C $root config core.autocrlf false
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'spec-ia-tests@example.invalid')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Spec IA Tests')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.autocrlf'; 'false')
 
     Set-RSFixtureFile -Root $root -RelativePath 'src/example.cpp' -Content 'int Example() { return 1; }'
     Set-RSFixtureFile -Root $root -RelativePath 'Tests/example.ps1' -Content "'example'"
@@ -87,11 +88,11 @@ Current behavior is implemented by `src/example.cpp`.
 <!-- spec-ia:wip-index:end -->
 '@
     Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# Historical plan`n"
-    & git -C $root add --all
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to stage the specification information architecture fixture repository.'
     }
-    & git -C $root commit --quiet -m 'fixture baseline'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture baseline')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to commit the specification information architecture fixture repository.'
     }
@@ -195,8 +196,8 @@ Describe 'Specification information architecture' {
     It 'accepts distinct WIP ranks that no archived plan claims' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# I7 Archived plan`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived plan'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived plan')
         # Two distinct files: pointing two rows at Plan.md would add an unrelated WIP_DUPLICATE_INDEX error.
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/WIP/Second.md' -Content "# Second fixture plan`n"
         $indexPath = Join-Path $root 'Specs/Plans/WIP/README.md'
@@ -230,8 +231,8 @@ Describe 'Specification information architecture' {
     It 'rejects a WIP rank that an archived plan title already claims' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# I0 Archived plan`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived plan'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived plan')
         $inventory = Get-RSFixtureInventory -Root $root
 
         (Get-RSFindingCount -Inventory $inventory -Code 'WIP_RANK_ARCHIVED_ID' -Severity 'Error') | Should Be 1
@@ -244,8 +245,8 @@ Describe 'Specification information architecture' {
     It 'does not treat an unrelated archived title as a claimed plan ID' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# Notes about I0 and the I0x series`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived note'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived note')
         $inventory = Get-RSFixtureInventory -Root $root
 
         (Get-RSFindingCount -Inventory $inventory -Code 'WIP_RANK_ARCHIVED_ID') | Should Be 0
@@ -254,8 +255,8 @@ Describe 'Specification information architecture' {
     It 'does not read an ordinary title word ending in a digit as a plan ID' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# S3 Interactive directory probe`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived S3 title'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived S3 title')
         $indexPath = Join-Path $root 'Specs/Plans/WIP/README.md'
         $index = (Get-Content -LiteralPath $indexPath -Raw).Replace('| ACTIVE | I0 | [Plan](Plan.md) |', '| ACTIVE | S3 | [Plan](Plan.md) |')
         Set-Content -LiteralPath $indexPath -Value $index -Encoding utf8
@@ -553,6 +554,26 @@ $sample = ']('
         (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
         @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
         (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+    }
+
+    It 'admits only the exact I65 closeout record path and refuses an unreviewed sibling' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/CodeReview_Remediation_2026-11-13.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# I65 closeout admission fixture`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 0
+
+        $unreviewedPath = 'Specs/Plans/Done/CodeReview_Remediation_2026-11-14.md'
+        Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+        (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
     }
 
     It 'admits only the reviewed completed I37 folder-copy progress record' {
@@ -1209,6 +1230,92 @@ if (Test-Path -LiteralPath $fixtureParent -PathType Container) {
     }
 }
 
+Describe 'Specification inventory report-free entrypoint' {
+    BeforeEach {
+        # Keep these actual-entrypoint fixtures after the earlier suite cleanup so
+        # a failed attempt remains available in its owned marked run.
+        $script:commandFixture = New-RSSpecFixtureRepository
+        $tools = Join-Path $script:commandFixture 'Tools'
+        $modules = Join-Path $tools 'Modules/Tooling'
+        [void][IO.Directory]::CreateDirectory($modules)
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Get-SpecInventory.ps1') -Destination $tools
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Tooling/SpecInformationArchitecture.psm1') -Destination $modules
+        # This synthetic checkout lacks the native registration graph. Keep the
+        # real spec scanner and command, with a read-only test-inventory producer
+        # whose refusal proves that -NoReports still executes that dependency.
+        # It also lacks the immutable 596-object Done relocation history: the
+        # actual public command must report that one finding, not waive it. The
+        # real-checkout -FailOnFindings control covers a complete source tree.
+        Set-RSFixtureFile -Root $script:commandFixture -RelativePath 'Tools/Get-TestInventory.ps1' -Content @'
+param([string]$RepoRoot,[string]$Format)
+if(Test-Path -LiteralPath (Join-Path $RepoRoot 'reject-test-inventory')){throw 'fixture test inventory refused'}
+'{"fixtureTestInventory":true}'
+'@
+        $script:specCommand = Join-Path $tools 'Get-SpecInventory.ps1'
+    }
+
+    It 'returns the same specification object without creating reports' {
+        $before = @(Get-ChildItem -LiteralPath $script:commandFixture -File -Recurse -Force | ForEach-Object FullName | Sort-Object)
+        $inventory = & $script:specCommand -NoReports -PassThru -ProtectedDoneBaseCommit HEAD
+        $inventory.SchemaVersion | Should Be 1
+        $inventory.Summary.BlockingFindings | Should Be 1
+        ($inventory.Findings.Code -join ',') | Should Be 'DONE_HISTORY_CHANGED'
+        $inventory.ProtectedDone.Relocations.Errors[0] | Should Match 'Required path-relocation manifest is missing'
+        ($inventory.Files.Count -gt 0) | Should Be $true
+        @(& $script:specCommand -NoReports -ProtectedDoneBaseCommit HEAD).Count | Should Be 0
+        $after = @(Get-ChildItem -LiteralPath $script:commandFixture -File -Recurse -Force | ForEach-Object FullName | Sort-Object)
+        ($after -join "`n") | Should Be ($before -join "`n")
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'keeps blocking specification findings fatal without writing reports' {
+        $ledger = Join-Path $script:commandFixture 'Specs/NormativeConsistency.json'
+        [IO.File]::WriteAllText($ledger, [IO.File]::ReadAllText($ledger).Replace('VERIFIED_MATCH', 'UNVERIFIED'))
+        $inventory = & $script:specCommand -NoReports -PassThru -ProtectedDoneBaseCommit HEAD
+        $inventory.Summary.BlockingFindings | Should Be 2
+        @($inventory.Findings | Where-Object Code -ceq 'NORMATIVE_UNRESOLVED_CONSISTENCY').Count | Should Be 1
+        { & $script:specCommand -NoReports -FailOnFindings -ProtectedDoneBaseCommit HEAD } | Should Throw '2 blocking issue'
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'still runs test-inventory reconciliation and propagates its failure without reports' {
+        Set-RSFixtureFile -Root $script:commandFixture -RelativePath 'reject-test-inventory' -Content 'reject'
+        { & $script:specCommand -NoReports -FailOnFindings -ProtectedDoneBaseCommit HEAD } | Should Throw 'fixture test inventory refused'
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'rejects an explicit OutputRoot with NoReports before creating any output' {
+        $output = Join-Path $script:commandFixture '.build/explicit'
+        { & $script:specCommand -NoReports -OutputRoot $output -ProtectedDoneBaseCommit HEAD } | Should Throw 'cannot be combined'
+        (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+    }
+
+    It 'preserves the default four-report catalog in an owned fixture checkout' {
+        $inventory = & $script:specCommand -PassThru -ProtectedDoneBaseCommit HEAD
+        $inventory.Summary.BlockingFindings | Should Be 1
+        ($inventory.Findings.Code -join ',') | Should Be 'DONE_HISTORY_CHANGED'
+        $output = Join-Path $script:commandFixture '.build/SpecInventory'
+        $names = @(Get-ChildItem -LiteralPath $output -File | ForEach-Object Name | Sort-Object)
+        ($names -join ',') | Should Be 'normative-consistency.json,spec-inventory.json,spec-inventory.md,test-inventory.json'
+        (Get-Content -LiteralPath (Join-Path $output 'spec-inventory.json') -Raw | ConvertFrom-Json).SchemaVersion | Should Be 1
+        (Get-Content -LiteralPath (Join-Path $output 'test-inventory.json') -Raw | ConvertFrom-Json).fixtureTestInventory | Should Be $true
+    }
+
+    It 'resolves its checkout independently of a foreign caller directory' {
+        $foreign = Join-Path $script:commandFixture 'foreign'
+        [void][IO.Directory]::CreateDirectory($foreign)
+        $prior = Get-Location
+        try {
+            Set-Location -LiteralPath $foreign
+            $inventory = & $script:specCommand -NoReports -PassThru -ProtectedDoneBaseCommit HEAD
+            $inventory.RepositoryRoot | Should Be $script:commandFixture
+            $inventory.Summary.BlockingFindings | Should Be 1
+            ($inventory.Findings.Code -join ',') | Should Be 'DONE_HISTORY_CHANGED'
+            (Test-Path -LiteralPath (Join-Path $script:commandFixture '.build')) | Should Be $false
+        } finally { Set-Location -LiteralPath $prior.Path }
+    }
+}
+
 Describe 'Markdown fence indentation boundaries' {
     It 'keeps unindented prose visible after an opener prefixed by <Name>' -TestCases @(
         @{Name='four spaces'; Indent='    '},
@@ -1260,5 +1367,44 @@ Describe 'Bounded Markdown comment-delimiter provenance mask' {
         try { $null = Get-RSMarkdownCommentDelimiterMask -Text ('x' * 2049) }
         catch { $boundMessage = $_.Exception.Message }
         $boundMessage | Should Match 'exceeds 2048 UTF-16 units'
+    }
+}
+
+Describe 'Engine-free specification metadata transport' {
+    It 'retains AllowFailure and exact errors without requiring a CI engine' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('spec-native-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'SpecBootstrap.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Tooling/SpecInformationArchitecture.psm1') -Destination $copy
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix SpecBootstrap
+        $savedConsoleEncoding=[Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            (Test-Path (Join-Path $fixture '.ci-engine'))|Should Be $false
+            $result=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('-c','fixture.payload=é雪','config','--get','fixture.payload')} $fixture
+            $result.ExitCode|Should Be 0
+            ($result.Output -join '|')|Should Be 'é雪'
+            [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(437)
+            $legacy=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('-c','fixture.payload=é雪','config','--get','fixture.payload')} $fixture
+            $legacy.Output[0]|Should Be 'é雪'
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            $null=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('init','--quiet')} $fixture
+            $null=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('config','core.quotepath','false')} $fixture
+            $path='café-Δ-雪.md'
+            [IO.File]::WriteAllText((Join-Path $fixture $path),'# owned fixture',[Text.UTF8Encoding]::new($false))
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                [Console]::OutputEncoding=$encoding
+                $paths=@(& $module {param($root)Get-RSInventoryPaths -RepositoryRoot $root} $fixture)
+                ($paths -ccontains $path)|Should Be $true
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $result=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('rev-parse','--verify','missing-object') -AllowFailure} $fixture
+            ($result.ExitCode -ne 0)|Should Be $true
+            $result.Output.Count|Should Be 0
+            $expected='git rev-parse --verify missing-object failed with exit code '+$result.ExitCode+'.'
+            $message=''
+            try {& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('rev-parse','--verify','missing-object')} $fixture}
+            catch {$message=$_.Exception.Message}
+            $message|Should Be $expected
+        } finally {[Console]::OutputEncoding=$savedConsoleEncoding;Remove-Module $module}
     }
 }

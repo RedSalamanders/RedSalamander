@@ -437,4 +437,12 @@ void UpdateInFlightFileProgress(FolderWindow::FileOperationState::Task& task,
                                 ULONGLONG nowTick,
                                 bool discoveryOpenAtCallback) noexcept;
 void RemoveInFlightFileBySourcePath(FolderWindow::FileOperationState::Task& task, const wchar_t* sourcePath) noexcept;
+#ifdef ENABLE_TESTS
+// Exercise the actual decision/cancellation/deadline wait with an unadmitted private task.
+[[nodiscard]] std::pair<FolderWindow::FileOperationState::Task::ConflictAction, bool> WaitForConflictDecision(
+    FolderWindow::FileOperationState::Task& task,
+    const void* cookieKey,
+    const FolderWindow::FileOperationState::Task::ConflictDecisionScope& decisionScope,
+    std::optional<FileOperations::ConflictObservationReference>* observation) noexcept;
+#endif
 } // namespace FolderWindowFileOperationsStateInternal
