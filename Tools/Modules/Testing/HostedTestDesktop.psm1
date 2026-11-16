@@ -189,6 +189,91 @@ namespace RedSalamander.Testing {
             }
             return info;
         }
+        // DesktopProbe only: unlike ReadFocus, this cold sampler reports unavailable
+        // GUI state without authorizing acquisition, restoration or qualification.
+        private static Tuple<IntPtr, uint, uint> ReadForegroundIdentityForDiagnostics() {
+            IntPtr window = GetForegroundWindow();
+            uint process = 0;
+            uint thread = window == IntPtr.Zero ? 0 : GetWindowThreadProcessId(window, out process);
+            return Tuple.Create(window, thread, process);
+        }
+        private static object ReadForegroundGuiForDiagnostics(uint thread) {
+            uint size = (uint)Marshal.SizeOf<GuiThreadInfo>();
+            var info = new GuiThreadInfo { Size = size };
+            bool success = GetGUIThreadInfo(thread, ref info);
+            int error = success ? 0 : Marshal.GetLastWin32Error();
+            // The output structure is unspecified on failure: never inspect it there.
+            object outputs = success ? new System.Collections.Generic.Dictionary<string, object> {
+                { "active", HexWindow(info.Active) }, { "focus", HexWindow(info.Focus) },
+                { "capture", HexWindow(info.Capture) }, { "menuOwner", HexWindow(info.MenuOwner) },
+                { "moveSize", HexWindow(info.MoveSize) }, { "caret", HexWindow(info.Caret) }, { "flags", info.Flags }
+            } : null;
+            return new System.Collections.Generic.Dictionary<string, object> {
+                { "requestedThread", thread }, { "inputSize", size }, { "attempted", true },
+                { "success", success }, { "savedError", success ? null : (object)error }, { "outputs", outputs }
+            };
+        }
+        private static Tuple<string, int> ReadForegroundClassForDiagnostics(IntPtr window) {
+            if (window == IntPtr.Zero) return Tuple.Create<string, int>(null, 0);
+            var text = new StringBuilder(256);
+            int length = HostedDesktopNative.GetClassNameW(window, text, text.Capacity);
+            int error = length > 0 ? 0 : Marshal.GetLastWin32Error();
+            return Tuple.Create(length > 0 ? text.ToString() : null, error);
+        }
+        private static string HexWindow(IntPtr window) {
+            return "0x" + window.ToInt64().ToString("X", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        private static object ForegroundIdentityData(Tuple<IntPtr, uint, uint> identity) {
+            return new System.Collections.Generic.Dictionary<string, object> {
+                { "hwnd", HexWindow(identity.Item1) }, { "thread", identity.Item2 }, { "process", identity.Item3 }
+            };
+        }
+        private static bool SameForegroundIdentity(Tuple<IntPtr, uint, uint> left, Tuple<IntPtr, uint, uint> right) {
+            return left.Item1 == right.Item1 && left.Item2 == right.Item2 && left.Item3 == right.Item3;
+        }
+        // Managed readers exercise the actual fixed orchestration without native UI.
+        // No returned fact grants permission or substitutes for ReadFocus.
+        internal static object ObserveForegroundQueueForDiagnostics(
+            Func<Tuple<IntPtr, uint, uint>> readIdentity, Func<uint, object> readGui,
+            Func<IntPtr, Tuple<string, int>> readClass) {
+            DateTimeOffset started = DateTimeOffset.UtcNow;
+            var explicitBefore = readIdentity();
+            var originalClass = readClass(explicitBefore.Item1);
+            object explicitQuery = explicitBefore.Item2 == 0 ?
+                new System.Collections.Generic.Dictionary<string, object> {
+                    { "requestedThread", 0u }, { "inputSize", (uint)Marshal.SizeOf<GuiThreadInfo>() },
+                    { "attempted", false }, { "success", false }, { "savedError", null }, { "outputs", null }
+                } : readGui(explicitBefore.Item2);
+            var explicitAfter = readIdentity();
+            var zeroBefore = readIdentity();
+            object zeroQuery = readGui(0);
+            var zeroAfter = readIdentity();
+            bool stable = explicitBefore.Item1 != IntPtr.Zero && explicitBefore.Item2 != 0 && explicitBefore.Item3 != 0 &&
+                SameForegroundIdentity(explicitBefore, explicitAfter) && SameForegroundIdentity(explicitBefore, zeroBefore) &&
+                SameForegroundIdentity(explicitBefore, zeroAfter);
+            bool classKnown = originalClass.Item1 != null;
+            return new System.Collections.Generic.Dictionary<string, object> {
+                { "schema", "red-salamander.foreground-queue-observation.v1" },
+                { "startedUtc", started.ToString("o") }, { "completedUtc", DateTimeOffset.UtcNow.ToString("o") },
+                { "processArchitecture", RuntimeInformation.ProcessArchitecture.ToString() },
+                { "osArchitecture", RuntimeInformation.OSArchitecture.ToString() }, { "pointerBytes", IntPtr.Size },
+                { "explicitBefore", ForegroundIdentityData(explicitBefore) }, { "explicitQuery", explicitQuery },
+                { "explicitAfter", ForegroundIdentityData(explicitAfter) }, { "zeroBefore", ForegroundIdentityData(zeroBefore) },
+                { "zeroQuery", zeroQuery }, { "zeroAfter", ForegroundIdentityData(zeroAfter) },
+                { "originalClass", new System.Collections.Generic.Dictionary<string, object> {
+                    { "attempted", explicitBefore.Item1 != IntPtr.Zero }, { "known", classKnown },
+                    { "value", originalClass.Item1 }, { "savedError", classKnown || explicitBefore.Item1 == IntPtr.Zero ? null : (object)originalClass.Item2 },
+                    { "correlated", stable }, { "isConsoleWindowClass", stable && classKnown ?
+                        (object)String.Equals(originalClass.Item1, "ConsoleWindowClass", StringComparison.Ordinal) : null }
+                } },
+                { "fourSampleIdentityStable", stable }, { "interpretationPermitted", stable },
+                { "nonAtomic", true }, { "acceptanceAuthority", false }
+            };
+        }
+        internal static object CaptureForegroundQueueForDiagnostics() {
+            return ObserveForegroundQueueForDiagnostics(ReadForegroundIdentityForDiagnostics,
+                ReadForegroundGuiForDiagnostics, ReadForegroundClassForDiagnostics);
+        }
         // Failure-only observations cannot authorize a retry or replace the saved query error.
         internal static Win32Exception FocusReadFailure(int error, uint thread, uint size, IntPtr original, uint originalProcess,
             string stage, string originalAtCapture, Func<IntPtr, string> observe) {
@@ -620,6 +705,9 @@ namespace RedSalamander.Testing {
     }
     public static class HostedDesktopNative {
         private const string ImplementationSourceHash = "__RS_HOSTED_NATIVE_SOURCE_HASH__";
+        public static object ReadForegroundQueueDiagnostics() {
+            return HostedForegroundBoundary.CaptureForegroundQueueForDiagnostics();
+        }
         [DllImport("kernel32.dll", ExactSpelling = true)] private static extern uint GetCurrentThreadId();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetProcessWindowStation();
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint thread);
@@ -1172,6 +1260,12 @@ function Get-RSHostedDesktopState {
     }
 }
 
+function Get-RSHostedForegroundQueueDiagnostics {
+    # Private cold DesktopProbe seam; never used by acquisition or restoration.
+    Initialize-RSHostedDesktopNative
+    [RedSalamander.Testing.HostedDesktopNative]::ReadForegroundQueueDiagnostics()
+}
+
 function Get-RSHostedDesktopDiagnostics {
     <#
     .SYNOPSIS
@@ -1181,6 +1275,9 @@ function Get-RSHostedDesktopDiagnostics {
         input desktop and foreground thread desktop, alongside display/session facts.
         Unavailable names retain their Windows error; they do not establish a mismatch.
         Does not send input, activate windows or change display/session settings.
+        Adds one non-atomic, four-identity-sample comparison of the HWND-derived
+        thread and documented foreground-zero GUI query. Errors and bounded class
+        observations are evidence only; changed identities prohibit interpretation.
     .OUTPUTS
         A diagnostic object, excluding the native display-mode restoration structure.
     .NOTES
@@ -1191,7 +1288,9 @@ function Get-RSHostedDesktopDiagnostics {
     [CmdletBinding()]
     param()
     if ($env:GITHUB_ACTIONS -cne 'true') { throw 'Hosted desktop diagnostics are restricted to GitHub Actions.' }
-    Get-RSHostedDesktopState | Select-Object * -ExcludeProperty Mode
+    $diagnostics = Get-RSHostedDesktopState | Select-Object * -ExcludeProperty Mode
+    $diagnostics | Add-Member -NotePropertyName ForegroundQueue -NotePropertyValue (Get-RSHostedForegroundQueueDiagnostics)
+    $diagnostics
 }
 
 function Get-RSHostedDisplayModes {

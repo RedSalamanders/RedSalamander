@@ -64,6 +64,15 @@ errors in source-bound `desktop.json` evidence. An unavailable name is unknown, 
 of a separate desktop. This scope sends no input, activates no window and changes no
 display or session settings. It remains NOT_EVALUATED and creates no test, regression or
 production receipt. Other phases and local invocation reject it before engine/sandbox work.
+Its foreground-queue evidence brackets one explicit HWND-derived thread query and one documented
+foreground (`0`) query with four HWND/thread/process samples. It saves errors before further queries,
+retains GUI output only on success, and includes one bounded class observation plus actual process/OS
+architecture. Changed or null identities make interpretation unavailable; even a stable observation is
+non-atomic and proves no historical cause or qualification. This adds no activation, handles, input,
+retry or fallback to foreground admission/restoration. The existing native runner may still perform
+toolchain setup and package-cache restoration before this early-return adapter path. Source, official
+run/attempt, requested platform, actual process architecture and uploaded `desktop.json` must be joined
+before describing a result as native ARM64 evidence.
 
 Project GitHub-hosted native interactive entries use an owned input desktop under the
 runner's per-entry interactive lease. The original native hotkey case and verified desktop

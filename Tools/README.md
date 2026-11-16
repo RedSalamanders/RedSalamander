@@ -169,6 +169,12 @@ The explicit DesktopProbe choice reads window-station, calling/input/foreground 
 names and query errors on the existing hosted runners before dependency installation or
 builds. It retains source-bound `desktop.json` evidence without input, activation or display
 changes. Missing names remain unknown, and its result is NOT_EVALUATED for native coverage.
+The same evidence contains exactly one explicit-thread/foreground-zero GUI comparison inside four
+foreground identity samples, one bounded window-class read and actual process/OS architecture.
+Null or changed identities prohibit interpretation. Errors and successful-query outputs are retained
+separately; no unavailable focus, console class or error code grants activation, retries or acceptance.
+This non-atomic observation changes no `ReadFocus` or restoration behavior. Toolchain/cache setup may
+precede the adapter's early return even though dependency installation and product builds do not.
 
 The explicit Release R0ePaired choice requires an immutable `baseline_ref` and runs
 `Invoke-R0ePairedValidation.ps1` on each matching native architecture. It retains an isolated

@@ -804,6 +804,17 @@ Environment variables may select alternate test inputs such as profile names, bu
   Missing observations never replace the saved error or authorize activation, attachment,
   retry, a different target, unknown focus, a skip or successful qualification. Code 87 alone
   establishes no layout, access, lifetime or historical failure cause.
+  The separate, read-only `DesktopProbe` observation compares exactly one HWND-derived-thread
+  `GetGUIThreadInfo` query with one documented foreground-thread (`0`) query. Four HWND/thread/process
+  samples bracket those queries; any null identity or disagreement prohibits interpretation. A missing
+  explicit thread is reported without substituting a second `0` query. Each query initializes a fresh
+  structure, saves its failure code immediately and reads GUI output fields only on success. One bounded
+  256-character-buffer class read occurs inside the first bracket; console classification requires a known
+  class and stable identity, never a process-name assumption. Process/OS architecture and pointer width are
+  retained so an ARM64 job cannot silently be described as a native ARM64 query under emulation.
+  This non-atomic diagnostic opens no new handles, enumerates no windows and grants no input or restoration
+  authority. It does not retry, replace `ReadFocus`, infer a missing input queue from error 87, or establish
+  a historical cause. Unknown GUI/class results remain evidence, not acceptance or a focus waiver.
   The managed inline implementation binds its normalized source template to the cached type.
   A missing or mismatched private identity fails before native initialization and requires a
   fresh PowerShell process; reimport must not silently keep an older implementation.

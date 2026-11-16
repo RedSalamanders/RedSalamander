@@ -23,6 +23,7 @@ Describe 'Hosted desktop fixture lifecycle' {
         $global:rsHostedDesktopFixtureTest.States.Enqueue($large)
         $global:rsHostedDesktopFixtureTest.States.Enqueue($small)
         Mock Get-RSHostedDesktopState { $global:rsHostedDesktopFixtureTest.States.Dequeue() } -ModuleName HostedTestDesktop
+        Mock Get-RSHostedForegroundQueueDiagnostics { [pscustomobject]@{ interpretationPermitted=$false; nonAtomic=$true } } -ModuleName HostedTestDesktop
         Mock Get-RSHostedDisplayModes {
             [pscustomobject]@{ Width = 1280; Height = 720; BitsPerPixel = 32; Frequency = 60 }
             [pscustomobject]@{ Width = 3840; Height = 2160; BitsPerPixel = 32; Frequency = 60 }
@@ -111,6 +112,160 @@ Describe 'Hosted desktop fixture lifecycle' {
         $failure | Should Match 'restricted to GitHub Actions'
         Assert-MockCalled Get-RSHostedDesktopState -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
         Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+}
+
+Describe 'Hosted foreground queue diagnostic evidence' {
+    BeforeAll {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $script:queueBoundary = 'RedSalamander.Testing.HostedDesktopNative' -as [type]
+        $script:queueBoundary = $script:queueBoundary.Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        if (-not ('RSHostedForegroundQueueProbe' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+public static class RSHostedForegroundQueueProbe {
+    public static object Run(Type boundary, string mode) {
+        int identities = 0, classes = 0, ambientError = 0;
+        var events = new List<string>();
+        var arguments = new List<uint>();
+        Func<Tuple<IntPtr,uint,uint>> identity = () => {
+            int index = identities++;
+            if (index >= 4) throw new InvalidOperationException("Extra identity read.");
+            events.Add("identity-" + index);
+            ambientError = 999;
+            long hwnd = 17; uint thread = 7, process = 42;
+            if (mode == "null") { hwnd = 0; thread = 0; process = 0; }
+            if (mode == "zero-thread") thread = 0;
+            if (mode == "zero-process") process = 0;
+            if (mode == "window-" + index) hwnd = 18;
+            if (mode == "thread-" + index) thread = 8;
+            if (mode == "process-" + index) process = 43;
+            return Tuple.Create(new IntPtr(hwnd), thread, process);
+        };
+        Func<IntPtr,Tuple<string,int>> readClass = window => {
+            if (++classes != 1) throw new InvalidOperationException("Extra class read.");
+            events.Add("class");
+            if (mode == "class-failure" || window == IntPtr.Zero) return Tuple.Create<string,int>(null, 5);
+            return Tuple.Create(mode == "non-console" ? "OwnedFixtureClass" : "ConsoleWindowClass", 0);
+        };
+        Func<uint,object> query = thread => {
+            arguments.Add(thread); events.Add("query-" + thread);
+            bool success = mode != "explicit-87" || thread == 0;
+            return new Dictionary<string,object> {
+                { "requestedThread", thread }, { "inputSize", 72u }, { "attempted", true }, { "success", success },
+                { "savedError", success ? null : (object)87 },
+                { "outputs", success ? new Dictionary<string,object>{{"active","0x11"},{"focus","0x12"}} : null }
+            };
+        };
+        var method = boundary.GetMethod("ObserveForegroundQueueForDiagnostics", BindingFlags.Static | BindingFlags.NonPublic);
+        object facts = method.Invoke(null, new object[]{identity, query, readClass});
+        return new Dictionary<string,object>{{"facts",facts},{"events",events.ToArray()},{"arguments",arguments.ToArray()},
+            {"identities",identities},{"classes",classes},{"ambientError",ambientError}};
+    }
+}
+'@
+        }
+    }
+    It 'uses exactly four identity samples and one in-bracket class read around the explicit and zero queries' {
+        $r = [RSHostedForegroundQueueProbe]::Run($script:queueBoundary, 'stable')
+        ($r.events -join ',') | Should Be 'identity-0,class,query-7,identity-1,identity-2,query-0,identity-3'
+        ($r.arguments -join ',') | Should Be '7,0'
+        $r.identities | Should Be 4
+        $r.classes | Should Be 1
+        $r.facts.fourSampleIdentityStable | Should Be $true
+        $r.facts.interpretationPermitted | Should Be $true
+        $r.facts.originalClass.isConsoleWindowClass | Should Be $true
+        $r.facts.nonAtomic | Should Be $true
+        $r.facts.acceptanceAuthority | Should Be $false
+        $r.facts.explicitQuery.outputs.focus | Should Be $r.facts.zeroQuery.outputs.focus
+        $r.facts.processArchitecture | Should Be ([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString())
+        $r.facts.osArchitecture | Should Be ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString())
+        $r.facts.pointerBytes | Should Be ([IntPtr]::Size)
+    }
+    It 'refuses interpretation for every changed window thread or process sample without retrying' {
+        foreach ($field in @('window','thread','process')) {
+            foreach ($index in 1..3) {
+                $r = [RSHostedForegroundQueueProbe]::Run($script:queueBoundary, ($field+'-'+$index))
+                $r.facts.fourSampleIdentityStable | Should Be $false
+                $r.facts.interpretationPermitted | Should Be $false
+                $r.facts.originalClass.correlated | Should Be $false
+                $r.facts.originalClass.isConsoleWindowClass | Should BeNullOrEmpty
+                ($r.arguments -join ',') | Should Be '7,0'
+                $r.identities | Should Be 4
+            }
+        }
+    }
+    It 'retains missing identities without substituting zero for an unavailable explicit thread' {
+        foreach ($mode in @('null','zero-thread','zero-process')) {
+            $r = [RSHostedForegroundQueueProbe]::Run($script:queueBoundary, $mode)
+            $r.facts.interpretationPermitted | Should Be $false
+            $r.identities | Should Be 4
+            if ($mode -eq 'null') {
+                $r.facts.originalClass.attempted | Should Be $false
+                $r.facts.originalClass.savedError | Should BeNullOrEmpty
+            }
+            if ($mode -ne 'zero-process') {
+                ($r.arguments -join ',') | Should Be '0'
+                $r.facts.explicitQuery.attempted | Should Be $false
+                $r.facts.explicitQuery.savedError | Should BeNullOrEmpty
+                $r.facts.explicitQuery.outputs | Should BeNullOrEmpty
+            }
+        }
+    }
+    It 'preserves the explicit saved87 and failed-output absence when a later observation changes ambient error' {
+        $r = [RSHostedForegroundQueueProbe]::Run($script:queueBoundary, 'explicit-87')
+        $r.facts.explicitQuery.success | Should Be $false
+        $r.facts.explicitQuery.savedError | Should Be 87
+        $r.facts.explicitQuery.outputs | Should BeNullOrEmpty
+        $r.ambientError | Should Be 999
+        $r.facts.zeroQuery.success | Should Be $true
+        $r.facts.zeroQuery.savedError | Should BeNullOrEmpty
+        ($r.arguments -join ',') | Should Be '7,0'
+        $r.facts.acceptanceAuthority | Should Be $false
+    }
+    It 'reports actual non-console or unavailable class facts without a console assumption' {
+        $r = [RSHostedForegroundQueueProbe]::Run($script:queueBoundary, 'non-console')
+        $r.facts.originalClass.value | Should Be 'OwnedFixtureClass'
+        $r.facts.originalClass.isConsoleWindowClass | Should Be $false
+        $r = [RSHostedForegroundQueueProbe]::Run($script:queueBoundary, 'class-failure')
+        $r.facts.originalClass.known | Should Be $false
+        $r.facts.originalClass.savedError | Should Be 5
+        $r.facts.originalClass.value | Should BeNullOrEmpty
+        $r.facts.originalClass.isConsoleWindowClass | Should BeNullOrEmpty
+    }
+    It 'keeps native query errors immediate outputs conditional and the cold sampler free of authority' {
+        $source = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1'))
+        $start = $source.IndexOf('private static Tuple<IntPtr, uint, uint> ReadForegroundIdentityForDiagnostics()')
+        $end = $source.IndexOf('// Failure-only observations cannot authorize', $start)
+        $cold = $source.Substring($start, $end-$start)
+        $guard = { param($text)
+            if ($text -notmatch 'bool success = GetGUIThreadInfo\(thread, ref info\);\s*int error = success \? 0 : Marshal.GetLastWin32Error\(\);') { throw 'GUI error must be saved immediately' }
+            if ($text -notmatch 'object outputs = success \?') { throw 'Failed GUI output must remain unavailable' }
+            if ($text -notmatch 'new GuiThreadInfo \{ Size = size \}') { throw 'Each query needs a fresh initialized structure' }
+            if ($text -notmatch 'new StringBuilder\(256\)') { throw 'Class buffer must stay bounded' }
+            if ($text -notmatch 'int length = HostedDesktopNative.GetClassNameW\(window, text, text.Capacity\);\s*int error = length > 0 \? 0 : Marshal.GetLastWin32Error\(\);') { throw 'Class error must be saved immediately' }
+            if ($text -match 'SetForegroundWindow|SetFocus|AttachThreadInput|SendInput|CreateWindow|ShowWindow|OpenProcess|OpenThread|OpenDesktop|SwitchDesktop|GetWindowText|EnumWindows|SetCursor|\bwhile\s*\(|\bfor\s*\(') { throw 'Cold diagnostic cannot gain native authority or retry' }
+        }
+        & $guard $cold
+        $counterfactuals = @(
+            @{ Text=$cold.Replace('int error = success ? 0 : Marshal.GetLastWin32Error();', 'int error = 0;'); Message='GUI error must be saved immediately' }
+            @{ Text=$cold.Replace('object outputs = success ?', 'object outputs = true ?'); Message='Failed GUI output must remain unavailable' }
+            @{ Text=($cold + ' SetForegroundWindow(window);'); Message='Cold diagnostic cannot gain native authority or retry' }
+        )
+        foreach ($counterfactual in $counterfactuals) {
+            $rejection = $null
+            try { & $guard $counterfactual.Text } catch { $rejection = $_.Exception }
+            $rejection | Should Not BeNullOrEmpty
+            $rejection.GetType().FullName | Should Be 'System.Management.Automation.RuntimeException'
+            $rejection.Message | Should Be $counterfactual.Message
+        }
+        $cold | Should Not Match 'ReadFocus\('
+        $queryMethod = $script:queueBoundary.GetMethod('ReadForegroundGuiForDiagnostics', [Reflection.BindingFlags]'Static,NonPublic')
+        $guiType = $script:queueBoundary.GetNestedType('GuiThreadInfo', [Reflection.BindingFlags]::NonPublic)
+        [Runtime.InteropServices.Marshal]::SizeOf([type]$guiType) | Should Be $(if ([IntPtr]::Size -eq 8) {72} else {48})
+        $queryMethod | Should Not BeNullOrEmpty
     }
 }
 

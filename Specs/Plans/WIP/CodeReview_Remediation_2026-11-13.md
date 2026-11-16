@@ -529,3 +529,49 @@ PrePush and hosted ARM gates remain pending after commit. Existing producer pin,
 engine, C++ and test assertions retain their accepted identities. I65 stays ACTIVE;
 no foreground lease has started, and no Full, merge, TestRuns closeout or Done move
 is established by these component/static checks.
+
+### Actual b985 local qualification and DesktopProbe queue evidence (2026-11-16)
+
+Source b985bbade0402eeacf2d4c01c29fa72aa3bcda7e completed test-enabled x64
+Debug and Release full-solution Rebuilds with zero warnings/errors and current
+H8 Source/header/archive/profile/toolchain byte joins. Fresh noninteractive
+PrePush promoted all 14 local entries in each profile: Debug 1756/0/27 and
+Release 1753/0/30. The archive 800-file transport case and all 43 selected
+Hosted lifetime/focus-context/return pure controls passed first attempt. Actual
+consumed writer receipts were fcc18173462892c7179abec380e3ef75ae62ecd15bad8444d9fa4b8e7ef3e0be
+and b7ef1191b465a2f0b33ea562ef85a7a18245ef821e8b8313c0373826c0088a39;
+neither is substituted with the initial build receipt. Both change verdicts were
+PASSED, repository verdicts NOT_EVALUATED, with zero quarantine/repair/retry and
+four desktop obligations still pending. Release's three additional skips declare
+unavailable Search service test hooks; unchanged canonical policy accepted them.
+The closed packet is retained under
+Z:\RedSalamander.Perf\evidence\completed-runs\20261116T121652Z-75132-755ae4f9e9634f01a7c40da5a6d16598\scratch\qualification\RS225-fixture-focus-current-prepush.
+
+[ARM attribution run 43866426276](https://github.com/RedSalamanders/RedSalamander/actions/runs/43866426276)
+at the same b985 source retained a zero-warning/error build and Help 1/0/0,
+then Preferences failed before native execution at ReadFocus with saved error
+87/HResult 0x80004005; the final two selections did not execute. The requested
+HWND 0x201C6/TID 8720/PID 8732, input size 72 and pointer width 8 were retained.
+Fresh sequential observations found the window valid, matching TID/PID and
+current foreground, but are explicitly non-atomic and prove no queue liveness
+or underlying cause. Original b985, 22a and earlier failed results are preserved.
+
+The next accepted DesktopProbe extension is evidence only: four fixed foreground
+HWND/TID/PID samples bracket one explicit-thread query and one foreground-zero
+query, with one bounded class observation and actual process/OS architecture.
+Null or changed identities prohibit interpretation; saved errors and successful
+outputs grant no activation, fallback, retry or qualification authority. Local
+x64 observations where both queries succeeded are not native ARM evidence.
+The accepted 26/0/0 pure controls include six new orchestration/source-negative
+cases; no native sampler or UI ran. All 93 prior cases and existing ReadFocus,
+acquisition and restoration behavior remain unchanged. The new source's first
+remote diagnostic is intended to be the read-only ARM DesktopProbe, retaining
+NOT_EVALUATED rather than full-build attribution or acceptance.
+The accepted component packet is retained under
+Z:\RedSalamander.Perf\evidence\completed-runs\20261116T142907Z-87404-e52e6b798c59442c88cb07c5773d4667\scratch\review\RS-DesktopProbe-queue-evidence-v2.
+
+I65 remains ACTIVE. The b985 local receipts qualify only their own source;
+current-source validation remains pending after this diagnostic extension.
+ARM correctness, four desktop obligations, fresh unfiltered Full and normative
+closeout remain pending. The first approved desktop lease is still unstarted;
+no tracked TestRuns result, Done move or merge is established here.
