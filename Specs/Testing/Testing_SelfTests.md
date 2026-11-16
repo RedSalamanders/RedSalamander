@@ -768,6 +768,28 @@ Environment variables may select alternate test inputs such as profile names, bu
   foreground window and native focus only while the fixture owns foreground (or verifies an
   already restored original), and is joined before the retained desktop handle closes. Setup or retirement
   failure fails qualification; a setup witness alone does not prove screenshot or input coverage.
+  Original-foreground focus is sampled with the documented `GetGUIThreadInfo(0)` foreground-queue
+  operation, not a queue inferred from the HWND's reported thread. Console ownership can be remapped;
+  that mechanism is not proof of any particular historical failure. The saved HWND/thread/process must
+  be valid and still foreground before and after the query. A fresh structure and immediate saved error
+  are mandatory. Returned active must identify that exact original top-level root; invalid or transitional
+  active facts fail the conservative witness rather than being normalized. A nonzero focused window is
+  independently identified by HWND/thread/process and `GA_ROOT`, with its identity checked twice. It must
+  remain related to the original root; it need not be the top-level HWND or share that window's owner.
+  Null focus is valid only after a successful query with a verified active original. Query failure never
+  means null focus. The separate originally-empty-foreground path still verifies emptiness after retirement.
+  The saved focus identity is immutable through acquisition, the owned hotkey callback and retirement.
+  No activation or input write occurs inside its read-only brackets. Owned-boundary readiness continues
+  to use that window's real owner-thread `GetFocus`, not an original-foreground sample.
+  As a conservative hosted-fixture admission rule, a related cross-process/thread focus grants read-only
+  observation only. The fixture refuses acquisition before any foreground/input write unless the saved
+  state permits the canonical restoration-write predicate (null focus or focus sharing the original's
+  reported thread/process). This is an authority choice, not a Win32 ownership guarantee. An already
+  restored related cross-owner state can be observed without a write. Restoration targets only the
+  originally saved foreground HWND, never a returned active/focus HWND. While the owned boundary or
+  permitted null transient is foreground, retirement makes no original-focus `0` query; only after the
+  original is foreground may the saved exact focus be compared. Existing single-request and 1,500 ms
+  message-aware waits remain, with no focus rebasing, foreign-focus write, attachment, retry or waiver.
   A foreign-foreground refusal captures current, saved/current-original and owned-boundary
   HWND/PID/thread/class identities with UTC capture times at the rejection boundary, without
   window titles. Diagnostic enrichment is best-effort and never changes the refusal,
@@ -792,7 +814,8 @@ Environment variables may select alternate test inputs such as profile names, bu
   dump no environment. Nonfatal formatting/sink failures preserve the primary setup error;
   the existing fatal diagnostic exception policy still propagates.
   A failed `GetGUIThreadInfo` saves its original error before any failure-only observations.
-  Its private exception context retains the actual requested thread/window/process, input
+  Its private exception context distinguishes actual `queryThread=0` from the expected original
+  window thread, and retains the original window/process, input
   structure size, pointer width, closed call stage and already captured original identity.
   It reuses the safe diagnostic fallback for one read-only sample of the original window's
   validity and thread/process relation plus current foreground. These sequential observations

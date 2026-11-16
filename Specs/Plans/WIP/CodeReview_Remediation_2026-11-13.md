@@ -575,3 +575,62 @@ current-source validation remains pending after this diagnostic extension.
 ARM correctness, four desktop obligations, fresh unfiltered Full and normative
 closeout remain pending. The first approved desktop lease is still unstarted;
 no tracked TestRuns result, Done move or merge is established here.
+
+### Primary original-foreground queue contract and prewrite authority (2026-11-16)
+
+Published diagnostics source `b1a618aea416fe957fbb5d65b035fe6aa28299d3` passed
+its three required compiler-free GitHub contexts. The one explicit ARM64 Release
+[DesktopProbe run 43889225762](https://github.com/RedSalamanders/RedSalamander/actions/runs/43889225762)
+completed successfully as `NOT_EVALUATED`, without dependency installation or
+product builds (existing MSVC/cache setup still occurred). Its source/platform
+and actual process/OS architecture were joined as native Arm64, pointer width 8,
+input structure size 72. Four foreground identities were stable; explicit thread
+9004 and documented foreground-zero queries both succeeded with identical GUI
+results. The observed class was `Windows.UI.Core.CoreWindow`, not a console;
+the foreground-desktop name remained unavailable with error 5. This establishes
+neither a desktop mismatch nor the cause of historical error 87. The original
+b985 failure and local x64 characterization remain unchanged and source-bound.
+
+The applied local successor now selects the documented foreground-zero query as
+the primary original-focus sampler, with strict before/after original identity,
+exact returned active/root and independent related-focus identity/root checks.
+Successful null focus is distinct from unavailable GUI state. Saved focus is
+immutable; related cross-owner focus may be observed already restored but cannot
+grant write admission. The fixture refuses before acquisition if the saved state
+cannot satisfy that conservative restoration predicate. Restore revalidates the
+existing Default input-desktop predicate at both prewrite validations, keeps the
+full inherited/input context check after waits, and retains the final foreground
+recheck, one saved-original request, owned readiness and both 1,500 ms limits.
+No original-focus query runs while owned/null foreground settles; no returned
+focus is written, no error-87 fallback or retry is added, and DesktopProbe is
+unchanged. This is an API-semantics/authority correction, not historical-cause
+proof or a console-compatibility claim.
+
+Independent V2 review accepted the five-file component and its canonical managed
+capture: 75 actual affected-source pure controls passed, zero failed/skipped,
+true contained NoWindow child 44464 exit 0, streams drained and parent environment
+restored. The added actual-orchestration refusal permits the first validation,
+then rejects the second/prewrite desktop check with the exact primary error,
+two validations, zero requests and zero GUI queries. All 108 V1 case extents
+remain unchanged, with one case added; the original 99 names remain, including
+the four explicitly justified query/context/refusal-binding contract updates.
+The first 73/1 development capture, final V1 74/0 and original immutable packets
+remain preserved. Final V2 proof SHA-256 is
+`E9CD2F349503609ACA3A28AD4D25A5B0DBFF04A5E52046189B749EDD08BC4A52`,
+seal `9FD00C27EF0075430E6351428C41F80B5D2CE63FC41147654792157FAB17CB1E`,
+packet run `20261116T152356Z-4928-510aba118a51458aaadcf7abb3d272b8`.
+These controls compile managed interop and exercise injected readers; they invoke
+no native window sampler or activation and grant no native acceptance.
+
+Shared inventory metadata, one ordinary dated fragment and the canonical scoped
+workflow digest `19cea470a9f85f2c7999a56b662dda1811ba5cd05deeff2ecb32b1b86858bd86`
+are composed around those exact reviewed source bytes. The H8 API 4 source pin and a094 engine remain
+unchanged. At this integration freeze, no new source commit, build, PrePush, ARM qualification, foreground
+lease, workflow dispatch or merge has occurred for this correction. The b985
+Debug/Release receipts are historical and are not rebound; new-head builds,
+scoped local gates, required GitHub contexts, actual ARM interactive qualification
+and restoration, applicable unfiltered Full and the four broad desktop entries
+remain pending. Console compatibility remains unproved; this creates no separate
+bespoke console-fixture gate. I65 stays **ACTIVE**, its first approved desktop clock
+is unstarted, and no Done move, generated changelog fold or qualification waiver
+is established.

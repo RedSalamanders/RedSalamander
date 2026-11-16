@@ -176,6 +176,15 @@ separately; no unavailable focus, console class or error code grants activation,
 This non-atomic observation changes no `ReadFocus` or restoration behavior. Toolchain/cache setup may
 precede the adapter's early return even though dependency installation and product builds do not.
 
+The separate hosted foreground fixture samples the original focus through the documented foreground
+queue (`GetGUIThreadInfo(0)`) with strict before/after original identity and returned active/focus-root
+checks. A successful null focus is distinct from unavailable GUI state. Saved focus identity never
+rebases. Related cross-owner focus is observable but cannot grant write admission: the fixture refuses
+before acquiring foreground when that saved state cannot satisfy the conservative restoration predicate.
+Owned-window `GetFocus` readiness, the one original-HWND restoration request and existing waits remain;
+no original-focus query runs while the owned/null handoff is settling. No console compatibility or
+historical-error repair is established without the separate actual runtime witness.
+
 The explicit Release R0ePaired choice requires an immutable `baseline_ref` and runs
 `Invoke-R0ePairedValidation.ps1` on each matching native architecture. It retains an isolated
 baseline build and five fresh canonical processes per side with the same hosted build number,

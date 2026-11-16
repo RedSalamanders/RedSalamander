@@ -106,6 +106,7 @@ namespace RedSalamander.Testing {
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
         [DllImport("user32.dll", ExactSpelling = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+        [DllImport("user32.dll", ExactSpelling = true)] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
         [DllImport("user32.dll", ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr window);
         [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
@@ -130,7 +131,8 @@ namespace RedSalamander.Testing {
         private readonly BoundarySubclassProcedure subclassProcedure;
         private static readonly UIntPtr BoundarySubclassId = new UIntPtr(0x52534244u);
         private const int BoundaryHotkeyId = 0x5253;
-        private IntPtr activationWindow, activationOriginal, activationOriginalFocus;
+        private IntPtr activationWindow, activationOriginal;
+        private OriginalForegroundFocus activationOriginalFocus;
         private uint activationOriginalThread, activationOriginalProcess;
         private bool hotkeyArmed, hotkeyHandled, hotkeyAcquired;
         private Exception hotkeyCallbackFailure;
@@ -169,13 +171,107 @@ namespace RedSalamander.Testing {
             canceled = true;
             stop.Set();
         }
-        private static void VerifyOriginalForeground(IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+        // Immutable observation, not ownership of either HWND and not write authority.
+        internal sealed class OriginalForegroundFocus {
+            internal readonly IntPtr Original, Focus, FocusRoot;
+            internal readonly uint OriginalThread, OriginalProcess, FocusThread, FocusProcess;
+            internal OriginalForegroundFocus(IntPtr original, uint thread, uint process, IntPtr focus, uint focusThread, uint focusProcess, IntPtr root) {
+                Original = original; OriginalThread = thread; OriginalProcess = process;
+                Focus = focus; FocusThread = focusThread; FocusProcess = focusProcess; FocusRoot = root;
+            }
+        }
+        private static Tuple<uint, uint, IntPtr, bool> ReadFocusWindowIdentity(IntPtr window) {
+            bool valid = window != IntPtr.Zero && IsWindow(window);
+            uint process = 0;
+            uint thread = window == IntPtr.Zero ? 0 : GetWindowThreadProcessId(window, out process);
+            return Tuple.Create(thread, process, window == IntPtr.Zero ? IntPtr.Zero : GetAncestor(window, 2), valid);
+        }
+        private static bool ValidFocusWindow(Tuple<uint, uint, IntPtr, bool> value, IntPtr original) {
+            return value.Item4 && value.Item1 != 0 && value.Item2 != 0 && value.Item3 == original;
+        }
+        private static bool SameFocusWindow(Tuple<uint, uint, IntPtr, bool> a, Tuple<uint, uint, IntPtr, bool> b) {
+            return a.Item1 == b.Item1 && a.Item2 == b.Item2 && a.Item3 == b.Item3 && a.Item4 == b.Item4;
+        }
+        private static bool MatchesOriginal(Tuple<IntPtr, uint, uint> value, IntPtr original, uint thread, uint process) {
+            return original != IntPtr.Zero && thread != 0 && process != 0 &&
+                value.Item1 == original && value.Item2 == thread && value.Item3 == process;
+        }
+        // Original-foreground semantics: the HWND-derived thread can be a remapped
+        // console identity. The documented foreground queue is queried directly.
+        internal static OriginalForegroundFocus CaptureOriginalForegroundFocus(IntPtr original, uint thread, uint process,
+            Func<Tuple<IntPtr, uint, uint>> foreground, Func<uint, Tuple<IntPtr, IntPtr>> query,
+            Func<IntPtr, Tuple<uint, uint, IntPtr, bool>> windowIdentity) {
+            var before = foreground();
+            var originalBefore = windowIdentity(original);
+            if (!MatchesOriginal(before, original, thread, process) || !ValidFocusWindow(originalBefore, original) ||
+                originalBefore.Item1 != thread || originalBefore.Item2 != process)
+                throw new InvalidOperationException("The original foreground identity is unavailable before focus sampling.");
+            var gui = query(0);
+            // Invalid/transitional active values cannot establish this exact boundary.
+            // This is a conservative witness, not a claim that the API always returns it.
+            if (gui.Item1 != original)
+                throw new InvalidOperationException("The foreground GUI active window does not identify the saved original.");
+            var focusBefore = gui.Item2 == IntPtr.Zero ? null : windowIdentity(gui.Item2);
+            var focusAfter = gui.Item2 == IntPtr.Zero ? null : windowIdentity(gui.Item2);
+            var originalAfter = windowIdentity(original);
+            var after = foreground();
+            if (!MatchesOriginal(after, original, thread, process) || !SameFocusWindow(originalBefore, originalAfter))
+                throw new InvalidOperationException("The original foreground identity changed during focus sampling.");
+            if (gui.Item2 != IntPtr.Zero && (!ValidFocusWindow(focusBefore, original) || !SameFocusWindow(focusBefore, focusAfter)))
+                throw new InvalidOperationException("The foreground focus identity or parent root is unavailable or changed.");
+            return new OriginalForegroundFocus(original, thread, process, gui.Item2,
+                focusBefore == null ? 0 : focusBefore.Item1, focusBefore == null ? 0 : focusBefore.Item2,
+                focusBefore == null ? IntPtr.Zero : focusBefore.Item3);
+        }
+        internal static bool SameOriginalForegroundFocus(OriginalForegroundFocus saved, OriginalForegroundFocus observed) {
+            return saved != null && observed != null && saved.Original == observed.Original &&
+                saved.OriginalThread == observed.OriginalThread && saved.OriginalProcess == observed.OriginalProcess &&
+                saved.Focus == observed.Focus && saved.FocusThread == observed.FocusThread &&
+                saved.FocusProcess == observed.FocusProcess && saved.FocusRoot == observed.FocusRoot;
+        }
+        // Conservative hosted admission follows the native ViewerPE distinction:
+        // a related cross-owner focus can be observed already restored, but cannot
+        // grant a restoration write or permission to acquire our boundary first.
+        internal static bool MayWriteOriginalForeground(OriginalForegroundFocus saved) {
+            return saved != null && (saved.Original == IntPtr.Zero || saved.Focus == IntPtr.Zero ||
+                (saved.FocusThread == saved.OriginalThread && saved.FocusProcess == saved.OriginalProcess));
+        }
+        private static OriginalForegroundFocus ReadOriginalForegroundFocus(uint thread, IntPtr original, uint process,
+            string stage, string originalAtCapture) {
+            return CaptureOriginalForegroundFocus(original, thread, process, ReadForegroundIdentityForDiagnostics,
+                queryThread => {
+                    if (queryThread != 0) throw new InvalidOperationException("Original focus must use the foreground queue.");
+                    var gui = ReadFocus(thread, original, process, stage, originalAtCapture);
+                    return Tuple.Create(gui.Active, gui.Focus);
+                }, ReadFocusWindowIdentity);
+        }
+        private static void ValidateSavedOriginalFocus(OriginalForegroundFocus saved, bool afterWait) {
+            if ((!afterWait && HostedDesktopNative.InputDesktopName() != "Default") ||
+                (afterWait && !IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0))))
+                throw new InvalidOperationException("The hosted desktop changed before original foreground restoration.");
+            if (!IsSavedOriginalFocusLive(saved, ReadFocusWindowIdentity))
+                throw new InvalidOperationException("The saved hosted original or focus window changed identity or root.");
+        }
+        internal static bool IsSavedOriginalFocusLive(OriginalForegroundFocus saved,
+            Func<IntPtr, Tuple<uint, uint, IntPtr, bool>> identity) {
+            if (saved.Original == IntPtr.Zero) return true;
+            var original = identity(saved.Original);
+            if (!ValidFocusWindow(original, saved.Original) || original.Item1 != saved.OriginalThread || original.Item2 != saved.OriginalProcess)
+                return false;
+            if (saved.Focus != IntPtr.Zero) {
+                var focus = identity(saved.Focus);
+                if (!ValidFocusWindow(focus, saved.Original) || focus.Item1 != saved.FocusThread || focus.Item2 != saved.FocusProcess || focus.Item3 != saved.FocusRoot)
+                    return false;
+            }
+            return true;
+        }
+        private static void VerifyOriginalForeground(IntPtr original, uint originalThread, uint originalProcess, OriginalForegroundFocus originalFocus) {
             if (HostedDesktopNative.InputDesktopName() != "Default" || GetForegroundWindow() != original)
                 throw new InvalidOperationException("The hosted desktop or foreground changed before boundary acquisition.");
             if (original != IntPtr.Zero) {
                 uint process;
                 if (!IsWindow(original) || GetWindowThreadProcessId(original, out process) != originalThread || process != originalProcess ||
-                    ReadFocus(originalThread, original, originalProcess, "verify-original-focus", null).Focus != originalFocus || GetForegroundWindow() != original)
+                    !SameOriginalForegroundFocus(originalFocus, ReadOriginalForegroundFocus(originalThread, original, originalProcess, "verify-original-focus", null)) || GetForegroundWindow() != original)
                     throw new InvalidOperationException("The hosted foreground identity or focus changed before boundary acquisition.");
             }
         }
@@ -183,7 +279,7 @@ namespace RedSalamander.Testing {
             uint size = (uint)Marshal.SizeOf<GuiThreadInfo>();
             var info = new GuiThreadInfo { Size = size };
             if (thread == 0) throw new InvalidOperationException("The original hosted foreground thread is unavailable.");
-            if (!GetGUIThreadInfo(thread, ref info)) {
+            if (!GetGUIThreadInfo(0, ref info)) {
                 int error = Marshal.GetLastWin32Error();
                 throw CaptureFocusReadFailure(error, thread, size, original, originalProcess, stage, originalAtCapture);
             }
@@ -279,7 +375,7 @@ namespace RedSalamander.Testing {
             string stage, string originalAtCapture, Func<IntPtr, string> observe) {
             string observation = CaptureIdentityForDiagnostics(original, observe);
             return new Win32Exception(error, String.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "Cannot verify the original hosted foreground focus. stage={0}; requestedThread={1}; requestedPid={2}; " +
+                "Cannot verify the original hosted foreground focus. stage={0}; queryThread=0; expectedOriginalThread={1}; requestedPid={2}; " +
                 "requestedHwnd=0x{3:X}; cbSize={4}; pointerBytes={5}; failureObservation={{{6}}}; " +
                 "nonAtomic=True; failedGuiFields=unspecified; originalAtCapture={{{7}}}",
                 stage, thread, originalProcess, original.ToInt64(), size, IntPtr.Size, observation, originalAtCapture ?? "unavailable"));
@@ -346,7 +442,7 @@ namespace RedSalamander.Testing {
             }
             return DefSubclassProc(window, message, wParam, lParam);
         }
-        private void AcquireWithOwnedHotkey(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus) {
+        private void AcquireWithOwnedHotkey(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, OriginalForegroundFocus originalFocus) {
             if (!AllowsOwnedBoundaryChord(Environment.GetEnvironmentVariable("REDSALAMANDER_HOSTED_TEST_DESKTOP"),
                 Environment.GetEnvironmentVariable("RS_HOSTED_ARM64_STOCK_PREPARATION"),
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT"),
@@ -507,49 +603,60 @@ namespace RedSalamander.Testing {
                 return refusal;
             }
         }
-        private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, IntPtr originalFocus,
+        private void RestoreForeground(IntPtr handle, IntPtr original, uint originalThread, uint originalProcess, OriginalForegroundFocus originalFocus,
             string originalAtCapture) {
             if (HostedDesktopNative.InputDesktopName() != "Default")
                 throw new InvalidOperationException("A foreign input-desktop change must not be replaced by the hosted fixture.");
-            IntPtr current = GetForegroundWindow();
-            if (original != IntPtr.Zero) {
-                uint ownerProcess;
-                if (!IsWindow(original) || GetWindowThreadProcessId(original, out ownerProcess) != originalThread ||
-                    ownerProcess != originalProcess)
-                    throw new InvalidOperationException("The original hosted foreground window changed identity.");
-            }
+            RestoreOriginalForeground(handle, originalFocus, GetForegroundWindow,
+                afterWait => ValidateSavedOriginalFocus(originalFocus, afterWait),
+                () => ReadOriginalForegroundFocus(originalThread, original, originalProcess, "restore-original-focus", originalAtCapture),
+                SetForegroundWindow, WaitOneRestoreMessage, timer => timer.ElapsedMilliseconds,
+                current => ForeignForegroundRefusal(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity));
+        }
+        // Dedicated hosted-fixture orchestration seam. Production binds the same
+        // native readers, one writer, message-aware wait and Stopwatch as before.
+        // Expected focus is immutable; a later observation can never rebase it.
+        internal static void RestoreOriginalForeground(IntPtr handle, OriginalForegroundFocus saved,
+            Func<IntPtr> foreground, Action<bool> validateSaved, Func<object> observeOriginal,
+            Func<IntPtr, bool> requestOriginal, Action<System.Diagnostics.Stopwatch> waitMessage,
+            Func<System.Diagnostics.Stopwatch, long> elapsed, Func<IntPtr, Exception> foreignRefusal) {
+            IntPtr original = saved.Original;
+            validateSaved(false);
+            IntPtr current = foreground();
             if (current == handle && original != IntPtr.Zero) {
-                if (!SetForegroundWindow(original))
+                if (!MayWriteOriginalForeground(saved))
+                    throw new InvalidOperationException("The saved related focus grants no hosted restoration-write authority.");
+                validateSaved(false);
+                current = foreground();
+                if (current != handle) throw foreignRefusal(current);
+                if (!requestOriginal(original))
                     throw new InvalidOperationException("Cannot restore the original hosted foreground window.");
                 var timer = System.Diagnostics.Stopwatch.StartNew();
                 do {
-                    current = GetForegroundWindow();
+                    current = foreground();
                     if (current == original) break;
-                    long elapsed = timer.ElapsedMilliseconds;
-                    if (!CanWaitForForegroundRestore(current, handle, elapsed))
+                    long waited = elapsed(timer);
+                    if (!CanWaitForForegroundRestore(current, handle, waited))
                         throw new InvalidOperationException("The original hosted foreground window was not restored. current=" + current.ToInt64() +
-                            "; original=" + original.ToInt64() + "; handle=" + handle.ToInt64() + "; elapsedMs=" + elapsed);
-                    WaitOneRestoreMessage(timer);
-                    uint checkedProcess;
-                    if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
-                        GetWindowThreadProcessId(original, out checkedProcess) != originalThread || checkedProcess != originalProcess)
-                        throw new InvalidOperationException("The hosted desktop or original identity changed during restoration.");
+                            "; original=" + original.ToInt64() + "; handle=" + handle.ToInt64() + "; elapsedMs=" + waited);
+                    waitMessage(timer);
+                    validateSaved(true);
                 } while (true);
             }
             // A previously empty foreground is verified after retiring our HWND.
             if (original == IntPtr.Zero && current == handle) return;
             if (current != original)
-                throw ForeignForegroundRefusal(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity);
+                throw foreignRefusal(current);
             if (original != IntPtr.Zero) {
                 var timer = System.Diagnostics.Stopwatch.StartNew();
-                while (ReadFocus(originalThread, original, originalProcess, "restore-original-focus", originalAtCapture).Focus != originalFocus) {
-                    if (GetForegroundWindow() != original || timer.ElapsedMilliseconds >= 1500)
+                while (true) {
+                    if (foreground() != original)
+                        throw new InvalidOperationException("The original hosted foreground changed before native focus observation.");
+                    if (SameOriginalForegroundFocus(saved, (OriginalForegroundFocus)observeOriginal())) break;
+                    if (foreground() != original || elapsed(timer) >= 1500)
                         throw new InvalidOperationException("The original hosted native focus was not restored.");
-                    WaitOneRestoreMessage(timer);
-                    uint checkedProcess;
-                    if (!IsVerifiedInheritedDesktop(HostedDesktopNative.ReadDesktopContext(0)) || !IsWindow(original) ||
-                        GetWindowThreadProcessId(original, out checkedProcess) != originalThread || checkedProcess != originalProcess)
-                        throw new InvalidOperationException("The hosted desktop or original identity changed during focus restoration.");
+                    waitMessage(timer);
+                    validateSaved(true);
                 }
             }
         }
@@ -571,8 +678,11 @@ namespace RedSalamander.Testing {
                 // This minimal entry-time creation query is intentional. A retirement-time
                 // query cannot retroactively identify the process instance saved at entry.
                 string originalAtCapture = CaptureIdentityForDiagnostics(original, HostedDesktopNative.DescribeEntryWindowIdentity);
-                IntPtr originalFocus = original == IntPtr.Zero ? IntPtr.Zero :
-                    ReadFocus(originalThread, original, originalProcess, "entry-original-focus", originalAtCapture).Focus;
+                OriginalForegroundFocus originalFocus = original == IntPtr.Zero ?
+                    new OriginalForegroundFocus(IntPtr.Zero, 0, 0, IntPtr.Zero, 0, 0, IntPtr.Zero) :
+                    ReadOriginalForegroundFocus(originalThread, original, originalProcess, "entry-original-focus", originalAtCapture);
+                if (!MayWriteOriginalForeground(originalFocus))
+                    throw new InvalidOperationException("The saved related focus cannot authorize hosted boundary acquisition and restoration.");
                 if (canceled) throw new InvalidOperationException("Hosted boundary startup was canceled before window creation.");
                 var window = CreateWindowExW(0x08040080, "STATIC", "RedSalamander hosted test boundary", 0x90000000,
                     Math.Max(0, GetSystemMetrics(0) - 8), Math.Max(0, GetSystemMetrics(1) - 8), 8, 8,

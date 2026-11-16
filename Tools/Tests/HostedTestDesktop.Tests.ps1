@@ -269,6 +269,273 @@ public static class RSHostedForegroundQueueProbe {
     }
 }
 
+Describe 'Hosted original foreground focus contract' {
+    BeforeAll {
+        & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
+        $script:primaryBoundary = ('RedSalamander.Testing.HostedDesktopNative' -as [type]).Assembly.GetType('RedSalamander.Testing.HostedForegroundBoundary', $true)
+        if (-not ('RSHostedPrimaryForegroundProbe' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.InteropServices;
+public static class RSHostedPrimaryForegroundProbe {
+    static readonly BindingFlags Flags = BindingFlags.Static | BindingFlags.NonPublic;
+    static object Call(Type boundary, string name, params object[] args) { return boundary.GetMethod(name, Flags).Invoke(null, args); }
+    static object Field(object value, string name) { return value.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(value); }
+    static object Capture(Type boundary, string mode, List<uint> queries, List<string> events,
+        Func<Tuple<IntPtr,uint,uint>> externalForeground = null) {
+        int foregroundReads = 0, originalReads = 0, focusReads = 0;
+        Func<Tuple<IntPtr,uint,uint>> foreground = externalForeground ?? (() => {
+            int index = foregroundReads++;
+            events.Add("foreground-" + index);
+            long h = 17; uint t = 7, p = 42;
+            if (index > 0 && mode == "changed-foreground") h = 19;
+            if (index > 0 && mode == "changed-foreground-thread") t = 8;
+            if (index > 0 && mode == "changed-foreground-process") p = 43;
+            if (mode == "not-original") h = 51;
+            return Tuple.Create(new IntPtr(h),t,p);
+        });
+        Func<uint,Tuple<IntPtr,IntPtr>> query = requested => {
+            uint actual = mode == "explicit-binding-counterfactual" ? 7u : requested;
+            queries.Add(actual); events.Add("gui-" + actual);
+            if (actual != 0 || mode == "failed-zero") {
+                var saved = new Win32Exception(87, "controlled original GUI query failed");
+                Marshal.SetLastPInvokeError(999);
+                throw saved;
+            }
+            if (mode == "fatal-zero") throw new OutOfMemoryException("synthetic fatal query control");
+            long active = mode == "wrong-active" ? 19 : mode == "null-active" ? 0 : 17;
+            long focus = mode == "null-focus" || mode == "null-active" ? 0 : mode == "focus-original" ? 17 : mode == "other-focus" ? 20 : 18;
+            return Tuple.Create(new IntPtr(active),new IntPtr(focus));
+        };
+        Func<IntPtr,Tuple<uint,uint,IntPtr,bool>> identity = window => {
+            bool original = window.ToInt64() == 17;
+            int index = original ? originalReads++ : focusReads++;
+            uint t = 7, p = 42; long root = 17; bool valid = true;
+            if (!original && mode == "cross-owner") { t = 8; p = 43; }
+            if (original && index > 0 && mode == "changed-original-thread") t = 8;
+            if (original && index > 0 && mode == "changed-original-process") p = 43;
+            if (!original && index > 0 && mode == "changed-focus-thread") t = 8;
+            if (!original && index > 0 && mode == "changed-focus-process") p = 43;
+            if (!original && mode == "wrong-root") root = 19;
+            if (!original && mode == "unknown-focus") { t = 0; p = 0; valid = false; }
+            if (original && mode == "unknown-original") valid = false;
+            return Tuple.Create(t,p,new IntPtr(root),valid);
+        };
+        return Call(boundary,"CaptureOriginalForegroundFocus",new IntPtr(17),7u,42u,foreground,query,identity);
+    }
+    static Dictionary<string,object> Failure(Exception error) {
+        return new Dictionary<string,object>{{"failureType",error == null ? null : error.GetType().FullName},
+            {"message",error == null ? null : error.Message},{"nativeError",error is Win32Exception ? (object)((Win32Exception)error).NativeErrorCode : null}};
+    }
+    public static object CaptureCase(Type boundary, string mode) {
+        var queries = new List<uint>(); var events = new List<string>(); object saved = null; Exception error = null;
+        try { saved = Capture(boundary,mode,queries,events); }
+        catch (TargetInvocationException caught) { error = caught.GetBaseException(); }
+        var result = Failure(error); result["queries"] = queries.ToArray(); result["events"] = events.ToArray();
+        result["mayWrite"] = saved != null && (bool)Call(boundary,"MayWriteOriginalForeground",saved);
+        if (saved != null) {
+            result["focus"] = ((IntPtr)Field(saved,"Focus")).ToInt64();
+            result["focusThread"] = Field(saved,"FocusThread"); result["focusProcess"] = Field(saved,"FocusProcess");
+            result["immutable"] = Array.TrueForAll(saved.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic), f => f.IsInitOnly);
+        }
+        return result;
+    }
+    public static object RestoreCase(Type boundary, string mode) {
+        var entryQueries = new List<uint>(); var events = new List<string>();
+        object saved = Capture(boundary, mode.StartsWith("cross-") ? "cross-owner" : "stable",entryQueries,events);
+        if (mode == "empty") {
+            var type = saved.GetType();
+            saved = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.NonPublic, null,
+                new object[]{IntPtr.Zero,0u,0u,IntPtr.Zero,0u,0u,IntPtr.Zero},null);
+        }
+        var queries = new List<uint>(); var writes = new List<long>();
+        bool already = mode == "already" || mode == "cross-already" || mode.StartsWith("focus-") || mode == "interference-before-query";
+        IntPtr current = new IntPtr(already ? 17 : 51); int waits = 0, validations = 0, foregroundReads = 0, observations = 0;
+        bool changedOwner = false; Exception error = null;
+        Func<IntPtr> foreground = () => {
+            foregroundReads++; IntPtr observed = current;
+            if (mode == "interference-before-query" && foregroundReads == 2) current = new IntPtr(68);
+            return observed;
+        };
+        Action<bool> validate = afterWait => {
+            validations++;
+            if (validations == 2 && mode == "desktop-before-write")
+                throw new InvalidOperationException("controlled prewrite Default desktop refusal");
+            if (validations == 2 && mode == "interference-before-write") current = new IntPtr(68);
+            if (validations == 2 && mode == "same-hwnd-owner-change") changedOwner = true;
+            Func<IntPtr,Tuple<uint,uint,IntPtr,bool>> identity = h => Tuple.Create(
+                changedOwner && h.ToInt64() == 18 ? 8u : h.ToInt64() == 18 && mode.StartsWith("cross-") ? 8u : 7u,
+                h.ToInt64() == 18 && mode.StartsWith("cross-") ? 43u : 42u,new IntPtr(17),true);
+            if (!(bool)Call(boundary,"IsSavedOriginalFocusLive",saved,identity))
+                throw new InvalidOperationException("controlled saved identity changed");
+        };
+        Func<object> observe = () => {
+            observations++;
+            string observationMode = mode.StartsWith("cross-") ? "cross-owner" :
+                (mode == "focus-timeout" || (mode == "focus-settle" && observations == 1)) ? "other-focus" : "stable";
+            return Capture(boundary, observationMode, queries, events,
+                () => Tuple.Create(current, current.ToInt64() == 17 ? 7u : 9u, current.ToInt64() == 17 ? 42u : 99u));
+        };
+        Func<IntPtr,bool> write = target => { writes.Add(target.ToInt64()); events.Add("write-"+target.ToInt64()); return true; };
+        Action<Stopwatch> wait = timer => {
+            waits++;
+            if (mode == "interference-after-write") current = new IntPtr(68);
+            else if (mode.StartsWith("focus-")) current = new IntPtr(17);
+            else current = waits == 1 ? IntPtr.Zero : new IntPtr(17);
+        };
+        Func<Stopwatch,long> elapsed = timer => mode == "foreground-timeout" || mode == "focus-timeout" ? 1500 : 0;
+        Func<IntPtr,Exception> foreign = window => new InvalidOperationException("controlled foreign foreground");
+        try { Call(boundary,"RestoreOriginalForeground",new IntPtr(51),saved,foreground,validate,observe,write,wait,elapsed,foreign); }
+        catch (TargetInvocationException caught) { error = caught.GetBaseException(); }
+        var result = Failure(error); result["queries"] = queries.ToArray(); result["writes"] = writes.ToArray();
+        result["waits"] = waits; result["observations"] = observations; result["validations"] = validations; result["events"] = events.ToArray();
+        result["savedFocus"] = ((IntPtr)Field(saved,"Focus")).ToInt64(); result["savedFocusThread"] = Field(saved,"FocusThread");
+        return result;
+    }
+}
+'@
+        }
+    }
+    It 'uses primary zero despite a backend that rejects the HWND-derived thread with87' {
+        $r=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,'stable')
+        $r.failureType | Should BeNullOrEmpty
+        ($r.queries -join ',') | Should Be '0'
+        $r.focus | Should Be 18
+        $r.mayWrite | Should Be $true
+        $r.immutable | Should Be $true
+        $old=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,'explicit-binding-counterfactual')
+        $old.failureType | Should Be 'System.ComponentModel.Win32Exception'
+        $old.nativeError | Should Be 87
+        ($old.queries -join ',') | Should Be '7'
+    }
+    It 'accepts genuine null focus and a related child without equating focus with foreground' {
+        foreach($mode in @('null-focus','focus-original','stable')) {
+            $r=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,$mode)
+            $r.failureType | Should BeNullOrEmpty
+            $r.mayWrite | Should Be $true
+            ($r.queries -join ',') | Should Be '0'
+        }
+        [RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,'null-focus').focus | Should Be 0
+    }
+    It 'refuses each same-HWND owner change wrong root unavailable identity or invalid active witness' {
+        foreach($mode in @('changed-foreground','changed-foreground-thread','changed-foreground-process','changed-original-thread','changed-original-process','changed-focus-thread','changed-focus-process','wrong-root','unknown-focus','unknown-original','wrong-active','null-active','not-original')) {
+            $r=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,$mode)
+            $r.failureType | Should Be 'System.InvalidOperationException'
+            $r.mayWrite | Should Be $false
+            if($mode -in @('not-original','unknown-original')) { @($r.queries).Count | Should Be 0 }
+        }
+    }
+    It 'preserves failed zero87 and fatal query exceptions without manufacturing null focus' {
+        $r=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,'failed-zero')
+        $r.failureType | Should Be 'System.ComponentModel.Win32Exception'
+        $r.nativeError | Should Be 87
+        $r.mayWrite | Should Be $false
+        ($r.queries -join ',') | Should Be '0'
+        $r=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,'fatal-zero')
+        $r.failureType | Should Be 'System.OutOfMemoryException'
+    }
+    It 'permits related cross-owner observation but refuses write admission before acquisition' {
+        $r=[RSHostedPrimaryForegroundProbe]::CaptureCase($script:primaryBoundary,'cross-owner')
+        $r.failureType | Should BeNullOrEmpty
+        $r.focusThread | Should Be 8
+        $r.focusProcess | Should Be 43
+        $r.mayWrite | Should Be $false
+        $already=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'cross-already')
+        $already.failureType | Should BeNullOrEmpty
+        @($already.writes).Count | Should Be 0
+        $blocked=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'cross-write')
+        $blocked.failureType | Should Be 'System.InvalidOperationException'
+        @($blocked.writes).Count | Should Be 0
+        @($blocked.queries).Count | Should Be 0
+    }
+    It 'issues one original-HWND request and no GUI queries while owned or null foreground settles' {
+        $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'settle')
+        $r.failureType | Should BeNullOrEmpty
+        ($r.writes -join ',') | Should Be '17'
+        ($r.queries -join ',') | Should Be '0'
+        $r.waits | Should Be 2
+        $r.savedFocus | Should Be 18
+        $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'empty')
+        $r.failureType | Should BeNullOrEmpty
+        @($r.writes).Count | Should Be 0
+        @($r.queries).Count | Should Be 0
+    }
+    It 'never writes after foreground or same-HWND owner interference and never queries a non-original queue' {
+        foreach($mode in @('interference-before-write','same-hwnd-owner-change','interference-before-query')) {
+            $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,$mode)
+            $r.failureType | Should Be 'System.InvalidOperationException'
+            @($r.writes).Count | Should Be 0
+            @($r.queries).Count | Should Be 0
+        }
+        $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'interference-after-write')
+        $r.failureType | Should Be 'System.InvalidOperationException'
+        ($r.writes -join ',') | Should Be '17'
+        @($r.queries).Count | Should Be 0
+    }
+    It 'keeps both1500ms limits and immutable expected focus while observing a valid focus transition' {
+        $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'focus-settle')
+        $r.failureType | Should BeNullOrEmpty
+        @($r.writes).Count | Should Be 0
+        ($r.queries -join ',') | Should Be '0,0'
+        $r.savedFocus | Should Be 18
+        foreach($mode in @('foreground-timeout','focus-timeout')) {
+            $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,$mode)
+            $r.failureType | Should Be 'System.InvalidOperationException'
+            $r.savedFocus | Should Be 18
+        }
+    }
+    It 'preserves a second prewrite desktop refusal with zero requests and zero GUI queries' {
+        $r=[RSHostedPrimaryForegroundProbe]::RestoreCase($script:primaryBoundary,'desktop-before-write')
+        $r.failureType | Should Be 'System.InvalidOperationException'
+        $r.message | Should Be 'controlled prewrite Default desktop refusal'
+        $r.validations | Should Be 2
+        @($r.writes).Count | Should Be 0
+        @($r.queries).Count | Should Be 0
+        $source=[IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1'))
+        $guard={param($text)
+            if($text -notmatch '!afterWait && HostedDesktopNative.InputDesktopName\(\) != "Default"' -or
+               $text -notmatch 'afterWait && !IsVerifiedInheritedDesktop\(HostedDesktopNative.ReadDesktopContext\(0\)\)') {
+                throw 'Native prewrite and postwait desktop predicates must remain bound'
+            }
+        }
+        & $guard $source
+        $rejection=$null
+        try { & $guard ($source.Replace('!afterWait && HostedDesktopNative.InputDesktopName() != "Default"','false')) } catch { $rejection=$_.Exception }
+        $rejection.GetType().FullName | Should Be 'System.Management.Automation.RuntimeException'
+        $rejection.Message | Should Be 'Native prewrite and postwait desktop predicates must remain bound'
+    }
+    It 'rejects acceptance-source counterfactuals and retains exact native bindings and owned readiness' {
+        $source=[IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1'))
+        $guard={param($text)
+            $start=$text.IndexOf('private static GuiThreadInfo ReadFocus(')
+            $end=$text.IndexOf('// DesktopProbe only:', $start)
+            $raw=$text.Substring($start,$end-$start)
+            if($text -notmatch 'var gui = query\(0\);' -or $raw -notmatch 'GetGUIThreadInfo\(0, ref info\)' -or $raw -match 'GetGUIThreadInfo\(thread, ref info\)|error\s*==\s*87') {throw 'Primary foreground query required'}
+            if($text -notmatch '!MatchesOriginal\(before,' -or $text -notmatch '!MatchesOriginal\(after,' -or $text -notmatch 'gui.Item1 != original') {throw 'Both original brackets and exact active witness required'}
+            if($text -notmatch 'saved.FocusThread == saved.OriginalThread && saved.FocusProcess == saved.OriginalProcess') {throw 'Cross-owner write admission forbidden'}
+            if($text -match '\bsaved\s*=\s*\(OriginalForegroundFocus\)observeOriginal') {throw 'Expected focus cannot be rebased'}
+        }
+        & $guard $source
+        $mutations=@(
+            @{Text=$source.Replace('var gui = query(0);','var gui = query(thread);');Message='Primary foreground query required'}
+            @{Text=$source.Replace('!MatchesOriginal(after,','!MatchesOriginal(before,');Message='Both original brackets and exact active witness required'}
+            @{Text=$source.Replace('gui.Item1 != original','false');Message='Both original brackets and exact active witness required'}
+            @{Text=$source.Replace('saved.FocusThread == saved.OriginalThread && saved.FocusProcess == saved.OriginalProcess','true');Message='Cross-owner write admission forbidden'}
+            @{Text=($source+' saved = (OriginalForegroundFocus)observeOriginal();');Message='Expected focus cannot be rebased'}
+        )
+        foreach($mutation in $mutations){$failure=$null;try{& $guard $mutation.Text}catch{$failure=$_.Exception};$failure.GetType().FullName|Should Be 'System.Management.Automation.RuntimeException';$failure.Message|Should Be $mutation.Message}
+        $run=$source.Substring($source.IndexOf('private void Run() {'),$source.IndexOf('public void Dispose()', $source.IndexOf('private void Run() {'))-$source.IndexOf('private void Run() {'))
+        $run.IndexOf('if (!MayWriteOriginalForeground(originalFocus))') | Should BeLessThan $run.IndexOf('var window = CreateWindowExW(')
+        $source | Should Match 'SetForegroundWindow, WaitOneRestoreMessage, timer => timer.ElapsedMilliseconds'
+        $source | Should Match 'GetForegroundWindow\(\) != handle \|\| GetFocus\(\) != handle'
+        $source | Should Not Match 'SetFocus\(original|SetFocus\(saved|SetFocus\(gui\.'
+    }
+}
+
 function Initialize-RSHostedDiagnosticMessageProbe {
     if (-not ('RedSalamander.Testing.HostedDiagnosticMessageProbeException' -as [type])) {
         Add-Type -TypeDefinition @"
@@ -630,7 +897,7 @@ namespace RedSalamander.Testing {
                 ($failure -is [ComponentModel.Win32Exception]) | Should Be $true
                 $failure.NativeErrorCode | Should Be 87
                 $failure.Message.StartsWith('Cannot verify the original hosted foreground focus.') | Should Be $true
-                $failure.Message | Should Match ('stage='+$stage+'; requestedThread=12; requestedPid=34; requestedHwnd=0x11; cbSize=72; pointerBytes='+[IntPtr]::Size)
+                $failure.Message | Should Match ('stage='+$stage+'; queryThread=0; expectedOriginalThread=12; requestedPid=34; requestedHwnd=0x11; cbSize=72; pointerBytes='+[IntPtr]::Size)
                 $failure.Message | Should Match 'originalAtCapture=\{saved-entry-identity\}'
                 $failure.Message | Should Match 'originalWindowValid=False; observedThread=0; observedPid=0; currentForeground=0x22; foregroundMatches=False'
                 $failure.Message | Should Match 'nonAtomic=True; failedGuiFields=unspecified'
@@ -681,7 +948,7 @@ namespace RedSalamander.Testing {
             $start = $text.IndexOf('private static GuiThreadInfo ReadFocus(')
             $end = $text.IndexOf('internal static Win32Exception FocusReadFailure(', $start)
             $read = $text.Substring($start, $end-$start)
-            if ($read -notmatch 'if\s*\(!GetGUIThreadInfo\(thread, ref info\)\)\s*\{\s*int error = Marshal.GetLastWin32Error\(\);\s*throw CaptureFocusReadFailure\(error, thread, size, original, originalProcess, stage, originalAtCapture\);') {
+            if ($read -notmatch 'if\s*\(!GetGUIThreadInfo\(0, ref info\)\)\s*\{\s*int error = Marshal.GetLastWin32Error\(\);\s*throw CaptureFocusReadFailure\(error, thread, size, original, originalProcess, stage, originalAtCapture\);') {
                 throw 'the original native error must be captured before failure observations'
             }
         }
@@ -694,7 +961,7 @@ namespace RedSalamander.Testing {
             [regex]::Matches($probe, ('\b'+$api+'\(')).Count | Should Be 1
         }
         $probe | Should Not Match 'SetForegroundWindow|SetFocus|SendInput|AttachThreadInput|OpenProcess|OpenThread|EnumWindows|GetWindowText|Sleep|Wait|Retry'
-        [regex]::Matches($source, 'ReadFocus\(originalThread, original, originalProcess, "(?:entry|verify|restore)-original-focus",').Count | Should Be 3
+        [regex]::Matches($source, 'ReadOriginalForegroundFocus\(originalThread, original, originalProcess, "(?:entry|verify|restore)-original-focus",').Count | Should Be 3
     }
     It 'keeps observer capture outside the compiled successful query and rejects the old capture shape' {
         $read = $script:focusBoundary.GetMethod('ReadFocus', $script:focusFlags)
@@ -729,7 +996,7 @@ namespace RedSalamander.Testing {
             $text = $global:rsFocusBoundedText[0]
             $text | Should Match 'NativeErrorCode=87'
             $text | Should Match 'HResult=0x80004005'
-            $text | Should Match 'requestedThread=12; requestedPid=34; requestedHwnd=0x11; cbSize=72'
+            $text | Should Match 'queryThread=0; expectedOriginalThread=12; requestedPid=34; requestedHwnd=0x11; cbSize=72'
             $text | Should Match 'failureObservation=\{originalWindowValid=False; observedThread=0; observedPid=0; currentForeground=0x22; foregroundMatches=False\}'
             $text | Should Match 'nonAtomic=True; failedGuiFields=unspecified'
             $text | Should Match 'diagnostic-truncated: field-string'
@@ -1126,7 +1393,10 @@ namespace RedSalamander.Testing {
     }
     It 'uses the identity builder only on the unchanged foreign foreground refusal branch' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Raw
-        $source | Should Match 'if \(current != original\)\s+throw ForeignForegroundRefusal\(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity\);'
+        $source | Should Match 'current => ForeignForegroundRefusal\(current, original, handle, originalAtCapture, HostedDesktopNative.DescribeWindowIdentity\)'
+        $source | Should Match 'if \(current != original\)\s+throw foreignRefusal\(current\);'
+        $source | Should Match 'if \(current != handle\) throw foreignRefusal\(current\);'
+        [regex]::Matches($source, 'throw foreignRefusal\(current\)').Count | Should Be 2
         $start = $source.IndexOf('internal static string DescribeWindowIdentity(')
         $end = $source.IndexOf('// ABI/layer exception:', $start)
         $observation = $source.Substring($start, $end - $start)
