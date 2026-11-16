@@ -781,8 +781,20 @@ Environment variables may select alternate test inputs such as profile names, bu
   completes. Desktop handles and synchronization objects retire only after the join.
   Retirement preserves simultaneous action, restoration, join and
   handle-release errors; a timeout is never reported as successful restoration.
-  The entry wrapper logs the complete retirement exception chain before propagating failure,
-  so hosted logs preserve the boundary cause hidden by PowerShell's outer invocation message.
+  The entry wrapper also records the captured setup ErrorRecord identifier/category and
+  exception tree before rethrowing the original record. It traverses aggregate branches
+  without deduplicating potentially distinct causes and retains existing exception types,
+  visited nonaggregate messages, HResult, Win32 NativeErrorCode and bounded stack text. Aggregate
+  composite Message getters are never read; an [aggregate-summary-omitted] marker replaces them.
+  Diagnostics bound tree traversal and emitted text, not arbitrary property-getter allocations, to
+  depth 8, 32 exception nodes, 1,024 characters per field and 16,384 UTF-16 characters
+  overall, with explicit truncation markers. They query no fresh native/window state and
+  dump no environment. Nonfatal formatting/sink failures preserve the primary setup error;
+  the existing fatal diagnostic exception policy still propagates.
+  Worker completion signalling is not a positive foreground-readiness witness. Multiple
+  wrappers may carry the same worker failure; their labels do not prove independent faults.
+  The existing complete retirement exception chain remains logged before propagation,
+  preserving the nested boundary cause hidden by PowerShell's outer invocation message.
   The child uses the existing native warning and original focus/input assertions. Its containment job
   must drain before the process-desktop scope retires, the original foreground and native focus
   are restored, the desktop handle closes and the interactive mutex releases. A foreign desktop or

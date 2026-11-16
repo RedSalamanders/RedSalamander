@@ -114,6 +114,21 @@ Describe 'Hosted desktop fixture lifecycle' {
     }
 }
 
+function Initialize-RSHostedDiagnosticMessageProbe {
+    if (-not ('RedSalamander.Testing.HostedDiagnosticMessageProbeException' -as [type])) {
+        Add-Type -TypeDefinition @"
+namespace RedSalamander.Testing {
+    public sealed class HostedDiagnosticMessageProbeException : System.Exception {
+        private readonly string label;
+        public int Reads { get; private set; }
+        public HostedDiagnosticMessageProbeException(string label) : base(label) { this.label = label; }
+        public void Reset() { Reads = 0; }
+        public override string Message { get { Reads++; return label; } }
+    }
+}
+"@
+    }
+}
 Describe 'Hosted Default desktop entry lifetime' {
     BeforeEach {
         $script:priorDefaultDesktopEnvironment = @{}
@@ -121,7 +136,7 @@ Describe 'Hosted Default desktop entry lifetime' {
             $script:priorDefaultDesktopEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
-        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; NestedRestoreFailure=$false; ReportRestored=$true }
+        $global:rsDefaultDesktopTest = [pscustomobject]@{ Events=[Collections.Generic.List[string]]::new(); FailCreate=$false; FailScope=$false; FailScopeRetire=$false; FailRestore=$false; NestedRestoreFailure=$false; ReportRestored=$true; DiagnosticText=[Collections.Generic.List[string]]::new() }
         $lease = [pscustomobject]@{ Name='Default'; Restored=$false; ForegroundBoundaryReady=$true }
         $lease | Add-Member -MemberType ScriptMethod -Name Dispose -Value {
             $global:rsDefaultDesktopTest.Events.Add('restore')
@@ -149,6 +164,7 @@ Describe 'Hosted Default desktop entry lifetime' {
             $global:rsDefaultDesktopTest.Scope
         } -ModuleName HostedTestDesktop
         Mock Set-RSHostedDisplayMode {} -ModuleName HostedTestDesktop
+        Mock Write-Host {} -ModuleName HostedTestDesktop
     }
     AfterEach {
         foreach ($name in $script:priorDefaultDesktopEnvironment.Keys) {
@@ -239,6 +255,140 @@ Describe 'Hosted Default desktop entry lifetime' {
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 0 } }
         $r.Succeeded | Should Be $false
         $r.Error.Exception.Message | Should Match 'did not restore its original foreground and focus'
+    }
+    It 'retains the original nested setup error and captures both aggregate branches without native execution' {
+        $native=[ComponentModel.Win32Exception]::new(5, 'seeded native setup leaf')
+        $setup=[InvalidOperationException]::new('seeded boundary startup', $native)
+        $cleanup=[InvalidOperationException]::new('seeded boundary cleanup', [TimeoutException]::new('seeded cleanup timeout'))
+        $failure=[AggregateException]::new('seeded setup and cleanup', [Exception[]]@($setup,$cleanup))
+        $record=[Management.Automation.ErrorRecord]::new($failure,'seeded-hosted-setup',[Management.Automation.ErrorCategory]::InvalidOperation,$null)
+        $global:rsDefaultDesktopTest | Add-Member -NotePropertyName SetupError -NotePropertyValue $record
+        Mock New-RSHostedDefaultDesktop {
+            $global:rsDefaultDesktopTest.Events.Add('create')
+            throw $global:rsDefaultDesktopTest.SetupError
+        } -ModuleName HostedTestDesktop
+        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.FullyQualifiedErrorId | Should Be 'seeded-hosted-setup'
+        ([object]::ReferenceEquals($r.Error.Exception,$failure)) | Should Be $true
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
+        $global:rsDefaultDesktopTest.DiagnosticText.Count | Should Be 1
+        $diagnostic=$global:rsDefaultDesktopTest.DiagnosticText[0]
+        $diagnostic | Should Match 'Hosted Default desktop setup exception:'
+        $diagnostic | Should Match 'System.ComponentModel.Win32Exception'
+        $diagnostic | Should Match 'NativeErrorCode=5'
+        $diagnostic | Should Match ('HResult=0x'+$native.HResult.ToString('X8'))
+        $diagnostic | Should Match 'seeded native setup leaf'
+        $diagnostic | Should Match 'System.TimeoutException'
+        $diagnostic | Should Match 'seeded cleanup timeout'
+        Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+        Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+    It 'preserves the primary setup error when the diagnostic sink fails' {
+        $failure=[InvalidOperationException]::new('seeded primary setup error')
+        $record=[Management.Automation.ErrorRecord]::new($failure,'seeded-hosted-sink',[Management.Automation.ErrorCategory]::InvalidOperation,$null)
+        $global:rsDefaultDesktopTest | Add-Member -NotePropertyName SetupError -NotePropertyValue $record
+        Mock New-RSHostedDefaultDesktop {
+            $global:rsDefaultDesktopTest.Events.Add('create')
+            throw $global:rsDefaultDesktopTest.SetupError
+        } -ModuleName HostedTestDesktop
+        Mock Write-Host { throw [IO.IOException]::new('seeded diagnostic sink failure') } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.FullyQualifiedErrorId | Should Be 'seeded-hosted-sink'
+        ([object]::ReferenceEquals($r.Error.Exception,$failure)) | Should Be $true
+        $r.Error.Exception.Message | Should Be 'seeded primary setup error'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
+        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly
+        Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+    It 'propagates a synthetic fatal diagnostic sink exception without resource exhaustion' {
+        $primary=[InvalidOperationException]::new('seeded primary before fatal diagnostic')
+        $record=[Management.Automation.ErrorRecord]::new($primary,'seeded-hosted-fatal-primary',[Management.Automation.ErrorCategory]::InvalidOperation,$null)
+        $fatal=[AccessViolationException]::new('seeded synthetic fatal diagnostic sink')
+        $global:rsDefaultDesktopTest | Add-Member -NotePropertyName SetupError -NotePropertyValue $record
+        $global:rsDefaultDesktopTest | Add-Member -NotePropertyName FatalSinkError -NotePropertyValue $fatal
+        Mock New-RSHostedDefaultDesktop {
+            $global:rsDefaultDesktopTest.Events.Add('create')
+            throw $global:rsDefaultDesktopTest.SetupError
+        } -ModuleName HostedTestDesktop
+        Mock Write-Host { throw $global:rsDefaultDesktopTest.FatalSinkError } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
+        $r.Succeeded | Should Be $false
+        ([object]::ReferenceEquals($r.Error.Exception,$fatal)) | Should Be $true
+        $r.Error.Exception.Message | Should Be 'seeded synthetic fatal diagnostic sink'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
+        Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+    It 'bounds setup diagnostic depth without traversing an excluded leaf' {
+        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        $failure=[Exception]::new('unreachable-depth-leaf')
+        foreach($index in 1..12){$failure=[InvalidOperationException]::new(('seeded level '+$index),$failure)}
+        $record=[Management.Automation.ErrorRecord]::new($failure,'seeded-depth',[Management.Automation.ErrorCategory]::InvalidOperation,$null)
+        & (Get-Module HostedTestDesktop) { param($captured) Write-RSHostedSetupFailureDiagnostic -ErrorRecord $captured } $record
+        $global:rsDefaultDesktopTest.DiagnosticText.Count | Should Be 1
+        $diagnostic=$global:rsDefaultDesktopTest.DiagnosticText[0]
+        $diagnostic | Should Match '\[diagnostic-truncated: depth\]'
+        $diagnostic | Should Not Match 'unreachable-depth-leaf'
+        ($diagnostic.Length -le 16384) | Should Be $true
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
+    }
+    It 'bounds setup diagnostic nodes fields and total text with explicit truncation markers' {
+        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        $children=[Collections.Generic.List[Exception]]::new()
+        foreach($index in 1..48){$children.Add([Exception]::new(('x'*5000)+('leaf-'+$index)))}
+        $failure=[AggregateException]::new('seeded wide exception', $children)
+        $record=[Management.Automation.ErrorRecord]::new($failure,'seeded-width',[Management.Automation.ErrorCategory]::InvalidOperation,$null)
+        & (Get-Module HostedTestDesktop) { param($captured) Write-RSHostedSetupFailureDiagnostic -ErrorRecord $captured } $record
+        $global:rsDefaultDesktopTest.DiagnosticText.Count | Should Be 1
+        $diagnostic=$global:rsDefaultDesktopTest.DiagnosticText[0]
+        $diagnostic | Should Match 'diagnostic-truncated:.*field-string'
+        $diagnostic | Should Match 'diagnostic-truncated:.*node-count'
+        $diagnostic | Should Match 'diagnostic-truncated:.*output-string'
+        ($diagnostic.Length -le 16384) | Should Be $true
+        $global:rsDefaultDesktopTest.Events.Count | Should Be 0
+    }
+    It 'does not read message getters below the aggregate depth budget' {
+        Initialize-RSHostedDiagnosticMessageProbe
+        $probe=[RedSalamander.Testing.HostedDiagnosticMessageProbeException]::new('excluded-deep-leaf')
+        $tree=$probe
+        for($index=0;$index -lt 12;$index++) { $tree=[AggregateException]::new('composite', [Exception[]]@($tree)) }
+        $record=[Management.Automation.ErrorRecord]::new($tree,'DeepAggregate',[Management.Automation.ErrorCategory]::NotSpecified,$null)
+        $probe.Reset()
+        Mock Write-Host { param($Object) $global:rsDefaultDesktopTest.DiagnosticText.Add([string]$Object) } -ModuleName HostedTestDesktop
+        & (Get-Module HostedTestDesktop) { param($errorRecord) Write-RSHostedSetupFailureDiagnostic -ErrorRecord $errorRecord } $record
+        $probe.Reads | Should Be 0
+        $text=$global:rsDefaultDesktopTest.DiagnosticText -join ''
+        $text | Should Match '\[aggregate-summary-omitted\]'
+        $text | Should Match 'diagnostic-truncated: depth'
+        $text | Should Not Match 'excluded-deep-leaf'
+        Assert-MockCalled New-RSHostedDefaultDesktop -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+        Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+It 'reads only visited leaf message getters within the aggregate node budget' {
+        Initialize-RSHostedDiagnosticMessageProbe
+        $probes=@(0..47 | ForEach-Object { [RedSalamander.Testing.HostedDiagnosticMessageProbeException]::new("leaf-$_") })
+        $tree=[AggregateException]::new('composite', [Exception[]]$probes)
+        $record=[Management.Automation.ErrorRecord]::new($tree,'WideAggregate',[Management.Automation.ErrorCategory]::NotSpecified,$null)
+        foreach($probe in $probes) { $probe.Reset() }
+        Mock Write-Host { param($Object) $global:rsDefaultDesktopTest.DiagnosticText.Add([string]$Object) } -ModuleName HostedTestDesktop
+        & (Get-Module HostedTestDesktop) { param($errorRecord) Write-RSHostedSetupFailureDiagnostic -ErrorRecord $errorRecord } $record
+        ($probes[31..47] | Measure-Object Reads -Sum).Sum | Should Be 0
+        ($probes[0..30] | Measure-Object Reads -Sum).Sum | Should Be 31
+        $text=$global:rsDefaultDesktopTest.DiagnosticText -join ''
+        $text | Should Match '\[aggregate-summary-omitted\]'
+        $text | Should Match 'diagnostic-truncated: node-count'
+        Assert-MockCalled New-RSHostedDefaultDesktop -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+        Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
+    }
+    It 'does not invoke setup diagnostic formatting on the successful path' {
+        Mock Write-RSHostedSetupFailureDiagnostic {} -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $true
+        $r.Output[0] | Should Be 7
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+        Assert-MockCalled Write-RSHostedSetupFailureDiagnostic -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
     It 'logs the inner retirement cause while retaining failure of a successful native entry' {
         Mock Write-Host {} -ModuleName HostedTestDesktop

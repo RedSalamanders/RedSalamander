@@ -413,3 +413,47 @@ or identify a failed process from a later command-resolution probe.
 Fresh current-source validation in the complete 68-file order remains pending after
 normal commit and compatible Debug/Release receipt refresh. I65 remains ACTIVE;
 there is no publication or Full/ARM acceptance, and the desktop clock is unstarted.
+
+### Actual 70fad local gates and failed ARM boundary attribution (2026-11-16)
+
+Source 70fad2b84101f35552f4615e0d03217b8b9a9f59 completed test-enabled
+full-solution x64 Debug and Release Source Rebuilds with four workers, build 1 and
+zero warnings/errors. Fresh current-source noninteractive PrePush promoted all
+14/14 applicable local entries in each profile: Debug 1738 passed/0 failed/28
+skipped; Release 1736 passed/0 failed/30 skipped. Canonical change acceptance
+PASSED with repository NOT_EVALUATED and four desktop obligations pending; neither
+outer exit 2 nor these local passes establish Full acceptance. Exact consumed
+writer receipts and profile-specific byte/header/archive/toolchain/CRT bindings
+remain retained separately. The original failed 3ebf run and its unproved Git 128
+cause remain unchanged.
+
+[ARM64 attribution run 43826250371](https://github.com/RedSalamanders/RedSalamander/actions/runs/43826250371)
+at the same source built ARM64 Release with zero warnings/errors. Help passed
+1/0/0 with native exit 0, filtered runner exit 2 and a strict source-bound proof.
+Preferences then failed before native invocation while establishing the hosted
+foreground boundary; the final two selections did not run. Setup and retirement
+wrappers can carry the same worker failure, so their labels do not prove two
+independent faults. Underlying exception types, HResult and native failure codes
+were not retained; the historical boundary cause remains UNKNOWN. Successful
+stock preparation and Help's boundary proof do not establish Preferences admission
+or complete restoration.
+
+The diagnostic-only follow-up retains the original captured setup ErrorRecord
+and visited exception branches, existing HResult/Win32 codes and bounded stack
+text before the unchanged primary throw. Aggregate composite messages are omitted
+rather than recursively materialized; depth/node bounds cover traversal and text
+bounds cover emitted UTF-16 characters, not arbitrary property-getter allocations.
+Its corrected V2 pure affected lifetime controls passed 26/0/0. Deep and wide
+getter-counter controls reject the exact prior formatter at excluded descendant
+reads and pass with zero excluded reads after correction. Original 76 cases,
+foreground authority, warnings, readiness/cleanup, timeouts and native lifecycle
+remain unchanged. This supplies observability, not a root-cause repair or new ARM
+qualification.
+
+Corrected V2 evidence is retained under
+Z:\RedSalamander.Perf\evidence\completed-runs\20261116T095215Z-89544-26e912feed6042c99278cf0de76d3af3\scratch\implementation\RS-hosted-setup-diagnostics-v2.
+Fresh current-head build/local obligations and ARM attribution remain pending
+after the diagnostic change. I65 remains ACTIVE; no tracked TestRuns closeout or
+Done move is claimed. The approved first local 4–6 hour foreground window has
+never started, and fresh unfiltered x64 Debug/Release Full plus the separate
+applicable ARM Full qualification remain pending.

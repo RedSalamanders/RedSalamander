@@ -124,8 +124,11 @@ After an accepted return request it tolerates a transient null foreground within
 while still rejecting another window and requiring the original foreground and focus.
 Each interactive entry holds its existing mutex, explicitly directs contained children to Default,
 and uses the existing native warning and assertions. No input desktop is created or switched.
-Boundary setup and restoration errors remain failures; retirement logs include the complete
-exception chain before the error propagates. A filtered diagnostic remains
+Boundary setup and restoration errors remain failures. Setup logs retain a bounded captured
+ErrorRecord/exception traversal and emitted text, including visited nonaggregate messages,
+omitted aggregate-summary markers, existing HResult/Win32 codes and truncation markers,
+without fresh observations or replacing the original error after nonfatal diagnostic failure.
+Retirement logs retain the complete exception chain; existing fatal diagnostic propagation stays binding. A filtered diagnostic remains
 NOT_EVALUATED; complete native qualification still requires its full selected plan.
 
 The project adapter selects approved stock-surface preparation only for its hosted native ARM64

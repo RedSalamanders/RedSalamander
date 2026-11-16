@@ -1371,6 +1371,90 @@ function New-RSHostedDesktopProcessScope {
     [RedSalamander.Tooling.ContainedProcess]::UseHostedDefaultDesktop()
 }
 
+function Write-RSHostedSetupFailureDiagnostic {
+    param([Parameter(Mandatory)][System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+    # Domain-local captured-error formatting: no generic ErrorRecord tree formatter
+    # exists at this compiler-free layer. It performs no desktop/native observation
+    # and is called only after setup failed; logging must not replace that failure.
+    try {
+        $maximumDepth = 8; $maximumNodes = 32; $maximumFieldCharacters = 1024
+        $maximumOutputCharacters = 16384; $payloadLimit = $maximumOutputCharacters - 160
+        $output = [Text.StringBuilder]::new()
+        $truncation = [Collections.Generic.List[string]]::new()
+        $appendField = {
+            param([string]$Label, [AllowNull()][string]$Value)
+            if ($null -eq $Value) { $Value = '<unavailable>' }
+            if ($Value.Length -gt $maximumFieldCharacters) {
+                $Value = $Value.Substring(0, $maximumFieldCharacters)
+                [void]$truncation.Add('field-string')
+            }
+            $line = $Label + $Value + [Environment]::NewLine
+            $remaining = $payloadLimit - $output.Length
+            if ($remaining -lt $line.Length) { [void]$truncation.Add('output-string') }
+            if ($remaining -gt 0) { [void]$output.Append($line, 0, [Math]::Min($remaining, $line.Length)) }
+        }
+        & $appendField '' 'Hosted Default desktop setup exception: captured ErrorRecord'
+        & $appendField 'limits=' 'depth8,nodes32,field1024,total16384 UTF-16 characters'
+        & $appendField 'errorId=' ([string]$ErrorRecord.FullyQualifiedErrorId)
+        & $appendField 'category=' ([string]$ErrorRecord.CategoryInfo)
+        $pending = [Collections.Generic.Queue[object]]::new()
+        $pending.Enqueue([pscustomobject]@{ Exception=$ErrorRecord.Exception; Depth=0; Path='root' })
+        $stacks = [Collections.Generic.List[object]]::new()
+        $visited = 0
+        while ($pending.Count -gt 0) {
+            $node = $pending.Dequeue(); $exception = $node.Exception; $visited++
+            & $appendField ('exception['+$node.Path+'].type=') $exception.GetType().FullName
+            & $appendField ('exception['+$node.Path+'].HResult=') ('0x'+$exception.HResult.ToString('X8'))
+            if ($exception -is [ComponentModel.Win32Exception]) {
+                & $appendField ('exception['+$node.Path+'].NativeErrorCode=') ([string]$exception.NativeErrorCode)
+            }
+            if ($exception -is [AggregateException]) {
+                # Its composite Message recursively reads excluded descendants before clipping.
+                & $appendField ('exception['+$node.Path+'].message=') '[aggregate-summary-omitted]'
+            } else {
+                & $appendField ('exception['+$node.Path+'].message=') $exception.Message
+            }
+            $stack = [string]$exception.StackTrace
+            if ($stack.Length -gt $maximumFieldCharacters) {
+                $stack = $stack.Substring(0, $maximumFieldCharacters)
+                [void]$truncation.Add('field-string')
+            }
+            $stacks.Add([pscustomobject]@{ Path=$node.Path; Text=$stack })
+            if ($exception -is [AggregateException]) {
+                $children = $exception.InnerExceptions
+            } elseif ($null -ne $exception.InnerException) {
+                $children = @($exception.InnerException)
+            } else { $children = @() }
+            if ($children.Count -gt 0 -and $node.Depth -ge $maximumDepth) {
+                [void]$truncation.Add('depth')
+                continue
+            }
+            for ($index = 0; $index -lt $children.Count; ++$index) {
+                if ($visited + $pending.Count -ge $maximumNodes) {
+                    [void]$truncation.Add('node-count')
+                    break
+                }
+                $pending.Enqueue([pscustomobject]@{
+                    Exception=$children[$index]; Depth=($node.Depth+1); Path=($node.Path+'.'+$index)
+                })
+            }
+        }
+        & $appendField 'scriptStack=' ([string]$ErrorRecord.ScriptStackTrace)
+        foreach ($stack in $stacks) { & $appendField ('exception['+$stack.Path+'].stack=') $stack.Text }
+        if ($truncation.Count -gt 0) {
+            [void]$output.Append('[diagnostic-truncated: '+(($truncation | Sort-Object -Unique) -join ',')+']')
+        }
+        Write-Host -Object $output.ToString()
+    } catch [OutOfMemoryException] { throw }
+      catch [StackOverflowException] { throw }
+      catch [AccessViolationException] { throw }
+      catch {
+        # Mirror the existing hosted observer fatal exclusions above. At this
+        # nonfatal diagnostic boundary the caller rethrows its original setup
+        # ErrorRecord if formatting or the diagnostic sink fails.
+    }
+}
 function Invoke-RSWithHostedDefaultDesktop {
     <#
     .SYNOPSIS
@@ -1399,7 +1483,8 @@ function Invoke-RSWithHostedDefaultDesktop {
         Synchronous entry operation that closes its containment job before returning.
     .OUTPUTS
         Action output and boundary/readiness/restoration diagnostics, including the
-        complete exception chain when retirement fails. Failure remains fatal.
+        bounded captured setup traversal/emitted text with visited nonaggregate messages, aggregate-summary-omitted markers, existing HResult and Win32 codes,
+        and the complete exception chain when retirement fails. Original failures remain fatal.
     .NOTES
         Owns only a neutral foreground window on the ephemeral hosted runner's Default desktop.
         With the project adapter's approved ARM64 opt-in, prepares only the three identified
@@ -1426,7 +1511,12 @@ function Invoke-RSWithHostedDefaultDesktop {
         if ($env:RS_HOSTED_ARM64_STOCK_PREPARATION -ceq '1') {
             [void](Invoke-RSHostedArm64StockPreparation -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))))
         }
-        $desktop = New-RSHostedDefaultDesktop
+        try {
+            $desktop = New-RSHostedDefaultDesktop
+        } catch {
+            Write-RSHostedSetupFailureDiagnostic -ErrorRecord $_
+            throw
+        }
         if ($desktop.ForegroundBoundaryReady -cne $true) { throw 'The hosted Default desktop has no verified foreground boundary.' }
         Write-Host ('Hosted Default desktop entered: ' + $desktop.Name + '; foregroundBoundaryReady=' + $desktop.ForegroundBoundaryReady)
         $processScope = New-RSHostedDesktopProcessScope -Name $desktop.Name
