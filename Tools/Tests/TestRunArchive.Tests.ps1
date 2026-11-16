@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -18,54 +19,54 @@ function New-RSArchiveContractRoot {
 
 function New-RSArchiveMigrationFixture {
     $root = New-RSArchiveContractRoot
-    & git -C $root init --quiet --initial-branch=main
-    & git -C $root config core.longpaths true
-    & git -C $root config user.email 'archive-contract@example.invalid'
-    & git -C $root config user.name 'Archive Contract'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet'; '--initial-branch=main')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.longpaths'; 'true')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'archive-contract@example.invalid')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Archive Contract')
     $legacy = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-01_120000/legacy.raw'
     $new = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-20_120000/new.raw'
     foreach ($path in @($legacy, $new)) {
         New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $root $path)) -Force | Out-Null
     }
     [IO.File]::WriteAllBytes((Join-Path $root $legacy), [byte[]]::new(2049))
-    & git -C $root add -- $legacy
-    & git -C $root commit --quiet -m 'immutable pre-contract fixture'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; $legacy)
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'immutable pre-contract fixture')
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create the legacy archive baseline fixture.' }
-    $baseline = (& git -C $root rev-parse HEAD).Trim()
-    & git -C $root update-ref refs/remotes/origin/main $baseline
-    & git -C $root switch --quiet -c ej/archive-contract
+    $baseline = (Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'rev-parse'; 'HEAD')).Trim()
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'update-ref'; 'refs/remotes/origin/main'; $baseline)
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'switch'; '--quiet'; '-c'; 'ej/archive-contract')
     [IO.File]::WriteAllBytes((Join-Path $root $new), [byte[]]::new(2049))
-    & git -C $root add -- $new
-    & git -C $root commit --quiet -m 'new governed invalid fixture'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; $new)
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'new governed invalid fixture')
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create the post-contract archive fixture.' }
     return [pscustomobject]@{ Root = $root; Baseline = $baseline; Legacy = $legacy; New = $new }
 }
 
 function New-RSGrandfatheredRelocationFixture {
     $root = New-RSArchiveContractRoot
-    & git -C $root init --quiet --initial-branch=main
-    & git -C $root config core.longpaths true
-    & git -C $root config user.email 'archive-relocation@example.invalid'
-    & git -C $root config user.name 'Archive Relocation'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet'; '--initial-branch=main')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.longpaths'; 'true')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'archive-relocation@example.invalid')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Archive Relocation')
     $old = 'Specs/TestRuns/4cb089111a23/Continuation/2026-07-03_100049_folderview_warpdrive_current_baton/CONTINUATION.md'
     $new = 'Specs/TestRuns/4cb089111a23/Continuation/c1/CONTINUATION.md'
     $oldFull = Join-Path $root ($old -replace '/', '\')
     New-Item -ItemType Directory -Path (Split-Path -Parent $oldFull) -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $root '.gitattributes'), "*.md text`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllBytes($oldFull, [Text.Encoding]::UTF8.GetBytes("retained historical bytes`n"))
-    & git -C $root add -- .gitattributes
-    & git -C $root add -- $old
-    & git -C $root commit --quiet -m 'immutable archive baseline'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; '.gitattributes')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; $old)
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'immutable archive baseline')
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create the grandfathered relocation baseline fixture.' }
-    $baseline = (& git -C $root rev-parse HEAD).Trim()
-    $treeLine = & git -C $root ls-tree -r $baseline -- $old
+    $baseline = (Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'rev-parse'; 'HEAD')).Trim()
+    $treeLine = Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'ls-tree'; '-r'; $baseline; '--'; $old)
     if ($LASTEXITCODE -ne 0 -or $treeLine -notmatch '^(?<mode>[0-7]{6}) blob (?<blob>[0-9a-f]+)\t') {
         throw 'Failed to read the fixture''s immutable archive identity.'
     }
     $mode = $matches['mode']
     $blob = $matches['blob']
-    & git -C $root update-ref refs/remotes/origin/main $baseline
-    & git -C $root switch --quiet -c ej/archive-relocation
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'update-ref'; 'refs/remotes/origin/main'; $baseline)
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'switch'; '--quiet'; '-c'; 'ej/archive-relocation')
     $oldDirectory = Split-Path -Parent $oldFull
     $newDirectory = Join-Path $root 'Specs\TestRuns\4cb089111a23\Continuation\c1'
     if (Test-Path -LiteralPath $newDirectory) { throw 'Fixture relocation destination unexpectedly exists.' }
@@ -86,8 +87,8 @@ function New-RSGrandfatheredRelocationFixture {
     $manifestPath = Join-Path $root 'Specs\Testing\ProtectedPathRelocations.json'
     New-Item -ItemType Directory -Path (Split-Path -Parent $manifestPath) -Force | Out-Null
     [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
-    & git -C $root add --all
-    & git -C $root commit --quiet -m 'relocate exact grandfathered archive'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'relocate exact grandfathered archive')
     if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the relocated archive fixture.' }
     return [pscustomobject]@{ Root = $root; Baseline = $baseline; Old = $old; New = $new; NewFull = $newFull; Manifest = $manifestPath }
 }
@@ -255,10 +256,10 @@ Describe 'TestRuns archive contract' {
     # of failing every clone (Testing_SelfTests.md).
     $fileOpsSummaryArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550') -PathType Container
     $archiveContractCommit = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveContractCommit }
-    & git -C $repoRoot merge-base --is-ancestor $archiveContractCommit HEAD *> $null
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'merge-base'; '--is-ancestor'; $archiveContractCommit; 'HEAD') *> $null
     $archiveContractInHistory = ($LASTEXITCODE -eq 0)
     $importedBaseline = & (Get-Module TestRunArchive) { $script:RSTestRunArchiveImportedBaselineCommit }
-    & git -C $repoRoot merge-base --is-ancestor $importedBaseline HEAD *> $null
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'merge-base'; '--is-ancestor'; $importedBaseline; 'HEAD') *> $null
     $importedBaselineInHistory = ($LASTEXITCODE -eq 0)
     $hasInventoryBaseline = $archiveContractInHistory -or $importedBaselineInHistory
     $checkedInInventoryPresent = $hasInventoryBaseline -and @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
@@ -316,11 +317,11 @@ Describe 'TestRuns archive contract' {
 
     It 'sizes a real worktree run from tracked files and excludes ignored raw artifacts' {
         $root = New-RSArchiveContractRoot
-        & git -C $root init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to initialize the synthetic archive worktree.'
         }
-        & git -C $root config core.longpaths true
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.longpaths'; 'true')
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to enable long-path support for the synthetic archive worktree.'
         }
@@ -332,7 +333,7 @@ Describe 'TestRuns archive contract' {
         New-Item -ItemType Directory -Path (Split-Path -Parent $trackedPath) -Force | Out-Null
         [IO.File]::WriteAllBytes($trackedPath, [byte[]]::new(512))
         [IO.File]::WriteAllBytes($ignoredPath, [byte[]]::new(4096))
-        & git -C $root add -- .gitignore ($relative -replace '\\', '/')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; '.gitignore'; ($relative -replace '\\', '/'))
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to stage the synthetic checked-in archive artifact.'
         }
@@ -441,19 +442,19 @@ Describe 'TestRuns archive contract' {
 
     It 'finds an unchanged historical violation only in whole-inventory mode' {
         $root = New-RSArchiveContractRoot
-        & git -c core.longpaths=true -C $root init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-c'; 'core.longpaths=true'; '-C'; $root; 'init'; '--quiet')
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to initialize the historical archive fixture.'
         }
-        & git -C $root config core.longpaths true
-        & git -C $root config user.email 'archive-contract@example.invalid'
-        & git -C $root config user.name 'Archive Contract'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.longpaths'; 'true')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'archive-contract@example.invalid')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Archive Contract')
         $relative = 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550\perf\perf_metrics.jsonl'
         $path = Join-Path $root $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
         [IO.File]::WriteAllBytes($path, [byte[]]::new(2049))
-        & git -C $root add -- ($relative -replace '\\', '/')
-        & git -C $root commit --quiet -m 'historical oversized archive fixture'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; ($relative -replace '\\', '/'))
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'historical oversized archive fixture')
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to commit the historical archive fixture.'
         }
@@ -482,10 +483,10 @@ Describe 'TestRuns archive contract' {
         [IO.File]::WriteAllBytes((Join-Path $fixture.Root $fixture.Legacy), [byte[]]::new(2050))
         $dirty = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
         $dirty.Count | Should Be 2
-        & git -C $fixture.Root add -- $fixture.Legacy
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; $fixture.Legacy)
         $staged = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
         $staged.Count | Should Be 2
-        & git -C $fixture.Root commit --quiet -m 'edited legacy fixture'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit'; '--quiet'; '-m'; 'edited legacy fixture')
         if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the edited legacy fixture.' }
         $committed = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
         $committed.Count | Should Be 2
@@ -495,14 +496,14 @@ Describe 'TestRuns archive contract' {
 
     It 'validates staged and committed moves of grandfathered blobs at their new paths' {
         $fixture = New-RSArchiveMigrationFixture
-        & git -C $fixture.Root config diff.renames true
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'config'; 'diff.renames'; 'true')
         $moved = 'Specs/TestRuns/7d3a1247382a/FileOps/2026-07-21_120000/moved.raw'
         New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $fixture.Root $moved)) -Force | Out-Null
-        & git -C $fixture.Root mv -- $fixture.Legacy $moved
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'mv'; '--'; $fixture.Legacy; $moved)
         if ($LASTEXITCODE -ne 0) { throw 'Failed to stage the legacy evidence move.' }
         foreach ($phase in @('staged', 'committed')) {
             if ($phase -eq 'committed') {
-                & git -C $fixture.Root commit --quiet -m 'moved legacy evidence fixture'
+                Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit'; '--quiet'; '-m'; 'moved legacy evidence fixture')
                 if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the legacy evidence move.' }
             }
             $paths = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $fixture.Baseline)
@@ -567,9 +568,9 @@ Describe 'TestRuns archive contract' {
         $manifest.test_run_archive_baseline_commit = $missing
         $manifest.entries[0].baseline_commit = $missing
         [IO.File]::WriteAllText($fixture.Manifest, ($manifest | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
-        $head = (& git -C $fixture.Root rev-parse HEAD).Trim()
-        $tree = (& git -C $fixture.Root rev-parse "$($fixture.Baseline)^{tree}").Trim()
-        $unrelated = (& git -C $fixture.Root commit-tree $tree -m 'unrelated identical snapshot').Trim()
+        $head = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'rev-parse'; 'HEAD')).Trim()
+        $tree = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'rev-parse'; "$($fixture.Baseline)^{tree}")).Trim()
+        $unrelated = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit-tree'; $tree; '-m'; 'unrelated identical snapshot')).Trim()
         if ($LASTEXITCODE -ne 0) { throw 'Failed to create unrelated snapshot fixture.' }
         $results = & (Get-Module TestRunArchive) {
             param($root, $source, $missingCommit, $headCommit, $unrelatedCommit)
@@ -631,10 +632,10 @@ Describe 'TestRuns archive contract' {
 
     It 'batches worktree and index identity reads while retaining byte, stage, and mode rejection' {
         $root = New-RSArchiveContractRoot
-        & git -C $root init --quiet --initial-branch=main
-        & git -C $root config core.autocrlf false
-        & git -C $root config user.email 'archive-batch@example.invalid'
-        & git -C $root config user.name 'Archive Batch'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet'; '--initial-branch=main')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.autocrlf'; 'false')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'archive-batch@example.invalid')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Archive Batch')
         [IO.File]::WriteAllText((Join-Path $root '.gitattributes'), "*.txt text`n*.raw -text`n", [Text.UTF8Encoding]::new($false))
         $textPath = 'Specs/TestRuns/batch-fixture/text.txt'
         $rawPath = 'Specs/TestRuns/batch-fixture/raw.raw'
@@ -643,11 +644,11 @@ Describe 'TestRuns archive contract' {
         }
         [IO.File]::WriteAllBytes((Join-Path $root $textPath), [Text.Encoding]::UTF8.GetBytes("normalized text`r`n"))
         [IO.File]::WriteAllBytes((Join-Path $root $rawPath), [Text.Encoding]::UTF8.GetBytes("raw bytes`r`n"))
-        & git -C $root add -- .gitattributes $textPath $rawPath
-        & git -C $root commit --quiet -m 'create batched identity fixture'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; '.gitattributes'; $textPath; $rawPath)
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'create batched identity fixture')
         if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the batched archive identity fixture.' }
-        $textTree = (& git -C $root ls-tree HEAD -- $textPath).Trim()
-        $rawTree = (& git -C $root ls-tree HEAD -- $rawPath).Trim()
+        $textTree = (Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'ls-tree'; 'HEAD'; '--'; $textPath)).Trim()
+        $rawTree = (Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'ls-tree'; 'HEAD'; '--'; $rawPath)).Trim()
         $textBlob = [regex]::Match($textTree, '^[0-7]{6} blob (?<oid>[0-9a-f]{40,64})\t').Groups['oid'].Value
         $rawBlob = [regex]::Match($rawTree, '^[0-7]{6} blob (?<oid>[0-9a-f]{40,64})\t').Groups['oid'].Value
         $snapshot = & (Get-Module TestRunArchive) {
@@ -670,19 +671,19 @@ Describe 'TestRuns archive contract' {
             Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $FixtureRoot -Path @($Path)
         } $root $textPath
         ($changed[$textPath] -cne $textBlob) | Should Be $true
-        & git -C $root add -- $textPath
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--'; $textPath)
         $changedIndex = & (Get-Module TestRunArchive) {
             param($FixtureRoot, $Path)
             Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path @($Path)
         } $root $textPath
         ($changedIndex[$textPath][0].Blob -cne $textBlob) | Should Be $true
-        & git -C $root update-index --chmod=+x -- $rawPath
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'update-index'; '--chmod=+x'; '--'; $rawPath)
         $modeDrift = & (Get-Module TestRunArchive) {
             param($FixtureRoot, $Path)
             Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path @($Path)
         } $root $rawPath
         $modeDrift[$rawPath][0].Mode | Should Be '100755'
-        & git -C $root update-index --force-remove -- $rawPath
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'update-index'; '--force-remove'; '--'; $rawPath)
         $missingIndex = & (Get-Module TestRunArchive) {
             param($FixtureRoot, $Path)
             Get-RSTestRunArchiveIndexStageMap -RepoRoot $FixtureRoot -Path @($Path)
@@ -715,15 +716,15 @@ Describe 'TestRuns archive contract' {
             Where-Object { $_.Kind -eq 'FileSize' -or $_.Kind -eq 'RunSize' })
         $sizeViolations.Count | Should Be 0
 
-        $tracked = @(& git -C $repoRoot ls-files)
+        $tracked = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'ls-files'))
         if ($LASTEXITCODE -ne 0) { throw 'Failed to inspect the effective tracked path set.' }
         (($tracked | Measure-Object Length -Maximum).Maximum) | Should BeLessThan 201
     }
 
     It 'fails closed when an imported baseline object is present but is not an ancestor' {
         $fixture = New-RSArchiveMigrationFixture
-        $tree = (& git -C $fixture.Root rev-parse 'HEAD^{tree}').Trim()
-        $unrelated = (& git -C $fixture.Root commit-tree $tree -m 'unrelated parentless fixture').Trim()
+        $tree = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'rev-parse'; 'HEAD^{tree}')).Trim()
+        $unrelated = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit-tree'; $tree; '-m'; 'unrelated parentless fixture')).Trim()
         if ($LASTEXITCODE -ne 0) { throw 'Failed to create the unrelated baseline object.' }
         $paths = @(Get-RSArchiveMigrationFixtureInventory -Root $fixture.Root -Baseline $unrelated)
         $paths.Count | Should Be 2
@@ -796,5 +797,81 @@ Describe 'TestRuns archive contract' {
         if ($violations.Count -ne 0) {
             throw (($violations | ForEach-Object { "$($_.Kind): $($_.Path): $($_.Message)" }) -join [Environment]::NewLine)
         }
+    }
+}
+
+Describe 'Engine-free archive metadata transport' {
+    It 'drains large stderr and preserves ordered UTF8 stdin hashing and archive errors' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('archive-native-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'ArchiveBootstrap.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunArchive.psm1') -Destination $copy
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/GitMetadataCapture.psm1') -Destination (Join-Path $fixture 'GitMetadataCapture.psm1')
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix ArchiveBootstrap
+        $savedConsoleEncoding=[Console]::OutputEncoding
+        try {
+            (Test-Path (Join-Path $fixture '.ci-engine'))|Should Be $false
+            $init=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('init','--quiet')} $fixture
+            $init.ExitCode|Should Be 0
+            $config=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('config','core.autocrlf','true')} $fixture
+            $config.ExitCode|Should Be 0
+            $paths=@(0..799|ForEach-Object {('fixture-{0:0000}-' -f $_)+('x'*90)+'.txt'})
+            $paths[0]='fixture-é雪.txt'
+            foreach($path in $paths){[IO.File]::WriteAllText((Join-Path $fixture $path),('payload'+[char]10),[Text.UTF8Encoding]::new($false))}
+            $staged=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('add','--all')} $fixture
+            $staged.ExitCode|Should Be 0
+            ($staged.ErrorText.Length -gt 65536)|Should Be $true
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                [Console]::OutputEncoding=$encoding
+                $listed=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('-c','core.quotepath=false','ls-files','--cached')} $fixture
+                ($listed.Output -ccontains $paths[0])|Should Be $true
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $hashes=& $module {param($root,$paths)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('hash-object','--stdin-paths') -InputLines $paths} $fixture $paths
+            $hashes.ExitCode|Should Be 0
+            $hashes.Output.Count|Should Be $paths.Count
+            $map=& $module {param($root,$paths)Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $root -Path $paths} $fixture $paths
+            $map.Count|Should Be $paths.Count
+            for($i=0;$i -lt $paths.Count;$i++){ $map[$paths[$i]]|Should Be $hashes.Output[$i] }
+            $failure=& $module {param($root)Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify','missing-object')} $fixture
+            ($failure.ExitCode -ne 0)|Should Be $true
+            $failure.Output.Count|Should Be 0
+            ($failure.ErrorText.Length -gt 0)|Should Be $true
+            $failed=$false
+            try {& $module {param($root)Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $root -Path @('missing-file')} $fixture}
+            catch {$failed=$_.Exception.Message -ceq 'Git worktree hash batch failed or returned an incomplete result.'}
+            $failed|Should Be $true
+        } finally {[Console]::OutputEncoding=$savedConsoleEncoding;Remove-Module $module}
+    }
+    It 'keeps the legal newline-path fallback literal and out of the stdin path protocol' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('archive-newline-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'ArchiveNewline.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunArchive.psm1') -Destination $copy
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/GitMetadataCapture.psm1') -Destination (Join-Path $fixture 'GitMetadataCapture.psm1')
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix ArchiveNewline
+        try {
+            $audit=& $module {
+                param($root)
+                $original=(Get-Command Invoke-RSTestRunArchiveGitCapture).ScriptBlock
+                $script:archiveNewlineCall=$null
+                function script:Invoke-RSTestRunArchiveGitCapture {
+                    param($Root,$Arguments,$InputLines)
+                    if($PSBoundParameters.ContainsKey('InputLines')){throw 'Newline path entered stdin protocol.'}
+                    $script:archiveNewlineCall=@($Arguments)
+                    $global:LASTEXITCODE=0
+                    return [pscustomobject]@{ExitCode=0;Output=@('a'*40);ErrorText=''}
+                }
+                try {
+                    $path='line'+[char]10+'name.txt'
+                    $map=Get-RSTestRunArchiveWorktreeBlobMap -RepoRoot $root -Path @($path)
+                    return [pscustomobject]@{Arguments=$script:archiveNewlineCall;Path=$path;Hash=$map[$path]}
+                } finally {Set-Item Function:script:Invoke-RSTestRunArchiveGitCapture -Value $original}
+            } $fixture
+            $audit.Arguments.Count|Should Be 4
+            $audit.Arguments[0]|Should Be 'hash-object'
+            $audit.Arguments[1]|Should Be ('--path='+$audit.Path)
+            $audit.Arguments[2]|Should Be '--'
+            $audit.Arguments[3]|Should Be $audit.Path
+            $audit.Hash|Should Be ('a'*40)
+        } finally {Remove-Module $module}
     }
 }

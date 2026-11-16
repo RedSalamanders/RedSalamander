@@ -1,5 +1,6 @@
 # Private build module; import through its reviewed callers.
 Import-Module (Join-Path $PSScriptRoot 'MSBuildInvocation.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 function Assert-RSVcpkgTripletLeafName {
     [CmdletBinding()]
     param(
@@ -450,7 +451,11 @@ function Get-RSVcpkgVisualStudioInstallation {
     if (-not $vswhere) {
         throw 'Visual Studio Installer\vswhere.exe was not found; install Visual Studio 2026 with the C++ tools.'
     }
-    $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath) |
+    $installationCapture = Invoke-RSCapturedProcess -FilePath $vswhere `
+        -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath') `
+        -WorkingDirectory (Get-Location).Path
+    if ($installationCapture.ExitCode -ne 0) { throw "Visual Studio discovery failed ($($installationCapture.ExitCode)): $($installationCapture.StdErr -join [Environment]::NewLine)" }
+    $installation = @($installationCapture.StdOut) |
         Where-Object { $_ } | Select-Object -First 1
     if (-not $installation) {
         throw 'Visual Studio with MSBuild was not found; install Visual Studio 2026 with the C++ tools.'
@@ -620,8 +625,13 @@ function Update-RSVcpkgOverlayTriplet {
 
 function Invoke-RSVcpkgBootstrapGit {
     param([string]$Root, [string[]]$Arguments)
-    $output = @(& git -C $Root @Arguments 2>&1)
-    if ($LASTEXITCODE -ne 0) {
+    # This provisioning wrapper can clone/fetch/checkout under its caller's dependency lock.
+    # Retain inherited artifact-write authority; the read-only projection deliberately cannot do that.
+    $output = [Collections.Generic.List[string]]::new()
+    $captureLine = { param($Line, $IsError) [void]$output.Add([string]$Line) }.GetNewClosure()
+    $exitCode = Invoke-RSStreamingProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -Arguments (@('-C', $Root) + $Arguments) `
+        -WorkingDirectory $Root -OutputLineCallback $captureLine -DelegateArtifactOperation
+    if ($exitCode -ne 0) {
         throw "Pinned vcpkg Git operation failed: git $($Arguments -join ' ') $($output -join [Environment]::NewLine)"
     }
     return ($output -join [Environment]::NewLine)
@@ -708,8 +718,9 @@ function Initialize-RSVcpkgToolContext {
             Write-Host (Invoke-RSVcpkgBootstrapGit $toolRoot @('fetch', '--unshallow', 'origin'))
         }
         foreach ($required in @($commit, $baseline) | Select-Object -Unique) {
-            & git -C $toolRoot cat-file -e ($required + '^{commit}') 2>$null
-            if ($LASTEXITCODE -ne 0) {
+            $commitProbe = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -WorkingDirectory $toolRoot `
+                -Arguments @('-C', $toolRoot, 'cat-file', '-e', ($required + '^{commit}'))
+            if ($commitProbe.ExitCode -ne 0) {
                 Write-Host (Invoke-RSVcpkgBootstrapGit $toolRoot @('fetch', 'origin', $required))
                 $null = Invoke-RSVcpkgBootstrapGit $toolRoot @('cat-file', '-e', ($required + '^{commit}'))
             }

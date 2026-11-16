@@ -2,6 +2,38 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Modules/Testing/GitMetadataCapture.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Share the exact engine-independent Git line/stdin transport used by validation fingerprints and archive provenance; retain UTF8 stdout, inherited diagnostic/stdin encoding, ordered input presence and actual exit.",
+      "usage": "Internal export Invoke-RSTestGitMetadataCapture; thin domain callers forward only their actual PSBoundParameters. No imports, new public command, shell, window or artifact authority.",
+      "usedBy": [
+        "Tools/Modules/Testing/ValidationFingerprint.psm1",
+        "Tools/Modules/Testing/TestRunArchive.psm1",
+        "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Tests/TestRunArchive.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
+      ],
+      "consumerClosure": "derived-references",
+      "prerequisites": [
+        "Git; no restored CI engine for this transport"
+      ],
+      "sideEffects": [
+        "Launches only the selected Git query with redirected streams and owned process disposal"
+      ],
+      "outputs": [
+        "Exact native exit, stdout lines and separate diagnostic text"
+      ],
+      "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
+      "tests": [
+        "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Tests/TestRunArchive.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
       "path": "Tools/Build-LocalSdkCandidate.ps1",
       "kind": "command",
       "visibility": "public",
@@ -565,7 +597,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate native test naming and verify reviewed candidate PR coverage against workflow/action/tooling execution closure and scheduled unchanged-source decisions.",
+      "purpose": "Validate native test naming and verify reviewed candidate PR coverage against workflow/action/tooling execution closure and scheduled unchanged-source decisions. Private engine-independent no-window Git and optional workflow-metadata transports retain raw output, separate diagnostics and exact exit.",
       "usage": "Import from Test-Changes and its focused policy tests; canonical Startrail owns execution and evidence.",
       "usedBy": [
         "Test-Changes.ps1",
@@ -587,7 +619,8 @@
       ],
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
-        "Tools/Tests/ScopedTesting.Tests.ps1"
+        "Tools/Tests/ScopedTesting.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -652,7 +685,7 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Restore the exact standalone DxUi pin and isolated compiler/SDK/CRT outputs, with an optional action-ready update advisory.",
-      "usage": "Run before IDE builds or use the automatic root build restore.",
+      "usage": "Run before IDE builds or use automatic root restore; VSwhere metadata is silently captured with separate streams and a checked exit, without requesting a console window.",
       "usedBy": [
         "Developers",
         "build.ps1",
@@ -660,6 +693,7 @@
       ],
       "prerequisites": [
         "Visual Studio C++",
+        "Tools/Modules/Build/ProcessStreaming.psm1",
         "Git read access to DxUi"
       ],
       "sideEffects": [
@@ -1604,7 +1638,7 @@
       "kind": "command",
       "visibility": "public",
       "lifecycle": "active",
-      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane.",
+      "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane. All three tracked build-graph enumerations use contained no-window metadata capture and refuse nonzero discovery before governance admission.",
       "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
       "usedBy": [
         "Developers",
@@ -1644,7 +1678,8 @@
         "Tools/Tests/ValidationEvidence.Tests.ps1",
         "Tools/Tests/ValidationImpact.Tests.ps1",
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
-        "Tools/Tests/TestRunEvidenceArchive.Tests.ps1"
+        "Tools/Tests/TestRunEvidenceArchive.Tests.ps1",
+        "Tools/Tests/ProcessStreaming.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2129,9 +2164,11 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Launch contained no-window child processes with sanitized environments, concurrent stdout/stderr capture and live output; background dependency and SDK/MSBuild wrappers retain existing artifact-operation delegation.",
+      "purpose": "Launch contained no-window children with sanitized environments and concurrent streams; provide a silent stdout/stderr/exit projection for metadata callers without artifact-write delegation. Interactive payload routing remains caller-owned. Graph/HEAD metadata consumers reuse capture; provisioning Git writes retain delegated streaming. An optional per-child stdout decoder is explicit at known Git callers; non-Git defaults and stderr decoding are unchanged.",
       "usage": "Import from build and test orchestration that requires live subprocess output.",
       "usedBy": [
+        "Tools/Restore-DxUi.ps1",
+        "Tools/Modules/Build/VcpkgInstallSafety.psm1",
         ".github/actions/setup-msvc/Setup.ps1",
         "build.ps1",
         "Tools/Run-AllTests.ps1",
@@ -2149,20 +2186,28 @@
         "Tools/Tests/RelocatedTestSandbox.Tests.ps1",
         "Tools/Tests/RunAllTestsPlan.Tests.ps1",
         "Tools/Modules/Build/DxUiDependency.psm1",
-        "Tools/Tests/DxUiDependency.Tests.ps1"
+        "Tools/Tests/DxUiDependency.Tests.ps1",
+        "Tools/Modules/Testing/HostedTestDesktop.psm1",
+        "Tools/Modules/Build/VcpkgToolIdentity.psm1",
+        "Tools/Tests/ToolingGovernance.Tests.ps1",
+        "Tools/Tests/TestSupport.psm1"
       ],
-      "prerequisites": [],
+      "prerequisites": [
+        "Tools/Modules/Build/SanitizedEnvironment.psm1"
+      ],
       "sideEffects": [
         "Launches child processes when invoked"
       ],
       "outputs": [
-        "Streaming process result objects"
+        "Streaming exit status and silent captured stdout/stderr/actual-exit records"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
         "Tools/Tests/ProcessStreaming.Tests.ps1",
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
-        "Tools/Tests/BuildOutputProcess.Tests.ps1"
+        "Tools/Tests/BuildOutputProcess.Tests.ps1",
+        "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2211,7 +2256,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets. Restore and bootstrap the exact tool/ports identities and expose process-local hosted integration for cold builds.",
+      "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets. Restore and bootstrap the exact tool/ports identities and expose process-local hosted integration for cold builds. Provisioning Git retains captured merged diagnostics and artifact delegation under its existing lock; the optional cat-file probe uses read-only capture and exact exit.",
       "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install. Unified native build roles bootstrap then invoke the canonical platform installer before MSBuild.",
       "usedBy": [
         "vcpkg-install.ps1",
@@ -2222,6 +2267,7 @@
         ".github/workflows/ghostty-runtime-product-qualification.yml"
       ],
       "prerequisites": [
+        "Tools/Modules/Build/ProcessStreaming.psm1",
         "Visual Studio with MSBuild (vswhere) and its default toolset version file, for the toolset pin",
         "Git and Windows; network for an uncached pinned tool bootstrap"
       ],
@@ -2240,7 +2286,9 @@
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
         "Tests/vcpkg-merge-synthetic-test.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
-        "Tools/Tests/VcpkgBootstrap.Tests.ps1"
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1",
+        "Tools/Tests/ProcessStreaming.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2249,21 +2297,26 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Resolve and attest the pinned vcpkg executable identity.",
+      "purpose": "Resolve and attest the pinned vcpkg executable identity. The HEAD query uses contained no-window capture with separate diagnostics and actual exit.",
       "usage": "Import from vcpkg bootstrap before invoking the repository's pinned tool.",
       "usedBy": [
         "vcpkg-install.ps1"
       ],
-      "prerequisites": [],
+      "prerequisites": [
+        "Git",
+        "Tools/Modules/Build/ProcessStreaming.psm1"
+      ],
       "sideEffects": [
-        "May execute vcpkg for identity and version inspection"
+        "Launches a contained no-window Git HEAD identity query; does not execute the identified vcpkg tool"
       ],
       "outputs": [
         "Validated vcpkg tool pin and identity objects"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
+        "Tools/Tests/BuildReproducibility.Tests.ps1",
+        "Tools/Tests/ProcessStreaming.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2559,7 +2612,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation with ancestral public-snapshot fallback when the implicit legacy baseline is missing, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof.",
+      "purpose": "Validate archived evidence structure, every performance JSONL row, schemas, result bindings, paired VT thresholds, unchanged pre-contract inventory boundaries, the exact 1,394-file baseline-pinned continuation relocation with ancestral public-snapshot fallback when the implicit legacy baseline is missing, and 1,012 current-contract relocation files under normal caps; batch attribute-aware worktree hashes and NUL-delimited staged identities without relaxing per-file proof. Private engine-independent no-window line/stdin Git transport preserves native-pipeline semantics; existing raw NUL/index readers remain separate. The domain-private line/stdin name is a thin parameter-preserving delegate to the single internal shared transport.",
       "usage": "Import through Test-TestRunArchive.ps1 and archive closeout automation.",
       "usedBy": [
         "Tools/Test-TestRunArchive.ps1",
@@ -2567,7 +2620,8 @@
       ],
       "prerequisites": [
         "PowerShell Test-Json support for schema-owned archives",
-        "Git ancestry for immutable archive baselines; absent ancestry validates all tracked files"
+        "Git ancestry for immutable archive baselines; absent ancestry validates all tracked files",
+        "Tools/Modules/Testing/GitMetadataCapture.psm1"
       ],
       "sideEffects": [
         "Invokes read-only Git queries"
@@ -2578,7 +2632,8 @@
       ],
       "ownerSpec": "Specs/TestRuns/README.md",
       "tests": [
-        "Tools/Tests/TestRunArchive.Tests.ps1"
+        "Tools/Tests/TestRunArchive.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2621,7 +2676,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Define exact Startrail canonical JSON, streaming-bounded record IO, stable base/index/worktree snapshots with actual pinned-engine input identity, canonical Git-blob SHA-256 with measured-size blob batches for large immutable inventories, versioned component fingerprints, derived runner dependency closure, build-receipt binding digests, identifier/path semantics, and provenance guards.",
+      "purpose": "Define exact Startrail canonical JSON, streaming-bounded record IO, stable base/index/worktree snapshots with actual pinned-engine input identity, canonical Git-blob SHA-256 with measured-size blob batches for large immutable inventories, versioned component fingerprints, derived runner dependency closure, build-receipt binding digests, identifier/path semantics, and provenance guards. Private engine-independent no-window line/stdin Git transport preserves ordered batch input and native-pipeline encoding; existing raw binary/blob readers remain separate. The domain-private line/stdin name is a thin parameter-preserving delegate to the single internal shared transport.",
       "usage": "Import through its declared repository consumers; use canonical Git-blob digests for cross-platform immutable-byte identity, create-only publication for immutable content-addressed records, and the derived dependency closure for runner fingerprints.",
       "consumerClosure": "derived-references",
       "usedBy": [
@@ -2651,13 +2706,15 @@
         "Tools/Tests/HostedTestDesktop.Tests.ps1",
         "Tools/Tests/ValidationImpact.Tests.ps1",
         "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
-        "Tools/Tests/RunResultReference.Tests.ps1"
+        "Tools/Tests/RunResultReference.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer for Startrail evidence operations",
         "Git checkout",
         "Exact clean .ci-engine and its Ci.SourceInputs.psm1 when .ci/project.json is present",
-        "Checked-in Startrail JSON schemas"
+        "Checked-in Startrail JSON schemas",
+        "Tools/Modules/Testing/GitMetadataCapture.psm1"
       ],
       "sideEffects": [
         "Snapshot and dependency-closure functions read local Git objects and repository files",
@@ -2674,7 +2731,8 @@
       "ownerSpec": "Specs/Testing/Testing_ValidationEvidence.md",
       "tests": [
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
-        "Tools/Tests/ToolInventory.Tests.ps1"
+        "Tools/Tests/ToolInventory.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2789,7 +2847,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure. Foreign-foreground refusal includes current, saved/current-original and boundary HWND/PID/thread/class identities with UTC capture times; unavailable diagnostics never authorize restoration. Separate failure-only process enrichment retains query-only handles through captured HWND relation rechecks, fixed image categories and canonical exact-UTF16LE SHA256 only; minimal original creation identity is sampled at entry. Availability/errors and parent/any-job facts grant no ownership or close authority. Stock preparation retains first/last minimal creation snapshots and counts; Unknown refusal borrows the already held capture lease through the canonical failure observer, positive captured creation matching and final relation check without PID reopen, new raw identifying fields, extra close authority or changed deadlines.",
+      "purpose": "Read hosted desktop identities and access errors, prepare only explicitly approved hosted ARM64 stock surfaces, recognize the exact same-session compute-agent console without closing it, restore supported display fixtures, and own a verified neutral foreground boundary on the rendered Default desktop for each leased hosted interactive entry. Bounded return permits a transient null foreground only after an accepted restoration request. Preserve complete nested retirement diagnostics while propagating failure. Foreign-foreground refusal includes current, saved/current-original and boundary HWND/PID/thread/class identities with UTC capture times; unavailable diagnostics never authorize restoration. Separate failure-only process enrichment retains query-only handles through captured HWND relation rechecks, fixed image categories and canonical exact-UTF16LE SHA256 only; minimal original creation identity is sampled at entry. Availability/errors and parent/any-job facts grant no ownership or close authority. Stock preparation retains first/last minimal creation snapshots and counts; Unknown refusal borrows the already held capture lease through the canonical failure observer, positive captured creation matching and final relation check without PID reopen, new raw identifying fields, extra close authority or changed deadlines. Stock-preparation HEAD provenance uses contained no-window Git capture without changing desktop/close authority.",
       "usage": "Use Get-RSHostedDesktopDiagnostics for read-only facts, Invoke-RSWithHostedTestDesktop for a supported display, Get-RSHostedInputDesktopRequest and Get-RSHostedStockPreparationRequest for pure policy selection, and Invoke-RSWithHostedDefaultDesktop only within the canonical interactive entry lease. The project adapter opts eligible hosted native ARM64 entries into the wrapper's private stock preparation; paired studies retain the original fixture. Local preparation is refused.",
       "usedBy": [
         ".github/workflows/build-reusable.yml",
@@ -2800,7 +2858,8 @@
       ],
       "prerequisites": [
         "Windows GitHub Actions runner with an interactive display",
-        "A driver-enumerated 32-bit mode containing the required native UI viewports"
+        "A driver-enumerated 32-bit mode containing the required native UI viewports",
+        "Git and Tools/Modules/Build/ProcessStreaming.psm1 for stock-preparation HEAD provenance"
       ],
       "sideEffects": [
         "Temporarily changes display mode only when the current display is insufficient",
@@ -2819,7 +2878,9 @@
       "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
       "tests": [
         "Tools/Tests/HostedTestDesktop.Tests.ps1",
-        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
+        "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+        "Tools/Tests/ProcessStreaming.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2973,7 +3034,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, plus the manifest-pinned one-to-one I27 relocation guard for stock-Windows path compatibility, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. The exact I55 CI implementation closeout has date-sibling and companion rejection; I56 hosted acceptance is not admitted as completed. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links. The bounded provenance comment-delimiter mask preserves offsets and masks all raw comment-shaped spans; existing heading/link parsing stays unchanged. Canonical code masking admits only zero-to-three-space top-level fences, rejects backticks in backtick-fence info and requires whitespace-only closing tails, preserving subsequent inline/prose link and heading checks. The six retired August advisor-survey records have individual exact-file admission, with date-sibling, companion and premature I58-closeout rejection; current documentation work remains indexed as I58.",
+      "purpose": "Implement specification classification, WIP indexing, consistency, link validation, and exact reviewed Done-path admission, including the three I19 adoption records, the exact I26 plan, and the exact I27 safety plan and individually reviewed gallery companion paths with plan/image sibling rejection, plus the manifest-pinned one-to-one I27 relocation guard for stock-Windows path compatibility, the exact I30 delivered record and its findings ledger, the exact 2026-10-16 File Operations card hierarchy record, and the exact I38 dialog keyboard focus and I39 breadcrumb natural sorting records, and the exact I40 natural file/folder display sorting record and I41 natural-sorting performance successor, the exact I43 Debug sorting row-movement closeout and I44 sort-paint measurement closeout and I45 Debug writer CPU closeout, the exact October 20 waiting-card closeout with sibling and companion rejection, plus the exact I42 Copy/Move selection-convergence closeout path and six individually reviewed October 19 File Operations UI/screenshot and stash-review records with sibling/companion rejection. The exact I49 agent/skill remediation record also has sibling/companion rejection without implying native qualification. The exact I55 CI implementation closeout has date-sibling and companion rejection; I56 hosted acceptance is not admitted as completed. Plan IDs are never reused: it reports an Error when two WIP index rows share a Rank or a Rank equals an ID that an archived Done plan claims in its title. Heading fragments retain identifier underscores and punctuation-created adjacent spaces to avoid rejecting valid GitHub links. The bounded provenance comment-delimiter mask preserves offsets and masks all raw comment-shaped spans; existing heading/link parsing stays unchanged. Canonical code masking admits only zero-to-three-space top-level fences, rejects backticks in backtick-fence info and requires whitespace-only closing tails, preserving subsequent inline/prose link and heading checks. The six retired August advisor-survey records have individual exact-file admission, with date-sibling, companion and premature I58-closeout rejection; current documentation work remains indexed as I58. Git provenance uses the reviewed engine-independent no-window line projection with separate diagnostic drainage.",
       "usage": "Import through Get-SpecInventory.ps1 or focused specification tests.",
       "usedBy": [
         "Tools/Get-SpecInventory.ps1",
@@ -2990,7 +3051,8 @@
       "ownerSpec": "Specs/README.md",
       "tests": [
         "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
-        "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
+        "Tools/Tests/DocumentationDriftContracts.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -2999,7 +3061,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Load, validate, reconcile, and render the checked-in Tools inventory.",
+      "purpose": "Load, validate, reconcile, and render the checked-in Tools inventory. Private bootstrap Git queries retain inherited encoding, line/exit/error semantics and no-window concurrent drainage without requiring the restored CI engine.",
       "usage": "Import through Get-ToolInventory.ps1 or focused inventory tests.",
       "usedBy": [
         "Tools/Get-ToolInventory.ps1",
@@ -3016,7 +3078,8 @@
       "ownerSpec": "Specs/Testing/Testing_ToolingGovernance.md",
       "tests": [
         "Tools/Tests/ToolInventory.Tests.ps1",
-        "Tools/Tests/ToolingGovernance.Tests.ps1"
+        "Tools/Tests/ToolingGovernance.Tests.ps1",
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
       ],
       "replacement": null
     },
@@ -4791,13 +4854,19 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide shared text/equality assertions, explicit positive test-block results, and hermetic Git/filesystem fixtures for Tools Pester suites.",
+      "purpose": "Provide shared text/equality assertions, explicit positive test-block results, and hermetic Git/filesystem fixtures for Tools Pester suites. Explicit Invoke-RSTestFixtureGit routes only scheduled owned fixtures through existing prepared capture, preserving native arguments, CWD, redirected text and exit without a global Git shim.",
       "usage": "Import from Tools tests instead of redefining shared assertions, positive exception handling, or dirty/staged/untracked/delete/rename fixture construction.",
       "usedBy": [
-        "Tools/Tests/*.Tests.ps1"
+        "Tools/Tests/*.Tests.ps1",
+        "Tools/Tests/ScopedTesting.Tests.ps1",
+        "Tools/Tests/ToolInventory.Tests.ps1",
+        "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
+        "Tools/Tests/TestRunArchive.Tests.ps1",
+        "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
       "prerequisites": [
-        "Git when New-RSValidationGitFixture is used"
+        "Git when New-RSValidationGitFixture is used",
+        "Tools/Modules/Build/ProcessStreaming.psm1 for scheduled Git fixture setup in the engine-prepared harness"
       ],
       "sideEffects": [
         "New-RSValidationGitFixture creates and commits an isolated repository beneath its caller-selected test root"
@@ -4812,7 +4881,8 @@
       "tests": [
         "Tools/Tests/SharedToolingModules.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
-        "Tools/Tests/ValidationFingerprint.Tests.ps1"
+        "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Tests/ToolInventory.Tests.ps1"
       ],
       "replacement": null
     },

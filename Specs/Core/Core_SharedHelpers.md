@@ -124,7 +124,8 @@ and product-specific color contrast thresholds remain distinct until their contr
 | Build output and test-surface identity | `Get-RSBuildArtifactRecords`, `New-RSBuildArtifactRecord` and `Test-RSBuildArtifactManifestTestsEnabled` in `Tools/Modules/Build/BuildEvidence.psm1` | Capture declared native bytes and provenance after the final native writer, then verify the captured files before receipt publication. The root build selects `-RequireUniform` to reject mixed manifest test surfaces; omission preserves the helper's conservative all-enabled predicate for existing callers. Owning contract: `Specs/Build/Build_Toolchain.md`. |
 | Immutable receipt republication | `Publish-RSBuildReceipt` and `Get-RSBuildReceiptProjection` in `Tools/Modules/Build/BuildEvidence.psm1` | Validate complete candidate/stored schema and semantics, then compare full canonical governing projections. Reuse first canonical record bytes and its pointer for an identical identity even when new excluded timing/diagnostic metadata differs. First write is create-only. Keep the canonical reader and full pointer byte equality, rejecting malformed/noncanonical records and identity mismatches before pointer mutation. Existing focused controls live in `Tools/Tests/BuildEvidence.Tests.ps1`; generic canonical/create-only record controls remain in `Tools/Tests/ValidationFingerprint.Tests.ps1`. Owner: `Specs/Build/Build_Toolchain.md`. |
 | Owned PowerShell child environments | `New-RSProcessStartInfo` in `Tools/Modules/Build/SanitizedEnvironment.psm1`, delegating to pinned shared `Set-CiNativeProcessEnvironment` | Apply child overrides, then assign one fresh private Windows MSVC metadata endpoint without changing the parent. Reuse the existing environment-block serializer and contained launch paths; do not duplicate namespace generation or alter arguments/flags. Load the shared policy only for child creation. Background dependency/SDK wrappers reuse `Invoke-RSStreamingProcess` for captured no-window execution with the existing artifact delegation; interactive build routing and generic factory defaults are unchanged. Low-level explicit PSI service-lifetime fixtures retain their controlled input. Owning contract: `Specs/Build/Build_Toolchain.md`. |
-| DxUi read-only native projection | Private `Invoke-RSDxUiReadOnlyCapture` and thin `Invoke-RSDxUiSourceGitCapture` in `Tools/Modules/Build/DxUiDependency.psm1`, using canonical `Invoke-RSStreamingProcess` | Module-local policy projects silent, separate stdout/stderr line arrays and actual exit status rather than the canonical launcher's exit-only result. The thin Git wrapper resolves the first Git Application; the backend preserves literal argv, explicit filesystem CWD and parent environment without artifact-write delegation. HEAD, clean status, header-tree, post-checkout status, local compiler-host MSBuild and test-local metadata queries share this boundary; the canonical helper owns no-window, containment and decoding. No new public API, import or layer cycle. Actual candidate-only guarded children and unsafe-PSI refusal in `Tools/Tests/DxUiDependency.Tests.ps1`, plus narrow source counterfactuals in `Tools/Tests/TestHarnessSourceContracts.Tests.ps1`, protect this variant. Pinned upstream identity-helper launches remain outside the local correction; no complete-build, historical creator or speedup claim. Owner: `Specs/Build/Build_Toolchain.md`. |
+| Silent native metadata capture | `Invoke-RSCapturedProcess` in `Tools/Modules/Build/ProcessStreaming.psm1` | Return separate stdout/stderr line arrays and actual exit through existing sanitized, contained, no-window streaming. No artifact delegation, limit or timer; decoding defaults are unchanged, with an optional per-child stdout override for known Git. Callers own read-only metadata policy. Existing DxUi private projection remains a thin compatibility shim. Standalone restore, root build VSwhere and vcpkg discovery retain query/selection/fallback behavior; interactive payloads are separate. Owner: `Specs/Build/Build_Toolchain.md`. |
+| DxUi read-only native projection | Private `Invoke-RSDxUiReadOnlyCapture` and thin `Invoke-RSDxUiSourceGitCapture` in `Tools/Modules/Build/DxUiDependency.psm1`, delegating through canonical `Invoke-RSCapturedProcess` and `Invoke-RSStreamingProcess` | Module-local policy projects silent, separate stdout/stderr line arrays and actual exit status rather than the canonical launcher's exit-only result. The thin Git wrapper resolves the first Git Application; the backend preserves literal argv, explicit filesystem CWD and parent environment without artifact-write delegation. HEAD, clean status, header-tree, post-checkout status, local compiler-host MSBuild and test-local metadata queries share this boundary; the canonical helper owns no-window, containment and decoding. No new public API, import or layer cycle. Actual candidate-only guarded children and unsafe-PSI refusal in `Tools/Tests/DxUiDependency.Tests.ps1`, plus narrow source counterfactuals in `Tools/Tests/TestHarnessSourceContracts.Tests.ps1`, protect this variant. These local controls do not execute the separately qualified H8 producer helper; fresh consumer builds remain required, with no complete-build, historical creator or speedup claim. Owner: `Specs/Build/Build_Toolchain.md`. |
 | Background child console/pipe fixture observations | Test-local `BackgroundBuildConsoleObservation` in `Tools/Tests/ProcessStreaming.Tests.ps1` | The managed fixture has no shared PowerShell equivalent for its four read-only kernel queries: `GetConsoleWindow`, `GetConsoleProcessList`, `GetStdHandle` and `GetFileType`. It creates no UI or process. The actual canonical launch is guarded before start for no-window and both redirected streams, then verified through the owned job, PID/parent, exit status and pipe observations. Console-server association/count is diagnostic; it is not a zero-count gate or creator proof. The lexical allowlist in `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` protects this deliberate test-local variant and the preflight ordering; it is not a complete C# parser. |
 | In-product selftest build admission | `Assert-RSSelfTestBuildSurface` in `Tools/Modules/Testing/TestInvocation.psm1`, exported through `TestRunPlan.psm1` | Require a test-enabled build receipt and the real executable resource marker before desktop admission or launch. Reuse `Get-RSPeTestSurface` from `ReleaseArtifactPolicy.psm1` for fail-closed PE parsing; production receipts and malformed/unmarked images refuse. Owning contract: `Specs/Testing/Testing_SelfTests.md`. |
 | Hosted native desktop fixtures | `Invoke-RSWithHostedTestDesktop`, `Get-RSHostedInputDesktopRequest` and `Invoke-RSWithHostedDefaultDesktop` in `Tools/Modules/Testing/HostedTestDesktop.psm1` | Share supported display setup and restoration, pure project-hosted input-fixture selection, and a neutral foreground boundary on the rendered Default desktop inside the canonical interactive lease. The boundary is created without activation and its owning thread clears the no-activation and tool-window styles for automatic return only after verified acquisition; the owned boundary may appear on the hosted taskbar until the entry ends. Restoration keeps its queue serviced within its original bounded waits, allowing transient null foreground after an accepted return request while rejecting another window. A foreign-foreground refusal records current, saved/current-original and boundary HWND/PID/thread/class and UTC capture times without titles; unavailable diagnostics never change restoration authority or the refusal. Preserve native assertions/warnings, child drain and restoration failures; the caller keeps the lease until the owned window thread retires, including after a join threshold fails. The hosted ARM64 stock preparation permits only the separately approved account, Search and exact WSL update startup windows, with held identity, exact WSL arguments and create-only audit. Local/self-hosted runs and historical paired studies keep their original input desktop. |
@@ -351,3 +352,54 @@ project paths and SolutionTarget names, including NestedProjects folder ancestry
 MSBuild normalization and reserved target disambiguation. Production callers consume
 that property; they never reconstruct targets from display names or filesystem paths.
 Malformed nesting and normalized target collisions refuse before compilation.
+
+### Engine-independent background Git provenance
+
+The existing canonical Invoke-RSCapturedProcess serves the runner's three graph
+reads, hosted HEAD, vcpkg-tool HEAD and optional object probe. Vcpkg provisioning
+clone/fetch/checkout instead uses existing Invoke-RSStreamingProcess with artifact
+delegation under the caller's existing lock; merged diagnostics are intentional
+there. Neither capture interface determines whether a selected command is read-only.
+
+The following exact private exceptions retain bootstrap availability and their
+native-pipeline/raw ownership without importing the engine-dependent process graph:
+
+| Owner | Reviewed private transport and semantic distinction |
+|---|---|
+| ScopedTesting.psm1 | Invoke-ScopedGit retains raw NUL/path output; Invoke-ScopedWorkflowMetadata retains optional raw GH JSON and actual exit. |
+| ToolInventory.psm1 | Invoke-RSToolInventoryGitCapture retains native-pipeline line/error/exit projection and inherited diagnostic encoding. |
+| SpecInformationArchitecture.psm1 | Existing Get-RSGitOutput preserves AllowFailure behavior, inherited diagnostic encoding and line results. |
+| GitMetadataCapture.psm1 | One internal export, Invoke-RSTestGitMetadataCapture, owns the unchanged shared Git line/stdin protocol, with no imports. |
+| ValidationFingerprint.psm1 | Invoke-RSValidationGitLineCapture is a thin @PSBoundParameters delegate preserving omitted/empty input; existing raw binary/blob readers stay separate and unchanged. |
+| TestRunArchive.psm1 | Invoke-RSTestRunArchiveGitCapture is the same thin parameter-preserving delegate; existing raw NUL/index reader remains separate and unchanged. |
+
+These are explicit module/dependency/encoding exceptions, not an alternate public
+process framework. They remain private, non-shell/no-window, concurrently drain
+both pipes, retain actual exits and dispose their own child. Existing raw-reader
+boundaries are not relabeled as text. Background Git metadata launch closure in
+Tools/Tests/TestHarnessSourceContracts.Tests.ps1 admits exactly these names and
+rejects no-window removal before launch; each owning test file covers actual
+raw/line/stdin/error behavior and absent-engine operation. The existing controlled
+CUI fixture in ProcessStreaming.Tests reuses its owned-console observations for
+actual graph/HEAD caller blocks. No fixture touches an unrelated desktop surface.
+Owner: Build_Toolchain and Testing_ToolingGovernance.
+
+Known Git text stdout is UTF-8 independently of the caller's console code page.
+The specialized engine-independent transports select that stdout decoder explicitly.
+Canonical Invoke-RSCapturedProcess/Invoke-RSStreamingProcess expose one optional
+per-child StandardOutputEncoding override, selected by known Git callers (including
+the DxUi Git projection and delegated vcpkg provisioning). The default remains
+unchanged for MSBuild, VSwhere, installers and arbitrary metadata; stderr decoding,
+ordered stdin encoding, inherited environment and raw binary readers are unchanged.
+Production code never changes global Console.OutputEncoding to decode a child.
+Actual Unicode Git path controls run under CP437 and UTF-8 and restore the caller;
+an earlier controlled UTF-8-only pass did not establish the CP437 path contract.
+
+Scheduled compiler-free Git fixtures use the explicit Invoke-RSTestFixtureGit export
+in existing Tools/Tests/TestSupport.psm1. It reuses canonical prepared streaming
+with literal argv/CWD, UTF-8 Git stdout and observed error-stream projection; no
+scheduled caller supplies pipeline stdin. This helper serves only owned fixture
+setup/readback, never product provisioning and never a global Git shim. Actual
+fixture-helper controls in ToolInventory.Tests cover empty/Unicode output, nonzero
+exit, redirects, both streams, owned starts and cleanup. Missing-engine modules
+remain independently tested; the fixture setup harness itself is engine-prepared.

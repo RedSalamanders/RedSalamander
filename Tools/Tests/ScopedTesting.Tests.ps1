@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 $repoRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestRunPlan.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Force
@@ -116,7 +117,7 @@ $global:LASTEXITCODE=2
         $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('pr-coverage-'+[guid]::NewGuid().ToString('N'))
         try {
             $delegate=Join-Path $fixture 'delegation'
-            function Invoke-DelegateGit([string[]]$Arguments) {& git -C $delegate @Arguments *> $null;if($LASTEXITCODE){throw "Delegation fixture git failed: $Arguments"}}
+            function Invoke-DelegateGit([string[]]$Arguments) {Invoke-RSTestFixtureGit -Arguments @('-C'; $delegate; $Arguments) *> $null;if($LASTEXITCODE){throw "Delegation fixture git failed: $Arguments"}}
             [void](New-Item -ItemType Directory -Path $delegate -Force)
             $workflow="name: fixture`non:`n  pull_request:`njobs:`n  tests:`n    uses: ./.github/workflows/build.yml`n"
             [void](New-Item -ItemType Directory -Path (Join-Path $delegate '.github/workflows') -Force)
@@ -129,19 +130,18 @@ $global:LASTEXITCODE=2
             Invoke-DelegateGit @('add','-A');Invoke-DelegateGit @('commit','-q','-m','baseline')
             Invoke-DelegateGit @('update-ref','refs/remotes/origin/main','HEAD')
             $coverage=[pscustomobject]@{repository='fixture/example';defaultBranch='main';prWorkflowDigest=(Get-ScopedPrWorkflowDigest $delegate);prCoverage=@([pscustomobject]@{platform='x64';configuration='Release';scopes=@('Example')})}
-            $previousGh=Get-Item Function:\global:gh -ErrorAction SilentlyContinue
             $global:ScopedFixtureGhCalls=0;$global:ScopedFixtureGhMutation=''
             $global:ScopedFixtureGhRoot=$delegate
-            function global:gh {
-                param([Parameter(ValueFromRemainingArguments=$true)][string[]]$FixtureGhArguments)
+            Mock Invoke-ScopedWorkflowMetadata -ModuleName ScopedTesting {
+                param([string]$Repository)
                 $global:ScopedFixtureGhCalls++;$global:LASTEXITCODE=0
                 if($global:ScopedFixtureGhMutation -eq 'untracked') {[IO.File]::WriteAllText((Join-Path $global:ScopedFixtureGhRoot 'during-api.cpp'),'changed')}
                 if($global:ScopedFixtureGhMutation -eq 'commit') {
                     [IO.File]::WriteAllText((Join-Path $global:ScopedFixtureGhRoot 'code.cpp'),'concurrent committed change')
-                    & git -C $global:ScopedFixtureGhRoot add code.cpp *> $null
-                    & git -C $global:ScopedFixtureGhRoot commit -q -m 'concurrent change' *> $null
+                    Invoke-RSTestFixtureGit -Arguments @('-C'; $global:ScopedFixtureGhRoot; 'add'; 'code.cpp') *> $null
+                    Invoke-RSTestFixtureGit -Arguments @('-C'; $global:ScopedFixtureGhRoot; 'commit'; '-q'; '-m'; 'concurrent change') *> $null
                 }
-                '{"state":"active"}'
+                return [pscustomobject]@{ExitCode=0;Output='{"state":"active"}'}
             }
             try {
                 Assert-PrCoverage (@(Get-ScopedPrCoverage $delegate $coverage x64 Release) -contains 'Example') 'Clean committed candidate was not delegated'
@@ -165,7 +165,6 @@ $global:LASTEXITCODE=2
                 $global:ScopedFixtureGhMutation='commit'
                 Assert-PrCoverage (@(Get-ScopedPrCoverage $delegate $coverage x64 Release).Count -eq 0) 'Concurrent committed candidate change was delegated'
             } finally {
-                if($previousGh){Set-Item Function:\global:gh -Value $previousGh.ScriptBlock}else{Remove-Item Function:\global:gh}
                 Remove-Variable -Name ScopedFixtureGhCalls,ScopedFixtureGhMutation,ScopedFixtureGhRoot -Scope Global
             }
         } finally {
@@ -189,8 +188,8 @@ $global:LASTEXITCODE=2
             [IO.File]::WriteAllText((Join-Path $fixture 'Tools/Modules/Testing/Policy.psm1'), "function Test-Policy { 'qualified' }")
             [IO.File]::WriteAllText((Join-Path $fixture 'Fixture.sln'), 'test project selection')
             [IO.File]::WriteAllText((Join-Path $fixture 'Tests/test-scopes.json'), '{"version":1,"prWorkflowDigest":"old"}')
-            & git -C $fixture init -q
-            & git -C $fixture add -A
+            Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'init'; '-q')
+            Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'add'; '-A')
             $baseline=Get-ScopedPrWorkflowDigest $fixture
             foreach($relative in @('.github/workflows/build.yml','.github/actions/check/action.yml','.github/actions/check/Dockerfile','Tools/Run.ps1','Tools/Modules/Testing/Policy.psm1','Fixture.sln')) {
                 $path=Join-Path $fixture $relative
@@ -240,5 +239,73 @@ Describe 'Canonical scoped evidence authority' {
         }
         $runner = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'))
         $runner | Should Match 'hosted_stock_preparation=\[string\]\$env:RS_HOSTED_ARM64_STOCK_PREPARATION'
+    }
+}
+Describe 'Engine-free scoped metadata transport' {
+    It 'preserves raw NUL Unicode and newline payloads without a CI engine or caller mutation' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('scoped-native-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'ScopedBootstrap.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Destination $copy
+        (Test-Path (Join-Path $fixture '.ci-engine'))|Should Be $false
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix ScopedBootstrap
+        $cwd=(Get-Location).Path;$prior=[Environment]::GetEnvironmentVariable('RS_METADATA_PARENT_SENTINEL','Process')
+        $savedConsoleEncoding=[Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            [Environment]::SetEnvironmentVariable('RS_METADATA_PARENT_SENTINEL','fixture é雪','Process')
+            $value='raw é雪'+[char]13+[char]10+'middle'+[char]10
+            $actual=& $module {param($root,$value)Invoke-ScopedGit $root @('-c',('fixture.payload='+$value),'config','--null','--get','fixture.payload')} $fixture $value
+            $actual|Should Be ($value+[char]0)
+            (Get-Location).Path|Should Be $cwd
+            [Environment]::GetEnvironmentVariable('RS_METADATA_PARENT_SENTINEL','Process')|Should Be 'fixture é雪'
+            [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(437)
+            $legacy=& $module {param($root,$value)Invoke-ScopedGit $root @('-c',('fixture.payload='+$value),'config','--null','--get','fixture.payload')} $fixture $value
+            $legacy|Should Be ($value+[char]0)
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            $null=& $module {param($root)Invoke-ScopedGit $root @('init','--quiet')} $fixture
+            $path='café-Δ-雪.txt'
+            [IO.File]::WriteAllText((Join-Path $fixture $path),'owned fixture',[Text.UTF8Encoding]::new($false))
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                [Console]::OutputEncoding=$encoding
+                $paths=@(& $module {param($root)Get-ScopedTrackedPaths $root} $fixture)
+                ($paths -ccontains $path)|Should Be $true
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $failed=$false
+            try {& $module {param($root)Invoke-ScopedGit $root @('rev-parse','--verify','missing-object')} $fixture}
+            catch {$failed=$_.Exception.Message.StartsWith('Git scope discovery failed: ')}
+            $failed|Should Be $true
+        } finally {
+            [Environment]::SetEnvironmentVariable('RS_METADATA_PARENT_SENTINEL',$prior,'Process')
+            [Console]::OutputEncoding=$savedConsoleEncoding
+            Remove-Module $module
+        }
+    }
+    It 'keeps an unavailable workflow API local without making a network request' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('scoped-api-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'ScopedApi.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Testing/ScopedTesting.psm1') -Destination $copy
+        [void][IO.Directory]::CreateDirectory((Join-Path $fixture '.github/workflows'))
+        [IO.File]::WriteAllText((Join-Path $fixture '.github/workflows/ci.yml'),('on:'+ [char]10+'  pull_request:'+ [char]10))
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix ScopedApi
+        try {
+            $result=& $module {
+                param($root)
+                $saved=@{}
+                foreach($name in @('Invoke-ScopedGit','Get-ScopedPrWorkflowDigest','Invoke-ScopedWorkflowMetadata')){$saved[$name]=(Get-Command $name).ScriptBlock}
+                $script:workflowFixtureCalls=0
+                function script:Invoke-ScopedGit {param($Root,$Arguments)if($Arguments[0] -eq 'rev-parse'){return ('a'*40)};return ''}
+                function script:Get-ScopedPrWorkflowDigest {param($Root)return 'reviewed'}
+                function script:Invoke-ScopedWorkflowMetadata {param($Repository)$script:workflowFixtureCalls++;$global:LASTEXITCODE=9;return [pscustomobject]@{ExitCode=9;Output='{"state":"active"}'}}
+                try {
+                    $manifest=[pscustomobject]@{prCoverage=@([pscustomobject]@{platform='ARM64';configuration='Release';scopes=@('native')});prWorkflowDigest='reviewed';repository='fixture/example';defaultBranch='main'}
+                    $coverage=@(Get-ScopedPrCoverage -Root $root -Manifest $manifest -Platform ARM64 -Configuration Release)
+                    return [pscustomobject]@{count=$coverage.Count;calls=$script:workflowFixtureCalls;exit=$LASTEXITCODE}
+                } finally {foreach($name in $saved.Keys){Set-Item -Path ('Function:script:'+$name) -Value $saved[$name]}}
+            } $fixture
+            $result.count|Should Be 0
+            $result.calls|Should Be 1
+            $result.exit|Should Be 9
+        } finally {Remove-Module $module}
     }
 }

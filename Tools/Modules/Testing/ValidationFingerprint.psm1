@@ -1,5 +1,6 @@
 Set-StrictMode -Version Latest
 Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'Build/DxUiDependency.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'GitMetadataCapture.psm1') -Scope Local -ErrorAction Stop
 
 $script:CanonicalizationId = 'rs-canonical-json-v1'
 $script:MaximumRecordBytes = 16MB
@@ -312,6 +313,10 @@ function Assert-RSValidationRecordPath {
     return $path
 }
 
+function Invoke-RSValidationGitLineCapture {
+    param([string]$Root, [string[]]$Arguments, [AllowEmptyCollection()][string[]]$InputLines)
+    Invoke-RSTestGitMetadataCapture @PSBoundParameters
+}
 function Invoke-RSValidationGitBinary {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
@@ -602,7 +607,8 @@ function Add-RSValidationGitBlobSha256Batches {
     }
 
     $blobOids = @($blobObjects | ForEach-Object { ([string]$_.Oid).ToLowerInvariant() })
-    $sizeRows = @($blobOids | & git -C $RepoRoot cat-file --batch-check 2>$null)
+    $capture = Invoke-RSValidationGitLineCapture -Root $RepoRoot -Arguments @('cat-file','--batch-check') -InputLines $blobOids
+    $sizeRows = @($capture.Output)
     if ($LASTEXITCODE -ne 0 -or $sizeRows.Count -ne $blobOids.Count) {
         throw 'Git blob batch-size query failed or returned an incomplete result.'
     }
@@ -1138,7 +1144,8 @@ function Get-RSValidationDependencyClosure {
     )
 
     $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
-    $tracked = @(& git -C $root ls-files --cached --others --exclude-standard)
+    $capture = Invoke-RSValidationGitLineCapture -Root $root -Arguments @('ls-files','--cached','--others','--exclude-standard')
+    $tracked = @($capture.Output)
     if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate validation dependency inputs with Git.' }
     $repositoryFiles = @($tracked | ForEach-Object { ([string]$_).Replace('\', '/') } |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)

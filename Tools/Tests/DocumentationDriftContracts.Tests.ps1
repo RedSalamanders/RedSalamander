@@ -103,7 +103,7 @@ Describe 'Agent guidance packages' {
 Describe 'Specification information architecture integration' {
     # The protected Done history is measured from base commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853, which a squashed or
     # shallow clone (hosted runners check out one commit) does not carry.
-    & git -C $repoRoot rev-parse --verify --quiet '4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853^{commit}' *> $null
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'rev-parse'; '--verify'; '--quiet'; '4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853^{commit}') *> $null
     $protectedHistoryBaseAvailable = ($LASTEXITCODE -eq 0)
     if (-not $protectedHistoryBaseAvailable) {
         Write-Host 'Skipping the protected Done history contract: base commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853 is not in this (squashed or shallow) clone.'
@@ -580,7 +580,7 @@ Describe 'Historical audit governance contracts' {
         $ignore | Should Match '(?m)^\.vite/\r?$'
         $ignore | Should Match '(?m)^dist/\r?$'
 
-        $trackedDist = @(& git -C $repoRoot ls-files -- 'Specs/Mockups/ThemeGalleryWorkbench/dist/**')
+        $trackedDist = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'ls-files'; '--'; 'Specs/Mockups/ThemeGalleryWorkbench/dist/**'))
         $LASTEXITCODE | Should Be 0
         $trackedDist.Count | Should Be 0
     }

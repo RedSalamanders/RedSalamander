@@ -52,29 +52,14 @@ function Assert-RSDxUiApiRevision {
 }
 
 function Invoke-RSDxUiReadOnlyCapture {
-    # Module-local projection for source/metadata checks. The canonical launcher owns
-    # no-window creation, containment, environment normalization and argument quoting.
-    # Do not delegate artifact-write authority for these identity/status queries.
+    # Compatibility projection for existing DxUi source/metadata callers and tests.
     param(
         [Parameter(Mandatory)][string]$WorkingDirectory,
         [Parameter(Mandatory)][string]$FilePath,
-        [Parameter(Mandatory)][string[]]$Arguments
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [System.Text.Encoding]$StandardOutputEncoding
     )
-    $stdoutLines = [Collections.Generic.List[string]]::new()
-    $stderrLines = [Collections.Generic.List[string]]::new()
-    # Retain these collections across the ProcessStreaming module's callback scope.
-    $captureLine = {
-        param($Line, $IsError)
-        if ($IsError) { [void]$stderrLines.Add([string]$Line) }
-        else { [void]$stdoutLines.Add([string]$Line) }
-    }.GetNewClosure()
-    $exitCode = Invoke-RSStreamingProcess -FilePath $FilePath -Arguments $Arguments `
-        -WorkingDirectory $WorkingDirectory -OutputLineCallback $captureLine
-    return [pscustomobject]@{
-        ExitCode = [int]$exitCode
-        StdOut = [string[]]$stdoutLines.ToArray()
-        StdErr = [string[]]$stderrLines.ToArray()
-    }
+    return Invoke-RSCapturedProcess -WorkingDirectory $WorkingDirectory -FilePath $FilePath -Arguments $Arguments -StandardOutputEncoding $StandardOutputEncoding
 }
 
 function Invoke-RSDxUiSourceGitCapture {
@@ -84,7 +69,7 @@ function Invoke-RSDxUiSourceGitCapture {
     )
     $gitApplication = Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1
     $gitPath = [IO.Path]::GetFullPath([string]$gitApplication.Source)
-    return Invoke-RSDxUiReadOnlyCapture -WorkingDirectory $WorkingDirectory -FilePath $gitPath -Arguments $Arguments
+    return Invoke-RSDxUiReadOnlyCapture -WorkingDirectory $WorkingDirectory -FilePath $gitPath -Arguments $Arguments -StandardOutputEncoding ([Text.UTF8Encoding]::new($false))
 }
 
 function Get-RSDxUiSourceIdentity {

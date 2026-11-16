@@ -72,6 +72,7 @@
 #include "BatchRenameExecutionEngine.h"
 #include "BatchRenameWindow.h"
 #include "Blake3Digest.h"
+#include "Common.Tests.PerfJsonl.h"
 #include "Common.Tests.SandboxPath.h"
 #include "Common.Tests.WindowActivationGuard.h"
 #include "CompareDirectoriesWindow.h"
@@ -706,6 +707,7 @@ struct SelfTestState
         FileOps_QueuedAdmissionContracts,
         FileOps_SafetyRemediationContracts,
         FileOps_ConflictMessageText,
+        FileOps_LocalAncestryMarkerProofCost,
         FileOps_ReviewRemediationContracts,
         FileOps_IdentityInterlockWaiting,
         FileOps_RepeatDecisionContracts,
@@ -1340,6 +1342,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_QueuedAdmissionContracts: return L"FileOps_QueuedAdmissionContracts";
         case SelfTestState::Step::FileOps_SafetyRemediationContracts: return L"FileOps_SafetyRemediationContracts";
         case SelfTestState::Step::FileOps_ConflictMessageText: return L"FileOps_ConflictMessageText";
+        case SelfTestState::Step::FileOps_LocalAncestryMarkerProofCost: return L"FileOps_LocalAncestryMarkerProofCost";
         case SelfTestState::Step::FileOps_ReviewRemediationContracts: return L"FileOps_ReviewRemediationContracts";
         case SelfTestState::Step::FileOps_IdentityInterlockWaiting: return L"FileOps_IdentityInterlockWaiting";
         case SelfTestState::Step::FileOps_RepeatDecisionContracts: return L"FileOps_RepeatDecisionContracts";
@@ -1678,6 +1681,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
 
     SelfTestState::Step::FileOps_SafetyRemediationContracts,
     SelfTestState::Step::FileOps_ConflictMessageText,
+    SelfTestState::Step::FileOps_LocalAncestryMarkerProofCost,
     SelfTestState::Step::FileOps_ReviewRemediationContracts,
     SelfTestState::Step::FileOps_IdentityInterlockWaiting,
     SelfTestState::Step::FileOps_RepeatDecisionContracts,
@@ -2366,9 +2370,10 @@ struct FileOpsFamilyDefinition
 constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyQueuedAdmissionContracts{{
     SelfTestState::Step::FileOps_QueuedAdmissionContracts,
 }};
-constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilySafetyRemediationContracts{{
+constexpr std::array<SelfTestState::Step, 8> kFileOpsFamilySafetyRemediationContracts{{
     SelfTestState::Step::FileOps_SafetyRemediationContracts,
     SelfTestState::Step::FileOps_ConflictMessageText,
+    SelfTestState::Step::FileOps_LocalAncestryMarkerProofCost,
     SelfTestState::Step::FileOps_ReviewRemediationContracts,
     SelfTestState::Step::FileOps_IdentityInterlockWaiting,
     SelfTestState::Step::FileOps_RepeatDecisionContracts,
@@ -15675,6 +15680,23 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+            NextStep(state, SelfTestState::Step::FileOps_LocalAncestryMarkerProofCost);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_LocalAncestryMarkerProofCost:
+        {
+            static bool inProgress = false;
+            if (inProgress || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            inProgress        = true;
+            const auto reset  = wil::scope_exit([&]() noexcept { inProgress = false; });
+            const auto result = RunFileOpsLocalAncestryMarkerProofCost(state);
+            if (result.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(result.reason);
+                return true;
+            }
+            RecordCurrentPhase(state, result.status, result.reason);
             NextStep(state, SelfTestState::Step::FileOps_ReviewRemediationContracts);
             return false;
         }

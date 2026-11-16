@@ -3,6 +3,24 @@ $ErrorActionPreference = 'Stop'
 
 $script:RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
+function Invoke-RSTestFixtureGit {
+    <# Scheduled, owned Git fixtures only. This explicit helper is not a global git shim
+       or a product provisioning path. No scheduled caller supplies pipeline stdin. #>
+    param([string[]]$Arguments)
+    if ($MyInvocation.ExpectingInput) { throw 'Scheduled Git fixture stdin requires its explicit reviewed transport.' }
+    $nativeArguments=$Arguments
+    Import-Module (Join-Path $PSScriptRoot '../Modules/Build/ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
+    $events=[Collections.Generic.List[object]]::new()
+    $capture={param($Line,$IsError)$events.Add([pscustomobject]@{Text=[string]$Line;IsError=[bool]$IsError})}.GetNewClosure()
+    $exitCode=Invoke-RSStreamingProcess -FilePath 'git' -Arguments $nativeArguments `
+        -WorkingDirectory (Get-Location).ProviderPath -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -OutputLineCallback $capture
+    foreach($event in $events){
+        if($event.IsError){Write-Error -Message $event.Text -ErrorId NativeCommandError -Category NotSpecified -ErrorAction Continue}
+        else{Write-Output ([string]$event.Text)}
+    }
+    $global:LASTEXITCODE=[int]$exitCode
+}
+
 function Get-RSText {
     <#
     .SYNOPSIS
@@ -130,20 +148,20 @@ function New-RSValidationGitFixture {
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'rename.txt'), "rename`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'path with spaces\tracked.txt'), "space`n", [Text.UTF8Encoding]::new($false))
 
-    & git -C $fixtureRoot init --quiet
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'init'; '--quiet')
     if ($LASTEXITCODE -ne 0) { throw 'Unable to initialize validation Git fixture.' }
-    & git -C $fixtureRoot config user.email 'startrail-fixture@invalid.example'
-    & git -C $fixtureRoot config user.name 'Startrail Fixture'
-    & git -C $fixtureRoot add -- .
-    & git -C $fixtureRoot commit --quiet -m 'fixture base'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'config'; 'user.email'; 'startrail-fixture@invalid.example')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'config'; 'user.name'; 'Startrail Fixture')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'add'; '--'; '.')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'commit'; '--quiet'; '-m'; 'fixture base')
     if ($LASTEXITCODE -ne 0) { throw 'Unable to commit validation Git fixture base.' }
 
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'dirty.txt'), "dirty`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'staged.txt'), "staged`n", [Text.UTF8Encoding]::new($false))
-    & git -C $fixtureRoot add -- staged.txt
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'add'; '--'; 'staged.txt')
     [IO.File]::WriteAllText((Join-Path $fixtureRoot 'untracked.txt'), "untracked`n", [Text.UTF8Encoding]::new($false))
     Remove-Item -LiteralPath (Join-Path $fixtureRoot 'delete.txt')
-    & git -C $fixtureRoot mv -- rename.txt renamed.txt
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $fixtureRoot; 'mv'; '--'; 'rename.txt'; 'renamed.txt')
     if ($LASTEXITCODE -ne 0) { throw 'Unable to create validation Git fixture rename.' }
 
     return [pscustomobject]@{
@@ -177,6 +195,7 @@ function New-RSTestRunArchiveFixture {
 }
 
 Export-ModuleMember -Function @(
+    'Invoke-RSTestFixtureGit',
     'Get-RSText',
     'Invoke-RSTestBlock',
     'Assert-RSEqual',

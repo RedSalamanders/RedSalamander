@@ -30,16 +30,36 @@ function Get-RSGitOutput {
         [switch]$AllowFailure
     )
 
-    $output = @(& git -C $RepositoryRoot @Arguments 2>$null)
-    $exitCode = $LASTEXITCODE
-    if ($exitCode -ne 0 -and -not $AllowFailure) {
-        throw "git $($Arguments -join ' ') failed with exit code $exitCode."
-    }
-
-    return [pscustomobject]@{
-        ExitCode = $exitCode
-        Output = @($output)
-    }
+    # Compiler-free inventory remains usable without a restored CI engine. This
+    # private native-pipeline projection therefore retains the inherited environment.
+    $start = [Diagnostics.ProcessStartInfo]::new('git')
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+    $start.StandardErrorEncoding = [Console]::OutputEncoding
+    foreach ($argument in @('-C', $RepositoryRoot) + $Arguments) { [void]$start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    try {
+        if (-not $process.Start()) { throw 'Unable to start Git metadata query.' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $null = $stderrTask.GetAwaiter().GetResult()
+        $exitCode = $process.ExitCode
+        $global:LASTEXITCODE = $exitCode
+        if ($exitCode -ne 0 -and -not $AllowFailure) {
+            throw "git $($Arguments -join ' ') failed with exit code $exitCode."
+        }
+        $output = [Collections.Generic.List[string]]::new()
+        $reader = [IO.StringReader]::new($stdout)
+        try { while ($null -ne ($line = $reader.ReadLine())) { $output.Add($line) } }
+        finally { $reader.Dispose() }
+        return [pscustomobject]@{ ExitCode = $exitCode; Output = [string[]]$output.ToArray() }
+    } finally { $process.Dispose() }
 }
 
 function Get-RSInventoryPaths {

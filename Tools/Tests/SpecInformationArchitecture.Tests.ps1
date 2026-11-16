@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force -ErrorAction Stop
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -26,17 +27,17 @@ function Set-RSFixtureFile {
 function New-RSSpecFixtureRepository {
     $root = Join-Path $fixtureParent ([Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $root -Force | Out-Null
-    & git -C $root init --quiet
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to initialize the specification information architecture fixture repository.'
     }
-    & git -C $root config core.longpaths true
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.longpaths'; 'true')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to enable long-path support for the specification information architecture fixture repository.'
     }
-    & git -C $root config user.email 'spec-ia-tests@example.invalid'
-    & git -C $root config user.name 'Spec IA Tests'
-    & git -C $root config core.autocrlf false
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'spec-ia-tests@example.invalid')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Spec IA Tests')
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'core.autocrlf'; 'false')
 
     Set-RSFixtureFile -Root $root -RelativePath 'src/example.cpp' -Content 'int Example() { return 1; }'
     Set-RSFixtureFile -Root $root -RelativePath 'Tests/example.ps1' -Content "'example'"
@@ -87,11 +88,11 @@ Current behavior is implemented by `src/example.cpp`.
 <!-- spec-ia:wip-index:end -->
 '@
     Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# Historical plan`n"
-    & git -C $root add --all
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to stage the specification information architecture fixture repository.'
     }
-    & git -C $root commit --quiet -m 'fixture baseline'
+    Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture baseline')
     if ($LASTEXITCODE -ne 0) {
         throw 'Failed to commit the specification information architecture fixture repository.'
     }
@@ -195,8 +196,8 @@ Describe 'Specification information architecture' {
     It 'accepts distinct WIP ranks that no archived plan claims' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# I7 Archived plan`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived plan'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived plan')
         # Two distinct files: pointing two rows at Plan.md would add an unrelated WIP_DUPLICATE_INDEX error.
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/WIP/Second.md' -Content "# Second fixture plan`n"
         $indexPath = Join-Path $root 'Specs/Plans/WIP/README.md'
@@ -230,8 +231,8 @@ Describe 'Specification information architecture' {
     It 'rejects a WIP rank that an archived plan title already claims' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# I0 Archived plan`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived plan'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived plan')
         $inventory = Get-RSFixtureInventory -Root $root
 
         (Get-RSFindingCount -Inventory $inventory -Code 'WIP_RANK_ARCHIVED_ID' -Severity 'Error') | Should Be 1
@@ -244,8 +245,8 @@ Describe 'Specification information architecture' {
     It 'does not treat an unrelated archived title as a claimed plan ID' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# Notes about I0 and the I0x series`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived note'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived note')
         $inventory = Get-RSFixtureInventory -Root $root
 
         (Get-RSFindingCount -Inventory $inventory -Code 'WIP_RANK_ARCHIVED_ID') | Should Be 0
@@ -254,8 +255,8 @@ Describe 'Specification information architecture' {
     It 'does not read an ordinary title word ending in a digit as a plan ID' {
         $root = New-RSSpecFixtureRepository
         Set-RSFixtureFile -Root $root -RelativePath 'Specs/Plans/Done/History.md' -Content "# S3 Interactive directory probe`n"
-        & git -C $root add --all
-        & git -C $root commit --quiet -m 'fixture archived S3 title'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '--all')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'fixture archived S3 title')
         $indexPath = Join-Path $root 'Specs/Plans/WIP/README.md'
         $index = (Get-Content -LiteralPath $indexPath -Raw).Replace('| ACTIVE | I0 | [Plan](Plan.md) |', '| ACTIVE | S3 | [Plan](Plan.md) |')
         Set-Content -LiteralPath $indexPath -Value $index -Encoding utf8
@@ -1366,5 +1367,44 @@ Describe 'Bounded Markdown comment-delimiter provenance mask' {
         try { $null = Get-RSMarkdownCommentDelimiterMask -Text ('x' * 2049) }
         catch { $boundMessage = $_.Exception.Message }
         $boundMessage | Should Match 'exceeds 2048 UTF-16 units'
+    }
+}
+
+Describe 'Engine-free specification metadata transport' {
+    It 'retains AllowFailure and exact errors without requiring a CI engine' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('spec-native-'+[guid]::NewGuid().ToString('N'))
+        $copy=Join-Path $fixture 'SpecBootstrap.psm1'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'Tools/Modules/Tooling/SpecInformationArchitecture.psm1') -Destination $copy
+        $module=Import-Module $copy -PassThru -Scope Local -Prefix SpecBootstrap
+        $savedConsoleEncoding=[Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            (Test-Path (Join-Path $fixture '.ci-engine'))|Should Be $false
+            $result=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('-c','fixture.payload=é雪','config','--get','fixture.payload')} $fixture
+            $result.ExitCode|Should Be 0
+            ($result.Output -join '|')|Should Be 'é雪'
+            [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(437)
+            $legacy=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('-c','fixture.payload=é雪','config','--get','fixture.payload')} $fixture
+            $legacy.Output[0]|Should Be 'é雪'
+            [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+            $null=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('init','--quiet')} $fixture
+            $null=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('config','core.quotepath','false')} $fixture
+            $path='café-Δ-雪.md'
+            [IO.File]::WriteAllText((Join-Path $fixture $path),'# owned fixture',[Text.UTF8Encoding]::new($false))
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                [Console]::OutputEncoding=$encoding
+                $paths=@(& $module {param($root)Get-RSInventoryPaths -RepositoryRoot $root} $fixture)
+                ($paths -ccontains $path)|Should Be $true
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $result=& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('rev-parse','--verify','missing-object') -AllowFailure} $fixture
+            ($result.ExitCode -ne 0)|Should Be $true
+            $result.Output.Count|Should Be 0
+            $expected='git rev-parse --verify missing-object failed with exit code '+$result.ExitCode+'.'
+            $message=''
+            try {& $module {param($root)Get-RSGitOutput -RepositoryRoot $root -Arguments @('rev-parse','--verify','missing-object')} $fixture}
+            catch {$message=$_.Exception.Message}
+            $message|Should Be $expected
+        } finally {[Console]::OutputEncoding=$savedConsoleEncoding;Remove-Module $module}
     }
 }

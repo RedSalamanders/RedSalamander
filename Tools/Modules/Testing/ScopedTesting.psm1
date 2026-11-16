@@ -8,6 +8,8 @@ function Invoke-ScopedGit {
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
+    $start.CreateNoWindow = $true
+    $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
     foreach ($argument in @('-c','core.quotepath=false','-C',$Root) + $Arguments) { $start.ArgumentList.Add($argument) }
     $process = [Diagnostics.Process]::Start($start)
     try {
@@ -17,6 +19,28 @@ function Invoke-ScopedGit {
         $errorText = $errors.GetAwaiter().GetResult()
         if ($process.ExitCode) { throw "Git scope discovery failed: $errorText" }
         return $output
+    } finally { $process.Dispose() }
+}
+
+function Invoke-ScopedWorkflowMetadata {
+    param([string] $Repository)
+    # Bootstrap planning remains engine-independent. Preserve raw JSON and inherited
+    # environment rather than the engine-dependent line-streaming projection.
+    $start = [Diagnostics.ProcessStartInfo]::new('gh')
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('api', "repos/$Repository/actions/workflows/ci.yml")) { $start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::Start($start)
+    try {
+        $output = $process.StandardOutput.ReadToEndAsync()
+        $errors = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $output.GetAwaiter().GetResult()
+        $null = $errors.GetAwaiter().GetResult()
+        $global:LASTEXITCODE = $process.ExitCode
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $stdout }
     } finally { $process.Dispose() }
 }
 
@@ -213,8 +237,10 @@ function Get-ScopedPrCoverage {
         if (Invoke-ScopedGit $Root @('status','--porcelain','--untracked-files=normal')) { return @() }
         $local = [IO.File]::ReadAllText((Join-Path $Root '.github/workflows/ci.yml')) -replace "`r`n","`n"
         if ((Get-ScopedPrWorkflowDigest $Root) -cne $Manifest.prWorkflowDigest -or $local -notmatch '(?m)^  pull_request:') { return @() }
-        $workflow = & gh api "repos/$($Manifest.repository)/actions/workflows/ci.yml" 2>$null | ConvertFrom-Json
-        if ($LASTEXITCODE -ne 0 -or $workflow.state -ne 'active') { return @() }
+        $workflowResult = Invoke-ScopedWorkflowMetadata -Repository $Manifest.repository
+        if ($workflowResult.ExitCode -ne 0) { return @() }
+        $workflow = $workflowResult.Output | ConvertFrom-Json
+        if ($workflow.state -ne 'active') { return @() }
         $paths = @(Get-ScopedChangedPaths $Root ('origin/' + $Manifest.defaultBranch))
         $covered = @(Get-ScopedPrCandidateScopes $Root $Manifest $Platform $Configuration $paths)
         if ((Invoke-ScopedGit $Root @('rev-parse','HEAD')).Trim() -cne $candidate -or

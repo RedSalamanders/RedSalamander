@@ -399,8 +399,10 @@ function Find-MSBuild {
         # Important for CI: the hosted runner may have VS 2022 preinstalled, but we may install newer Build Tools.
         $instances = @()
         try {
-            $instancesJson = & $vswhere -all -products "*" -prerelease -format json 2>$null
-            if ($LASTEXITCODE -eq 0 -and $instancesJson) {
+            $instancesCapture = Invoke-RSCapturedProcess -FilePath $vswhere `
+                -Arguments @('-all','-products','*','-prerelease','-format','json') -WorkingDirectory (Get-Location).Path
+            $instancesJson = $instancesCapture.StdOut -join [Environment]::NewLine
+            if ($instancesCapture.ExitCode -eq 0 -and $instancesJson) {
                 $instances = @($instancesJson | ConvertFrom-Json)
             }
         }

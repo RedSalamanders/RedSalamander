@@ -226,7 +226,7 @@ class GuiBootstrapper {
                     }
                     $record = Join-Path $fixtureRoot 'iteration.json'
                     $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
-                    Write-Host ('Managed bootstrapper iteration: ' + ($observed | ConvertTo-Json -Depth 5 -Compress))
+                    Write-Host ('Managed bootstrapper iteration: ' + ($observed | ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
                     if (-not $markerPresent) {
                         $observed.status = 'failed'
                         $observed | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $record -Encoding UTF8
@@ -848,5 +848,222 @@ exit 17
         $facts.stdout_type | Should Be 3
         $facts.stderr_type | Should Be 3
         $facts.any_job | Should Be $true
+    }
+}
+
+Describe 'Captured VSwhere metadata family' {
+    BeforeAll {
+        $script:metadataSourceRoot=$repoRoot
+        $script:metadataStreaming=Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1') -Force -PassThru
+        $script:metadataRealCapture=$script:metadataStreaming.ExportedFunctions['Invoke-RSCapturedProcess']
+        function Get-MetadataFunctionText([string]$Relative,[string]$Name) {
+            $tokens=$null;$errors=$null
+            $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $script:metadataSourceRoot $Relative),[ref]$tokens,[ref]$errors)
+            if($errors.Count){throw 'Metadata source does not parse.'}
+            $found=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $Name},$true))
+            if($found.Count -ne 1){throw 'Expected one actual metadata function.'};return $found[0].Extent.Text
+        }
+        function Assert-MetadataCapturedCall([string]$Text) {
+            $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($Text,[ref]$tokens,[ref]$errors)
+            $commands=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst]},$true))
+            if($errors.Count -or @($commands|Where-Object {$_.InvocationOperator -eq 'Ampersand' -and $_.Extent.Text -match '&\s*\$vswhere\b'}).Count -or
+                @($commands|Where-Object {$_.GetCommandName() -ceq 'Invoke-RSCapturedProcess'}).Count -ne 1){throw 'Refusing a bare or unreviewed metadata caller before execution.'}
+        }
+        $script:metadataBuild=Get-MetadataFunctionText 'build.ps1' 'Find-MSBuild'
+        $script:metadataVcpkg=Get-MetadataFunctionText 'Tools/Modules/Build/VcpkgInstallSafety.psm1' 'Get-RSVcpkgVisualStudioInstallation'
+        $restore=[IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Restore-DxUi.ps1')).Replace("`r`n","`n")
+        $begin=$restore.IndexOf('$vswhere =');$end=$restore.IndexOf('$msbuildRelative =')
+        if($begin -lt 0 -or $end -le $begin){throw 'Expected the actual standalone discovery block.'}
+        $script:metadataRestore=$restore.Substring($begin,$end-$begin)
+        foreach($text in @($script:metadataBuild,$script:metadataVcpkg,$script:metadataRestore)){Assert-MetadataCapturedCall $text}
+    }
+    BeforeEach {
+        # The canonical decoder inherits Console.OutputEncoding; exercise its explicit UTF-8 caller contract.
+        $script:metadataSavedOutputEncoding=[Console]::OutputEncoding
+        [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+        $script:metadataSavedEnvironment=@{}
+        foreach($name in @('ProgramFiles','ProgramFiles(x86)','GITHUB_ACTIONS','MSBUILD_EXE_PATH','RS_METADATA_PAYLOAD','RS_METADATA_EXIT','RS_METADATA_OBSERVATION','TEMP','TMP')){
+            $script:metadataSavedEnvironment[$name]=[Environment]::GetEnvironmentVariable($name,'Process')
+        }
+        $script:metadataRoot=Join-Path $TestDrive ([guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($script:metadataRoot)
+        $script:metadataProgramFiles=Join-Path $script:metadataRoot 'Program files é雪'
+        $script:metadataInstallation=Join-Path $script:metadataProgramFiles 'Microsoft Visual Studio/2026/Enterprise'
+        foreach($relative in @('MSBuild/Current/Bin/amd64/MSBuild.exe','MSBuild/Current/Bin/arm64/MSBuild.exe','MSBuild/Current/Bin/MSBuild.exe')){
+            $file=Join-Path $script:metadataInstallation $relative;[void][IO.Directory]::CreateDirectory((Split-Path $file));[IO.File]::WriteAllText($file,'data-only marker; never executed')
+        }
+        $vswhere=Join-Path $script:metadataProgramFiles 'Microsoft Visual Studio/Installer/vswhere.exe'
+        [void][IO.Directory]::CreateDirectory((Split-Path $vswhere));[IO.File]::WriteAllText($vswhere,'data-only marker; never executed')
+        $script:metadataProbe=Join-Path $script:metadataRoot 'Safe metadata child.ps1'
+        $probeLines=@(
+            '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)',
+            'Add-Type -TypeDefinition ''using System; using System.Runtime.InteropServices; public static class MetadataConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] public static extern bool IsWindowVisible(IntPtr h); }''',
+            '$console=[MetadataConsoleProbe]::GetConsoleWindow()',
+            '[ordered]@{pid=$PID;argv=@($args);cwd=(Get-Location).Path;visibleConsole=($console -ne [IntPtr]::Zero -and [MetadataConsoleProbe]::IsWindowVisible($console));endpoint=$env:_MSPDBSRV_ENDPOINT_}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath $env:RS_METADATA_OBSERVATION -Encoding utf8',
+            '[Console]::Out.WriteLine([IO.File]::ReadAllText($env:RS_METADATA_PAYLOAD))',
+            '[Console]::Error.WriteLine(''diagnostic stderr é雪; never metadata'')',
+            'exit ([int]$env:RS_METADATA_EXIT)')
+        [IO.File]::WriteAllText($script:metadataProbe,($probeLines -join "`n"),[Text.UTF8Encoding]::new($false))
+        foreach($name in @('ProgramFiles','ProgramFiles(x86)')){[Environment]::SetEnvironmentVariable($name,$script:metadataProgramFiles,'Process')}
+        foreach($name in @('GITHUB_ACTIONS','MSBUILD_EXE_PATH')){[Environment]::SetEnvironmentVariable($name,$null,'Process')}
+        foreach($name in @('TEMP','TMP')){[Environment]::SetEnvironmentVariable($name,$script:metadataRoot,'Process')}
+        $env:RS_METADATA_PAYLOAD=Join-Path $script:metadataRoot 'payload.txt';$env:RS_METADATA_EXIT='0';$env:RS_METADATA_OBSERVATION=Join-Path $script:metadataRoot 'observed.json'
+        $starterPath=Join-Path $script:metadataSourceRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1'
+        $starters=@(Get-Module -All|Where-Object {$_.Path -ceq $starterPath});if($starters.Count -ne 1){throw 'Expected one actual canonical starter module.'}
+        $script:metadataAudit=[pscustomobject]@{Rows=[Collections.Generic.List[object]]::new();Starter=$starters[0].ExportedFunctions['Start-RSContainedProcess'];Active=$true}
+        $starterExport=$script:metadataAudit.Starter
+        if($starterExport -isnot [Management.Automation.FunctionInfo] -or -not [object]::ReferenceEquals($starterExport.Module,$starters[0])){throw 'Canonical starter export ownership mismatch.'}
+        $state=$script:metadataAudit
+        Mock Start-RSContainedProcess -ModuleName ProcessStreaming ({
+            param($ProcessStartInfo,[switch]$DelegateArtifactOperation)
+            if(-not $state.Active -or $ProcessStartInfo.UseShellExecute -or -not $ProcessStartInfo.CreateNoWindow -or
+                -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation){throw 'Refusing unsafe metadata start before child creation.'}
+            $starter=$state.Starter;$owned=& $starter -ProcessStartInfo $ProcessStartInfo;$transferred=$false
+            try {
+                $state.Rows.Add([ordered]@{pid=$owned.Id;contained=$owned.IsInContainmentJob;file=$ProcessStartInfo.FileName;cwd=$ProcessStartInfo.WorkingDirectory;
+                    argv=@($ProcessStartInfo.ArgumentList);noWindow=$ProcessStartInfo.CreateNoWindow;stdout=$ProcessStartInfo.RedirectStandardOutput;stderr=$ProcessStartInfo.RedirectStandardError;delegated=[bool]$DelegateArtifactOperation;stdoutEncoding=$(if($ProcessStartInfo.StandardOutputEncoding){$ProcessStartInfo.StandardOutputEncoding.CodePage}else{$null});stderrEncoding=$(if($ProcessStartInfo.StandardErrorEncoding){$ProcessStartInfo.StandardErrorEncoding.CodePage}else{$null})})
+                $transferred=$true;return $owned
+            }finally{if(-not $transferred){$owned.Dispose()}}
+        }.GetNewClosure())
+    }
+    AfterEach {
+        [Console]::OutputEncoding=$script:metadataSavedOutputEncoding
+        Write-Host ('[METADATA OWNED STARTS] '+($script:metadataAudit.Rows|ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
+        $script:metadataAudit.Active=$false
+        foreach($name in $script:metadataSavedEnvironment.Keys){
+            if($null -eq $script:metadataSavedEnvironment[$name]){ Remove-Item -LiteralPath ('Env:\'+$name) -ErrorAction SilentlyContinue }
+            else{ [Environment]::SetEnvironmentVariable($name,$script:metadataSavedEnvironment[$name],'Process') }
+            if([Environment]::GetEnvironmentVariable($name,'Process') -cne $script:metadataSavedEnvironment[$name]){throw ("Metadata fixture environment restoration failed: $name expectedNull=$($null -eq $script:metadataSavedEnvironment[$name]) actualNull=$($null -eq [Environment]::GetEnvironmentVariable($name,'Process'))" )}
+        }
+        Write-Host '[METADATA ENVIRONMENT] restored'
+    }
+    It 'captures a real owned Unicode CUI child with literal arguments, separate streams, actual exits and cleanup' {
+        $beforeEndpoint=[Environment]::GetEnvironmentVariable('_MSPDBSRV_ENDPOINT_','Process')
+        foreach($exitCode in @(0,17)){
+            [IO.File]::WriteAllText($env:RS_METADATA_PAYLOAD,'{"value":"metadata é雪"}',[Text.UTF8Encoding]::new($false));$env:RS_METADATA_EXIT=[string]$exitCode
+            $capture=& $script:metadataRealCapture -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @('-NoLogo','-NoProfile','-File',$script:metadataProbe,'literal space','*') -WorkingDirectory $script:metadataRoot
+            $capture.ExitCode|Should Be $exitCode;(($capture.StdOut -join "`n")|ConvertFrom-Json).value|Should Be 'metadata é雪'
+            ($capture.StdErr -join '|')|Should Be 'diagnostic stderr é雪; never metadata'
+            $observed=Get-Content -LiteralPath $env:RS_METADATA_OBSERVATION -Raw|ConvertFrom-Json
+            ($observed.argv -join '|')|Should Be 'literal space|*';$observed.cwd|Should Be $script:metadataRoot;$observed.visibleConsole|Should Be $false
+            Write-Host ('[METADATA CHILD] '+([ordered]@{exit=$capture.ExitCode;stdout=$capture.StdOut;stderr=$capture.StdErr;observation=$observed}|ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
+            $row=$script:metadataAudit.Rows[$script:metadataAudit.Rows.Count-1];$row.pid|Should Be $observed.pid;$row.contained|Should Be $true;$row.stdoutEncoding|Should BeNullOrEmpty;$row.stderrEncoding|Should BeNullOrEmpty
+            (Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty
+        }
+        $script:metadataAudit.Rows.Count|Should Be 2
+        [Environment]::GetEnvironmentVariable('_MSPDBSRV_ENDPOINT_','Process')|Should Be $beforeEndpoint
+        $unsafe=[Diagnostics.ProcessStartInfo]::new();$unsafe.FileName=Join-Path $PSHOME 'pwsh.exe'
+        {& $script:metadataStreaming {param($psi)Start-RSContainedProcess -ProcessStartInfo $psi} $unsafe}|Should Throw 'Refusing unsafe metadata start'
+        $script:metadataAudit.Rows.Count|Should Be 2
+    }
+    It 'runs all three actual discovery callers through capture and retains selection and exit policies' {
+        $calls=[Collections.Generic.List[object]]::new();$real=$script:metadataRealCapture;$probe=$script:metadataProbe;$cwd=$script:metadataRoot
+        $installation=$script:metadataInstallation;$build=$script:metadataBuild;$vcpkg=$script:metadataVcpkg;$restore=$script:metadataRestore
+        $run={param($kind,$source,$exitCode)
+            $env:RS_METADATA_EXIT=[string]$exitCode
+            $payload=if($kind -eq 'build'){@(@{installationPath=$installation;installationVersion='18.0.1';displayName='Synthetic VS'})|ConvertTo-Json -Compress}else{$installation}
+            [IO.File]::WriteAllText($env:RS_METADATA_PAYLOAD,$payload,[Text.UTF8Encoding]::new($false))
+            & {
+                function Invoke-RSCapturedProcess {param($FilePath,$Arguments,$WorkingDirectory)
+                    $calls.Add([ordered]@{kind=$kind;file=$FilePath;argv=@($Arguments);cwd=$WorkingDirectory})
+                    return & $real -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments (@('-NoLogo','-NoProfile','-File',$probe)+$Arguments) -WorkingDirectory $WorkingDirectory
+                }
+                function Get-RSWorkflowSelectedMSBuild{return $null}
+                function Get-RSHostOrderedMSBuildRelativePaths{'MSBuild/Current/Bin/amd64/MSBuild.exe';'MSBuild/Current/Bin/arm64/MSBuild.exe';'MSBuild/Current/Bin/MSBuild.exe'}
+                if($kind -eq 'restore'){. ([scriptblock]::Create($source));return $installation}
+                . ([scriptblock]::Create($source))
+                if($kind -eq 'build'){return Find-MSBuild};return Get-RSVcpkgVisualStudioInstallation
+            }
+        }.GetNewClosure()
+        Push-Location $cwd
+        try {
+            foreach($kind in @('restore','vcpkg','build')){
+                $source=switch($kind){restore{$restore}vcpkg{$vcpkg}build{$build}}
+                $result=& $run $kind $source 0
+                if($kind -eq 'build'){$result.Method|Should Be 'vswhere';$result.Path|Should Be (Join-Path $installation 'MSBuild/Current/Bin/amd64/MSBuild.exe')}else{$result|Should Be $installation}
+                $last=$calls[$calls.Count-1];$last.cwd|Should Be $cwd
+                $expected=if($kind -eq 'build'){'-all|-products|*|-prerelease|-format|json'}else{'-latest|-prerelease|-products|*|-requires|Microsoft.Component.MSBuild|-property|installationPath'}
+                ($last.argv -join '|')|Should Be $expected
+                $observed=Get-Content -LiteralPath $env:RS_METADATA_OBSERVATION -Raw|ConvertFrom-Json
+                ($observed.argv -join '|')|Should Be $expected;$observed.visibleConsole|Should Be $false
+                Write-Host ('[METADATA CALLER] '+([ordered]@{kind=$kind;argv=$last.argv;observation=$observed}|ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
+                if($kind -eq 'build'){$fallback=& $run $kind $source 17;$fallback.Method|Should Not Be 'vswhere'}else{{& $run $kind $source 17}|Should Throw 'Visual Studio discovery failed (17)'}
+                $failureObserved=Get-Content -LiteralPath $env:RS_METADATA_OBSERVATION -Raw|ConvertFrom-Json
+                $failureObserved.visibleConsole|Should Be $false;($failureObserved.argv -join '|')|Should Be $expected
+                $failureObserved.pid|Should Be $script:metadataAudit.Rows[$script:metadataAudit.Rows.Count-1].pid
+                Write-Host ('[METADATA CALLER FAILURE] '+([ordered]@{kind=$kind;exit=17;observation=$failureObserved}|ConvertTo-Json -Depth 5 -Compress -EscapeHandling EscapeNonAscii))
+                $unsafe=$source.Replace('Invoke-RSCapturedProcess -FilePath $vswhere','& $vswhere');($unsafe -cne $source)|Should Be $true
+                {Assert-MetadataCapturedCall $unsafe}|Should Throw 'Refusing a bare or unreviewed metadata caller'
+            }
+            $calls.Count|Should Be 6;$script:metadataAudit.Rows.Count|Should Be 6
+            @($script:metadataAudit.Rows|Where-Object {-not $_.contained -or -not $_.noWindow -or -not $_.stdout -or -not $_.stderr -or $_.delegated}).Count|Should Be 0
+            foreach($row in $script:metadataAudit.Rows){(Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty}
+        }finally{Pop-Location}
+    }
+    It 'runs each actual graph and HEAD metadata caller with owned capture and refuses failed queries' {
+        function Get-GitCallerStatements($Assignment) {
+            $siblings=@($Assignment.Parent.Statements);$index=-1
+            for($n=0;$n -lt $siblings.Count;$n++){if([object]::ReferenceEquals($siblings[$n],$Assignment)){$index=$n;break}}
+            if($index -lt 0 -or $index+2 -ge $siblings.Count){throw 'Git caller statement boundary unavailable.'}
+            return (($siblings[$index..($index+2)]|ForEach-Object {$_.Extent.Text}) -join "`n")
+        }
+        function Assert-GitCallerCapture([string]$Source) {
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($Source,[ref]$t,[ref]$e)
+            $commands=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst]},$true))
+            if($e.Count -or @($commands|Where-Object {$_.GetCommandName() -ceq 'git'}).Count -or
+                @($commands|Where-Object {$_.GetCommandName() -ceq 'Invoke-RSCapturedProcess'}).Count -ne 1){throw 'Refusing an uncaptured Git caller before execution.'}
+        }
+        $t=$null;$e=$null;$runner=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Run-AllTests.ps1'),[ref]$t,[ref]$e)
+        $graph=@($runner.FindAll({param($n)$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$graphInputsCapture'},$true))
+        $graph.Count|Should Be 3
+        $cases=[Collections.Generic.List[object]]::new()
+        foreach($assignment in $graph){$statements=@($assignment.Parent.Statements);$source=Get-GitCallerStatements $assignment
+            $target=if($source.Contains('$prebuildTrackedInputs =')){'prebuildTrackedInputs'}else{'trackedGraphInputs'}
+            $cases.Add(@{kind='graph';source=$source;target=$target})
+        }
+        $hostText=Get-MetadataFunctionText 'Tools/Modules/Testing/HostedTestDesktop.psm1' 'Invoke-RSHostedArm64StockPreparation'
+        $hostAst=[Management.Automation.Language.Parser]::ParseInput($hostText,[ref]$t,[ref]$e)
+        $hostAssignment=$hostAst.Find({param($n)$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$headCapture'},$true)
+        $cases.Add(@{kind='host-head';source=(Get-GitCallerStatements $hostAssignment);target='sourceHead'})
+        $identity=Get-MetadataFunctionText 'Tools/Modules/Build/VcpkgToolIdentity.psm1' 'Assert-RSVcpkgToolIdentity'
+        $cases.Add(@{kind='vcpkg-head';source=$identity;target=''})
+        $vcpkg=Join-Path $script:metadataRoot 'vcpkg.exe';[IO.File]::WriteAllText($vcpkg,'fixture identity marker; never executed')
+        [void][IO.Directory]::CreateDirectory((Join-Path $script:metadataRoot '.git'))
+        $calls=[Collections.Generic.List[object]]::new();$real=$script:metadataRealCapture;$probe=$script:metadataProbe;$cwd=$script:metadataRoot
+        $run={param($case,$code)
+            $env:RS_METADATA_EXIT=[string]$code
+            $payload=if($case.kind -eq 'graph'){"Graph é雪.sln`nliteral*.props"}else{'a'*40}
+            [IO.File]::WriteAllText($env:RS_METADATA_PAYLOAD,$payload,[Text.UTF8Encoding]::new($false))
+            & {
+                Set-StrictMode -Version Latest
+                function Invoke-RSCapturedProcess {param($FilePath,$Arguments,$WorkingDirectory,[Text.Encoding]$StandardOutputEncoding)
+                    if ($null -eq $StandardOutputEncoding -or $StandardOutputEncoding.CodePage -ne 65001) { throw 'Known Git stdout requires per-child UTF8.' }
+                    if ($FilePath -cne 'git' -or $WorkingDirectory -cne $cwd) { throw 'Git caller lost literal executable or CWD.' }
+                    $calls.Add(@{kind=$case.kind;argv=@($Arguments);cwd=$WorkingDirectory})
+                    return & $real -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments (@('-NoLogo','-NoProfile','-File',$probe)+$Arguments) -WorkingDirectory $WorkingDirectory -StandardOutputEncoding $StandardOutputEncoding
+                }
+                function Exit-RSInvalidRunnerInvocation {param($Message)throw $Message}
+                $repoRoot=$cwd
+                . ([scriptblock]::Create($case.source))
+                if($case.kind -eq 'vcpkg-head'){return Assert-RSVcpkgToolIdentity -VcpkgExe $vcpkg -ExpectedCommit ('a'*40)}
+                return ,(Get-Variable -Name $case.target -ValueOnly)
+            }
+        }.GetNewClosure()
+        foreach($case in $cases){
+            Assert-GitCallerCapture $case.source
+            $result=& $run $case 0
+            if($case.kind -eq 'graph'){($result -join '|')|Should Be 'Graph é雪.sln|literal*.props'}
+            elseif($case.kind -eq 'host-head'){$result|Should Be ('a'*40)}else{$result|Should Be $vcpkg}
+            $observed=Get-Content $env:RS_METADATA_OBSERVATION -Raw|ConvertFrom-Json
+            $observed.visibleConsole|Should Be $false;$observed.pid|Should Be $script:metadataAudit.Rows[$script:metadataAudit.Rows.Count-1].pid
+            $expected=if($case.kind -eq 'graph'){'-C|'+$cwd+'|ls-files|*.sln|*.slnx|*.vcxproj|*.props|*.targets|RuntimeDependencies.props'}else{'-C|'+$cwd+'|rev-parse|HEAD'}
+            ($calls[$calls.Count-1].argv -join '|')|Should Be $expected;($observed.argv -join '|')|Should Be $expected
+            $failure=if($case.kind -eq 'graph'){'Cannot enumerate tracked validation build-graph inputs.'}elseif($case.kind -eq 'host-head'){'Cannot bind stock preparation to the exact checkout head.'}else{'Unable to read the vcpkg Git identity'}
+            {& $run $case 17}|Should Throw $failure
+            $unsafe=$case.source.Replace('Invoke-RSCapturedProcess','& git')
+            ($unsafe -cne $case.source)|Should Be $true
+            {Assert-GitCallerCapture $unsafe}|Should Throw 'Refusing an uncaptured Git caller'
+        }
+        $calls.Count|Should Be 10;$script:metadataAudit.Rows.Count|Should Be 10
+        foreach($row in $script:metadataAudit.Rows){$row.contained|Should Be $true;$row.delegated|Should Be $false;(Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty}
     }
 }

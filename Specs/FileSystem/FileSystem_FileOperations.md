@@ -2346,6 +2346,16 @@ candidate-marker lookup count and status. Outside candidates normally require on
 only found or inconclusive marker observations validate the interior non-follow components.
 Path construction remains proportional to each candidate's path length; there is no total linear
 time claim for arbitrary depth.
+The ordinary `FileOps_LocalAncestryMarkerProofCost` phase additionally supplies the
+BUG-09 marker-proof component comparison under the existing FileOps runner and desktop
+lease. Both observation-only identity-guard A and identity-guard-plus-real-proof B use
+identical demonstrably disjoint owned cross-volume paths; A never grants transfer authority
+or executes. The fixed 16-cohort ABBA/BAAB protocol, legitimate identity-less fixture,
+per-call timing/lookup/probe/status evidence and independent untimed Copy witnesses are
+owned by `Specs/Testing/Testing_PerformanceValidation.md`. Missing approved alternate-root
+prerequisites retain a skip and leave this evidence pending. No containment policy,
+production guard, destructive distinctness rule or existing correctness assertion changes.
+
 Regular-file destructive distinctness is a separate qualification owned by invariant 13a.
 `FileOps.Conflict.LocalDistinctnessUnproved` counts an uncertain Local pair refused by that helper,
 including its post-replacement identityless-cleanup call; it is not a SameObject finding or a provider

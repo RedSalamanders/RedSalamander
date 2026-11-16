@@ -1,5 +1,6 @@
 # Private build module; import through its reviewed callers.
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot 'ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 
 function Get-RSVcpkgToolPin {
     [CmdletBinding()]
@@ -46,8 +47,9 @@ function Assert-RSVcpkgToolIdentity {
         throw "vcpkg tool identity cannot be verified because '$resolvedExe' is not in a Git checkout. Use a vcpkg checkout at commit $ExpectedCommit."
     }
 
-    $head = (& git -C $toolRoot rev-parse HEAD).Trim().ToLowerInvariant()
-    if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
+    $headCapture = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -Arguments @('-C', $toolRoot, 'rev-parse', 'HEAD') -WorkingDirectory $toolRoot
+    $head = ($headCapture.StdOut -join [Environment]::NewLine).Trim().ToLowerInvariant()
+    if ($headCapture.ExitCode -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
         throw "Unable to read the vcpkg Git identity from '$toolRoot'."
     }
     if ($head -ne $ExpectedCommit.ToLowerInvariant()) {

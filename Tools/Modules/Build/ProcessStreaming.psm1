@@ -57,6 +57,34 @@ function ConvertTo-RSStreamingQuotedArgument {
     return $builder.ToString()
 }
 
+function Invoke-RSCapturedProcess {
+    # Silent stdout/stderr/exit projection. Callers own read-only metadata policy; this helper cannot prove an executable is read-only.
+    # The canonical launcher owns
+    # no-window creation, containment, environment normalization and argument quoting.
+    # Capture never delegates artifact-write authority. Streaming owns decoding, lifetime and caller-thread cleanup.
+    param(
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [System.Text.Encoding]$StandardOutputEncoding
+    )
+    $stdoutLines = [Collections.Generic.List[string]]::new()
+    $stderrLines = [Collections.Generic.List[string]]::new()
+    # Retain these collections across the ProcessStreaming module's callback scope.
+    $captureLine = {
+        param($Line, $IsError)
+        if ($IsError) { [void]$stderrLines.Add([string]$Line) }
+        else { [void]$stdoutLines.Add([string]$Line) }
+    }.GetNewClosure()
+    $exitCode = Invoke-RSStreamingProcess -FilePath $FilePath -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory -OutputLineCallback $captureLine -StandardOutputEncoding $StandardOutputEncoding
+    return [pscustomobject]@{
+        ExitCode = [int]$exitCode
+        StdOut = [string[]]$stdoutLines.ToArray()
+        StdErr = [string[]]$stderrLines.ToArray()
+    }
+}
+
 function Invoke-RSStreamingProcess {
     param(
         [Parameter(Mandatory = $true)]
@@ -71,6 +99,8 @@ function Invoke-RSStreamingProcess {
         [string]$ErrorLogPath = '',
 
         [hashtable]$AdditionalEnvironment = @{},
+
+        [System.Text.Encoding]$StandardOutputEncoding,
 
         [scriptblock]$OutputLineCallback,
 
@@ -91,6 +121,7 @@ function Invoke-RSStreamingProcess {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
+    if ($null -ne $StandardOutputEncoding) { $psi.StandardOutputEncoding = $StandardOutputEncoding }
 
     # Resolve and compare both paths before creating either file. A same-path
     # configuration must fail without truncating the shared target.
@@ -350,5 +381,6 @@ function Invoke-RSStreamingProcess {
 
 Export-ModuleMember -Function @(
     'ConvertTo-RSStreamingQuotedArgument',
-    'Invoke-RSStreamingProcess'
+    'Invoke-RSStreamingProcess',
+    'Invoke-RSCapturedProcess'
 )

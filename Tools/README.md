@@ -601,6 +601,7 @@ and focused tests.
 | `Modules/Packaging/WingetPrPublication.psm1` | Deterministic winget publication state and pull-request operations. |
 | `Modules/Reporting/SourceLineMeasurement.psm1` | Shared solution source discovery for line-count commands. |
 | `Modules/Reporting/TestRunReporting.psm1` | Shared archived-run discovery, summaries, and formatting. |
+| `Modules/Testing/GitMetadataCapture.psm1` | Internal engine-free Git line/stdin capture shared by archive and fingerprint metadata; explicit UTF-8 stdout, inherited stdin and diagnostic decoding, no imports or artifact authority. |
 | `Modules/Testing/HostedTestDesktop.psm1` | Hosted desktop/access diagnostics, display restoration, pure input-fixture selection and a leased owned input desktop with verified restoration. |
 | `Modules/Testing/HostedDiagnosticEvidence.psm1` | Validates the fixed filtered hosted diagnostic selections and their source-bound evidence. |
 | `Modules/Testing/R0ePairedValidation.psm1` | Validates the reviewed R0e source, closed raw sample archives and fixed same-machine paired comparison. |
@@ -750,3 +751,13 @@ Production-only builds consume BuildProjectSelection.psm1's complete SolutionTar
 names, retaining nested localization/resource and plugin targets. The helper rejects
 invalid nesting and target collisions before compilation. Focused tests include an
 actual MSBuild solution traversal with nested and reserved-name fixture projects.
+
+Visual Studio metadata queries in the standalone DxUi restorer, root build discovery, and
+vcpkg installation discovery use the existing contained no-window streaming backend
+through Invoke-RSCapturedProcess. Stdout, stderr and actual exit remain separate;
+the root build retains discovery fallback. This does not change interactive MSBuild
+or installer inheritance and does not identify a historical console creator.
+
+Background Git provenance and build-graph reads follow the existing no-window metadata boundary. Engine-independent scope/inventory/archive transports retain their raw, line or ordered-stdin contracts without importing the restored engine; the exact private exceptions are cataloged in Specs/Core/Core_SharedHelpers.md. Provisioning Git writes retain the existing dependency lock and delegated streaming authority; interactive installer/build payload routing is unchanged. Focused controls reject unsafe launch policy before a child starts. These changes establish no historical console creator or product/desktop acceptance.
+
+Known Git stdout uses explicit per-child UTF-8. The optional shared stdout decoder leaves non-Git/default and stderr behavior unchanged; no global console encoding is changed by production tooling. Unicode Git path controls cover CP437 and UTF-8 callers.

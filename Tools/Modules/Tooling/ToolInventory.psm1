@@ -6,6 +6,39 @@ $script:RSToolHistoricalManualEntryPoints = [string[]]@(
     'Tools/Test-TerminalEngineRound4Closeout.ps1'
 )
 
+function Invoke-RSToolInventoryGitCapture {
+    param([string]$Root, [string[]]$Arguments)
+    # Engine-free bootstrap projection: native pipeline line semantics differ
+    # from the engine-dependent streaming factory. No public process surface.
+    $start = [Diagnostics.ProcessStartInfo]::new('git')
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+    $start.StandardErrorEncoding = [Console]::OutputEncoding
+    foreach ($argument in @('-C', $Root) + $Arguments) { [void]$start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    try {
+        if (-not $process.Start()) { throw 'Unable to start Git metadata query.' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $global:LASTEXITCODE = $process.ExitCode
+        $lines = [Collections.Generic.List[string]]::new()
+        $reader = [IO.StringReader]::new($stdout)
+        try { while ($null -ne ($line = $reader.ReadLine())) { $lines.Add($line) } }
+        finally { $reader.Dispose() }
+        $errorLines = [Collections.Generic.List[string]]::new()
+        $errorReader = [IO.StringReader]::new($stderr)
+        try { while ($null -ne ($line = $errorReader.ReadLine())) { $errorLines.Add($line) } }
+        finally { $errorReader.Dispose() }
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = [string[]]$lines.ToArray(); ErrorOutput = [string[]]$errorLines.ToArray() }
+    } finally { $process.Dispose() }
+}
 function ConvertTo-RSToolForwardSlashPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -181,7 +214,9 @@ function Get-RSToolRepositoryFilePaths {
         [string]$RepositoryRoot
     )
 
-    $gitOutput = @(& git -C $RepositoryRoot ls-files --cached --others --exclude-standard -- Tools 2>&1)
+    $capture = Invoke-RSToolInventoryGitCapture -Root $RepositoryRoot -Arguments @('ls-files','--cached','--others','--exclude-standard','--','Tools')
+    $gitOutput = @($capture.Output)
+    if ($capture.ExitCode -ne 0) { $gitOutput += @($capture.ErrorOutput) }
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to enumerate tracked and non-ignored Tools files from '$RepositoryRoot': $($gitOutput -join '; ')"
     }
@@ -203,7 +238,8 @@ function Get-RSToolDerivedConsumers {
     )
 
     $leaf = [IO.Path]::GetFileName($ToolPath)
-    $candidatePaths = @(& git -C $RepositoryRoot ls-files --cached --others --exclude-standard)
+    $capture = Invoke-RSToolInventoryGitCapture -Root $RepositoryRoot -Arguments @('ls-files','--cached','--others','--exclude-standard')
+    $candidatePaths = @($capture.Output)
     if ($LASTEXITCODE -ne 0) { throw 'Failed to enumerate repository consumer inputs.' }
     $consumers = foreach ($candidatePath in $candidatePaths) {
         $relative = ConvertTo-RSToolForwardSlashPath -Path ([string]$candidatePath)

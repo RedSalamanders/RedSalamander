@@ -1330,7 +1330,10 @@ if ($ExplainPlan) {
     $impactSchemaPath = Join-Path $repoRoot 'Specs\Testing\ValidationImpact.schema.json'
     $impactManifest = Read-RSValidationImpactManifest -Path $impactManifestPath `
         -SchemaPath $impactSchemaPath -RepoRoot $repoRoot
-    $trackedGraphInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+    $graphInputsCapture = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -WorkingDirectory $repoRoot `
+        -Arguments @('-C', $repoRoot, 'ls-files', '*.sln', '*.slnx', '*.vcxproj', '*.props', '*.targets', 'RuntimeDependencies.props')
+    if ($graphInputsCapture.ExitCode -ne 0) { Exit-RSInvalidRunnerInvocation 'Cannot enumerate tracked validation build-graph inputs.' }
+    $trackedGraphInputs = @($graphInputsCapture.StdOut)
     $governance = Test-RSValidationImpactGovernance -Manifest $impactManifest -TrackedPaths $trackedGraphInputs -RepoRoot $repoRoot
     if (-not $governance.IsValid) {
         Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete: $(@($governance.UnmappedBuildInputs) -join ', ')"
@@ -1515,7 +1518,10 @@ if ($ValidationMode -ceq 'Affected') {
     $prebuildWorkspaceSnapshot = Get-RSWorkspaceSnapshot -RepoRoot $repoRoot -ImpactBase $ImpactBase
     $prebuildManifest = Read-RSValidationImpactManifest -Path (Join-Path $repoRoot 'Tools/validation-impact.json') `
         -SchemaPath (Join-Path $repoRoot 'Specs/Testing/ValidationImpact.schema.json') -RepoRoot $repoRoot
-    $prebuildTrackedInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+    $graphInputsCapture = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -WorkingDirectory $repoRoot `
+        -Arguments @('-C', $repoRoot, 'ls-files', '*.sln', '*.slnx', '*.vcxproj', '*.props', '*.targets', 'RuntimeDependencies.props')
+    if ($graphInputsCapture.ExitCode -ne 0) { Exit-RSInvalidRunnerInvocation 'Cannot enumerate tracked validation build-graph inputs.' }
+    $prebuildTrackedInputs = @($graphInputsCapture.StdOut)
     $prebuildGovernance = Test-RSValidationImpactGovernance -Manifest $prebuildManifest -TrackedPaths $prebuildTrackedInputs -RepoRoot $repoRoot
     if (-not $prebuildGovernance.IsValid) {
         Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete before build: $(@($prebuildGovernance.UnmappedBuildInputs) -join ', ')"
@@ -1851,7 +1857,10 @@ if ($null -ne $prebuildWorkspaceSnapshot -and
         -Path (Join-Path $repoRoot 'Tools\validation-impact.json') `
         -SchemaPath (Join-Path $repoRoot 'Specs\Testing\ValidationImpact.schema.json') `
         -RepoRoot $repoRoot
-    $trackedGraphInputs = @(& git -C $repoRoot ls-files '*.sln' '*.slnx' '*.vcxproj' '*.props' '*.targets' 'RuntimeDependencies.props')
+    $graphInputsCapture = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -WorkingDirectory $repoRoot `
+        -Arguments @('-C', $repoRoot, 'ls-files', '*.sln', '*.slnx', '*.vcxproj', '*.props', '*.targets', 'RuntimeDependencies.props')
+    if ($graphInputsCapture.ExitCode -ne 0) { Exit-RSInvalidRunnerInvocation 'Cannot enumerate tracked validation build-graph inputs.' }
+    $trackedGraphInputs = @($graphInputsCapture.StdOut)
     $impactGovernance = Test-RSValidationImpactGovernance -Manifest $impactManifest -TrackedPaths $trackedGraphInputs -RepoRoot $repoRoot
     if (-not $impactGovernance.IsValid) {
         Exit-RSInvalidRunnerInvocation "Validation impact governance is incomplete: $(@($impactGovernance.UnmappedBuildInputs) -join ', ')"

@@ -1,6 +1,7 @@
 # Private test-evidence module; import through its reviewed callers.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'GitMetadataCapture.psm1') -Scope Local -ErrorAction Stop
 
 # The checked-in archive contract and its 2 MiB / 5 MiB limits were introduced
 # by this commit. Older untouched evidence is grandfathered; any archive added
@@ -14,6 +15,10 @@ $script:RSTestRunArchiveRelocationBaselineCommit = '8b9e36191835cc71b5ee0dfeea4d
 $script:RSTestRunArchiveRelocationPathCount = 1394
 $script:RSTestRunArchiveCurrentRelocationPathCount = 1012
 
+function Invoke-RSTestRunArchiveGitCapture {
+    param([string]$Root, [string[]]$Arguments, [AllowEmptyCollection()][string[]]$InputLines)
+    Invoke-RSTestGitMetadataCapture @PSBoundParameters
+}
 function Get-RSTestRunArchiveWorktreeBlobMap {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
@@ -33,7 +38,7 @@ function Get-RSTestRunArchiveWorktreeBlobMap {
     }
 
     if ($batchPaths.Count -gt 0) {
-        $hashRows = @($batchPaths.ToArray() | & git -C $root hash-object --stdin-paths 2>$null)
+        $hashRows = @((Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('hash-object','--stdin-paths') -InputLines $batchPaths.ToArray()).Output)
         if ($LASTEXITCODE -ne 0 -or $hashRows.Count -ne $batchPaths.Count) {
             throw 'Git worktree hash batch failed or returned an incomplete result.'
         }
@@ -52,7 +57,7 @@ function Get-RSTestRunArchiveWorktreeBlobMap {
     # for the exceptional legal pathname by hashing it through the per-path form.
     foreach ($pathValue in $fallbackPaths) {
         if ([string]::IsNullOrWhiteSpace($pathValue)) { continue }
-        $hashRow = & git -C $root hash-object "--path=$pathValue" -- $pathValue 2>$null
+        $hashRow = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('hash-object',"--path=$pathValue",'--',$pathValue)).Output | Write-Output
         if ($LASTEXITCODE -ne 0 -or ([string]$hashRow).Trim() -notmatch '^[0-9a-fA-F]{40,64}$') {
             throw "Git worktree hash failed for '$pathValue'."
         }
@@ -266,22 +271,22 @@ function Get-RSTestRunArchiveGrandfatheredRelocationState {
     # The published parentless snapshot preserves the reviewed baseline identities.
     # Only the implicit production baseline may fall back; explicit baselines stay exact.
     $verificationBaseline = $ExpectedBaselineCommit
-    & git -C $root rev-parse --verify "$ExpectedBaselineCommit^{commit}" *> $null
+    $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify',"$ExpectedBaselineCommit^{commit}")
     if ($LASTEXITCODE -ne 0 -and -not $PSBoundParameters.ContainsKey('ExpectedBaselineCommit') -and
         $ExpectedBaselineCommit -ceq $script:RSTestRunArchiveRelocationBaselineCommit) {
-        & git -C $root rev-parse --verify "$script:RSTestRunArchiveImportedBaselineCommit^{commit}" *> $null
+        $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify',"$script:RSTestRunArchiveImportedBaselineCommit^{commit}")
         if ($LASTEXITCODE -eq 0) {
-            & git -C $root merge-base --is-ancestor $script:RSTestRunArchiveImportedBaselineCommit HEAD *> $null
+            $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('merge-base','--is-ancestor',$script:RSTestRunArchiveImportedBaselineCommit,'HEAD')
             if ($LASTEXITCODE -eq 0) { $verificationBaseline = $script:RSTestRunArchiveImportedBaselineCommit }
         }
     }
     foreach ($commit in @($ExpectedSourceCommit, $verificationBaseline)) {
-        & git -C $root rev-parse --verify "$commit^{commit}" *> $null
+        $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify',"$commit^{commit}")
         if ($LASTEXITCODE -ne 0) {
             $errors.Add("Required immutable relocation commit is unavailable: $commit")
         }
         if ($commit -ceq $ExpectedSourceCommit) {
-            & git -C $root merge-base --is-ancestor $commit HEAD *> $null
+            $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('merge-base','--is-ancestor',$commit,'HEAD')
             if ($LASTEXITCODE -ne 0) {
                 $errors.Add("Pinned relocation source commit is not an ancestor of HEAD: $commit")
             }
@@ -294,7 +299,7 @@ function Get-RSTestRunArchiveGrandfatheredRelocationState {
             [pscustomobject]@{ Commit = $ExpectedSourceCommit; Destination = $sourceTree },
             [pscustomobject]@{ Commit = $verificationBaseline; Destination = $baselineTree }
         )) {
-        $output = & git -C $root ls-tree -r --full-tree $spec.Commit -- Specs/TestRuns 2>$null
+        $output = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('ls-tree','-r','--full-tree',$spec.Commit,'--','Specs/TestRuns')).Output | Write-Output
         if ($LASTEXITCODE -ne 0) {
             $errors.Add("Cannot read immutable archive identities from $($spec.Commit).")
             continue
@@ -738,7 +743,7 @@ function Get-RSTestRunArchiveViolations {
     }
 
     $isExactGitWorktreeRoot = $false
-    $gitTopLevel = & git -C $root rev-parse --show-toplevel 2>$null
+    $gitTopLevel = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--show-toplevel')).Output | Write-Output
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$gitTopLevel)) {
         $resolvedGitTopLevel = [IO.Path]::GetFullPath(([string]$gitTopLevel).Trim()).TrimEnd('\', '/')
         $isExactGitWorktreeRoot = [string]::Equals($resolvedGitTopLevel, $root, [StringComparison]::OrdinalIgnoreCase)
@@ -844,7 +849,7 @@ function Get-RSTestRunArchiveViolations {
 
         $aggregatePaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
         if ($isExactGitWorktreeRoot) {
-            $trackedPaths = & git -C $root ls-files --cached -- $runKey 2>$null
+            $trackedPaths = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('ls-files','--cached','--',$runKey)).Output | Write-Output
             if ($LASTEXITCODE -ne 0) {
                 throw "git ls-files --cached -- $runKey failed while sizing the checked-in TestRuns run."
             }
@@ -1044,7 +1049,7 @@ function Get-RSChangedTestRunArchivePaths {
 
     $baseRef = $null
     foreach ($candidate in @('origin/main', 'origin/master')) {
-        & git -C $root rev-parse --verify "$candidate^{commit}" *> $null
+        $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify',"$candidate^{commit}")
         if ($LASTEXITCODE -eq 0) {
             $baseRef = $candidate
             break
@@ -1059,7 +1064,7 @@ function Get-RSChangedTestRunArchivePaths {
     $commands.Add(@('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns'))
 
     foreach ($arguments in $commands) {
-        $output = & git -C $root @arguments 2>$null
+        $output = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments $arguments).Output | Write-Output
         if ($LASTEXITCODE -ne 0) {
             throw "git $($arguments -join ' ') failed while locating changed TestRuns artifacts."
         }
@@ -1085,14 +1090,14 @@ function Get-RSTestRunArchiveInventoryPaths {
     )
 
     $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
-    $gitTopLevel = & git -C $root rev-parse --show-toplevel 2>$null
+    $gitTopLevel = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--show-toplevel')).Output | Write-Output
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$gitTopLevel)) {
         $resolvedGitTopLevel = [IO.Path]::GetFullPath(([string]$gitTopLevel).Trim()).TrimEnd('\', '/')
         if ([string]::Equals($resolvedGitTopLevel, $root, [StringComparison]::OrdinalIgnoreCase)) {
             $hasContractCommit = $false
-            & git -C $root rev-parse --verify "$script:RSTestRunArchiveContractCommit^{commit}" *> $null
+            $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify',"$script:RSTestRunArchiveContractCommit^{commit}")
             if ($LASTEXITCODE -eq 0) {
-                & git -C $root merge-base --is-ancestor $script:RSTestRunArchiveContractCommit HEAD *> $null
+                $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('merge-base','--is-ancestor',$script:RSTestRunArchiveContractCommit,'HEAD')
                 $hasContractCommit = $LASTEXITCODE -eq 0
             }
 
@@ -1100,9 +1105,9 @@ function Get-RSTestRunArchiveInventoryPaths {
             if ($hasContractCommit) {
                 $contractRange = "$script:RSTestRunArchiveContractCommit^..HEAD"
             } else {
-                & git -C $root rev-parse --verify "$script:RSTestRunArchiveImportedBaselineCommit^{commit}" *> $null
+                $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('rev-parse','--verify',"$script:RSTestRunArchiveImportedBaselineCommit^{commit}")
                 if ($LASTEXITCODE -eq 0) {
-                    & git -C $root merge-base --is-ancestor $script:RSTestRunArchiveImportedBaselineCommit HEAD *> $null
+                    $null = Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('merge-base','--is-ancestor',$script:RSTestRunArchiveImportedBaselineCommit,'HEAD')
                     if ($LASTEXITCODE -eq 0) {
                         $contractRange = "$script:RSTestRunArchiveImportedBaselineCommit..HEAD"
                     }
@@ -1117,7 +1122,7 @@ function Get-RSTestRunArchiveInventoryPaths {
                     @('diff', '--no-renames', '--cached', '--name-only', '--diff-filter=AM', '--', 'Specs/TestRuns')
                 )
                 foreach ($arguments in $commands) {
-                    $output = & git -C $root @arguments 2>$null
+                    $output = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments $arguments).Output | Write-Output
                     if ($LASTEXITCODE -ne 0) {
                         throw "git $($arguments -join ' ') failed while enumerating the governed TestRuns inventory."
                     }
@@ -1129,7 +1134,7 @@ function Get-RSTestRunArchiveInventoryPaths {
                 }
                 $trackedPaths = @($paths)
             } else {
-                $trackedPaths = & git -C $root ls-files --cached -- Specs/TestRuns 2>$null
+                $trackedPaths = (Invoke-RSTestRunArchiveGitCapture -Root $root -Arguments @('ls-files','--cached','--','Specs/TestRuns')).Output | Write-Output
                 if ($LASTEXITCODE -ne 0) {
                     throw 'git ls-files --cached -- Specs/TestRuns failed while enumerating the checked-in TestRuns inventory.'
                 }

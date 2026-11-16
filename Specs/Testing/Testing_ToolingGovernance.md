@@ -456,3 +456,41 @@ repository root, so checkout ancestor names cannot suppress findings. Selected s
 roots must remain inside that root and cannot traverse reparse-point components. The
 repository root itself cannot be a reparse point; source
 discovery does not follow directory links and rejects included reparse-point files.
+
+## Background metadata transport exceptions
+
+Native background Git/workflow metadata must be non-shell and no-window before
+launch, drain stdout/stderr independently, preserve literal arguments, stdin and
+actual exit/error semantics, and close only the process it launched. Prefer the
+canonical captured/streaming helper. Engine-independent bootstrap and provenance
+readers retain only the exact private raw/line/stdin exceptions in Core_SharedHelpers;
+their dependency/environment/encoding distinction is documented at the definition
+and protected by the finite AST/source and owned-child controls. A caller-owned
+Git shim can diagnose an unsafe path but never constitutes its production fix.
+Provisioning writes retain the governing lock and delegated write authority; a
+read-only projection never silently acquires that authority. No generic factory
+or interactive installer/build policy is changed to make metadata silent.
+
+On the supported Pester3 host, successful Should assertions can emit Boolean values.
+Capture/exit-code doubles must keep assertions out of their returned pipeline (use
+equivalent terminating field checks or suppress assertion output), so the test does
+not replace an integer exit or capture object with a Boolean/object array.
+
+Known Git text stdout is UTF-8 independently of the caller's console code page.
+The specialized engine-independent transports select that stdout decoder explicitly.
+Canonical Invoke-RSCapturedProcess/Invoke-RSStreamingProcess expose one optional
+per-child StandardOutputEncoding override, selected by known Git callers (including
+the DxUi Git projection and delegated vcpkg provisioning). The default remains
+unchanged for MSBuild, VSwhere, installers and arbitrary metadata; stderr decoding,
+ordered stdin encoding, inherited environment and raw binary readers are unchanged.
+Production code never changes global Console.OutputEncoding to decode a child.
+Actual Unicode Git path controls run under CP437 and UTF-8 and restore the caller;
+an earlier controlled UTF-8-only pass did not establish the CP437 path contract.
+
+Fingerprint/archive line-and-stdin queries share the one internal, import-free
+Testing/GitMetadataCapture.psm1 transport. Domain wrappers forward @PSBoundParameters
+unchanged, preserving omitted versus empty stdin; other distinct policies stay local.
+Scheduled compiler-free Git fixture calls use the named TestSupport fixture helper
+in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
+No temporary/global Git shim substitutes for a production fix. Existing tests do not
+rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.

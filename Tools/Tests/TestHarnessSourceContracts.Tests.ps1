@@ -2236,7 +2236,7 @@ Describe 'Test harness source contracts' {
         $combined | Should Not Match '\[System\.IO\.Path\]::GetTempPath\(\)'
 
         $specInformationArchitecture | Should Match 'New-RSTestSandboxScratchDirectory'
-        $specInformationArchitecture | Should Match 'git\s+-C\s+\$root\s+config\s+core\.longpaths\s+true'
+        $specInformationArchitecture | Should Match 'Invoke-RSTestFixtureGit\s+-Arguments\s+@\(''-C'';\s*\$root;\s*''config'';\s*''core\.longpaths'';\s*''true''\)'
         $specInformationArchitecture | Should Match 'Failed to stage the specification information architecture fixture repository'
         $specInformationArchitecture | Should Match 'Failed to commit the specification information architecture fixture repository'
 
@@ -5584,7 +5584,7 @@ Specs\TestRuns\local_scratch
             $backendText = $backend[0].Body.Extent.Text
             return $captureText -match 'Get-Command git -CommandType Application -ErrorAction Stop \| Select-Object -First 1' -and
                 $captureText -match 'Invoke-RSDxUiReadOnlyCapture -WorkingDirectory \$WorkingDirectory -FilePath \$gitPath -Arguments \$Arguments' -and
-                $backendText -match '(?s)Invoke-RSStreamingProcess -FilePath \$FilePath -Arguments \$Arguments\s+`\s*-WorkingDirectory \$WorkingDirectory -OutputLineCallback \$captureLine' -and
+                $backendText -match 'Invoke-RSCapturedProcess -WorkingDirectory \$WorkingDirectory -FilePath \$FilePath -Arguments \$Arguments' -and
                 $backendText -notmatch 'DelegateArtifactOperation|Write-Host|2>&1' -and
                 ([regex]::Matches($body, "'--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'").Count -eq 2)
         }
@@ -5592,7 +5592,7 @@ Specs\TestRuns\local_scratch
         $unsafe = $source.Replace("Invoke-RSDxUiSourceGitCapture -WorkingDirectory `$RepoRoot -Arguments @('-C', `$source, 'rev-parse', 'HEAD')", "& git -C `$source rev-parse HEAD")
         ($unsafe -cne $source) | Should Be $true
         (& $valid $unsafe) | Should Be $false
-        (& $valid ($source.Replace('-OutputLineCallback $captureLine', '-OutputLineCallback $captureLine -DelegateArtifactOperation'))) | Should Be $false
+        (& $valid ($source.Replace('Invoke-RSCapturedProcess -WorkingDirectory', 'Invoke-RSCapturedProcess -DelegateArtifactOperation -WorkingDirectory'))) | Should Be $false
         (& $valid ($source.Replace("'--no-optional-locks', 'status'", "'status'"))) | Should Be $false
     }
 
@@ -6124,7 +6124,7 @@ Describe 'Test-owned volume mount source contracts' {
     It 'never mounts a volume from native code and lets F7 consume only the harness-proved test-owned VHDX' {
         # Q12: a test never mounts a volume it did not create. The only mount is the harness's
         # Add-PartitionAccessPath on the VHDX volume it created and proved.
-        $mountCallers = @(git -C $repoRoot grep -l -E 'SetVolumeMountPoint[AW]?[[:space:]]*\(' -- '*.cpp' '*.h' '*.hpp' '*.inl')
+        $mountCallers = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'grep'; '-l'; '-E'; 'SetVolumeMountPoint[AW]?[[:space:]]*\('; '--'; '*.cpp'; '*.h'; '*.hpp'; '*.inl'))
         $mountCallers | Should BeNullOrEmpty
         $f7 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp'
         $helper = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.OwnedVirtualDisk.h'
@@ -6255,9 +6255,7 @@ $script:RSTestExposureAllowlist = @(
 )
 
 function Get-RSTestExposureSourcePaths {
-    $files = @(git -C $repoRoot ls-files -- `
-            'RedSalamander/SelfTest/**' 'RedSalamander/**/*.Tests.*' 'Tests/**' 'Plugins/**/*.Tests.*' 'Common/Common.Tests.*' `
-            'Tools/Tests/**' 'Tools/**/*.Tests.ps1' 'Tools/Modules/Testing/**' 'Tools/Run-AllTests.ps1' 'Tools/Test-Changes.ps1' 'Tools/Clean-TestSandbox.ps1')
+    $files = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'ls-files'; '--'; 'RedSalamander/SelfTest/**'; 'RedSalamander/**/*.Tests.*'; 'Tests/**'; 'Plugins/**/*.Tests.*'; 'Common/Common.Tests.*'; 'Tools/Tests/**'; 'Tools/**/*.Tests.ps1'; 'Tools/Modules/Testing/**'; 'Tools/Run-AllTests.ps1'; 'Tools/Test-Changes.ps1'; 'Tools/Clean-TestSandbox.ps1'))
     if ($LASTEXITCODE -ne 0) { throw "git ls-files failed with exit $LASTEXITCODE." }
     # This contract file spells every pattern it forbids, so it is the one exclusion.
     return @($files | Where-Object { $_ -match '\.(?:cpp|h|hpp|inl|c|cs|ps1|psm1)$' -and $_ -ne 'Tools/Tests/TestHarnessSourceContracts.Tests.ps1' } | Sort-Object -Unique)
@@ -6360,9 +6358,9 @@ Describe 'Test link, mount and share exposure source contracts' {
         }
 
         # The real pre-fix F7 source, when this clone has that history (hosted clones may be shallow).
-        & git -C $repoRoot cat-file -e "fc222f854^:$f7" 2>$null
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'cat-file'; '-e'; "fc222f854^:$f7") 2>$null
         if ($LASTEXITCODE -eq 0) {
-            $old = (& git -C $repoRoot show "fc222f854^:$f7") -join "`n"
+            $old = (Invoke-RSTestFixtureGit -Arguments @('-C'; $repoRoot; 'show'; "fc222f854^:$f7")) -join "`n"
             $oldViolations = @(Get-RSTestExposureViolations -Sources @{ $f7 = $old } -Allowlist $script:RSTestExposureAllowlist)
             @($oldViolations | Where-Object { $_ -match 'SetVolumeMountPointW\(' }).Count | Should Be 1
         }
@@ -6578,7 +6576,7 @@ Describe 'Captured DxUi metadata process source contracts' {
         $tests = Get-RSText 'Tools/Tests/DxUiDependency.Tests.ps1'
         $backend = [regex]::Match($source,'(?ms)^function Invoke-RSDxUiReadOnlyCapture \{.*?^\}')
         $backend.Success | Should Be $true
-        $backend.Value | Should Match 'Invoke-RSStreamingProcess -FilePath \$FilePath -Arguments \$Arguments'
+        $backend.Value | Should Match 'Invoke-RSCapturedProcess -WorkingDirectory \$WorkingDirectory -FilePath \$FilePath -Arguments \$Arguments'
         $backend.Value | Should Not Match 'DelegateArtifactOperation|Write-Host|2>&1'
         $hostProbe = [regex]::Match($source,'(?ms)^function Get-RSDxUiConsumerCompilerHost \{.*?^\}')
         $hostProbe.Success | Should Be $true
@@ -6603,5 +6601,114 @@ Describe 'Captured DxUi metadata process source contracts' {
         $tests | Should Match '-c core\.longpaths=true -C \$source checkout --quiet --detach \$head'
         $tests | Should Match '\$predictedSource\.Length -gt 240'
         $tests | Should Match '\$metadataPath\.Length \| Should BeGreaterThan 260'
+    }
+}
+
+Describe 'Background Git metadata launch closure' {
+    It 'keeps the finite engine-free transport exceptions no-window before either pipe or raw query starts' {
+        $helpers=@(
+            @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedGit'),
+            @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedWorkflowMetadata'),
+            @('Tools/Modules/Tooling/ToolInventory.psm1','Invoke-RSToolInventoryGitCapture'),
+            @('Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Get-RSGitOutput'),
+            @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture')
+        )
+        $valid={param([string]$body)
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($body,[ref]$t,[ref]$e)
+            if($e.Count){return $false}
+            $starts=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.InvokeMemberExpressionAst] -and $n.Member.Value -ceq 'Start'},$true))
+            if(!$starts.Count){return $false}
+            foreach($flag in @(@('UseShellExecute','$false'),@('CreateNoWindow','$true'),@('RedirectStandardOutput','$true'),@('RedirectStandardError','$true'))){
+                $assignment=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left -is [Management.Automation.Language.MemberExpressionAst] -and $n.Left.Member.Value -ceq $flag[0] -and $n.Right.Extent.Text -ceq $flag[1]},$true))
+                if($assignment.Count -ne 1 -or $assignment[0].Extent.EndOffset -gt $starts[0].Extent.StartOffset){return $false}
+            }
+            return $body.Contains('StandardOutput') -and $body.Contains('StandardError.ReadToEndAsync()') -and $body.Contains('ExitCode') -and $body.Contains('finally') -and $body.Contains('.Dispose()')
+        }
+        foreach($helper in $helpers){
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput((Get-RSText -Path $helper[0]),[ref]$t,[ref]$e)
+            $functions=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $helper[1]},$true))
+            $functions.Count|Should Be 1
+            $body=$functions[0].Extent.Text
+            (& $valid $body)|Should Be $true
+            $unsafe=$body.Replace('.CreateNoWindow = $true','.CreateNoWindow = $false')
+            ($unsafe -cne $body)|Should Be $true
+            (& $valid $unsafe)|Should Be $false
+        }
+    }
+    It 'admits only the reviewed captured caller paths and keeps vcpkg writes outside the read-only projection' {
+        $paths=@('Tools/Run-AllTests.ps1','Tools/Modules/Testing/HostedTestDesktop.psm1','Tools/Modules/Build/VcpkgToolIdentity.psm1','Tools/Modules/Build/VcpkgInstallSafety.psm1',
+            'Tools/Modules/Testing/ScopedTesting.psm1','Tools/Modules/Tooling/ToolInventory.psm1','Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestRunArchive.psm1')
+        $noBare={param([string]$source)
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$t,[ref]$e)
+            if($e.Count){return $false}
+            return @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','gh')},$true)).Count -eq 0
+        }
+        foreach($path in $paths){(& $noBare (Get-RSText -Path $path))|Should Be $true}
+        $runner=Get-RSText -Path 'Tools/Run-AllTests.ps1'
+        ([regex]::Matches($runner,'\$graphInputsCapture = Invoke-RSCapturedProcess')).Count|Should Be 3
+        (& $noBare ($runner.Replace('Invoke-RSCapturedProcess','& git')))|Should Be $false
+        $vcpkg=Get-RSText -Path 'Tools/Modules/Build/VcpkgInstallSafety.psm1'
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($vcpkg,[ref]$t,[ref]$e)
+        $bootstrap=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSVcpkgBootstrapGit'},$true).Extent.Text
+        $bootstrap|Should Match 'Invoke-RSStreamingProcess[\s\S]*-DelegateArtifactOperation'
+        $bootstrap|Should Not Match 'Invoke-RSCapturedProcess'
+        $vcpkg|Should Match '\$commitProbe\.ExitCode -ne 0'
+    }
+    It 'limits the optional decoder override to known Git stdout without changing defaults or stderr' {
+        $stream=Get-RSText -Path 'Tools/Modules/Build/ProcessStreaming.psm1'
+        $stream|Should Match '\[System.Text.Encoding\]\$StandardOutputEncoding'
+        $stream|Should Match 'if \(\$null -ne \$StandardOutputEncoding\) \{ \$psi.StandardOutputEncoding = \$StandardOutputEncoding \}'
+        $stream|Should Not Match '\.StandardErrorEncoding\s*='
+        $stream|Should Not Match '\[Console\]::OutputEncoding\s*='
+        $dxui=Get-RSText -Path 'Tools/Modules/Build/DxUiDependency.psm1'
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($dxui,[ref]$t,[ref]$e)
+        $git=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSDxUiSourceGitCapture'},$true).Extent.Text
+        $git|Should Match '-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\)'
+        foreach($path in @('Tools/Run-AllTests.ps1','Tools/Modules/Testing/HostedTestDesktop.psm1','Tools/Modules/Build/VcpkgToolIdentity.psm1','Tools/Modules/Build/VcpkgInstallSafety.psm1')){
+            $source=Get-RSText -Path $path
+            $source|Should Match '-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\) -FilePath ''git'''
+            $source|Should Not Match '\[Console\]::OutputEncoding\s*='
+        }
+    }
+    It 'shares exactly one engine-free stdin transport while retaining thin parameter-preserving callers' {
+        $shared=Get-RSText -Path 'Tools/Modules/Testing/GitMetadataCapture.psm1'
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($shared,[ref]$t,[ref]$e)
+        @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Import-Module'},$true)).Count|Should Be 0
+        $shared|Should Match 'Export-ModuleMember -Function Invoke-RSTestGitMetadataCapture'
+        $sharedFunction=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-RSTestGitMetadataCapture'},$true)
+        $validForwarder={param([string]$text,[string]$name)
+            $tokens=$null;$errors=$null;$tree=[Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+            if($errors.Count){return $false}
+            $function=$tree.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq $name},$true)
+            if(!$function -or $function.Body.EndBlock.Statements.Count -ne 1 -or $function.Body.ParamBlock.Extent.Text -cne $sharedFunction.Body.ParamBlock.Extent.Text){return $false}
+            $calls=@($function.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst]},$true))
+            return $calls.Count -eq 1 -and $calls[0].GetCommandName() -ceq 'Invoke-RSTestGitMetadataCapture' -and $calls[0].CommandElements.Count -eq 2 -and
+                $calls[0].CommandElements[1] -is [Management.Automation.Language.VariableExpressionAst] -and $calls[0].CommandElements[1].Splatted -and
+                $calls[0].CommandElements[1].VariablePath.UserPath -ceq 'PSBoundParameters'
+        }
+        foreach($item in @(@('Tools/Modules/Testing/ValidationFingerprint.psm1','Invoke-RSValidationGitLineCapture'),@('Tools/Modules/Testing/TestRunArchive.psm1','Invoke-RSTestRunArchiveGitCapture'))){
+            $source=Get-RSText -Path $item[0]
+            $source|Should Match 'Import-Module \(Join-Path \$PSScriptRoot ''GitMetadataCapture.psm1''\) -Scope Local -ErrorAction Stop'
+            (& $validForwarder $source $item[1])|Should Be $true
+            (& $validForwarder ($source.Replace('@PSBoundParameters','@()')) $item[1])|Should Be $false
+        }
+    }
+    It 'keeps the scheduled fixture scope on explicit native argument vectors without a global Git shim' {
+        $files=@('ScopedTesting.Tests.ps1','ToolInventory.Tests.ps1','SpecInformationArchitecture.Tests.ps1','ValidationFingerprint.Tests.ps1','TestRunArchive.Tests.ps1','ToolingGovernance.Tests.ps1','DocumentationDriftContracts.Tests.ps1','TestHarnessSourceContracts.Tests.ps1','ProcessStreaming.Tests.ps1','DxUiDependency.Tests.ps1','VcpkgInstallSafety.Tests.ps1','TestSupport.psm1')
+        foreach($file in $files){
+            $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput((Get-RSText -Path ('Tools/Tests/'+$file)),[ref]$t,[ref]$e)
+            @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','git.exe','gh')},$true)).Count|Should Be 0
+            foreach($call in @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Invoke-RSTestFixtureGit'},$true))){
+                $call.CommandElements.Count|Should Be 3
+                $call.CommandElements[1].ParameterName|Should Be 'Arguments'
+                ($call.CommandElements[2] -is [Management.Automation.Language.ArrayExpressionAst])|Should Be $true
+            }
+        }
+        $support=Get-RSText -Path 'Tools/Tests/TestSupport.psm1'
+        $support|Should Match 'function Invoke-RSTestFixtureGit'
+        $support|Should Match 'param\(\[string\[\]\]\$Arguments\)'
+        $support|Should Match 'Invoke-RSStreamingProcess[\s\S]*-StandardOutputEncoding \(\[Text.UTF8Encoding\]::new\(\$false\)\)'
+        $support|Should Not Match 'function (global:)?git\b'
+        $support|Should Match '\$global:LASTEXITCODE=\[int\]\$exitCode'
     }
 }

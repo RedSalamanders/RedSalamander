@@ -108,7 +108,7 @@ Describe 'Captured DxUi source Git identity' {
         Mock Get-Command -ModuleName DxUiDependency {
             @([pscustomobject]@{Source='C:\first Git\git.exe'},[pscustomobject]@{Source='C:\second Git\git.exe'})
         } -ParameterFilter { $Name -ceq 'git' -and $CommandType -eq 'Application' -and $env:RS_DXUI_FAKE_GIT -ceq '1' }
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
             param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
             @{file=$FilePath;arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation} |
                 ConvertTo-Json -Compress | Set-Content (Join-Path $WorkingDirectory 'recording.json') -Encoding utf8
@@ -139,7 +139,7 @@ Describe 'Captured DxUi source Git identity' {
 
     It 'keeps the three literal identity queries and clean empty output separate from stderr' {
         $root = New-RSDxUiCaptureFixture (Join-Path $TestDrive 'capture identity root')
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
             param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
             [IO.File]::AppendAllText((Join-Path $WorkingDirectory 'queries.jsonl'), ((@{arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation}|ConvertTo-Json -Compress)+"`n"))
             if ($Arguments[-1] -ceq 'HEAD') { & $OutputLineCallback ('a'*40) $false }
@@ -167,7 +167,7 @@ Describe 'Captured DxUi source Git identity' {
         param($Mode)
         $root = New-RSDxUiCaptureFixture (Join-Path $TestDrive ('capture-'+$Mode))
         $Mode | Set-Content (Join-Path $root 'query-mode')
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
             param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback)
             $mode = (Get-Content (Join-Path $WorkingDirectory 'query-mode') -Raw).Trim()
             if ($Arguments[-1] -ceq 'HEAD') {
@@ -233,6 +233,7 @@ Describe 'Captured DxUi source Git identity' {
                     -not $ProcessStartInfo.RedirectStandardOutput -or -not $ProcessStartInfo.RedirectStandardError -or $DelegateArtifactOperation) {
                     throw 'Refusing unsafe DxUi Git fixture launch.'
                 }
+                if ($null -eq $ProcessStartInfo.StandardOutputEncoding -or $ProcessStartInfo.StandardOutputEncoding.CodePage -ne 65001 -or $null -ne $ProcessStartInfo.StandardErrorEncoding) { throw 'Git stdout must be UTF8 without changing stderr decoding.' }
                 # Resolve the already-loaded canonical module without importing it
                 # over this module-scoped interception after the first child.
                 $starterModule = @(Get-Module -All | Where-Object { $_.Path -ceq $env:RS_DXUI_CAPTURE_STARTER })
@@ -261,6 +262,7 @@ Describe 'Captured DxUi source Git identity' {
             $refused | Should Be $true
             (Test-Path $env:RS_DXUI_CAPTURE_RECORD) | Should Be $false
             '// synthetic header' | Set-Content (Join-Path $origin 'include/Example.h') -Encoding utf8
+            '// synthetic Unicode-name fixture' | Set-Content (Join-Path $origin 'include/資料 雪.sln') -Encoding utf8
             Invoke-RSDxUiTestGit -c core.longpaths=true init --quiet $origin
             Invoke-RSDxUiTestGit -C $origin add .
             Invoke-RSDxUiTestGit -C $origin -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m 'Unicode 雪 fixture'
@@ -268,12 +270,25 @@ Describe 'Captured DxUi source Git identity' {
             $unicode = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-C',$Root,'log','-1','--format=%s')} $origin
             $unicode.ExitCode | Should Be 0
             ($unicode.StdOut -join "`n") | Should Be 'Unicode 雪 fixture'
+            $savedConsoleEncoding=[Console]::OutputEncoding
+            $unicodeObservations=[Collections.Generic.List[object]]::new()
+            try {
+                foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                    [Console]::OutputEncoding=$encoding
+                    $paths = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-c','core.quotepath=false','-C',$Root,'ls-files')} $origin
+                    $paths.ExitCode | Should Be 0
+                    (@($paths.StdOut) -ccontains 'include/資料 雪.sln') | Should Be $true
+                    [Console]::OutputEncoding.CodePage | Should Be $encoding.CodePage
+                    $unicodeObservations.Add(@{parentCodePage=$encoding.CodePage;stdout=@($paths.StdOut);exit=$paths.ExitCode})
+                }
+            } finally { [Console]::OutputEncoding=$savedConsoleEncoding }
+            $unicodeObservations | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $sandbox 'git-stdout-unicode-codepages.json') -Encoding utf8
             $failure = & $script:dxUiTestModule {param($Root) Invoke-RSDxUiSourceGitCapture -WorkingDirectory $Root -Arguments @('-C',$Root,'rev-parse','HEAD:missing')} $origin
             ($failure.ExitCode -ne 0) | Should Be $true
             @($failure.StdErr).Count | Should BeGreaterThan 0
             $env:RS_DXUI_CAPTURE_SENTINEL | Should Be 'literal inherited 雪'
             $rows = @(Get-Content $env:RS_DXUI_CAPTURE_RECORD | ForEach-Object { $_ | ConvertFrom-Json })
-            $rows.Count | Should Be 5
+            $rows.Count | Should Be 7
             @($rows | Where-Object { -not $_.no_window -or -not $_.stdout -or -not $_.stderr -or -not $_.exact_job -or $_.delegated }).Count | Should Be 0
             @($rows | Where-Object { $_.inherited_sentinel -cne 'literal inherited 雪' }).Count | Should Be 0
             $rows | ConvertTo-Json -Depth 7 | Set-Content (Join-Path $sandbox 'safe-git-observations.json') -Encoding utf8
@@ -825,7 +840,7 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
             'if($Phase -ceq ''Production''){' + $production[0].Extent.Text + '}' + "`n" +
             'if($Phase -cin @(''ReleaseTestBuild'',''Qualification'')){' + $testBuild[0].Extent.Text + '}')
         $pin=Get-Content (Join-Path $repoRoot 'Dependencies/DxUi.lock.json') -Raw|ConvertFrom-Json
-        $pin.commit | Should Be '4cdf1ce52c7785446698e346b8aec058ed6a9283'
+        $pin.commit | Should Be '7fb2ab71852087d93b3a3e5b3ba504c37f56267c'
         $pin.apiRevision | Should Be 4
         $count=0
         foreach($phase in @('Static','ReleaseTestBuild','ReleaseTest','Production','Qualification')){
@@ -989,7 +1004,7 @@ Describe 'Captured DxUi metadata probes' {
         [void][IO.Directory]::CreateDirectory($root)
         $sentinel = Join-Path $root 'owned-sentinel'
         'unchanged' | Set-Content $sentinel -Encoding utf8
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency { return 0 } -ParameterFilter { $env:RS_DXUI_METADATA_AMBIENT_TEST -ceq '1' }
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming { return 0 } -ParameterFilter { $env:RS_DXUI_METADATA_AMBIENT_TEST -ceq '1' }
         $previousRecord = $env:RS_DXUI_METADATA_RECORD
         $previousAudit = $script:dxUiMetadataAudit
         $previousFixtureFlag = $env:RS_DXUI_METADATA_AMBIENT_TEST
@@ -1033,7 +1048,7 @@ Describe 'Captured DxUi metadata probes' {
         $root=Join-Path $TestDrive ('metadata-host-'+$HostValue)
         [void][IO.Directory]::CreateDirectory($root)
         $HostValue|Set-Content (Join-Path $root 'metadata-mode')
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
             param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation)
             @{file=$FilePath;arguments=@($Arguments);cwd=$WorkingDirectory;delegated=[bool]$DelegateArtifactOperation;parent_host=$env:PreferredToolArchitecture} |
                 ConvertTo-Json -Depth 5|Set-Content (Join-Path $WorkingDirectory 'metadata-record.json') -Encoding utf8
@@ -1063,7 +1078,7 @@ Describe 'Captured DxUi metadata probes' {
         $root=Join-Path $TestDrive ('metadata-refusal-'+$Mode)
         [void][IO.Directory]::CreateDirectory($root)
         $Mode|Set-Content (Join-Path $root 'metadata-failure')
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
             param($WorkingDirectory,$OutputLineCallback)
             $mode=(Get-Content (Join-Path $WorkingDirectory 'metadata-failure') -Raw).Trim()
             & $OutputLineCallback ($(if($mode -eq 'nonzero'){'x64'}else{'foreign-host'})) $false
@@ -1079,7 +1094,7 @@ Describe 'Captured DxUi metadata probes' {
     It 'preserves JSON stdout separately from stderr and retains the exact nonzero exit' {
         $root=Join-Path $TestDrive 'metadata-json'
         [void][IO.Directory]::CreateDirectory($root)
-        Mock Invoke-RSStreamingProcess -ModuleName DxUiDependency {
+        Mock Invoke-RSStreamingProcess -ModuleName ProcessStreaming {
             param($OutputLineCallback)
             & $OutputLineCallback '{"Properties":{"Value":"Unicode 雪"}}' $false
             & $OutputLineCallback 'not JSON: diagnostic stderr' $true

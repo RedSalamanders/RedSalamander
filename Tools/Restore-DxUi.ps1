@@ -5,6 +5,7 @@ Restore RedSalamander's exact DxUi source and isolated build dependencies.
 Clones only the locked commit into repository .build, restores WIL and writes platform-specific
 MSBuild properties using the selected first-party compiler host, including explicit overrides.
 New managed source clones enable Git long paths for metadata creation and locally for checkout; global Git settings are unchanged.
+Captures VSwhere metadata without a console window, retaining separate stderr and the actual exit.
 Uses the shared-dependency lease and contained child processes. Does not edit
 a sibling checkout or the lock. Unavailable pinned source or a dirty source fails closed; public HTTPS requires no secret.
 .PARAMETER Platform
@@ -31,8 +32,13 @@ param(
 $ErrorActionPreference='Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $PSScriptRoot 'Modules/Build/DxUiDependency.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Modules/Build/ProcessStreaming.psm1') -ErrorAction Stop
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-$installation = & $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath
+$installationCapture = Invoke-RSCapturedProcess -FilePath $vswhere `
+    -Arguments @('-latest','-prerelease','-products','*','-requires','Microsoft.Component.MSBuild','-property','installationPath') `
+    -WorkingDirectory (Get-Location).Path
+if ($installationCapture.ExitCode -ne 0) { throw "Visual Studio discovery failed ($($installationCapture.ExitCode)): $($installationCapture.StdErr -join [Environment]::NewLine)" }
+$installation = ($installationCapture.StdOut -join [Environment]::NewLine).Trim()
 if (-not $installation) { throw 'Visual Studio C++ MSBuild is required.' }
 $msbuildRelative = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
     'MSBuild/Current/Bin/arm64/MSBuild.exe'

@@ -212,8 +212,9 @@ Fixture diagnostic retention requires active script-owned audit state and the ca
 containment check for each derived recorder file. An inherited record-path variable grants
 no output authority; cleanup restores the prior audit state and environment.
 The restore fixture supplies its own synthetic consumer-identity module; these controls do
-not execute the pinned upstream identity helper. That helper's own bare native probes remain
-outside this local correction, so complete build-launch closure remains pending. No hidden
+not execute the pinned upstream identity helper. H8's producer-owned capture/backend closure is
+qualified separately by producer validation; fresh byte-verified consumer builds remain pending.
+Neither local fixtures nor producer success alone establish complete consumer build-launch acceptance. No hidden
 console-server absence, historical creator or foreground-restoration guarantee is inferred.
 The clone enables Git long paths twice: a process-level `-c core.longpaths=true` covers `git init`, which copies its
 template hooks before the new repository has a configuration, and `clone -c` stores the setting in that repository so every
@@ -1144,3 +1145,87 @@ and Terminal satellite producers. A selected build may consequently build the
 application when it is a real test input. Existing warm output is never evidence
 that an undeclared dependency is available on a clean profile. Runtime staging
 continues through `RuntimeDependencies.props` and the shared MSBuild targets.
+
+### Captured local Visual Studio metadata
+
+The VSwhere probes in Tools/Restore-DxUi.ps1, build.ps1 Find-MSBuild and
+Get-RSVcpkgVisualStudioInstallation are metadata, including when their parent is
+noninteractive. They use Invoke-RSCapturedProcess over the canonical contained
+Invoke-RSStreamingProcess boundary: literal arguments, explicit current filesystem
+working directory, separate silent stdout/stderr and actual exit, with no artifact
+write delegation. Public restore and vcpkg discovery refuse a nonzero query exit;
+root build discovery retains its documented next-strategy fallback. Preserve
+workflow-selected fast paths, query selection and native-host preference.
+This metadata policy does not change real interactive MSBuild or installer
+console inheritance. The shared projection cannot establish that an executable
+is read-only; its callers own that bounded policy. A repaired launch path is not
+proof of the creator or cause of a historical foreground surface.
+
+### Qualified API4 process-capture Source consumption
+
+`Dependencies/DxUi.lock.json` selects API revision 4 at qualified DxUi
+[`7fb2ab71852087d93b3a3e5b3ba504c37f56267c`](https://github.com/RedSalamanders/DxUi/tree/7fb2ab71852087d93b3a3e5b3ba504c37f56267c).
+Exact-source [producer validation](https://github.com/RedSalamanders/DxUi/actions/runs/43769081609)
+and [formatting](https://github.com/RedSalamanders/DxUi/actions/runs/43769081636)
+passed. Its complete normal paired P/T8 study retained all 144 reports and passed
+the trusted-policy gate with all 24 exact-budget slots held. These producer results
+establish the source-adoption prerequisite; they do not qualify this consumer's ABI,
+headers/archive combination, build outputs, platform behavior or desktop/Full suites.
+
+The pinned CI engine has no distributed qualified SDK for this immutable source
+(SDK NotDistributed). Use canonical Source restore/build, without `-SdkRoot`, and
+resolve its checkout through the existing source helper and 16-character directory
+key. Do not reuse another source's SDK, add a descriptor/allowlist exception, or
+change the native toolchain or CI engine to obtain it. Restore matching public
+headers and build the archive using this consumer's actual compiler, CRT and
+configuration. API revision equality is not ABI or consumer qualification.
+Fresh full-solution receipts and exact header/archive/output-byte verification,
+native ARM64 evidence and separate desktop/Full acceptance remain required.
+The API4 policy seed grants no cooking API5/version6 qualification; no cooking
+port is part of this adoption.
+
+### Background Git metadata and provisioning launch closure
+
+Run-AllTests' three tracked build-graph reads, hosted stock-preparation HEAD and
+vcpkg-tool HEAD/probe queries use the canonical contained, sanitized no-window
+capture boundary, with literal arguments, concurrent separate streams and actual
+exit checks. Failed graph discovery refuses governance admission rather than
+silently supplying an empty graph. Stock preparation gains no additional desktop
+or foreign-window authority from its HEAD query.
+
+Scoped planning, tool/spec inventories and snapshot/archive provenance also remain
+usable for their existing bootstrap queries without a restored CI engine. Their
+finite private transport exceptions are cataloged in Core_SharedHelpers and guarded
+before launch: no shell/window, both pipes drained, exact exit and owned process
+cleanup. Raw JSON/NUL/binary readers are not converted to line projections; ordered
+stdin batches retain their existing encoding, newline and EOF contract. These
+exceptions preserve inherited environments and introduce no public process API.
+
+The vcpkg provisioning wrapper can clone, fetch and checkout under its existing
+provisioning/dependency locks. It uses delegated streaming, retaining inherited
+artifact-write authority and its existing merged diagnostic projection; never
+route those writes through the read-only/no-delegation projection. The optional
+cat-file existence query uses actual captured exit to preserve fetch/recheck behavior.
+Real MSBuild/installer interactive console inheritance is unchanged. Full cache and
+receipt closures already include the changed safety/identity/streaming dependencies;
+source identity invalidates reuse without a new key, cache purge or engine change.
+No launch-policy correction establishes a historical Terminal creator or a speedup.
+
+Known Git text stdout is UTF-8 independently of the caller's console code page.
+The specialized engine-independent transports select that stdout decoder explicitly.
+Canonical Invoke-RSCapturedProcess/Invoke-RSStreamingProcess expose one optional
+per-child StandardOutputEncoding override, selected by known Git callers (including
+the DxUi Git projection and delegated vcpkg provisioning). The default remains
+unchanged for MSBuild, VSwhere, installers and arbitrary metadata; stderr decoding,
+ordered stdin encoding, inherited environment and raw binary readers are unchanged.
+Production code never changes global Console.OutputEncoding to decode a child.
+Actual Unicode Git path controls run under CP437 and UTF-8 and restore the caller;
+an earlier controlled UTF-8-only pass did not establish the CP437 path contract.
+
+Fingerprint/archive line-and-stdin queries share the one internal, import-free
+Testing/GitMetadataCapture.psm1 transport. Domain wrappers forward @PSBoundParameters
+unchanged, preserving omitted versus empty stdin; other distinct policies stay local.
+Scheduled compiler-free Git fixture calls use the named TestSupport fixture helper
+in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
+No temporary/global Git shim substitutes for a production fix. Existing tests do not
+rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.

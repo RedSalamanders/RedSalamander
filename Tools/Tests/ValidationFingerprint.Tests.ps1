@@ -1,4 +1,4 @@
-﻿$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -Force
@@ -163,7 +163,7 @@ Describe 'Operation Startrail dependency closure' {
             [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText((Join-Path $root 'Tools\Modules\B.psm1'), '', [Text.UTF8Encoding]::new($false))
         [IO.File]::WriteAllText((Join-Path $root 'Tools\Modules\schema.json'), '{}', [Text.UTF8Encoding]::new($false))
-        & git -C $root init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
         $closure = @(Get-RSValidationDependencyClosure -RepoRoot $root -RootRelativePath 'Tools/Root.ps1')
         $closure | Should Be @('Tools/Modules/A.psm1', 'Tools/Modules/schema.json', 'Tools/Root.ps1')
 
@@ -191,7 +191,7 @@ Describe 'Operation Startrail workspace snapshots' {
         [void][IO.Directory]::CreateDirectory((Join-Path $fixture.Root '.ci'))
         [IO.File]::Copy((Join-Path $repoRoot '.ci/project.json'), (Join-Path $fixture.Root '.ci/project.json'))
         $engine = Join-Path $fixture.Root '.ci-engine'
-        $clone = & git clone --quiet --no-hardlinks (Join-Path $repoRoot '.ci-engine') $engine 2>&1
+        $clone = Invoke-RSTestFixtureGit -Arguments @('clone'; '--quiet'; '--no-hardlinks'; (Join-Path $repoRoot '.ci-engine'); $engine) 2>&1
         if ($LASTEXITCODE) { throw "Owned engine fixture clone failed: $clone" }
         $before = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
         $before.engine_inputs_identity | Should Match '^[0-9a-f]{64}$'
@@ -226,10 +226,10 @@ Describe 'Operation Startrail workspace snapshots' {
         [IO.File]::WriteAllText($attributes, "*.md text`n", [Text.UTF8Encoding]::new($false))
         $markdown = Join-Path $fixture.Root 'history.md'
         [IO.File]::WriteAllBytes($markdown, [Text.Encoding]::UTF8.GetBytes("immutable blob bytes`n"))
-        & git -C $fixture.Root add -- .gitattributes history.md
-        & git -C $fixture.Root commit --quiet -m 'add text-normalized blob fixture'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; '.gitattributes'; 'history.md')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit'; '--quiet'; '-m'; 'add text-normalized blob fixture')
         $LASTEXITCODE | Should Be 0
-        $tree = & git -C $fixture.Root ls-tree HEAD -- history.md
+        $tree = Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'ls-tree'; 'HEAD'; '--'; 'history.md')
         $tree | Should Match '^100644 blob [0-9a-f]{40}\thistory\.md$'
         $blob = [regex]::Match($tree, '^100644 blob (?<oid>[0-9a-f]{40})\t').Groups['oid'].Value
         $expected = Get-RSValidationGitBlobContentSha256 -RepoRoot $fixture.Root -BlobId $blob
@@ -237,7 +237,7 @@ Describe 'Operation Startrail workspace snapshots' {
         $digestMap[$blob] | Should Be $expected
 
         [IO.File]::WriteAllBytes($markdown, [Text.Encoding]::UTF8.GetBytes("immutable blob bytes`r`n"))
-        $checkoutHash = & git -C $fixture.Root hash-object --path=history.md -- history.md
+        $checkoutHash = Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'hash-object'; '--path=history.md'; '--'; 'history.md')
         $LASTEXITCODE | Should Be 0
         ([string]$checkoutHash).Trim() | Should Be $blob
         (Get-RSValidationGitBlobContentSha256 -RepoRoot $fixture.Root -BlobId $blob) | Should Be $expected
@@ -251,11 +251,11 @@ Describe 'Operation Startrail workspace snapshots' {
         for ($index = 0; $index -lt $paths.Count; $index++) {
             [IO.File]::WriteAllBytes((Join-Path $fixture.Root $paths[$index]), $payloads[$index])
         }
-        & git -C $fixture.Root add -- $paths
-        & git -C $fixture.Root commit --quiet -m 'create measured blob batches'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; $paths)
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit'; '--quiet'; '-m'; 'create measured blob batches')
         if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the blob-batch fixture.' }
         $blobIds = @($paths | ForEach-Object {
-                $tree = (& git -C $fixture.Root ls-tree HEAD -- $_).Trim()
+                $tree = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'ls-tree'; 'HEAD'; '--'; $_)).Trim()
                 [regex]::Match($tree, '^[0-7]{6} blob (?<oid>[0-9a-f]{40,64})\t').Groups['oid'].Value
             })
         $cache = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
@@ -289,7 +289,7 @@ Describe 'Operation Startrail workspace snapshots' {
         $before = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
         $toolRoot = Join-Path $fixture.Root '.build\vcpkg-tool'
         [void](New-Item -ItemType Directory -Path $toolRoot -Force)
-        & git -C $toolRoot init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $toolRoot; 'init'; '--quiet')
         $LASTEXITCODE | Should Be 0
         [IO.File]::WriteAllText((Join-Path $toolRoot 'bootstrap-vcpkg.bat'), 'managed tool', [Text.UTF8Encoding]::new($false))
         (Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root).snapshot_id | Should Be $before.snapshot_id
@@ -298,7 +298,7 @@ Describe 'Operation Startrail workspace snapshots' {
         # unreviewed exclusion from the source-integrity boundary.
         $unmanagedRoot = Join-Path $fixture.Root 'vcpkg'
         [void](New-Item -ItemType Directory -Path $unmanagedRoot -Force)
-        & git -C $unmanagedRoot init --quiet
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $unmanagedRoot; 'init'; '--quiet')
         $LASTEXITCODE | Should Be 0
         [IO.File]::WriteAllText((Join-Path $unmanagedRoot 'unexpected.txt'), 'unmanaged tool', [Text.UTF8Encoding]::new($false))
         (Test-RSActionThrows { Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root }) | Should Be $true
@@ -308,7 +308,7 @@ Describe 'Operation Startrail workspace snapshots' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'workspace identities')
         $dirtyPath = Join-Path $fixture.Root $fixture.DirtyPath
         [IO.File]::WriteAllText($dirtyPath, "index-content`n", [Text.UTF8Encoding]::new($false))
-        & git -C $fixture.Root add -- $fixture.DirtyPath
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; $fixture.DirtyPath)
         [IO.File]::WriteAllText($dirtyPath, "worktree-content`n", [Text.UTF8Encoding]::new($false))
 
         $first = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
@@ -348,14 +348,14 @@ Describe 'Operation Startrail workspace snapshots' {
 
     It 'changes identity for committed and pre/post worktree mutations' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'workspace committed')
-        & git -C $fixture.Root reset --hard --quiet HEAD
-        & git -C $fixture.Root clean -fdq
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'reset'; '--hard'; '--quiet'; 'HEAD')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'clean'; '-fdq')
         $clean = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
         [IO.File]::WriteAllText((Join-Path $fixture.Root 'dirty.txt'), "post`n", [Text.UTF8Encoding]::new($false))
         $post = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
         $post.snapshot_id | Should Not Be $clean.snapshot_id
-        & git -C $fixture.Root add -- dirty.txt
-        & git -C $fixture.Root commit --quiet -m 'committed mutation'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; 'dirty.txt')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit'; '--quiet'; '-m'; 'committed mutation')
         $committed = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
         $committed.snapshot_id | Should Not Be $clean.snapshot_id
         @($committed.files).Count | Should Be 0
@@ -363,8 +363,8 @@ Describe 'Operation Startrail workspace snapshots' {
 
     It 'rejects reparse inputs and unsafe impact-base arguments without fetching' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'workspace reparse')
-        & git -C $fixture.Root reset --hard --quiet HEAD
-        & git -C $fixture.Root clean -fdq
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'reset'; '--hard'; '--quiet'; 'HEAD')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'clean'; '-fdq')
         $link = Join-Path $fixture.Root 'reparse.txt'
         [void](New-RSTestSandboxLink -ItemType SymbolicLink -Path $link -Target (Join-Path $fixture.Root 'dirty.txt'))
         (Test-RSActionThrows { Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root }) | Should Be $true
@@ -374,13 +374,13 @@ Describe 'Operation Startrail workspace snapshots' {
 
     It 'uses the local merge base and includes committed divergence without fetching' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'workspace merge base')
-        & git -C $fixture.Root reset --hard --quiet HEAD
-        & git -C $fixture.Root clean -fdq
-        $base = (& git -C $fixture.Root rev-parse HEAD).Trim()
-        & git -C $fixture.Root branch impact-base
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'reset'; '--hard'; '--quiet'; 'HEAD')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'clean'; '-fdq')
+        $base = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'rev-parse'; 'HEAD')).Trim()
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'branch'; 'impact-base')
         [IO.File]::WriteAllText((Join-Path $fixture.Root 'dirty.txt'), "branch-change`n", [Text.UTF8Encoding]::new($false))
-        & git -C $fixture.Root add -- dirty.txt
-        & git -C $fixture.Root commit --quiet -m 'branch divergence'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; 'dirty.txt')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'commit'; '--quiet'; '-m'; 'branch divergence')
         $snapshot = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root -ImpactBase impact-base
         $snapshot.base | Should Be $base
         ($snapshot.files | Where-Object path -eq 'dirty.txt').status | Should Be 'modified'
@@ -398,16 +398,16 @@ Describe 'Operation Startrail workspace snapshots' {
             [void](New-Item -ItemType Directory -Path (Split-Path -Parent $fullPath) -Force)
             [IO.File]::WriteAllText($fullPath, "$path`n", [Text.UTF8Encoding]::new($false))
         }
-        & git -C $root init --quiet
-        & git -C $root config user.email 'startrail-boundary@invalid.example'
-        & git -C $root config user.name 'Startrail Boundary Fixture'
-        & git -C $root add -f -- .
-        & git -C $root commit --quiet -m 'boundary base'
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'init'; '--quiet')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.email'; 'startrail-boundary@invalid.example')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'config'; 'user.name'; 'Startrail Boundary Fixture')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'add'; '-f'; '--'; '.')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'commit'; '--quiet'; '-m'; 'boundary base')
 
-        & git -C $root mv -- staged-to-log.h staged-to-log.log
-        & git -C $root mv -- staged-to-build.h .build/staged-to-build.h
-        & git -C $root mv -- excluded-source.log included-from-log.h
-        & git -C $root mv -- .build/excluded-source.h included-from-build.h
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'mv'; '--'; 'staged-to-log.h'; 'staged-to-log.log')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'mv'; '--'; 'staged-to-build.h'; '.build/staged-to-build.h')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'mv'; '--'; 'excluded-source.log'; 'included-from-log.h')
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $root; 'mv'; '--'; '.build/excluded-source.h'; 'included-from-build.h')
         Move-Item -LiteralPath (Join-Path $root 'unstaged-to-log.h') -Destination (Join-Path $root 'unstaged-to-log.log')
         Move-Item -LiteralPath (Join-Path $root 'unstaged-to-build.h') -Destination (Join-Path $root '.build\unstaged-to-build.h')
 
@@ -631,7 +631,7 @@ Describe 'Operation Startrail atomic records and fixtures' {
 
     It 'creates the reusable dirty staged untracked delete rename and space fixture' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'git fixture')
-        $status = @(& git -C $fixture.Root status --porcelain=v1 --untracked-files=all)
+        $status = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'status'; '--porcelain=v1'; '--untracked-files=all'))
         ($status -join "`n") | Should Match 'dirty\.txt'
         ($status -join "`n") | Should Match 'staged\.txt'
         ($status -join "`n") | Should Match 'untracked\.txt'
@@ -642,7 +642,7 @@ Describe 'Operation Startrail atomic records and fixtures' {
 
     It 'caches immutable historical tree maps without caching mutable index lookups' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'tree-cache-and-batch')
-        $headOid = (& git -C $fixture.Root rev-parse HEAD).Trim()
+        $headOid = (Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'rev-parse'; 'HEAD')).Trim()
         & (Get-Module ValidationFingerprint) { $script:HistoricalTreeMapCache.Clear() }
 
         $first = & (Get-Module ValidationFingerprint) {
@@ -668,7 +668,7 @@ Describe 'Operation Startrail atomic records and fixtures' {
         } $fixture.Root
         $indexFirst.Count | Should BeGreaterThan 0
         [IO.File]::WriteAllText((Join-Path $fixture.Root 'new-index.txt'), 'new tracked input')
-        & git -C $fixture.Root add -- new-index.txt
+        Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture.Root; 'add'; '--'; 'new-index.txt')
         if ($LASTEXITCODE -ne 0) { throw 'Unable to update the mutable index fixture.' }
         $indexSecond = & (Get-Module ValidationFingerprint) {
             param($Root)
@@ -676,5 +676,119 @@ Describe 'Operation Startrail atomic records and fixtures' {
         } $fixture.Root
         $indexFirst.ContainsKey('new-index.txt') | Should Be $false
         $indexSecond.ContainsKey('new-index.txt') | Should Be $true
+    }
+}
+
+Describe 'Engine-free fingerprint metadata transport' {
+    It 'preserves ordered batch-check stdin and rejects missing objects without a build' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('fingerprint-native-'+[guid]::NewGuid().ToString('N'))
+        $module=Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -PassThru -Scope Local -Prefix FingerprintNative
+        $savedConsoleEncoding=[Console]::OutputEncoding
+        try {
+            (Test-Path (Join-Path $fixture '.ci-engine'))|Should Be $false
+            $init=& $module {param($root)Invoke-RSValidationGitLineCapture -Root $root -Arguments @('init','--quiet')} $fixture
+            $init.ExitCode|Should Be 0
+            $path='café-Δ-雪.txt'
+            [IO.File]::WriteAllText((Join-Path $fixture $path),'owned fixture',[Text.UTF8Encoding]::new($false))
+            foreach($encoding in @([Text.Encoding]::GetEncoding(437),[Text.UTF8Encoding]::new($false))) {
+                [Console]::OutputEncoding=$encoding
+                $paths=& $module {param($root)Invoke-RSValidationGitLineCapture -Root $root -Arguments @('-c','core.quotepath=false','ls-files','--others','--exclude-standard')} $fixture
+                ($paths.Output -ccontains $path)|Should Be $true
+                [Console]::OutputEncoding.CodePage|Should Be $encoding.CodePage
+            }
+            $one=& $module {param($root)Invoke-RSValidationGitLineCapture -Root $root -Arguments @('hash-object','-w','--stdin') -InputLines @('first é雪')} $fixture
+            $two=& $module {param($root)Invoke-RSValidationGitLineCapture -Root $root -Arguments @('hash-object','-w','--stdin') -InputLines @('second')} $fixture
+            $one.ExitCode|Should Be 0;$two.ExitCode|Should Be 0
+            $order=@($two.Output[0],$one.Output[0],$two.Output[0])
+            $sizes=& $module {param($root,$oids)Invoke-RSValidationGitLineCapture -Root $root -Arguments @('cat-file','--batch-check') -InputLines $oids} $fixture $order
+            $sizes.ExitCode|Should Be 0
+            $sizes.Output.Count|Should Be 3
+            for($i=0;$i -lt 3;$i++){ $sizes.Output[$i].StartsWith($order[$i]+' blob ')|Should Be $true }
+            $cache=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+            $objects=@([pscustomobject]@{Type='blob';Oid=$one.Output[0]},[pscustomobject]@{Type='blob';Oid=$two.Output[0]})
+            $count=& $module {param($root,$objects,$cache)Add-RSValidationGitBlobSha256Batches -RepoRoot $root -Object $objects -Cache $cache} $fixture $objects $cache
+            ($count -gt 0)|Should Be $true
+            $cache.Count|Should Be 2
+            $failed=$false
+            try {& $module {param($root)Add-RSValidationGitBlobSha256Batches -RepoRoot $root -Object @([pscustomobject]@{Type='blob';Oid=('0'*40)},[pscustomobject]@{Type='blob';Oid=('1'*40)}) -Cache ([Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal))} $fixture}
+            catch {$failed=$_.Exception.Message.StartsWith("Unexpected Git blob batch-size row '")}
+            $failed|Should Be $true
+        } finally {[Console]::OutputEncoding=$savedConsoleEncoding;Remove-Module $module}
+    }
+}
+
+Describe 'Shared bootstrap Git transport boundary' {
+    It 'retains import ownership engine independence omitted stdin and inherited input encoding in either caller order' {
+        $fixture=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('shared-git-boundary-'+[guid]::NewGuid().ToString('N'))
+        $source=Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/ValidationFingerprint.psm1') -PassThru -Scope Local -Prefix SharedSource
+        try {$closure=@(& $source {param($root)Get-RSValidationDependencyClosure -RepoRoot $root -RootRelativePath 'Tools/Modules/Testing/ValidationFingerprint.psm1'} $repoRoot)}
+        finally {Remove-Module $source}
+        $closure=@($closure+@('Tools/Modules/Testing/TestRunArchive.psm1','Tools/Modules/Testing/GitMetadataCapture.psm1')|Sort-Object -Unique)
+        $savedInput=$global:OutputEncoding;$savedExit=$global:LASTEXITCODE
+        $savedConsoleOut=[Console]::OutputEncoding;$savedConsoleIn=[Console]::InputEncoding
+        $savedPath=$env:PATH;$savedCwd=(Get-Location).Path;$savedProcessCwd=[Environment]::CurrentDirectory
+        try {
+            foreach($order in @(
+                [pscustomobject]@{Name='fingerprint-first';Modules=@('ValidationFingerprint','TestRunArchive')},
+                [pscustomobject]@{Name='archive-first';Modules=@('TestRunArchive','ValidationFingerprint')}
+            )) {
+                $root=Join-Path $fixture $order.Name
+                foreach($relative in $closure) {
+                    $destination=Join-Path $root $relative
+                    [void][IO.Directory]::CreateDirectory((Split-Path $destination))
+                    Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $destination
+                }
+                (Test-Path (Join-Path $root '.ci-engine'))|Should Be $false
+                $callers=[Collections.Generic.List[object]]::new()
+                try {
+                    foreach($name in $order.Modules) {
+                        $module=Import-Module (Join-Path $root ('Tools/Modules/Testing/'+$name+'.psm1')) -PassThru -Scope Local -Prefix ('Boundary'+$order.Name.Replace('-','')+$name)
+                        $wrapper=if($name -eq 'ValidationFingerprint'){'Invoke-RSValidationGitLineCapture'}else{'Invoke-RSTestRunArchiveGitCapture'}
+                        $callers.Add([pscustomobject]@{Module=$module;Wrapper=$wrapper})
+                        $owner=& $module {(Get-Command Invoke-RSTestGitMetadataCapture).Module.Path}
+                        $owner|Should Be (Join-Path $root 'Tools/Modules/Testing/GitMetadataCapture.psm1')
+                    }
+                    $init=& $callers[0].Module {param($root,$wrapper)& $wrapper -Root $root -Arguments @('init','--quiet','--object-format=sha1')} $root $callers[0].Wrapper
+                    $init.ExitCode|Should Be 0
+                    foreach($caller in $callers) {
+                        $empty=& $caller.Module {param($root,$wrapper)& $wrapper -Root $root -Arguments @('cat-file','--batch-check') -InputLines @()} $root $caller.Wrapper
+                        $empty.ExitCode|Should Be 0;$empty.Output.Count|Should Be 0
+                        foreach($encoding in @([Text.UTF8Encoding]::new($false),[Text.UnicodeEncoding]::new($false,$false))) {
+                            $global:OutputEncoding=$encoding
+                            $payload='shared é雪'
+                            $data=$encoding.GetBytes($payload+[Environment]::NewLine)
+                            $header=[Text.Encoding]::ASCII.GetBytes(('blob '+$data.Length+[char]0))
+                            $blob=[byte[]](@($header)+@($data))
+                            $expected=[Convert]::ToHexString([Security.Cryptography.SHA1]::HashData($blob)).ToLowerInvariant()
+                            $actual=& $caller.Module {param($root,$wrapper,$payload)& $wrapper -Root $root -Arguments @('hash-object','--stdin') -InputLines @($payload)} $root $caller.Wrapper $payload
+                            $actual.ExitCode|Should Be 0;$actual.Output[0]|Should Be $expected
+                            [object]::ReferenceEquals($global:OutputEncoding,$encoding)|Should Be $true
+                            [Console]::OutputEncoding.CodePage|Should Be $savedConsoleOut.CodePage
+                            [Console]::InputEncoding.CodePage|Should Be $savedConsoleIn.CodePage
+                        }
+                        $observations=& $caller.Module {
+                            param($root,$wrapper)
+                            $original=(Get-Command Invoke-RSTestGitMetadataCapture).ScriptBlock
+                            function script:Invoke-RSTestGitMetadataCapture {
+                                param($Root,$Arguments,$InputLines)
+                                return [pscustomobject]@{Bound=$PSBoundParameters.ContainsKey('InputLines');Count=if($PSBoundParameters.ContainsKey('InputLines')){@($InputLines).Count}else{-1}}
+                            }
+                            try {@(& $wrapper -Root $root -Arguments @('--version');& $wrapper -Root $root -Arguments @('--version') -InputLines @();& $wrapper -Root $root -Arguments @('--version') -InputLines @(''))}
+                            finally {Set-Item Function:script:Invoke-RSTestGitMetadataCapture -Value $original}
+                        } $root $caller.Wrapper
+                        $observations.Count|Should Be 3
+                        $observations[0].Bound|Should Be $false;$observations[0].Count|Should Be -1
+                        $observations[1].Bound|Should Be $true;$observations[1].Count|Should Be 0
+                        $observations[2].Bound|Should Be $true;$observations[2].Count|Should Be 1
+                    }
+                    (Test-Path (Join-Path $root '.ci-engine'))|Should Be $false
+                    $env:PATH|Should Be $savedPath;(Get-Location).Path|Should Be $savedCwd
+                    [Environment]::CurrentDirectory|Should Be $savedProcessCwd
+                } finally {for($i=$callers.Count-1;$i -ge 0;$i--){Remove-Module $callers[$i].Module}}
+            }
+        } finally {
+            $global:OutputEncoding=$savedInput;$global:LASTEXITCODE=$savedExit
+            [Console]::OutputEncoding=$savedConsoleOut;[Console]::InputEncoding=$savedConsoleIn
+        }
     }
 }

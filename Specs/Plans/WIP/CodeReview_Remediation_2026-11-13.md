@@ -31,7 +31,7 @@ Status terminology: **validated** means current source review supports the defec
 | BUG-12 | Validated; implemented | Artifact-registry ASCII case-insensitive marker/extension checks use the canonical helper and fixed-width MTP suffix location. `FileOps_IdentityLessGuardPartition` coverage is implemented, not executed. |
 | BUG-13 | Validated; fix reported | Shared reserved-device-name policy now trims before extension handling and covers COM/LPT superscript aliases; duplicate bridge policy removed. Runtime execution remains pending. |
 | BUG-14 | Validated; corrected Debug controls passed | DPI pixel state, footer restoration and exact-ceiling growth corrected. The corrected Debug Popup selected case exercised same-physical-DPI state and one-pixel resize controls; broader UI acceptance remains pending. |
-| BUG-15 | Partly validated by corrected Debug control | Completed-group reveal was exercised for both targets in the corrected Debug Popup selected case. Issues-pane copied facts and broader UI acceptance remain pending. |
+| BUG-15 | Partly validated by corrected Debug control | Completed-group reveal was exercised for both targets in the corrected Debug Popup selected case. Issues-pane copied-facts regression coverage is implemented in `RunFileOpsIssuesPaneUxChecks` (actual displayed fact strings plus exact paths); current-source execution and broader UI acceptance remain pending. |
 | BUG-16 | Validated; fix reported | Queue reorder under lock corrected. Runtime execution remains pending. |
 | BUG-17 | Validated; implemented | Historical-tree hashing now batches through the 64 MiB caller; meaningful batch-byte tests reported passed. No native builds/tests are claimed. |
 | BUG-18 | Validated; implemented, subclaims 18.1–18.4 | Shared workflow/PATH MSBuild selection and vcpkg alignment; sanitized/contained SDK invocation; current-process PowerShell and no-optional-locks Git reads with deeper JSON identity; fail-closed single Clean before Rebuild. Initial PATH-only VS selection issue also fixed. Focused tooling passes are listed below; native acceptance is pending. |
@@ -213,3 +213,147 @@ Use `Test-Changes.ps1 -Explain`, then the derived affected scope and `Test-Chang
 
 - The initial observer campaign passed 369/0/0 in canonical context 20261114T171326Z-104004-b585a173556f410d9542832fbee50626; its superseded three-file packet/source manifest is preserved byte-for-byte in completed context 20261114T172900Z-72004-0f966b5292db4e5988832cb6cdc70231. The first joint campaign (174429/PID106616) retained 436 passed/4 failed/0 skipped from one missing derived-consumer inventory declaration, then repaired that declaration. The next campaign (174732/PID109328) retained 439/1/0: an existing managed GUI-bootstrapper fixture returned -1 before its marker; the exact failed iteration/cause remains unknown after automatic fixture cleanup. The fixture now acquires bounded short marked-sandbox paths, checks executable/config/log budgets before launch, and retains actual 0/3010/17 exits, arguments, logs and original errors before cleanup. Its targeted 11/0/0 and final pure primary/secondary/fatal/restore controls 9/0/0 are retained; no production wait, timeout or assertion was weakened, and MAX_PATH is not promoted to the historical cause.
 - Final frozen joint-source compiler-free validation passed **440/0/0** in 140.311 seconds: whole HostedTestDesktop, source contracts, inventory, governance, documentation drift, ProcessStreaming, Vcpkg safety and compiler-free BuildReproducibility (RequiresBuildToolchain excluded). All 18 source hashes were stable; the [compact stock-observation component packet](../../TestRuns/4cb089111a23/Testing/2026-11-14_171326_HostedStockObservation/README.md) pins the 17 non-reporting targets and all 40 exact fake-work rows from completed context 20261114T181221Z-106388-bcb8bdefe1754f749767db431e92cd3a. The actual background launch control requires no-window/redirected PSI, window zero, both pipes, exact owned job/PID-parent and exit 17; observed console-server association count 1 is diagnostic, not a zero-count requirement. These component results do not prove the old terminal creator, native API cost, animation causality or a performance improvement. New-source native/ARM64 and broad desktop qualification remain pending; I65 stays ACTIVE.
+
+### VSwhere metadata caller follow-up prepared privately (2026-11-15)
+
+A private unapplied patch lifts the existing silent DxUi capture projection into
+the canonical ProcessStreaming module and routes the standalone restorer, root
+build and local vcpkg VSwhere metadata queries through it. The original bare
+probes were read-only discovery, not intentional interactive installers. The
+reachable launch-policy gap is validated; historical console authorship remains
+unproved. Queries, workflow fast paths, native-host ordering and build fallback
+remain intact; nonzero standalone/vcpkg discovery fails closed. No installer or
+real interactive MSBuild inheritance is changed. This preparation changes no actual
+RS source, dependency pin, SDK policy or engine. Focused native-query controls are
+separate from native product/Full/ARM64/desktop qualification. I65 stays ACTIVE.
+
+Private final controls cover eight actual contained no-window CUI starts through
+the shared projection and all three caller ASTs, with exit0/17, separate streams,
+literal arguments, owned console visibility and cleanup; twenty existing focused
+source/metadata/workflow controls also passed. Earlier private fixture failures
+remain retained. These are metadata-query controls, not product native acceptance.
+The final composed source requires a reviewed PR execution-digest refresh or
+conservative local PrePush accounting; the old digest must not delegate new work.
+
+
+### BUG-09 paired marker-proof coverage prepared privately (2026-11-15)
+
+An unapplied exact-source candidate extends the ordinary FileOps runner with
+`FileOps_LocalAncestryMarkerProofCost`, included in unfiltered Full and the existing
+safety family. It compares observation-only current identity guards with the same
+actual guards plus marker proof on identical disjoint owned fixtures: 16 cohorts,
+six alternating ABBA/BAAB blocks and four calls/window (1,536 timed guards/768 proofs).
+The existing scoped identity-less injection and actual counter must agree; 16 untimed
+real Copy witnesses retain source and exact payload and must traverse the production
+proof. Primary/alternate roots remain existing marked resources with explicit opt-in;
+there is no scan fallback, new link/share/mount/root or no-lease exemption.
+
+Only private source/format checks are intended here. No build, native run, timing
+measurement, pin or Full acceptance has occurred; BUG-09 paired evidence remains
+pending until the exact final consumer source's admitted Release Full executes and
+its raw data/receipt/profile/fixture bindings are reviewed. The bounded component
+protocol does not qualify transfer throughput, NAS, I60/W5 or other roadmap work.
+I65 remains ACTIVE. Compose this checkpoint and owning-spec additions with the
+separate VSwhere and accepted producer-pin changes; keep the existing RS fragment
+and do not fold CHANGELOG.
+
+### Composed H8 API4 candidate prepared privately (2026-11-15)
+
+This unapplied private candidate combines the reviewed three-VSwhere metadata
+capture fix and BUG-09 marker-proof component case with proposed DxUi
+[`7fb2ab71852087d93b3a3e5b3ba504c37f56267c`](https://github.com/RedSalamanders/DxUi/tree/7fb2ab71852087d93b3a3e5b3ba504c37f56267c),
+retaining API revision 4. H8 is **UNQUALIFIED/PENDING**: fresh producer gates
+remain required. Historical H7 passed six native profiles and eight consumers but
+its normal paired measurement timed out at 150 minutes after 135/144 receipts; no
+complete summary or verdict exists. This is a failed partial A/B study, not A/A,
+and not adoption evidence. H8 changes only the outer workflow deadlines and owning
+source contracts; its twenty-file measured harness remains 7249D6FCCF538E722FAC8E615CB1656BD516F9224828BBB7CDFBB64FB82C0E56.
+Fresh H8 [validation](https://github.com/RedSalamanders/DxUi/actions/runs/43769081609)
+and [format](https://github.com/RedSalamanders/DxUi/actions/runs/43769081636) remain pending.
+The earlier H6 and H7 candidates are superseded; neither failed cohort is adoption evidence. Actual RS source/index remain at 83fd/B pin;
+apply only after the exact producer source qualifies, or supersede this candidate
+if the accepted source changes.
+
+The lock and sole hardcoded test expectation change together. Use canonical Source
+restore/build when SDK NotDistributed, never B-SDK reuse, a descriptor/allowlist
+exception, engine update or API5 migration. Rebuild with matching public headers/archive
+and retain actual consumer/toolchain/CRT bytes. Earlier metadata-capture focused
+passes and BUG-09 pure source/format checks remain component observations, not
+execution of this composition. No build, native timing, PrePush, ABI, hosted or Full
+acceptance is claimed.
+
+After authorized actual application and settled source, compute and review the
+canonical derived PR workflow digest once; no old or partial digest delegates this
+candidate. Then account for noninteractive PrePush, zero-warning test-enabled full
+x64 Debug/Release solution builds and complete byte-verified receipts (188 outputs
+is prior expectation, not a fixed contract), published-head ARM64 Release
+CommandsUiAttribution's fixed four cases, fresh unfiltered x64 Debug/Release Full,
+and separate native ARM64 Release Full. Existing Full covers applicable local UI
+regressions once; add a filtered run only for a demonstrated coverage gap or failure
+investigation. SMB/resource prerequisites and separately owned I60 NAS/W5 work retain
+their actual contractual scope; no unrelated roadmap becomes a new merge gate.
+The authorized fresh 4–6 hour desktop window starts only after corrected RS builds
+and the ARM diagnostic, with conductor announcement and the existing three-minute
+teardown buffer. Its clock has not started. I65 remains **ACTIVE**.
+
+### Qualified H8 composition applied locally; consumer execution pending (2026-11-16)
+
+The reviewed nineteen-path composition is now **APPLIED LOCAL / CONSUMER
+QUALIFICATION PENDING** on RS `83fd6a3faeddd3228c5f462a857db3ba00889fd4`. It selects
+qualified API4 DxUi `7fb2ab71852087d93b3a3e5b3ba504c37f56267c`: exact producer
+[validation43769081609](https://github.com/RedSalamanders/DxUi/actions/runs/43769081609)
+and [format43769081636](https://github.com/RedSalamanders/DxUi/actions/runs/43769081636)
+passed, including the complete 144-report normal P/T8 study, trusted-policy Gate
+and all 24 exact-budget slots. Independent offline replay and retained-binary rehash
+were reviewed before source-adoption authorization. H7's 135/144 timeout/no verdict
+remains failed history; historical private checkpoints above remain point-in-time
+preparation records.
+
+The shared VSwhere capture, BUG09v2 component case and existing BUG15 coverage are
+integrated without changing production C++ or their assertions. BUG09 actual timing,
+copy witnesses and cleanup assertions remain unexecuted. Current owning Build norm
+now specifies qualified Source consumption; SDK NotDistributed grants no SDK reuse,
+allowlist/descriptor/engine change, API5 migration or cooking port. Matching consumer
+headers/archive, zero-warning full builds, byte-verified receipts, ABI, PrePush,
+ARM attribution and fresh x64 Debug/Release Full plus separate ARM Full remain pending.
+The authoritative Tests/test-scopes.json PR workflow digest is refreshed only after
+these composed source bytes settle; a digest refresh grants no completed qualification.
+RS CHANGELOG remains untouched and the existing dated fragment is retained.
+
+Only contained compiler-free tooling/source/inventory/governance/changelog/spec checks
+are authorized at this stage; their outcomes accompany the staged review. No local
+native build, product test, focus, workflow dispatch, commit or push is claimed here.
+I65 remains **ACTIVE**. The authorized 4–6 hour desktop clock has not started; its
+conductor announcement follows corrected consumer builds and the ARM diagnostic,
+with the existing three-minute teardown buffer. Applicable SMB/resource prerequisites
+and separately owned I60 NAS/W5 scope retain their actual contracts.
+
+### Remaining background Git launch closure implemented (2026-11-16)
+
+A bounded nine-file follow-up closes actual scoped-planning, tooling/spec inventory, snapshot/archive, runner graph, hosted HEAD and vcpkg provenance/bootstrap launch gaps. Canonical contained capture serves graph/HEAD/probe reads; provisioning writes retain delegated streaming and the existing lock. Reviewed engine-independent private transports preserve raw/NUL, line/stdin, inherited environment and exit/error semantics; existing raw readers are unchanged. No temporary caller shim is the production fix. Exact source guards, controlled owned-CUI observations and focused semantic tests are reported with the final staged bytes. The previous cc848 digest was intermediate; the canonical scope-manifest field is refreshed after all production/test/inventory bytes settle. This is no historical Terminal attribution, UI fix or native qualification. I65 remains ACTIVE; consumer builds/ABI/Full and desktop clock remain pending/unstarted.
+
+The CP437 investigation also validated real Git stdout Unicode corruption, rather than only a fixture mismatch. Specialized Git text decoders now select UTF-8; the canonical capture/streaming boundary adds one optional per-child stdout override for known Git callers, including the DxUi Git shim. Defaults, arbitrary stderr, non-Git decoding, ordered stdin and raw readers remain unchanged. No production global console encoding is changed. Existing UTF-8-only passes are retained with their limits; new actual guarded Git path controls exercise both CP437 and UTF-8. First assertion-pipeline fixture failures and the exact Pester3 Boolean-output diagnostic are preserved; equivalent terminating field checks prevent those doubles from corrupting command return values.
+
+### Compiler-free integration checkpoint; real dependency preparation pending (2026-11-16)
+
+Ten actual whole compiler-free suites pass **512/0/0**: ScopedTesting 13,
+ToolInventory 21, SpecInformationArchitecture 85, ValidationFingerprint 31,
+TestRunArchive 28, ToolingGovernance 12, DocumentationDriftContracts 30,
+TestHarnessSourceContracts 243, ProcessStreaming 17 and DxUiDependency 32.
+The scheduled fixture scope uses 136 migrated native Git calls and twelve explicit
+protocol-control calls through the prepared no-window helper. Real controls preserve
+scalar/multiline/blank versus empty output, literal arguments, redirected diagnostics,
+Unicode under CP437/UTF-8 and actual native exits. The first scalar-list wrapper,
+stale longpaths source-pattern and missing README map failures remain preserved;
+only the equivalent guarded source-pattern assertion was intentionally retargeted.
+The inventory classified all 231 files with zero blockers; fragment validation and
+specification inventory also passed with zero blocking findings.
+
+Whole Vcpkg safety is **PENDING**, not passed: its pre-build attempt reported
+31 passed, one Describe-setup failure and one declared missing-pinned-module skip.
+The existing strict object-store locator check correctly rejects the previous DxUi
+identity after the H8 lock change. No locator is edited and no assertion is weakened.
+Canonical Source preparation/build must establish current locators and restored
+modules before rerunning those dependency-sensitive checks. The derived workflow
+digest binds settled source only and does not promote this prerequisite or any
+consumer native/ABI/Full result. I65 remains ACTIVE; desktop clock is unstarted.

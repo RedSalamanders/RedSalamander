@@ -417,7 +417,7 @@ Describe 'Vcpkg default MSVC toolset pin' {
     It 'matches the pinned DxUi modules it mirrors' -Skip:(-not $dxuiModulesRestored) {
         # The short directory is only a locator; verify the complete identity
         # before importing executable code from the restored dependency.
-        $restoredHead = & git -C $dxuiSource rev-parse HEAD 2>$null
+        $restoredHead = Invoke-RSTestFixtureGit -Arguments @('-C'; $dxuiSource; 'rev-parse'; 'HEAD') 2>$null
         $LASTEXITCODE | Should Be 0
         ([string]$restoredHead).Trim() | Should Be $pin
         # This installer cannot import the pinned checkout (it runs before the restore), so it keeps DxUi's contract itself. Whenever
@@ -597,14 +597,14 @@ Describe 'Vcpkg dependency pins' {
             if ($identity.Identity.commit -cne $dependencyPin.commit -or $identity.Identity.platform -cne $platform) {
                 throw 'Pinned-baseline object-store locator has a stale DxUi dependency identity.'
             }
-            $sourceHead = & git --no-optional-locks --no-lazy-fetch -C $source rev-parse HEAD 2>&1
+            $sourceHead = Invoke-RSTestFixtureGit -Arguments @('--no-optional-locks'; '--no-lazy-fetch'; '-C'; $source; 'rev-parse'; 'HEAD') 2>&1
             if ($LASTEXITCODE -ne 0 -or ([string]$sourceHead).Trim() -cne $dependencyPin.commit) {
                 throw 'Pinned-baseline object-store locator does not match the complete DxUi source pin.'
             }
             $output = Read-DxUiResolvedOutputRoot -DependencyRoot $dependency -Platform $platform -BuildIdentity $identity
             $candidate = Join-Path $output 'vcpkg-tool'
             if (-not (Test-Path -LiteralPath (Join-Path $candidate '.git'))) { continue }
-            $origin = & git --no-optional-locks --no-lazy-fetch -C $candidate remote get-url origin 2>&1
+            $origin = Invoke-RSTestFixtureGit -Arguments @('--no-optional-locks'; '--no-lazy-fetch'; '-C'; $candidate; 'remote'; 'get-url'; 'origin') 2>&1
             $expectedOrigin = (Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg-tool.json') -Raw | ConvertFrom-Json).repository
             if ($LASTEXITCODE -ne 0 -or (([string]$origin).Trim().TrimEnd('/') -replace '\.git$', '') -cne $expectedOrigin) {
                 throw 'Pinned-baseline object store does not have the pinned microsoft/vcpkg origin.'
@@ -643,7 +643,7 @@ Describe 'Vcpkg dependency pins' {
     if (-not (Test-Path -LiteralPath (Join-Path $toolObjectStore '.git'))) {
         $baselineObjectUnavailableReason = "No managed vcpkg Git object store is available at $toolObjectStore."
     } else {
-        $commitCheck = @(& git --no-lazy-fetch -C $toolObjectStore cat-file -e "$baselineCommit^{commit}" 2>&1)
+        $commitCheck = @(Invoke-RSTestFixtureGit -Arguments @('--no-lazy-fetch'; '-C'; $toolObjectStore; 'cat-file'; '-e'; "$baselineCommit^{commit}") 2>&1)
         if ($LASTEXITCODE -ne 0) {
             $message = $commitCheck -join "`n"
             if ($message -match '(?i)not a valid object name|could not get object info|missing object|bad object|promisor remote|could not fetch') {
@@ -653,7 +653,7 @@ Describe 'Vcpkg dependency pins' {
             }
         } else {
             foreach ($relative in $baselinePaths) {
-                $listing = @(& git --no-lazy-fetch -C $toolObjectStore ls-tree -r $baselineCommit -- $relative 2>&1)
+                $listing = @(Invoke-RSTestFixtureGit -Arguments @('--no-lazy-fetch'; '-C'; $toolObjectStore; 'ls-tree'; '-r'; $baselineCommit; '--'; $relative) 2>&1)
                 if ($LASTEXITCODE -ne 0) {
                     $message = $listing -join "`n"
                     if ($message -match '(?i)missing|not a valid|bad object|unable to read|not a tree object|promisor remote') {
@@ -666,7 +666,7 @@ Describe 'Vcpkg dependency pins' {
                 if ($entry.Count -ne 1) { throw "Pinned baseline $baselineCommit does not contain exactly one expected file '$relative'." }
                 if ($entry[0] -notmatch '^100644 blob ([0-9a-f]{40})\t') { throw "Pinned baseline path '$relative' is not a regular blob: $($entry[0])" }
                 $blobId = $Matches[1]
-                $blobCheck = @(& git --no-lazy-fetch -C $toolObjectStore cat-file -e "$blobId^{blob}" 2>&1)
+                $blobCheck = @(Invoke-RSTestFixtureGit -Arguments @('--no-lazy-fetch'; '-C'; $toolObjectStore; 'cat-file'; '-e'; "$blobId^{blob}") 2>&1)
                 if ($LASTEXITCODE -ne 0) {
                     $message = $blobCheck -join "`n"
                     if ($message -match '(?i)missing|not a valid|bad object|unable to read|promisor remote') {
@@ -702,7 +702,7 @@ Describe 'Vcpkg dependency pins' {
                 Invoke-RSValidationGitBinary -RepoRoot $ObjectStore -Argument @('--no-lazy-fetch', 'cat-file', 'blob', $BlobId)
             } $toolObjectStore $baselineBlobIds[$relative]
             [IO.File]::WriteAllBytes($filePath, $blobBytes)
-            $actualBlob = & git --no-lazy-fetch -C $toolObjectStore hash-object --no-filters -- $filePath
+            $actualBlob = Invoke-RSTestFixtureGit -Arguments @('--no-lazy-fetch'; '-C'; $toolObjectStore; 'hash-object'; '--no-filters'; '--'; $filePath)
             if ($LASTEXITCODE -ne 0 -or ([string]$actualBlob).Trim() -cne $baselineBlobIds[$relative]) {
                 throw "Pinned baseline file '$relative' does not match its immutable Git blob $($baselineBlobIds[$relative])."
             }
@@ -1005,6 +1005,54 @@ file(WRITE "`${CMAKE_BINARY_DIR}/result.txt" "`${affected}\n`${other}\n")
             $actual = @(Get-Content -LiteralPath (Join-Path $build 'result.txt'))
             $actual[0] | Should Be $case.expected
             $actual[1] | Should Be 'NOTFOUND'
+        }
+    }
+}
+
+Describe 'Captured vcpkg provisioning Git authority' {
+    It 'keeps provisioning writes on delegated streaming with original merged diagnostics and exact failure' {
+        $root=New-RSTemporaryVcpkgInstallSafetyRoot
+        $bootstrapFixtureState=[pscustomobject]@{Exit=0;Calls=[Collections.Generic.List[object]]::new()}
+        Mock Invoke-RSCapturedProcess -ModuleName VcpkgInstallSafety {throw 'Provisioning writes must not use read-only capture.'}
+        Mock Invoke-RSStreamingProcess -ModuleName VcpkgInstallSafety ({
+            param($FilePath,$Arguments,$WorkingDirectory,$OutputLineCallback,[switch]$DelegateArtifactOperation,[Text.Encoding]$StandardOutputEncoding)
+            if ($FilePath -cne 'git' -or $WorkingDirectory -cne $root -or -not $DelegateArtifactOperation -or $StandardOutputEncoding.CodePage -ne 65001) { throw 'Bootstrap capture lost literal Git, CWD or delegated write authority.' }
+            $bootstrapFixtureState.Calls.Add(@{argv=@($Arguments);delegated=[bool]$DelegateArtifactOperation})
+            & $OutputLineCallback 'stdout é雪' $false
+            & $OutputLineCallback 'stderr diagnostic' $true
+            return $bootstrapFixtureState.Exit
+        }.GetNewClosure())
+        $module=Get-Module VcpkgInstallSafety
+        $actual=& $module {param($Root)Invoke-RSVcpkgBootstrapGit $Root @('clone','--','literal * repository','owned checkout')} $root
+        $actual|Should Be ('stdout é雪'+[Environment]::NewLine+'stderr diagnostic')
+        ($bootstrapFixtureState.Calls[0].argv -join '|')|Should Be ('-C|'+$root+'|clone|--|literal * repository|owned checkout')
+        $bootstrapFixtureState.Exit=17
+        {& $module {param($Root)Invoke-RSVcpkgBootstrapGit $Root @('fetch','origin',('a'*40))} $root}|Should Throw 'Pinned vcpkg Git operation failed'
+        ($bootstrapFixtureState.Calls[1].argv -join '|')|Should Be ('-C|'+$root+'|fetch|origin|'+('a'*40))
+        $bootstrapFixtureState.Calls.Count|Should Be 2
+    }
+    It 'uses the actual cat-file exit to fetch only missing pinned objects without swallowing the recheck' {
+        $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($helperModule,[ref]$t,[ref]$e)
+        $function=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Initialize-RSVcpkgToolContext'},$true)
+        $loop=$function.Find({param($n)$n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Variable.Extent.Text -ceq '$required'},$true)
+        if(!$loop -or !$loop.Extent.Text.Contains('$commitProbe.ExitCode -ne 0')){throw 'Actual pinned-object probe boundary missing.'}
+        $source=$loop.Extent.Text
+        foreach($probeExitValue in @(0,17)){
+            $probeWriteCalls=[Collections.Generic.List[object]]::new();$probeReadCalls=[Collections.Generic.List[object]]::new()
+            & {
+                $toolRoot=$TestDrive;$commit='a'*40;$baseline='b'*40
+                function Invoke-RSCapturedProcess {param($FilePath,$WorkingDirectory,$Arguments,[Text.Encoding]$StandardOutputEncoding)
+                    if ($FilePath -cne 'git' -or $WorkingDirectory -cne $toolRoot -or $StandardOutputEncoding.CodePage -ne 65001) { throw 'Object probe lost literal Git or CWD.' }
+                    $probeReadCalls.Add(@($Arguments));return [pscustomobject]@{ExitCode=$probeExitValue;StdOut=@();StdErr=@('probe diagnostic must remain suppressed')}
+                }
+                function Invoke-RSVcpkgBootstrapGit {param($Root,$Arguments)$Root|Should Be $toolRoot;$probeWriteCalls.Add(@($Arguments));return ''}
+                . ([scriptblock]::Create($source))
+            }
+            $probeReadCalls.Count|Should Be 2
+            ($probeReadCalls[0] -join '|')|Should Be ('-C|'+$TestDrive+'|cat-file|-e|'+('a'*40)+'^{commit}')
+            ($probeReadCalls[1] -join '|')|Should Be ('-C|'+$TestDrive+'|cat-file|-e|'+('b'*40)+'^{commit}')
+            $probeWriteCalls.Count|Should Be $(if($probeExitValue){4}else{0})
+            if($probeExitValue){($probeWriteCalls[0] -join '|')|Should Be ('fetch|origin|'+('a'*40));($probeWriteCalls[1] -join '|')|Should Be ('cat-file|-e|'+('a'*40)+'^{commit}')}
         }
     }
 }

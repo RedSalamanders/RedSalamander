@@ -1,4 +1,5 @@
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot '../Build/ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 
 function Initialize-RSHostedDesktopNative {
     if ('RedSalamander.Testing.HostedDesktopNative' -as [type]) { return }
@@ -1263,8 +1264,9 @@ function Invoke-RSHostedArm64StockPreparation {
     $directory=Assert-RSTestSandboxContainedPath -TestRoot $root -Path (Join-Path $root ('evidence/hosted-stock-preparation/'+[guid]::NewGuid().ToString('N'))) -RequireDescendant
     if(Test-Path -LiteralPath $directory){throw 'Stock preparation audit directory already exists.'}
     [void][IO.Directory]::CreateDirectory($directory)
-    $sourceHead = (& git -C $RepoRoot rev-parse HEAD | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $sourceHead -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot bind stock preparation to the exact checkout head.' }
+    $headCapture = Invoke-RSCapturedProcess -StandardOutputEncoding ([Text.UTF8Encoding]::new($false)) -FilePath 'git' -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -WorkingDirectory $RepoRoot
+    $sourceHead = ($headCapture.StdOut | Out-String).Trim()
+    if ($headCapture.ExitCode -ne 0 -or $sourceHead -cnotmatch '^[0-9a-f]{40}$') { throw 'Cannot bind stock preparation to the exact checkout head.' }
     Invoke-RSHostedStockPreparationCore -Directory $directory -SourceHead $sourceHead
     Write-Host ("Hosted ARM64 stock preparation audit: $directory")
     return $directory
