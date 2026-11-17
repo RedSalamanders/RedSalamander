@@ -2,7 +2,7 @@
 
 RedSalamander keeps every user-facing string and every static menu, dialog, and accelerator in Windows `.rc` resources, ships English embedded in each binary, and overlays translations through per-culture satellite DLLs. This page is the developer reference for how that system is laid out, the runtime lookup and fallback chain, the placeholder rules translators must follow, and the day-to-day workflows for adding a string and adding a culture.
 
-For the public/onboarding overview see the [Developer Guide](../DeveloperGuide.md). The normative behavior lives in `Specs/Core/Core_Localization.md`, and the hands-on patterns are in `.github/skills/localization/SKILL.md`.
+For the public/onboarding overview see the [Developer Guide](../DeveloperGuide.md). The normative behavior lives in `Specs/Core/Core_Localization.md` (with shared agent patterns in `RedHome`'s `localization` skill).
 
 ## Where strings live (.rc ownership)
 
@@ -221,7 +221,6 @@ Invoke-Pester -Path .\Tools\Tests\ResourceLocalizationContracts.Tests.ps1
 - [Themes.md](../Themes.md) — the dynamic theme menu sections rebuilt on language change
 - [Preferences.md](../Preferences.md) — the General → Display language setting
 - `Specs/Core/Core_Localization.md` — normative specification
-- `.github/skills/localization/SKILL.md` — patterns and helper reference
 
 
 RedMonitor owns its resources and four legacy-named satellites in its independent repository/package. No monitor resource project is built or shipped by this solution.
