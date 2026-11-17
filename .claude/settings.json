@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "redsalamanders": {
+      "source": {
+        "source": "github",
+        "repo": "RedSalamanders/RedHome"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "redhome@redsalamanders": true
+  }
+}

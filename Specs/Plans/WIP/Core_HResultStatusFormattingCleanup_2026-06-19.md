@@ -29,8 +29,8 @@ This plan owns the residual HRESULT/system-message and status text cleanup split
   - `FormatHResultMessage(HRESULT hr)`
   - `FormatHResultMessageWithCode(HRESULT hr)`
 - `Specs/Core/Core_Localization.md`
-- `.github/skills/compiler-warnings/SKILL.md`
-- `.github/skills/error-handling/SKILL.md`
+- `../RedHome/.agents/skills/modern-cpp-windows/references/compiler-warnings.md`
+- `../RedHome/.agents/skills/modern-cpp-windows/references/error-handling.md`
 
 ## Scope
 

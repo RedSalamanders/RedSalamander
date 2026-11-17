@@ -1,4 +1,3 @@
-# RedSalamander guidance
+# Claude Code Instructions
 
-Read [AGENTS.md](AGENTS.md) first for the canonical development rules, build/test entrypoints and skill routing.
-Read the owning domain specification before editing. Do not maintain a second build, test or policy recipe here.
+Read and follow [AGENTS.md](AGENTS.md), the single canonical guidance for this repository; do not duplicate or diverge from it here. Shared RedSalamanders skills come from the sibling `RedHome` repository: `.claude/settings.json` enables its `redhome` plugin, and `../RedHome/AGENTS.md` indexes the same skills when that checkout is present.
