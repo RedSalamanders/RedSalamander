@@ -1,1 +1,0 @@
-- Preserve bounded diagnostics for Commands dialog and editor marker failures without changing test assertions or waits.

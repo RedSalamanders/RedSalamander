@@ -1,1 +1,0 @@
-- Preserve generated version-header timestamps when their content is unchanged so ordinary warm builds avoid unnecessary recompilation; changed version numbers and module metadata still invalidate consumers through the normal MSBuild dependencies.

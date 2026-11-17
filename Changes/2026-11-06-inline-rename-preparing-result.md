@@ -1,1 +1,0 @@
-- Correct the inline rename refusal selftest and specification to preserve the existing pre-mutation `NotAttempted` result, with an independent source-byte witness and detailed failure diagnostics. Native validation remains pending.

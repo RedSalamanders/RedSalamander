@@ -1,1 +1,0 @@
-- Keep the original July audit campaign provenance checks exact while requiring later historical reviews to identify their own reviewed commit, date and live work index; reject missing or misplaced provenance.

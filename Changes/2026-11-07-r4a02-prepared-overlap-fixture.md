@@ -1,1 +1,0 @@
-- Synchronize same-destination overlap coverage at the prepared-copy boundary, and verify canceled copies publish no destination members.

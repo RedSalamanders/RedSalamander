@@ -1,1 +1,0 @@
-- Preserve the hosted foreground worker's inherited Default desktop access while verifying its desktop context before admission.

@@ -1,1 +1,0 @@
-- Keep direct changelog Markdown from selecting native builds/tests during affected iteration while validating fragments before every execution; unknown or executable Changes inputs still select conservative coverage.

@@ -4,6 +4,407 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Consolidated the shared `improve`, `compiler-warnings`, `cpp-modern-style`, `error-handling`, `localization`,
+  `wil-raii`, and `yyjson` agent skills into the organization `RedHome` repository, retaining the twelve
+  RedSalamander-specific skills and validating with `Tools/Get-SpecInventory.ps1 -FailOnFindings`,
+  `DocumentationDriftContracts.Tests.ps1`, and `Tools/Test-Changelog.ps1` (documentation/tooling only; native
+  qualification unchanged).
+  Shared-skill discovery names `../RedHome/AGENTS.md`, the package directory, and the clone URL while preserving
+  local product authority; the SettingsStore overview now reflects its JSON/JSON5 persistence contract.
+- Sample hosted original-foreground focus from the documented foreground queue and validate immutable original/focus identities before acquisition and restoration. Refuse unsupported cross-owner write admission and recheck the Default desktop before the single saved-original request, retaining the existing waits and owned-window assertions. Affected managed controls pass; native console/ARM compatibility, historical error-87 cause and new-head qualification remain pending.
+- Keep SDK preparation routing fixtures beneath their owned test workspace so hosted machines without a developer Z: drive execute the same sixty combinations and inherited-override checks.
+- Refresh a cached shared process policy after restoring the pinned CI engine in the same PowerShell session, retain unchanged imports, and explain missing engine preparation before starting a child process.
+- Improve File Operations reliability for queued and folder operations, harden copy/move rollback, cross-root identity and source-retention checks, correct navigation focus and DPI layout, and clarify localized Delete Source guidance; strengthen Windows build selection, cleanup, and hosted-test evidence handling. Align native FileOps guards with recovered-mismatch occupant preservation and localized managed-source-retention control flow. Add report-free specification validation, privacy-safe refusal/clipboard and process-attribution diagnostics, deterministic drive-menu and ViewerSpace capacity fixtures, guarded popup/menu fixture prerequisites, bounded cadence diagnostics and retained-rate controls with archived selected Debug/Release observations, and a fixed test-only hosted UI-attribution campaign with architecture selection, strict clean-quarantine admission through the canonical runner facade and independently archived case evidence. Bind nondefault diagnostic timeouts from one trusted producer value to both child invocation and strict archived-plan verification while preserving the default timeout for existing callers. Preserve captured process-instance diagnostics at hosted stock-preparation refusal without widening foreground or close authority. Route background dependency and sanitized SDK/MSBuild children through captured no-window execution and bind their full behavioral dependency closure into receipts and cache identities. Bound managed bootstrapper fixture paths and retain original installer outcomes and logs before temporary-fixture cleanup. Route read-only DxUi source identity and post-checkout Git queries through contained no-window capture with separate streams, literal arguments, actual exits and no artifact-write delegation. Preserve immutable build-receipt bytes when identical artifact identity is republished with a new build interval, while validating full candidate metadata and rejecting governing-identity or canonical-record mismatches. Validate captured-Git fixture module ownership under strict Pester scope. Capture the local consumer compiler-host and fixture VSwhere/MSBuild metadata probes through the same silent no-window boundary, retaining separate streams and exact exit checks. Capture standalone restore, root build and vcpkg VSwhere metadata through one shared no-window stream projection, preserving selection and interactive build/installer behavior while retaining actual query exits and independent native-query controls; historical foreground attribution and product qualification remain unproved. Add a fixed same-binary Local ancestry marker-proof component protocol to the ordinary FileOps runner, retaining identity-less treatment evidence, per-call costs and untimed real Copy witnesses; actual paired/native/Full evidence remains pending. Adopt qualified API4 dependency source 7fb2ab71852087d93b3a3e5b3ba504c37f56267c with matching lock/test expectation and canonical Source consumption; final consumer build, ABI, native and Full acceptance remain pending. Capture remaining background Git planning, inventory, graph, provenance and vcpkg bootstrap processes without changing raw/line/stdin identity semantics, delegated provisioning authority or interactive payloads; preserve source-specific evidence and pending consumer qualification. Decode known Git stdout as UTF-8 through explicit per-child policy while preserving non-Git defaults, stderr, ordered stdin, raw readers and global console state; cover actual Unicode paths under CP437 and UTF-8. Keep selected native test fixtures behind explicit captured argument-vector execution, preserve asynchronous versioning ownership with hidden launches, and validate real installer batches through a private no-window fixture seam without changing production installer inheritance. Capture engine-free formatter and Ghostty metadata while preserving formatter admission, pin checks, arguments and failure outcomes. Retain bounded failure-only Git staging diagnostics in archive transport tests, preserving original assertions and failed qualification evidence; fresh validation remains pending. Retain bounded hosted setup exception traversal/emitted text, omit recursive aggregate summaries, and retain captured native error codes without changing foreground admission, cleanup or original failure authority; the historical ARM boundary cause remains unproved. Bound archive transport fixture housing below Git legacy full-path limits while preserving its 800-file, large-stderr, Unicode and ordered-hashing workload and original failures. Preserve the original hosted focus-query error with failure-only bounded context and reject stale inline native implementations without relaxing admission or restoration. Extend the read-only hosted DesktopProbe with bounded foreground identity/class and explicit-thread versus foreground-zero GUI evidence, retaining actual architecture, non-atomic uncertainty and no acceptance authority; existing focus acquisition and restoration remain unchanged.
+- Preserve viewer-harness unhandled fault evidence through COM teardown in the marked run, with an actual
+  contained crash control verifying the original exception, dump and sidecar. Passing diagnostics do not
+  supersede the earlier unexplained viewer access violation.
+- Preserve generated version-header timestamps when their content is unchanged so ordinary warm builds avoid unnecessary recompilation; changed version numbers and module metadata still invalidate consumers through the normal MSBuild dependencies.
+- Keep qualified SDK compilation compatible with absent Visual Studio support-library defaults while preserving core library paths, exact dependency bytes, and current local/main gates. SDK mismatch diagnostics now identify the required and next actual path.
+- Updated the shared SDK library-path guard to admit only freshly absent optional ATL/NETFX default directories after normalization, retaining required compiler/Windows/CRT paths and the existing main native and production gates.
+- Preserved the historical six-profile Source build record with its exact source, engine and receipt identities; it grants no acceptance to newer source or pending runtime qualification.
+- Attribute popup idle-cadence task snapshots to bounded test-only source-line counters so excess work retains an actionable caller breakdown. Keep production state/signatures and all timing, snapshot and heartbeat assertions unchanged; this instrumentation alone does not claim a cadence repair.
+- Use the canonical process-owned desktop observer in overwrite-preservation coverage so unrelated foreground changes remain diagnostic while transient owned activation, missing observations and event-drain failures still fail; keep all exact byte, hash, file-ID and closed-inventory assertions.
+- Preserve normal full/single-project build receipts when the optional project union is empty or null, restore the local SDK command's tooling navigation entry, and check artifact admission at the actual native writer boundary after independent sandbox planning.
+- Add an explicit local Release SDK application build in fresh leased outputs, including plugin and language-resource intermediates. Keep ordinary dependencies under the existing platform lock, refuse abandoned or contaminated inputs, and retain actual ABI and linker-input verification. Local build results grant no test, repository or production qualification.
+- Isolate the identity-less Delete fixtures' bounded diagnostic budget so preceding actionable rows cannot evict their technical logging witnesses. Restore the original setting and remove only owned task diagnostics; production retention and existing outcome assertions remain unchanged.
+- Exercise the shared generated qualification matrix, initialize the deep Git fixture with long-path support, and keep each R0e classification attempt separate. Recognize the exact GitHub compute-agent console as an observation-only hosted surface; never close it or waive foreground, focus or restoration checks. Preserve the original failed native runs; these tooling repairs do not qualify unresolved File Operations or viewer failures.
+- Build the native test surface for every test-runner mode, including focused Release, and reject a production receipt or executable without its ENABLE_TESTS resource before in-product selftests can wait for desktop admission or launch. Use the canonical positive-block assertion to prove enabled-image admission; production packaging remains test-disabled.
+- Acquire retained-run security descriptors directly from the safely enumerated file objects, avoiding repeated PowerShell provider setup while preserving exact ACLs, file/stream hashes, metadata, link refusal and archive verification.
+- Avoid repeatedly scanning historical runs whose unsafe links already prevented archival. Automatic startup preserves those runs through recorded refusals and reports a count; explicit archival still verifies the full current tree after repair. Existing owner/path checks, failed evidence, transient retries and current-run archive verification remain required.
+- Let explicit exact local Full Resume retain independently verified successful entries from a closed failed or interrupted campaign. Failed entries, changed inputs and incompatible artifacts still execute; corruption remains fatal, original failures stay recorded, and hosted/main gates remain unchanged.
+- Declare viewer and plugin contract test runtime producers so clean selective builds
+  include their required fixtures without borrowing earlier full-build output.
+  Preserve runtime assertions and centralized dependency staging.
+- A copy or move task can now carry, from its start, what it does when a file already exists: Ask (the
+  default), Skip, Replace older or Keep both. No window sets it yet; the start surface of plan I18 will.
+  - `OperationAdmission::presetCollisionPolicy` reaches the task through
+    `Task::SeedPresetCollisionPolicy`, which writes it once on the conflict arbiter before the first
+    collision.
+  - Skip and Keep both decide every collision of two regular files that could take an Apply-to-all
+    answer, a read-only occupant included; Replace older is the existing `Replace all older` grant set
+    from the start. Links, folders and type mismatches still ask.
+  - New self-test `RunFileOperationPresetCollisionPolicySelfTest` in
+    `FileOps_ReviewRemediationContracts`.
+- During a parallel copy or move, each file now stays on its own line of the card while it is
+  copied: when one file finishes, the files below it no longer move up a line. The numbers in the
+  progress, counts and speed rows keep their width as they change.
+  - The engine gives each transfer stream a row slot for its lifetime (the lowest free slot) and
+    keeps it when the in-flight array is compacted; the popup snapshot carries the slot and the
+    card draws each stream in its slot. A finished file's row stays for 300 ms, then the row is
+    blank until another file takes it or the card's reservation releases it.
+  - The progress, counts and ETA, and throughput rows use tabular figures on the popup's own text
+    layouts. The skipped-counting work summary is measured once per text, width and format
+    instead of on every paint.
+  - New ETW counters `FileOps.Popup.CardHeightChanges`, `FileOps.Popup.ScrollBarToggles` and
+    `FileOps.Popup.WindowResizes`, and new self-test `RunFileOperationStreamSlotSelfTest` in
+    `FileOps_ReviewRemediationContracts`.
+  - Not part of this change: a reserved width for the widest form of each number, the eased
+    height change, scroll anchoring, card enter and leave motion, and the budget case
+    `FileOps_PopupLayoutStability`.
+- A file operation now keeps the computer awake while it runs. While at least one Copy, Move or Delete task is running or stopping, RedSalamander holds one Windows power request so that the computer does not go to sleep on its own, and gives it back when every task has finished, is paused, or is only waiting for your answer.
+  - The request is for the system only. The screen can still turn off, and closing the lid or choosing Sleep still puts the computer to sleep. On a computer that uses Modern Standby and runs on battery, Windows may still enter standby; this has not been measured.
+  - While one item waits for your answer, other files of the same task may still be transferring, so the request is given back only after the task has reported no progress for two minutes.
+  - There is no setting. If Windows refuses the request, the task carries on and one line is written to the debug output.
+  - New `FileOperations::PowerRequest`, `KeepAwakeLease` and the pure predicate `TaskNeedsMachineAwake` in `FileOperationsPowerRequest.h` and `.cpp`, one hook function `Task::UpdateKeepAwake` called at admission, leaving the operation, pause and resume, the wait for an answer, cancel and the terminal state, one resource string in five resource files, and a self-test with a fake power API in `FileOps_ReviewRemediationContracts`.
+  - Not part of this change: a preference, keeping the display on, blocking Sleep or lid close, and a measurement on a Modern Standby computer.
+- A Move from a location that cannot identify files (a share without file IDs) now copies each
+  item and removes the source when it is unchanged, instead of refusing the Move.
+  - Before the copy opens a file, the Local provider reads its size, dates, attributes and file
+    number. After the copy is published, the provider deletes the source by name only while those
+    facts are unchanged, comparing them on the handle that deletes it. Nothing more is asked.
+  - Otherwise the source is kept and the item reports `Copied; source kept` with the reason: the
+    file changed, it is in use, it carries alternate data streams, extended attributes, encryption
+    or a cloud placeholder (this route does not copy them), or a replaced destination file may be
+    the source itself under another name. This is a Warning, not an error.
+  - A source folder is removed only when the Move emptied it. A source whose open fails is still
+    refused. Permanent Delete by name and its confirmation are unchanged.
+  - New optional provider method `ReadUnidentifiedMetadataFeatures` on
+    `IFileSystemExpectedOccupantPublication` (Local provider), four strings in five resource files,
+    and new self-test `RunFileOperationIdentityLessSourceMoveSelfTest` (ten cases) in
+    `FileOps_ReviewRemediationContracts`.
+  - Limit: a change that keeps a file's size, dates and attributes is not noticed.
+- A folder moved onto a folder of the same name at a location that cannot identify files (a share
+  without file IDs) now merges, as on any other drive, instead of being refused.
+  - The folder itself raises no question. Each file that already exists raises its own decision,
+    with the choices that location offers. A Copy already merged there.
+  - A source folder that still holds a skipped file is kept, and the item ends partly skipped, not
+    as an error. A source folder the merge emptied is removed through its exact binding.
+  - A folder onto a file of that name raises the type-mismatch decision (Keep both, Skip, Cancel).
+    A destination folder that is a link or another reparse point, and a linked folder above it, are
+    still refused before anything changes.
+  - New self-test `RunFileOperationIdentityLessFolderMergeSelfTest` in
+    `FileOps_ReviewRemediationContracts` (Copy merge, Move merge with a skipped child, Move merge
+    that empties the source folder, link destination refused).
+- A Move collision can now be answered `Delete source`: the existing destination file is kept, nothing is
+  copied, and the source goes to the Recycle Bin. It finishes a Move that was run before. The item's result
+  is `Already there; source removed`, not a skip, and the task is not Partial for it.
+  - Offered only for a Managed Move whose source is on the Local file system, for a regular file that is
+    provably another file than the source: by the two objects' identities, or, at a destination that cannot
+    identify files, by a sharing probe (hold the destination denying all sharing, open the source by name).
+  - Never a permanent delete: a source whose location has no Recycle Bin is kept, the item ends as a skip
+    and a Warning says why. Permanent removal after one confirmation (the rest of D-5) is not implemented.
+  - Apply to all covers it only for files with the same size and date; a remembered answer is reused only
+    for such pairs. It shares its repeat key with `Replace`, so the latest answer given for all wins.
+  - It is published under `More...`; on such prompts `Skip all` moves there too, because the menu now
+    holds two commands.
+  - New action `ConflictAction::DiscardSource` (appended, existing values unchanged), task counter and
+    summary count, four strings in five resource files, policy-matrix coverage and a new self-test in
+    `FileOps_ReviewRemediationContracts`.
+  - Not part of this change: sources on other providers, folders and links, the one-hour class, and the
+    same answer for a Move that the Local provider performs as a native rename.
+- When a Move answered `Delete source` meets a source folder without a Recycle Bin, the task now asks once
+  whether to delete such sources permanently (`Permanently delete`, `Keep source`, `Cancel`) instead of
+  always keeping them. The answer covers the rest of the task.
+  - The question is the Move's Recycle-refusal consent card: Cancel is the default, no Apply to all, no
+    `More...`. One worker asks; the answer is kept on the conflict arbiter (`sourceNoRecycleBinAnswer`).
+  - `Permanently delete` binds the source before the question and again with delete access after it,
+    requires the same identity, size and last-write time, repeats the distinct-file proof and consumes the
+    bound object with `DeleteIfUnchanged`. A changed source, a second name of the destination, a read-only
+    source or a refused delete keeps the source as a skipped item with a Warning; an unknown outcome is an
+    Error.
+  - `Keep source` now records an Information note instead of a Warning, so the user's own choice does not
+    count as a problem.
+  - Five strings in five resource files; the Local provider's test seam
+    `REDSALAMANDER_FILEOPS_RECYCLE_UNAVAILABLE_DIRECTORY`; new self-test
+    `RunFileOperationDiscardSourceWithoutRecycleBinSelfTest` in `FileOps_ReviewRemediationContracts`.
+  - Not covered: a source whose location cannot identify files (Delete source is not offered there) and
+    sources on other providers.
+- The Issues pane now shows, for a file that already existed at the destination, the size and date of both
+  files and how they compare, in the words the question used.
+  - The prompt observation keeps a typed `ConflictObservedComparison` (both items' size and last-write
+    time and the engine's comparison) for a collision of two regular files whose facts were read.
+  - `BuildConflictObservedTexts` reuses the shared prompt text builder; the detail adds the summary line
+    to the Problem and each item's line under its Source and Destination path.
+  - Not done: the finished card of a single-item task (B3.3's second half), sizes on provider routes
+    (B3.2; the provider issue callback carries no sizes), and facts for items a remembered answer or a
+    policy decided.
+- A file collision can now be answered with one of two task-wide choices under `More...`: `Skip all
+  with the same size and date` and `Replace all older`. They run an interrupted copy or move again
+  without a question for every file already there.
+  - Each is offered only when the prompt's own pair matches it and the prompt offers Apply to all;
+    choosing it answers the current file and every later matching file of the task. `Replace all older`
+    replaces only when the incoming file is newer by more than the two-second timestamp tolerance.
+  - They cover plain regular-file collisions only: a read-only file, a link, a folder, a type mismatch,
+    the one-hour class and unknown facts still ask. They are consulted before the Apply-to-all answers,
+    and `Skip all with the same size and date` and a remembered `Delete source` for all replace each
+    other (the later one wins).
+  - A policy skip is an ordinary user skip (a Move keeps its source) and opens no content; a policy
+    replacement takes the route of a single `Replace`. The card's Result line adds `N already there`
+    and `N replaced because older`; the task records one Information note per policy.
+  - New actions `ConflictAction::SkipSameSizeAndDate` and `ReplaceOlder` (appended, existing values
+    unchanged), two task counters, four strings in five resource files, policy-matrix coverage and a
+    new self-test in `FileOps_ReviewRemediationContracts`.
+  - Not part of this change: choosing a policy before the task starts (D-13), `Skip` and `Keep both`
+    as policy values, a task-wide `Delete source` beyond B4, and item-scoped policy receipts for I18.
+- Plan I63 is closed and moved to `Specs/Plans/Done/`, with its checkboxes, decisions and limits recorded
+  and its Done path admitted by a focused test. The new plan I64 owns what I63 did not finish: collisions
+  that no longer stop their task (designed, with five open owner decisions) and the listed residuals. The
+  once-per-task note that items were checked by name, size and dates is now a localized resource string.
+- Fixes from a review of the File Operations UX work. A copy with several streams could lose its copied-file
+  and folder counts for the rest of the task when one stream finished while another was still copying; the
+  counts now stay. Cancel on `This location has no Recycle Bin. Delete the source files permanently?` now
+  cancels the task at once instead of letting another worker ask again, and Issues shows that question
+  instead of `Recycle Bin delete failed.` Before a Move removes a source at a location that cannot identify
+  files, the same-file check now verifies that the location really refuses a second open of a held file,
+  and refuses links and folders; where it cannot tell, the source is kept. A keep-awake request that
+  Windows refused for the first running task is tried again for the next one. Reordering a queued task
+  can no longer overwrite the place a task took when it was told to wait for another. The scanning
+  summary of a Delete card no longer leaves an empty line when the list has no scrollbar.
+- Build an explicit native project union in one solution operation and retain its exact project/runtime receipt scope. Selftest-only routes can verify their selected application receipt; Full/PR/CI and package gates keep full-solution requirements, and partial builds cannot repair full-solution contamination. Controls cover target injection, duplicate names, missing runtime bytes, stale outputs and incompatible receipt selection; native cold-build and timing acceptance remain separate.
+- Report monotonic preparation costs for File Operations profile/volume setup, the existing interactive session lease wait and contained native process start. Start/completion console rows expose the phase of a prelaunch delay without changing native assertions, deadlines, ownership or acceptance; native timing evidence and root-cause diagnosis remain separate.
+- Select native project unions before compiling governed affected work, bind producer names into plan contracts and reject source changes before narrowed execution. Unknown/shared inputs, artifact writers and incomplete bindings keep the full build; Fresh Full and exact Resume retain their existing gates. Prose/empty changes with no affected entries avoid native work, its profile lease and historical scavenging, run applicable ownership checks, and archive diagnostic plans with NOT_EVALUATED status.
+- Bind local build and validation reuse to the actual clean pinned CI engine inputs, retaining historical evidence and the current local and main gates.
+- Preserve rejected validation reason codes and skipped case names in runner failure details, route Terminal debug contract labels through the shared stderr reporter, and make the image reservation test wait for explicit harness release rather than a brief timing window. Acceptance, skip and native qualification requirements remain unchanged.
+- Reuse optional exact pinned qualified DxUi SDK inputs for Release builds with
+  actual compiler and per-translation-unit ABI guards, live reader ownership,
+  linker provenance and sealed dependency records. Reopen original SDK inputs
+  before artifact reuse and packaging; retain Source fallback and unchanged pins.
+  Keep SDK packages on the separate receipt-verified packaging route and reject
+  SDK inputs in the existing Source-only portable attestation format.
+  Preserve the application's Windows header macro policy while importing SDK
+  integration, and retain strict required artifact downloads alongside the exact
+  DxUi-only optional library handoff.
+  Preserve the verified SDK recipe through artifact-mutating tooling and profile
+  re-attestation; block lost, substituted or changed SDK input before native tests.
+  Resolve production localization/plugin targets through the full solution-folder graph, preserving required projects and rejecting invalid target metadata before compilation.
+  Keep SDK CI builds and test reuse on canonical vcpkg MSBuild paths without injecting a compiler override that the ABI guard must reject.
+
+  Alternate-volume test acquisition now refuses uninitialized drive-root folders;
+  the generic opt-in allows use only of an existing, explicitly initialized marked
+  sandbox. It no longer creates a new root or ownership marker during discovery.
+  Give each factory-created native child a private compiler metadata-service endpoint so one owned operation cannot retire another operation's shared service.
+- Staging files created on Windows paths now end in a real extension: `<name>.<32 hex>[_<stream>].rs-tmp`
+  for incomplete content (host bridge stage, Local copy, link and directory stages, the writer's
+  overwrite stage) and `<name>.<32 hex>.rs-bak` for a name that may hold an original (Local overwrite
+  backup, case-only rename hop). The bridge stage name is now built by the shared bounded-name helper,
+  so its leaf stays within 255 characters for a long final name. Leftover recognition is simpler: it
+  accepts only the names the current build writes (owner decision D-17), so a leftover written by an
+  earlier build is an ordinary file, and a name that only ends in `.rs-tmp` or `.rs-bak` stays ordinary.
+  Remote, S3 and MTP names are unchanged.
+- The File Operations card list moves less during a transfer. A running card now keeps the rows it
+  has needed instead of changing height on every frame that needs fewer: stream rows are reserved at
+  their high-water mark and released one at a time after two seconds, a two-fact row that wrapped
+  stays wrapped until its facts fit with room to spare for two seconds, and the parallel-transfers
+  note and the waiting reason keep their row for two seconds after they end.
+  - The rate and ETA text change at most twice per second; the graph is unchanged. The row of a
+    completed file keeps its bar column, so its path is not re-truncated.
+  - The list's scrollbar is decided for the height the window is about to have, so it no longer
+    flashes when the window is about to grow to fit the new content, and it still appears at once
+    when the window cannot grow enough or when something asks to scroll meanwhile (the wheel, a
+    scrollbar message, revealing the focused control). A pending or running automatic resize now uses the 16 ms
+    motion cadence, and the rate history advances once per 100 ms interval even on motion ticks.
+  - The rules are small state machines in `RedSalamander/FileOperationsLayoutStability.h` with
+    compile-time contract checks. The popup's debug layout snapshot reports the reserved stream rows
+    and the scrollbar decision.
+  - Not executed: the popup self-tests need the desktop. Cases that scroll or compare card heights
+    right after a change may need a settle step; they are listed in the plan's implementation log.
+  - Not part of this change: tabular figures, stable stream slots in the engine, an eased height
+    change, scroll anchoring, card enter and leave motion, and the sequence capture.
+- Queued file operations now start in the order of their cards. A task takes its queue place when it is
+  admitted and keeps it while Preparing, so a later task that prepared faster no longer starts first. A
+  task is passed only while it waits for the user's answer on its own card or is queued behind a named
+  task, and it starts next once that reason clears; a task that is cancelled or fails before starting
+  gives its place up at once. Active cards are ordered by one key, so a card no longer moves when its
+  task starts. A waiting card states its place (`Next in the queue`, `Position N in the queue`), and Move
+  Up or Move Down is offered only for a move the engine performs, never across a task queued behind a
+  named task. Seven engine scenarios of the start order run inside `FileOps_IdentityInterlockWaiting`
+  and pass; the popup cases (position text, move edges, card order) wait for an agreed desktop time.
+- A plain click in the pane that is not active now makes that pane active and moves the cursor to the
+  clicked item without changing that pane's selection; a click on the empty area changes nothing. Ctrl,
+  Shift, right-click and double-click keep their meaning, a middle click only activates the pane, and a
+  drag from an item outside the kept selection drags that item alone. The second plain click selects as
+  before. Removed the main window's parent-notify handler, which compared a value Windows leaves
+  undefined for mouse buttons and never matched. Three Commands cases
+  (`cmd_pane_folderView_activation_press_*`) cover it; they are written and compile, and their execution
+  waits for an agreed desktop time because the Commands suite takes keyboard and mouse focus.
+- A menu button in the File Operations popup and in the pane decision mirror is now shown only when its
+  menu holds at least two commands. `Skip all` is a direct button before Cancel on a collision or retry
+  prompt, and a finished task with a single command shows it as its own button. A finished task with
+  no command no longer shows a `More...` button that opened an empty menu. The button and its menu
+  are built from one list. Recycle escalation's `Delete all remaining permanently` and `Delete all
+  remaining by name` were each alone under `More...`; each is now a direct button before Cancel, never
+  the default and never the Escape action. The policy self-test, the popup cases and the visual
+  gallery are updated and a test hook counts flyouts opened with fewer than two commands.
+- A Move of a file onto an existing file on a share that cannot identify files no longer fails with
+  `Errors: 2` and no choice. The task now asks, before any byte is copied, with the size and date of
+  both files: Replace, Keep both, Skip, Skip all or Cancel. Keep both publishes beside the existing
+  file and completes the Move; Skip keeps both files.
+  - Replace on such a share uses a new optional provider contract,
+    `IFileSystemExpectedOccupantPublication`, implemented by the Local provider: the new file is
+    copied to a stage, and one replacing rename publishes it only while the existing file still has
+    the size, dates and attributes read before the decision. A changed file replaces nothing and the
+    decision is asked again; a refused rename (file in use) leaves both files and removes the stage.
+    No handle is held on the existing file during the copy and no backup copy of it is made. The task
+    notes once that replaced items were checked by name, size and dates.
+  - A route that cannot qualify (a folder source, a destination that cannot prove what it published)
+    keeps the earlier refusal.
+  - `FileOps_ReviewRemediationContracts` covers Skip, Keep both, Cancel, Replace, Replace read-only, a
+    file changed after the decision and a file in use at the rename, each for a share-wide and a
+    single-file identity gap.
+- One failed item no longer reads `Errors: 2`. The counters on a task card count problems: the
+  trailing `task.result` Error is not counted when an Error of the same task already explains the
+  failure. The record is still written to Issues, the log and the export, and it counts when it is
+  the only Error. The two visual-gallery fixtures of the failed Move card use `Errors: 1`.
+- A name-collision question now says how the two files compare. Each file's line shows its size and
+  date followed by `Newer`/`Older`/`Same date` and `Larger`/`Smaller`/`Same size`; when both are the
+  same, one line says `Same size and date`, and `One hour apart, same size` covers the
+  daylight-saving shift of FAT volumes and some servers. Dates within two seconds are the same.
+  - The engine computes the comparison once (`FileOperations::CompareConflictItems`) and publishes it
+    with the decision. The task card and the question over the pane share the text
+    (`BuildConflictPromptItemText`); the question over the pane now also shows each file's size and
+    date, which it did not before.
+  - Eight new strings in the base and the four satellite resources.
+  - Not part of this change: the exact byte count in a tooltip, the size of items on provider routes
+    that report none today, and the same facts on the Issues row of a skipped or failed item.
+- Plan I62 explicit state-machine and lifetime-safety remediation across RedSalamander, RedSalamanderSearchService, RedConfigure, Common, bundled plugins, and PowerShell tooling (`Specs/Plans/WIP/ExplicitStateMachines_2026-11-10.md`).
+  Static specification, tooling-inventory, and changelog gates pass; native slice implementation and qualification remain pending.
+- Repair hosted validation fixtures without weakening their assertions: exercise the actual manual architecture selector, enable Git long-path support for the deliberately long compiler-host fixture, and isolate repeated partial-command runs. Hosted desktop retirement logs now preserve the inner exception cause while retaining failure. Native x64/ARM64 acceptance remains required.
+- Record the I61 cross-repository testing and integration acceleration option catalog (`Specs/Plans/WIP/TestingAndIntegrationAcceleration_2026-11-09.md`) and index it in `Specs/Plans/WIP/README.md` for owner review across `RedSalamander`, `DxUi`, `RedPrism`, `RedTilde`, and `RedXe`.
+  Validation: `Get-SpecInventory.ps1 -FailOnFindings` and `Test-Changelog.ps1` pass; no normative contract or runtime behavior is changed until selected options are approved.
+- Adopt explicit owned-prose exclusions and the shared CI guard so new runtime Markdown and notice files retain native qualification; preserve existing native gates and historical artifact identity.
+- Rewrite and relocate I61's organization-wide testing and integration acceleration handoff to the shared .github project's Specs/Plans/WIP, replacing the product-owned copy with an ownership link and adding the WIP-to-Done completion rule and indexes there; implementation and native qualification remain pending.
+- Reuse bounded immutable impact-pattern matchers during planning while reevaluating every path; preserve wildcard, literal, Unicode and invariant case behavior across cache hits and eviction.
+- Retry transient Ghostty/Zig archive download failures within explicit connection, transfer and process bounds while preserving every locked hash and offline check.
+- Bind hosted regression to its canonical runner's create-only exact summary reference, verifying run/profile/gate and final bytes instead of discovering summaries by archive location and timestamps; keep positive execution and Release failure detection required.
+- Adopt the shared engine's ABI-indexed vcpkg fallback cache and manual native dependency caching; keep compiler-free PRs, exact dependency pins and every native qualification gate.
+- Keep direct changelog Markdown from selecting native builds/tests during affected iteration while validating fragments before every execution; unknown or executable Changes inputs still select conservative coverage.
+- Allow the selected hosted native x64 interactive fixture to use the existing guarded owned-window keyboard handoff when direct foreground acquisition is refused.
+- Fix hosted test focus restoration after modal viewers close by making the owned return window eligible for automatic activation.
+- Keep focused file-operation actions visible when the viewport changes during keyboard traversal, while preserving explicit scrolling.
+  The controlled resize and manual-scroll checks passed in three focused repetitions; hosted x64 Full and NAS qualification remain pending.
+- Synchronize the File Operations apply-to-all test with a real waiting worker before measuring conflict convergence.
+- Make the isolated Terminal localization fixture observe copied-module unmapping within its existing unload budget and report scratch cleanup errors.
+- Synchronize same-destination overlap coverage at the prepared-copy boundary, and verify canceled copies publish no destination members.
+- Add the I60 pre-production readiness and bounded simplification execution plan (`Waves 0-5`),
+  documenting plain-language root causes, WIL/RAII-compliant fixes, test gates, and post-cut
+  deferrals across `main`, `PR #200`, `PR #201`, and `origin/ci-state`. Runtime code and build
+  outputs remain unchanged; native qualification belongs to the implementation waves.
+- Track process-owned foreground activation during popup recovery while preserving unrelated desktop activity.
+- Require successful Pane Filter accessibility value reads and retain diagnostic identity after capturing the original value.
+- Record bounded pane-filter prompt snapshot, accessibility value-read and foreground evidence when the focused UI Automation comparison fails.
+- Isolate the NavigationView suggestion keyboard fixture from observed pointer hover while retaining its focus, selection and stale-result assertions.
+- Preserve each native self-test's original process exit before result normalization and archival, so missing results and archive failures retain the exit needed for diagnosis; retries receive separate records and failed writes stop validation.
+- Allow the configured NAS identity-less scale correctness case one scaled three-minute post-consent deadline while retaining its safety and full-deletion checks.
+- Arm fake MTP delayed-reader watchdogs after reader setup so the short timeout targets the intended read.
+- Propose the libghostty-vt 1.0 migration for review, with a complete public ABI/API inventory,
+  private patch rationale, ordered implementation and qualification gates, rollback, and separate
+  terminal experience opportunities. The dependency and runtime remain unchanged; native acceptance
+  belongs to the future implementation.
+- Record the 12 locked-in owner design decisions (`D-01`–`D-12`) and codebase contract refinements in
+  the active `I60` pre-production readiness plan (`Waves 0-5`), covering in-cut `PR #201` gating,
+  unsigned byte-promoting publication, `Symbols.zip` and declarative Winget metadata, 15-plugin
+  `--package-smoke`, strict preview-first Batch Rename `Enter`, unconditional Search Service
+  reparse-directory skips, 4-satellite translation completion, pause-only transfer-slot yield, and
+  16-worker NAS scale-delete RPC reduction preserving `FILE_SHARE_READ`. Runtime code and build
+  outputs remain unchanged.
+- Allow the explicitly approved hosted ARM64 WSL update startup console to retire after strict process and argument verification.
+- Run hosted interactive UI checks on the rendered Default desktop across active qualification callers, with an owned foreground window and verified restoration of the original foreground and native focus. Preserve raw native exits in retained hosted artifacts. Alternate-desktop capture failures are retained; platform capture and input qualification remain required.
+- Preserve the hosted foreground worker's inherited Default desktop access while verifying its desktop context before admission.
+- Allow a transient null foreground during the bounded hosted test desktop return while retaining ownership and focus verification.
+- Require a real neutral foreground and focus window before hosted interactive tests start, keeping its message queue alive for restoration observers and joining its owning thread before desktop handles retire. Preserve setup failures, input and screenshot assertions, child containment and verified restoration.
+- Keep the hosted UI desktop lease until its owned window thread has stopped, including slow retirement failures, so cleanup cannot change focus after another interactive test starts.
+- Keep the hosted test boundary eligible for automatic foreground return after verified acquisition and service its message queue during bounded restoration.
+- Prepare eligible hosted ARM64 interactive test entries with the specifically approved stock account and Search surface checks, retaining guarded close evidence while preserving native focus, input and capture assertions.
+- Admit the hosted ARM64 test fixture through a bounded owned hotkey handoff when Windows refuses direct foreground activation, preserving key-release, focus, restoration and native suite checks.
+- Settle the private Find Files queue probe's window-creation notifications before injecting ordering witnesses, and independently verify that a DWM notification blocks result draining. Preserve the exact queue-head and child-input assertions.
+- Retire the recursive-copy matrix's owned source and copied junctions with sandbox-checked no-follow cleanup, while checking that source, copied, and target canary bytes remain unchanged.
+- Preserve bounded diagnostics for Commands dialog and editor marker failures without changing test assertions or waits.
+- Settle queued Batch Rename preview and target rebuilds in waiting test snapshots, with a regression that verifies pending work is completed before mode controls are asserted.
+- Use a fixed invented root name in the ViewerSpace capture fixture so breadcrumb pixels do not depend on machine uptime; preserve the existing visual assertions.
+- Report ViewerSpace capture failures with the original pixel witnesses, child geometry, DPI, monitor bounds, and navigation host state to help diagnose hosted composition failures; validation remains pending.
+- Record bounded foreground admission diagnostics when the ViewerSpace keyboard test cannot activate its owned window.
+- Retire source-scanner fixture junctions and file links in finally blocks, preserving their target bytes. Successful scanner checks now leave relocatable run evidence rather than failing the final archive on an absolute link.
+- Keep Local root probes limited to attribute and synchronization access so a directory oplock cannot force the UI to wait for a lock acknowledgment. Exercise the actual provider helper against an owned read-handle oplock and preserve exact fixture bytes.
+- Pilot the existing native foreground hotkey check on a temporary desktop owned by the hosted test entry, preserving the warning, assertions, contained child drain and original desktop restoration. Bind the fixture to validation fingerprints; creation or restoration failures remain failures and the filtered pilot does not qualify Full coverage.
+- Avoid re-encoding Local route tokens after a fresh matching volume identity hits the existing cache.
+- Correct the inline rename refusal selftest and specification to preserve the existing pre-mutation `NotAttempted` result, with an independent source-byte witness and detailed failure diagnostics. Native validation remains pending.
+- Use the verified owned input-desktop fixture for this project's hosted native interactive entries, retaining real keyboard/focus assertions, the existing warning, contained process drain and verified restoration. Local/self-hosted runs and matched historical comparisons keep their original desktop; inherited requests are cleared unless selected by the current role.
+- Add explicit hosted ViewerSpace capture and paired Release R0e diagnostics with immutable source, profile and raw-evidence checks; retain failed baselines without promoting Full coverage.
+- Add an explicit read-only hosted desktop diagnostic to investigate foreground refusal on the existing native runners. Preserve individual access errors, source identity and pending interactive qualification without changing input, activation, display settings or test requirements.
+- Resolve canonical existing Local paths with fresh, metadata-only no-reparse handles and a matching current volume-GUID observation. Links, missing/noncanonical paths, SUBST, remote or unknown mappings and any uncertain result retain the existing Win32 resolver. Preserve fresh route classification, cache identity/expiry and the original timing workload and deadline; record independent root-proof counters for validation. Reuse one Windows device-name policy with ordinal case comparison, keeping reserved-name detection independent of the process C locale.
+- Record focused File Operations popup geometry and accessibility witnesses when conflict traversal or task disclosure assertions fail.
+- Retain precise conflict-inspection and popup idle-cadence witness failures in native test results so hosted failures can be investigated without their separate trace.
+- Preserve capability/admission counts and timing components and failed safety sub-witness names in File Operations case failure results so hosted qualification failures can be diagnosed without a missing trace; retain the existing workload, performance ceilings and safety assertions.
+- Run the same-name file/folder inspection checks inside a current enumeration settlement. A displayed folder can retain its rows during a refresh; the test now waits for the correct generation before injecting its synthetic twin, preserving every ambiguity and selection assertion.
+- Verify grandfathered TestRuns relocations against the ancestral public snapshot when the original implicit baseline is unavailable, preserving exact manifest identities and fail-closed custom baselines.
+- Add two explicit hosted diagnostic scopes with exact case and evidence checks while retaining Full as the manual native-suite default.
+- Record separate owned foreground-handoff attempt and thread-state diagnostics when interactive self-test admission fails, preserving the existing focus requirements.
+- Preserve provider separator rules when recognizing extended drive roots during parent traversal.
+- Preserve filesystem root separators and stop parent traversal at absolute drive and volume-GUID roots without treating volume devices as directories.
+- Record bounded, failure-only admission diagnostics for the independent-volume File Operations fixture, including the time spent capturing its scalar witness.
+- Permit one guarded foreground request after a refused dispatched hotkey and complete key release, retaining strict hotkey-only admission and independent handoff diagnostics.
+- Record the owned-window guard, foreground request and desktop-session facts when a Commands test cannot acquire its required foreground window.
+- Resolve relative CI engine checkout paths from the current PowerShell filesystem location.
+- Correct the ViewerSpace keyboard fixture to verify that Escape clears the filter, hides analysis, and then closes the viewer from the focused map.
+- Keep historical-review banner provenance visible by excluding Markdown link, image, math and escape constructs from the bounded banner body.
+- Require historical-review banner provenance to appear outside hidden Markdown reference definitions.
+- Fix repository source audits incorrectly excluding every finding when a checkout is located beneath a directory named `.build`.
+- Preserve the approved alternate-volume test-sandbox root and ownership marker during run cleanup, including when retained evidence keeps the root nonempty. Add a post-cleanup marker guard.
+- Close singular Local file-operation discovery on early failures while preserving early finality and preventing whole-tree replay after closure.
+  Classify the exact Local discovery API fixture as a no-activation, non-desktop witness.
+- Use the Full suite's bounded build parallelism for its targeted plugin deployment fixture, retaining the timeout, output restaging and receipt checks.
+- Set a finite 60-minute guard for the Full tooling deployment fixture's targeted compiler operation, retaining its rebuild, restaging, and receipt checks.
+- Observe owned activation throughout the File Operations waiting-card capture without treating a switch between other applications as a fixture failure.
+- Prevent a failed bridge transfer with unknown or already published output, or retained stage debt, from replaying the primary operation. Preserve source retention for copy-only Move failures, and distinguish intentional Skips and successful unverified copies from independently failed work.
+- Make the live folder discovery capture deterministic by holding the selected traversal at a real open listing report until capture finishes, with cancellation-aware bounded cleanup.
+- Clean up all owned synthetic completion records after the File Operations issue-text fixture so later safety checks start with an empty task history.
+- Keep a handled new-file commit collision out of the File Operations error count when Skip preserves the appeared occupant. Other commit failures retain their diagnostics.
+- Recheck appeared destination occupants through bounded, authority-guarded bridge admission, keep retry progress distinct from retransmitted bandwidth, and isolate fake-device collision checks from earlier recovery state.
+- Update the shared per-item scheduler fixture to verify exclusive task admission, the subsequent task handoff, and concurrency within each task under the current transfer policy.
+- Preserve root and descendant Skip results when a bridge transfer encounters a directory-versus-file conflict, while keeping sibling failures visible.
+- Preserve concurrent progress across roots of one File Operations task while keeping their combined file transfers within the shared limit. Cooperative Local Copy participates in the task budget; opaque providers retain exclusive fallback, cancellation and identity guards.
+- Keep the deferred-consent matrix item-scoped so each expected prompt is independently exercised and checked.
+- Correct popup accessibility, conflict, restart, export-fault, and ViewerSpace cache fixtures while retaining real input and content assertions; report task state when the admission benchmark cannot reach its existing gate, and verify terminal failure after partial directory publication.
+- Avoid requiring attribute-write access to delete a corroborated nonreadonly child by name.
+- Preserve descendant Skip outcomes when a reparse-tagged selected root binds as a directory and is traversed.
+- Pass the receipt's frozen build number to artifact-writing deployment checks and verify their resulting receipts.
+- Establish visible decision controls and fresh UIA providers before validating synchronous two-task conflict focus, preserving exact keyboard bindings and proving no render repairs the asserted transaction.
+- Add a shared parallel-transfer limit (default four, configurable from one to sixteen in Preferences > File Operations). Distinct new regular-file destinations can transfer together when NAS directory IDs are unavailable; conflicting names, overwrites and folder work remain serialized. Moves retain their sources when publication cannot be proved. Waiting cards explain capacity and safety waits. Add settings, real Preferences interaction, scheduler, copy/move, cancellation and localized presentation coverage.
+- Correct review regression fixtures to consume and clear transaction faults, respect exclusive transfer admission, measure actual offscreen keyboard targets, isolate Find queue ordering, and verify ViewerSpace cold-window and same-window cache lifecycles with the existing performance limits.
+- Keep the original July audit campaign provenance checks exact while requiring later historical reviews to identify their own reviewed commit, date and live work index; reject missing or misplaced provenance.
+- Require review provenance warnings to be rendered opening alerts, rejecting fenced examples, later quotations, and provenance in comment-shaped spans and unsupported raw HTML while preserving dated legacy and newer-review provenance checks.
+- Archive source-bound Release evidence for queue admission, identity waiting, Permanent Delete and pin-handoff contracts, together with the failed configured NAS scale run. Curated metric rows retain their original bytes and ordered raw-input digest bindings. The NAS deadline and human review remain open; this evidence does not establish Full or native ARM64 qualification.
+- Preserve explicit microsecond units for zero-duration performance records and transfer-wait metrics, and reject mixed-unit analyzer summaries and comparisons; retain exact counter and auxiliary-field semantics.
+- Distinguish an unavailable NAS scale-test completion from a successful provider result and record synchronized task/admission state at the existing wait deadline before cancellation.
+- Restore the pinned-tree Delete scale fixture through the canonical configuration path, verify normalized provider settings and the effective budget, and preserve the caller's exact host configuration and dirty state. Local witnesses cover defaults, nondefault settings and early exits. Bounded disposition substage diagnostics distinguish extended and legacy calls, handle close, read-only handling and completion callbacks while retaining the existing workload, deadlines and identity checks; NAS acceptance remains open after the configured scale case missed its existing wait.
+- Make the identity-less Delete scale fixture use and restore an explicit Local provider concurrency, and record bounded per-walk diagnostics for its deletion stages.
+- Classify the Find queue-order probe's hidden message-only STATIC parent precisely and retain negative audit coverage for visible native controls.
+- Align overlapping Copy test actions with serialized admission, explicitly recurse the live-output directory fixture and fail unexpected publisher prompts early. Preserve no-activation path-detail coverage by checking initial focus before UIA Invoke and separately observing virtualized cards and retained actions clipped outside the viewport.
+- Restore eligible queue-order controls on tasks waiting for transfer capacity or identity while keeping unsafe Start now actions unavailable.
+- Let nonactivating waiting-card captures tolerate unrelated desktop activity while continuing to reject activation of process-owned windows.
+- Keep directory Delete cards in Preparing while acquiring their checked authority and finishing consent, with Waiting for decision taking precedence while the question is open.
+- Remove every fixture-owned synthetic completion after File Operations producer tests so later idle-state checks do not inherit their results.
+- Preserve the running transfer limit when private workspaces attach settings, observe conflicting admissions atomically during handoff tests, and reserve admission for eligible older exclusive transfers so later jobs cannot starve them. Integrate the retained Shift/late-paint fixture repairs and current main; focused validation and remaining platform qualifications are recorded with the review evidence.
+- Integrate the shared transfer limit with per-field Preferences merging and task-owned cancellation, preserving concurrent popup settings. Keep live-output warning coverage on a publisher with released file handles and separately verify that a retained bridge publication authority makes Delete fail safely without changing either file; preserve the original failed run alongside follow-up evidence.
+- Let queued Local directory deletes retain a nonblocking identity witness until predecessors finish, then verify and pin the same directory for confirmation and deletion. Serialize overlapping host work, preserve deferred consent after readiness, and release strict leases before admitting successors.
+  - Retire each old directory metadata pin through a checked optional handoff so retained identity snapshots do not keep the task's own deleted directory pending; reject active readers and unavailable or mismatched authority before mutation.
+- Keep denied Delete opens out of the by-name fallback even when an earlier metadata probe cannot report an object identity.
+- Update File Operations source-contract coverage for deferred directory Delete authority and preserve exact-object and confirmation checks.
+- Wait for an observed hosted frame and exact visible Cancel control when preparing the two-pending-conflict UI witness. Record focus, scroll and geometry through setup while retaining the existing bounded wait, full-visibility predicate and subsequent synchronous no-frame binding checks. A persistent focus-reveal failure remains a failed test.
+- Repair the short File Operations keyboard fixture by delivering and verifying balanced retained-host Shift messages, and replace the late-paint control's fixed sleep with observable timer readiness inside its original deadline. Preserve failed initial receipts and independent counterfactual controls; full native regression and publication gates remain required.
+- Report synchronized task, preparation and admission witnesses when the File Operations preconsumption gate fails, retaining the 60-second deadline and rejecting a task that terminates before entering the gate.
+- Keep blocked file operations in Waiting after Start now, and explain when a location's unavailable file identifiers force operations to run one at a time. Hide Start now for that safety wait and suppress Counting and zero-byte transfer activity until admission. Add deterministic admission/cancel and English/French waiting-card regression coverage.
+- Track the public unified-CI native and artifact-only Prepare acceptance with original source-bound receipts, retain the exact scope and timing of obsolete-run cancellation approvals, and keep private-project readiness and broader runtime qualification with their existing owners. DxUi retains internal SDK artifacts without a publication workflow.
 - Consolidate the remaining advisor-survey documentation and routing work into one indexed WIP plan, preserve all six superseded survey files as retired Done records with source provenance, remove the old root queue, and update current references with exact archive-admission guards. Product implementation and qualification remain with their existing owners.
   Validation preserved all six original body hashes and unchanged existing Done history; specification and tooling inventories passed. Focused checks recorded 148 passed, one pre-existing historical-review provenance failure and zero skips; the new archive-admission control passed. I58 records the failure and its bounded follow-up without claiming Full or product qualification.
 - Record a historical review of the WIP folder at `eb779e0bd836`. It checks plan accuracy against the tree, remaining source work, a recommended ship order, and folder-quality defects. The record authorizes no implementation and does not change the live index.

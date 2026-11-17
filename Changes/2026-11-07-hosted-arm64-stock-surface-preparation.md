@@ -1,1 +1,0 @@
-- Prepare eligible hosted ARM64 interactive test entries with the specifically approved stock account and Search surface checks, retaining guarded close evidence while preserving native focus, input and capture assertions.

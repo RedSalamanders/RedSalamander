@@ -1,1 +1,0 @@
-- Record bounded foreground admission diagnostics when the ViewerSpace keyboard test cannot activate its owned window.

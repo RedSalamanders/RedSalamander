@@ -1,1 +1,0 @@
-- Record bounded pane-filter prompt snapshot, accessibility value-read and foreground evidence when the focused UI Automation comparison fails.

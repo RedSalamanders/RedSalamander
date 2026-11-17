@@ -1,1 +1,0 @@
-- Remove every fixture-owned synthetic completion after File Operations producer tests so later idle-state checks do not inherit their results.

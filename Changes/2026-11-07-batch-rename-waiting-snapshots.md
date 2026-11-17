@@ -1,1 +1,0 @@
-- Settle queued Batch Rename preview and target rebuilds in waiting test snapshots, with a regression that verifies pending work is completed before mode controls are asserted.

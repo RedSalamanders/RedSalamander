@@ -1,1 +1,0 @@
-- Pass the receipt's frozen build number to artifact-writing deployment checks and verify their resulting receipts.

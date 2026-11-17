@@ -1,1 +1,0 @@
-- Retain precise conflict-inspection and popup idle-cadence witness failures in native test results so hosted failures can be investigated without their separate trace.

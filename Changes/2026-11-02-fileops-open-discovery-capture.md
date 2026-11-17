@@ -1,1 +1,0 @@
-- Make the live folder discovery capture deterministic by holding the selected traversal at a real open listing report until capture finishes, with cancellation-aware bounded cleanup.
