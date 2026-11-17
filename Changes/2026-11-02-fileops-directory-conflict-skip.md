@@ -1,1 +1,0 @@
-- Preserve root and descendant Skip results when a bridge transfer encounters a directory-versus-file conflict, while keeping sibling failures visible.

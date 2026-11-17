@@ -1,1 +1,0 @@
-- Preserved the historical six-profile Source build record with its exact source, engine and receipt identities; it grants no acceptance to newer source or pending runtime qualification.

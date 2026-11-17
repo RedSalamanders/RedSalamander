@@ -1,1 +1,0 @@
-- Arm fake MTP delayed-reader watchdogs after reader setup so the short timeout targets the intended read.

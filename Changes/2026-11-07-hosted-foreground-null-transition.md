@@ -1,1 +1,0 @@
-- Allow a transient null foreground during the bounded hosted test desktop return while retaining ownership and focus verification.

@@ -1,1 +1,0 @@
-- Isolate the NavigationView suggestion keyboard fixture from observed pointer hover while retaining its focus, selection and stale-result assertions.

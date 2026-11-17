@@ -1,1 +1,0 @@
-- Correct popup accessibility, conflict, restart, export-fault, and ViewerSpace cache fixtures while retaining real input and content assertions; report task state when the admission benchmark cannot reach its existing gate, and verify terminal failure after partial directory publication.

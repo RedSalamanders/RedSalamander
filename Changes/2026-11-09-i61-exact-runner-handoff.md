@@ -1,1 +1,0 @@
-- Bind hosted regression to its canonical runner's create-only exact summary reference, verifying run/profile/gate and final bytes instead of discovering summaries by archive location and timestamps; keep positive execution and Release failure detection required.

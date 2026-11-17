@@ -1,1 +1,0 @@
-- Preserve normal full/single-project build receipts when the optional project union is empty or null, restore the local SDK command's tooling navigation entry, and check artifact admission at the actual native writer boundary after independent sandbox planning.

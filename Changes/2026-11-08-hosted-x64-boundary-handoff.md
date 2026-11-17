@@ -1,1 +1,0 @@
-- Allow the selected hosted native x64 interactive fixture to use the existing guarded owned-window keyboard handoff when direct foreground acquisition is refused.

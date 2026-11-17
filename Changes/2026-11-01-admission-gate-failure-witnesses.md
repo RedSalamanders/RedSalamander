@@ -1,1 +1,0 @@
-- Report synchronized task, preparation and admission witnesses when the File Operations preconsumption gate fails, retaining the 60-second deadline and rejecting a task that terminates before entering the gate.

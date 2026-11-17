@@ -1,1 +1,0 @@
-- Keep qualified SDK compilation compatible with absent Visual Studio support-library defaults while preserving core library paths, exact dependency bytes, and current local/main gates. SDK mismatch diagnostics now identify the required and next actual path.

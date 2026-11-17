@@ -1,1 +1,0 @@
-- Let nonactivating waiting-card captures tolerate unrelated desktop activity while continuing to reject activation of process-owned windows.

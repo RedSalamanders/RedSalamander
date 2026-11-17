@@ -1,1 +1,0 @@
-- Avoid requiring attribute-write access to delete a corroborated nonreadonly child by name.

@@ -1,1 +1,0 @@
-- Add explicit hosted ViewerSpace capture and paired Release R0e diagnostics with immutable source, profile and raw-evidence checks; retain failed baselines without promoting Full coverage.

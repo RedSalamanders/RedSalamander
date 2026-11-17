@@ -1,1 +1,0 @@
-- Preserve capability/admission counts and timing components and failed safety sub-witness names in File Operations case failure results so hosted qualification failures can be diagnosed without a missing trace; retain the existing workload, performance ceilings and safety assertions.

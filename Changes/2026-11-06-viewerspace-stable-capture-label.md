@@ -1,1 +1,0 @@
-- Use a fixed invented root name in the ViewerSpace capture fixture so breadcrumb pixels do not depend on machine uptime; preserve the existing visual assertions.

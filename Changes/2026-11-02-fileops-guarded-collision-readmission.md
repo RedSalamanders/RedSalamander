@@ -1,1 +1,0 @@
-- Recheck appeared destination occupants through bounded, authority-guarded bridge admission, keep retry progress distinct from retransmitted bandwidth, and isolate fake-device collision checks from earlier recovery state.
