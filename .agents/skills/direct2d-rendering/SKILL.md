@@ -1,9 +1,6 @@
 ---
 name: direct2d-rendering
 description: Direct2D and DirectWrite graphics rendering patterns for Windows. Use when implementing 2D graphics, text rendering, hardware-accelerated drawing, handling device loss, or working with ID2D1DeviceContext.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Direct2D/DirectWrite Rendering

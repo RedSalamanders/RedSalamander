@@ -1,9 +1,6 @@
 ---
 name: async-threading
 description: Threading model and async operation patterns for Windows applications. Use when implementing background operations, thread synchronization, posting to UI thread, or using thread pools.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Threading and Async Operations

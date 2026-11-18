@@ -1,9 +1,6 @@
 ---
 name: win32-wndproc
 description: Win32 window procedure and message handling patterns. Use when implementing WndProc, handling Windows messages like WM_PAINT WM_SIZE WM_NOTIFY WM_COMMAND, or creating message handler methods.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Win32 Message Handling

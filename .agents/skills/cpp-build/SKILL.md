@@ -1,9 +1,6 @@
 ---
 name: cpp-build
 description: Build RedSalamander C++ projects using the PowerShell wrapper; the independently installed RedMonitor helper is outside this solution.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Building RedSalamander
@@ -84,7 +81,7 @@ consumer package contains only the client notice. See Specs/Core/Core_RedSalaman
 ## Tooling Changes
 
 Read `Specs/Testing/Testing_ToolingGovernance.md`, `Tools/README.md`, and
-`.github/skills/tooling-governance/SKILL.md` before changing a build script or
+`.agents/skills/tooling-governance/SKILL.md` before changing a build script or
 helper. Keep stable build entrypoints at the Tools root, place reusable
 implementation in explicit modules, update `Tools/tool-inventory.json`, and
 prove that workflow cache keys include every imported module, patch, notice,
@@ -191,4 +188,4 @@ See:
 
 - `Specs/Testing/Testing_PerformanceValidation.md`
 - `Specs/TestRuns/README.md`
-- `.github/skills/perf-validation/SKILL.md`
+- `.agents/skills/perf-validation/SKILL.md`

@@ -384,7 +384,7 @@ need to be more visible with a clear fiffernce between file and folder display
 global documentation and code : https://github.com/aws/aws-sdk-cpp
 exmaples : https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code/
 
-implement all that by respecting AGENTS.md and skills in .github/skills
+implement all that by respecting AGENTS.md and skills in .agents/skills
 
 ------------------------------------------------------------------------------------------------------
 # DONE Filesystem copy/move to and from

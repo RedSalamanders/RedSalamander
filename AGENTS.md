@@ -31,28 +31,29 @@ at forbidden old drive-root paths.
 ## Canonical Agent Guidance
 
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
-- Project skills live in `.github/skills/` (one directory per skill; table below). Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
+- Project skills live in `.agents/skills/` (one directory per skill; table below), the skill folder of every RedSalamanders repository. Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
 - Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
-- Repository crash-forensics meta-skill (`red-salamander-crash-forensics`) lives only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
+- Every project skill, including the crash-forensics meta-skill (`red-salamander-crash-forensics`), lives only in `.agents/skills/` with `name` and `description` front matter; do not create copies under `.claude/`, `.github/skills/` or other tool-specific directories.
 - Agent/skill authority, package/example integrity, compatibility routes and truthful evaluation are governed by [Testing_AgentGuidance.md](Specs/Testing/Testing_AgentGuidance.md). Keep mutable machine facts and delivery history with their owners rather than copying them into instructions.
 
 ## Skills Reference
 
-Detailed patterns and guidelines are available as Agent Skills in `.github/skills/`:
+Detailed patterns and guidelines are available as Agent Skills in `.agents/skills/`:
 
 | Skill | Description |
 |-------|-------------|
-| [cpp-build](.github/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
-| [perf-validation](.github/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
-| [direct2d-rendering](.github/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
-| [icon-cache](.github/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
-| [win32-wndproc](.github/skills/win32-wndproc/SKILL.md) | Window procedure and message handling |
-| [plugin-callbacks](.github/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
-| [file-actions](.github/skills/file-actions/SKILL.md) | File-action ID semantics, settings validation, direct dispatch, and regression coverage |
-| [build-preferences-pages](.github/skills/build-preferences-pages/SKILL.md) | End-to-end Preferences page workflow: draft state, dirty tracking, persistence, accessibility, specs, and tests |
-| [tooling-governance](.github/skills/tooling-governance/SKILL.md) | Inventory, placement, help, compatibility, caller, cache, and spec rules for scripts and tooling |
-| [theming](.github/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
-| [async-threading](.github/skills/async-threading/SKILL.md) | Threading model and async patterns |
+| [cpp-build](.agents/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
+| [perf-validation](.agents/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
+| [direct2d-rendering](.agents/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
+| [icon-cache](.agents/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
+| [win32-wndproc](.agents/skills/win32-wndproc/SKILL.md) | Window procedure and message handling |
+| [plugin-callbacks](.agents/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
+| [file-actions](.agents/skills/file-actions/SKILL.md) | File-action ID semantics, settings validation, direct dispatch, and regression coverage |
+| [build-preferences-pages](.agents/skills/build-preferences-pages/SKILL.md) | End-to-end Preferences page workflow: draft state, dirty tracking, persistence, accessibility, specs, and tests |
+| [tooling-governance](.agents/skills/tooling-governance/SKILL.md) | Inventory, placement, help, compatibility, caller, cache, and spec rules for scripts and tooling |
+| [theming](.agents/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
+| [async-threading](.agents/skills/async-threading/SKILL.md) | Threading model and async patterns |
+| [red-salamander-crash-forensics](.agents/skills/red-salamander-crash-forensics/SKILL.md) | Dumps, sidecar stacks, fatal dialogs, hangs, timeouts and failed selftest runs |
 
 ## Core Principles
 
@@ -66,7 +67,7 @@ Any new feature, hot-path change, or optimization that can affect responsiveness
 - deterministic selftest coverage,
 - archived perf evidence under `Specs/TestRuns/`
 
-from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.github/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
+from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.agents/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
 
 ### Spec Closeout is Mandatory
 
@@ -87,7 +88,7 @@ Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, 
 Before adding, moving, renaming, or materially changing a file under `Tools/`, read
 [`Tools/README.md`](Tools/README.md),
 [`Specs/Testing/Testing_ToolingGovernance.md`](Specs/Testing/Testing_ToolingGovernance.md),
-and the [tooling-governance skill](.github/skills/tooling-governance/SKILL.md).
+and the [tooling-governance skill](.agents/skills/tooling-governance/SKILL.md).
 Update `Tools/tool-inventory.json`, public help, callers, focused tests, and the
 owning normative spec in the same change. Keep stable entrypoints at the Tools
 root, put reusable implementation in explicit modules, and preserve documented
@@ -264,7 +265,7 @@ Key interfaces in `Common/PlugInterfaces/`:
 
 ## Build
 
-Use `build.ps1` for command-line builds. See [cpp-build skill](.github/skills/cpp-build/SKILL.md) for details.
+Use `build.ps1` for command-line builds. See [cpp-build skill](.agents/skills/cpp-build/SKILL.md) for details.
 
 ```powershell
 .\build.ps1                              # Build all (Debug)
