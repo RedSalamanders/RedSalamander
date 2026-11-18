@@ -1,6 +1,6 @@
 ---
 name: red-salamander-crash-forensics
-description: Preserve and investigate RedSalamander dumps, sidecar stacks, fatal dialogs, hangs, timeouts, and failed selftest runs before rerunning a focused scenario.
+description: Preserve and investigate RedSalamander dumps, sidecar stacks, fatal dialogs, hangs, timeouts, and failed selftest runs before rerunning a focused scenario. Use when the app or a selftest crashed, hung, timed out or showed a fatal dialog, when locating that run's dumps and artifacts, or when diagnosing a crash signature and verifying its repair.
 ---
 
 # RedSalamander crash forensics

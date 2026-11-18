@@ -1,6 +1,6 @@
 ---
 name: cpp-build
-description: Build RedSalamander C++ projects using the PowerShell wrapper; the independently installed RedMonitor helper is outside this solution.
+description: Build RedSalamander C++ projects using the PowerShell wrapper; the independently installed RedMonitor helper is outside this solution. Use when running build.ps1 for a configuration, platform or single project, diagnosing an MSBuild or vcpkg failure, staging runtime dependencies, or changing a build script, shared MSBuild default or output location.
 ---
 
 # Building RedSalamander

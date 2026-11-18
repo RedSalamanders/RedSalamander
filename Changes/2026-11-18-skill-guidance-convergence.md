@@ -6,3 +6,5 @@
   `metadata.author` and `metadata.version` keys so front matter is `name` and `description` only (A-10). `AGENTS.md`,
   `Specs/Testing/Testing_AgentGuidance.md`, the `Specs/NormativeConsistency.json` anchors, two active plans and the
   default guidance roots of `Tools/Tests/DocumentationDriftContracts.Tests.ps1` follow the move.
+  `red-salamander-crash-forensics`, `cpp-build` and `tooling-governance` now say when to use them ("Use when ...",
+  CV-2-13), so every skill description says what the skill does and then when to use it.
