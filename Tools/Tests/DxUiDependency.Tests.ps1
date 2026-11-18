@@ -537,6 +537,7 @@ Describe 'Lighter DxUi source restore' {
             'capabilities.json' = '{ "apiRevision": 3 }'
             'vcpkg.json' = '{}'
             'vcpkg-install.ps1' = '# fixture'
+            'vcpkg-tool.json' = '{ "repository": "https://github.com/microsoft/vcpkg", "commit": "0000000000000000000000000000000000000000" }'
             'Tools/ConsumerBuild.psm1' = '# fixture'
             'Build/DxUi.Consumer.props' = '<Project />'
             'Build/DxUi.Consumer.targets' = '<Project />'
@@ -585,7 +586,7 @@ Describe 'Lighter DxUi source restore' {
         foreach ($omitted in @('Measurements', 'docs/gallery', 'Specs')) {
             Test-Path -LiteralPath (Join-Path $source $omitted) | Should Be $false
         }
-        foreach ($kept in @('capabilities.json', 'vcpkg-install.ps1', 'Tools/ConsumerBuild.psm1', 'src/DxUi.vcxproj', 'include/DxUi/Example.h', 'docs/README.md')) {
+        foreach ($kept in @('capabilities.json', 'vcpkg-install.ps1', 'vcpkg-tool.json', 'Tools/ConsumerBuild.psm1', 'src/DxUi.vcxproj', 'include/DxUi/Example.h', 'docs/README.md')) {
             Test-Path -LiteralPath (Join-Path $source $kept) | Should Be $true
         }
         # Long paths live in the checkout's own configuration; no user or global configuration is involved.

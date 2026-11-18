@@ -10,7 +10,7 @@ Import-Module (Join-Path $PSScriptRoot 'ProcessStreaming.psm1') -Scope Local
 # skip-worktree bit, so `git status` stays clean and the clean-source check below still holds.
 $script:RSDxUiSparseCheckoutPatterns = @('/*', '!/Measurements/', '!/docs/gallery/', '!/Specs/')
 # What the restore and the build read from the checkout. A sparse checkout that lacks one of them has failed.
-$script:RSDxUiRequiredSourcePaths = @('capabilities.json', 'vcpkg-install.ps1', 'Tools/ConsumerBuild.psm1',
+$script:RSDxUiRequiredSourcePaths = @('capabilities.json', 'vcpkg-install.ps1', 'vcpkg-tool.json', 'Tools/ConsumerBuild.psm1',
     'Build/DxUi.Consumer.props', 'Build/DxUi.Consumer.targets', 'src/DxUi.vcxproj', 'include')
 
 function Get-RSDxUiPin {
@@ -271,6 +271,16 @@ foreach($field in (Get-DxUiNativePolicyFields -RepoRoot $RepoRoot).GetEnumerator
         $output = Initialize-DxUiOutputRoot -DependencyRoot $dependency -BuildIdentity $identity
         $pwshExe = (Get-Process -Id $PID).Path
         if ([string]::IsNullOrWhiteSpace($pwshExe) -or -not (Test-Path -LiteralPath $pwshExe -PathType Leaf)) { $pwshExe = 'pwsh.exe' }
+        # The pinned installer clones vcpkg with --filter=blob:none unless its output root already holds a clean checkout
+        # at the commit its vcpkg-tool.json names. vcpkg cannot read that partial clone: it extracts versioned ports with
+        # Git in an environment holding only GIT_INDEX_FILE, which resolves no host ("Could not resolve host"). Prepare
+        # the complete checkout first. The helper is the consumers' shared copy and calls Git directly, so it runs in the
+        # same contained, logged child process as the pinned installer rather than in this module.
+        $quote = { param([string]$Value) "'" + $Value.Replace("'", "''") + "'" }
+        $checkout = 'Import-Module -Name {0} -ErrorAction Stop; Initialize-VcpkgToolCheckout -ToolIdentityPath {1} -ToolRoot {2}' -f `
+            (& $quote (Join-Path $PSScriptRoot 'VcpkgToolCheckout.psm1')), (& $quote (Join-Path $source 'vcpkg-tool.json')),
+            (& $quote (Join-Path $output 'vcpkg-tool'))
+        Invoke-RSDxUiRestoreProcess $RepoRoot $pwshExe @('-NoProfile','-ExecutionPolicy','Bypass','-Command',$checkout)
         Invoke-RSDxUiRestoreProcess $RepoRoot $pwshExe @('-NoProfile','-ExecutionPolicy','Bypass','-File',
             (Join-Path $source 'vcpkg-install.ps1'),'-Platform',$Platform,'-OutputRoot',$output)
         $values = [ordered]@{

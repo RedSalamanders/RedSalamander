@@ -761,7 +761,8 @@
         "Tools/Tests/BuildEvidence.Tests.ps1",
         "Tools/Tests/DxUiDependency.Tests.ps1",
         "Tools/Invoke-ProjectCi.ps1",
-        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
+        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+        "Tools/Tests/VcpkgToolCheckout.Tests.ps1"
       ],
       "consumerClosure": "derived-references",
       "prerequisites": [
@@ -2295,6 +2296,33 @@
         "Tools/Tests/VcpkgBootstrap.Tests.ps1",
         "Tools/Tests/ProcessStreaming.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
+      ],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Modules/Build/VcpkgToolCheckout.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Prepare the complete vcpkg checkout the pinned DxUi installer restores with: clone without a blob filter, complete an earlier partial or shallow clone in place, and select the commit the pinned source's vcpkg-tool.json names, refusing another repository. It is the consumers' byte-identical shared copy and calls Git directly, so the DxUi restore runs it in the contained child process that runs the pinned installer.",
+      "usage": "Run by Restore-RSDxUiDependency in a contained child PowerShell immediately before the pinned DxUi vcpkg-install.ps1 runs with the same output root.",
+      "usedBy": [
+        "Tools/Modules/Build/DxUiDependency.psm1",
+        "Tools/Tests/VcpkgToolCheckout.Tests.ps1"
+      ],
+      "prerequisites": [
+        "Git",
+        "Network access to the pinned vcpkg repository for a first clone or a completion"
+      ],
+      "sideEffects": [
+        "Clones, fetches into, completes and checks out the managed vcpkg checkout beneath the DxUi dependency output root; never deletes files or changes user or global Git configuration"
+      ],
+      "outputs": [
+        "A complete, clean vcpkg checkout at the pinned commit"
+      ],
+      "ownerSpec": "Specs/Build/Build_Toolchain.md",
+      "tests": [
+        "Tools/Tests/VcpkgToolCheckout.Tests.ps1"
       ],
       "replacement": null
     },
