@@ -121,8 +121,9 @@ Describe 'Historical Terminal profile integrity' {
         $actionIgnore.Groups['rules'].Value | Should Not Match 'dependency-name: \*|update-types:'
         $ignored = @([regex]::Matches($actions.Groups['settings'].Value, '(?m)^      - dependency-name: ([^\r\n]+)') |
             ForEach-Object { $_.Groups[1].Value.Trim() })
-        $ignored.Count | Should Be 1
+        $ignored.Count | Should Be 2
         $ignored[0] | Should Be 'RedSalamanders/.github'
+        $ignored[1] | Should Be 'RedSalamanders/.github/*'
     }
 
     It 'classifies the unused generic lifecycle facade without deleting its stable paths' {

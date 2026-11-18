@@ -12,3 +12,7 @@
   truncates a rule file (CV-3-08). The solution layout moves into the `cpp-build` skill; the screenshot, test-path,
   resource-placeholder and posted-payload guards keep a one-paragraph rule each and link to their owners
   (`Testing_SelfTests.md`, `Core_Localization.md`, `async-threading`), which gain the three details they lacked.
+  Dependabot now also ignores `RedSalamanders/.github/*`, the name it gives each reusable engine workflow, so it
+  stops proposing one caller bump at a time (CV-4-02, the line the other five repositories already have);
+  `HistoricalTerminalProfile.Tests.ps1` and `Testing_ToolingGovernance.md` expect both ignore names. No C++,
+  MSBuild or product input changes, so nothing compiles differently.
