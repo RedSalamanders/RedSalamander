@@ -1,36 +1,35 @@
 # RedMonitor consumer contract
 
-The viewer, model, listener, rendering, resources and native viewer tests are owned by
-[RedSalamanders/RedMonitor](https://github.com/RedSalamanders/RedMonitor).
-RedSalamander vendors only ThirdParty/RedMonitor/include/RedMonitor/Client.h and its MIT notice.
-Dependencies/RedMonitor.lock.json records the exact upstream commit, API and SHA-256 values.
-Tools/Verify-RedMonitorClient.ps1 performs local-only verification; explicit
-Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA updates the two files and lock together.
-The former Restore-RedMonitor command is a read-only compatibility verifier.
+RedMonitor's [consumer contract](https://github.com/RedSalamanders/RedMonitor/blob/main/Specs/Build/Build_Consumption.md#consumer-contract)
+owns the rules every application that adopts its client follows: the pinned client files and their verification, the
+provider and its message format, viewer discovery and launch, the `--redmonitor-probe` command, and the validation
+gates. This file keeps only RedSalamander's adapter facts and, below them, the historical viewer requirements that
+moved to RedMonitor.
 
-There are no viewer/test/satellite projects in this solution. Builds, tests and portable ZIPs never
-clone, compile, stage or require a viewer. The ZIP carries only the client MIT notice; stale old
-viewer executables/satellites must not enter the package. The independent RedMonitor Release ZIP owns
-the viewer's installation.
+## Adapter facts
 
-Existing per-module providers remain registered through their original lifetime and ABI.
-Debug::detail::EmitEtwEvent calls the shared WriteNormalizedEvent with RedSalamander as application label,
-preserving severity and copied PID/TID/FILETIME. Existing fields/GUID/name remain compatible; Application
-is additive and the text prefix is normalized. Producer messages are truncated only when needed to fit the
-client's 16,000 UTF-16-code-unit application-plus-message limit; the retained prefix ends before a complete
-surrogate pair and carries the `[truncated]` marker. The application and message together never exceed the
-client limit. Local/debug/crash/performance behavior remains owned here.
-
-Debug bare startup may asynchronously launch an available production Release helper from
-LocalAppData/Programs/RedMonitor/RedMonitor.exe or ProgramFiles/RedMonitor/RedMonitor.exe.
-Explicit --redmonitor uses the same discovery. Release, help/test/probe command lines never auto-launch.
-Missing/invalid helpers are harmless to normal application startup. No PATH/adjacent/.build fallback,
-viewer rebuild, synchronous wait or independent process termination is allowed.
-
-Preferences retains the legacy monitor settings adapter. In every consumer configuration its storage
-path is RedSalamanderMonitor-7.0.settings.json, matching the installed Release viewer. Existing live
-filter/mask signaling remains compatible. Native settings-path and consented real Preferences interaction
-are separate checks. Independent settings/support narrowing remains tracked in the canonical WIP plan.
+- The viewer, model, listener, rendering, resources and native viewer tests are owned by
+  [RedSalamanders/RedMonitor](https://github.com/RedSalamanders/RedMonitor).
+  RedSalamander vendors only ThirdParty/RedMonitor/include/RedMonitor/Client.h and its MIT notice.
+  Dependencies/RedMonitor.lock.json records the exact upstream commit, API and SHA-256 values.
+  Tools/Verify-RedMonitorClient.ps1 performs local-only verification; explicit
+  Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA updates the two files and lock together.
+  The former Restore-RedMonitor command is a read-only compatibility verifier.
+- There are no viewer/test/satellite projects in this solution. Builds, tests and portable ZIPs never
+  clone, compile, stage or require a viewer. The ZIP carries only the client MIT notice; stale old
+  viewer executables/satellites must not enter the package. The independent RedMonitor Release ZIP owns
+  the viewer's installation.
+- Existing per-module providers remain registered through their original lifetime and ABI.
+  Debug::detail::EmitEtwEvent calls the shared WriteNormalizedEvent with RedSalamander as application label,
+  preserving severity and copied PID/TID/FILETIME. Existing fields/GUID/name remain compatible; Application
+  is additive and the text prefix is normalized. Producer messages are truncated only when needed to fit the
+  client's 16,000 UTF-16-code-unit application-plus-message limit; the retained prefix ends before a complete
+  surrogate pair and carries the `[truncated]` marker. The application and message together never exceed the
+  client limit. Local/debug/crash/performance behavior remains owned here.
+- Preferences retains the legacy monitor settings adapter. In every consumer configuration its storage
+  path is RedSalamanderMonitor-7.0.settings.json, matching the installed Release viewer. Existing live
+  filter/mask signaling remains compatible. Native settings-path and consented real Preferences interaction
+  are separate checks. Independent settings/support narrowing remains tracked in the canonical WIP plan.
 
 ## Historical viewer requirements transferred to the independent owner
 
