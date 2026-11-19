@@ -223,12 +223,25 @@ configuration never change. The checkout is sparse (`/*`, `!/Measurements/`, `!/
 measurements, specifications and gallery sheets are most of the library's tracked files and none of its consumer
 interface. Omitted paths are not deletions, so the clean-source check still holds. After checkout the restore requires a
 clean status (a checkout can name files it could not write and still exit 0) and the paths restore and build read
-(`capabilities.json`, `vcpkg-install.ps1`, `Tools/ConsumerBuild.psm1`, `Build/DxUi.Consumer.props`/`.targets`,
+(`capabilities.json`, `vcpkg-install.ps1`, `vcpkg-tool.json`, `Tools/ConsumerBuild.psm1`, `Build/DxUi.Consumer.props`/`.targets`,
 `src/DxUi.vcxproj`, `include`). A restore that fails removes only the partial checkout it created, beneath the guarded
 dependency root, so the next run clones again. A restore test from a 160-character root, where a kept library file's
 restored path passes MAX_PATH, covers all of it. Long paths do not lift the 258-character Win32 limit on a current
 directory, which `git -C` needs, so the checkout directory (the consumer root plus 72 characters) must stay within it: a
 root of at most 186 characters.
+
+Before the pinned `vcpkg-install.ps1` runs, the restore prepares the complete vcpkg checkout it restores with,
+`<output>/vcpkg-tool` at the repository and commit of the pinned source's `vcpkg-tool.json`
+(`Initialize-VcpkgToolCheckout` in `Tools/Modules/Build/VcpkgToolCheckout.psm1`). The pinned installer otherwise clones
+vcpkg with `--filter=blob:none`, and vcpkg cannot read a partial clone: it extracts each versioned port with `git
+read-tree` and `git checkout-index` in an environment that holds only `GIT_INDEX_FILE`, where Git resolves no host, so a
+blob left on the server fails the restore ("Could not resolve host: github.com"; first seen on 2026-11-18, when upstream
+microsoft/vcpkg de36db0455 moved `vcpkg-cmake` past the baseline's tree). The installer reuses a clean checkout at its
+pinned commit, so it never clones. The helper clones completely, completes an earlier partial or shallow clone in place,
+refuses a checkout of another repository and deletes nothing. It is the byte-identical copy every DxUi consumer keeps and
+calls Git directly, so it runs in the same contained, logged child process as the pinned installer. It becomes
+unnecessary once the DxUi pin holds the library's own complete-clone installer, and moves with the shared toolchain
+tooling (RedHome convergence CV-5-07).
 
 Separate platform properties select an output fingerprint containing source/API, compiler host and
 compiler/linker/MSBuild/SDK identities, CRT family and STL annotation policy. RedSalamander explicitly

@@ -618,6 +618,7 @@ and focused tests.
 | `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution. |
 | `Modules/Build/SanitizedEnvironment.psm1` | Canonical environment normalization with distinct null-removal and present-empty child overrides, kill-on-close contained process launch (the job also applies `SEM_NOGPFAULTERRORBOX`, so a crash ends the process without a Windows Error Reporting dialog), and local current-parent identity. |
 | `Modules/Build/VcpkgInstallSafety.psm1` | Pinned tool/baseline bootstrap and process-local hosted integration, manifest floor/override validation, safe triplets/merge paths, and the default-MSVC-toolset overlay shared by installer and build. |
+| `Modules/Build/VcpkgToolCheckout.psm1` | Complete vcpkg checkout for the pinned DxUi installer (the consumers' shared copy), run before it in the restore's contained child process. |
 | `Modules/Build/VcpkgToolIdentity.psm1` | Pinned vcpkg executable attestation. |
 | `Modules/Build/Versioning.psm1` | Atomic locked version resolution/persistence and validated diagnostics plus pure explicit package-version construction. |
 | `Modules/Packaging/PortablePackageSmoke.psm1` | Clean-extraction package smoke plus receipt-bound Ghostty identity, notice, and native load/free validation. |
