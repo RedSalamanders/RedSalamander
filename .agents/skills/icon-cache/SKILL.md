@@ -1,9 +1,6 @@
 ---
 name: icon-cache
 description: Shell icon management and caching using IconCache class. Use when extracting, caching, or rendering Windows shell icons, working with system image lists, or creating menu bitmaps from icons.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Icon Cache Management

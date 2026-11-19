@@ -1,9 +1,6 @@
 ---
 name: async-threading
 description: Threading model and async operation patterns for Windows applications. Use when implementing background operations, thread synchronization, posting to UI thread, or using thread pools.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Threading and Async Operations
@@ -90,11 +87,15 @@ The registry owns the payload until a receiver takes it or teardown drains it:
 - Call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`).
 - Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; it fences new posts, invalidates all tokens for the
   window, and deletes their storage exactly once.
+- Never post `PostMessageW(...payload.release())` or a raw `new` payload; post through `PostMessagePayload(...)`.
 - Always receive with `TakeMessagePayload<T>(hwnd, message, lParam)` (not a cast or manual `unique_ptr` wrap). A null result from a
   nonzero token means stale, drained, unregistered, or type-mismatched input and must be ignored before
   message-specific work.
-- Tokens use cryptographic entropy and live-entry collision rejection, with bounded retries and no predictable fallback. Validate the actual receiving HWND, message and type before removal; mismatches preserve registry ownership. A drained entry is invalidated; random token reuse has negligible collision probability, not a mathematical never-reuse guarantee.
+- Tokens use cryptographic entropy and live-entry collision rejection, with bounded retries and no predictable fallback. Validate the actual receiving HWND, message and type under the registry lock before removal; mismatches preserve registry ownership. A drained entry is invalidated; random token reuse has negligible collision probability, not a mathematical never-reuse guarantee.
 - Reserve `lParam == 0` only for a payload-less fallback explicitly defined by that message.
+- Capture every payload field needed for `msg`, `wParam` or other arguments before the call. Never dereference a
+  `unique_ptr` in the same function-call expression that also passes `std::move(payload)`: argument evaluation may
+  move it first.
 
 ### UI-host cross-thread checklist
 

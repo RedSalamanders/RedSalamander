@@ -31,28 +31,29 @@ at forbidden old drive-root paths.
 ## Canonical Agent Guidance
 
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
-- Project skills live in `.github/skills/` (one directory per skill; table below). Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
+- Project skills live in `.agents/skills/` (one directory per skill; table below), the skill folder of every RedSalamanders repository. Cross-repository C++, WIL, `yyjson`, localization, audit (`improve`), and `spec-workflow` skills live in the sibling `RedHome` repository.
 - Shared skill index: `../RedHome/AGENTS.md`; packages: `../RedHome/.agents/skills/`. If `../RedHome` is missing, clone https://github.com/RedSalamanders/RedHome.git to that path. This repository's guidance and domain specs own product behavior and validation.
-- Repository crash-forensics meta-skill (`red-salamander-crash-forensics`) lives only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
+- Every project skill, including the crash-forensics meta-skill (`red-salamander-crash-forensics`), lives only in `.agents/skills/` with `name` and `description` front matter; do not create copies under `.claude/`, `.github/skills/` or other tool-specific directories.
 - Agent/skill authority, package/example integrity, compatibility routes and truthful evaluation are governed by [Testing_AgentGuidance.md](Specs/Testing/Testing_AgentGuidance.md). Keep mutable machine facts and delivery history with their owners rather than copying them into instructions.
 
 ## Skills Reference
 
-Detailed patterns and guidelines are available as Agent Skills in `.github/skills/`:
+Detailed patterns and guidelines are available as Agent Skills in `.agents/skills/`:
 
 | Skill | Description |
 |-------|-------------|
-| [cpp-build](.github/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
-| [perf-validation](.github/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
-| [direct2d-rendering](.github/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
-| [icon-cache](.github/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
-| [win32-wndproc](.github/skills/win32-wndproc/SKILL.md) | Window procedure and message handling |
-| [plugin-callbacks](.github/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
-| [file-actions](.github/skills/file-actions/SKILL.md) | File-action ID semantics, settings validation, direct dispatch, and regression coverage |
-| [build-preferences-pages](.github/skills/build-preferences-pages/SKILL.md) | End-to-end Preferences page workflow: draft state, dirty tracking, persistence, accessibility, specs, and tests |
-| [tooling-governance](.github/skills/tooling-governance/SKILL.md) | Inventory, placement, help, compatibility, caller, cache, and spec rules for scripts and tooling |
-| [theming](.github/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
-| [async-threading](.github/skills/async-threading/SKILL.md) | Threading model and async patterns |
+| [cpp-build](.agents/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
+| [perf-validation](.agents/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
+| [direct2d-rendering](.agents/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
+| [icon-cache](.agents/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
+| [win32-wndproc](.agents/skills/win32-wndproc/SKILL.md) | Window procedure and message handling |
+| [plugin-callbacks](.agents/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
+| [file-actions](.agents/skills/file-actions/SKILL.md) | File-action ID semantics, settings validation, direct dispatch, and regression coverage |
+| [build-preferences-pages](.agents/skills/build-preferences-pages/SKILL.md) | End-to-end Preferences page workflow: draft state, dirty tracking, persistence, accessibility, specs, and tests |
+| [tooling-governance](.agents/skills/tooling-governance/SKILL.md) | Inventory, placement, help, compatibility, caller, cache, and spec rules for scripts and tooling |
+| [theming](.agents/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
+| [async-threading](.agents/skills/async-threading/SKILL.md) | Threading model and async patterns |
+| [red-salamander-crash-forensics](.agents/skills/red-salamander-crash-forensics/SKILL.md) | Dumps, sidecar stacks, fatal dialogs, hangs, timeouts and failed selftest runs |
 
 ## Core Principles
 
@@ -66,28 +67,21 @@ Any new feature, hot-path change, or optimization that can affect responsiveness
 - deterministic selftest coverage,
 - archived perf evidence under `Specs/TestRuns/`
 
-from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.github/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
+from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.agents/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
 
 ### Spec Closeout is Mandatory
 
-Application screenshots for specifications, documentation, and UI reviews MUST be generated through the test
-harness with deterministic scenarios and no desktop takeover. Reuse or extend harness capture support rather
-than using Computer Use or manual desktop screenshots. Save scenario/build provenance with the captures and
-label proposal mockups separately from actual application screenshots.
-All published screenshots MUST use realistic invented fixture data for paths, filenames, accounts,
-hostnames and other identifying content. Never publish personal or environment-derived data, or
-replace it with redaction labels such as `[path hidden]`; seed synthetic values before capture.
-See `Specs/Testing/Testing_SelfTests.md` for the screenshot data and privacy contract.
-Default to no activation. When the user explicitly authorizes brief focus for interaction captures, use
-the harness’s existing warning and interactive desktop lease, target only owned test windows, and restore
-cursor and foreground focus. Never substitute Computer Use or manual desktop screenshots.
+Application screenshots for specifications, documentation, and UI reviews MUST come from deterministic test-harness
+scenarios with no desktop takeover and realistic invented fixture data, never personal data or redaction labels.
+[Testing_SelfTests.md](Specs/Testing/Testing_SelfTests.md#documentation-screenshot-scenarios) owns provenance, mockup
+labeling, and the explicitly authorized brief-focus exception for interaction captures.
 Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, UI contract, validation rule, or workflow requirement discovered during implementation MUST be merged into the authoritative domain spec under `Specs/<Domain>/` (or repo-level guidance such as `AGENTS.md` / `Specs/Testing/*` when appropriate) before the work is considered closed. Do not leave normative requirements stranded only in `Specs/Plans/WIP/` or `Specs/Plans/Done/`.
 
 ### Tooling Governance is Mandatory
 Before adding, moving, renaming, or materially changing a file under `Tools/`, read
 [`Tools/README.md`](Tools/README.md),
 [`Specs/Testing/Testing_ToolingGovernance.md`](Specs/Testing/Testing_ToolingGovernance.md),
-and the [tooling-governance skill](.github/skills/tooling-governance/SKILL.md).
+and the [tooling-governance skill](.agents/skills/tooling-governance/SKILL.md).
 Update `Tools/tool-inventory.json`, public help, callers, focused tests, and the
 owning normative spec in the same change. Keep stable entrypoints at the Tools
 root, put reusable implementation in explicit modules, and preserve documented
@@ -120,24 +114,12 @@ paths with thin compatibility shims when they may have external consumers.
   desktop lease. Its large, non-activating, click-through surface stays centered
   on the test app. Do not add duplicate warnings or weaken focus assertions.
   See `Specs/Testing/Testing_SelfTests.md` for the activation classes and warning contract.
-- **Test paths are fail-closed:** all test-generated local scratch, temp, logs,
-  archives, and validation evidence must stay beneath exact
-  `X:\RedSalamander.Perf`, where `X:` is any selected fixed local drive.
-  `REDSALAMANDER_TEST_ROOT` is a request, not authorization; first creation and
-  alternate-volume FileOps coverage require explicit initialization plus the
-  ownership marker. Repository `.build` is a build-input/output location, never
-  a test-data sandbox. Test tooling never enumerates, writes, or cleans legacy runtime
-  data outside the selected root. Tests never mount, link (junction, symbolic or hard
-  link), share, `subst` or otherwise expose a directory or volume that is not itself
-  inside a marked sandbox; the only mountable volume is a test-owned virtual disk file
-  inside one, and no test passes a volume GUID it did not create to
-  `SetVolumeMountPointW`. Every link a test creates targets a path inside the same
-  marked sandbox (native `Common::Testing::RequireSandboxedLinkTarget` or the guarded
-  creators beside it, PowerShell `New-RSTestSandboxLink`), and sandbox cleanup never
-  follows links or mount points. `Tools\Tests\TestHarnessSourceContracts.Tests.ps1`
-  allowlists every such call site in test code. A test item moved to the user's
-  Recycle Bin is purged by the case that recycled it (`SelfTest::PurgeRecycledTestItems`
-  at every case boundary); never empty or enumerate the Recycle Bin.
+- **Test paths are fail-closed:** all test-generated scratch, temp, logs, archives, and validation evidence stay
+  beneath exact `X:\RedSalamander.Perf` (any selected fixed local drive) with its ownership marker.
+  `REDSALAMANDER_TEST_ROOT` is a request, not authorization, and repository `.build` is never a test-data sandbox.
+  Tests never mount, link, share, or `subst` anything outside a marked sandbox, sandbox cleanup never follows links,
+  and each case purges what it moved to the Recycle Bin. [Testing_SelfTests.md](Specs/Testing/Testing_SelfTests.md)
+  owns the full rules, the guarded link helpers, and the `TestHarnessSourceContracts.Tests.ps1` allowlist.
 - **Shared-helper reuse is mandatory:** before adding a consumer-local utility, search
   `Specs/Core/Core_SharedHelpers.md`, `Common/`, and (for test code) `Tests/TestSupport/`. Reuse or extend the
   canonical helper when its semantics match; do not reimplement it under a different name. A local variant is
@@ -153,11 +135,11 @@ paths with thin compatibility shims when they may have external consumers.
 - **Ban `sprintf_s` / `swprintf_s`** in non-PoC code:
   - Diagnostics: `std::format` / `std::format_to_n` + `OutputDebugStringA/W`
   - User-facing/localized: `.rc` resources + `FormatStringResource(...)` with **positional** placeholders
-- **Resource strings must use `std::format`-style positional placeholders** (`{0}`, `{1:08X}`); bare `{}` and unindexed format specs like `{:08X}` are forbidden in `.rc` resources because translators must be able to reorder arguments. Embedded/source strings must introduce placeholders in code argument order (`{0}`, then `{1}`, etc.) with no skipped indexes, and `FormatStringResource(...)` calls must pass arguments in that same source-string order. Satellite translations may reorder placeholders for grammar but must preserve the exact source placeholder tokens; they must not add, drop, duplicate, renumber, or change format specs. Never treat a resource string as a printf-format string (avoid C4774 suppression).
+- **Resource strings use `std::format` positional placeholders** (`{0}`, `{1:08X}`), introduced in argument order, never bare `{}`, unindexed specs, or printf syntax; translations keep the source tokens. [Core_Localization.md](Specs/Core/Core_Localization.md) owns the full placeholder and translation rules.
 - **COM ownership:** never store owning raw COM interface pointers (no manual `Release()`); use `wil::com_ptr<T>` for members and locals.
 - **COM ref-counting:** never do `obj->AddRef(); ptr.attach(obj);` (two-step hazard); prefer `ptr = obj;` / `wil::com_ptr<T> ptr = obj;`.
 - **`wil::unique_hwnd` ownership:** never call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner; use `_hWnd.reset()` (or `.release()` only when transferring ownership explicitly).
-- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(hwnd, message, lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. A helper-owned nonzero `lParam` is an opaque registry token, never a pointer: do not cast or adopt it directly. If a nonzero token yields null, it is stale/drained/type-mismatched and must be ignored before message-specific work. Zero is reserved for an explicitly posted payload-less fallback only when that message defines one. Capture every payload field needed for `msg`/`wParam`/other arguments before the call; never dereference a `unique_ptr` in the same function-call expression that also passes `std::move(payload)`, because argument evaluation may move it first. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; the drain closes posting, invalidates all registered tokens, and deletes the registered storage. Tokens use cryptographic entropy and are unique among live entries. Destination HWND, message and type must match under the registry lock before removal; rejected claims preserve ownership. Draining invalidates old entries; random token reuse has negligible collision probability, rather than a mathematical never-reuse guarantee. Every UI-host cross-thread change must review: payload ownership, UI-thread boundary, cancellation path, teardown drain, and a focused teardown stress/selftest when the touched host can queue payloads.
+- **Cross-thread `PostMessageW` payloads:** post with `PostMessagePayload(...)` and receive with `TakeMessagePayload<T>(hwnd, message, lParam)`; never post `payload.release()` or a raw `new`. A nonzero `lParam` is an opaque token, never a pointer, and a null take is stale input to ignore. Receiving windows call `InitPostedPayloadWindow(hwnd)` on create and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`. The [async-threading skill](.agents/skills/async-threading/SKILL.md#hwnd-teardown-and-posted-payloads) owns the token, argument-capture, and drain rules and the review checklist for every UI-host cross-thread change.
 - **IconCache COM contract:** `IconCache::Initialize(...)` stays UI-thread/STA responsibility; any worker thread calling `IconCache::ExtractSystemIcon()` must initialize COM as MTA (`wil::CoInitializeEx(COINIT_MULTITHREADED)`).
 - **MTP/WPD worker contract:** portable-device workers must initialize COM as MTA before using WPD, serialize each device session, honor watchdog/cancel/quarantine teardown, and keep `GetCapabilities()` honest for read-only, writable, invalid-profile, and disconnected states.
 - **File-action IDs:** treat viewer/editor/user-menu action IDs as stable but case-insensitive identifiers. Uniqueness and lookup are case-insensitive, IDs that differ only by case are invalid duplicates, and parameterized command dispatch or association resolution must never require exact casing.
@@ -199,72 +181,14 @@ paths with thin compatibility shims when they may have external consumers.
 
 ## Architecture
 
-### Solution Structure (~21 core projects + localization satellites)
-
-```text
-RedSalamander/             # Main file manager application (incl. SelfTest\ suites)
-ThirdParty/RedMonitor/    # Pinned producer header and MIT notice; independent viewer is installed separately
-RedSalamanderSearchService/# Background search/index Windows service (named pipe + SQLite)
-RedConfigure/              # Standalone configuration tool
-RedLauncher/               # Launcher app
-Common/                    # Shared library (utilities, settings, product UI adapters)
-  └── PlugInterfaces/      # COM-style plugin interfaces (IFileSystem, IViewer, ...)
-Plugins/                   # All plugin DLLs
-  ├── FileSystem, FileSystem7z, FileSystemCurl, FileSystemS3,
-  │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemMtp, FileSystemDummy
-  ├── Terminal
-  └── ViewerText, ViewerSqlite, ViewerSpace, ViewerImgRaw,
-      ViewerVLC, ViewerPE, ViewerWeb
-Tests/                     # Standalone test projects (ProductUiTests, PerformanceTests2, ...)
-Tools/                     # Inventoried commands/modules; start with Tools/README.md
-Installer/                 # Portable ZIP packaging and Winget manifests
-PoC/                       # Proof-of-concept projects
-```
-
-The solution additionally contains ~90 per-language localization satellite resource projects, so Solution Explorer shows far more than the core list.
-
-### Project Dependencies
-
-- **Common** → no dependencies (shared library)
-- **RedMonitor** is independent; this solution verifies its vendored header and never builds the helper.
-- **RedSalamander** → Common + all plugins
-- **Plugins** → independent DLLs using PlugInterfaces
-
-### Key Components
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| FolderWindow | RedSalamander/ | Main window with dual-pane layout |
-| FolderView | RedSalamander/ | File list rendering, selection, drag-drop (split into ~10 .cpp files) |
-| RedMonitor client | ThirdParty/RedMonitor/include/RedMonitor/Client.h | Normalized diagnostics and optional installed-helper discovery |
-| PlugInterfaces | Common/PlugInterfaces/ | COM-style interfaces for plugins |
-| Helpers.h | Common/ | Core utilities, Debug logging, TraceLogging |
-| SettingsStore | Common/ | JSON/JSON5 settings persistence through yyjson |
-
-### Plugin Architecture
-
-Plugins use COM-style interfaces with a factory entry point:
-
-```cpp
-extern "C" HRESULT RedSalamanderCreate(REFIID riid, const FactoryOptions*, IHost*, const wchar_t* pluginId, void** ppv);
-```
-
-Key interfaces in `Common/PlugInterfaces/`:
-- **IFileSystem** - Virtual file system operations (copy, move, delete, search)
-- **IViewer** - File viewer with theming support
-- **IHost** - Host callbacks for plugins
-
-### Output Locations
-```text
-.build\x64\Debug\*.exe, *.dll       # Debug builds
-.build\x64\Release\*.exe, *.dll     # Release builds
-.build\ARM64\Debug\*.exe, *.dll     # Debug builds
-.build\ARM64\Release\*.exe, *.dll   # Release builds
-```
+The solution layout (about 21 core projects plus about 90 localization satellite projects), project dependencies, key
+components, the plugin factory entry point, and output locations are in the
+[cpp-build skill](.agents/skills/cpp-build/SKILL.md#solution-layout).
+[Plugins_PluginAPI.md](Specs/Plugins/Plugins_PluginAPI.md) owns the plugin ABI.
 
 ## Build
 
-Use `build.ps1` for command-line builds. See [cpp-build skill](.github/skills/cpp-build/SKILL.md) for details.
+Use `build.ps1` for command-line builds. See [cpp-build skill](.agents/skills/cpp-build/SKILL.md) for details.
 
 ```powershell
 .\build.ps1                              # Build all (Debug)

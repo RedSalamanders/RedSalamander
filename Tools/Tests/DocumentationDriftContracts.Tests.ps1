@@ -18,7 +18,7 @@ Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Er
 # this variant only collects owned guidance and performs no creation or publication.
 function Get-RSOwnedGuidanceDocuments {
     param([Parameter(Mandatory)][string]$RepositoryRoot,
-          [string[]]$RelativeRoots = @('.github/skills', '.agents/skills', '.github/agents'))
+          [string[]]$RelativeRoots = @('.agents/skills', '.github/agents'))
     foreach ($relativeRoot in $RelativeRoots) {
         $root = Resolve-RSGuardedRepositoryPath -RepoRoot $RepositoryRoot -GuardedRelativeRoot $relativeRoot -Path (Join-Path $RepositoryRoot $relativeRoot)
         $pending = [Collections.Generic.Stack[string]]::new()

@@ -1,9 +1,6 @@
 ---
 name: perf-validation
 description: Performance-first development contract for RedSalamander. Use when adding features, optimizing code, instrumenting hot paths, or validating UI/startup/search/fileops/compare performance from the beginning.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Performance Validation

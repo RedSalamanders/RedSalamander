@@ -1,6 +1,6 @@
 ---
 name: tooling-governance
-description: Add, change, move or retire RedSalamander tooling with its inventory, help, callers, compatibility, dependency closure and owning specifications.
+description: Add, change, move or retire RedSalamander tooling with its inventory, help, callers, compatibility, dependency closure and owning specifications. Use when adding or editing a script or module under Tools/, changing Tools/tool-inventory.json or a public command's help, or changing a cache or workflow key, lock scope or test sandbox that a tool relies on.
 ---
 
 # Tooling governance

@@ -20,7 +20,7 @@
 - **Ownership boundary:** `Tools/`, direct build/workflow/documentation callers,
   tooling tests, tooling guidance, and the authoritative tooling-governance
   contract
-- **Drift check:** `git diff f9cee9d47..HEAD -- Tools .github/workflows Directory.Build.targets RuntimeDependencies.props build.ps1 vcpkg-install.ps1 README.md docs Specs/Testing AGENTS.md .github/skills`
+- **Drift check:** `git diff f9cee9d47..HEAD -- Tools .github/workflows Directory.Build.targets RuntimeDependencies.props build.ps1 vcpkg-install.ps1 README.md docs Specs/Testing AGENTS.md .github/skills .agents/skills`
 - **Parallelism:** inventory/docs, shared helper extraction, and Terminal/cache
   cleanup may proceed in parallel only while their file ownership is disjoint;
   integration and final verification remain serialized.

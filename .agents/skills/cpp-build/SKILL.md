@@ -1,9 +1,6 @@
 ---
 name: cpp-build
-description: Build RedSalamander C++ projects using the PowerShell wrapper; the independently installed RedMonitor helper is outside this solution.
-metadata:
-  author: RedSalamander
-  version: "1.0"
+description: Build RedSalamander C++ projects using the PowerShell wrapper; the independently installed RedMonitor helper is outside this solution. Use when running build.ps1 for a configuration, platform or single project, diagnosing an MSBuild or vcpkg failure, staging runtime dependencies, or changing a build script, shared MSBuild default or output location.
 ---
 
 # Building RedSalamander
@@ -39,6 +36,65 @@ metadata:
 | `-Clean` | Switch | False |
 | `-Rebuild` | Switch | False |
 | `-MaxCpuCount` | 0-256 | 0 (MSBuild default) |
+
+## Solution layout
+
+`AGENTS.md` links here for the solution layout. `Specs/Plugins/Plugins_PluginAPI.md` owns the plugin ABI.
+
+### Solution Structure (~21 core projects + localization satellites)
+
+```text
+RedSalamander/             # Main file manager application (incl. SelfTest\ suites)
+ThirdParty/RedMonitor/    # Pinned producer header and MIT notice; independent viewer is installed separately
+RedSalamanderSearchService/# Background search/index Windows service (named pipe + SQLite)
+RedConfigure/              # Standalone configuration tool
+RedLauncher/               # Launcher app
+Common/                    # Shared library (utilities, settings, product UI adapters)
+  └── PlugInterfaces/      # COM-style plugin interfaces (IFileSystem, IViewer, ...)
+Plugins/                   # All plugin DLLs
+  ├── FileSystem, FileSystem7z, FileSystemCurl, FileSystemS3,
+  │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemMtp, FileSystemDummy
+  ├── Terminal
+  └── ViewerText, ViewerSqlite, ViewerSpace, ViewerImgRaw,
+      ViewerVLC, ViewerPE, ViewerWeb
+Tests/                     # Standalone test projects (ProductUiTests, PerformanceTests2, ...)
+Tools/                     # Inventoried commands/modules; start with Tools/README.md
+Installer/                 # Portable ZIP packaging and Winget manifests
+PoC/                       # Proof-of-concept projects
+```
+
+The solution additionally contains ~90 per-language localization satellite resource projects, so Solution Explorer shows far more than the core list.
+
+### Project Dependencies
+
+- **Common** → no dependencies (shared library)
+- **RedMonitor** is independent; this solution verifies its vendored header and never builds the helper.
+- **RedSalamander** → Common + all plugins
+- **Plugins** → independent DLLs using PlugInterfaces
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| FolderWindow | RedSalamander/ | Main window with dual-pane layout |
+| FolderView | RedSalamander/ | File list rendering, selection, drag-drop (split into ~10 .cpp files) |
+| RedMonitor client | ThirdParty/RedMonitor/include/RedMonitor/Client.h | Normalized diagnostics and optional installed-helper discovery |
+| PlugInterfaces | Common/PlugInterfaces/ | COM-style interfaces for plugins |
+| Helpers.h | Common/ | Core utilities, Debug logging, TraceLogging |
+| SettingsStore | Common/ | JSON/JSON5 settings persistence through yyjson |
+
+### Plugin Architecture
+
+Plugins use COM-style interfaces with a factory entry point:
+
+```cpp
+extern "C" HRESULT RedSalamanderCreate(REFIID riid, const FactoryOptions*, IHost*, const wchar_t* pluginId, void** ppv);
+```
+
+Key interfaces in `Common/PlugInterfaces/`:
+- **IFileSystem** - Virtual file system operations (copy, move, delete, search)
+- **IViewer** - File viewer with theming support
+- **IHost** - Host callbacks for plugins
 
 ## Output Locations
 
@@ -84,7 +140,7 @@ consumer package contains only the client notice. See Specs/Core/Core_RedSalaman
 ## Tooling Changes
 
 Read `Specs/Testing/Testing_ToolingGovernance.md`, `Tools/README.md`, and
-`.github/skills/tooling-governance/SKILL.md` before changing a build script or
+`.agents/skills/tooling-governance/SKILL.md` before changing a build script or
 helper. Keep stable build entrypoints at the Tools root, place reusable
 implementation in explicit modules, update `Tools/tool-inventory.json`, and
 prove that workflow cache keys include every imported module, patch, notice,
@@ -191,4 +247,4 @@ See:
 
 - `Specs/Testing/Testing_PerformanceValidation.md`
 - `Specs/TestRuns/README.md`
-- `.github/skills/perf-validation/SKILL.md`
+- `.agents/skills/perf-validation/SKILL.md`

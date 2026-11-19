@@ -210,8 +210,10 @@ test describe the supported repository-side reproduction boundary without
 rewriting historical evidence.
 
 Dependabot's GitHub Actions configuration excludes only the exact sealed Gate0 and Round4 workflow paths
-through `exclude-paths`. The shared-engine dependency is ignored because one reviewed update must change the
-manifest and every thin caller together; other current actions retain normal dependency updates and reviewed immutable pins.
+through `exclude-paths`. The shared-engine dependency is ignored under both names Dependabot gives it,
+`RedSalamanders/.github` and `RedSalamanders/.github/*` (each reusable workflow is a separate dependency), because one
+reviewed update must change the manifest and every thin caller together; other current actions retain normal
+dependency updates and reviewed immutable pins.
 Artifact-action policy accepts Gate0's historical pins only
 when the whole file matches its existing sealed SHA-256; its integrity guard is never
 rebaselined for an automated dependency bump. Other workflow files cannot inherit this

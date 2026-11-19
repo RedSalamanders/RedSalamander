@@ -1,9 +1,6 @@
 ---
 name: plugin-callbacks
 description: Plugin callback patterns with cookie-based context for INavigationMenuCallback, IFileSystemCallback, and IFileSystemSearchCallback interfaces. Use when implementing or consuming plugin interfaces.
-metadata:
-  author: RedSalamander
-  version: "1.0"
 ---
 
 # Plugin Callback Pattern
