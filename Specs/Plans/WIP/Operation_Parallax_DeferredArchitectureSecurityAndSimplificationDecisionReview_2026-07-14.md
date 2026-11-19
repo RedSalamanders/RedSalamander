@@ -13,7 +13,7 @@
 >
 > ```powershell
 > git diff --stat 0bee16269..HEAD -- Common Plugins RedConfigure RedSalamander `
->   RedSalamanderMonitor Specs/Plugins Specs/Plans/WIP/Win32_Inventory.md
+>   RedSalamanderMonitor Specs/Plugins Specs/Plans/WIP/Win32_Inventory_2026-05-18.md
 > ```
 >
 > If cited code, an authoritative spec, or an owner plan changed, inspect the live source and update the
@@ -143,7 +143,7 @@ double-destroy or stale-owner defect.
 
 **Why Lighthouse rejected the broad defect claim:** the remaining instances are not proven double-destroys
 solely by their syntax. However, the repository rule deliberately bans the pattern, and
-`Specs/Plans/WIP/Win32_Inventory.md:36` already owns CHK-1. Current anchors include
+`Specs/Plans/WIP/Win32_Inventory_2026-05-18.md:36` already owns CHK-1. Current anchors include
 `RedSalamander/RedSalamander.cpp:822` and `:1214`.
 
 **Decision to take later:**
