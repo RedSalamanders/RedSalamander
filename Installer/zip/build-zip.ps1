@@ -300,6 +300,8 @@ https://github.com/RedSalamanders/RedSalamander
     if (Test-Path $LicenseSource) {
         Copy-Item $LicenseSource (Join-Path $TempDir "LICENSE.txt")
     }
+    # The third-party notices ship beside the license.
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "THIRD-PARTY-NOTICES.md") -Destination (Join-Path $TempDir "THIRD-PARTY-NOTICES.md")
 
     # Create and validate a unique same-directory archive before publishing it.
     # The prior complete ZIP remains untouched until the final atomic operation.
