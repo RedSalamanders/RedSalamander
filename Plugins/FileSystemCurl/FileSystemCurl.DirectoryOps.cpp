@@ -1,5 +1,5 @@
-#include "FileSystemCurl.Internal.h"
 #include "FileOperationTraversalPolicy.h"
+#include "FileSystemCurl.Internal.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -12,12 +12,9 @@ using namespace FileSystemCurlInternal;
 
 namespace
 {
-[[nodiscard]] bool ReadRequestReachesCommittedEnd(size_t bufferCapacity,
-                                                  unsigned long bytesToRead,
-                                                  uint64_t remainingCommittedBytes) noexcept
+[[nodiscard]] bool ReadRequestReachesCommittedEnd(size_t bufferCapacity, unsigned long bytesToRead, uint64_t remainingCommittedBytes) noexcept
 {
-    return remainingCommittedBytes <= static_cast<uint64_t>(bufferCapacity) &&
-           static_cast<uint64_t>(bytesToRead) >= remainingCommittedBytes;
+    return remainingCommittedBytes <= static_cast<uint64_t>(bufferCapacity) && static_cast<uint64_t>(bytesToRead) >= remainingCommittedBytes;
 }
 
 class TempFileReader final : public IFileReader
@@ -323,15 +320,20 @@ public:
             return hr;
         }
 
-        const bool allowOverwrite = HasFlag(_flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
+        const bool allowOverwrite                        = HasFlag(_flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
         const CurlReplaceExpectation* replaceExpectation = _replaceExpectation.has_value() ? &_replaceExpectation.value() : nullptr;
         CurlWriterPublicationMetrics publicationMetrics{};
         CurlPublicationAccumulator publicationAccumulator;
 
-        hr = ResolveLocationWithAuthRetry(
-            _protocol, _settings, _pluginPath.c_str(), _hostConnections.get(), true, [&](const ResolvedLocation& resolved) noexcept {
-            const CurlPublicationResult attemptResult =
-                PublishCurlWriterTransaction(resolved.connection, resolved.remotePath, _file.get(), sizeBytes, allowOverwrite, replaceExpectation, publicationMetrics);
+        hr = ResolveLocationWithAuthRetry(_protocol,
+                                          _settings,
+                                          _pluginPath.c_str(),
+                                          _hostConnections.get(),
+                                          true,
+                                          [&](const ResolvedLocation& resolved) noexcept
+        {
+            const CurlPublicationResult attemptResult = PublishCurlWriterTransaction(
+                resolved.connection, resolved.remotePath, _file.get(), sizeBytes, allowOverwrite, replaceExpectation, publicationMetrics);
             publicationAccumulator.Merge(attemptResult);
             return attemptResult.OperationResult();
         });
@@ -604,10 +606,7 @@ public:
 #if defined(ENABLE_TESTS)
                     _debugReadableWaitEntered.store(true, std::memory_order_release);
 #endif
-                    _cvReadable.wait(lock, [&]() noexcept
-                    {
-                        return _eof || FAILED(_workerHr) || _stopping.load(std::memory_order_acquire);
-                    });
+                    _cvReadable.wait(lock, [&]() noexcept { return _eof || FAILED(_workerHr) || _stopping.load(std::memory_order_acquire); });
                 }
                 if (_stopping.load(std::memory_order_acquire) && SUCCEEDED(_workerHr))
                 {
@@ -618,10 +617,10 @@ public:
         }
 
         const size_t desiredBufferedBytes =
-            (std::min)({static_cast<size_t>(bytesToRead), _bufferCapacity, static_cast<size_t>((std::min)(remainingCommittedBytes,
-                                                                                                        static_cast<uint64_t>((std::numeric_limits<size_t>::max)())))});
-        const bool readReachesCommittedEnd =
-            _sizeKnown && ReadRequestReachesCommittedEnd(_bufferCapacity, bytesToRead, remainingCommittedBytes);
+            (std::min)({static_cast<size_t>(bytesToRead),
+                        _bufferCapacity,
+                        static_cast<size_t>((std::min)(remainingCommittedBytes, static_cast<uint64_t>((std::numeric_limits<size_t>::max)())))});
+        const bool readReachesCommittedEnd = _sizeKnown && ReadRequestReachesCommittedEnd(_bufferCapacity, bytesToRead, remainingCommittedBytes);
         while (_bufferedBytes < desiredBufferedBytes || (readReachesCommittedEnd && ! _eof))
         {
             if (_stopping.load(std::memory_order_acquire))
@@ -639,7 +638,8 @@ public:
 #if defined(ENABLE_TESTS)
             _debugReadableWaitEntered.store(true, std::memory_order_release);
 #endif
-            _cvReadable.wait(lock, [&]() noexcept
+            _cvReadable.wait(lock,
+                             [&]() noexcept
             {
                 return _stopping.load(std::memory_order_acquire) || FAILED(_workerHr) || _eof ||
                        (_bufferedBytes >= desiredBufferedBytes && (! readReachesCommittedEnd || _eof));
@@ -796,9 +796,8 @@ private:
 
         const uint64_t activeGen = _transferGeneration.load(std::memory_order_acquire);
 
-        if (_activeTransferSizeKnown &&
-            (_activeTransferReceivedBytes > _activeTransferExpectedBytes ||
-             static_cast<uint64_t>(bytes) > _activeTransferExpectedBytes - _activeTransferReceivedBytes))
+        if (_activeTransferSizeKnown && (_activeTransferReceivedBytes > _activeTransferExpectedBytes ||
+                                         static_cast<uint64_t>(bytes) > _activeTransferExpectedBytes - _activeTransferReceivedBytes))
         {
             _activeTransferValidationHr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             return 0;
@@ -960,8 +959,7 @@ private:
 
                 std::unique_lock lock(_mutex);
                 _cvWritable.wait(lock, [&]() noexcept {
-                    return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() ||
-                           _generation.load(std::memory_order_acquire) != gen;
+                    return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() || _generation.load(std::memory_order_acquire) != gen;
                 });
                 continue;
             }
@@ -1067,13 +1065,11 @@ private:
             }
 
             HRESULT transferHr = _activeTransferValidationHr;
-            if (SUCCEEDED(transferHr) && _activeTransferSizeKnown &&
-                _activeTransferReceivedBytes > _activeTransferExpectedBytes)
+            if (SUCCEEDED(transferHr) && _activeTransferSizeKnown && _activeTransferReceivedBytes > _activeTransferExpectedBytes)
             {
                 transferHr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
-            if (SUCCEEDED(transferHr) && _activeTransferSizeKnown &&
-                _activeTransferReceivedBytes < _activeTransferExpectedBytes &&
+            if (SUCCEEDED(transferHr) && _activeTransferSizeKnown && _activeTransferReceivedBytes < _activeTransferExpectedBytes &&
                 (code == CURLE_OK || code == CURLE_PARTIAL_FILE))
             {
                 transferHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
@@ -1092,8 +1088,7 @@ private:
 
             std::unique_lock lock(_mutex);
             _cvWritable.wait(lock, [&]() noexcept {
-                return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() ||
-                       _generation.load(std::memory_order_acquire) != gen;
+                return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() || _generation.load(std::memory_order_acquire) != gen;
             });
         }
     }
@@ -1162,9 +1157,7 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
     constexpr size_t kReaderBufferBytes = 1024u * 1024u;
     check(ReadRequestReachesCommittedEnd(kReaderBufferBytes, 4099u, 4099u),
           L"a request that can consume the buffered committed tail should await terminal validation");
-    check(! ReadRequestReachesCommittedEnd(kReaderBufferBytes,
-                                           (std::numeric_limits<unsigned long>::max)(),
-                                           static_cast<uint64_t>(kReaderBufferBytes) + 1u),
+    check(! ReadRequestReachesCommittedEnd(kReaderBufferBytes, (std::numeric_limits<unsigned long>::max)(), static_cast<uint64_t>(kReaderBufferBytes) + 1u),
           L"a request larger than the ring buffer must drain a chunk instead of deadlocking while awaiting terminal validation");
 
     ConnectionInfo connection{};
@@ -1220,8 +1213,7 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
 
     {
         auto waitingReader = makeKnownReader(1u);
-        check(static_cast<bool>(waitingReader) && SUCCEEDED(waitingReader->DebugPrepareEmptyForSelfTest(16u)),
-              L"read-wait teardown fixture should initialize");
+        check(static_cast<bool>(waitingReader) && SUCCEEDED(waitingReader->DebugPrepareEmptyForSelfTest(16u)), L"read-wait teardown fixture should initialize");
         if (waitingReader)
         {
             std::atomic_bool returned{false};
@@ -1243,14 +1235,11 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
             }
             catch (const std::system_error& error)
             {
-                Debug::Error(L"FileSystemCurl streaming-reader selftest could not create the read-wait worker (code={}).",
-                             error.code().value());
+                Debug::Error(L"FileSystemCurl streaming-reader selftest could not create the read-wait worker (code={}).", error.code().value());
             }
-            const bool entered = waitUntil(
-                [&]() noexcept { return waitingReader->DebugReadableWaitEnteredForSelfTest(); }, std::chrono::seconds{2});
+            const bool entered = waitUntil([&]() noexcept { return waitingReader->DebugReadableWaitEnteredForSelfTest(); }, std::chrono::seconds{2});
             waitingReader->DebugRequestStopForSelfTest();
-            const bool stopped = waitUntil(
-                [&]() noexcept { return returned.load(std::memory_order_acquire); }, std::chrono::seconds{2});
+            const bool stopped = waitUntil([&]() noexcept { return returned.load(std::memory_order_acquire); }, std::chrono::seconds{2});
             if (! stopped)
             {
                 waitingReader->DebugFailForSelfTest(E_ABORT);
@@ -1267,8 +1256,7 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
     {
         auto fullReader = makeKnownReader(2u);
         constexpr std::array<std::byte, 1u> full{{std::byte{0x2a}}};
-        check(static_cast<bool>(fullReader) && SUCCEEDED(fullReader->DebugPrimeForSelfTest(full, false)),
-              L"full-buffer writer-stop fixture should initialize");
+        check(static_cast<bool>(fullReader) && SUCCEEDED(fullReader->DebugPrimeForSelfTest(full, false)), L"full-buffer writer-stop fixture should initialize");
         if (fullReader)
         {
             std::atomic_bool returned{false};
@@ -1288,14 +1276,11 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
             }
             catch (const std::system_error& error)
             {
-                Debug::Error(L"FileSystemCurl streaming-reader selftest could not create the writer-wait worker (code={}).",
-                             error.code().value());
+                Debug::Error(L"FileSystemCurl streaming-reader selftest could not create the writer-wait worker (code={}).", error.code().value());
             }
-            const bool entered = waitUntil(
-                [&]() noexcept { return fullReader->DebugWritableWaitEnteredForSelfTest(); }, std::chrono::seconds{2});
+            const bool entered = waitUntil([&]() noexcept { return fullReader->DebugWritableWaitEnteredForSelfTest(); }, std::chrono::seconds{2});
             fullReader->DebugRequestStopForSelfTest();
-            const bool stopped = waitUntil(
-                [&]() noexcept { return returned.load(std::memory_order_acquire); }, std::chrono::seconds{2});
+            const bool stopped = waitUntil([&]() noexcept { return returned.load(std::memory_order_acquire); }, std::chrono::seconds{2});
             if (! stopped)
             {
                 fullReader->DebugFailForSelfTest(E_ABORT);
@@ -1311,8 +1296,7 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
 
     {
         auto knownReader = makeKnownReader(tail.size());
-        check(static_cast<bool>(knownReader) && SUCCEEDED(knownReader->DebugPrimeForSelfTest(tail, true)),
-              L"known-size exact reader should initialize");
+        check(static_cast<bool>(knownReader) && SUCCEEDED(knownReader->DebugPrimeForSelfTest(tail, true)), L"known-size exact reader should initialize");
         std::array<std::byte, 16> exactOutput{};
         bytesRead = 0;
         check(knownReader && SUCCEEDED(knownReader->Read(exactOutput.data(), static_cast<unsigned long>(exactOutput.size()), &bytesRead)) &&
@@ -1325,16 +1309,15 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
 
     {
         auto shortReader = makeKnownReader(tail.size() + 1u);
-        check(static_cast<bool>(shortReader) && SUCCEEDED(shortReader->DebugPrimeForSelfTest(tail, true)),
-              L"known-size short reader should initialize");
+        check(static_cast<bool>(shortReader) && SUCCEEDED(shortReader->DebugPrimeForSelfTest(tail, true)), L"known-size short reader should initialize");
         std::array<std::byte, 16> shortOutput{};
         bytesRead = 0;
         check(shortReader && SUCCEEDED(shortReader->Read(shortOutput.data(), static_cast<unsigned long>(shortOutput.size()), &bytesRead)) &&
                   bytesRead == tail.size(),
               L"known-size short reader may return its final nonempty prefix");
         bytesRead = 99u;
-        check(shortReader && shortReader->Read(shortOutput.data(), static_cast<unsigned long>(shortOutput.size()), &bytesRead) ==
-                                 HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
+        check(shortReader &&
+                  shortReader->Read(shortOutput.data(), static_cast<unsigned long>(shortOutput.size()), &bytesRead) == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
                   bytesRead == 0u,
               L"known-size short reader must fail instead of reporting premature successful EOF");
     }
@@ -1345,14 +1328,15 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
               L"known-size overlong reader should initialize");
         std::array<std::byte, 16> overlongOutput{};
         bytesRead = 99u;
-        check(overlongReader && overlongReader->Read(overlongOutput.data(), static_cast<unsigned long>(overlongOutput.size()), &bytesRead) ==
-                                    HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+        check(overlongReader &&
+                  overlongReader->Read(overlongOutput.data(), static_cast<unsigned long>(overlongOutput.size()), &bytesRead) ==
+                      HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
                   bytesRead == 0u,
               L"known-size reader must reject buffered bytes beyond its commitment");
     }
 
     {
-        auto seekReader = makeKnownReader(tail.size());
+        auto seekReader       = makeKnownReader(tail.size());
         uint64_t seekPosition = 0u;
         check(static_cast<bool>(seekReader) && SUCCEEDED(seekReader->Seek(3, FILE_BEGIN, &seekPosition)) && seekPosition == 3u,
               L"known-size seeked-range reader should accept an in-range restart");
@@ -1366,8 +1350,8 @@ void RunDebugCurlStreamingReaderContractSelfTests(unsigned int& passed, unsigned
     }
 
     {
-        constexpr std::array<std::byte, 8> restartBytes{{std::byte{8}, std::byte{7}, std::byte{6}, std::byte{5},
-                                                         std::byte{4}, std::byte{3}, std::byte{2}, std::byte{1}}};
+        constexpr std::array<std::byte, 8> restartBytes{
+            {std::byte{8}, std::byte{7}, std::byte{6}, std::byte{5}, std::byte{4}, std::byte{3}, std::byte{2}, std::byte{1}}};
         auto restartReader = makeKnownReader(restartBytes.size());
         const std::span<const std::byte> shortGeneration{restartBytes.data(), restartBytes.size() - 1u};
         check(static_cast<bool>(restartReader) && SUCCEEDED(restartReader->DebugPrimeForSelfTest(shortGeneration, true)),
@@ -1579,8 +1563,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileReader(const wchar_t* path, 
         if (resolved.connection.protocol != Protocol::Imap)
         {
             CurlSourceSizeCommitment sourceSize{};
-            const HRESULT sourceSizeHr = ResolveCurlSourceSizeCommitment(
-                resolved.connection, resolved.remotePath, entry.sizeBytes, entry.sizeKnown, sourceSize);
+            const HRESULT sourceSizeHr =
+                ResolveCurlSourceSizeCommitment(resolved.connection, resolved.remotePath, entry.sizeBytes, entry.sizeKnown, sourceSize);
             if (FAILED(sourceSizeHr))
             {
                 return sourceSizeHr;
@@ -1714,8 +1698,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SupportsAtomicWriterCommit(const wchar
         return E_INVALIDARG;
     }
 
-    constexpr uint32_t knownFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY |
-                                    FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
+    constexpr uint32_t knownFlags =
+        FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
     const uint32_t requestedFlags = static_cast<uint32_t>(flags);
     if ((requestedFlags & ~knownFlags) != 0u ||
         ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u && (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u))
@@ -2086,10 +2070,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
     {
         rootResolved = resolved;
         CurlEntryLookupMetrics lookup{};
-        const HRESULT probeHr = GetEntryInfo(resolved.connection, resolved.remotePath, rootInfo, &lookup,
-                                             [&control]() noexcept { return control.Checkpoint(); });
-        peakFrames = lookup.metadataBytes == 0u ? 0u : 1u;
-        peakPathBytes = (std::max)(peakPathBytes, lookup.pathBytes);
+        const HRESULT probeHr =
+            GetEntryInfo(resolved.connection, resolved.remotePath, rootInfo, &lookup, [&control]() noexcept { return control.Checkpoint(); });
+        peakFrames        = lookup.metadataBytes == 0u ? 0u : 1u;
+        peakPathBytes     = (std::max)(peakPathBytes, lookup.pathBytes);
         peakMetadataBytes = (std::max)(peakMetadataBytes, lookup.metadataBytes);
         return probeHr;
     });
@@ -2258,8 +2242,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
             }
             if (hr == S_FALSE && ! frame.pendingDirectories.empty())
             {
-                auto child                    = std::move(frame.pendingDirectories.front());
-                const uint64_t pendingBytes   = static_cast<uint64_t>(child.first.capacity() + child.second.capacity() + 2u) * sizeof(wchar_t);
+                auto child                  = std::move(frame.pendingDirectories.front());
+                const uint64_t pendingBytes = static_cast<uint64_t>(child.first.capacity() + child.second.capacity() + 2u) * sizeof(wchar_t);
                 frame.pendingDirectories.erase(frame.pendingDirectories.begin());
                 if (pendingBytes > frame.pathBytes || pendingBytes > retainedPaths)
                 {

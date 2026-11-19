@@ -8,8 +8,9 @@
   `format.ps1`, maps `-WhatIf` to `format.ps1 -Check` and refuses a `-RepositoryRoot` other than its own checkout.
   The tool inventory, validation-impact rules, `Tools/README.md`, `Build_Toolchain.md`, the shared-helper and
   tooling-governance specs and the focused tests follow; the new fixture tests use the owned formatter probe and
-  download nothing. 90 C and C++ files that the new scope found unformatted are reformatted, whitespace only: each
-  is token-identical to its previous version once whitespace is removed, and no `#include` line moved. 25 further
-  files that formatting would change beyond whitespace (include reordering, added namespace-closing comments or a
-  split string literal) are left unformatted for a separate change, so `format.ps1 -Check` still lists them. No
-  native build was run for this change.
+  download nothing.
+  The 115 C and C++ files that drifted from the repository style since they were last formatted are formatted,
+  so `format.ps1 -Check` passes. 90 change in whitespace only. In the other 25, the style also sorts includes
+  inside their existing blocks (20 files), adds namespace-closing comments (4) and splits one wide string
+  literal into two adjacent literals (1); none changes behavior, and the six build profiles prove the include
+  order.
