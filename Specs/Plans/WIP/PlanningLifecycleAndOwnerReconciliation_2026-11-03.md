@@ -15,7 +15,7 @@
 
 ```powershell
 git status --short
-git diff 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1..HEAD -- Specs/Plans/WIP/README.md Specs/Plans/WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md Specs/Plans/WIP/FileSystem_GoogleDrivePluginPlan.md Specs/Plans/WIP/FolderView_ThumbnailBackgroundEnrichmentFollowup_2026-07-04.md Specs/Plans/WIP/Operation_Tailwind_FolderViewWarpDrivePreMergeReviewRemediation_2026-06-30.md Specs/Plans/WIP/Operation_PerfMeasurementContract_2026-07-06.md Specs/Plans/WIP/Operation_Astrolabe_TestContractArchitectureMigration_2026-07-17.md Specs/Plans/WIP/Operation_RosettaLantern_RedConfigureSatelliteLocalizationReview_2026-07-17.md Specs/Plans/WIP/Core_HResultStatusFormattingCleanup_2026-06-19.md Specs/Plans/WIP/Win32_Inventory.md Specs/Plans/WIP/Product_WhimFilesRemainingDecisions_2026-08-25.md Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md Specs/Plans/WIP/Operation_Parallax_DeferredArchitectureSecurityAndSimplificationDecisionReview_2026-07-14.md Tools/Modules/Tooling/SpecInformationArchitecture.psm1 Tools/Tests/SpecInformationArchitecture.Tests.ps1 Tools/Tests/DocumentationDriftContracts.Tests.ps1 Specs/Reviews/WIP_FolderQuality_2026-11-01.md Specs/README.md
+git diff 269b06fc9f79f9fdd2bcbe1fce6423ed3b1424f1..HEAD -- Specs/Plans/WIP/README.md Specs/Plans/WIP/PlanningLifecycleAndOwnerReconciliation_2026-11-03.md Specs/Plans/WIP/FileSystem_GoogleDrivePluginPlan_2026-03-08.md Specs/Plans/WIP/FolderView_ThumbnailBackgroundEnrichmentFollowup_2026-07-04.md Specs/Plans/WIP/Operation_Tailwind_FolderViewWarpDrivePreMergeReviewRemediation_2026-06-30.md Specs/Plans/WIP/Operation_PerfMeasurementContract_2026-07-06.md Specs/Plans/WIP/Operation_Astrolabe_TestContractArchitectureMigration_2026-07-17.md Specs/Plans/WIP/Operation_RosettaLantern_RedConfigureSatelliteLocalizationReview_2026-07-17.md Specs/Plans/WIP/Core_HResultStatusFormattingCleanup_2026-06-19.md Specs/Plans/WIP/Win32_Inventory_2026-05-18.md Specs/Plans/WIP/Product_WhimFilesRemainingDecisions_2026-08-25.md Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md Specs/Plans/WIP/Operation_Parallax_DeferredArchitectureSecurityAndSimplificationDecisionReview_2026-07-14.md Tools/Modules/Tooling/SpecInformationArchitecture.psm1 Tools/Tests/SpecInformationArchitecture.Tests.ps1 Tools/Tests/DocumentationDriftContracts.Tests.ps1 Specs/Reviews/WIP_FolderQuality_2026-11-01.md Specs/README.md
 git diff --stat
 ```
 
@@ -38,7 +38,7 @@ Supporting current evidence:
 - [I12 completed record](../Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md) retains its September 8 closeout and failures. It is frozen history.
 - [I10](Tooling_ToolsInventoryAndGovernance_2026-08-13.md) records the October 17 source-identity check. An unrelated aggregate Full cannot close it.
 - [I9](CI_FormatAutocommitRace_2026-08-25.md) routes shared formatting implementation to [completed I55](../Done/CI_OrganizationStandardization_2026-10-29.md) and hosted acceptance to [I56](CI_HostedAcceptance_2026-10-31.md).
-- [Win32 inventory](Win32_Inventory.md) already documents external DxUi ownership and the remaining test-only owned-HWND calls. Keep its current evidence instead of restoring August claims.
+- [Win32 inventory](Win32_Inventory_2026-05-18.md) already documents external DxUi ownership and the remaining test-only owned-HWND calls. Keep its current evidence instead of restoring August claims.
 
 ## Ordered remaining work
 
