@@ -6611,8 +6611,7 @@ Describe 'Background Git metadata launch closure' {
             @('Tools/Modules/Testing/ScopedTesting.psm1','Invoke-ScopedWorkflowMetadata'),
             @('Tools/Modules/Tooling/ToolInventory.psm1','Invoke-RSToolInventoryGitCapture'),
             @('Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Get-RSGitOutput'),
-            @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture'),
-            @('Tools/Modules/Build/ClangFormat.psm1','Invoke-RSClangFormatCapture')
+            @('Tools/Modules/Testing/GitMetadataCapture.psm1','Invoke-RSTestGitMetadataCapture')
         )
         $valid={param([string]$body)
             $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($body,[ref]$t,[ref]$e)
@@ -6638,7 +6637,7 @@ Describe 'Background Git metadata launch closure' {
     }
     It 'admits only the reviewed captured caller paths and keeps vcpkg writes outside the read-only projection' {
         $paths=@('Tools/Run-AllTests.ps1','Tools/Modules/Testing/HostedTestDesktop.psm1','Tools/Modules/Build/VcpkgToolIdentity.psm1','Tools/Modules/Build/VcpkgInstallSafety.psm1',
-            'Tools/Modules/Testing/ScopedTesting.psm1','Tools/Modules/Tooling/ToolInventory.psm1','Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestRunArchive.psm1','format-all.ps1','Tools/TerminalEngine/GhosttyRuntimeStatus.psm1','Tools/TerminalEngine/GhosttyCandidateReview.psm1')
+            'Tools/Modules/Testing/ScopedTesting.psm1','Tools/Modules/Tooling/ToolInventory.psm1','Tools/Modules/Tooling/SpecInformationArchitecture.psm1','Tools/Modules/Testing/ValidationFingerprint.psm1','Tools/Modules/Testing/TestRunArchive.psm1','format.ps1','format-all.ps1','Tools/TerminalEngine/GhosttyRuntimeStatus.psm1','Tools/TerminalEngine/GhosttyCandidateReview.psm1')
         $noBare={param([string]$source)
             $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$t,[ref]$e)
             if($e.Count){return $false}
@@ -6702,7 +6701,7 @@ Describe 'Background Git metadata launch closure' {
         }
     }
     It 'keeps the scheduled fixture scope on explicit native argument vectors without a global Git shim' {
-        $files=@('ScopedTesting.Tests.ps1','ToolInventory.Tests.ps1','SpecInformationArchitecture.Tests.ps1','ValidationFingerprint.Tests.ps1','TestRunArchive.Tests.ps1','ToolingGovernance.Tests.ps1','DocumentationDriftContracts.Tests.ps1','TestHarnessSourceContracts.Tests.ps1','ProcessStreaming.Tests.ps1','DxUiDependency.Tests.ps1','VcpkgInstallSafety.Tests.ps1','TestSupport.psm1','BuildEvidence.Tests.ps1','BuildReproducibility.Tests.ps1','GhosttyCandidateReview.Tests.ps1','GhosttyRuntimeStatus.Tests.ps1','ReleaseWorkflowPolicy.Tests.ps1','ResourceLocalizationContracts.Tests.ps1','ValidationImpact.Tests.ps1','VcpkgBootstrap.Tests.ps1','CiDependencyWarnings.Tests.ps1','RemoveAds.Tests.ps1','RunAllTestsPlan.Tests.ps1','SharedToolingModules.Tests.ps1','Versioning.Tests.ps1','ClangFormat.Tests.ps1')
+        $files=@('ScopedTesting.Tests.ps1','ToolInventory.Tests.ps1','SpecInformationArchitecture.Tests.ps1','ValidationFingerprint.Tests.ps1','TestRunArchive.Tests.ps1','ToolingGovernance.Tests.ps1','DocumentationDriftContracts.Tests.ps1','TestHarnessSourceContracts.Tests.ps1','ProcessStreaming.Tests.ps1','DxUiDependency.Tests.ps1','VcpkgInstallSafety.Tests.ps1','TestSupport.psm1','BuildEvidence.Tests.ps1','BuildReproducibility.Tests.ps1','GhosttyCandidateReview.Tests.ps1','GhosttyRuntimeStatus.Tests.ps1','ReleaseWorkflowPolicy.Tests.ps1','ResourceLocalizationContracts.Tests.ps1','ValidationImpact.Tests.ps1','VcpkgBootstrap.Tests.ps1','CiDependencyWarnings.Tests.ps1','RemoveAds.Tests.ps1','RunAllTestsPlan.Tests.ps1','SharedToolingModules.Tests.ps1','Versioning.Tests.ps1')
         foreach($file in $files){
             $t=$null;$e=$null;$ast=[Management.Automation.Language.Parser]::ParseInput((Get-RSText -Path ('Tools/Tests/'+$file)),[ref]$t,[ref]$e)
             @($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in @('git','git.exe','gh')},$true)).Count|Should Be 0

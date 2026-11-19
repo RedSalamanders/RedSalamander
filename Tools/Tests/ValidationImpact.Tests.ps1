@@ -123,8 +123,8 @@ Describe 'Operation Startrail governed impact graph' {
         } finally { [Globalization.CultureInfo]::CurrentCulture = $culture }
     }
 
-    It 'maps native formatter acquisition inputs to tooling coverage' {
-        foreach ($path in @('Build/clang-format.json', 'Tools/Install-ClangFormat.ps1')) {
+    It 'maps the root format command and its deprecated wrapper to tooling coverage' {
+        foreach ($path in @('format.ps1', 'format-all.ps1')) {
             $decision = Get-RSValidationImpactDecision -Manifest $manifest `
                 -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{path=$path; old_path=$null})) `
                 -ValidationPlan $plan

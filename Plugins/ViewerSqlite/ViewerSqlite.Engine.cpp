@@ -46,20 +46,20 @@ constexpr uint64_t kMaxRetainedTableChars   = 4u * 1024u * 1024u;
 constexpr uint32_t kMaxPageSize             = 1000u;
 constexpr uint32_t kMaxQueryRowCap          = 100000u;
 constexpr uint64_t kMaxVirtualSnapshotBytes = kMaxSnapshotBytes;
-constexpr int kProgressOpcodeInterval        = 1000;
-constexpr uint32_t kBackupTimeoutMs          = 60'000u;
-constexpr unsigned int kTempPathAttempts     = 16u;
-constexpr wchar_t kTempFilePrefix[]          = L"RedSalamander-ViewerSqlite-";
+constexpr int kProgressOpcodeInterval       = 1000;
+constexpr uint32_t kBackupTimeoutMs         = 60'000u;
+constexpr unsigned int kTempPathAttempts    = 16u;
+constexpr wchar_t kTempFilePrefix[]         = L"RedSalamander-ViewerSqlite-";
 
 const int kViewerSqliteEngineModuleAnchor = 0;
 
 struct TempSnapshot final
 {
-    TempSnapshot()                                    = default;
-    TempSnapshot(const TempSnapshot&)                 = delete;
-    TempSnapshot(TempSnapshot&&) noexcept             = default;
-    TempSnapshot& operator=(const TempSnapshot&)      = delete;
-    TempSnapshot& operator=(TempSnapshot&&) noexcept  = default;
+    TempSnapshot()                                   = default;
+    TempSnapshot(const TempSnapshot&)                = delete;
+    TempSnapshot(TempSnapshot&&) noexcept            = default;
+    TempSnapshot& operator=(const TempSnapshot&)     = delete;
+    TempSnapshot& operator=(TempSnapshot&&) noexcept = default;
 
     std::filesystem::path path;
     wil::unique_handle lifetimeHandle;
@@ -104,8 +104,8 @@ struct SqliteProgressState final
     QueryCancellation cancellation;
     QueryWorkBudget budget;
     std::chrono::steady_clock::time_point startedAt = std::chrono::steady_clock::now();
-    uint64_t observedVmSteps                         = 0;
-    WorkStopReason stopReason                        = WorkStopReason::None;
+    uint64_t observedVmSteps                        = 0;
+    WorkStopReason stopReason                       = WorkStopReason::None;
 };
 
 class ScopedSqliteProgress final
@@ -147,9 +147,8 @@ private:
         }
 
         const bool stepLimitExceeded = state->budget.maxVmSteps != 0u && state->observedVmSteps > state->budget.maxVmSteps;
-        const bool timeLimitExceeded = state->budget.maxElapsedMs != 0u &&
-                                       std::chrono::steady_clock::now() - state->startedAt >=
-                                           std::chrono::milliseconds(state->budget.maxElapsedMs);
+        const bool timeLimitExceeded =
+            state->budget.maxElapsedMs != 0u && std::chrono::steady_clock::now() - state->startedAt >= std::chrono::milliseconds(state->budget.maxElapsedMs);
         if (stepLimitExceeded || timeLimitExceeded)
         {
             state->stopReason = WorkStopReason::LimitExceeded;
@@ -167,7 +166,7 @@ class ConnectionUseCounter final
 public:
     ConnectionUseCounter(std::atomic_uint32_t& active, std::atomic_uint32_t& maximum) noexcept : _active(active)
     {
-        const uint32_t now = _active.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        const uint32_t now  = _active.fetch_add(1u, std::memory_order_acq_rel) + 1u;
         uint32_t currentMax = maximum.load(std::memory_order_relaxed);
         while (currentMax < now && ! maximum.compare_exchange_weak(currentMax, now, std::memory_order_release, std::memory_order_relaxed))
         {
@@ -188,7 +187,7 @@ private:
 
 [[nodiscard]] HINSTANCE GetEngineResourceInstance() noexcept
 {
-    HMODULE module = nullptr;
+    HMODULE module   = nullptr;
     const BOOL found = GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                           reinterpret_cast<LPCWSTR>(&kViewerSqliteEngineModuleAnchor),
                                           &module);
@@ -200,8 +199,7 @@ private:
     return LoadStringResource(GetEngineResourceInstance(), resourceId);
 }
 
-template<typename... Args>
-[[nodiscard]] std::wstring FormatEngineString(const UINT resourceId, Args&&... args)
+template <typename... Args> [[nodiscard]] std::wstring FormatEngineString(const UINT resourceId, Args&&... args)
 {
     return FormatStringResource(GetEngineResourceInstance(), resourceId, std::forward<Args>(args)...);
 }
@@ -364,9 +362,7 @@ template<typename... Args>
     return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
 }
 
-[[nodiscard]] HRESULT CheckCancellation(const QueryCancellation cancellation,
-                                        std::wstring& errorText,
-                                        std::atomic_uint64_t* cancelledCount = nullptr) noexcept
+[[nodiscard]] HRESULT CheckCancellation(const QueryCancellation cancellation, std::wstring& errorText, std::atomic_uint64_t* cancelledCount = nullptr) noexcept
 {
     if (! cancellation.IsCancellationRequested())
     {
@@ -477,8 +473,8 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
         return {};
     }
 
-    const auto length = static_cast<size_t>(bytes16 / static_cast<int>(sizeof(wchar_t)));
-    const auto* wide  = static_cast<const wchar_t*>(text16);
+    const auto length         = static_cast<size_t>(bytes16 / static_cast<int>(sizeof(wchar_t)));
+    const auto* wide          = static_cast<const wchar_t*>(text16);
     const size_t copiedLength = std::min(length, maxChars + 1u);
     std::wstring value(wide, copiedLength);
     TruncateUtf16Safely(value, maxChars);
@@ -536,7 +532,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
         const char* rawName = sqlite3_column_name(stmt.get(), columnIndex);
         const char* rawDecl = sqlite3_column_decltype(stmt.get(), columnIndex);
         ColumnInfo columnInfo{};
-        columnInfo.name = SanitizeIdentifierText(Utf16FromBoundedUtf8String(rawName, kMaxIdentifierChars * 4u, true));
+        columnInfo.name         = SanitizeIdentifierText(Utf16FromBoundedUtf8String(rawName, kMaxIdentifierChars * 4u, true));
         columnInfo.declaredType = SanitizeIdentifierText(Utf16FromBoundedUtf8String(rawDecl, kMaxIdentifierChars * 4u, true));
         page.columns.push_back(std::move(columnInfo));
     }
@@ -583,7 +579,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
         row.reserve(static_cast<size_t>(std::max(columnCount, 0)));
         for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex)
         {
-            std::wstring value = ReadCellValue(stmt.get(), columnIndex);
+            std::wstring value        = ReadCellValue(stmt.get(), columnIndex);
             const uint64_t valueChars = static_cast<uint64_t>(value.size());
             if (valueChars > std::numeric_limits<uint64_t>::max() - materializedChars ||
                 (budget.maxResultChars != 0u && materializedChars + valueChars > budget.maxResultChars))
@@ -704,11 +700,11 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     std::wstring tempPath;
     wil::unique_handle file;
     const Common::Paths::UniqueSiblingFileOptions options{.prefix             = kTempFilePrefix,
-                                                           .suffix             = L".sqlite",
-                                                           .desiredAccess      = GENERIC_READ | GENERIC_WRITE,
-                                                           .shareMode          = FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                                           .flagsAndAttributes = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_SEQUENTIAL_SCAN,
-                                                           .maximumAttempts   = kTempPathAttempts};
+                                                          .suffix             = L".sqlite",
+                                                          .desiredAccess      = GENERIC_READ | GENERIC_WRITE,
+                                                          .shareMode          = FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                          .flagsAndAttributes = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_SEQUENTIAL_SCAN,
+                                                          .maximumAttempts    = kTempPathAttempts};
     const HRESULT createHr = Common::Paths::CreateUniqueFileInDirectory(tempDirectory.data(), options, tempPath, file);
     if (FAILED(createHr))
     {
@@ -743,13 +739,10 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ReadSqlitePragmaUint64(sqlite3* db,
-                                             const char* sql,
-                                             uint64_t& value,
-                                             std::wstring& errorText) noexcept
+[[nodiscard]] HRESULT ReadSqlitePragmaUint64(sqlite3* db, const char* sql, uint64_t& value, std::wstring& errorText) noexcept
 {
-    value = 0u;
-    sqlite3_stmt* raw = nullptr;
+    value               = 0u;
+    sqlite3_stmt* raw   = nullptr;
     const int prepareRc = sqlite3_prepare_v2(db, sql, -1, &raw, nullptr);
     unique_sqlite_stmt stmt(raw, sqlite3_finalize);
     if (prepareRc != SQLITE_OK || ! stmt)
@@ -806,7 +799,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     }
 
     sqlite3* rawSource = nullptr;
-    int rc = sqlite3_open_v2(sourceUtf8.c_str(), &rawSource, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_PRIVATECACHE, nullptr);
+    int rc             = sqlite3_open_v2(sourceUtf8.c_str(), &rawSource, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_PRIVATECACHE, nullptr);
     unique_sqlite3 source(rawSource);
     if (rc != SQLITE_OK || ! source)
     {
@@ -822,14 +815,12 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
         errorText = DescribeSqliteFailure(source.get(), rc, IDS_VIEWERSQLITE_ERROR_OPEN_DATABASE_CONTEXT);
         return E_FAIL;
     }
-    const auto endSourceReadTransaction = wil::scope_exit([&]() noexcept
-    {
-        static_cast<void>(sqlite3_exec(source.get(), "ROLLBACK", nullptr, nullptr, nullptr));
-    });
+    const auto endSourceReadTransaction =
+        wil::scope_exit([&]() noexcept { static_cast<void>(sqlite3_exec(source.get(), "ROLLBACK", nullptr, nullptr, nullptr)); });
 
     uint64_t pageCount = 0u;
     uint64_t pageSize  = 0u;
-    hr = ReadSqlitePragmaUint64(source.get(), "PRAGMA page_count", pageCount, errorText);
+    hr                 = ReadSqlitePragmaUint64(source.get(), "PRAGMA page_count", pageCount, errorText);
     if (SUCCEEDED(hr))
     {
         hr = ReadSqlitePragmaUint64(source.get(), "PRAGMA page_size", pageSize, errorText);
@@ -848,10 +839,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     const uint64_t preflightBytes = pageCount * pageSize;
 
     sqlite3* rawDestination = nullptr;
-    rc = sqlite3_open_v2(snapshotUtf8.c_str(),
-                         &rawDestination,
-                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_PRIVATECACHE,
-                         nullptr);
+    rc = sqlite3_open_v2(snapshotUtf8.c_str(), &rawDestination, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_PRIVATECACHE, nullptr);
     unique_sqlite3 destination(rawDestination);
     if (rc != SQLITE_OK || ! destination)
     {
@@ -886,7 +874,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
             break;
         }
 
-        rc = sqlite3_backup_step(backup.get(), 256);
+        rc                          = sqlite3_backup_step(backup.get(), 256);
         const int observedPageCount = sqlite3_backup_pagecount(backup.get());
         if (observedPageCount < 0 || static_cast<uint64_t>(observedPageCount) > maxSnapshotBytes / pageSize)
         {
@@ -941,11 +929,8 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     return hr;
 }
 
-[[nodiscard]] HRESULT CopyReaderToSnapshot(IFileReader* reader,
-                                           const TempSnapshot& snapshot,
-                                           const QueryCancellation cancellation,
-                                           uint64_t& snapshotBytes,
-                                           std::wstring& errorText) noexcept
+[[nodiscard]] HRESULT CopyReaderToSnapshot(
+    IFileReader* reader, const TempSnapshot& snapshot, const QueryCancellation cancellation, uint64_t& snapshotBytes, std::wstring& errorText) noexcept
 {
     const auto startedAt = std::chrono::steady_clock::now();
     if (reader == nullptr)
@@ -955,7 +940,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     }
 
     uint64_t advertisedBefore = 0;
-    HRESULT hr = reader->GetSize(&advertisedBefore);
+    HRESULT hr                = reader->GetSize(&advertisedBefore);
     if (FAILED(hr))
     {
         errorText = ReadEngineString(IDS_VIEWERSQLITE_ERROR_SOURCE_SIZE);
@@ -990,7 +975,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
 
     uint64_t copiedBytes = 0;
     std::array<BYTE, 20> databaseHeader{};
-    size_t databaseHeaderBytes = 0u;
+    size_t databaseHeaderBytes   = 0u;
     bool databaseHeaderValidated = false;
     for (;;)
     {
@@ -1001,7 +986,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
         }
 
         unsigned long readBytes = 0;
-        hr = reader->Read(buffer.get(), static_cast<unsigned long>(kCopyChunkBytes), &readBytes);
+        hr                      = reader->Read(buffer.get(), static_cast<unsigned long>(kCopyChunkBytes), &readBytes);
         if (FAILED(hr))
         {
             errorText = ReadEngineString(IDS_VIEWERSQLITE_ERROR_SOURCE_READ);
@@ -1037,8 +1022,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
             {
                 static constexpr std::array<BYTE, 16> kSqliteHeader{{'S', 'Q', 'L', 'i', 't', 'e', ' ', 'f', 'o', 'r', 'm', 'a', 't', ' ', '3', 0}};
                 databaseHeaderValidated = true;
-                if (std::equal(kSqliteHeader.begin(), kSqliteHeader.end(), databaseHeader.begin()) &&
-                    (databaseHeader[18] == 2u || databaseHeader[19] == 2u))
+                if (std::equal(kSqliteHeader.begin(), kSqliteHeader.end(), databaseHeader.begin()) && (databaseHeader[18] == 2u || databaseHeader[19] == 2u))
                 {
                     errorText = ReadEngineString(IDS_VIEWERSQLITE_ERROR_VIRTUAL_WAL_UNSUPPORTED);
                     hr        = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -1048,7 +1032,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
         }
 
         DWORD writtenBytes = 0;
-        const BOOL writeOk  = WriteFile(snapshot.lifetimeHandle.get(), buffer.get(), readBytes, &writtenBytes, nullptr);
+        const BOOL writeOk = WriteFile(snapshot.lifetimeHandle.get(), buffer.get(), readBytes, &writtenBytes, nullptr);
         if (writeOk == 0 || writtenBytes != readBytes)
         {
             errorText = ReadEngineString(IDS_VIEWERSQLITE_ERROR_SNAPSHOT_WRITE);
@@ -1097,7 +1081,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
                                               std::atomic_uint64_t* cancelledCount,
                                               std::atomic_uint64_t* workLimitCount) noexcept
 {
-    const std::wstring sql = std::format(L"SELECT * FROM {} LIMIT 0", QuoteIdentifier(tableName));
+    const std::wstring sql    = std::format(L"SELECT * FROM {} LIMIT 0", QuoteIdentifier(tableName));
     const std::string sqlUtf8 = Utf8FromUtf16(sql);
     if (sqlUtf8.empty())
     {
@@ -1106,7 +1090,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
     }
 
     sqlite3_stmt* raw = nullptr;
-    const int rc = sqlite3_prepare_v2(db, sqlUtf8.c_str(), static_cast<int>(sqlUtf8.size()), &raw, nullptr);
+    const int rc      = sqlite3_prepare_v2(db, sqlUtf8.c_str(), static_cast<int>(sqlUtf8.size()), &raw, nullptr);
     unique_sqlite_stmt stmt(raw, sqlite3_finalize);
     if (rc != SQLITE_OK || ! stmt)
     {
@@ -1115,7 +1099,7 @@ void TruncateUtf16Safely(std::wstring& value, const size_t maxChars)
             return DescribeStoppedWork(progress, errorText, cancelledCount, workLimitCount);
         }
         const std::wstring context = FormatEngineString(IDS_VIEWERSQLITE_ERROR_TABLE_METADATA_FMT, SanitizeIdentifierText(std::wstring(tableName)));
-        errorText                 = DescribeSqliteFailure(db, rc, context);
+        errorText                  = DescribeSqliteFailure(db, rc, context);
         return E_FAIL;
     }
 
@@ -1169,7 +1153,7 @@ const std::wstring& DatabaseSource::GetDisplayName() const noexcept
 SourceDebugSnapshot DatabaseSource::GetDebugSnapshot() const noexcept
 {
     SourceDebugSnapshot snapshot{};
-    snapshot.cachedConnectionOpenCount = _connection ? 1u : 0u;
+    snapshot.cachedConnectionOpenCount  = _connection ? 1u : 0u;
     snapshot.operationCount             = _operationCount.load(std::memory_order_relaxed);
     snapshot.cancelledOperationCount    = _cancelledOperationCount.load(std::memory_order_relaxed);
     snapshot.workLimitFailureCount      = _workLimitFailureCount.load(std::memory_order_relaxed);
@@ -1354,13 +1338,8 @@ QueryPageResult DatabaseSource::LoadTablePage(std::wstring_view tableName,
     size_t columnCount = tableIt->second;
     if (columnCount == kNoSortColumn)
     {
-        result.hr = ResolveTableColumnCount(_connection.get(),
-                                            exactTable,
-                                            columnCount,
-                                            result.errorText,
-                                            progress,
-                                            &_cancelledOperationCount,
-                                            &_workLimitFailureCount);
+        result.hr =
+            ResolveTableColumnCount(_connection.get(), exactTable, columnCount, result.errorText, progress, &_cancelledOperationCount, &_workLimitFailureCount);
         if (FAILED(result.hr))
         {
             return result;
@@ -1393,16 +1372,12 @@ QueryPageResult DatabaseSource::LoadTablePage(std::wstring_view tableName,
     {
         if (rc == SQLITE_INTERRUPT || progress.stopReason != WorkStopReason::None || cancellation.IsCancellationRequested())
         {
-            result.hr = DescribeStoppedWork(progress,
-                                            result.errorText,
-                                            &_cancelledOperationCount,
-                                            &_workLimitFailureCount);
+            result.hr = DescribeStoppedWork(progress, result.errorText, &_cancelledOperationCount, &_workLimitFailureCount);
             return result;
         }
-        result.hr = E_FAIL;
-        const std::wstring context =
-            FormatEngineString(IDS_VIEWERSQLITE_ERROR_PREPARE_PREVIEW_FMT, SanitizeIdentifierText(exactTable));
-        result.errorText = DescribeSqliteFailure(_connection.get(), rc, context);
+        result.hr                  = E_FAIL;
+        const std::wstring context = FormatEngineString(IDS_VIEWERSQLITE_ERROR_PREPARE_PREVIEW_FMT, SanitizeIdentifierText(exactTable));
+        result.errorText           = DescribeSqliteFailure(_connection.get(), rc, context);
         return result;
     }
 
@@ -1460,14 +1435,8 @@ QueryPageResult DatabaseSource::ExecuteReadOnlyQuery(std::wstring_view sql,
     ScopedSqliteProgress progressHandler(_connection.get(), progress);
     unique_sqlite_stmt stmt(nullptr, sqlite3_finalize);
     std::wstring executedSql;
-    result.hr = PrepareSingleReadonlyStatement(_connection.get(),
-                                               sql,
-                                               stmt,
-                                               executedSql,
-                                               result.errorText,
-                                               progress,
-                                               &_cancelledOperationCount,
-                                               &_workLimitFailureCount);
+    result.hr = PrepareSingleReadonlyStatement(
+        _connection.get(), sql, stmt, executedSql, result.errorText, progress, &_cancelledOperationCount, &_workLimitFailureCount);
     if (FAILED(result.hr))
     {
         return result;
@@ -1494,9 +1463,7 @@ QueryPageResult DatabaseSource::ExecuteReadOnlyQuery(std::wstring_view sql,
     return result;
 }
 
-ValidationResult DatabaseSource::ValidateReadOnlyQuery(std::wstring_view sql,
-                                                       const QueryCancellation cancellation,
-                                                       const QueryWorkBudget budget) const noexcept
+ValidationResult DatabaseSource::ValidateReadOnlyQuery(std::wstring_view sql, const QueryCancellation cancellation, const QueryWorkBudget budget) const noexcept
 {
     ValidationResult result{};
     result.hr = CheckCancellation(cancellation, result.errorText, &_cancelledOperationCount);
@@ -1525,14 +1492,8 @@ ValidationResult DatabaseSource::ValidateReadOnlyQuery(std::wstring_view sql,
     ScopedSqliteProgress progressHandler(_connection.get(), progress);
     unique_sqlite_stmt stmt(nullptr, sqlite3_finalize);
     std::wstring executedSql;
-    result.hr = PrepareSingleReadonlyStatement(_connection.get(),
-                                               sql,
-                                               stmt,
-                                               executedSql,
-                                               result.errorText,
-                                               progress,
-                                               &_cancelledOperationCount,
-                                               &_workLimitFailureCount);
+    result.hr = PrepareSingleReadonlyStatement(
+        _connection.get(), sql, stmt, executedSql, result.errorText, progress, &_cancelledOperationCount, &_workLimitFailureCount);
     if (SUCCEEDED(result.hr))
     {
         result.accepted = true;
@@ -1555,13 +1516,8 @@ SourceOpenResult DatabaseSource::OpenOwnedSnapshot(std::filesystem::path snapsho
         return result;
     }
 
-    auto source = std::shared_ptr<DatabaseSource>(new (std::nothrow)
-                                                      DatabaseSource(std::move(snapshotPath),
-                                                                     std::move(displayName),
-                                                                     std::move(snapshotLifetimeHandle),
-                                                                     std::move(connection),
-                                                                     snapshotKind,
-                                                                     snapshotBytes));
+    auto source = std::shared_ptr<DatabaseSource>(new (std::nothrow) DatabaseSource(
+        std::move(snapshotPath), std::move(displayName), std::move(snapshotLifetimeHandle), std::move(connection), snapshotKind, snapshotBytes));
     if (! source)
     {
         result.hr        = E_OUTOFMEMORY;
@@ -1594,18 +1550,14 @@ SourceOpenResult DatabaseSource::OpenFromPath(std::filesystem::path localPath,
     }
 
     uint64_t snapshotBytes = 0;
-    result.hr = BackupLocalDatabase(localPath, snapshot, cancellation, maxSnapshotBytes, snapshotBytes, result.errorText);
+    result.hr              = BackupLocalDatabase(localPath, snapshot, cancellation, maxSnapshotBytes, snapshotBytes, result.errorText);
     if (FAILED(result.hr))
     {
         return result;
     }
 
-    return OpenOwnedSnapshot(std::move(snapshot.path),
-                             std::move(displayName),
-                             std::move(snapshot.lifetimeHandle),
-                             SnapshotKind::LocalSqliteBackup,
-                             snapshotBytes,
-                             cancellation);
+    return OpenOwnedSnapshot(
+        std::move(snapshot.path), std::move(displayName), std::move(snapshot.lifetimeHandle), SnapshotKind::LocalSqliteBackup, snapshotBytes, cancellation);
 }
 
 SourceOpenResult OpenFromViewerContext(IFileSystem* fileSystem,
@@ -1655,7 +1607,7 @@ SourceOpenResult OpenFromViewerContext(IFileSystem* fileSystem,
     }
 
     uint64_t snapshotBytes = 0;
-    result.hr = CopyReaderToSnapshot(reader.get(), snapshot, cancellation, snapshotBytes, result.errorText);
+    result.hr              = CopyReaderToSnapshot(reader.get(), snapshot, cancellation, snapshotBytes, result.errorText);
     if (FAILED(result.hr))
     {
         return result;
@@ -1687,11 +1639,8 @@ std::wstring QuoteIdentifier(std::wstring_view name)
     return quoted;
 }
 
-std::wstring BuildTablePreviewSql(std::wstring_view tableName,
-                                  const uint32_t pageSize,
-                                  const uint64_t rowOffset,
-                                  const size_t orderByColumnIndex,
-                                  const TableSortDirection sortDirection)
+std::wstring BuildTablePreviewSql(
+    std::wstring_view tableName, const uint32_t pageSize, const uint64_t rowOffset, const size_t orderByColumnIndex, const TableSortDirection sortDirection)
 {
     std::wstring sql = std::format(L"SELECT * FROM {}", QuoteIdentifier(tableName));
     if (sortDirection != TableSortDirection::None && orderByColumnIndex != kNoSortColumn)

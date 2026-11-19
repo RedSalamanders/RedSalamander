@@ -1062,30 +1062,9 @@ DxUi consumer identity record the selected host.
 Windows CI enables Git `core.longpaths` before checkout: retained test evidence includes repository paths beyond
 the default Windows Git path limit. This setup runs on the disposable runner before any project validation.
 
-CI formatting checks changed owned native files with the hash-pinned clang-format 22.1.3 wheel in
-`Build/clang-format.json`. `Tools/Install-ClangFormat.ps1` uses PowerShell 7 to download and checksum-verify the wheel and extract only its native executable. No Python or pip is required for formatting. Cached executable bytes are checked against the verified archive, and a failed hash, entry or version check preserves the previous executable. `-WheelPath` permits offline installation with the same pin; `-WhatIf` downloads and writes nothing. The repository-root `format-all.ps1` compatibility entrypoint uses this installer and pin, selects only tracked first-party `.cpp` and `.h` files, and excludes `ThirdParty/`, `Specs/` and `.codex/`; its own `-WhatIf` previews without installing or formatting. Ghostty upstream qualification and dependency-managed build tools retain their separate Python requirements. CI does not commit changes or format archived Specs/TestRuns source snapshots.
+Formatting: the root `.clang-format` is the one style. `format.ps1` formats, and `format.ps1 -Check` verifies without writing and lists every file that needs formatting. Both take clang-format from `Install-CiFormatter` in the pinned `.ci-engine`, which installs the build that the engine's `Policy/clang-format.json` pins (22.1.3 today) under `.build/shared-format` and verifies its SHA-256 and version; no Visual Studio, `PATH` or repository-pinned formatter is used. Both cover the files CI formats: `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp` and `.hxx` files under the `formatRoots` of `.ci/project.json` that its `formatExclude` does not match. Pull-request checks run the same formatter over the files the pull request changes, or over every file when `.clang-format` or `.clang-format-ignore` changes; drift fails the check and retains the patch. The manual `Commit PR formatting` workflow commits that formatting to an open same-repository pull request with an ordinary push and requests fresh checks for the new head.
 
-The PR build-policy test MUST verify the formatter job invokes this installer with `pwsh` and
-does not bootstrap Python or install pip packages in that job. This job-scoped wiring check
-does not constrain other dependencies' Python requirements. `Tools/Tests/ClangFormat.Tests.ps1`
-owns the separate offline acquisition, integrity, publication and cache-lease behavior checks.
-
-Formatter acquisition MUST reuse `Resolve-RSGuardedRepositoryPath` and
-`Publish-RSGuardedRepositoryFile` for its `.build/format` cache, download staging and
-executable publication. Every existing output component from the repository root through
-the leaf MUST be admitted without reparses, including `.build` and executable parents;
-paths are revalidated before writes, execution, publication and temporary cleanup. If the
-chain becomes unsafe, cleanup MUST preserve redirected targets and retain the temporary
-artifact for governed cleanup. These path checks do not establish an OS security boundary
-against a process with permission to race filesystem changes.
-
-The installer MUST hold an exclusive `.build/format/.install.lock` file lease while mutating
-the shared formatter cache; contention fails immediately without blocking native artifact
-profiles. The empty lock file remains after closing. `-WhatIf` creates no directories or
-lease file. An explicit `-WheelPath` MUST resolve once through the PowerShell FileSystem
-provider against the caller's PowerShell location. Hash verification and ZIP parsing MUST
-consume the same open stream held against writes/deletion until extraction and publication
-finish, regardless of the process current directory.
+`format-all.ps1` remains for one release as a deprecated wrapper of `format.ps1`: it runs `format.ps1`, runs `format.ps1 -Check` for `-WhatIf`, and refuses a `-RepositoryRoot` other than its own checkout.
 
 The reusable CI build step checks the native build exit status immediately, before
 any matrix validator or other native command can overwrite it. A compiler failure
@@ -1229,18 +1208,7 @@ Scheduled compiler-free Git fixture calls use the named TestSupport fixture help
 in the prepared harness, preserving arguments, CWD, native exits and stream redirects.
 No temporary/global Git shim substitutes for a production fix. Existing tests do not
 rely on $? or cross-stream ordering/error object types; no stdin-pipeline scope is added.
-### Silent formatter metadata and explicit fixture payloads
-
-`format-all.ps1 -WhatIf` retains its PowerShell 7 and Git bootstrap contract: tracked-file
-enumeration uses the import-free Git metadata transport and does not restore the CI
-engine, acquire a formatter or rewrite source. The formatter module's internal
-`Invoke-RSClangFormatCapture` owns native EXE version queries and the already-admitted
-per-file formatting invocation. It preserves arguments, caller working directory,
-diagnostic decoding and actual exits while disabling shell/window creation and draining
-both streams concurrently. The root command retains its existing `ShouldProcess`
-boundary, exact pin check, one invocation per selected file and complete failure list.
-Capture does not grant source-write authority. No CMD fallback is part of this formatter
-contract.
+### Git metadata prefixes and explicit fixture payloads
 
 The shared engine-free Git transport's optional `PrefixArguments` retains command-local
 global options before `-C <root>`; its default is empty. The Ghostty candidate metadata

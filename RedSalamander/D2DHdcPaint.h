@@ -29,8 +29,7 @@ public:
     void FillRectangle(const RECT& rectPx, COLORREF color) noexcept;
     void FillRoundedRectangle(const RECT& rectPx, float radiusPx, COLORREF fill, COLORREF border, float strokeWidthPx = 1.0f) noexcept;
     void DrawLine(float x1, float y1, float x2, float y2, COLORREF color, float strokeWidthPx = 1.0f) noexcept;
-    [[nodiscard]] wchar_t DrawCenteredGlyph(
-        const RECT& rectPx, wchar_t fluentGlyph, wchar_t fallbackGlyph, COLORREF color, float fontSizePx) noexcept;
+    [[nodiscard]] wchar_t DrawCenteredGlyph(const RECT& rectPx, wchar_t fluentGlyph, wchar_t fallbackGlyph, COLORREF color, float fontSizePx) noexcept;
 
 private:
     [[nodiscard]] bool SetBrush(COLORREF color, float alpha = 1.0f) noexcept;

@@ -34,7 +34,7 @@ extern HINSTANCE g_hInstance;
 namespace
 {
 thread_local IWICImagingFactory* g_pngDecodeWicFactory = nullptr;
-template<typename T>
+template <typename T>
 concept HasSizeMember = requires(T value) { value.size; };
 
 static_assert(std::is_standard_layout_v<GhosttyTerminalModeConfig>);
@@ -55,8 +55,7 @@ TerminalPngDecodeThreadContext::TerminalPngDecodeThreadContext() noexcept
         return;
     }
 
-    HRESULT hr = CoCreateInstance(
-        CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(_factory.put()));
+    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(_factory.put()));
     if (FAILED(hr))
     {
         hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(_factory.put()));
@@ -67,10 +66,10 @@ TerminalPngDecodeThreadContext::TerminalPngDecodeThreadContext() noexcept
         return;
     }
 
-    _previousFactory = g_pngDecodeWicFactory;
+    _previousFactory      = g_pngDecodeWicFactory;
     g_pngDecodeWicFactory = _factory.get();
-    _installed = true;
-    _status = S_OK;
+    _installed            = true;
+    _status               = S_OK;
 }
 
 TerminalPngDecodeThreadContext::~TerminalPngDecodeThreadContext() noexcept
@@ -88,9 +87,9 @@ HRESULT TerminalPngDecodeThreadContext::Status() const noexcept
 
 namespace
 {
-constexpr uint64_t kMaximumKittyPixels = 16u * 1024u * 1024u;
-constexpr size_t kMaximumKittyDecodedBytes = 64u * 1024u * 1024u;
-constexpr uint64_t kExpectedRuntimeBytes = RSTerminalRuntimeIdentity::kSizeBytes;
+constexpr uint64_t kMaximumKittyPixels             = 16u * 1024u * 1024u;
+constexpr size_t kMaximumKittyDecodedBytes         = 64u * 1024u * 1024u;
+constexpr uint64_t kExpectedRuntimeBytes           = RSTerminalRuntimeIdentity::kSizeBytes;
 constexpr std::wstring_view kExpectedRuntimeSha256 = RSTerminalRuntimeIdentity::kSha256;
 static_assert(kExpectedRuntimeBytes > 0u);
 static_assert(kExpectedRuntimeSha256.size() == 64u);
@@ -108,11 +107,7 @@ uint32_t g_systemCallbackUsers = 0u;
 std::atomic<decltype(&ghostty_alloc)> g_ghosttyAlloc{nullptr};
 std::atomic<decltype(&ghostty_free)> g_ghosttyFree{nullptr};
 
-[[nodiscard]] bool DecodePng(void* /*userData*/,
-                             const GhosttyAllocator* allocator,
-                             const uint8_t* data,
-                             size_t dataLength,
-                             GhosttySysImage* output) noexcept
+[[nodiscard]] bool DecodePng(void* /*userData*/, const GhosttyAllocator* allocator, const uint8_t* data, size_t dataLength, GhosttySysImage* output) noexcept
 {
     if (data == nullptr || output == nullptr || dataLength == 0u || dataLength > static_cast<size_t>(MAXDWORD))
     {
@@ -134,9 +129,7 @@ std::atomic<decltype(&ghostty_free)> g_ghosttyFree{nullptr};
     }
 
     wil::com_ptr<IWICBitmapDecoder> decoder;
-    if (FAILED(factory->CreateDecoderFromStream(
-            stream.get(), &GUID_ContainerFormatPng, WICDecodeMetadataCacheOnDemand, decoder.put())) ||
-        ! decoder)
+    if (FAILED(factory->CreateDecoderFromStream(stream.get(), &GUID_ContainerFormatPng, WICDecodeMetadataCacheOnDemand, decoder.put())) || ! decoder)
     {
         return false;
     }
@@ -146,50 +139,48 @@ std::atomic<decltype(&ghostty_free)> g_ghosttyFree{nullptr};
     {
         return false;
     }
-    UINT width = 0u;
+    UINT width  = 0u;
     UINT height = 0u;
     if (FAILED(frame->GetSize(&width, &height)) || width == 0u || height == 0u)
     {
         return false;
     }
-    const uint64_t pixels = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
+    const uint64_t pixels       = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
     const uint64_t decodedBytes = pixels * 4u;
-    if (pixels > kMaximumKittyPixels || decodedBytes > kMaximumKittyDecodedBytes ||
-        decodedBytes > static_cast<uint64_t>((std::numeric_limits<UINT>::max)()))
+    if (pixels > kMaximumKittyPixels || decodedBytes > kMaximumKittyDecodedBytes || decodedBytes > static_cast<uint64_t>((std::numeric_limits<UINT>::max)()))
     {
         return false;
     }
 
     wil::com_ptr<IWICFormatConverter> converter;
     if (FAILED(factory->CreateFormatConverter(converter.put())) || ! converter ||
-        FAILED(converter->Initialize(
-            frame.get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom)))
+        FAILED(converter->Initialize(frame.get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom)))
     {
         return false;
     }
 
     const auto allocate = g_ghosttyAlloc.load(std::memory_order_acquire);
-    const auto release = g_ghosttyFree.load(std::memory_order_acquire);
+    const auto release  = g_ghosttyFree.load(std::memory_order_acquire);
     if (allocate == nullptr || release == nullptr)
     {
         return false;
     }
     const size_t byteCount = static_cast<size_t>(decodedBytes);
-    uint8_t* decoded = allocate(allocator, byteCount);
+    uint8_t* decoded       = allocate(allocator, byteCount);
     if (decoded == nullptr)
     {
         return false;
     }
     auto releaseOnFailure = wil::scope_exit([&]() noexcept { release(allocator, decoded, byteCount); });
-    const UINT stride = width * 4u;
+    const UINT stride     = width * 4u;
     if (FAILED(converter->CopyPixels(nullptr, stride, static_cast<UINT>(byteCount), decoded)))
     {
         return false;
     }
 
-    output->width = width;
-    output->height = height;
-    output->data = decoded;
+    output->width    = width;
+    output->height   = height;
+    output->data     = decoded;
     output->data_len = byteCount;
     releaseOnFailure.release();
     return true;
@@ -218,8 +209,7 @@ std::atomic<decltype(&ghostty_free)> g_ghosttyFree{nullptr};
 [[nodiscard]] HRESULT ReadRuntimeBytes(HANDLE file, uint64_t offset, std::span<std::byte> destination) noexcept
 {
     if (file == nullptr || file == INVALID_HANDLE_VALUE || destination.empty() ||
-        destination.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()) ||
-        offset > static_cast<uint64_t>((std::numeric_limits<LONGLONG>::max)()))
+        destination.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()) || offset > static_cast<uint64_t>((std::numeric_limits<LONGLONG>::max)()))
     {
         return E_INVALIDARG;
     }
@@ -239,8 +229,7 @@ std::atomic<decltype(&ghostty_free)> g_ghosttyFree{nullptr};
     return static_cast<size_t>(bytesRead) == destination.size() ? S_OK : HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
 }
 
-template <typename T>
-[[nodiscard]] HRESULT ReadRuntimeValue(HANDLE file, uint64_t offset, T& value) noexcept
+template <typename T> [[nodiscard]] HRESULT ReadRuntimeValue(HANDLE file, uint64_t offset, T& value) noexcept
 {
     return ReadRuntimeBytes(file, offset, std::as_writable_bytes(std::span<T>(&value, 1u)));
 }
@@ -262,13 +251,8 @@ template <typename T>
     }
 
     DWORD hashObjectBytes = 0u;
-    DWORD propertyBytes = 0u;
-    status = BCryptGetProperty(algorithm.get(),
-                               BCRYPT_OBJECT_LENGTH,
-                               reinterpret_cast<PUCHAR>(&hashObjectBytes),
-                               sizeof(hashObjectBytes),
-                               &propertyBytes,
-                               0u);
+    DWORD propertyBytes   = 0u;
+    status = BCryptGetProperty(algorithm.get(), BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&hashObjectBytes), sizeof(hashObjectBytes), &propertyBytes, 0u);
     if (! BCRYPT_SUCCESS(status) || hashObjectBytes == 0u)
     {
         return BCRYPT_SUCCESS(status) ? E_FAIL : HRESULT_FROM_NT(status);
@@ -276,8 +260,7 @@ template <typename T>
 
     std::vector<std::byte> hashObject(hashObjectBytes);
     wil::unique_bcrypt_hash hash;
-    status = BCryptCreateHash(
-        algorithm.get(), hash.put(), reinterpret_cast<PUCHAR>(hashObject.data()), hashObjectBytes, nullptr, 0u, 0u);
+    status = BCryptCreateHash(algorithm.get(), hash.put(), reinterpret_cast<PUCHAR>(hashObject.data()), hashObjectBytes, nullptr, 0u, 0u);
     if (! BCRYPT_SUCCESS(status))
     {
         return HRESULT_FROM_NT(status);
@@ -313,7 +296,7 @@ template <typename T>
     digestText.resize(digest.size() * 2u);
     for (size_t index = 0u; index < digest.size(); ++index)
     {
-        digestText[index * 2u] = kHex[digest[index] >> 4u];
+        digestText[index * 2u]        = kHex[digest[index] >> 4u];
         digestText[(index * 2u) + 1u] = kHex[digest[index] & 0x0Fu];
     }
     return S_OK;
@@ -325,7 +308,7 @@ template <typename T>
     if (GetFileInformationByHandle(file, &information) == FALSE)
     {
         const DWORD error = GetLastError();
-        errorText = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_METADATA_ERROR, error);
+        errorText         = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_METADATA_ERROR, error);
         return HRESULT_FROM_WIN32(error);
     }
     if ((information.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
@@ -337,8 +320,7 @@ template <typename T>
     const uint64_t fileBytes = (static_cast<uint64_t>(information.nFileSizeHigh) << 32u) | information.nFileSizeLow;
     if (fileBytes != kExpectedRuntimeBytes)
     {
-        errorText = FormatStringResource(
-            g_hInstance, IDS_TERMINAL_RUNTIME_SIZE_ERROR, kExpectedRuntimeBytes, fileBytes);
+        errorText = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_SIZE_ERROR, kExpectedRuntimeBytes, fileBytes);
         return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
 
@@ -373,8 +355,7 @@ template <typename T>
     hr = ComputeRuntimeSha256(file, digestText);
     if (FAILED(hr))
     {
-        errorText = FormatStringResource(
-            g_hInstance, IDS_TERMINAL_RUNTIME_SHA256_ERROR, static_cast<uint32_t>(hr));
+        errorText = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_SHA256_ERROR, static_cast<uint32_t>(hr));
         return hr;
     }
     if (digestText != kExpectedRuntimeSha256)
@@ -388,22 +369,18 @@ template <typename T>
 [[nodiscard]] HRESULT GetLockedRuntimePath(HANDLE file, std::wstring& path, std::wstring& errorText) noexcept
 {
     std::array<wchar_t, 32768u> resolvedPath{};
-    const DWORD copied = GetFinalPathNameByHandleW(file,
-                                                   resolvedPath.data(),
-                                                   static_cast<DWORD>(resolvedPath.size()),
-                                                   FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    const DWORD copied = GetFinalPathNameByHandleW(file, resolvedPath.data(), static_cast<DWORD>(resolvedPath.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
     if (copied == 0u || copied >= resolvedPath.size())
     {
         const DWORD error = copied == 0u ? GetLastError() : ERROR_FILENAME_EXCED_RANGE;
-        errorText = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_LOCK_PATH_ERROR, error);
+        errorText         = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_LOCK_PATH_ERROR, error);
         return HRESULT_FROM_WIN32(error);
     }
     path.assign(resolvedPath.data(), copied);
     return S_OK;
 }
 
-template <typename T>
-[[nodiscard]] bool ResolveFunction(HMODULE module, const char* name, T& output) noexcept
+template <typename T> [[nodiscard]] bool ResolveFunction(HMODULE module, const char* name, T& output) noexcept
 {
 #pragma warning(push)
 #pragma warning(disable : 4191) // Closed export table validated before the cast.
@@ -438,7 +415,7 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
     if (! runtimeFile)
     {
         const DWORD error = GetLastError();
-        _errorText = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_OPEN_ERROR, error, runtimePath);
+        _errorText        = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_OPEN_ERROR, error, runtimePath);
         return HRESULT_FROM_WIN32(error);
     }
 
@@ -455,21 +432,18 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
         return lockedPathHr;
     }
 
-    wil::unique_hmodule module(LoadLibraryExW(
-        lockedRuntimePath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32));
+    wil::unique_hmodule module(LoadLibraryExW(lockedRuntimePath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32));
     if (! module)
     {
         const DWORD error = GetLastError();
-        _errorText = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_LOAD_ERROR, error);
+        _errorText        = FormatStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_LOAD_ERROR, error);
         return HRESULT_FROM_WIN32(error);
     }
 
-    const bool complete = ResolveFunction(module.get(), "ghostty_build_info", buildInfo) &&
-        ResolveFunction(module.get(), "ghostty_terminal_new", terminalNew) &&
-        ResolveFunction(module.get(), "ghostty_terminal_free", terminalFree) &&
-        ResolveFunction(module.get(), "ghostty_terminal_resize", terminalResize) &&
-        ResolveFunction(module.get(), "ghostty_terminal_set", terminalSet) &&
-        ResolveFunction(module.get(), "ghostty_terminal_get", terminalGet) &&
+    const bool complete =
+        ResolveFunction(module.get(), "ghostty_build_info", buildInfo) && ResolveFunction(module.get(), "ghostty_terminal_new", terminalNew) &&
+        ResolveFunction(module.get(), "ghostty_terminal_free", terminalFree) && ResolveFunction(module.get(), "ghostty_terminal_resize", terminalResize) &&
+        ResolveFunction(module.get(), "ghostty_terminal_set", terminalSet) && ResolveFunction(module.get(), "ghostty_terminal_get", terminalGet) &&
         ResolveFunction(module.get(), "ghostty_terminal_grid_ref", terminalGridRef) &&
         ResolveFunction(module.get(), "ghostty_grid_ref_hyperlink_uri", gridRefHyperlinkUri) &&
         ResolveFunction(module.get(), "ghostty_terminal_grid_ref_track", terminalGridRefTrack) &&
@@ -480,8 +454,7 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
         ResolveFunction(module.get(), "ghostty_terminal_select_all", terminalSelectAll) &&
         ResolveFunction(module.get(), "ghostty_terminal_selection_format_buf", terminalSelectionFormatBuffer) &&
         ResolveFunction(module.get(), "ghostty_terminal_scroll_viewport", terminalScrollViewport) &&
-        ResolveFunction(module.get(), "ghostty_paste_is_safe", pasteIsSafe) &&
-        ResolveFunction(module.get(), "ghostty_paste_encode", pasteEncode) &&
+        ResolveFunction(module.get(), "ghostty_paste_is_safe", pasteIsSafe) && ResolveFunction(module.get(), "ghostty_paste_encode", pasteEncode) &&
         ResolveFunction(module.get(), "ghostty_render_state_new", renderStateNew) &&
         ResolveFunction(module.get(), "ghostty_render_state_free", renderStateFree) &&
         ResolveFunction(module.get(), "ghostty_render_state_begin_update", renderStateBeginUpdate) &&
@@ -496,13 +469,10 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
         ResolveFunction(module.get(), "ghostty_render_state_row_cells_new", renderRowCellsNew) &&
         ResolveFunction(module.get(), "ghostty_render_state_row_cells_free", renderRowCellsFree) &&
         ResolveFunction(module.get(), "ghostty_render_state_row_cells_next", renderRowCellsNext) &&
-        ResolveFunction(module.get(), "ghostty_render_state_row_cells_get", renderRowCellsGet) &&
-        ResolveFunction(module.get(), "ghostty_cell_get", cellGet) &&
-        ResolveFunction(module.get(), "ghostty_key_encoder_new", keyEncoderNew) &&
-        ResolveFunction(module.get(), "ghostty_key_encoder_free", keyEncoderFree) &&
+        ResolveFunction(module.get(), "ghostty_render_state_row_cells_get", renderRowCellsGet) && ResolveFunction(module.get(), "ghostty_cell_get", cellGet) &&
+        ResolveFunction(module.get(), "ghostty_key_encoder_new", keyEncoderNew) && ResolveFunction(module.get(), "ghostty_key_encoder_free", keyEncoderFree) &&
         ResolveFunction(module.get(), "ghostty_key_encoder_setopt_from_terminal", keyEncoderSetFromTerminal) &&
-        ResolveFunction(module.get(), "ghostty_key_encoder_encode", keyEncoderEncode) &&
-        ResolveFunction(module.get(), "ghostty_key_event_new", keyEventNew) &&
+        ResolveFunction(module.get(), "ghostty_key_encoder_encode", keyEncoderEncode) && ResolveFunction(module.get(), "ghostty_key_event_new", keyEventNew) &&
         ResolveFunction(module.get(), "ghostty_key_event_free", keyEventFree) &&
         ResolveFunction(module.get(), "ghostty_key_event_set_action", keyEventSetAction) &&
         ResolveFunction(module.get(), "ghostty_key_event_set_key", keyEventSetKey) &&
@@ -514,16 +484,13 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
         ResolveFunction(module.get(), "ghostty_mouse_encoder_setopt", mouseEncoderSetOption) &&
         ResolveFunction(module.get(), "ghostty_mouse_encoder_setopt_from_terminal", mouseEncoderSetFromTerminal) &&
         ResolveFunction(module.get(), "ghostty_mouse_encoder_encode", mouseEncoderEncode) &&
-        ResolveFunction(module.get(), "ghostty_mouse_event_new", mouseEventNew) &&
-        ResolveFunction(module.get(), "ghostty_mouse_event_free", mouseEventFree) &&
+        ResolveFunction(module.get(), "ghostty_mouse_event_new", mouseEventNew) && ResolveFunction(module.get(), "ghostty_mouse_event_free", mouseEventFree) &&
         ResolveFunction(module.get(), "ghostty_mouse_event_set_action", mouseEventSetAction) &&
         ResolveFunction(module.get(), "ghostty_mouse_event_set_button", mouseEventSetButton) &&
         ResolveFunction(module.get(), "ghostty_mouse_event_clear_button", mouseEventClearButton) &&
         ResolveFunction(module.get(), "ghostty_mouse_event_set_mods", mouseEventSetMods) &&
-        ResolveFunction(module.get(), "ghostty_mouse_event_set_position", mouseEventSetPosition) &&
-        ResolveFunction(module.get(), "ghostty_alloc", alloc) &&
-        ResolveFunction(module.get(), "ghostty_free", free) &&
-        ResolveFunction(module.get(), "ghostty_sys_set", sysSet) &&
+        ResolveFunction(module.get(), "ghostty_mouse_event_set_position", mouseEventSetPosition) && ResolveFunction(module.get(), "ghostty_alloc", alloc) &&
+        ResolveFunction(module.get(), "ghostty_free", free) && ResolveFunction(module.get(), "ghostty_sys_set", sysSet) &&
         ResolveFunction(module.get(), "ghostty_kitty_graphics_get", kittyGraphicsGet) &&
         ResolveFunction(module.get(), "ghostty_kitty_graphics_image", kittyGraphicsImage) &&
         ResolveFunction(module.get(), "ghostty_kitty_graphics_image_get_multi", kittyGraphicsImageGetMulti) &&
@@ -542,13 +509,11 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
         return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
     }
 
-    bool simd = true;
-    bool kittyGraphics = false;
+    bool simd                    = true;
+    bool kittyGraphics           = false;
     GhosttyOptimizeMode optimize = GHOSTTY_OPTIMIZE_DEBUG;
-    if (buildInfo(GHOSTTY_BUILD_INFO_SIMD, &simd) != GHOSTTY_SUCCESS ||
-        buildInfo(GHOSTTY_BUILD_INFO_KITTY_GRAPHICS, &kittyGraphics) != GHOSTTY_SUCCESS ||
-        buildInfo(GHOSTTY_BUILD_INFO_OPTIMIZE, &optimize) != GHOSTTY_SUCCESS || simd || ! kittyGraphics ||
-        optimize != GHOSTTY_OPTIMIZE_RELEASE_FAST)
+    if (buildInfo(GHOSTTY_BUILD_INFO_SIMD, &simd) != GHOSTTY_SUCCESS || buildInfo(GHOSTTY_BUILD_INFO_KITTY_GRAPHICS, &kittyGraphics) != GHOSTTY_SUCCESS ||
+        buildInfo(GHOSTTY_BUILD_INFO_OPTIMIZE, &optimize) != GHOSTTY_SUCCESS || simd || ! kittyGraphics || optimize != GHOSTTY_OPTIMIZE_RELEASE_FAST)
     {
         Unload();
         _errorText = LoadStringResource(g_hInstance, IDS_TERMINAL_RUNTIME_BUILD_OPTIONS_ERROR);
@@ -576,7 +541,7 @@ HRESULT TerminalRuntimeLoader::Load() noexcept
     }
 
     _runtimeFile = std::move(runtimeFile);
-    _module = std::move(module);
+    _module      = std::move(module);
     return S_OK;
 }
 
@@ -597,76 +562,76 @@ void TerminalRuntimeLoader::Unload() noexcept
         }
         _systemCallbacksAcquired = false;
     }
-    kittyPlacementRenderInfo = nullptr;
-    kittyPlacementGet = nullptr;
-    kittyPlacementNext = nullptr;
-    kittyPlacementIteratorFree = nullptr;
-    kittyPlacementIteratorNew = nullptr;
-    kittyGraphicsImageGetMulti = nullptr;
-    kittyGraphicsImage = nullptr;
-    kittyGraphicsGet = nullptr;
-    sysSet = nullptr;
-    free = nullptr;
-    alloc = nullptr;
-    mouseEventSetPosition = nullptr;
-    mouseEventSetMods = nullptr;
-    mouseEventClearButton = nullptr;
-    mouseEventSetButton = nullptr;
-    mouseEventSetAction = nullptr;
-    mouseEventFree = nullptr;
-    mouseEventNew = nullptr;
-    mouseEncoderEncode = nullptr;
-    mouseEncoderSetFromTerminal = nullptr;
-    mouseEncoderSetOption = nullptr;
-    mouseEncoderFree = nullptr;
-    mouseEncoderNew = nullptr;
+    kittyPlacementRenderInfo      = nullptr;
+    kittyPlacementGet             = nullptr;
+    kittyPlacementNext            = nullptr;
+    kittyPlacementIteratorFree    = nullptr;
+    kittyPlacementIteratorNew     = nullptr;
+    kittyGraphicsImageGetMulti    = nullptr;
+    kittyGraphicsImage            = nullptr;
+    kittyGraphicsGet              = nullptr;
+    sysSet                        = nullptr;
+    free                          = nullptr;
+    alloc                         = nullptr;
+    mouseEventSetPosition         = nullptr;
+    mouseEventSetMods             = nullptr;
+    mouseEventClearButton         = nullptr;
+    mouseEventSetButton           = nullptr;
+    mouseEventSetAction           = nullptr;
+    mouseEventFree                = nullptr;
+    mouseEventNew                 = nullptr;
+    mouseEncoderEncode            = nullptr;
+    mouseEncoderSetFromTerminal   = nullptr;
+    mouseEncoderSetOption         = nullptr;
+    mouseEncoderFree              = nullptr;
+    mouseEncoderNew               = nullptr;
     keyEventSetUnshiftedCodepoint = nullptr;
-    keyEventSetUtf8 = nullptr;
-    keyEventSetMods = nullptr;
-    keyEventSetKey = nullptr;
-    keyEventSetAction = nullptr;
-    keyEventFree = nullptr;
-    keyEventNew = nullptr;
-    keyEncoderEncode = nullptr;
-    keyEncoderSetFromTerminal = nullptr;
-    keyEncoderFree = nullptr;
-    keyEncoderNew = nullptr;
-    cellGet = nullptr;
-    renderRowCellsGet = nullptr;
-    renderRowCellsNext = nullptr;
-    renderRowCellsFree = nullptr;
-    renderRowCellsNew = nullptr;
-    renderRowSet = nullptr;
-    renderRowGet = nullptr;
-    renderRowIteratorNext = nullptr;
-    renderRowIteratorFree = nullptr;
-    renderRowIteratorNew = nullptr;
-    renderStateSet = nullptr;
-    renderStateGet = nullptr;
-    renderStateEndUpdate = nullptr;
-    renderStateBeginUpdate = nullptr;
-    renderStateFree = nullptr;
-    renderStateNew = nullptr;
-    formatterFree = nullptr;
-    formatterFormatBuffer = nullptr;
-    formatterTerminalNew = nullptr;
-    pasteEncode = nullptr;
-    pasteIsSafe = nullptr;
+    keyEventSetUtf8               = nullptr;
+    keyEventSetMods               = nullptr;
+    keyEventSetKey                = nullptr;
+    keyEventSetAction             = nullptr;
+    keyEventFree                  = nullptr;
+    keyEventNew                   = nullptr;
+    keyEncoderEncode              = nullptr;
+    keyEncoderSetFromTerminal     = nullptr;
+    keyEncoderFree                = nullptr;
+    keyEncoderNew                 = nullptr;
+    cellGet                       = nullptr;
+    renderRowCellsGet             = nullptr;
+    renderRowCellsNext            = nullptr;
+    renderRowCellsFree            = nullptr;
+    renderRowCellsNew             = nullptr;
+    renderRowSet                  = nullptr;
+    renderRowGet                  = nullptr;
+    renderRowIteratorNext         = nullptr;
+    renderRowIteratorFree         = nullptr;
+    renderRowIteratorNew          = nullptr;
+    renderStateSet                = nullptr;
+    renderStateGet                = nullptr;
+    renderStateEndUpdate          = nullptr;
+    renderStateBeginUpdate        = nullptr;
+    renderStateFree               = nullptr;
+    renderStateNew                = nullptr;
+    formatterFree                 = nullptr;
+    formatterFormatBuffer         = nullptr;
+    formatterTerminalNew          = nullptr;
+    pasteEncode                   = nullptr;
+    pasteIsSafe                   = nullptr;
     terminalSelectionFormatBuffer = nullptr;
-    terminalScrollViewport = nullptr;
-    terminalSelectAll = nullptr;
-    terminalSelectWord = nullptr;
-    terminalVtWrite = nullptr;
-    trackedGridRefSnapshot = nullptr;
-    trackedGridRefFree = nullptr;
-    terminalGridRefTrack = nullptr;
-    terminalGridRef = nullptr;
-    terminalGet = nullptr;
-    terminalSet = nullptr;
-    terminalResize = nullptr;
-    terminalFree = nullptr;
-    terminalNew = nullptr;
-    buildInfo = nullptr;
+    terminalScrollViewport        = nullptr;
+    terminalSelectAll             = nullptr;
+    terminalSelectWord            = nullptr;
+    terminalVtWrite               = nullptr;
+    trackedGridRefSnapshot        = nullptr;
+    trackedGridRefFree            = nullptr;
+    terminalGridRefTrack          = nullptr;
+    terminalGridRef               = nullptr;
+    terminalGet                   = nullptr;
+    terminalSet                   = nullptr;
+    terminalResize                = nullptr;
+    terminalFree                  = nullptr;
+    terminalNew                   = nullptr;
+    buildInfo                     = nullptr;
     _module.reset();
     _runtimeFile.reset();
 }
@@ -681,8 +646,7 @@ const std::wstring& TerminalRuntimeLoader::ErrorText() const noexcept
     return _errorText;
 }
 
-GhosttyResult TerminalRuntimeLoader::GetTerminalMode(
-    GhosttyTerminal terminal, GhosttyMode mode, bool& value) const noexcept
+GhosttyResult TerminalRuntimeLoader::GetTerminalMode(GhosttyTerminal terminal, GhosttyMode mode, bool& value) const noexcept
 {
     if (terminalGet == nullptr)
     {
@@ -690,7 +654,7 @@ GhosttyResult TerminalRuntimeLoader::GetTerminalMode(
     }
 
     GhosttyTerminalModeConfig config{};
-    config.mode = mode;
+    config.mode                = mode;
     const GhosttyResult result = terminalGet(terminal, GHOSTTY_TERMINAL_DATA_MODE, &config);
     if (result == GHOSTTY_SUCCESS)
     {

@@ -27,8 +27,7 @@ namespace Detail
     return ch == L' ' || ch == L'\t' || ch == L'\n' || ch == L'\r' || ch == L'\f' || ch == L'\v';
 }
 
-[[nodiscard]] inline std::wstring_view TrimBoundaryWhitespace(std::wstring_view text,
-                                                              ThroughputBoundaryWhitespacePolicy policy) noexcept
+[[nodiscard]] inline std::wstring_view TrimBoundaryWhitespace(std::wstring_view text, ThroughputBoundaryWhitespacePolicy policy) noexcept
 {
     while (! text.empty() && IsBoundaryWhitespace(text.front(), policy))
     {
@@ -138,8 +137,7 @@ namespace Detail
     }
 
     uint64_t multiplier = 0u;
-    if (unit.empty() || Detail::EqualsAsciiNoCase(unit, L"kb") || Detail::EqualsAsciiNoCase(unit, L"k") ||
-        Detail::EqualsAsciiNoCase(unit, L"kib"))
+    if (unit.empty() || Detail::EqualsAsciiNoCase(unit, L"kb") || Detail::EqualsAsciiNoCase(unit, L"k") || Detail::EqualsAsciiNoCase(unit, L"kib"))
     {
         multiplier = kKiB;
     }
@@ -147,23 +145,19 @@ namespace Detail
     {
         multiplier = 1u;
     }
-    else if (Detail::EqualsAsciiNoCase(unit, L"mb") || Detail::EqualsAsciiNoCase(unit, L"m") ||
-             Detail::EqualsAsciiNoCase(unit, L"mib"))
+    else if (Detail::EqualsAsciiNoCase(unit, L"mb") || Detail::EqualsAsciiNoCase(unit, L"m") || Detail::EqualsAsciiNoCase(unit, L"mib"))
     {
         multiplier = kMiB;
     }
-    else if (Detail::EqualsAsciiNoCase(unit, L"gb") || Detail::EqualsAsciiNoCase(unit, L"g") ||
-             Detail::EqualsAsciiNoCase(unit, L"gib"))
+    else if (Detail::EqualsAsciiNoCase(unit, L"gb") || Detail::EqualsAsciiNoCase(unit, L"g") || Detail::EqualsAsciiNoCase(unit, L"gib"))
     {
         multiplier = kGiB;
     }
-    else if (Detail::EqualsAsciiNoCase(unit, L"tb") || Detail::EqualsAsciiNoCase(unit, L"t") ||
-             Detail::EqualsAsciiNoCase(unit, L"tib"))
+    else if (Detail::EqualsAsciiNoCase(unit, L"tb") || Detail::EqualsAsciiNoCase(unit, L"t") || Detail::EqualsAsciiNoCase(unit, L"tib"))
     {
         multiplier = kTiB;
     }
-    else if (Detail::EqualsAsciiNoCase(unit, L"pb") || Detail::EqualsAsciiNoCase(unit, L"p") ||
-             Detail::EqualsAsciiNoCase(unit, L"pib"))
+    else if (Detail::EqualsAsciiNoCase(unit, L"pb") || Detail::EqualsAsciiNoCase(unit, L"p") || Detail::EqualsAsciiNoCase(unit, L"pib"))
     {
         multiplier = kPiB;
     }

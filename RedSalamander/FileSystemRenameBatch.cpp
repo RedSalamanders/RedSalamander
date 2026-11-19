@@ -28,22 +28,14 @@ namespace
         }
 
         const FileSystemRenameBatch::RenameOp& op = ops[index];
-        const HRESULT hr = fileSystem.RenameItem(
-            op.sourcePath.c_str(), op.providerDestinationPath.c_str(), flags, options, callback, cookie);
+        const HRESULT hr = fileSystem.RenameItem(op.sourcePath.c_str(), op.providerDestinationPath.c_str(), flags, options, callback, cookie);
         if (callback)
         {
             // Report each attempted rename (including the failing one) so hosts that track
             // per-item outcomes see exactly which items reached the filesystem; otherwise a
             // partial fallback run would be indistinguishable from a total failure.
             static_cast<void>(callback->FileSystemItemCompleted(
-                FILESYSTEM_RENAME,
-                static_cast<unsigned long>(index),
-                op.sourcePath.c_str(),
-                op.providerDestinationPath.c_str(),
-                hr,
-                nullptr,
-                nullptr,
-                cookie));
+                FILESYSTEM_RENAME, static_cast<unsigned long>(index), op.sourcePath.c_str(), op.providerDestinationPath.c_str(), hr, nullptr, nullptr, cookie));
         }
         if (FAILED(hr))
         {

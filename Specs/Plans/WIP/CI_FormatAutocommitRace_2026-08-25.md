@@ -29,7 +29,7 @@ Re-verified 2026-08-25: checkout still uses `ref: ${{ github.head_ref || github.
 
 ```powershell
 Invoke-Pester -Script .\Tools\Tests -PassThru
-.\format-all.ps1
+.\format.ps1
 git diff --check
 ```
 

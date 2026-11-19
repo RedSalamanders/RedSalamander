@@ -522,9 +522,11 @@ not compiler-free validation.
 `New-RSTestFormatterFixture` creates only an owned native CUI probe beneath a marked
 sandbox, using the existing Windows PowerShell managed-compilation pattern. It enforces
 the managed-loader path budget before creation, verifies subsystem 3, records argv/CWD
-and owned-console observations and never formats source. This is a test prerequisite,
-not a compiler/engine prerequisite for production formatter preview. Real stderr larger
-than a pipe buffer, nonzero exits and engine-free metadata controls protect the actual
-formatter boundary. Intentional installer inheritance is tested through the private
-real-batch seam described in `Specs/Build/Build_Toolchain.md`; it is not blanket-routed
-through a read-only production projection.
+and owned-console observations, serializes concurrent appends, and never formats source.
+Given a marker, it reports each marked file after `--` to a `--dry-run` call the way
+`clang-format --Werror` reports drift. The root `format.ps1` and `format-all.ps1` tests
+return it from a stub `Install-CiFormatter` beside the shared engine's real policy module,
+so they download nothing. This is a test prerequisite, not a compiler or formatter
+prerequisite of the format command. Intentional installer inheritance is tested through
+the private real-batch seam described in `Specs/Build/Build_Toolchain.md`; it is not
+blanket-routed through a read-only production projection.

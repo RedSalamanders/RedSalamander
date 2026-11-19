@@ -153,8 +153,7 @@ void ShortcutManager::Load(const Common::Settings::ShortcutsSettings& shortcuts)
     LoadBindings(shortcuts.terminal, _terminal, _terminalReverse, _terminalConflicts);
 }
 
-std::optional<std::wstring_view> ShortcutManager::FindApplicationCommand(
-    uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept
+std::optional<std::wstring_view> ShortcutManager::FindApplicationCommand(uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept
 {
     return FindCommand(_application, vk, modifiers, scanCode, extended);
 }
@@ -170,14 +169,12 @@ std::optional<std::wstring_view> ShortcutManager::FindFunctionBarCommand(uint32_
     return it->second;
 }
 
-std::optional<std::wstring_view> ShortcutManager::FindFolderViewCommand(
-    uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept
+std::optional<std::wstring_view> ShortcutManager::FindFolderViewCommand(uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept
 {
     return FindCommand(_folderView, vk, modifiers, scanCode, extended);
 }
 
-std::optional<std::wstring_view> ShortcutManager::FindTerminalCommand(
-    uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept
+std::optional<std::wstring_view> ShortcutManager::FindTerminalCommand(uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept
 {
     return FindCommand(_terminal, vk, modifiers, scanCode, extended);
 }

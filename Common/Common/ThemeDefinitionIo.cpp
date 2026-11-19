@@ -185,8 +185,8 @@ namespace
         out = static_cast<uint32_t>(*unsignedValue);
         return true;
     }
-    if (const auto* signedValue = std::get_if<int64_t>(&value->value); signedValue && *signedValue >= 0 &&
-                                                                       static_cast<uint64_t>(*signedValue) <= std::numeric_limits<uint32_t>::max())
+    if (const auto* signedValue = std::get_if<int64_t>(&value->value);
+        signedValue && *signedValue >= 0 && static_cast<uint64_t>(*signedValue) <= std::numeric_limits<uint32_t>::max())
     {
         out = static_cast<uint32_t>(*signedValue);
         return true;
@@ -205,23 +205,22 @@ namespace
     for (const auto& [keyUtf8, value] : object.members)
     {
         const std::wstring key = Utf16FromUtf8(keyUtf8);
-        const bool validKey = palette ? IsValidThemePaletteName(key) : IsValidThemeColorKey(key);
-        const bool duplicate = out.contains(key);
+        const bool validKey    = palette ? IsValidThemePaletteName(key) : IsValidThemeColorKey(key);
+        const bool duplicate   = out.contains(key);
         const auto* sourceText = std::get_if<std::string>(&value.value);
         ThemeColorSource source;
         std::wstring parseMessage;
-        const bool validSource = sourceText && SUCCEEDED(ParseThemeColorSource(Utf16FromUtf8(*sourceText), source, &parseMessage));
+        const bool validSource    = sourceText && SUCCEEDED(ParseThemeColorSource(Utf16FromUtf8(*sourceText), source, &parseMessage));
         const bool paletteDynamic = palette && validSource && (IsPaintTimeThemeColorSource(source) || IsEventTimeThemeColorSource(source));
         if (! validKey || duplicate || ! sourceText || ! validSource || paletteDynamic)
         {
             if (mode == ThemeDefinitionParseMode::StrictFile)
             {
-                const ThemeDefinitionIoError error = ! validKey ? (palette ? ThemeDefinitionIoError::InvalidPaletteName
-                                                                           : ThemeDefinitionIoError::InvalidColorKey)
-                                                     : duplicate ? (palette ? ThemeDefinitionIoError::DuplicatePaletteName
-                                                                            : ThemeDefinitionIoError::DuplicateColorKey)
-                                                     : ! sourceText ? ThemeDefinitionIoError::ColorValueNotString
-                                                                   : ThemeDefinitionIoError::InvalidColorValue;
+                const ThemeDefinitionIoError error =
+                    ! validKey     ? (palette ? ThemeDefinitionIoError::InvalidPaletteName : ThemeDefinitionIoError::InvalidColorKey)
+                    : duplicate    ? (palette ? ThemeDefinitionIoError::DuplicatePaletteName : ThemeDefinitionIoError::DuplicateColorKey)
+                    : ! sourceText ? ThemeDefinitionIoError::ColorValueNotString
+                                   : ThemeDefinitionIoError::InvalidColorValue;
                 return InvalidData(error, outError, outMessage, std::move(parseMessage));
             }
             ++skipped;
@@ -263,12 +262,13 @@ HRESULT ParseThemeDefinitionFromValue(const JsonValue& value,
     ThemeDefinition parsed;
     if (! ReadJsonUInt32(object, "formatVersion", parsed.formatVersion))
     {
-        return InvalidData(ThemeDefinitionIoError::MissingOrInvalidFormatVersion, outError, outMessage,
-                           L"Theme formatVersion must be the integer 2.");
+        return InvalidData(ThemeDefinitionIoError::MissingOrInvalidFormatVersion, outError, outMessage, L"Theme formatVersion must be the integer 2.");
     }
     if (parsed.formatVersion != 2u)
     {
-        return InvalidData(ThemeDefinitionIoError::UnsupportedFormatVersion, outError, outMessage,
+        return InvalidData(ThemeDefinitionIoError::UnsupportedFormatVersion,
+                           outError,
+                           outMessage,
                            std::format(L"Unsupported theme formatVersion {}. Only version 2 is accepted.", parsed.formatVersion));
     }
     if (! ReadJsonString(object, "id", parsed.id))
@@ -310,8 +310,7 @@ HRESULT ParseThemeDefinitionFromValue(const JsonValue& value,
         }
         if ((*palettePtr)->members.size() > 128u)
         {
-            return InvalidData(ThemeDefinitionIoError::TooManyPaletteEntries, outError, outMessage,
-                               L"A theme palette cannot contain more than 128 entries.");
+            return InvalidData(ThemeDefinitionIoError::TooManyPaletteEntries, outError, outMessage, L"A theme palette cannot contain more than 128 entries.");
         }
         if (const HRESULT hr = ParseSourceObject(**palettePtr, true, mode, parsed.palette, outError, outMessage, skipped); FAILED(hr))
         {
@@ -327,8 +326,7 @@ HRESULT ParseThemeDefinitionFromValue(const JsonValue& value,
     }
     if ((*colorsPtr)->members.size() > 512u)
     {
-        return InvalidData(ThemeDefinitionIoError::TooManyColorEntries, outError, outMessage,
-                           L"A theme cannot contain more than 512 semantic color entries.");
+        return InvalidData(ThemeDefinitionIoError::TooManyColorEntries, outError, outMessage, L"A theme cannot contain more than 512 semantic color entries.");
     }
 
     if (const HRESULT hr = ParseSourceObject(**colorsPtr, false, mode, parsed.colors, outError, outMessage, skipped); FAILED(hr))
@@ -358,8 +356,7 @@ HRESULT ParseThemeDefinitionJson5(std::string_view jsonText, ThemeDefinition& ou
     const HRESULT parseHr = ParseJsonValue(jsonText, value);
     if (FAILED(parseHr))
     {
-        return parseHr == E_OUTOFMEMORY ? OutOfMemory(outError, outMessage)
-                                       : InvalidData(ThemeDefinitionIoError::ParseFailed, outError, outMessage);
+        return parseHr == E_OUTOFMEMORY ? OutOfMemory(outError, outMessage) : InvalidData(ThemeDefinitionIoError::ParseFailed, outError, outMessage);
     }
     return ParseThemeDefinitionFromValue(value, outTheme, ThemeDefinitionParseMode::StrictFile, outError, outMessage);
 }
@@ -368,9 +365,8 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
 {
     outJson.clear();
 
-    if (theme.formatVersion != 2u || ! IsValidUserThemeId(theme.id) || theme.name.empty() || theme.name.size() > 64u ||
-        theme.palette.size() > 128u || theme.colors.size() > 512u ||
-        ! IsBuiltinThemeId(theme.baseThemeId))
+    if (theme.formatVersion != 2u || ! IsValidUserThemeId(theme.id) || theme.name.empty() || theme.name.size() > 64u || theme.palette.size() > 128u ||
+        theme.colors.size() > 512u || ! IsBuiltinThemeId(theme.baseThemeId))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
@@ -423,9 +419,7 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
         return hr;
     }
 
-    const auto addSources = [&](const char* memberName,
-                                const std::unordered_map<std::wstring, ThemeColorSource>& sources,
-                                bool palette) noexcept -> HRESULT
+    const auto addSources = [&](const char* memberName, const std::unordered_map<std::wstring, ThemeColorSource>& sources, bool palette) noexcept -> HRESULT
     {
         yyjson_mut_val* object = yyjson_mut_obj(doc.get());
         if (! object || ! yyjson_mut_obj_add_val(doc.get(), root, memberName, object))
@@ -450,13 +444,13 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
             {
                 continue;
             }
-            const std::string keyUtf8 = Utf8FromUtf16(key);
+            const std::string keyUtf8   = Utf8FromUtf16(key);
             const std::string valueUtf8 = Utf8FromUtf16(FormatThemeColorSource(it->second));
             if (keyUtf8.empty() || valueUtf8.empty())
             {
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
-            yyjson_mut_val* keyNode = yyjson_mut_strncpy(doc.get(), keyUtf8.data(), keyUtf8.size());
+            yyjson_mut_val* keyNode   = yyjson_mut_strncpy(doc.get(), keyUtf8.data(), keyUtf8.size());
             yyjson_mut_val* valueNode = yyjson_mut_strncpy(doc.get(), valueUtf8.data(), valueUtf8.size());
             if (! keyNode || ! valueNode || ! yyjson_mut_obj_add(object, keyNode, valueNode))
             {
@@ -507,7 +501,8 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
             while (lineStart < outJson.size())
             {
                 size_t lineEnd = outJson.find('\n', lineStart);
-                if (lineEnd == std::string::npos) lineEnd = outJson.size();
+                if (lineEnd == std::string::npos)
+                    lineEnd = outJson.size();
                 const std::string_view line(outJson.data() + lineStart, lineEnd - lineStart);
                 if (line.starts_with("    \"") && ! line.starts_with("    //"))
                 {
@@ -515,7 +510,7 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
                     if (keyEnd != std::string_view::npos)
                     {
                         const std::string_view key = line.substr(5u, keyEnd - 5u);
-                        const size_t dot = key.find('.');
+                        const size_t dot           = key.find('.');
                         const std::string group(key.substr(0u, dot));
                         if (group != previousGroup)
                         {
@@ -527,7 +522,8 @@ HRESULT BuildThemeDefinitionJson5(const ThemeDefinition& theme, std::string& out
                     }
                 }
                 grouped.append(line);
-                if (lineEnd < outJson.size()) grouped.push_back('\n');
+                if (lineEnd < outJson.size())
+                    grouped.push_back('\n');
                 lineStart = lineEnd + 1u;
             }
             outJson = std::move(grouped);
