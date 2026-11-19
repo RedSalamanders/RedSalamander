@@ -11,7 +11,6 @@ This directory is non-normative. It routes unfinished work and decisions; curren
 ## Status meanings
 
 - `ACTIVE`: executable unfinished work with one owner.
-- `DRAFT`: optional incomplete activation detail inside a plan; grants no edit authority.
 - `HOLD`: preserved work that is blocked, coordination-sensitive, or subordinate to another active owner; do not pick it independently.
 - `DECISION`: unresolved product/architecture choices; it authorizes review, not implementation.
 - `RETIRED`: retired plans live in `../Done/` as frozen history; do not keep them in this index.
