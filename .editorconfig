@@ -1,0 +1,22 @@
+# The same editor settings in every RedSalamanders repository (RedHome convergence B-12, D-03, D-04).
+# Line endings match the common .gitattributes block. C and C++ layout is .clang-format's.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{c,cc,cpp,cxx,h,hh,hpp,hxx,hlsl,hlsli,ps1,psm1,psd1,sln,vcxproj,filters,props,targets}]
+end_of_line = crlf
+
+[*.{md,json,yml,yaml}]
+end_of_line = lf
+
+[*.{json,yml,yaml,vcxproj,filters,props,targets}]
+indent_size = 2
+
+[*.sln]
+indent_style = tab
