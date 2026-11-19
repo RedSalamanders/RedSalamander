@@ -23,7 +23,7 @@ This specification defines the fail-closed portable ZIP contract implemented by
 ## Package construction
 
 The ZIP contains the shipping launchers and applications, root runtime DLLs, `Plugins\`, `Lang\`, `Themes\`, the
-settings schema, license, and portable README. Build/link artifacts and the package-smoke test executable are not
+settings schema, license, third-party notices (`THIRD-PARTY-NOTICES.md`), and portable README. Build/link artifacts and the package-smoke test executable are not
 shipped. The Microsoft Visual C++ runtime for the target architecture is bundled app-locally.
 
 Before compression, packaging validates the build output through `Tools/Modules/Packaging/RuntimeDependencies.psm1`. A missing
