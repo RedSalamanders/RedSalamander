@@ -6,10 +6,9 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide one internal import-free Git text/stdin transport for archive, fingerprint, formatter and Ghostty metadata; optional command-local PrefixArguments precede the target -C while defaults remain unchanged.",
+      "purpose": "Provide one internal import-free Git text/stdin transport for archive, fingerprint and Ghostty metadata; optional command-local PrefixArguments precede the target -C while defaults remain unchanged.",
       "usage": "Internal export Invoke-RSTestGitMetadataCapture; thin domain callers retain bound input presence, diagnostic policy and read-only authority. Candidate metadata alone supplies its original local global-option prefix.",
       "usedBy": [
-        "format-all.ps1",
         "Tools/Modules/Testing/TestRunArchive.psm1",
         "Tools/Modules/Testing/ValidationFingerprint.psm1",
         "Tools/TerminalEngine/GhosttyCandidateReview.psm1",
@@ -130,67 +129,6 @@
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1"
       ],
       "replacement": null
-    },
-    {
-      "purpose": "Acquire the pinned native formatter without Python, with checksum and executable validation.",
-      "prerequisites": [
-        "PowerShell 7",
-        "HTTPS access for uncached downloads or an offline pinned wheel"
-      ],
-      "lifecycle": "active",
-      "kind": "command",
-      "tests": [
-        "Tools/Tests/ClangFormat.Tests.ps1",
-        "Tools/Tests/BuildReproducibility.Tests.ps1"
-      ],
-      "path": "Tools/Install-ClangFormat.ps1",
-      "usage": "Run before CI formatting or use WheelPath for offline installation.",
-      "replacement": null,
-      "sideEffects": [
-        "Downloads and caches the verified wheel and stages the native executable beneath .build/format",
-        "Holds an exclusive cache lease and fails immediately on contention; rejects reparse output chains"
-      ],
-      "outputs": [
-        ".build/format/clang_format/data/bin/clang-format.exe",
-        ".build/format/clang-format-22.1.3.whl",
-        ".build/format/.install.lock (empty persistent lease file)"
-      ],
-      "ownerSpec": "Specs/Build/Build_Toolchain.md",
-      "visibility": "public",
-      "usedBy": [
-        ".github/workflows/ci.yml"
-      ]
-    },
-    {
-      "kind": "module",
-      "outputs": [
-        "Verified native formatter path"
-      ],
-      "sideEffects": [
-        "Downloads and writes the selected repository-local formatter cache",
-        "Holds an exclusive .build/format/.install.lock lease; leaves the empty lease file after disposal"
-      ],
-      "purpose": "Acquire and checksum-verify the pinned native formatter; internal Invoke-RSClangFormatCapture owns engine-free no-window EXE version and explicitly admitted formatting calls with concurrent separate stream drains and actual exits.",
-      "replacement": null,
-      "ownerSpec": "Specs/Build/Build_Toolchain.md",
-      "prerequisites": [
-        "PowerShell 7",
-        "Build/clang-format.json",
-        "Tools/Modules/Build/ArtifactOperationLock.psm1 guarded path/publication helpers"
-      ],
-      "usedBy": [
-        "format-all.ps1",
-        "Tools/Install-ClangFormat.ps1",
-        "Tools/Tests/ClangFormat.Tests.ps1",
-        "Tools/Tests/TestHarnessSourceContracts.Tests.ps1"
-      ],
-      "visibility": "internal",
-      "path": "Tools/Modules/Build/ClangFormat.psm1",
-      "lifecycle": "active",
-      "tests": [
-        "Tools/Tests/ClangFormat.Tests.ps1"
-      ],
-      "usage": "Install-RSClangFormat retains its guarded offline/cache contract; Invoke-RSClangFormatCapture is an internal domain boundary whose caller owns ShouldProcess and source-write authority."
     },
     {
       "path": "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
@@ -2022,7 +1960,6 @@
         "Installer/winget/generate-manifest.ps1",
         "Installer/zip/build-zip.ps1",
         "Tools/Invoke-SanitizedMsbuild.ps1",
-        "Tools/Modules/Build/ClangFormat.psm1",
         "Tools/Run-AllTests.ps1",
         "Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1",
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1",
@@ -2048,7 +1985,6 @@
         "Tools/Tests/RedSalamanderPluginDeployment.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
-        "Tools/Tests/ClangFormat.Tests.ps1",
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1"
       ],
       "replacement": null
@@ -4890,7 +4826,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Provide shared assertions and explicit owned fixture execution: Invoke-RSTestFixtureNative preserves native arguments, CWD, inherited decoding and exits through prepared capture; Invoke-RSTestFixtureGit is its UTF-8 specialization. New-RSTestFormatterFixture creates only an owned bounded native CUI formatter probe and audit records.",
+      "purpose": "Provide shared assertions and explicit owned fixture execution: Invoke-RSTestFixtureNative preserves native arguments, CWD, inherited decoding and exits through prepared capture; Invoke-RSTestFixtureGit is its UTF-8 specialization. New-RSTestFormatterFixture creates only an owned bounded native CUI formatter probe and audit records; it can report marked files to a --dry-run check and never rewrites them.",
       "usage": "Import the explicit native/Git fixture helpers and formatter factory rather than replacing global commands or duplicating process/fixture machinery. Callers retain marked-root and ownership obligations.",
       "usedBy": [
         "Tools/Tests/*.Tests.ps1",

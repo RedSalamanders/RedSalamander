@@ -1,38 +1,41 @@
 <#
 .SYNOPSIS
-    Formats tracked first-party C++ source with the repository-pinned clang-format.
+    Deprecated compatibility wrapper for format.ps1. It will be removed after one release.
 
 .DESCRIPTION
-    Selects tracked .cpp and .h files from RepositoryRoot while excluding vendor, specification,
-    and agent-plan trees. Acquires and verifies the exact formatter pinned by
-    Build/clang-format.json, then formats the selected files in place using .clang-format.
+    The repository-root format.ps1 is the format command. It takes clang-format from
+    Install-CiFormatter in the pinned .ci-engine and formats the C and C++ files that CI
+    formats, or verifies them with -Check. This wrapper keeps the old command name working for
+    one release: it runs format.ps1, or format.ps1 -Check when called with -WhatIf. Call
+    format.ps1 directly; format-all.ps1 will be removed.
 
 .PARAMETER RepositoryRoot
-    Repository checkout whose tracked source files are selected. Defaults to this script's
-    containing checkout.
+    Retained for compatibility. format.ps1 always formats its own checkout, so the only accepted
+    value is this script's own folder (the default); any other folder is refused before anything
+    runs.
 
 .OUTPUTS
-    Text status. The selected tracked source files may be rewritten; the pinned formatter
-    cache is stored beneath .build/format.
+    Text status from format.ps1. Without -WhatIf, files that need formatting are rewritten.
 
 .NOTES
-    Requires PowerShell 7 and Git. A first run may download the pinned formatter wheel from
-    PyPI; later runs use the verified repository-local cache. Does not format vendored files,
-    archived specification evidence, or untracked files. Use -WhatIf to preview without
-    acquiring the formatter or changing source files. Metadata and native formatter children
-    use captured no-window execution without a restored CI engine. Primary consumer: local source formatting.
+    Deprecated; use format.ps1. Requires PowerShell 7.4, Git and the .ci-engine checkout at the
+    engine.ref that .ci/project.json pins. format.ps1 may download and verify the pinned
+    formatter into .build/shared-format. -WhatIf runs format.ps1 -Check, which writes no source
+    and fails, listing every file that needs formatting. A failure of format.ps1 propagates
+    unchanged as a terminating error (nonzero exit). Primary consumer: existing local callers of
+    the old command name.
 
 .EXAMPLE
     .\format-all.ps1 -WhatIf
 
-    Previews formatting of the tracked first-party source file set without installing the tool.
+    Runs .\format.ps1 -Check.
 
 .EXAMPLE
-    .\format-all.ps1
+    .\format.ps1
 
-    Formats tracked first-party C++ files with the pinned formatter.
+    The replacement command: formats the files CI formats.
 #>
-#Requires -Version 7.0
+#Requires -Version 7.4
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
 param(
     [string]$RepositoryRoot = $PSScriptRoot
@@ -41,71 +44,17 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot)
-Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Testing/GitMetadataCapture.psm1') -ErrorAction Stop
-$tracked = Invoke-RSTestGitMetadataCapture -Root $repositoryRoot -Arguments @('ls-files','--cached','--','*.cpp','*.h')
-if ($tracked.ErrorText) { [Console]::Error.Write($tracked.ErrorText) }
-if ($tracked.ExitCode -ne 0) {
-    throw 'Could not enumerate tracked C++ source files with Git.'
-}
-$trackedPaths = @($tracked.Output)
-
-$sourcePaths = @(
-    $trackedPaths |
-        Where-Object {
-            $_ -and
-            $_ -notmatch '^(?i:ThirdParty|Specs|\.codex)/'
-        } |
-        Sort-Object -Unique |
-        ForEach-Object {
-            $path = Join-Path $repositoryRoot ($_ -replace '/', [IO.Path]::DirectorySeparatorChar)
-            if (Test-Path -LiteralPath $path -PathType Leaf) {
-                $item = Get-Item -LiteralPath $path -Force
-                if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                    throw "Refusing to format a reparse-point source file: $_"
-                }
-                $path
-            }
-        }
-)
-if ($sourcePaths.Count -eq 0) {
-    Write-Host 'No tracked first-party C++ source files are available to format.'
-    return
+Write-Warning 'format-all.ps1 is deprecated and will be removed after one release; use format.ps1 (format.ps1 -Check verifies).'
+$requested = [IO.Path]::TrimEndingDirectorySeparator($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($RepositoryRoot))
+if (-not [string]::Equals($requested, [IO.Path]::TrimEndingDirectorySeparator($PSScriptRoot), [StringComparison]::OrdinalIgnoreCase)) {
+    throw "format-all.ps1 forwards to format.ps1, which formats only its own checkout. Run format.ps1 in '$requested' instead."
 }
 
-$pin = Get-Content -LiteralPath (Join-Path $repositoryRoot 'Build/clang-format.json') -Raw | ConvertFrom-Json
-if ($pin.version -cnotmatch '^\d+\.\d+\.\d+$') {
-    throw "The repository clang-format version is invalid: '$($pin.version)'."
+$format = Join-Path $PSScriptRoot 'format.ps1'
+if ($PSCmdlet.ShouldProcess($PSScriptRoot, 'Format the C and C++ files CI formats with format.ps1')) {
+    & $format
+} elseif ($WhatIfPreference) {
+    # The preview is the read-only check; format.ps1 itself has no ShouldProcess surface.
+    $WhatIfPreference = $false
+    & $format -Check
 }
-$action = "Format $($sourcePaths.Count) tracked first-party C++ source files with clang-format $($pin.version)"
-if (-not $PSCmdlet.ShouldProcess($repositoryRoot, $action)) {
-    return
-}
-
-$formatterInstaller = Join-Path $repositoryRoot 'Tools/Install-ClangFormat.ps1'
-$formatterPath = & $formatterInstaller
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$formatterPath)) {
-    throw 'The pinned clang-format installer did not return a usable executable path.'
-}
-$formatterPath = [IO.Path]::GetFullPath([string]$formatterPath)
-Import-Module (Join-Path $PSScriptRoot 'Tools/Modules/Build/ClangFormat.psm1') -ErrorAction Stop
-$version = Invoke-RSClangFormatCapture -FilePath $formatterPath -Arguments @('--version')
-if ($version.ErrorText) { [Console]::Error.Write($version.ErrorText) }
-if ($version.ExitCode -ne 0 -or ($version.StdOut -join "`n") -notmatch "^clang-format version $([regex]::Escape([string]$pin.version))(?:\s|$)") {
-    throw "The formatter executable does not match pinned version $($pin.version): $formatterPath"
-}
-
-$failures = [Collections.Generic.List[string]]::new()
-foreach ($sourcePath in $sourcePaths) {
-    Write-Host "Formatting: $([IO.Path]::GetRelativePath($repositoryRoot, $sourcePath))"
-    $formatted = Invoke-RSClangFormatCapture -FilePath $formatterPath -Arguments @('-i','--style=file',$sourcePath)
-    $formatted.StdOut | Write-Output
-    if ($formatted.ErrorText) { [Console]::Error.Write($formatted.ErrorText) }
-    if ($formatted.ExitCode -ne 0) {
-        $failures.Add("$sourcePath (exit $($formatted.ExitCode))")
-    }
-}
-if ($failures.Count -gt 0) {
-    throw "clang-format failed for $($failures.Count) file(s):`n$($failures -join "`n")"
-}
-Write-Host "Formatted $($sourcePaths.Count) tracked first-party C++ source files with clang-format $($pin.version)."

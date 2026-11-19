@@ -72,17 +72,17 @@ enum class TerminalPathInsertionMode : uint32_t
 
 enum TerminalCapabilityFlags : uint64_t
 {
-    TerminalCapabilityNone             = 0u,
-    TerminalCapabilityFollow           = 0x1u,
-    TerminalCapabilityPathInsertion    = 0x2u,
-    TerminalCapabilityPromptTracking   = 0x4u,
+    TerminalCapabilityNone           = 0u,
+    TerminalCapabilityFollow         = 0x1u,
+    TerminalCapabilityPathInsertion  = 0x2u,
+    TerminalCapabilityPromptTracking = 0x4u,
 };
 
 struct TerminalUtf16Span
 {
     const wchar_t* data = nullptr;
-    uint32_t length      = 0u;
-    uint32_t reserved    = 0u;
+    uint32_t length     = 0u;
+    uint32_t reserved   = 0u;
 };
 
 // The plugin allocates data with CoTaskMemAlloc. The host owns a successful
@@ -107,9 +107,9 @@ struct TerminalOriginalSourceKey
 
 struct TerminalLogicalLocation
 {
-    uint32_t sizeBytes = 0u;
+    uint32_t sizeBytes        = 0u;
     TerminalLocationKind kind = TerminalLocationKind::Unsupported;
-    uint32_t reserved0 = 0u;
+    uint32_t reserved0        = 0u;
     TerminalUtf16Span windowsPath{};
     TerminalUtf16Span wslDistribution{};
     TerminalUtf16Span wslAbsolutePath{};
@@ -121,7 +121,7 @@ struct TerminalLogicalLocation
 struct TerminalOpenContext
 {
     uint32_t sizeBytes = 0u;
-    HWND parentWindow = nullptr;
+    HWND parentWindow  = nullptr;
     TerminalInstanceId instanceId{};
     TerminalOriginalSourceKey originalSource{};
     uint64_t sourceGeneration = 0u;
@@ -132,17 +132,17 @@ struct TerminalOpenContext
 
 struct TerminalTheme
 {
-    uint32_t sizeBytes = 0u;
-    uint32_t dpi = USER_DEFAULT_SCREEN_DPI;
-    uint32_t dark = 0u;
-    uint32_t highContrast = 0u;
-    uint32_t backgroundArgb = 0xFF000000u;
-    uint32_t foregroundArgb = 0xFFFFFFFFu;
-    uint32_t cursorArgb = 0xFFFFFFFFu;
+    uint32_t sizeBytes               = 0u;
+    uint32_t dpi                     = USER_DEFAULT_SCREEN_DPI;
+    uint32_t dark                    = 0u;
+    uint32_t highContrast            = 0u;
+    uint32_t backgroundArgb          = 0xFF000000u;
+    uint32_t foregroundArgb          = 0xFFFFFFFFu;
+    uint32_t cursorArgb              = 0xFFFFFFFFu;
     uint32_t selectionBackgroundArgb = 0xFF264F78u;
     uint32_t selectionForegroundArgb = 0xFFFFFFFFu;
-    uint32_t hyperlinkArgb = 0xFF4EA1FFu;
-    uint32_t inactiveStatusArgb = 0xFF808080u;
+    uint32_t hyperlinkArgb           = 0xFF4EA1FFu;
+    uint32_t inactiveStatusArgb      = 0xFF808080u;
     uint32_t ansiArgb[16]{};
     uint32_t reserved[4]{};
 };
@@ -151,9 +151,9 @@ struct TerminalSourceUpdate
 {
     uint32_t sizeBytes = 0u;
     TerminalOriginalSourceKey originalSource{};
-    uint64_t sourceGeneration = 0u;
+    uint64_t sourceGeneration             = 0u;
     TerminalSourceDisposition disposition = TerminalSourceDisposition::Active;
-    uint32_t reserved0 = 0u;
+    uint32_t reserved0                    = 0u;
     TerminalLogicalLocation sourceLocation{};
     uint32_t reserved[4]{};
 };
@@ -164,9 +164,9 @@ struct TerminalPathInsertion
     TerminalOriginalSourceKey initiatingSource{};
     uint64_t initiatingSourceGeneration = 0u;
     TerminalLogicalLocation initiatingSourceLocation{};
-    uint64_t itemGeneration = 0u;
+    uint64_t itemGeneration        = 0u;
     TerminalPathInsertionMode mode = TerminalPathInsertionMode::ContextualLeafOrFull;
-    uint32_t reserved0 = 0u;
+    uint32_t reserved0             = 0u;
     TerminalLogicalLocation itemLocation{};
     TerminalLogicalLocation parentLocation{};
     TerminalUtf16Span displayLeaf{};
@@ -175,16 +175,16 @@ struct TerminalPathInsertion
 
 struct TerminalActivitySnapshot
 {
-    uint32_t sizeBytes = 0u;
+    uint32_t sizeBytes                    = 0u;
     TerminalLifecycleState lifecycleState = TerminalLifecycleState::Created;
-    TerminalActivityTrust activityTrust = TerminalActivityTrust::Untrusted;
-    uint64_t generation = 0u;
-    uint32_t hasRunningCommandOrChild = 0u;
-    uint32_t idleAtPrimaryPrompt = 0u;
-    uint32_t hasPendingUserInput = 0u;
-    uint32_t passwordInputActive = 0u;
-    uint32_t alternateScreenActive = 0u;
-    uint32_t tuiInputOwner = 0u;
+    TerminalActivityTrust activityTrust   = TerminalActivityTrust::Untrusted;
+    uint64_t generation                   = 0u;
+    uint32_t hasRunningCommandOrChild     = 0u;
+    uint32_t idleAtPrimaryPrompt          = 0u;
+    uint32_t hasPendingUserInput          = 0u;
+    uint32_t passwordInputActive          = 0u;
+    uint32_t alternateScreenActive        = 0u;
+    uint32_t tuiInputOwner                = 0u;
     uint32_t reserved[4]{};
 };
 
@@ -192,13 +192,13 @@ struct TerminalViewState
 {
     uint32_t sizeBytes = 0u;
     TerminalInstanceId instanceId{};
-    uint64_t stateGeneration = 0u;
-    uint64_t sessionGeneration = 0u;
-    uint64_t capabilityFlags = TerminalCapabilityNone;
+    uint64_t stateGeneration        = 0u;
+    uint64_t sessionGeneration      = 0u;
+    uint64_t capabilityFlags        = TerminalCapabilityNone;
     TerminalFollowState followState = TerminalFollowState::Disabled;
-    uint32_t exitCodePresent = 0u;
-    uint32_t exitCode = 0u;
-    uint32_t finalSnapshotComplete = 0u;
+    uint32_t exitCodePresent        = 0u;
+    uint32_t exitCode               = 0u;
+    uint32_t finalSnapshotComplete  = 0u;
     TerminalActivitySnapshot activity{};
     TerminalOwnedUtf16 title{};
     TerminalOwnedUtf16 status{};
@@ -207,10 +207,10 @@ struct TerminalViewState
 
 enum class TerminalShortcutRoute : uint32_t
 {
-    PassThrough      = 1u,
-    Handled          = 2u,
+    PassThrough       = 1u,
+    Handled           = 2u,
     InvokeHostCommand = 3u,
-    Blocked          = 4u,
+    Blocked           = 4u,
 };
 
 enum TerminalShortcutModifierFlags : uint32_t
@@ -231,13 +231,13 @@ struct TerminalShortcutRequest
 {
     uint32_t sizeBytes = 0u;
     TerminalUtf16Span commandId{};
-    uint32_t message = 0u;
-    uint32_t virtualKey = 0u;
-    uint32_t scanCode = 0u;
-    uint32_t extended = 0u;
-    uint32_t systemKey = 0u;
-    uint32_t repeatCount = 0u;
-    uint32_t previousDown = 0u;
+    uint32_t message       = 0u;
+    uint32_t virtualKey    = 0u;
+    uint32_t scanCode      = 0u;
+    uint32_t extended      = 0u;
+    uint32_t systemKey     = 0u;
+    uint32_t repeatCount   = 0u;
+    uint32_t previousDown  = 0u;
     uint32_t modifierFlags = TerminalShortcutModifierNone;
     TerminalInstanceId instanceId{};
     uint64_t sessionGeneration = 0u;
@@ -256,8 +256,8 @@ struct TerminalActionRequest
 struct TerminalActionState
 {
     uint32_t sizeBytes = 0u;
-    uint32_t enabled = 0u;
-    uint32_t checked = 0u;
+    uint32_t enabled   = 0u;
+    uint32_t checked   = 0u;
     uint32_t reserved0 = 0u;
     RECT childAnchor{};
     uint32_t anchorPresent = 0u;
@@ -271,14 +271,14 @@ enum class TerminalEventKind : uint32_t
 
 struct TerminalEvent
 {
-    uint32_t sizeBytes = 0u;
+    uint32_t sizeBytes     = 0u;
     TerminalEventKind kind = TerminalEventKind::RootSessionExited;
     TerminalInstanceId instanceId{};
-    uint64_t sessionGeneration = 0u;
-    uint64_t stateGeneration = 0u;
-    uint32_t exitCodePresent = 0u;
-    uint32_t exitCode = 0u;
-    uint32_t finalSnapshotComplete = 0u;
+    uint64_t sessionGeneration          = 0u;
+    uint64_t stateGeneration            = 0u;
+    uint32_t exitCodePresent            = 0u;
+    uint32_t exitCode                   = 0u;
+    uint32_t finalSnapshotComplete      = 0u;
     int64_t rootExitObservedTimestampNs = 0;
     uint32_t reserved[2]{};
 };
@@ -289,21 +289,21 @@ interface ITerminalEventCallback;
 
 interface __declspec(uuid("47E1AC4C-022E-42C4-8E2C-0C2BBC687D31")) __declspec(novtable) ITerminal : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE Open(const TerminalOpenContext* context) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetChildWindow(HWND* childWindow) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetTheme(const TerminalTheme* theme) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE UpdateSourceLocation(const TerminalSourceUpdate* update) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE InsertPath(const TerminalPathInsertion* insertion) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetViewState(TerminalViewState* state) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetCallback(ITerminalEventCallback* callback, void* cookie) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE Close() noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE Open(const TerminalOpenContext* context) noexcept                     = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetChildWindow(HWND * childWindow) noexcept                           = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetTheme(const TerminalTheme* theme) noexcept                         = 0;
+    virtual HRESULT STDMETHODCALLTYPE UpdateSourceLocation(const TerminalSourceUpdate* update) noexcept     = 0;
+    virtual HRESULT STDMETHODCALLTYPE InsertPath(const TerminalPathInsertion* insertion) noexcept           = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetViewState(TerminalViewState * state) noexcept                      = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetCallback(ITerminalEventCallback * callback, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE Close() noexcept                                                      = 0;
 };
 
 interface __declspec(uuid("842E2028-816A-440A-A906-33D8606C7899")) __declspec(novtable) ITerminalActions : public IUnknown
 {
     virtual HRESULT STDMETHODCALLTYPE RouteShortcut(const TerminalShortcutRequest* request, TerminalShortcutRoute* route) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetActionState(const TerminalActionRequest* request, TerminalActionState* state) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE ExecuteAction(const TerminalActionRequest* request) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetActionState(const TerminalActionRequest* request, TerminalActionState* state) noexcept    = 0;
+    virtual HRESULT STDMETHODCALLTYPE ExecuteAction(const TerminalActionRequest* request) noexcept                                 = 0;
 };
 
 // Plugin Route/GetActionState/ExecuteAction and both hosts share this ID set.
@@ -311,10 +311,9 @@ interface __declspec(uuid("842E2028-816A-440A-A906-33D8606C7899")) __declspec(no
 // still query this list so the command is not stuck at E_NOTIMPL.
 [[nodiscard]] constexpr bool IsTerminalPluginActionId(std::wstring_view commandId) noexcept
 {
-    return commandId == L"cmd/terminal/copy" || commandId == L"cmd/terminal/copySelectionOrPassthrough" ||
-        commandId == L"cmd/terminal/find" || commandId == L"cmd/terminal/paste" || commandId == L"cmd/terminal/selectAll" ||
-        commandId == L"cmd/terminal/suggestions" || commandId.starts_with(L"cmd/terminal/scroll/") ||
-        commandId.starts_with(L"cmd/terminal/font/");
+    return commandId == L"cmd/terminal/copy" || commandId == L"cmd/terminal/copySelectionOrPassthrough" || commandId == L"cmd/terminal/find" ||
+           commandId == L"cmd/terminal/paste" || commandId == L"cmd/terminal/selectAll" || commandId == L"cmd/terminal/suggestions" ||
+           commandId.starts_with(L"cmd/terminal/scroll/") || commandId.starts_with(L"cmd/terminal/font/");
 }
 
 // A host owns this weak, non-COM callback. SetCallback(nullptr, nullptr) is a

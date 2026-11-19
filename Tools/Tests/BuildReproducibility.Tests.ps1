@@ -342,95 +342,261 @@ Describe 'Declarative runtime dependency graph' {
     }
 }
 
-Describe 'Root format-all command ownership and preview' {
-    It 'formats only tracked owned files with the pinned installer from a foreign working directory' {
-        $fixture = Join-Path $TestDrive ('format-all-' + [guid]::NewGuid().ToString('N'))
-        foreach ($directory in @('Owned', 'ThirdParty/RedMonitor/include/RedMonitor', 'Specs/TestRuns', '.codex', 'Tools', 'Dependencies', 'Build')) {
-            [void][IO.Directory]::CreateDirectory((Join-Path $fixture $directory))
-        }
-        $sourcePath = Join-Path $fixture 'Owned/sample with spaces.cpp'
-        $vendorPath = Join-Path $fixture 'ThirdParty/RedMonitor/include/RedMonitor/Client.h'
-        $archivedPath = Join-Path $fixture 'Specs/TestRuns/old.cpp'
-        $agentPath = Join-Path $fixture '.codex/fixture.h'
-        [IO.File]::WriteAllText($sourcePath, 'int owned();' + "`n")
-        [IO.File]::WriteAllText($vendorPath, '// pinned vendor bytes' + "`n")
-        [IO.File]::WriteAllText($archivedPath, '// archived evidence' + "`n")
-        [IO.File]::WriteAllText($agentPath, '// agent file' + "`n")
-        [IO.File]::WriteAllText((Join-Path $fixture '.clang-format'), 'BasedOnStyle: LLVM' + "`n")
-        [IO.File]::WriteAllText((Join-Path $fixture 'Build/clang-format.json'), '{"version":"22.1.3","wheelSha256":"' + ('0' * 64) + '"}')
-        $vendorHash = (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        $lockJson = [ordered]@{
-            files = @(
-                [ordered]@{
-                    path = 'include/RedMonitor/Client.h'
-                    sha256 = $vendorHash
-                }
-            )
-        } | ConvertTo-Json -Compress -Depth 4
-        [IO.File]::WriteAllText((Join-Path $fixture 'Dependencies/RedMonitor.lock.json'),
-            $lockJson)
+function New-RSFormatCommandFixture {
+    <# A synthetic checkout with the shared engine's real policy module and project schema. Only
+       Install-CiFormatter is a stub that returns the owned formatter probe, so nothing is downloaded. #>
+    param([Parameter(Mandatory = $true)][string]$RepositoryRoot, [Parameter(Mandatory = $true)][string]$Root)
 
-        $gitOutput = @(Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'init'; '-q'; '-b'; 'main') 2>&1)
-        $LASTEXITCODE | Should Be 0
+    $engine = Join-Path $Root '.ci-engine'
+    foreach ($directory in @('.ci', 'Owned/Nested', 'OwnedSibling', 'Outside', 'Tools/Sealed', '.ci-engine/Tools/Modules', '.ci-engine/Schemas')) {
+        [void][IO.Directory]::CreateDirectory((Join-Path $Root $directory))
+    }
+    Copy-Item -LiteralPath (Join-Path $RepositoryRoot '.ci-engine/Tools/Modules/Ci.Policy.psm1') -Destination (Join-Path $engine 'Tools/Modules/Ci.Policy.psm1')
+    Copy-Item -LiteralPath (Join-Path $RepositoryRoot '.ci-engine/Schemas/project.schema.json') -Destination (Join-Path $engine 'Schemas/project.schema.json')
+    [IO.File]::WriteAllText((Join-Path $engine 'Tools/Modules/Ci.Format.psm1'), @'
+Set-StrictMode -Version Latest
+function Install-CiFormatter {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Root)
+    [IO.File]::AppendAllText($env:RS_FORMATTER_INSTALL_LOG, $Root + [Environment]::NewLine)
+    return $env:RS_FORMATTER_EXECUTABLE
+}
+Export-ModuleMember -Function Install-CiFormatter
+'@)
+
+    foreach ($repository in @($engine, $Root)) {
+        [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $repository; 'init'; '-q'; '-b'; 'main') 2>&1)
+        if ($LASTEXITCODE -ne 0) { throw "Fixture Git failed with exit $LASTEXITCODE." }
         foreach ($setting in @(@('user.name', 'Formatter fixture'), @('user.email', 'format@fixture.invalid'),
-                @('core.hooksPath', (Join-Path $fixture '.no-hooks')), @('core.autocrlf', 'false'))) {
-            [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'config'; $setting) 2>&1)
-            $LASTEXITCODE | Should Be 0
+                @('core.hooksPath', (Join-Path $Root '.no-hooks')), @('core.autocrlf', 'false'), @('commit.gpgsign', 'false'))) {
+            [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $repository; 'config'; $setting) 2>&1)
+            if ($LASTEXITCODE -ne 0) { throw "Fixture Git failed with exit $LASTEXITCODE." }
         }
-        [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $fixture; 'add'; '--all') 2>&1)
-        $LASTEXITCODE | Should Be 0
+    }
+    [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $engine; 'add'; '--all') 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "Fixture Git failed with exit $LASTEXITCODE." }
+    [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $engine; 'commit'; '-q'; '-m'; 'Fixture engine') 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "Fixture Git failed with exit $LASTEXITCODE." }
+    $engineHead = ([string]@(Invoke-RSTestFixtureGit -Arguments @('-C'; $engine; 'rev-parse'; 'HEAD'))[0]).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Fixture Git failed with exit $LASTEXITCODE." }
+    if ($engineHead -notmatch '^[0-9a-f]{40}$') { throw 'Fixture engine commit is not a full SHA-1.' }
 
-        $formatterFixture = New-RSTestFormatterFixture
-        $formatterPath = $formatterFixture.Executable
-        $formatterLog = $formatterFixture.LogPath
-        $installerLog = Join-Path $fixture 'installer-invocations.txt'
-        $installer = Join-Path $fixture 'Tools/Install-ClangFormat.ps1'
-        [IO.File]::WriteAllText($installer,
-            '[IO.File]::AppendAllText($env:RS_FORMATTER_INSTALL_LOG, "called")' + "`n" +
-            'Write-Output $env:RS_FORMATTER_EXECUTABLE' + "`n" +
-            '$global:LASTEXITCODE = 0' + "`n")
+    $project = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.ci/project.json') -Raw | ConvertFrom-Json -AsHashtable
+    $project.engine.ref = $engineHead
+    $project.formatRoots = @('Owned', 'Tools')
+    $project.formatExclude = @('Tools/Sealed/**')
+    $projectText = $project | ConvertTo-Json -Depth 8
+    [IO.File]::WriteAllText((Join-Path $Root '.ci/project.json'), $projectText)
 
-        $oldFormatterLog = $env:RS_FORMATTER_LOG
-        $oldInstallerLog = $env:RS_FORMATTER_INSTALL_LOG
-        $oldFormatterExe = $env:RS_FORMATTER_EXECUTABLE
-        try {
-            $env:RS_FORMATTER_LOG = $formatterLog
-            $env:RS_FORMATTER_INSTALL_LOG = $installerLog
-            $env:RS_FORMATTER_EXECUTABLE = $formatterPath
-            $foreignDirectory = Join-Path $TestDrive ('foreign-' + [guid]::NewGuid().ToString('N'))
-            [void][IO.Directory]::CreateDirectory($foreignDirectory)
-            Push-Location $foreignDirectory
-            try {
-                & (Join-Path $repoRoot 'format-all.ps1') -RepositoryRoot $fixture -WhatIf
-                Test-Path -LiteralPath $installerLog | Should Be $false
-                Test-Path -LiteralPath $formatterLog | Should Be $false
-                Test-Path -LiteralPath $formatterFixture.AuditPath | Should Be $false
-                (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
-                (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() |
-                    Should Be ((Get-Content -LiteralPath (Join-Path $fixture 'Dependencies/RedMonitor.lock.json') -Raw | ConvertFrom-Json).files[0].sha256)
+    $marker = '/* fixture: needs formatting */'
+    $files = [ordered]@{
+        '.gitignore' = "/.ci-engine/`n*.generated.h`n"
+        '.clang-format' = "BasedOnStyle: LLVM`n"
+        'Owned/sample with spaces.cpp' = "int owned(); $marker`n"
+        'Owned/Nested/Header.HPP' = "int header();`n"
+        'Owned/notes.txt' = "$marker`n"
+        'Tools/current.cc' = "int tool(); $marker`n"
+        'Tools/Sealed/frozen.cpp' = "int sealed(); $marker`n"
+        'OwnedSibling/prefix.cpp' = "int sibling(); $marker`n"
+        'Outside/other.cpp' = "int outside(); $marker`n"
+    }
+    foreach ($file in $files.GetEnumerator()) { [IO.File]::WriteAllText((Join-Path $Root $file.Key), $file.Value) }
+    foreach ($script in @('format.ps1', 'format-all.ps1')) { Copy-Item -LiteralPath (Join-Path $RepositoryRoot $script) -Destination (Join-Path $Root $script) }
+    [void](Invoke-RSTestFixtureGit -Arguments @('-C'; $Root; 'add'; '--all') 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "Fixture Git failed with exit $LASTEXITCODE." }
+    # Added after staging: one new file CI formats and one file Git ignores.
+    [IO.File]::WriteAllText((Join-Path $Root 'Owned/new.hxx'), "int added();`n")
+    [IO.File]::WriteAllText((Join-Path $Root 'Owned/build.generated.h'), "int generated(); $marker`n")
 
-                & (Join-Path $repoRoot 'format-all.ps1') -RepositoryRoot $fixture -Confirm:$false
-                Test-Path -LiteralPath $installerLog | Should Be $true
-                $invocations = Get-Content -LiteralPath $formatterLog -Raw
-                $invocations | Should Match 'sample with spaces\.cpp'
-                $invocations | Should Not Match 'Client\.h|TestRuns|\.codex'
-                @($invocations -split '\r?\n' | Where-Object { $_ }).Count | Should Be 1
-                $nativeAudit = @(Get-Content -LiteralPath $formatterFixture.AuditPath | ForEach-Object { $_ | ConvertFrom-Json })
-                $nativeAudit.Count | Should Be 2
-                foreach ($row in $nativeAudit) {
-                    $row.consolePresent | Should Be $false
-                    $row.consoleVisible | Should Be $false
-                    $row.workingDirectory | Should Be $foreignDirectory
-                }
-                (Get-FileHash -LiteralPath $vendorPath -Algorithm SHA256).Hash.ToLowerInvariant() | Should Be $vendorHash
-            } finally {
-                Pop-Location
+    [pscustomobject]@{
+        Root = $Root
+        EngineHead = $engineHead
+        ProjectText = $projectText
+        Marker = $marker
+        Selected = 'Owned/Nested/Header.HPP|Owned/new.hxx|Owned/sample with spaces.cpp|Tools/current.cc'
+    }
+}
+
+function Invoke-RSFormatFixtureCommand {
+    <# Runs one fixture command in a fresh PowerShell from a foreign directory. The bootstrap prints a
+       terminating error's message unwrapped, so assertions do not depend on the host's error view. #>
+    param(
+        [Parameter(Mandatory = $true)][object]$Context,
+        [Parameter(Mandatory = $true)][string]$Script,
+        [hashtable]$Parameters = @{}
+    )
+
+    $probe = $Context.Probe
+    $env:RS_FORMATTER_LOG = Join-Path $probe.Root ('args-' + [guid]::NewGuid().ToString('N') + '.jsonl')
+    $env:RS_FORMATTER_INSTALL_LOG = Join-Path $probe.Root ('install-' + [guid]::NewGuid().ToString('N') + '.log')
+    $auditBefore = if (Test-Path -LiteralPath $probe.AuditPath) { @(Get-Content -LiteralPath $probe.AuditPath).Count } else { 0 }
+    $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $Context.Bootstrap, '-Script', (Join-Path $Context.Fixture.Root $Script))
+    foreach ($name in @('Check', 'WhatIf')) { if ($Parameters.ContainsKey($name)) { $arguments += "-Use$name" } }
+    if ($Parameters.ContainsKey('RepositoryRoot')) { $arguments += @('-RepositoryRoot', $Parameters.RepositoryRoot) }
+    $records = @(Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments $arguments -WorkingDirectory $Context.Foreign 2>&1)
+    $exitCode = $LASTEXITCODE
+
+    $invocations = @(if (Test-Path -LiteralPath $env:RS_FORMATTER_LOG -PathType Leaf) {
+            foreach ($line in @(Get-Content -LiteralPath $env:RS_FORMATTER_LOG | Where-Object { $_ })) {
+                $values = @($line | ConvertFrom-Json)
+                $separator = [Array]::IndexOf([object[]]$values, '--')
+                [pscustomobject]@{ Options = (@($values | Select-Object -First $separator) -join ' '); Files = @($values | Select-Object -Skip ($separator + 1)) }
             }
-        } finally {
-            $env:RS_FORMATTER_LOG = $oldFormatterLog
-            $env:RS_FORMATTER_INSTALL_LOG = $oldInstallerLog
-            $env:RS_FORMATTER_EXECUTABLE = $oldFormatterExe
+        })
+    [string[]]$files = @($invocations | ForEach-Object { $_.Files })
+    [Array]::Sort($files, [StringComparer]::Ordinal)
+    $audit = @(if (Test-Path -LiteralPath $probe.AuditPath) {
+            @(Get-Content -LiteralPath $probe.AuditPath) | Select-Object -Skip $auditBefore | ForEach-Object { $_ | ConvertFrom-Json }
+        })
+    [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = (@($records | ForEach-Object { [string]$_ }) -join "`n")
+        Invocations = $invocations
+        Files = ($files -join '|')
+        Installs = @(if (Test-Path -LiteralPath $env:RS_FORMATTER_INSTALL_LOG) { Get-Content -LiteralPath $env:RS_FORMATTER_INSTALL_LOG | Where-Object { $_ } })
+        Audit = $audit
+    }
+}
+
+function Get-RSFormatFixtureHashes {
+    param([Parameter(Mandatory = $true)][string]$Root)
+    $prefix = $Root.TrimEnd('\') + '\'
+    @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force | Where-Object { $_.FullName -notmatch '\\\.git\\' } | Sort-Object FullName |
+        ForEach-Object { $_.FullName.Substring($prefix.Length) + '=' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }) -join "`n"
+}
+
+Describe 'Root format command and deprecated format-all wrapper' {
+    BeforeAll {
+        $script:formatEnvironment = @{}
+        foreach ($name in @('RS_FORMATTER_EXECUTABLE', 'RS_FORMATTER_INSTALL_LOG', 'RS_FORMATTER_LOG', 'RS_FORMATTER_UNFORMATTED',
+                'RS_FORMATTER_STDOUT', 'RS_FORMATTER_EXIT', 'RS_FORMATTER_STDERR_COUNT', 'RS_FORMATTER_VERSION')) {
+            $script:formatEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
+            # PowerShell passes $null to a .NET string as an empty value, which would leave an empty variable.
+            Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
         }
+        $case = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'fmt' -Case ([guid]::NewGuid().ToString('N'))
+        $bootstrap = Join-Path $case 'invoke-format.ps1'
+        [IO.File]::WriteAllText($bootstrap, @'
+param([Parameter(Mandatory)][string]$Script, [switch]$UseCheck, [switch]$UseWhatIf, [string]$RepositoryRoot)
+$parameters = @{}
+if ($UseCheck) { $parameters.Check = $true }
+if ($UseWhatIf) { $parameters.WhatIf = $true }
+if ($PSBoundParameters.ContainsKey('RepositoryRoot')) { $parameters.RepositoryRoot = $RepositoryRoot }
+try { & $Script @parameters } catch { [Console]::Error.WriteLine('FAILED: ' + $_.Exception.Message); exit 1 }
+exit 0
+'@)
+        $foreign = Join-Path $case 'foreign'
+        [void][IO.Directory]::CreateDirectory($foreign)
+        $script:formatCommand = [pscustomobject]@{
+            Fixture = (New-RSFormatCommandFixture -RepositoryRoot $repoRoot -Root (Join-Path $case 'checkout'))
+            Probe = (New-RSTestFormatterFixture)
+            Bootstrap = $bootstrap
+            Foreign = $foreign
+        }
+        $env:RS_FORMATTER_EXECUTABLE = $script:formatCommand.Probe.Executable
+    }
+
+    AfterAll {
+        foreach ($entry in $script:formatEnvironment.GetEnumerator()) {
+            if ($null -eq $entry.Value) { Remove-Item -LiteralPath "Env:$($entry.Key)" -ErrorAction SilentlyContinue }
+            else { Set-Item -LiteralPath "Env:$($entry.Key)" -Value $entry.Value }
+        }
+    }
+
+    It 'refuses an engine checkout at another commit than the pin before acquiring the formatter' {
+        $fixture = $script:formatCommand.Fixture
+        $projectPath = Join-Path $fixture.Root '.ci/project.json'
+        try {
+            [IO.File]::WriteAllText($projectPath, $fixture.ProjectText.Replace($fixture.EngineHead, ('0' * 40)))
+            $result = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format.ps1' -Parameters @{ Check = $true }
+        } finally {
+            [IO.File]::WriteAllText($projectPath, $fixture.ProjectText)
+        }
+        $result.ExitCode | Should Be 1
+        $result.Output | Should Match ([regex]::Escape("FAILED: .ci-engine is at $($fixture.EngineHead), but .ci/project.json pins $('0' * 40)."))
+        $result.Installs.Count | Should Be 0
+        $result.Invocations.Count | Should Be 0
+    }
+
+    It 'refuses a root style that can inherit a style from outside the checkout' {
+        $stylePath = Join-Path $script:formatCommand.Fixture.Root '.clang-format'
+        try {
+            [IO.File]::WriteAllText($stylePath, "BasedOnStyle: InheritParentConfig`n")
+            $result = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format.ps1' -Parameters @{ Check = $true }
+        } finally {
+            [IO.File]::WriteAllText($stylePath, "BasedOnStyle: LLVM`n")
+        }
+        $result.ExitCode | Should Be 1
+        $result.Output | Should Match 'FAILED: Formatting requires the repository''s own root \.clang-format, which must not inherit a style from outside the checkout\.'
+        $result.Installs.Count | Should Be 0
+    }
+
+    It 'checks exactly the CI file selection without writing and lists every file that needs formatting' {
+        $fixture = $script:formatCommand.Fixture
+        $before = Get-RSFormatFixtureHashes -Root $fixture.Root
+        $env:RS_FORMATTER_UNFORMATTED = $fixture.Marker
+        try {
+            $result = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format.ps1' -Parameters @{ Check = $true }
+        } finally { $env:RS_FORMATTER_UNFORMATTED = $null }
+
+        $result.ExitCode | Should Be 1
+        $result.Output | Should Match 'Formatter: clang-format version 22\.1\.3 \('
+        $needs = @([regex]::Matches($result.Output, '(?m)^Needs formatting: (.+?)\s*$') | ForEach-Object { $_.Groups[1].Value })
+        ($needs -join '|') | Should Be 'Owned/sample with spaces.cpp|Tools/current.cc'
+        $result.Output | Should Match 'FAILED: 2 of 4 files need formatting\. Run \./format\.ps1 to format them\.'
+        $result.Files | Should Be $fixture.Selected
+        $result.Invocations.Count | Should BeGreaterThan 0
+        foreach ($invocation in $result.Invocations) { $invocation.Options | Should Be '--style=file --Werror --dry-run' }
+        ($result.Installs -join '|') | Should Be $fixture.Root
+        $result.Audit.Count | Should Be ($result.Invocations.Count + 1)
+        @($result.Audit | Where-Object { @($_.arguments).Count -eq 1 -and $_.arguments[0] -ceq '--version' }).Count | Should Be 1
+        foreach ($row in $result.Audit) {
+            $row.workingDirectory | Should Be $fixture.Root
+            $row.consoleVisible | Should Be $false
+        }
+        Get-RSFormatFixtureHashes -Root $fixture.Root | Should Be $before
+    }
+
+    It 'formats the same selection in place and then reports a clean check' {
+        $formatted = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format.ps1'
+        $formatted.ExitCode | Should Be 0
+        $formatted.Output | Should Match '(?m)^Formatted 4 files\.\s*$'
+        $formatted.Files | Should Be $script:formatCommand.Fixture.Selected
+        foreach ($invocation in $formatted.Invocations) { $invocation.Options | Should Be '--style=file --Werror -i' }
+        foreach ($row in $formatted.Audit) { $row.workingDirectory | Should Be $script:formatCommand.Fixture.Root }
+
+        $checked = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format.ps1' -Parameters @{ Check = $true }
+        $checked.ExitCode | Should Be 0
+        $checked.Output | Should Match '(?m)^Checked 4 files\.\s*$'
+        $checked.Output | Should Not Match 'Needs formatting'
+    }
+
+    It 'keeps format-all.ps1 as a deprecated wrapper that maps -WhatIf to the check and refuses another checkout' {
+        $fixture = $script:formatCommand.Fixture
+        (Get-Help -Name (Join-Path $repoRoot 'format-all.ps1')).Synopsis | Should Match '^Deprecated compatibility wrapper for format\.ps1\. It will be removed after one release\.'
+
+        $env:RS_FORMATTER_UNFORMATTED = $fixture.Marker
+        try {
+            $preview = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format-all.ps1' -Parameters @{ WhatIf = $true }
+        } finally { $env:RS_FORMATTER_UNFORMATTED = $null }
+        $preview.ExitCode | Should Be 1
+        $preview.Output | Should Match 'format-all\.ps1 is deprecated and will be removed after one release; use format\.ps1'
+        $preview.Output | Should Match '(?m)^Needs formatting: Tools/current\.cc\s*$'
+        $preview.Output | Should Match 'FAILED: 2 of 4 files need formatting\.'
+        $preview.Files | Should Be $fixture.Selected
+        foreach ($invocation in $preview.Invocations) { $invocation.Options | Should Be '--style=file --Werror --dry-run' }
+
+        $refused = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format-all.ps1' -Parameters @{ RepositoryRoot = $script:formatCommand.Foreign }
+        $refused.ExitCode | Should Be 1
+        $refused.Output | Should Match ([regex]::Escape("FAILED: format-all.ps1 forwards to format.ps1, which formats only its own checkout. Run format.ps1 in '$($script:formatCommand.Foreign)' instead."))
+        $refused.Installs.Count | Should Be 0
+        $refused.Audit.Count | Should Be 0
+
+        $formatted = Invoke-RSFormatFixtureCommand -Context $script:formatCommand -Script 'format-all.ps1' -Parameters @{ RepositoryRoot = ($fixture.Root + '\') }
+        $formatted.ExitCode | Should Be 0
+        $formatted.Output | Should Match '(?m)^Formatted 4 files\.\s*$'
+        $formatted.Files | Should Be $fixture.Selected
+        foreach ($invocation in $formatted.Invocations) { $invocation.Options | Should Be '--style=file --Werror -i' }
     }
 }
 

@@ -1,7 +1,7 @@
 #include "ConnectionSecrets.h"
 
-#include <cwctype>
 #include <atomic>
+#include <cwctype>
 #include <format>
 #include <limits>
 #include <mutex>
@@ -219,8 +219,8 @@ std::mutex g_secretAccessAuthorizationMutex;
 struct SecretAccessAuthorizationKey
 {
     std::wstring connectionId;
-    SecretKind kind                 = SecretKind::Password;
-    SecretAccessPurpose purpose     = SecretAccessPurpose::Interactive;
+    SecretKind kind             = SecretKind::Password;
+    SecretAccessPurpose purpose = SecretAccessPurpose::Interactive;
 
     bool operator==(const SecretAccessAuthorizationKey&) const noexcept = default;
 };
@@ -459,16 +459,11 @@ void NoteSecretAccessAuthorized(std::wstring_view connectionId, SecretKind kind)
 
     const uint64_t now = GetTickCount64();
     std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    g_secretAccessAuthorizationTicks.insert_or_assign(
-        SecretAccessAuthorizationKey{canonicalId, kind, SecretAccessPurpose::Interactive}, now);
-    g_secretAccessAuthorizationTicks.insert_or_assign(
-        SecretAccessAuthorizationKey{std::move(canonicalId), kind, SecretAccessPurpose::Background}, now);
+    g_secretAccessAuthorizationTicks.insert_or_assign(SecretAccessAuthorizationKey{canonicalId, kind, SecretAccessPurpose::Interactive}, now);
+    g_secretAccessAuthorizationTicks.insert_or_assign(SecretAccessAuthorizationKey{std::move(canonicalId), kind, SecretAccessPurpose::Background}, now);
 }
 
-bool IsSecretAccessAuthorized(std::wstring_view connectionId,
-                              SecretKind kind,
-                              SecretAccessPurpose purpose,
-                              uint64_t reauthTimeoutMs) noexcept
+bool IsSecretAccessAuthorized(std::wstring_view connectionId, SecretKind kind, SecretAccessPurpose purpose, uint64_t reauthTimeoutMs) noexcept
 {
     std::wstring canonicalId;
     if (! TryGetCanonicalConnectionId(connectionId, canonicalId))
@@ -508,8 +503,7 @@ void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept
     }
 
     std::scoped_lock lock(g_secretAccessAuthorizationMutex);
-    std::erase_if(g_secretAccessAuthorizationTicks,
-                  [&](const auto& entry) noexcept { return entry.first.connectionId == canonicalId; });
+    std::erase_if(g_secretAccessAuthorizationTicks, [&](const auto& entry) noexcept { return entry.first.connectionId == canonicalId; });
 }
 
 void ClearAllSecretAccessAuthorizations() noexcept
@@ -519,10 +513,7 @@ void ClearAllSecretAccessAuthorizations() noexcept
 }
 
 #ifdef ENABLE_TESTS
-void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId,
-                                                SecretKind kind,
-                                                SecretAccessPurpose purpose,
-                                                uint64_t tick) noexcept
+void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, SecretKind kind, SecretAccessPurpose purpose, uint64_t tick) noexcept
 {
     std::wstring canonicalId;
     if (! TryGetCanonicalConnectionId(connectionId, canonicalId))

@@ -339,7 +339,6 @@ SHA-256; consumers retain schema, gate and complete-execution checks. See the
 | Behavior | Canonical owner | Contract |
 | --- | --- | --- |
 | Ghostty locked package directory | Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1, Expand-RSGhosttyRuntimeLockedPackages | Assembles Zig 0.17 hash-named packages from a validated Ghostty lock beneath a dedicated guarded .build child. Reuses Resolve-RSGuardedRepositoryPath and bounded canonical archive extraction; refuses nonempty destinations, escaped package names, changed archives and reparse output chains. Runtime builds and native qualification share this policy. See the Terminal runtime contract. |
-| Pinned native formatter acquisition | Tools/Modules/Build/ClangFormat.psm1, Install-RSClangFormat | Repository-local checksum-verified wheel/executable cache, provider-resolved offline input, WhatIf and failure-preserving publication under an exclusive cache lease. Reuses canonical ArtifactOperationLock guarded path/publication helpers. The local variant extends the DxUi acquisition pattern with cache-byte validation and staged version checks; see [the build contract](../Build/Build_Toolchain.md). |
 
 ## Build and SDK provenance primitives
 
@@ -411,13 +410,11 @@ remain independently tested; the fixture setup harness itself is engine-prepared
 | Responsibility | Canonical helper | Boundary |
 |---|---|---|
 | Synchronous native fixture calls | `Invoke-RSTestFixtureNative` in `Tools/Tests/TestSupport.psm1` | Prepared canonical capture with caller-owned marked fixtures, literal vectors/CWD, inherited defaults and actual exits. Git is the thin UTF-8 specialization; no global command replacement or stdin expansion. |
-| Owned native formatter probe | `New-RSTestFormatterFixture` in the same module | Reuses managed fixture compilation; bounded native CUI executable and audit data, no actual formatting or production compiler dependency. |
-| Engine-free native formatter boundary | `Invoke-RSClangFormatCapture` in `Tools/Modules/Build/ClangFormat.psm1` | Native EXE metadata and explicitly admitted formatting payload, no shell/window, concurrent separate drains; `ShouldProcess` and source-write authority stay with the caller. |
+| Owned native formatter probe | `New-RSTestFormatterFixture` in the same module | Reuses managed fixture compilation; bounded native CUI executable and audit data that stands in for clang-format in the root `format.ps1` tests, reports marked files to a `--dry-run` check, and never formats or needs a production compiler. |
 | Real installer test seam | Private `Invoke-RSVcpkgBootstrapPayload` in `VcpkgInstallSafety.psm1` | Default inherited installer invocation remains unchanged. Only tests bind the actual owned batch to an explicit no-window CMD invocation. |
 
-`Testing/GitMetadataCapture.psm1` also serves root formatter enumeration and the two
-Ghostty metadata adapters. Its optional command-local `PrefixArguments` precede the
-existing target `-C`; default argv/CWD/stdin/diagnostic behavior and the thin archive and
+`Testing/GitMetadataCapture.psm1` also serves the two Ghostty metadata adapters. Its
+optional command-local `PrefixArguments` precede the existing target `-C`; default argv/CWD/stdin/diagnostic behavior and the thin archive and
 fingerprint interfaces remain unchanged. Owner contracts are the build and tooling
 governance specifications; these narrow existing-module extensions are not a new public
 process framework.

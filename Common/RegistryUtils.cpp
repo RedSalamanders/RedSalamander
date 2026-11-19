@@ -42,11 +42,8 @@ void NormalizeString(std::wstring& value, bool trimWhitespace) noexcept
     return value.find(L'\0') != std::wstring_view::npos;
 }
 
-[[nodiscard]] std::optional<std::wstring> ExpandEnvironmentValue(std::wstring_view rawValue,
-                                                                  size_t maxBytes,
-                                                                  unsigned int maxAttempts,
-                                                                  bool trimWhitespace,
-                                                                  bool allowEmpty) noexcept
+[[nodiscard]] std::optional<std::wstring> ExpandEnvironmentValue(
+    std::wstring_view rawValue, size_t maxBytes, unsigned int maxAttempts, bool trimWhitespace, bool allowEmpty) noexcept
 {
     const size_t maxChars = maxBytes / sizeof(wchar_t);
     const std::wstring nullTerminated(rawValue);
@@ -92,16 +89,15 @@ std::optional<std::wstring> ReadBoundedStringValue(HKEY key, const wchar_t* valu
         return std::nullopt;
     }
 
-    const size_t maxBytes = (std::min)(options.maxBytes, kMaximumRegistryStringBytes);
+    const size_t maxBytes          = (std::min)(options.maxBytes, kMaximumRegistryStringBytes);
     const unsigned int maxAttempts = (std::min)(options.maxAttempts, kMaximumReadAttempts);
 
     for (unsigned int attempt = 0u; attempt < maxAttempts; ++attempt)
     {
-        DWORD queriedType      = REG_NONE;
-        DWORD queriedByteCount = 0u;
+        DWORD queriedType         = REG_NONE;
+        DWORD queriedByteCount    = 0u;
         const LSTATUS queryStatus = RegQueryValueExW(key, valueName, nullptr, &queriedType, nullptr, &queriedByteCount);
-        if (queryStatus != ERROR_SUCCESS || ! IsAllowedType(queriedType, options) || queriedByteCount > maxBytes ||
-            (queriedByteCount % sizeof(wchar_t)) != 0u)
+        if (queryStatus != ERROR_SUCCESS || ! IsAllowedType(queriedType, options) || queriedByteCount > maxBytes || (queriedByteCount % sizeof(wchar_t)) != 0u)
         {
             return std::nullopt;
         }
@@ -113,8 +109,8 @@ std::optional<std::wstring> ReadBoundedStringValue(HKEY key, const wchar_t* valu
 
         const size_t queriedChars = static_cast<size_t>(queriedByteCount) / sizeof(wchar_t);
         std::wstring value(queriedChars + 1u, L'\0');
-        DWORD readType      = REG_NONE;
-        DWORD readByteCount = static_cast<DWORD>(value.size() * sizeof(wchar_t));
+        DWORD readType           = REG_NONE;
+        DWORD readByteCount      = static_cast<DWORD>(value.size() * sizeof(wchar_t));
         const LSTATUS readStatus = RegQueryValueExW(key, valueName, nullptr, &readType, reinterpret_cast<BYTE*>(value.data()), &readByteCount);
         if (readStatus == ERROR_MORE_DATA)
         {

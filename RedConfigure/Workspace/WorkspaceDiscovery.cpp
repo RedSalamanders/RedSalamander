@@ -7,8 +7,8 @@
 #include <cwctype>
 #include <string_view>
 
-#include <objidl.h>
 #include <XmlLite.h>
+#include <objidl.h>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026, C5027

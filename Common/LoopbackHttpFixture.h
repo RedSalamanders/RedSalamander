@@ -46,7 +46,7 @@ namespace Common::SelfTest
 struct LoopbackHttpRequest final
 {
     std::string method;
-    std::string path; // percent-decoded, always starts with '/'
+    std::string path;                           // percent-decoded, always starts with '/'
     std::map<std::string, std::string> query;   // decoded
     std::map<std::string, std::string> headers; // lower-case names
     std::vector<uint8_t> body;
@@ -308,7 +308,7 @@ public:
         {
             return E_FAIL;
         }
-        _winsockStarted = true;
+        _winsockStarted  = true;
         const HRESULT hr = CreateLoopbackListener(_listener, _port);
         if (FAILED(hr))
         {
@@ -621,8 +621,8 @@ private:
         buffer.erase(0, headEnd + 4u);
 
         const std::string* transferEncoding = request.Header("transfer-encoding");
-        const bool chunked   = transferEncoding != nullptr && LoopbackHttpToLowerAscii(*transferEncoding).find("chunked") != std::string::npos;
-        size_t contentLength = 0u;
+        const bool chunked                  = transferEncoding != nullptr && LoopbackHttpToLowerAscii(*transferEncoding).find("chunked") != std::string::npos;
+        size_t contentLength                = 0u;
         if (const std::string* lengthHeader = request.Header("content-length"); lengthHeader != nullptr)
         {
             const auto parsed = std::from_chars(lengthHeader->data(), lengthHeader->data() + lengthHeader->size(), contentLength);
@@ -680,7 +680,8 @@ private:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT SendResponse(SOCKET socketValue, std::stop_token stopToken, const LoopbackHttpResponse& response, size_t dripBytesPerTick, unsigned int dripTickMs)
+    [[nodiscard]] HRESULT SendResponse(
+        SOCKET socketValue, std::stop_token stopToken, const LoopbackHttpResponse& response, size_t dripBytesPerTick, unsigned int dripTickMs)
     {
         std::string head = std::format("HTTP/1.1 {} {}\r\nDate: {}\r\nServer: RedSalamanderLoopbackFixture\r\nx-request-id: {}\r\nContent-Length: {}\r\n",
                                        response.status,

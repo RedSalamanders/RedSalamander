@@ -56,23 +56,41 @@ class FormatterFixtureProgram {
     [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] static extern bool IsWindowVisible(IntPtr window);
     static string Json(string value) { return "\""+value.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\r","\\r").Replace("\n","\\n").Replace("\t","\\t")+"\""; }
     static string ArgsJson(string[] args) { string[] values=new string[args.Length]; for(int i=0;i<args.Length;i++)values[i]=Json(args[i]); return "["+String.Join(",",values)+"]"; }
+    // Concurrent fixture processes serialize their appends instead of failing on a sharing violation.
+    static void Append(string path,string line) {
+        byte[] bytes=new UTF8Encoding(false).GetBytes(line+Environment.NewLine);
+        for(int attempt=0;;attempt++){
+            try{ using(FileStream stream=new FileStream(path,FileMode.Append,FileAccess.Write,FileShare.Read)){stream.Write(bytes,0,bytes.Length);} return; }
+            catch(IOException){ if(attempt>=400)throw; System.Threading.Thread.Sleep(5); }
+        }
+    }
     static int Main(string[] args) {
         Console.OutputEncoding=new UTF8Encoding(false);
         string root=Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         string audit=Path.Combine(root,"formatter.audit.jsonl");
         IntPtr window=GetConsoleWindow();
         string record="{\"processId\":"+System.Diagnostics.Process.GetCurrentProcess().Id+",\"consolePresent\":"+(window!=IntPtr.Zero?"true":"false")+",\"consoleVisible\":"+(window!=IntPtr.Zero&&IsWindowVisible(window)?"true":"false")+",\"workingDirectory\":"+Json(Environment.CurrentDirectory)+",\"arguments\":"+ArgsJson(args)+"}";
-        File.AppendAllText(audit,record+Environment.NewLine,new UTF8Encoding(false));
+        Append(audit,record);
         bool version=args.Length==1&&args[0]=="--version";
         string custom=Environment.GetEnvironmentVariable("RS_FORMATTER_STDOUT");
         if(custom!=null)Console.Out.WriteLine(custom);
         else if(version)Console.Out.WriteLine("clang-format version "+(Environment.GetEnvironmentVariable("RS_FORMATTER_VERSION")??"22.1.3"));
-        if(!version){ string log=Environment.GetEnvironmentVariable("RS_FORMATTER_LOG")??Path.Combine(root,"formatter.args.jsonl"); File.AppendAllText(log,ArgsJson(args)+Environment.NewLine,new UTF8Encoding(false)); }
+        if(!version){ string log=Environment.GetEnvironmentVariable("RS_FORMATTER_LOG")??Path.Combine(root,"formatter.args.jsonl"); Append(log,ArgsJson(args)); }
+        // A --dry-run check reports each file after "--" that contains the marker the way clang-format
+        // --Werror reports drift. The probe still never rewrites a file.
+        int violations=0;
+        string marker=Environment.GetEnvironmentVariable("RS_FORMATTER_UNFORMATTED");
+        int files=Array.IndexOf(args,"--");
+        if(!version&&!String.IsNullOrEmpty(marker)&&files>=0&&Array.IndexOf(args,"--dry-run")>=0){
+            for(int i=files+1;i<args.Length;i++){
+                if(File.Exists(args[i])&&File.ReadAllText(args[i]).Contains(marker)){Console.Error.WriteLine(args[i]+":1:1: error: code should be clang-formatted [-Wclang-format-violations]");violations++;}
+            }
+        }
         int count=0;Int32.TryParse(Environment.GetEnvironmentVariable("RS_FORMATTER_STDERR_COUNT"),out count);
         if(count<0||count>262144)return 98;
         if(count>0)Console.Error.Write(new String('E',count));
         int code=0;Int32.TryParse(Environment.GetEnvironmentVariable("RS_FORMATTER_EXIT"),out code);
-        return code;
+        return violations>0?1:code;
     }
 }
 '@
