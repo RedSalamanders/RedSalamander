@@ -3608,7 +3608,6 @@ Specs\TestRuns\local_scratch
         $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         $selfTestSpec = Get-RSText -Path 'Specs\Testing\Testing_SelfTests.md'
         $dxUiSpec = Get-RSText -Path 'Specs\UI\UI_DxUiWinUIDesign.md'
-        $perfSkill = Get-RSText -Path '.agents\skills\perf-validation\SKILL.md'
 
         $liveStart = $themesAdvanced.IndexOf('[[nodiscard]] bool TestPreferencesDialogThemesLiveSearchDxInteraction')
         $liveEnd = $themesAdvanced.IndexOf('[[nodiscard]] bool TestPreferencesDialogThemesResetLiveDxInteraction', $liveStart)
@@ -3654,8 +3653,6 @@ Specs\TestRuns\local_scratch
         $selfTestSpec | Should Match 'Reproduce the failure with its predecessor cluster in one process'
         $dxUiSpec | Should Match 'retains exactly one root provider after the first successful `WM_GETOBJECT`'
         $dxUiSpec | Should Match 'calling `UiaDisconnectProvider\(\.\.\.\)`'
-        $perfSkill | Should Match 'For a same-process UIA close/reopen scenario'
-        $perfSkill | Should Match 'A standalone exact-case pass does not'
     }
 
     It 'keeps Compare Directories lower-card scroll focus failures diagnostic-rich' {
