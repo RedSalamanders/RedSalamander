@@ -6773,7 +6773,12 @@ struct ConflictPromptBeginResult
         ++waitCallCount;
         const DWORD wait = WaitForMultipleObjects(task._keepAwakeWorkEvent ? 3u : 2u, waits.data(), FALSE, waitMs);
         if (wait == WAIT_TIMEOUT)
+        {
             ++timeoutCount;
+#ifdef ENABLE_TESTS
+            task._dbgConflictDecisionTimeoutCount.fetch_add(1u, std::memory_order_relaxed);
+#endif
+        }
         if (wait == WAIT_FAILED)
         {
             Debug::ErrorWithLastError(L"File Operations conflict decision wait failed.");

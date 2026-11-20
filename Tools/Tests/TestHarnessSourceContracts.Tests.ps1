@@ -612,7 +612,7 @@ Describe 'Preferences settings-backed page source contracts' {
         $mouseSource = Get-RSText -Path 'RedSalamander\Preferences.Mouse.cpp'
         $mouseTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
         $preferencesSpec = Get-RSText -Path 'Specs\UI\UI_PreferencesDialog.md'
-        $preferencesSkill = Get-RSText -Path '.github\skills\build-preferences-pages\SKILL.md'
+        $preferencesSkill = Get-RSText -Path '.agents\skills\build-preferences-pages\SKILL.md'
     }
 
     It 'keeps Mouse in both manual Preferences projections and verifies live Apply persistence' {
@@ -876,7 +876,7 @@ Describe 'Test harness source contracts' {
             @{ Path = 'Plugins\ViewerText\ViewerText.Text.cpp'; ExpectedCallbacks = 1 },
             @{ Path = 'Plugins\ViewerVLC\ViewerVLC.cpp'; ExpectedCallbacks = 2 },
             @{ Path = 'Plugins\ViewerSqlite\ViewerSqlite.cpp'; ExpectedCallbacks = 1 },
-            @{ Path = '.github\skills\plugin-callbacks\SKILL.md'; ExpectedCallbacks = 1 }
+            @{ Path = '.agents\skills\plugin-callbacks\SKILL.md'; ExpectedCallbacks = 1 }
         )
 
         foreach ($callbackFile in $callbackFiles) {
@@ -3604,7 +3604,7 @@ Specs\TestRuns\local_scratch
         $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         $selfTestSpec = Get-RSText -Path 'Specs\Testing\Testing_SelfTests.md'
         $dxUiSpec = Get-RSText -Path 'Specs\UI\UI_DxUiWinUIDesign.md'
-        $perfSkill = Get-RSText -Path '.github\skills\perf-validation\SKILL.md'
+        $perfSkill = Get-RSText -Path '.agents\skills\perf-validation\SKILL.md'
 
         $liveStart = $themesAdvanced.IndexOf('[[nodiscard]] bool TestPreferencesDialogThemesLiveSearchDxInteraction')
         $liveEnd = $themesAdvanced.IndexOf('[[nodiscard]] bool TestPreferencesDialogThemesResetLiveDxInteraction', $liveStart)
@@ -4704,7 +4704,7 @@ Specs\TestRuns\local_scratch
         $proofBridge | Should Not BeNullOrEmpty
         $proofBridge | Should Not Match 'pluginId|shortId|GetMetaData'
         $dummy | Should Match 'class DummyFileWriter final\s*:\s*public IFileWriter,\s*public IFileWriterCommitSizeProof'
-        $s3Io | Should Match 'class MultipartS3FileWriter final\s*:\s*public IFileWriter,[\s\S]{0,100}public IFileWriterCommitSizeProof'
+        $s3Io | Should Match 'class MultipartS3FileWriter final\s*:\s*public IFileWriter\s*,(?:\s*public\s+\w+\s*,)*\s*public\s+IFileWriterCommitSizeProof\b'
         $microsoftDrive | Should Match 'class MicrosoftDriveFileWriter final\s*:\s*public IFileWriter,\s*public IFileWriterExpectedSize,\s*public IFileWriterCommitSizeProof'
         $bridgeQueue | Should Match 'SetFileOpsBridgeFailNextSourceGetSizeForSelfTest'
         $bridgeQueue | Should Match 'SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest'
