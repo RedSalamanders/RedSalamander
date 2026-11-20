@@ -6756,6 +6756,7 @@ struct ConflictPromptBeginResult
     [[maybe_unused]] const std::stop_callback cancelWake(task._stopToken, [event = cancelled.get()]() noexcept { static_cast<void>(SetEvent(event)); });
     const ULONGLONG waitStartedTick = GetTickCount64();
     const std::array<HANDLE, 3u> waits{{cancelled.get(), task._conflictArbiter.decisionEvent.get(), task._keepAwakeWorkEvent.get()}};
+    const DWORD waitHandleCount = task._keepAwakeWorkEvent ? 3u : 2u;
     for (;;)
     {
         if (task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
@@ -6771,9 +6772,18 @@ struct ConflictPromptBeginResult
             task._dbgConflictDecisionInfiniteWaitCount.fetch_add(1u, std::memory_order_release);
 #endif
         ++waitCallCount;
-        const DWORD wait = WaitForMultipleObjects(task._keepAwakeWorkEvent ? 3u : 2u, waits.data(), FALSE, waitMs);
+        const DWORD wait = WaitForMultipleObjects(waitHandleCount, waits.data(), FALSE, waitMs);
+#ifdef ENABLE_TESTS
+        if (wait < waitHandleCount)
+            task._dbgConflictDecisionSignalCount.fetch_add(1u, std::memory_order_relaxed);
+#endif
         if (wait == WAIT_TIMEOUT)
+        {
             ++timeoutCount;
+#ifdef ENABLE_TESTS
+            task._dbgConflictDecisionTimeoutCount.fetch_add(1u, std::memory_order_relaxed);
+#endif
+        }
         if (wait == WAIT_FAILED)
         {
             Debug::ErrorWithLastError(L"File Operations conflict decision wait failed.");

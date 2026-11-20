@@ -3157,8 +3157,9 @@ preference: the request is always made.
   with a fake power API in `FileOps_ReviewRemediationContracts`.
   That case also exercises the actual conflict waiter with unadmitted private tasks: prepublished decisions,
   cancellation before entry, quiet cancellation, resumed-work rearming, stop-token-only cancellation and
-  spurious decision wakes. A test-only short quiet budget bounds these controls; their wait-count assertions
-  and `FileOps.Power.ConflictWaitCalls` metrics prove event-driven waiting without a two-minute sleep. These
+  spurious decision wakes. A test-only short quiet budget bounds these controls. The tests count event wakes
+  and event-only waits separately from deadline timeouts and verify that a spurious signal leaves the worker
+  waiting for the real decision. `FileOps.Power.ConflictWaitCalls` records the total wait count. These
   controls neither invoke real power APIs nor qualify machine sleep/Modern Standby behavior.
 
 ## Artifact warnings and retained state

@@ -745,7 +745,7 @@ Describe 'Embedded Terminal plugin source contracts' {
         $interfaceHeader | Should Match 'struct\s+TerminalOpenContext\s*\{\s*uint32_t\s+sizeBytes'
         $interfaceHeader | Should Match 'interface[\s\S]+ITerminal[\s\S]+Open\(const TerminalOpenContext\* context\)'
         $interfaceHeader | Should Match 'GetChildWindow[\s\S]+SetTheme[\s\S]+UpdateSourceLocation[\s\S]+InsertPath[\s\S]+GetViewState[\s\S]+SetCallback[\s\S]+Close'
-        $interfaceHeader | Should Match 'SetCallback\(ITerminalEventCallback\s*\* callback, void\* cookie\) noexcept = 0'
+        $interfaceHeader | Should Match 'SetCallback\(ITerminalEventCallback\s*\*\s*callback, void\* cookie\) noexcept\s*=\s*0'
         $interfaceHeader | Should Match 'OnTerminalEvent\(const TerminalEvent\* event, void\* cookie\) noexcept = 0'
         $interfaceHeader | Should Not Match 'OnTerminalEvent\(void\* cookie, const TerminalEvent\* event\)'
         $interfaceHeader | Should Match 'int64_t\s+rootExitObservedTimestampNs'

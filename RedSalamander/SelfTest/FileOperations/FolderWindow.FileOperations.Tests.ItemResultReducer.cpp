@@ -1889,7 +1889,7 @@ struct KeepAwakeSelfTestApi final
     using FileOperations::TaskNeedsMachineAwake;
 
     unsigned int step = 0u;
-    const auto fail   = [&step](const wchar_t* what) noexcept
+    const auto fail   = [&step](std::wstring_view what) noexcept
     {
         AppendLog(std::format(L"Keep awake self-test failed at step {}: {}", step, what));
         return false;
@@ -2124,6 +2124,8 @@ struct KeepAwakeSelfTestApi final
                                       WaitControl::Spurious})
     {
         ++step;
+        const bool prepublishedDecision = control == WaitControl::Preanswered || control == WaitControl::Precancelled;
+        const bool repeatsQuietWait     = control == WaitControl::QuietResume || control == WaitControl::Spurious;
         Task task(owner);
         // No operation slot, provider, real power request, owner posts or diagnostic publication.
         task._state = nullptr;
@@ -2146,16 +2148,13 @@ struct KeepAwakeSelfTestApi final
             return FileOperations::ConflictBroker::TryAcceptLocked(
                 task._conflictArbiter, 1u, Action::Skip, false, FileOperations::ConflictBroker::Placement::Published);
         };
-        if (control == WaitControl::Preanswered || control == WaitControl::Precancelled)
+        if (prepublishedDecision)
         {
             if (! answer())
                 return fail(L"the before-wait decision could not be published");
             if (control == WaitControl::Precancelled)
                 task.RequestCancel();
         }
-        if (control == WaitControl::Spurious)
-            static_cast<void>(SetEvent(task._conflictArbiter.decisionEvent.get()));
-
         wil::unique_event_nothrow done;
         done.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (! done)
@@ -2173,26 +2172,25 @@ struct KeepAwakeSelfTestApi final
             if (worker.joinable())
                 worker.join();
         });
-        if (control != WaitControl::Preanswered && control != WaitControl::Precancelled)
+        if (! prepublishedDecision)
         {
             const auto quiet = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
                 return task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire) >= 1u;
             }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"private conflict wait reaches quiet deadline"});
             if (! quiet.conditionMet || ! task._awaitingAnswerQuiet.load(std::memory_order_acquire) || WaitForSingleObject(done.get(), 0u) != WAIT_TIMEOUT)
-                return fail(L"quiet conflict wait must remain asleep without accepting a spurious decision");
-            if (control == WaitControl::QuietResume)
+                return fail(L"quiet conflict wait must remain asleep until signaled");
+            if (repeatsQuietWait)
             {
-                task.NoteKeepAwakeWork(GetTickCount64());
+                if (control == WaitControl::QuietResume)
+                    task.NoteKeepAwakeWork(GetTickCount64());
+                else if (! SetEvent(task._conflictArbiter.decisionEvent.get()))
+                    return fail(L"the spurious decision event could not be signaled");
                 const auto quietAgain = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
                     return task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire) >= 2u;
-                }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"resumed stream rearms private conflict quiet deadline"});
-                if (! quietAgain.conditionMet || ! task._awaitingAnswerQuiet.load(std::memory_order_acquire) || ! answer())
-                    return fail(L"resumed work must rearm the deadline and retain its later decision");
-            }
-            else if (control == WaitControl::Spurious)
-            {
-                if (! answer())
-                    return fail(L"a real decision after a spurious wake must still be accepted");
+                }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"private conflict wait reenters quiet"});
+                if (! quietAgain.conditionMet || ! task._awaitingAnswerQuiet.load(std::memory_order_acquire) ||
+                    WaitForSingleObject(done.get(), 0u) != WAIT_TIMEOUT || ! answer())
+                    return fail(L"a resumed stream or spurious signal must return to quiet before accepting the real decision");
             }
             else if (control == WaitControl::StopOnly)
                 task._stopSource.request_stop(); // No RequestCancel/decision-event signal: the stop callback must wake it.
@@ -2204,26 +2202,31 @@ struct KeepAwakeSelfTestApi final
         worker.join();
         const Action expected =
             control == WaitControl::Preanswered || control == WaitControl::QuietResume || control == WaitControl::Spurious ? Action::Skip : Action::Cancel;
-        const uint32_t calls = task._dbgConflictDecisionWaitCount.load(std::memory_order_acquire);
-        if (result.load(std::memory_order_acquire) != expected || task._awaitingUserDecision.load(std::memory_order_acquire) ||
-            calls > (control == WaitControl::QuietResume ? 6u
-                     : control == WaitControl::Spurious  ? 3u
-                                                         : 2u))
+        const Action actual                = result.load(std::memory_order_acquire);
+        const bool awaitingDecision        = task._awaitingUserDecision.load(std::memory_order_acquire);
+        const uint32_t calls               = task._dbgConflictDecisionWaitCount.load(std::memory_order_acquire);
+        const uint32_t timeouts            = task._dbgConflictDecisionTimeoutCount.load(std::memory_order_acquire);
+        const uint32_t signalWakes         = task._dbgConflictDecisionSignalCount.load(std::memory_order_acquire);
+        const uint32_t quietWaits          = task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire);
+        const uint32_t expectedSignalWakes = control == WaitControl::Precancelled ? 0u : 1u + static_cast<uint32_t>(repeatsQuietWait);
+        // A timed wait can expire before the coarse tick count reaches the deadline.
+        // Verify the real signal wakes and event-only waits independently of those timer resamples.
+        if (actual != expected || awaitingDecision || timeouts > calls || calls - timeouts != signalWakes || signalWakes != expectedSignalWakes ||
+            (prepublishedDecision ? timeouts != 0u : quietWaits != expectedSignalWakes))
         {
-            AppendLog(std::format(
-                L"Private conflict wait failure: control={} result={} expected={} awaiting={} waitCalls={} cap={} infiniteCount={} quiet={} quietPeriodMs={}",
-                static_cast<uint32_t>(control),
-                static_cast<uint32_t>(result.load(std::memory_order_acquire)),
-                static_cast<uint32_t>(expected),
-                task._awaitingUserDecision.load(std::memory_order_acquire),
-                calls,
-                control == WaitControl::QuietResume ? 6u
-                : control == WaitControl::Spurious  ? 3u
-                                                    : 2u,
-                task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire),
-                task._awaitingAnswerQuiet.load(std::memory_order_acquire),
-                task._dbgConflictQuietPeriodMs.load(std::memory_order_relaxed)));
-            return fail(L"event waits preserve exact decisions/cancellation with bounded deadline wakes");
+            return fail(std::format(L"conflict wait control={} expected={} actual={} awaiting={} calls={} timeouts={} quietWaits={} "
+                                    L"signalWakes={} expectedSignalWakes={} quiet={} quietPeriodMs={}",
+                                    static_cast<unsigned int>(control),
+                                    static_cast<unsigned int>(expected),
+                                    static_cast<unsigned int>(actual),
+                                    awaitingDecision,
+                                    calls,
+                                    timeouts,
+                                    quietWaits,
+                                    signalWakes,
+                                    expectedSignalWakes,
+                                    task._awaitingAnswerQuiet.load(std::memory_order_acquire),
+                                    task._dbgConflictQuietPeriodMs.load(std::memory_order_relaxed)));
         }
         Debug::Perf::Emit(L"FileOps.Power.ConflictWaitCalls", L"control,calls", 0u, static_cast<uint64_t>(control), calls, S_OK);
     }
