@@ -861,7 +861,7 @@ Describe 'Pinned public build dependency binding' {
             ($events -join ',') | Should Be 'lock-shared-dependency,streaming,unlock,lock-shared-dependency,direct,unlock'
             $children.Count | Should Be 2
             foreach($child in $children){
-                $child.Environment['Path'] | Should Be $TestDrive
+                $child.Environment['Path'] | Should Be ([string]$TestDrive)
                 $child.Environment.ContainsKey('CL') | Should Be $false
                 $child.Environment.ContainsKey('LINK') | Should Be $false
                 @($child.ArgumentList) -contains '/nr:false' | Should Be $true
