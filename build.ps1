@@ -6,6 +6,11 @@
     Optionally builds one ProjectName or an explicit ProjectNames union.
     Captures native artifacts and provenance, optionally produces a portable ZIP,
     and verifies those bytes before publishing a successful build receipt.
+    Requires the selected platform's prepared canonical vcpkg inputs. Use
+    Initialize-RSVcpkgToolContext and vcpkg-install.ps1 before building. Verifies
+    the tool/registry pins and binds their imports and paths only to child
+    MSBuild processes; it never falls back to the Visual Studio vcpkg root or
+    installs packages inside a dependency lock.
 .PARAMETER Configuration
     Build configuration: Debug, Release, or ASan Debug (default: Debug)
 .PARAMETER Platform
@@ -516,42 +521,25 @@ function Find-MSBuild {
 }
 
 
-# Script-scope state is initialized before use: Run-AllTests and Test-Changes invoke this script under Set-StrictMode -Version Latest.
-$script:vcpkgOverlayTripletRefreshed = $false
+function Initialize-RSBuildVcpkgEnvironment {
+    # Public builds consume the governed, already prepared platform tree. The
+    # bootstrap verifies tool/registry pins; it never installs packages here.
+    param([Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
+        [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration,
+        [switch]$SdkInput)
 
-function Update-RSBuildVcpkgOverlayTriplet {
-    # MSBuild's manifest install runs whenever vcpkg.json is newer than its stamp, and Directory.Build.props passes it the overlay
-    # triplet vcpkg-install.ps1 writes. Refresh that file here the same way (same installation, its default MSVC toolset, same
-    # path), so neither installer falls back to vcpkg's newest toolset. Once per build, inside the platform dependency lock.
-    if ($script:vcpkgOverlayTripletRefreshed) {
-        return
+    $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child '.build/vcpkg-tool'
+    # Fail with provisioning guidance before changing a cold tool cache.
+    $null = Get-RSVcpkgBuildEnvironment -RepoRoot $RepoRoot -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration
+    $context = Initialize-RSVcpkgToolContext -RepoRoot $RepoRoot
+    $environment = [hashtable](Get-RSVcpkgBuildEnvironment -RepoRoot $RepoRoot -ToolRoot $context.ToolRoot -Platform $Platform -Configuration $Configuration)
+    if ($SdkInput) {
+        # SDK admission has already checked the caller's raw overrides. Preserve
+        # its compiler defaults without a synthetic CL override afterward.
+        $environment['CL'] = $null
     }
-    $script:vcpkgOverlayTripletRefreshed = $true
-    if ($env:VcpkgManifestInstall -eq 'false') {
-        # The caller (CI) installs with the governed installer first and disables MSBuild's install.
-        return
-    }
-
-    $triplet = if ($Platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
-    $visualStudioInstallation = Get-RSVcpkgVisualStudioInstallation
-    # The vcpkg root MSBuild's integration installs with: an explicit VcpkgRoot, else the installation's bundled vcpkg. Their
-    # x64-windows and arm64-windows triplets match the pinned tool's byte for byte, so both installers write the same file.
-    $stockTriplet = @($env:VcpkgRoot, (Join-Path $visualStudioInstallation 'VC\vcpkg')) |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        ForEach-Object { Join-Path $_ "triplets\$triplet.cmake" } |
-        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
-        Select-Object -First 1
-    if (-not $stockTriplet) {
-        # No vcpkg MSBuild integration to install with; an existing overlay from vcpkg-install.ps1 stays as it is.
-        return
-    }
-
-    $msvcToolset = Get-RSVcpkgDefaultToolset -Installation $visualStudioInstallation
-    $overlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $SolutionDir -Child ".build\vcpkg-triplets\$($Platform.ToLowerInvariant())" -Description "vcpkg triplet overlay directory"
-    $overlay = Update-RSVcpkgOverlayTriplet -StockTripletPath $stockTriplet -Toolset $msvcToolset -OutputDirectory $overlayDirectory
-    if ($overlay.Changed) {
-        Write-Host "vcpkg overlay triplet $($overlay.Path) written: MSVC $($msvcToolset.MajorMinor) of $visualStudioInstallation" -ForegroundColor Cyan
-    }
+    return [pscustomobject]@{ Environment=$environment; ToolCommit=$context.ToolCommit; Baseline=$context.Baseline }
 }
 
 function Invoke-MSBuild {
@@ -612,8 +600,6 @@ function Invoke-MSBuild {
         Assert-RSNoResidualArtifactToolProcesses `
             -RepoRoot $SolutionDir `
             -Scope $sharedDependencyScope
-        Update-RSBuildVcpkgOverlayTriplet
-
         $logPath = New-ProcessLogPath -Prefix 'msbuild'
         $script:LastProcessLogPath = $logPath
         $invocationPlan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $script:UseInteractiveTerminal -LogPath $logPath
@@ -622,7 +608,8 @@ function Invoke-MSBuild {
             $exitCode = Invoke-RSProcess `
                 -FilePath $MSBuildPath `
                 -Arguments @($effectiveArguments + @($invocationPlan.AdditionalArguments)) `
-                -WorkingDirectory $WorkingDirectory
+                -WorkingDirectory $WorkingDirectory `
+                -AdditionalEnvironment $script:buildVcpkgEnvironment
         }
         else {
             $exitCode = Invoke-RSStreamingProcess `
@@ -630,6 +617,7 @@ function Invoke-MSBuild {
                 -Arguments $effectiveArguments `
                 -WorkingDirectory $WorkingDirectory `
                 -LogPath $logPath `
+                -AdditionalEnvironment $script:buildVcpkgEnvironment `
                 -OutputLineCallback {
                 param(
                     [string]$Line,
@@ -788,6 +776,11 @@ if ($DxUiSdkInputDescriptor) {
         $receiptBuildArguments+=@('dxui-recipe=PinnedQualifiedReleaseSdkV2',"dxui-sdk-input-key=$($sdkInput.Evidence.inputKey)","dxui-sdk-manifest=$($sdkInput.Evidence.manifestSha256)","dxui-sdk-descriptor-sha256=$($sdkInput.Descriptor.Hash.ToLowerInvariant())")
     }
 }
+# SDK admission above must inspect the caller's original overrides before the
+# canonical child binding is composed. The calling-process environment is unchanged.
+$vcpkgBinding = Initialize-RSBuildVcpkgEnvironment -RepoRoot $SolutionDir -Platform $Platform -Configuration $Configuration -SdkInput:($null -ne $sdkInput)
+$script:buildVcpkgEnvironment = $vcpkgBinding.Environment
+$receiptBuildArguments += @('vcpkg-binding=pinned-process-local-v1', "vcpkg-tool=$($vcpkgBinding.ToolCommit)", "vcpkg-baseline=$($vcpkgBinding.Baseline)")
 Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates -Rebuild:$Rebuild -ProjectName $repairProjectName -SdkInput $sdkInput
 if($null -eq $sdkInput){
     $oldSdkRecord=Resolve-RSGuardedRepositoryPath -RepoRoot $SolutionDir -GuardedRelativeRoot ".build/$Platform/$Configuration" -Path (Join-Path $buildOutputDir 'DxUi.sdk-input.json')
@@ -795,7 +788,7 @@ if($null -eq $sdkInput){
 }
 $buildSourceSnapshotBefore = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
 $buildIdentity = Get-RSBuildIdentityBundle -RepoRoot $SolutionDir -MSBuildPath $msbuildPath `
-    -Platform $Platform -Configuration $Configuration
+    -Platform $Platform -Configuration $Configuration -AdditionalEnvironment $script:buildVcpkgEnvironment
 $toolchainIdentityPath = Join-Path $buildOutputDir 'toolchain-identity.json'
 $priorReceipt = $null
 try {

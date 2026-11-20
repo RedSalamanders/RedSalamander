@@ -13,6 +13,8 @@
 #include "Common.Tests.Runner.h"
 #endif
 
+class FolderWindow;
+
 namespace FileOperationsSelfTest
 {
 // Starts the self-test state machine (debug-only).
@@ -28,7 +30,7 @@ std::vector<std::wstring> BuildExpectedCaseNames(const SelfTest::SelfTestOptions
 bool Tick(HWND mainWindow) noexcept;
 
 // Best-effort completion notification for host-driven file ops tasks.
-void NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept;
+void NotifyTaskCompleted(FolderWindow* owner, std::uint64_t taskId, HRESULT hr) noexcept;
 
 // Returns true when the self-test has been started.
 bool IsRunning() noexcept;

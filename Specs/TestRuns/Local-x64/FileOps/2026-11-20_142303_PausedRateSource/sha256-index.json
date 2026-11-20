@@ -1,0 +1,368 @@
+{
+  "kind": "minimal digest references for deterministic derived combined curation",
+  "raw": [
+    {
+      "Role": "A operation report",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/operation-report.json",
+      "SHA256": "E987428B29D4D8F45B4C72329FB024BED73DDC008E4CDE777408605E52419258",
+      "Bytes": 1944
+    },
+    {
+      "Role": "Native FileOperations result",
+      "RunId": "20261120T142303Z-71668-c330287a8bf3437d81293d0d74b8e1f7",
+      "Member": "artifacts/selftest/last_run/fileops/results.json",
+      "SHA256": "F9AB18A8AF51EC86EB234E40A87E26B7A3CB1511D77D567E76A304E4DC6319C0",
+      "Bytes": 1599
+    },
+    {
+      "Role": "Native trace",
+      "RunId": "20261120T142303Z-71668-c330287a8bf3437d81293d0d74b8e1f7",
+      "Member": "artifacts/selftest/last_run/fileops/trace.txt",
+      "SHA256": "F6954A295C1693F790AE712FB04AFAE04CBEFB6E2E9C64C0AF70C78FFDA47219",
+      "Bytes": 195966
+    },
+    {
+      "Role": "Native raw metrics",
+      "RunId": "20261120T142303Z-71668-c330287a8bf3437d81293d0d74b8e1f7",
+      "Member": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "SHA256": "4F969A370AA4CB9A1A67551D23D5046F3E03D9DDF3CA0081382338EE8FEF611C",
+      "Bytes": 2077905
+    },
+    {
+      "Role": "Observed post-archive runner v1 summary",
+      "RunId": "20261120T142303Z-71668-c330287a8bf3437d81293d0d74b8e1f7",
+      "Member": "artifacts/selftest/last_run/run-all-tests-results.json",
+      "SHA256": "B37C4872DDE5DAA587D97054385BA9AB55D026194E5ADEAC04047C59FE84D582",
+      "Bytes": 36488
+    },
+    {
+      "Role": "Native exit record",
+      "RunId": "20261120T142303Z-71668-c330287a8bf3437d81293d0d74b8e1f7",
+      "Member": "artifacts/native-process-exits/6961f53b5a4b42c4b21ba34f77360fcd.json",
+      "SHA256": "466AEBF7DA2DAD28E5757D63DB897FFFE9A2ED7FB72F7F7508EB110E12B707B6",
+      "Bytes": 247
+    },
+    {
+      "Role": "Own canonical A receipt",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/build-own-receipt.json",
+      "SHA256": "55127941C6A28458C77E053311E2DF668C13CE214A2EB23D6A946CA763BB9915",
+      "Bytes": 95415
+    },
+    {
+      "Role": "Original failed parent selector report",
+      "RunId": "20261120T140845Z-57688-c74b98be85e24dd799c34ef2d36cce7e",
+      "Member": "scratch/qualification/V5-A-canonical-owner/A-only-owner-report.json",
+      "SHA256": "5E2506F091F1D6EED658BBB1C711A0740C00EFAB02201B7F36FD739C56F57A46",
+      "Bytes": 1006
+    },
+    {
+      "Role": "Read-only exact-ID reporting reconciliation",
+      "RunId": "20261120T143350Z-73164-e8f1cd1fdf0b43db972c64c5efbc79f8",
+      "Member": "scratch/qualification/V5-A-exact-reporting-reconciliation/A-exact-reporting-reconciliation.json",
+      "SHA256": "197E689F16ED50D4D59DF24DF40217E5AC629A4A3962686B87DBD55F705C7F35",
+      "Bytes": 20298
+    },
+    {
+      "Role": "Unchanged test instrumentation/assertion source",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/preserved/source/FolderWindow.FileOperations.Tests.Runner.cpp",
+      "SHA256": "C7D9A49D24FFDF58044F13A79BF21800EB37871610DF9B333DB28EAEC3F9977F",
+      "Bytes": 999095
+    },
+    {
+      "Role": "Prospective controls stage",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/inputs-before.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "Prospective controls stage",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/inputs-before-build.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "Prospective controls stage",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/inputs-after-build.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "Prospective controls stage",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/inputs-after-case.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "Prospective controls stage",
+      "RunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+      "Member": "scratch/qualification/source-governed-cadence-A/inputs-after-B-restoration.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "B native FileOperations results",
+      "RunId": "20261120T151701Z-60064-72307d4b81ed4f31a72567c7e2bc456a",
+      "Member": "artifacts/selftest/last_run/fileops/results.json",
+      "SHA256": "AEB56DF1D5ADCF1E1FA0343F77BAB055563086818D409F5AEAB74057B2F6515B",
+      "Bytes": 881
+    },
+    {
+      "Role": "B native trace",
+      "RunId": "20261120T151701Z-60064-72307d4b81ed4f31a72567c7e2bc456a",
+      "Member": "artifacts/selftest/last_run/fileops/trace.txt",
+      "SHA256": "599DA4CE71D37EA5269A08C8BD79EB23C5F2C278D3837497234DC57BA8EBBBBC",
+      "Bytes": 180478
+    },
+    {
+      "Role": "B raw native metrics",
+      "RunId": "20261120T151701Z-60064-72307d4b81ed4f31a72567c7e2bc456a",
+      "Member": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "SHA256": "5D565583F72B5B9D92864E3EB66D338B679BF68DA7EDE27E5790AA9B954555E3",
+      "Bytes": 2161851
+    },
+    {
+      "Role": "B observed post-archive runner v1 summary; not claimed inventory-sealed",
+      "RunId": "20261120T151701Z-60064-72307d4b81ed4f31a72567c7e2bc456a",
+      "Member": "artifacts/selftest/last_run/run-all-tests-results.json",
+      "SHA256": "F155EE225B79F284A4EF5E657AA0DDE49CEBB05C89EEFC2423EFDF29FEEE23C5",
+      "Bytes": 35276
+    },
+    {
+      "Role": "B native exit record",
+      "RunId": "20261120T151701Z-60064-72307d4b81ed4f31a72567c7e2bc456a",
+      "Member": "artifacts/native-process-exits/4854cedb251d42fd8b855331cc145759.json",
+      "SHA256": "8B96F762600F748C4C670FB30EB966D198429D93651FB1AB7543C5B4C77F7D4D",
+      "Bytes": 247
+    },
+    {
+      "Role": "B final operation report",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/operation-report.json",
+      "SHA256": "156AAACE6AE04CF2053E487A04EE39C068167CE3F1B0112C9238424BE34B5FA9",
+      "Bytes": 1805
+    },
+    {
+      "Role": "B own canonical receipt",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/build-own-receipt.json",
+      "SHA256": "72B22249730BE11FB664CA904BF611F6C20135DE08B5B35A0F2979B1F4878FAD",
+      "Bytes": 95415
+    },
+    {
+      "Role": "B typed filtered native proof",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/typed-native-proof.json",
+      "SHA256": "D8FC5620E9CA39DE963F909F0DC1B88570B937C9E263AF2175EE26815967160B",
+      "Bytes": 1185
+    },
+    {
+      "Role": "B canonical owner report",
+      "RunId": "20261120T150326Z-41312-bd5f0d5b5460425fa3655c0519b17b04",
+      "Member": "scratch/qualification/V6-B-canonical-owner/B-only-owner-report.json",
+      "SHA256": "2EA35A78392D54D40EF8483542D876B3090799B2A233D5C7CEBC76C915BDAE32",
+      "Bytes": 3393
+    },
+    {
+      "Role": "B own module Source sidecar",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/preserved/build-own-outputs/.build/x64/Release/RedSalamander.exe.DxUi.json",
+      "SHA256": "909E8759DA96390404EFEFB3CE9E01863CE04D32C50FE3AC463FC7DDFAD23E39",
+      "Bytes": 1890
+    },
+    {
+      "Role": "B prospective controls stage",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/inputs-before.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "B prospective controls stage",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/inputs-before-build.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "B prospective controls stage",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/inputs-after-build.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "B prospective controls stage",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/inputs-after-case.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "B prospective controls stage",
+      "RunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+      "Member": "scratch/qualification/source-governed-cadence-B/inputs-after-B-restoration.json",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "Bytes": 11103714
+    },
+    {
+      "Role": "B canonical owner final retirement/binding report",
+      "RunId": "20261120T150326Z-41312-bd5f0d5b5460425fa3655c0519b17b04",
+      "Member": "scratch/qualification/V6-B-canonical-owner/canonical-owner-final.json",
+      "SHA256": "DCA56047B3D4D330C8F81C3A2DF4A7BC1225FE8982A9259E8DB59702A16BD6D1",
+      "Bytes": 302
+    },
+    {
+      "Role": "B six core held bindings before",
+      "RunId": "20261120T150326Z-41312-bd5f0d5b5460425fa3655c0519b17b04",
+      "Member": "scratch/qualification/V6-B-canonical-owner/six-bindings-before.json",
+      "SHA256": "AF2219E664A18AB910D868B648E8854A76B0581DB739AF1D5C0F3CD4D6D7E1DE",
+      "Bytes": 3323
+    },
+    {
+      "Role": "B six core held bindings after",
+      "RunId": "20261120T150326Z-41312-bd5f0d5b5460425fa3655c0519b17b04",
+      "Member": "scratch/qualification/V6-B-canonical-owner/six-bindings-after.json",
+      "SHA256": "AF2219E664A18AB910D868B648E8854A76B0581DB739AF1D5C0F3CD4D6D7E1DE",
+      "Bytes": 3323
+    },
+    {
+      "Role": "B explicit canonical-host bootstrap final",
+      "RunId": "20261120T150324Z-75100-d7cc6ed39c65494e8da34dc200860940",
+      "Member": "scratch/qualification/V6-B-tool-only-bootstrap/launcher-final.json",
+      "SHA256": "EDF3B227444BD15531E6148E61941E5DECA61FD133D3AB74C55EDFE8AAC39800",
+      "Bytes": 385
+    },
+    {
+      "Role": "B integration manifest and nine file held bindings before",
+      "RunId": "20261120T150324Z-75100-d7cc6ed39c65494e8da34dc200860940",
+      "Member": "scratch/qualification/V6-B-tool-only-bootstrap/integration-pins-before.json",
+      "SHA256": "3359977E5FB89C36E1413EB6F9FF76DB554469B6A0E3D0E26604FC20F58EA516",
+      "Bytes": 4705
+    },
+    {
+      "Role": "B integration manifest and nine file held bindings after",
+      "RunId": "20261120T150324Z-75100-d7cc6ed39c65494e8da34dc200860940",
+      "Member": "scratch/qualification/V6-B-tool-only-bootstrap/integration-pins-after.json",
+      "SHA256": "3359977E5FB89C36E1413EB6F9FF76DB554469B6A0E3D0E26604FC20F58EA516",
+      "Bytes": 4705
+    },
+    {
+      "Role": "B canonical transport owned child exit",
+      "RunId": "20261120T150325Z-74820-a935158e76724dc6a52eace9d32e6aaf",
+      "Member": "scratch/qualification/V6-B-canonical-transport/canonical-owner-exit.json",
+      "SHA256": "422EDC5F80E7E4FC5D091CFCDF3FB8102A3B3F94182A1D74749B00B416C2D2BF",
+      "Bytes": 316
+    },
+    {
+      "Role": "V5 to V6 reporting-selector-only delta",
+      "RunId": "20261120T143919Z-64848-9fcaa8cdb5d74e0b92148e037bb4bf67",
+      "Member": "scratch/qualification/future-B-actor-selection-v6/v5-to-v6-wrapper-selection.diff",
+      "SHA256": "2F07CAA3AFD0EC70A0131814587FEB864854A9F1057212171E3C661C32EEE05C",
+      "Bytes": 4499
+    },
+    {
+      "Role": "V6 safe reporting selector replay controls",
+      "RunId": "20261120T143919Z-64848-9fcaa8cdb5d74e0b92148e037bb4bf67",
+      "Member": "scratch/qualification/future-B-actor-selection-v6/selection-replay-results.json",
+      "SHA256": "0E04A2C60E76978236703DF7E31ADDB71FE3989479129C3AB2F9B2D0A3BE1081",
+      "Bytes": 3543
+    },
+    {
+      "Role": "Read-only B final exact source/output/pin/retirement closure",
+      "RunId": "20261120T152523Z-64068-3f84cf62c745464a9cb6d05a31802cb8",
+      "Member": "scratch/qualification/B-final-read-only-closure/B-final-read-only-closure.json",
+      "SHA256": "FB123C3E560B6E6AD94CAE468FC28A1AC7DE45EFCDFE02C7C884A5F354DF302B",
+      "Bytes": 28943
+    },
+    {
+      "Role": "Preserved B tool-host rejection before context/transport/build/native",
+      "RunId": "20261120T150215Z-7480-f57e447493824f28b65dfa8a01758271",
+      "Member": "scratch/qualification/B-prelaunch-tool-host-rejection/prelaunch-failure-report.json",
+      "SHA256": "BC83CB72F5913B4CEB61B79C3954751912DDEC8460B3F3C1891744BE064324F6",
+      "Bytes": 1648
+    }
+  ],
+  "A": {
+    "rawMetricsNonblankRows": 5777,
+    "rawTraceLines": 275,
+    "rawMetricsPhysicalLines": 5777,
+    "selectedMetricRows": 7,
+    "selectedTraceRows": 10
+  },
+  "B": {
+    "rawMetricsNonblankRows": 6011,
+    "rawTraceLines": 257,
+    "rawMetricsPhysicalLines": 6011,
+    "selectedMetricRows": 7,
+    "selectedTraceRows": 9
+  },
+  "lineDigestEncoding": "UTF-8 decoded line without line terminator; full raw digest includes original bytes",
+  "originalOrderRetained": true,
+  "derived": [
+    {
+      "file": "A-metrics.filtered.jsonl",
+      "SHA256": "CF8E65ED1B6040196B0E1CC0E980E5720EED92A3D9890D6BD7B056A7712A8297",
+      "bytes": 1717
+    },
+    {
+      "file": "A-source-binding.json",
+      "SHA256": "18D6C6B3145C5FA51941E7E7B15C3E75C1C8D5A8C89D80282F7AF669226C6860",
+      "bytes": 3032
+    },
+    {
+      "file": "A-summary.json",
+      "SHA256": "74CC3F7ECCEA0F55963F8FA6108975545021A7EFCB5D5D23B99F26AB0774C143",
+      "bytes": 2015
+    },
+    {
+      "file": "A-trace.filtered.json",
+      "SHA256": "DA319AAB6EA3E4980AD0E3CECC99D97F31CC6F5C5F57646C4624ADF4425C709A",
+      "bytes": 2636
+    },
+    {
+      "file": "assertion-bounds.json",
+      "SHA256": "8D4E42C817D82FF5320D869787BC1A9254E8C0D8E8AB41946EC80D1FD22FBECA",
+      "bytes": 2071
+    },
+    {
+      "file": "B-metrics.filtered.jsonl",
+      "SHA256": "76C4CF2E3B623B59F32501EAA96C5F4291FFC1424D2E26248B4A09D3FEB13D80",
+      "bytes": 1703
+    },
+    {
+      "file": "B-source-binding.json",
+      "SHA256": "CD28C5084DA50C27E452FAF5D7CDAE09DC117D56671E49A147EA9CC97B827D60",
+      "bytes": 5905
+    },
+    {
+      "file": "B-summary.json",
+      "SHA256": "3B1D05780209C3CE9EC4C2703D1BA867BA20BF5141AC7729E401091BA82E02D6",
+      "bytes": 1688
+    },
+    {
+      "file": "B-trace.filtered.json",
+      "SHA256": "92336FC88B7B3BECCD6E4D9C34983BFEE7370B4F5B60FC697BD9FC6E45E0091B",
+      "bytes": 2240
+    },
+    {
+      "file": "pair-summary.json",
+      "SHA256": "F65F250E795C92E79862834FBD801CBFA07000B948AD44EC707EA588919CCF35",
+      "bytes": 3319
+    },
+    {
+      "file": "README.md",
+      "SHA256": "3545389CA0946E4210D31CD4DA56D57684EB6C75E15A08AF03AD66BFA1B0118B",
+      "bytes": 4273
+    }
+  ],
+  "privateOriginalsRemainOutsideGit": true,
+  "immutableAOnlyPatchSHA256": "E7BE38417A6D93884F09B9B9180633177AF75B1B45ED90C8E3C02269208DAFC6",
+  "immutableAOnlyFreezeSHA256": "EAFCFCECB7391CBCD4E032CD375FE7DD6FBD06C0C46957CAA953CF22C894118A"
+}

@@ -7,16 +7,35 @@
 {
     if (! fixture.folderWindow || ! fixture.fileOps || ! fixture.fsDummy)
         return state.Require(false, L"Clipboard-ready token witness requires the existing FolderWindow and Dummy provider fixture.");
+    // A prior case may legitimately retain completed cards on the shared owner.
+    // Preserve those cards and give this strict-empty admission witness a real
+    // private completion destination, as the owned completion teardown case does.
+    Common::Settings::Settings privateSettings{};
+    privateSettings.fileOperations.emplace();
+    wil::unique_hwnd privateContainer(
+        CreateWindowExW(0, L"STATIC", L"Owned clipboard admission fixture", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+    FolderWindow privateOwner;
+    privateOwner.SetSettings(&privateSettings);
+    if (! state.Require(privateContainer && privateOwner.Create(privateContainer.get(), 0, 0, 640, 480),
+                        L"Clipboard-ready token witness requires a private real completion HWND."))
+        return false;
+    if (! state.Require(SUCCEEDED(privateOwner.SetFileSystemPluginForPane(FolderWindow::Pane::Left, kPluginIdDummy)) &&
+                            SUCCEEDED(privateOwner.SetFileSystemPluginForPane(FolderWindow::Pane::Right, kPluginIdDummy)),
+                        L"Clipboard-ready token witness requires private Dummy endpoints."))
+        return false;
+    auto* const operations = privateOwner.DebugGetFileOperationState();
+    if (! state.Require(operations != nullptr, L"Clipboard-ready token witness requires its private File Operations engine."))
+        return false;
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> inheritedCompleted;
     std::vector<FolderWindow::InformationalTaskUpdate> inheritedInformational;
-    fixture.fileOps->CollectCompletedTasks(inheritedCompleted);
-    fixture.fileOps->CollectInformationalTasks(inheritedInformational);
-    if (! state.Require(! fixture.fileOps->HasActiveOperations() && ! fixture.fileOps->GetPopupHwndForSelfTest() && inheritedCompleted.empty() &&
+    operations->CollectCompletedTasks(inheritedCompleted);
+    operations->CollectInformationalTasks(inheritedInformational);
+    if (! state.Require(! operations->HasActiveOperations() && ! operations->GetPopupHwndForSelfTest() && inheritedCompleted.empty() &&
                             inheritedInformational.empty(),
                         std::format(L"Clipboard-ready token witness must start without inherited work, retained entries, or an application popup "
                                     L"(active={}, popup={}, completed={}, informational={}).",
-                                    fixture.fileOps->HasActiveOperations(),
-                                    fixture.fileOps->GetPopupHwndForSelfTest() != nullptr,
+                                    operations->HasActiveOperations(),
+                                    operations->GetPopupHwndForSelfTest() != nullptr,
                                     inheritedCompleted.size(),
                                     inheritedInformational.size())))
         return false;
@@ -28,7 +47,7 @@
     const auto barrierCalls = std::make_shared<std::atomic<uint32_t>>(0u);
     const auto admit        = [&](HRESULT& admissionStatus) noexcept
     {
-        return StartFileOperationAndGetId(fixture.fileOps,
+        return StartFileOperationAndGetId(operations,
                                           FILESYSTEM_MOVE,
                                           FolderWindow::Pane::Right,
                                           FolderWindow::Pane::Left,
@@ -63,7 +82,7 @@
     // through production cleanup, so the next family inherits neither work nor its popup.
     const auto finishOwnedTask = [&](uint64_t ownedTaskId, bool requireExpectedResult) noexcept -> bool
     {
-        if (auto* ownedTask = fixture.fileOps->FindTask(ownedTaskId))
+        if (auto* ownedTask = operations->FindTask(ownedTaskId))
         {
             if (! ownedTask->_taskFinished.load(std::memory_order_acquire))
                 ownedTask->RequestCancel();
@@ -71,19 +90,19 @@
                 ownedTask->_thread.join();
         }
         const auto drained = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
-            return fixture.fileOps->FindTask(ownedTaskId) == nullptr;
+            return operations->FindTask(ownedTaskId) == nullptr;
         }, {.timeout = SelfTest::Scale(std::chrono::milliseconds(5'000)), .operationName = L"Clipboard-ready fixture completion drain"});
         if (! drained.conditionMet)
             AppendLog(drained.timeoutDiagnostic);
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
-        fixture.fileOps->CollectCompletedTasks(completed);
+        operations->CollectCompletedTasks(completed);
         const bool resultApplied = ! requireExpectedResult || std::ranges::any_of(completed, [&](const auto& result) noexcept {
             return result.taskId == ownedTaskId && result.resultHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         });
-        fixture.fileOps->DismissCompletedTask(ownedTaskId);
-        fixture.fileOps->DebugRemoveDiagnosticsForTask(ownedTaskId);
-        fixture.fileOps->CollectCompletedTasks(completed);
-        return drained.conditionMet && resultApplied && ! fixture.fileOps->HasActiveOperations() && ! fixture.fileOps->GetPopupHwndForSelfTest() &&
+        operations->DismissCompletedTask(ownedTaskId);
+        operations->DebugRemoveDiagnosticsForTask(ownedTaskId);
+        operations->CollectCompletedTasks(completed);
+        return drained.conditionMet && resultApplied && ! operations->HasActiveOperations() && ! operations->GetPopupHwndForSelfTest() &&
                std::ranges::none_of(completed, [&](const auto& result) noexcept { return result.taskId == ownedTaskId; });
     };
     auto cleanupTask = wil::scope_exit([&]() noexcept
@@ -94,7 +113,7 @@
             state.Require(false, L"Clipboard-ready fixture cleanup failed after an earlier assertion.");
         }
     });
-    auto* const task = fixture.fileOps->FindTask(taskId.value());
+    auto* const task = operations->FindTask(taskId.value());
     if (! state.Require(task != nullptr, L"Clipboard-ready token witness must find its published task."))
         return false;
 
@@ -136,7 +155,7 @@
         return false;
     }
 
-    const HWND folderHwnd       = fixture.folderWindow->GetHwnd();
+    const HWND folderHwnd       = privateOwner.GetHwnd();
     const LRESULT staleDispatch = SendMessageW(folderHwnd, WndMsg::kFileOperationClipboardMoveReady, static_cast<WPARAM>(taskId.value()), staleMessage.lParam);
     const bool staleIgnored     = staleDispatch == 0 && ! task->_clipboardMoveBarrierCompleted.load(std::memory_order_acquire) &&
                                   ! task->_workerReleased.load(std::memory_order_acquire) && barrierCalls->load(std::memory_order_acquire) == 0u &&

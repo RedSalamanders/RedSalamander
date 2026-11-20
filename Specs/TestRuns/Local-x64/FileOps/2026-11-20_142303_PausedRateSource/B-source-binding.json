@@ -1,0 +1,144 @@
+{
+  "kind": "separate derived source/receipt binding; native rows unchanged",
+  "role": "corrected B2 product source; unchanged test and instrumentation",
+  "branchBaseCommit": "ebebc14b003c38be28fa5918f85bca6456834d72",
+  "sourceSnapshot": "736eff833c02f7f5763d03a61168f11ddd90052514760e2149662d678bd06774",
+  "ownReceiptId": "870be6dbe2a11cb4472a1829b88b8c92bc19fe75522807c924080f9aa9c65d59",
+  "platform": "x64",
+  "configuration": "Release",
+  "testsEnabled": true,
+  "compilerDebugInformation": "ProgramDatabase",
+  "dependencyRecipe": "PinnedSource",
+  "h8Commit": "7fb2ab71852087d93b3a3e5b3ba504c37f56267c",
+  "h8PublicHeadersTree": "b04d3e96177b14c9f2cb30887e58a8ad63c17aeb",
+  "ownModuleSHA256": "8453B41E812D87C37E24CE8F82600AFD28646CD7EACDCB77382825DB1E389287",
+  "ownGeneratedArchiveSHA256": "5C4BFB3DC311DD47151E57879B5C35FFD87AAF85DDF4FD2690BDEAEEEA1E9CB1",
+  "nativeMetricCommit": "",
+  "nativeCommitWasNotFilled": true,
+  "commonControlFileCount": 35584,
+  "observedCommandTlogs": 199,
+  "retainedProducerReadWitnessPaths": 465,
+  "preparedPayloadFiles": 3056,
+  "commonStageSHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+  "allFiveCommonStagesExact": true,
+  "coreHeldBindings": [
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "SHA256": "040652FF8BF68BCE9B4288B4C631C841AADCFF65FF6EC089B0A89BB3BBC7CDAF",
+      "name": "V6Operator"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "SHA256": "9E02C0D3AD972C06BC890EA51D1258F36093855781E64A2726925B681D82F2E8",
+      "name": "OwnerSelection"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "SHA256": "CA6ABD5E158AF6C364B131B9BF3D8A0F676A7CEA6D215CE235C6FA23FE115E4C",
+      "name": "ControlPlan"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "SHA256": "20E78AA8E8A74CA85174EBB796BC03CB8C0B749E413010EEFA99DA41EAA916A6",
+      "name": "ProspectiveBinding"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "name": "OriginalV4SourceFreeze"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "SHA256": "E94166ED9F376559C1359BAFB08BC49E463A494C330F67644EC1D9F1FFEB5EE5",
+      "name": "CanonicalProtocolHost"
+    }
+  ],
+  "integrationHeldBindings": [
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "integration-freeze.json",
+      "SHA256": "87EDFC84D963A0E2896D97C10A4AFB5B9E2C291ACFBF5BABB82DBCD86ECCECA2"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "A-negative-control-admission.json",
+      "SHA256": "3ED238648B204DCA61DD89E76735276F5036162776EA6BB8AE97F8B02D150697"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "A-owner-to-future-B-owner.diff",
+      "SHA256": "B077DC288CC700BAB38A3AC7FF454511A42D87C70A762916697543FF75F226CC"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "A-transport-to-future-B-transport.diff",
+      "SHA256": "45690F62117B37BE9F123B1B485E4F2D1FC9D52C06A5000FFE7E160A090FC1E1"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "Invoke-CanonicalBOwner.ps1",
+      "SHA256": "4C369AC68114EC6BAEB5122E6DFAD01CEFF965AAC86941F34A18402C3B44C95C"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "planned-parameters.json",
+      "SHA256": "513A89A5977DFFAC2DEF8A8FFABF621754938E00F30C961DE38CCBF31041087C"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "preparation-checks.json",
+      "SHA256": "C2D26E8E79482006E36EC951DAB150F5C8A829C64960A0C37A17143E614B0504"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "README.md",
+      "SHA256": "6AF862DE859B39A9614AA025CAE510B738283A833D793C3EC853ECCE42D4579D"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "ROOT-A-ADMISSION-REFERENCE.txt",
+      "SHA256": "040617F380EE62B80A74469240A5EB673EBDA247434DD4C1743BA96C89F44474"
+    },
+    {
+      "beforeAfterHeldAndPathEqual": true,
+      "file": "Start-CanonicalBOwner.ps1",
+      "SHA256": "717099F23C766FD319F5E9E1E76A94071C0D5C11C10E1BCE6CFC7B9809948DE3"
+    }
+  ],
+  "integrationBindingsRole": "one integration-freeze manifest plus nine integration files",
+  "fullB2SourceRestored": true,
+  "noInverse": true,
+  "outputsSwapped": false,
+  "receiptRelabelled": false,
+  "innerCompilerEnvironmentObserved": false,
+  "sourceRecipeNotCrossBuildArchiveEquality": true,
+  "ownedChainClosure": {
+    "operatorBothStreamsDrained": true,
+    "transportBothStreamsDrained": true,
+    "bootstrapFailure": null,
+    "leaseCloseErrors": 0,
+    "transportContainmentClosed": true,
+    "operatorContainmentClosed": true,
+    "ownerBindingsValid": true
+  },
+  "actorIdentity": "exact actor-returned RunID and PID joined to contained archive/report; Capture.StartedUtc is only the held invocation/launch window",
+  "typedFilteredAssessment": {
+    "Assessment": "DERIVED bounded filtered assessment; original v1 summary unchanged",
+    "Coverage": "filtered",
+    "RepositoryVerdict": "NOT_EVALUATED",
+    "ChangeVerdict": "PASSED",
+    "OuterExit": 2,
+    "NativeExit": 0,
+    "NativePID": 74772,
+    "Passed": 3,
+    "Failed": 0,
+    "Skipped": 0,
+    "CaseCount": 3,
+    "SummarySchema": "red-salamander.run-all-tests.v1"
+  },
+  "ownGeneratedPdbSHA256": "43CBB8037F91BE32C14551B882CBB784713966FA03229B8BAE6886DB4D05630B",
+  "ownLinkCommandSHA256": "70C0521FC1D6092C7C6BAD10F6F814CC73CCFBDCA5CF50F9738F18BBFF2718EB",
+  "outputCheckMeaning": "Actual exact V6 operation completed canonical own-receipt/output gate and rehashed preserved own output records after case; inventory hashes are recorded identity, not a new full payload scan",
+  "receiptOutputCount": 162,
+  "preservedOutputInventoryCount": 583
+}

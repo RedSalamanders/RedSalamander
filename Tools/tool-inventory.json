@@ -1606,6 +1606,10 @@
         "Aggregate-v2 run summary with v1 sidecar",
         "Per-launch artifacts/native-process-exits/<guid>.json with raw signed process exit, PID, executable and UTC observation",
         "Console start/completion rows with monotonic elapsed time for FileOps profile/volume setup, session lease waiting and contained native process launch",
+        "Direct owned self-test launch/listing/classification console facts with actual PSI flags, PID/job availability, native exit, stream drain and containment-close return; absence is uninformative and foreign creator attribution is outside scope",
+        "Nonfatal diagnostic failures preserve native results; structural finally guarantees owned close before fatal diagnostic propagation, and success rows require close return",
+        "Explicit identity property access preserves ordinary getter errors as unavailable/error facts and unwraps fatal getter causes; missing or successfully null values remain unavailable",
+        "Invocation wrappers preserve aggregate branches; fatal diagnostic/close combinations retain earlier native/listing errors after mandatory close, and native exit records precede exit diagnostics",
         "Normalized terminal results and verified promotions",
         "Validation plan, content-addressed decisions, fingerprints, and checkpoints",
         "Typed PASSED/FAILED/NOT_EVALUATED/invalid/blocked/corrupt process exit",
@@ -2019,7 +2023,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process/MSBuild helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild. Repeated receipt publication validates complete candidate/stored records and full governing projections, preserves the first immutable bytes and republishes their exact canonical pointer; first publication is create-only.",
-      "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
+      "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs. Identity probes reuse contained capture with explicit child-only canonical environment overrides.",
       "consumerClosure": "derived-references",
       "usedBy": [
         "Tools/Tests/BuildReproducibility.Tests.ps1",
@@ -2035,7 +2039,8 @@
         "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
         "Tools/Modules/Build/DxUiDependency.psm1",
-        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
+        "Tools/Tests/ProcessStreaming.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer",
@@ -2046,7 +2051,8 @@
         "Tools/Modules/Build/ArtifactOperationLock.psm1",
         "Tools/Modules/Testing/ValidationFingerprint.psm1",
         "Tools/Modules/Packaging/RuntimeDependencies.psm1",
-        "Specs/Build/Build_DxUiSdkInput.schema.json"
+        "Specs/Build/Build_DxUiSdkInput.schema.json",
+        "Tools/Modules/Build/ProcessStreaming.psm1"
       ],
       "sideEffects": [
         "Source snapshot functions read Git and hash repository files",
@@ -2108,7 +2114,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Launch contained no-window children with sanitized environments and concurrent streams; provide a silent stdout/stderr/exit projection for metadata callers without artifact-write delegation. Interactive payload routing remains caller-owned. Graph/HEAD metadata consumers reuse capture; provisioning Git writes retain delegated streaming. An optional per-child stdout decoder is explicit at known Git callers; non-Git defaults and stderr decoding are unchanged.",
-      "usage": "Import from build and test orchestration that requires live subprocess output.",
+      "usage": "Import from build and test orchestration that requires live subprocess output. Silent metadata capture forwards optional AdditionalEnvironment through the same child launcher without mutating its parent.",
       "usedBy": [
         "Tools/Restore-DxUi.ps1",
         "Tools/Modules/Build/VcpkgInstallSafety.psm1",
@@ -2171,7 +2177,9 @@
         "Tools/Run-AllTests.ps1",
         "Tools/SanitizedEnvironment.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
-        "Tools/Tests/DxUiDependency.Tests.ps1"
+        "Tools/Tests/DxUiDependency.Tests.ps1",
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1",
+        "Tools/Tests/VcpkgInstallSafety.Tests.ps1"
       ],
       "prerequisites": [
         "Exact pinned .ci-engine/Tools/Modules/Ci.Policy.psm1"
@@ -2200,7 +2208,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets. Restore and bootstrap the exact tool/ports identities and expose process-local hosted integration for cold builds. Provisioning Git retains captured merged diagnostics and artifact delegation under its existing lock; the optional cat-file probe uses read-only capture and exact exit.",
-      "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install. Unified native build roles bootstrap then invoke the canonical platform installer before MSBuild.",
+      "usage": "Import from governed installation and public build preparation. Public build.ps1 validates prepared platform inputs, verifies managed pins and applies the canonical child binding; package installation remains separate under its platform lock.",
       "usedBy": [
         "vcpkg-install.ps1",
         "build.ps1",
@@ -2222,7 +2230,8 @@
       ],
       "outputs": [
         "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset",
-        ".build/vcpkg-tool and .build/vcpkg-registry with verified independent pins; process-local integration values"
+        ".build/vcpkg-tool and .build/vcpkg-registry with verified independent pins; process-local integration values",
+        "Validated prepared-input binding with canonical generated CL/LINK paths, no ambient flag concatenation, and actionable provisioning errors"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
@@ -2615,6 +2624,8 @@
       "purpose": "Provide stable metadata-complete test-plan entries, reviewed native producer bindings in portable contracts, shared viewer-group artifact policy, mode-independent coverage-plan identity plus truthful invocation-plan identity, path normalization, run identifiers, and live-process snapshots. Recognize native adhoc-PID owners for conservative archival and audits.",
       "usage": "Loaded through the TestRunPlan facade and imported by sandbox and suite-plan domain modules; reuse compares coverage_plan_digest while persisted invocation records retain their actual Fresh, Resume, or Affected mode.",
       "usedBy": [
+        "Tools/Tests/BuildConsoleCheck.ps1",
+        "Tools/Tests/BuildConsole.Tests.ps1",
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Modules/Testing/TestSandbox.psm1",
         "Tools/Modules/Testing/TestSuitePlan.psm1",
@@ -2841,6 +2852,9 @@
       ],
       "outputs": [
         "Qualification action output and display/work-area/session/foreground diagnostics",
+        "Direct action-start/return and before-retirement/retired/failure console phases, without foreign-process creator attribution",
+        "Nonfatal lifecycle sink failures preserve captured action and restoration errors; owned process scope and desktop retirement remain in structural finally before fatal propagation",
+        "Fatal setup diagnostics retain the original ErrorRecord in exception data without changing fatal exception identity; independent process-scope and desktop disposal errors remain represented after both disposal attempts",
         "Read-only calling/input/foreground desktop names with individual Windows query errors",
         "Rendered Default-desktop identity, positive neutral foreground boundary and verified restoration diagnostics",
         "Immutable saved original/focus identities, explicit queryThread=0 versus expectedOriginalThread failure context and conservative prewrite Default-desktop admission; pure controls do not establish console or native runtime qualification",
@@ -2904,6 +2918,8 @@
       "purpose": "Own fail-closed exact X:/RedSalamander.Perf authorization, ownership markers, fresh uncached reparse-component checks and contained output validation, sandbox-confined test link creation with one PowerShell-resolved absolute link path for validation and creation (New-RSTestSandboxLink), run contexts, exact/stale-run removal, and live-owner-consistent root-local disk audits that require current root authority even when a requested path is absent. Preserve completed and abandoned runs through create-only, owner-checked, verified same-volume evidence archival; automatic stale maintenance preserves recorded unsafe-link refusals without rescanning payloads, while explicit archival always verifies afresh. Acquire provider-equivalent archive security directly from safely enumerated FileSystemInfo objects without caching security or content identities.",
       "usage": "Loaded through the TestRunPlan facade or imported by an executing test fixture that allocates scratch; every test-data consumer uses the same marked fixed-local-drive root. Synthetic liveness cleanup requires an explicit CandidateRunIds allowlist.",
       "usedBy": [
+        "Tools/Tests/BuildConsoleCheck.ps1",
+        "Tools/Tests/BuildConsole.Tests.ps1",
         "Tools/Modules/Testing/TestRunPlan.psm1",
         "Tools/Clean-TestSandbox.ps1",
         "Tools/Run-AllTests.ps1",
@@ -5209,10 +5225,10 @@
         "Tools/Tests/BuildConsole.Tests.ps1"
       ],
       "sideEffects": [
-        "Explicit functions write dependency markers or owned fixture data; import is read-only"
+        "Writes owned fixture data; validates borrowed ownership before creation; archives only its standalone canonical run"
       ],
       "visibility": "internal",
-      "purpose": "Exercise zero-warning results, terminal links, launch-command quoting and short dependency identity collision refusal.",
+      "purpose": "Exercise unchanged console/path assertions with validated active-run borrowing and standalone owned archival/error preservation.",
       "usage": "Use through the existing build/tooling entrypoints.",
       "prerequisites": [
         "PowerShell",
@@ -5221,7 +5237,7 @@
       ],
       "lifecycle": "active",
       "outputs": [
-        "Dependency identity validation or behavior-test evidence"
+        "Dependency identity validation and owned behavior-test evidence with standalone archive outcome"
       ],
       "path": "Tools/Tests/BuildConsoleCheck.ps1",
       "kind": "test",
@@ -5239,7 +5255,7 @@
         "Explicit functions write dependency markers or owned fixture data; import is read-only"
       ],
       "visibility": "internal",
-      "purpose": "Run the owned build-console and dependency-path behavior checks through Pester.",
+      "purpose": "Run unchanged console/path assertions and focused borrowed/standalone lifecycle, error and current shared-fixture closure checks through Pester.",
       "usage": "Use through the existing build/tooling entrypoints.",
       "prerequisites": [
         "PowerShell",

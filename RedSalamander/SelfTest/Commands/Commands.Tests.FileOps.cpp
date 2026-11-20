@@ -13445,6 +13445,42 @@ struct FileOperationsPopupTestFixture final
     state.Require(successLayout.completedVisibleActionCount <= 2u,
                   std::format(L"Completed success task should expose at most 2 actions; saw {}.", successLayout.completedVisibleActionCount));
     state.Require(successLayout.completedDismissVisible, L"Completed success task should keep Dismiss as the primary action.");
+    if (! successLayout.completedDismissVisible)
+    {
+        // Preserve the failed assertion and its exact observed frame. Diagnostics
+        // never pump, paint, scroll, or wait for a later action to become ready.
+        Trace(std::format(L"Completed success Dismiss assertion snapshot: task={} found={} paintGeneration={} compact={} autoCollapsed={} "
+                          L"groupVisible={} groupExpanded={} hiddenByGroup={} footerOnly={} actions={} dismiss={} more={} rowFits={} "
+                          L"openDestination={} revealDestination={} overlap={}.",
+                          successLayout.taskId,
+                          successLayout.found,
+                          successLayout.taskPaintGeneration,
+                          successLayout.taskCompactRow,
+                          successLayout.taskAutoCollapsedOnCompletion,
+                          successLayout.completedGroupVisible,
+                          successLayout.completedGroupExpanded,
+                          successLayout.taskHiddenByCompletedGroup,
+                          successLayout.footerOnly,
+                          successLayout.completedVisibleActionCount,
+                          successLayout.completedDismissVisible,
+                          successLayout.completedDiagnosticsMoreVisible,
+                          successLayout.completedActionRowFits,
+                          successLayout.completedOpenDestinationActionVisible,
+                          successLayout.completedRevealDestinationActionVisible,
+                          successLayout.taskHasVisibleButtonOverlap));
+        Trace(std::format(L"Completed success Dismiss assertion geometry: scroll={} viewport=[{},{},{},{}] "
+                          L"layoutMotion={} autoResizeMotion={} groupMotion={} popupVisible={} popupIconic={}.",
+                          successLayout.scrollPosition,
+                          successLayout.listViewportRect.left,
+                          successLayout.listViewportRect.top,
+                          successLayout.listViewportRect.right,
+                          successLayout.listViewportRect.bottom,
+                          successLayout.layoutMotionActive,
+                          successLayout.autoResizeMotionActive,
+                          successLayout.completedGroupLayoutMotionActive,
+                          IsWindowVisible(popup) != FALSE,
+                          IsIconic(popup) != FALSE));
+    }
     state.Require(successLayout.completedDiagnosticsMoreVisible, L"Completed success task should expose a More affordance for destination actions.");
     state.Require(successLayout.completedOpenDestinationActionVisible, L"Completed success task should expose Open destination in the More action set.");
     state.Require(successLayout.completedRevealDestinationActionVisible, L"Completed success task should expose Reveal item in the More action set.");

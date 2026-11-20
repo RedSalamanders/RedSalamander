@@ -1,0 +1,77 @@
+{
+  "kind": "derived qualitative state-correctness and bounded-work pair",
+  "A": {
+    "ordinaryNegative": "fresh nonzero pause projection stale; deliberately ZERO repeated-ordering control missed collection/reset",
+    "failed": 1,
+    "passed": 2,
+    "rawNative": "FAILED",
+    "operator": "V5",
+    "skipped": 0,
+    "runnerExit": 1,
+    "nativeExit": 1,
+    "operatorSHA256": "106F7DFFAE5496149D9D60E92A505C779057C67664B267659A783C0DC2EF8449"
+  },
+  "B": {
+    "repositoryVerdict": "NOT_EVALUATED",
+    "failed": 0,
+    "functionalPositive": "fresh nonzero pause clears before telemetry; repeated actual rate window collected/reset once",
+    "passed": 3,
+    "rawNative": "PASSED",
+    "operator": "V6",
+    "operatorExit": 2,
+    "runnerExit": 2,
+    "nativeExit": 0,
+    "operatorSHA256": "040652FF8BF68BCE9B4288B4C631C841AADCFF65FF6EC089B0A89BB3BBC7CDAF",
+    "coverage": "filtered",
+    "skipped": 0
+  },
+  "operatorDifference": {
+    "scope": "reporting selection only; functional build/case/control code unchanged",
+    "deltaSHA256": "2F07CAA3AFD0EC70A0131814587FEB864854A9F1057212171E3C661C32EEE05C",
+    "safeSelectorControlsPassed": 15,
+    "safeSelectorControlsFailed": 0
+  },
+  "controlledInputs": {
+    "retainedProducerReadWitnessPaths": 465,
+    "commonFiles": 35584,
+    "allTenA_BCommonStagesSHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+    "sourceDifference": "reviewed five hunks in three product files only",
+    "preparedPayloadFiles": 3056,
+    "ownGeneratedOutputs": "distinct raw archive/module identities recorded per exact own receipt; no swaps or receipt relabelling",
+    "observedCommandTlogs": 199
+  },
+  "closure": {
+    "heldPinsAndSourceChecksComplete": true,
+    "actorsDrainedAndContainedClosed": true,
+    "restored": true,
+    "branchBase": "ebebc14b003c38be28fa5918f85bca6456834d72",
+    "sourceB2Snapshot": "736eff833c02f7f5763d03a61168f11ddd90052514760e2149662d678bd06774"
+  },
+  "claims": {
+    "CPUComparison": "A0 and B15625us are single quantized observations, not benchmark samples",
+    "originalTenRenderSymptomReproduced": false,
+    "codeEquivalence": false,
+    "FullOrARMOrMergedMainAcceptance": false,
+    "statisticalTimingOrSpeedup": false,
+    "speedRatio": false
+  },
+  "historicalOutcomes": {
+    "earlierStoppedCanceledPreparationRunsNotPromoted": true,
+    "AReadOnlyExactIdReconciliationDidNotRerun": true,
+    "originalAParentSelectorFailurePreserved": true,
+    "BPrelaunchRejection": {
+      "status": "FAILED before launch, no B result",
+      "failure": "Canonical launch host mismatch",
+      "processPIDReported": false,
+      "ownerOrTransportExecuted": false,
+      "buildNativeOrSourceMutation": false,
+      "reportSHA256": "BC83CB72F5913B4CEB61B79C3954751912DDEC8460B3F3C1891744BE064324F6",
+      "laterActualB": "explicit canonical-host bootstrap; separate exact returned actors and archives"
+    }
+  },
+  "nativeEmptyCommitPreserved": true,
+  "AOnlyPacketImmutable": true,
+  "AOnlyRoleDocSuperseded": "PauseProjectionUs.value1 is conjunction success flag, not tick delta",
+  "publicCurationIsDerived": true,
+  "reviewStateAtCuration": "raw chain closure complete; final pair semantic review pending; not repository acceptance"
+}

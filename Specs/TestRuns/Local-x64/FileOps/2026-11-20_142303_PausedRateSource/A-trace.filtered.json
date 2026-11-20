@@ -1,0 +1,52 @@
+[
+  {
+    "sourceLine": 107,
+    "sourceLineSHA256": "836F2E601DC628BB0FDF9FB4D83249B80DAC33F3424197A446E9CD117B44BC3D",
+    "text": "[26348953] Popup idle cadence: aligned pause: ageMs=0 beforeRate=3031.076581576027 publishedRate=3031.076581576027 rateCleared=false noTimerTick=true rateCopies=0"
+  },
+  {
+    "sourceLine": 108,
+    "sourceLineSHA256": "C2A8D2A7DA3CCFAB8E69781DF3BFFC962BF4115F2978605E877190037C021C48",
+    "text": "[26348953] Popup idle cadence: FAILED: the pause paint did not clear its retained rate and ETA before another telemetry tick, or collected rates more than once"
+  },
+  {
+    "sourceLine": 109,
+    "sourceLineSHA256": "0327A75AFEE67C07FE2A3A29585707CF66607E1B7801F02D767CD29D797B2062",
+    "text": "[26352437] Popup idle cadence: engine-paused: elapsedMs=2208 timerTicks=2 renders=2 intervalMs=1000 ownerTicks=2 heartbeatMs=1000 presentationBuilds=0 projectableScans=0 uiCpuUs=0"
+  },
+  {
+    "sourceLine": 111,
+    "sourceLineSHA256": "52829AA58F83560A3021E66B769A034C0F91A0CEF54B3CEF95CB1A647698CDA5",
+    "text": "[26352453] Popup idle cadence: repeated pause: heldRate=0 rateCopies=0 timerTicks=0 windowSamples=1 reset=false"
+  },
+  {
+    "sourceLine": 112,
+    "sourceLineSHA256": "EE61F79F4BF7F44D495C60C79B99045CE519309C2BD1744770E5F990B94FCA9E",
+    "text": "[26352453] Popup idle cadence: FAILED: the repeated pause reused the old waiting episode instead of collecting and resetting its actual rate window once"
+  },
+  {
+    "sourceLine": 114,
+    "sourceLineSHA256": "197B63A43CC1D1433E3855094BDB9C8A4ADA5B665F23FEFB54E03D9EF67ADE0C",
+    "text": "[26352453] Popup idle cadence: engine-paused-through-resume observer: rows=138 lost=0 (opt-in fixed storage; graph/host queries add diagnostic overhead; output follows measurement)"
+  },
+  {
+    "sourceLine": 260,
+    "sourceLineSHA256": "BF9CC49A81F83FC31F42F60953964CDBDF557E461EFAE11AFBACE7E08434CB99",
+    "text": "[26353203] PerformCleanup: restoring file-operations settings snapshot"
+  },
+  {
+    "sourceLine": 261,
+    "sourceLineSHA256": "2C358635E50C6FBA34FAA564F759C256FEA3A82B8C853CED03031004D5A5B6C8",
+    "text": "[26353203] PerformCleanup: restored file-operations settings snapshot"
+  },
+  {
+    "sourceLine": 262,
+    "sourceLineSHA256": "23A214E3AAF49B3EB2256CF27E70C8A38C792418F86B4BF8F2171D2B1A19160B",
+    "text": "[26353203] PerformCleanup: restoring app theme snapshot"
+  },
+  {
+    "sourceLine": 263,
+    "sourceLineSHA256": "FF032B7C8A4DC8C74D389C63E81A540A85C40559670281BD7AFE9202D6311607",
+    "text": "[26353218] PerformCleanup: restored app theme snapshot"
+  }
+]

@@ -14307,8 +14307,11 @@ void FolderWindow::FileOperationState::Task::SetPaused(bool paused) noexcept
     if (! paused)
     {
         _pauseCv.notify_all();
-        NotifyTelemetryWorkResumed();
     }
+    // Publish pause entry as well as resume: the popup must clear its retained rate before
+    // selecting the waiting cadence, rather than starting that transition on its first slow tick.
+    if (_state)
+        _state->RequestTaskPresentationRefresh();
 
     GetPerItemTaskScheduler().NotifyWorkAvailable();
 }
@@ -14472,8 +14475,9 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
     if (! paused)
     {
         _pauseCv.notify_all();
-        NotifyTelemetryWorkResumed();
     }
+    if (_state)
+        _state->RequestTaskPresentationRefresh();
 
     GetPerItemTaskScheduler().NotifyWorkAvailable();
 }

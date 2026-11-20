@@ -255,8 +255,9 @@ SDK ABI reader must independently reject unsupported overrides rather than accep
 
 ### Manual diagnostics
 
-The manual native suite defaults to Full and platform `All`; explicit platform choices `x64` and `ARM64` select the
-matching existing pinned native runner. It may select CommandsHandoff, FileOpsVolumes or ViewerSpaceCapture, each mapped
+The manual native suite defaults to Normal (CI) and platform `All`; select Full explicitly for complete qualification.
+Explicit platform choices `x64` and `ARM64` select the matching existing pinned native runner.
+It may select CommandsHandoff, FileOpsVolumes or ViewerSpaceCapture, each mapped
 to one fixed diagnostic case. The adapter permits filtered runner exit 2 only after validating the exact archived native
 cases, quarantine state, profile and source-bound full-solution receipt. It labels that result filtered and
 NOT_EVALUATED for repository coverage and creates no regression or production receipt. Other phases reject these scopes

@@ -2209,7 +2209,22 @@ struct KeepAwakeSelfTestApi final
             calls > (control == WaitControl::QuietResume ? 6u
                      : control == WaitControl::Spurious  ? 3u
                                                          : 2u))
+        {
+            AppendLog(std::format(
+                L"Private conflict wait failure: control={} result={} expected={} awaiting={} waitCalls={} cap={} infiniteCount={} quiet={} quietPeriodMs={}",
+                static_cast<uint32_t>(control),
+                static_cast<uint32_t>(result.load(std::memory_order_acquire)),
+                static_cast<uint32_t>(expected),
+                task._awaitingUserDecision.load(std::memory_order_acquire),
+                calls,
+                control == WaitControl::QuietResume ? 6u
+                : control == WaitControl::Spurious  ? 3u
+                                                    : 2u,
+                task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire),
+                task._awaitingAnswerQuiet.load(std::memory_order_acquire),
+                task._dbgConflictQuietPeriodMs.load(std::memory_order_relaxed)));
             return fail(L"event waits preserve exact decisions/cancellation with bounded deadline wakes");
+        }
         Debug::Perf::Emit(L"FileOps.Power.ConflictWaitCalls", L"control,calls", 0u, static_cast<uint64_t>(control), calls, S_OK);
     }
     return true;

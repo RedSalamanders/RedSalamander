@@ -624,6 +624,90 @@ Describe 'Hosted Default desktop entry lifetime' {
         ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,entry-drained,retire-process-scope,restore'
         Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
+    It 'records retirement after action return and retains a distinct refusal phase' {
+        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $true
+        $r.Output[0] | Should Be 7
+        $rows=$global:rsDefaultDesktopTest.DiagnosticText -join "`n"
+        $rows | Should Match '(?s)stage=action-start.*stage=action-returned.*stage=before-retirement.*restored=True.*stage=retired'
+        $rows | Should Not Match 'stage=retirement-failed'
+        $global:rsDefaultDesktopTest.DiagnosticText.Clear()
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        $rows=$global:rsDefaultDesktopTest.DiagnosticText -join "`n"
+        $rows | Should Match '(?s)stage=action-returned.*stage=before-retirement.*stage=retirement-failed'
+        $rows | Should Not Match 'stage=retired;'
+    }
+    It 'keeps action results and both cleanup operations when a nonfatal host sink throws' {
+        Mock Write-Host { throw [Management.Automation.Host.HostException]::new('seeded host sink failure') } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $true
+        $r.Output[0] | Should Be 7
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+        $global:rsDefaultDesktopTest.Events.Clear()
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded original native failure' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded original native failure'
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
+    It 'propagates fatal before-retirement diagnostics only after disposing both owned resources' {
+        Mock Write-Host {
+            if (($Object -join ' ') -match 'stage=before-retirement;') {
+                $global:rsDefaultDesktopTest.Events.Add('fatal-sink')
+                throw [AccessViolationException]::new('seeded fatal before retirement')
+            }
+        } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded fatal before retirement'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,fatal-sink,retire-process-scope,restore'
+    }
+    It 'retains fatal lifecycle identity with ordinary inner context after both owned disposals' {
+        $fatal=[OutOfMemoryException]::new('seeded fatal lifecycle with context',[InvalidOperationException]::new('ordinary lifecycle context'))
+        $global:rsDefaultDesktopTest | Add-Member NoteProperty FatalContext $fatal
+        Mock Write-Host {
+            if (($Object -join ' ') -match 'stage=before-retirement;') { throw $global:rsDefaultDesktopTest.FatalContext }
+        } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        ([object]::ReferenceEquals($r.Error.Exception,$fatal)) | Should Be $true
+        $r.Error.Exception.InnerException.Message | Should Be 'ordinary lifecycle context'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
+    It 'retains action and restoration primaries beside a fatal lifecycle aggregate after cleanup' {
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        Mock Write-Host {
+            if (($Object -join ' ') -match 'stage=retirement-failed;') {
+                throw [AggregateException]::new('seeded fatal lifecycle aggregate', [Exception[]]@(
+                    [InvalidOperationException]::new('seeded lifecycle companion'),
+                    [OutOfMemoryException]::new('seeded synthetic fatal lifecycle cause')))
+            }
+        } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded earlier action failure' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded earlier action failure'
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        $r.Error.Exception.Message | Should Match 'seeded lifecycle companion'
+        $r.Error.Exception.Message | Should Match 'seeded synthetic fatal lifecycle cause'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
+    It 'retains a fatal scope disposal beside an independent desktop disposal failure' {
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $global:rsDefaultDesktopTest.Scope | Add-Member ScriptMethod Dispose {
+            $global:rsDefaultDesktopTest.Events.Add('retire-process-scope')
+            throw [AccessViolationException]::new('seeded fatal scope disposal')
+        } -Force
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded fatal scope disposal'
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
     It 'preserves a failing native entry after restoring the original desktop' {
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded native entry failure' } }
         $r.Succeeded | Should Be $false
@@ -689,7 +773,12 @@ Describe 'Hosted Default desktop entry lifetime' {
             $global:rsDefaultDesktopTest.Events.Add('create')
             throw $global:rsDefaultDesktopTest.SetupError
         } -ModuleName HostedTestDesktop
-        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        # This control owns the single bounded setup-exception rendering. Lifecycle
+        # phase rows have separate controls and do not belong in its count/budget.
+        Mock Write-Host {
+            $text=$Object -join ' '
+            if ($text -match '^Hosted Default desktop setup exception:') { $global:rsDefaultDesktopTest.DiagnosticText.Add($text) }
+        } -ModuleName HostedTestDesktop
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
         $r.Error.FullyQualifiedErrorId | Should Be 'seeded-hosted-setup'
@@ -722,7 +811,7 @@ Describe 'Hosted Default desktop entry lifetime' {
         ([object]::ReferenceEquals($r.Error.Exception,$failure)) | Should Be $true
         $r.Error.Exception.Message | Should Be 'seeded primary setup error'
         ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
-        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly
+        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly -ParameterFilter { ($Object -join ' ') -match '^Hosted Default desktop setup exception:' }
         Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
     It 'propagates a synthetic fatal diagnostic sink exception without resource exhaustion' {
@@ -740,6 +829,8 @@ Describe 'Hosted Default desktop entry lifetime' {
         $r.Succeeded | Should Be $false
         ([object]::ReferenceEquals($r.Error.Exception,$fatal)) | Should Be $true
         $r.Error.Exception.Message | Should Be 'seeded synthetic fatal diagnostic sink'
+        ([object]::ReferenceEquals($fatal.Data['RSHostedSetupPrimaryError'].Exception,$primary)) | Should Be $true
+        $fatal.Data['RSHostedSetupPrimaryError'].FullyQualifiedErrorId | Should Be 'seeded-hosted-fatal-primary'
         ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
         Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }

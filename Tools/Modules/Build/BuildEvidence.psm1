@@ -10,6 +10,7 @@ Import-Module $validationModule -Scope Local -ErrorAction Stop
 Import-Module $runtimeDependencyModule -Scope Local -ErrorAction Stop
 Import-Module $artifactOperationModule -Scope Local -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'DxUiDependency.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 
 function Get-RSFileSha256 {
     param([Parameter(Mandatory = $true)][string]$LiteralPath)
@@ -176,34 +177,16 @@ function Invoke-RSNativeTextOutput {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
         [Parameter(Mandatory = $true)][string[]]$Argument,
-        [Parameter(Mandatory = $true)][string]$WorkingDirectory
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [hashtable]$AdditionalEnvironment = @{}
     )
 
-    $start = [Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = $FilePath
-    $start.WorkingDirectory = $WorkingDirectory
-    $start.UseShellExecute = $false
-    $start.RedirectStandardOutput = $true
-    $start.RedirectStandardError = $true
-    $start.CreateNoWindow = $true
-    foreach ($value in $Argument) { [void]$start.ArgumentList.Add($value) }
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $start
-    try {
-        if (-not $process.Start()) { throw "Unable to start native identity probe: $FilePath" }
-        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-        $stderrTask = $process.StandardError.ReadToEndAsync()
-        $process.WaitForExit()
-        $stdout = $stdoutTask.GetAwaiter().GetResult()
-        $stderr = $stderrTask.GetAwaiter().GetResult()
-        if ($process.ExitCode -ne 0) {
-            throw "Native identity probe failed with exit $($process.ExitCode): $stderr"
-        }
-        return $stdout
+    $capture = Invoke-RSCapturedProcess -FilePath $FilePath -Arguments $Argument -WorkingDirectory $WorkingDirectory `
+        -AdditionalEnvironment $AdditionalEnvironment -StandardOutputEncoding ([Text.UTF8Encoding]::new($false))
+    if ($capture.ExitCode -ne 0) {
+        throw "Native identity probe failed with exit $($capture.ExitCode): $($capture.StdErr -join [Environment]::NewLine)"
     }
-    finally {
-        $process.Dispose()
-    }
+    return ($capture.StdOut -join [Environment]::NewLine)
 }
 
 function New-RSBuildToolFileIdentity {
@@ -284,7 +267,8 @@ function Get-RSBuildToolchainIdentity {
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [Parameter(Mandatory = $true)][string]$MSBuildPath,
         [Parameter(Mandatory = $true)][ValidateSet('x64', 'ARM64')][string]$Platform,
-        [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration
+        [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration,
+        [hashtable]$AdditionalEnvironment = @{}
     )
 
     $root = [IO.Path]::GetFullPath($RepoRoot)
@@ -296,7 +280,7 @@ function Get-RSBuildToolchainIdentity {
         "/p:Platform=$Platform",
         "-getProperty:$propertyNames",
         '-nologo'
-    )
+    ) -AdditionalEnvironment $AdditionalEnvironment
     $resolved = $jsonText | ConvertFrom-Json -DateKind String
     $properties = $resolved.Properties
     foreach ($name in $propertyNames.Split(',')) {
@@ -753,12 +737,13 @@ function Get-RSBuildIdentityBundle {
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [Parameter(Mandatory = $true)][string]$MSBuildPath,
         [Parameter(Mandatory = $true)][ValidateSet('x64', 'ARM64')][string]$Platform,
-        [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration
+        [Parameter(Mandatory = $true)][ValidateSet('Debug', 'Release', 'ASan Debug')][string]$Configuration,
+        [hashtable]$AdditionalEnvironment = @{}
     )
 
     $root = [IO.Path]::GetFullPath($RepoRoot)
     $toolchain = Get-RSBuildToolchainIdentity -RepoRoot $root -MSBuildPath $MSBuildPath `
-        -Platform $Platform -Configuration $Configuration
+        -Platform $Platform -Configuration $Configuration -AdditionalEnvironment $AdditionalEnvironment
     $sourcePaths = Get-RSGitSourcePaths -RepoRoot $root
     $projectExtensions = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($extension in @('.sln', '.vcxproj', '.props', '.targets')) { [void]$projectExtensions.Add($extension) }

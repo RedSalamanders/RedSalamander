@@ -16,6 +16,10 @@
     early scheduling set remains a valid plan.
     A rejected validation contract is retained in Failures with its reason codes;
     unallowed skips also name the skipped cases, even when assertions passed.
+    Console launch diagnostics distinguish original execution, case inventory and
+    failure classification, actual process-start flags, native exit, redirected
+    stream drain and containment-close return. They observe direct owned launches
+    only; absent rows do not prove background absence or a foreign process creator.
 
     Self-test artifacts are written under:
       REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\
@@ -897,6 +901,72 @@ function Invoke-RSTestEntryClassificationRetry {
         -Reason (Get-RSTestResultFailureReason -Result $retryResult)
 }
 
+function Write-RSSelfTestLaunchDiagnostic {
+    # Direct launch observations only. Missing rows say nothing about other
+    # processes, and these facts cannot identify a foreign Terminal's creator.
+    param(
+        [Parameter(Mandatory)][Diagnostics.ProcessStartInfo]$StartInfo,
+        [Parameter(Mandatory)][string]$InvocationKind,
+        [Parameter(Mandatory)][string]$Stage,
+        [Parameter(Mandatory)][string]$LaunchId,
+        [AllowNull()]$Process,
+        [string]$DesktopRequest = 'inherited',
+        [string]$StreamsDrained = 'not-redirected',
+        [AllowNull()]$NativeExitCode = $null,
+        [bool]$CloseCompleted = $false
+    )
+    try {
+        $processId = $null; $ownedJob = $null; $identityError = $null
+        try {
+            if ($null -ne $Process) {
+                # Adapted dot/.Value reads silently return null when a CLR or
+                # ScriptProperty getter throws. Invoke its accessor explicitly
+                # so unavailable identity and fatal causes remain observable.
+                $idProperty = $Process.PSObject.Properties['Id']
+                if ($null -ne $idProperty) { $processId = $idProperty.get_Value() }
+                $jobProperty = $Process.PSObject.Properties['IsInContainmentJob']
+                if ($null -ne $jobProperty) { $ownedJob = $jobProperty.get_Value() }
+            }
+        } catch {
+            # Invocation wrappers are transport, not the getter's failure policy.
+            $cause = $_.Exception
+        while ($cause -isnot [AggregateException] -and $cause -isnot [OutOfMemoryException] -and $cause -isnot [StackOverflowException] -and $cause -isnot [AccessViolationException] -and $null -ne $cause.InnerException) { $cause = $cause.InnerException }
+            $pending = [Collections.Generic.Queue[Exception]]::new(); $pending.Enqueue($cause)
+            while ($pending.Count -gt 0) {
+                $leaf = $pending.Dequeue()
+                if ($leaf -is [OutOfMemoryException] -or $leaf -is [StackOverflowException] -or $leaf -is [AccessViolationException]) { throw $cause }
+                if ($leaf -is [AggregateException]) { foreach ($inner in $leaf.InnerExceptions) { $pending.Enqueue($inner) } }
+                elseif ($null -ne $leaf.InnerException) { $pending.Enqueue($leaf.InnerException) }
+            }
+            $identityError = $cause.HResult
+        }
+        Write-Host ('[selftest-launch] ' + (([ordered]@{
+        invocation = $InvocationKind; stage = $Stage; launch_id = $LaunchId; observed_utc = [DateTime]::UtcNow.ToString('o')
+        process_id = $processId; creation_identity = 'unavailable'; exact_test_job = $ownedJob; identity_error = $identityError
+        create_no_window = $StartInfo.CreateNoWindow; hidden = $StartInfo.WindowStyle -eq [Diagnostics.ProcessWindowStyle]::Hidden
+        stdout_redirected = $StartInfo.RedirectStandardOutput; stderr_redirected = $StartInfo.RedirectStandardError
+        stdin_redirected = $StartInfo.RedirectStandardInput; desktop_request = $DesktopRequest
+        native_exit_code = $NativeExitCode; redirected_streams_drained = $StreamsDrained; containment_close_completed = $CloseCompleted
+        scope = 'direct-owned-launch-only;absence-uninformative;not-foreign-creator-proof'
+        }) | ConvertTo-Json -Compress))
+    } catch [OutOfMemoryException] { throw }
+      catch [StackOverflowException] { throw }
+      catch [AccessViolationException] { throw }
+      catch {
+        # Match the hosted diagnostic boundary: nonfatal formatting, identity and
+        # sink failures cannot replace native results; fatal errors still propagate.
+        $cause = $_.Exception
+        while ($cause -isnot [AggregateException] -and $cause -isnot [OutOfMemoryException] -and $cause -isnot [StackOverflowException] -and $cause -isnot [AccessViolationException] -and $null -ne $cause.InnerException) { $cause = $cause.InnerException }
+        $pending = [Collections.Generic.Queue[Exception]]::new(); $pending.Enqueue($cause)
+        while ($pending.Count -gt 0) {
+            $leaf = $pending.Dequeue()
+            if ($leaf -is [OutOfMemoryException] -or $leaf -is [StackOverflowException] -or $leaf -is [AccessViolationException]) { throw $cause }
+            if ($leaf -is [AggregateException]) { foreach ($inner in $leaf.InnerExceptions) { $pending.Enqueue($inner) } }
+            elseif ($null -ne $leaf.InnerException) { $pending.Enqueue($leaf.InnerException) }
+        }
+    }
+}
+
 function Invoke-RSSelfTestClassificationRetry {
     param(
         [Parameter(Mandatory = $true)]
@@ -914,7 +984,7 @@ function Invoke-RSSelfTestClassificationRetry {
 
     if (@($failedCaseNames).Count -eq 0 -or @($nonCaseFailureNames).Count -gt 0) {
         $started = Get-Date
-        $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($Entry.Arguments)
+        $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($Entry.Arguments) -InvocationKind 'classification-entry'
         $ended = Get-Date
         return @(
             New-RSTestRetryAttempt `
@@ -933,7 +1003,7 @@ function Invoke-RSSelfTestClassificationRetry {
 
     foreach ($plan in @($retryPlan | Where-Object { [string]$_.mode -eq 'failed-case' })) {
         $started = Get-Date
-        $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($plan.arguments)
+        $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($plan.arguments) -InvocationKind 'classification-case'
         $ended = Get-Date
         $retryAttempts += New-RSTestRetryAttempt `
             -Name $plan.name `
@@ -958,7 +1028,7 @@ function Invoke-RSSelfTestClassificationRetry {
                 -ShuffleTriageSeeds @(Get-RSSelfTestShuffleTriageSeeds -Arguments @($Entry.Arguments) -Count 3) | Where-Object { [string]$_.mode -eq 'shuffle-triage' })
         foreach ($plan in $shuffleRetryPlan) {
             $started = Get-Date
-            $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($plan.arguments)
+            $exitCode = Invoke-RSSelfTestProcess -Entry $Entry -Arguments @($plan.arguments) -InvocationKind 'classification-shuffle'
             $ended = Get-Date
             $retryAttempts += New-RSTestRetryAttempt `
                 -Name $Entry.Name `
@@ -1001,19 +1071,46 @@ function Invoke-RSSelfTestCaseList {
         -RequiresInteractiveDesktop $false `
         -Operation {
             $process = $null
+            $launchId = [guid]::NewGuid().ToString('N')
+            $streamsDrained = 'pending'; $nativeExitCode = $null
+            $nativeFailure = $null
             try {
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind 'listing' -Stage 'before-start' -Process $null -StreamsDrained $streamsDrained
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
                 $stdoutTask = $process.StandardOutput.ReadToEndAsync()
                 $stderrTask = $process.StandardError.ReadToEndAsync()
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind 'listing' -Stage 'started' -Process $process -StreamsDrained $streamsDrained
                 $process.WaitForExit()
+                $nativeExitCode = $process.ExitCode
+                $stdout = $stdoutTask.GetAwaiter().GetResult()
+                $stderr = $stderrTask.GetAwaiter().GetResult()
+                $streamsDrained = 'complete'
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind 'listing' -Stage 'exited' -Process $process -StreamsDrained $streamsDrained -NativeExitCode $nativeExitCode
                 return [pscustomobject]@{
-                    Stdout = $stdoutTask.GetAwaiter().GetResult()
-                    Stderr = $stderrTask.GetAwaiter().GetResult()
-                    ExitCode = $process.ExitCode
+                    Stdout = $stdout
+                    Stderr = $stderr
+                    ExitCode = $nativeExitCode
                 }
-            }
-            finally {
-                Close-RSContainedProcess -Process $process
+            } catch { $nativeFailure = $_; throw } finally {
+                $diagnosticFailure = $null; $closeFailure = $null
+                try {
+                    try {
+                        Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind 'listing' -Stage 'before-close' -Process $process -StreamsDrained $streamsDrained -NativeExitCode $nativeExitCode
+                    } catch { $diagnosticFailure = $_ }
+                } finally {
+                    try { Close-RSContainedProcess -Process $process } catch { $closeFailure = $_ }
+                }
+                if ($null -eq $closeFailure -and $null -eq $diagnosticFailure) {
+                    try {
+                        Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind 'listing' -Stage 'closed' -Process $null -StreamsDrained $streamsDrained -NativeExitCode $nativeExitCode -CloseCompleted ($null -ne $process)
+                    } catch { $diagnosticFailure = $_ }
+                }
+                if ($null -ne $diagnosticFailure -or $null -ne $closeFailure) {
+                    $failures = @($nativeFailure, $diagnosticFailure, $closeFailure | Where-Object { $null -ne $_ } | ForEach-Object { $_.Exception })
+                    if ($failures.Count -gt 1) { throw [AggregateException]::new('Native listing, diagnostics or containment close failed.', [Exception[]]$failures) }
+                    if ($null -ne $closeFailure) { throw $closeFailure }
+                    throw $diagnosticFailure
+                }
             }
         }
 
@@ -1108,7 +1205,10 @@ function Invoke-RSSelfTestProcess {
         [object]$Entry,
 
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
+        [string[]]$Arguments,
+
+        [ValidateSet('original', 'classification-entry', 'classification-case', 'classification-shuffle')]
+        [string]$InvocationKind = 'original'
     )
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -1157,12 +1257,18 @@ function Invoke-RSSelfTestProcess {
         -RequiresInteractiveDesktop (Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry) `
         -Operation {
             $process = $null
+            $launchId = [guid]::NewGuid().ToString('N')
+            $nativeExitCode = $null
+            $nativeFailure = $null
+            $desktopRequest = if ((Test-RSTestEntryRequiresInteractiveDesktop -Entry $Entry) -and $env:REDSALAMANDER_HOSTED_TEST_DESKTOP -ceq 'default') { 'WinSta0\Default' } else { 'inherited' }
             try {
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'before-start' -Process $null -DesktopRequest $desktopRequest
                 Write-Host '[selftest-preflight] Starting the contained native process.' -ForegroundColor DarkGray
                 $launchClock = [Diagnostics.Stopwatch]::StartNew()
                 $process = Start-RSContainedProcess -ProcessStartInfo $startInfo
                 $launchClock.Stop()
                 Write-Host "[selftest-preflight] Contained native process started: $($launchClock.ElapsedMilliseconds) ms; pid=$($process.Id)." -ForegroundColor DarkGray
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'started' -Process $process -DesktopRequest $desktopRequest
                 $process.WaitForExit()
                 $nativeExitCode = $process.ExitCode
                 $exitDirectory = Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot `
@@ -1178,10 +1284,28 @@ function Invoke-RSSelfTestProcess {
                     exit_code = $nativeExitCode
                 }
                 $exitRecord | ConvertTo-Json -Compress | Out-File -LiteralPath $exitPath -Encoding utf8NoBOM -NoClobber -ErrorAction Stop
+                Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'exited' -Process $process -DesktopRequest $desktopRequest -NativeExitCode $nativeExitCode
                 return $nativeExitCode
-            }
-            finally {
-                Close-RSContainedProcess -Process $process
+            } catch { $nativeFailure = $_; throw } finally {
+                $diagnosticFailure = $null; $closeFailure = $null
+                try {
+                    try {
+                        Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'before-close' -Process $process -DesktopRequest $desktopRequest -NativeExitCode $nativeExitCode
+                    } catch { $diagnosticFailure = $_ }
+                } finally {
+                    try { Close-RSContainedProcess -Process $process } catch { $closeFailure = $_ }
+                }
+                if ($null -eq $closeFailure -and $null -eq $diagnosticFailure) {
+                    try {
+                        Write-RSSelfTestLaunchDiagnostic -LaunchId $launchId -StartInfo $startInfo -InvocationKind $InvocationKind -Stage 'closed' -Process $null -DesktopRequest $desktopRequest -NativeExitCode $nativeExitCode -CloseCompleted ($null -ne $process)
+                    } catch { $diagnosticFailure = $_ }
+                }
+                if ($null -ne $diagnosticFailure -or $null -ne $closeFailure) {
+                    $failures = @($nativeFailure, $diagnosticFailure, $closeFailure | Where-Object { $null -ne $_ } | ForEach-Object { $_.Exception })
+                    if ($failures.Count -gt 1) { throw [AggregateException]::new('Native execution, diagnostics or containment close failed.', [Exception[]]$failures) }
+                    if ($null -ne $closeFailure) { throw $closeFailure }
+                    throw $diagnosticFailure
+                }
             }
         }
 }
