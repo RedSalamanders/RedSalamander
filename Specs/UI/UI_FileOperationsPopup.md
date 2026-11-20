@@ -1416,8 +1416,14 @@ Active telemetry retains its existing 100 ms cadence except during an explicitly
 motion deadline or a pending or running automatic window resize, which is bounded by its debounce
 and its ease (I63 slice F). Continuously changing progress interpolation alone must not raise that
 sampling cadence. The rate history advances once per telemetry interval however fast the timer
-ticks. Visible idle motion may use the bounded motion cadence until its final frame settles. The
-timer tick that stops the timer still requests one frame: a motion whose deadline passed since the
+ticks, with one additional reducer synchronization when all open work enters a waiting episode.
+That synchronization clears blocked rates, ETA and the sampling window before the popup selects
+its slow cadence; it must not wait for the first one-second tick to start the marker-to-zero
+transition. Repeated waiting paints do not collect rates again. A reducer sample that observes
+active work invalidates that synchronization even if no paint observed the resume, so a later
+pause cannot reuse an obsolete waiting episode. Visible idle motion may use the bounded motion
+cadence until its final frame settles. The timer tick that stops the timer still requests one
+frame: a motion whose deadline passed since the
 last frame (a late tick on a busy UI thread) settles at its target only when a frame resolves it, so
 a collapsing card never keeps its expanded height (owner report 2026-10-13).
 Automatic completion collapse retires the old expanded-height and disclosure animations and uses compact geometry
@@ -1432,8 +1438,9 @@ or waiting on an unanswered prompt whose metadata has loaded, the popup timer ru
 (elapsed text and taskbar stay current) and renders once per tick. Hosted progress motion is suspended for paused, queued and prompt-blocked cards, and for the aggregate when no task can advance. Unknown totals remain indeterminate and controls remain enabled; resuming re-seeds animation without catching up elapsed paused time. A running, discovering,
 verifying, stopping (cancel requested, which may roll back or clean up) or terminal-owned task, a
 prompt still loading its metadata, or an unfinished informational task keeps the 100 ms cadence.
-Resuming a task, leaving the queue, lifting a queue pause, requesting cancel, and clearing an
-active prompt (whether the worker consumes the user's answer or a cancel or cached decision clears
+Entering or lifting a task pause or queue pause posts a presentation change after releasing the
+task's pause lock. Leaving the queue, requesting cancel, and clearing an active prompt (whether
+the worker consumes the user's answer or a cancel or cached decision clears
 it) post a presentation change, so the 100 ms cadence returns at once rather than on the next slow
 tick. Open path detail suspends auto-resize and drops any pending or running auto-resize motion, so
 it never holds the 16 ms motion cadence; the next measurement after it closes starts from scratch
@@ -1456,6 +1463,24 @@ before the join, where an early payload-less wake must return the owner heartbea
 `FileOps.PopupCadence.PromptAnswerResumeUs` and `FileOps.PopupCadence.UiCpuUs`, and requires at
 most two ticks per 1.2 s while waiting, no per-tick projection rebuild, the 1 s owner heartbeat
 with no fallback pending, and a prompt resume of the 100 ms cadence.
+The real Copy's pause is aligned immediately after an actual nonzero rate update. It dispatches
+one owned running paint before accepting alignment and rechecks the unchanged rate-update identity,
+the original 50 ms maximum sample age, and that new frame's nonzero graph target and retained history.
+It then dispatches the real Pause action and resolves that owned invalidation before another timer tick, requiring
+the published rate and ETA to clear with at most one rate snapshot collection. Read-only scalar
+observations cannot advance the reducer. The existing 600 ms settle and 2,200 ms paused measurement
+remain unchanged, and graph observations must show the zero marker target before the first
+waiting tick. `FileOps.PopupCadence.PauseProjectionUs` records the transition duration in
+microseconds, rate snapshot collections and the before-next-tick clearing witness. This real
+alignment is separate from the synthetic reducer control below.
+After that unchanged paused measurement, a bounded repeated-order control resumes the real held
+task, invokes the actual rate collection/reducer without a cadence refresh, and pauses it again
+before any refresh observes Active. It requires one fresh collection and a reset one-sample
+window before another timer tick. The held task's second rate is zero: this checks the repeated
+ordering, while the first real nonzero alignment establishes the old-negative rate witness.
+`FileOps.PopupCadence.RepeatedPauseProjection` records collections and intervening timer ticks.
+No progress is fabricated, no direct reducer pre-advance replaces the real snapshot, and no
+additional Copy, payload change, barrier extension or idle-measurement delay is introduced.
 The existing case may additionally opt into a default-off `ENABLE_TESTS` observer with
 1,024 preallocated scalar rows and a loss count. It samples actual pinned graph debug
 state, visibility, host invalidation and animation-subscription facts; output follows

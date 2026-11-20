@@ -1317,6 +1317,14 @@ struct SelfTestState
     std::unordered_map<std::uint64_t, CompletedTaskInfo> completedTasks;
 
     // Phase 14 â€” UI lifetime guard regression.
+    Common::Settings::Settings phase14Settings;
+    wil::unique_hwnd phase14Container;
+    std::unique_ptr<FolderWindow> phase14Owner;
+    FolderWindow::FileOperationState* phase14FileOps = nullptr;
+    HWND phase14PopupBeforeShutdown                  = nullptr;
+    std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> phase14SharedCompletedBefore;
+    std::optional<uint64_t> phase14SharedRetainedWitness;
+    bool phase14ShutdownSubmitted = false;
     std::optional<std::uint64_t> phase14InfoTask;
     std::atomic<bool> phase14ShutdownDone{false};
 };
@@ -3250,6 +3258,31 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     }
     // The host timer guards against reentrant Tick calls while the shared message pump dispatches
     // completion notifications. All injected worker barriers above are released before cancellation.
+    if (state.phase14Owner)
+    {
+        if (state.phase14ShutdownSubmitted)
+        {
+            const auto retired = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return state.phase14ShutdownDone.load(std::memory_order_acquire);
+            }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Phase14 private shutdown callback retirement"});
+            if (! retired.conditionMet)
+            {
+                // Keep the private owner and callback storage alive, along with its
+                // providers and scratch. A later family must not reuse this process.
+                state.retainTempRootOnFailure = true;
+                AppendLog(retired.timeoutDiagnostic);
+                return false;
+            }
+        }
+        else if (! CancelOutstandingSelfTestOperations(state.phase14FileOps))
+        {
+            state.retainTempRootOnFailure = true;
+            return false;
+        }
+        state.phase14Owner.reset();
+        state.phase14FileOps = nullptr;
+        state.phase14Container.reset();
+    }
     if (! CancelOutstandingSelfTestOperations(state.fileOps))
     {
         state.failed.store(true, std::memory_order_release);
@@ -3259,6 +3292,11 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
             state.failureMessage = L"FileOps cleanup could not drain outstanding operations.";
         }
         return false;
+    }
+    if (state.fileOps && state.phase14SharedRetainedWitness.has_value())
+    {
+        state.fileOps->DismissCompletedTask(state.phase14SharedRetainedWitness.value());
+        state.phase14SharedRetainedWitness.reset();
     }
     RestoreSelfTestSharedTransferLimit(state);
     if (state.batchRenameExactAutoAcceptBefore.has_value())
@@ -7729,6 +7767,10 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.defaultSpeedLimitCandidateUs                    = 0;
     state.defaultSpeedLimitDummyConfigSnapshot.clear();
     state.completedTasks.clear();
+    state.phase14SharedCompletedBefore.clear();
+    state.phase14SharedRetainedWitness.reset();
+    state.phase14ShutdownSubmitted   = false;
+    state.phase14PopupBeforeShutdown = nullptr;
     state.phase14InfoTask.reset();
     state.phase14ShutdownDone.store(false, std::memory_order_release);
     ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
@@ -10578,11 +10620,116 @@ using TickResult = std::optional<bool>;
             cadencePopupState->DebugStopCadenceCaptureForSelfTest();
     });
 
+    // Pause immediately after a real nonzero rate update, before the next telemetry tick can
+    // clear it. The real Pause action invalidates the popup: its paint used to select 1 s while
+    // leaving the running rate intact, so the first slow tick started a late marker animation.
+    // These observations only read publication facts; no fixture adapter advances the reducer.
+    const auto alignmentBefore = cadencePopupState->DebugTelemetrySnapshot();
+    FileOperationsPopupInternal::PopupRateSamplingDebugSnapshot alignedRate{};
+    uintptr_t alignedGraph         = 0u;
+    size_t alignedGraphSamples     = 0u;
+    uint64_t lastForcedRateUpdate  = 0u;
+    ULONGLONG lastForcedSampleTick = 0u;
+    const auto aligned             = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        const auto telemetry = cadencePopupState->DebugTelemetrySnapshot();
+        if (! cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, alignedRate))
+            return false;
+        const ULONGLONG sampledAt = GetTickCount64();
+        // Less than the ordinary rate-update gap, so the pause paint cannot be mistaken for
+        // another telemetry sample. A missed observation must await another actual sample.
+        if (telemetry.timerIntervalMs != 100u || telemetry.rateUpdates <= alignmentBefore.rateUpdates || alignedRate.currentBandwidth <= 0.0 ||
+            sampledAt < alignedRate.lastUpdateTick || sampledAt - alignedRate.lastUpdateTick > 50u)
+            return false;
+
+        // WM_TIMER can publish this rate while its WM_PAINT is still pending. Resolve one
+        // owned running frame, then require the same sample to remain fresh. Looking at an
+        // older AfterGraphSync row could otherwise compare the paused history to the frame
+        // before this rate sample. No timer/presentation pump or reducer call occurs here.
+        const ULONGLONG sampledTick = alignedRate.lastUpdateTick;
+        if (telemetry.rateUpdates == lastForcedRateUpdate && sampledTick == lastForcedSampleTick)
+            return false;
+        // A skipped/failed render must await a different natural sample, not repeatedly force
+        // this eligible sample on each predicate poll. Mark before either native call can fail.
+        lastForcedRateUpdate           = telemetry.rateUpdates;
+        lastForcedSampleTick           = sampledTick;
+        const size_t runningPaintBegin = cadencePopupState->DebugCadenceObservationsForSelfTest().size();
+        if (! InvalidateRect(popup, nullptr, FALSE) || ! UpdateWindow(popup))
+            return false;
+        const auto paintedTelemetry = cadencePopupState->DebugTelemetrySnapshot();
+        if (! cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, alignedRate))
+            return false;
+        const ULONGLONG paintedAt = GetTickCount64();
+        if (paintedTelemetry.timerIntervalMs != 100u || paintedTelemetry.timerTicks != telemetry.timerTicks ||
+            paintedTelemetry.rateUpdates != telemetry.rateUpdates || alignedRate.lastUpdateTick != sampledTick || alignedRate.currentBandwidth <= 0.0 ||
+            paintedAt < sampledTick || paintedAt - sampledTick > 50u)
+            return false;
+        for (const auto& row : cadencePopupState->DebugCadenceObservationsForSelfTest().subspan(runningPaintBegin))
+        {
+            if (row.event == PopupCadenceDebugEvent::AfterGraphSync && row.publishedStateKnown && ! row.publishedPaused && row.graphVisible &&
+                row.graphIdentity != 0u && row.graph.sampleCount != 0u && row.graph.targetCurrentValue == alignedRate.currentBandwidth)
+            {
+                alignedGraph        = row.graphIdentity;
+                alignedGraphSamples = row.graph.sampleCount;
+            }
+        }
+        return alignedGraph != 0u;
+    },
+        {.timeout = SelfTest::Scale(2s), .operationName = L"nonzero running rate immediately before pause"});
+    if (! aligned.conditionMet)
+        return reject(L"the real held Copy did not expose a coherent fresh nonzero rate and running graph for pause alignment");
+    const auto alignedTelemetry        = cadencePopupState->DebugTelemetrySnapshot();
+    const size_t pauseObservationBegin = cadencePopupState->DebugCadenceObservationsForSelfTest().size();
+    const ULONGLONG pauseStartedTick   = GetTickCount64();
+    if (pauseStartedTick < alignedRate.lastUpdateTick || pauseStartedTick - alignedRate.lastUpdateTick > 50u)
+        return reject(L"the coherent nonzero rate observation expired before the real Pause action");
+    const auto pauseStartedAt = std::chrono::steady_clock::now();
+    FileOperationsPopupInternal::PopupSelfTestInvoke pause{};
+    pause.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskPause;
+    pause.taskId = taskId;
+    static_cast<void>(InvokePopupSelfTest(popup, pause)); // Success is the real task state, not this handler's zero LRESULT.
+    if (! task->IsPaused())
+        return reject(L"the real Pause action did not pause its task");
+    UpdateWindow(popup); // Resolve the action's owned invalidation before dispatching another timer or presentation post.
+    FileOperationsPopupInternal::PopupRateSamplingDebugSnapshot pausedRate{};
+    const auto pauseTelemetry = cadencePopupState->DebugTelemetrySnapshot();
+    const bool rateCleared    = cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, pausedRate) && pausedRate.currentBandwidth == 0.0 &&
+                                ! pausedRate.hasSmoothedEta && ! pausedRate.hasProvisionalEta;
+    const bool noTimerTick    = pauseTelemetry.timerTicks == alignedTelemetry.timerTicks;
+    const uint64_t rateCopies = pauseTelemetry.rateSnapshots - alignedTelemetry.rateSnapshots;
+    Debug::Perf::Emit(L"FileOps.PopupCadence.PauseProjectionUs",
+                      L"engine-aligned-pause",
+                      Debug::Perf::ElapsedUs(pauseStartedAt),
+                      rateCopies,
+                      rateCleared && noTimerTick ? 1u : 0u,
+                      rateCleared && noTimerTick ? S_OK : E_FAIL);
+    note(std::format(L"aligned pause: ageMs={} beforeRate={} publishedRate={} rateCleared={} noTimerTick={} rateCopies={}",
+                     pauseStartedTick - alignedRate.lastUpdateTick,
+                     alignedRate.currentBandwidth,
+                     pausedRate.currentBandwidth,
+                     rateCleared,
+                     noTimerTick,
+                     rateCopies));
+    if (! rateCleared || ! noTimerTick || rateCopies > 1u)
+        fail(L"the pause paint did not clear its retained rate and ETA before another telemetry tick, or collected rates more than once");
+
     // Paused: the waiting cadence for the popup, the backed-off heartbeat for the owner (x-perf#5).
-    task->SetPaused(true);
     if (! waitForInterval(1000u, SelfTest::Scale(2s), L"paused copy waiting cadence").conditionMet)
         fail(L"the paused Copy kept the 100 ms telemetry cadence");
     static_cast<void>(pumpFor(600ms)); // the Paused card's bounded control transitions finish first
+    bool zeroTargetBeforeSlowTick = false;
+    const auto pauseRows          = cadencePopupState->DebugCadenceObservationsForSelfTest().subspan(pauseObservationBegin);
+    for (const auto& row : pauseRows)
+    {
+        if (row.event == FileOperationsPopupInternal::PopupCadenceDebugEvent::Message && row.popupTimer && row.telemetryIntervalMs == 1000u)
+            break;
+        if (row.event == FileOperationsPopupInternal::PopupCadenceDebugEvent::AfterGraphSync && row.publishedStateKnown && row.publishedPaused &&
+            row.graphQueried && row.graphIdentity == alignedGraph && row.graph.sampleCount == alignedGraphSamples && row.graph.targetCurrentValue == 0.0)
+            zeroTargetBeforeSlowTick = true;
+    }
+    if (! zeroTargetBeforeSlowTick)
+        fail(L"the real paused graph did not receive its zero marker target before the first waiting tick");
     if (! measure(L"engine-paused", 2200ms, before, after))
         return reject(L"paused measurement pump failed");
     if (after.popup.timerTicks - before.popup.timerTicks > 3u || after.popup.taskSnapshots - before.popup.taskSnapshots > 4u ||
@@ -10591,6 +10738,40 @@ using TickResult = std::optional<bool>;
                          after.popup.timerTicks - before.popup.timerTicks,
                          after.popup.taskSnapshots - before.popup.taskSnapshots,
                          after.recoveryTicks - before.recoveryTicks));
+
+    // Repeat the ordering that an aggregate-only waiting latch misses: the real task resumes,
+    // a regular rate collection observes it, then it pauses again before any cadence refresh sees
+    // Active. The held Copy advances no more bytes, so this second rate is deliberately zero;
+    // the nonzero old-negative witness above remains separate. Exercise actual UpdateRates with
+    // the real snapshot, never an injected progress value or a direct reducer pre-advance.
+    task->SetPaused(false);
+    cadencePopupState->DebugUpdateRatesWithoutCadenceRefreshForSelfTest();
+    FileOperationsPopupInternal::PopupRateSamplingDebugSnapshot resumedRate{};
+    const auto repeatedBefore = cadencePopupState->DebugTelemetrySnapshot();
+    if (repeatedBefore.timerIntervalMs != 1000u || ! cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, resumedRate) ||
+        resumedRate.currentBandwidth != 0.0)
+        return reject(L"the held Copy did not expose the zero-rate resume without an intervening active cadence refresh");
+    static_cast<void>(InvokePopupSelfTest(popup, pause));
+    if (! task->IsPaused())
+        return reject(L"the repeated real Pause action did not pause its task");
+    UpdateWindow(popup);
+    const auto repeatedAfter = cadencePopupState->DebugTelemetrySnapshot();
+    FileOperationsPopupInternal::PopupRateSamplingDebugSnapshot repeatedRate{};
+    const uint64_t repeatedCopies = repeatedAfter.rateSnapshots - repeatedBefore.rateSnapshots;
+    const uint64_t repeatedTicks  = repeatedAfter.timerTicks - repeatedBefore.timerTicks;
+    const bool repeatedReset      = cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, repeatedRate) && repeatedRate.currentBandwidth == 0.0 &&
+                                    ! repeatedRate.hasSmoothedEta && ! repeatedRate.hasProvisionalEta && repeatedRate.windowSampleCount == 1u &&
+                                    repeatedCopies == 1u && repeatedTicks == 0u;
+    Debug::Perf::Emit(
+        L"FileOps.PopupCadence.RepeatedPauseProjection", L"engine-held-zero-rate", 0u, repeatedCopies, repeatedTicks, repeatedReset ? S_OK : E_FAIL);
+    note(std::format(L"repeated pause: heldRate={} rateCopies={} timerTicks={} windowSamples={} reset={}",
+                     resumedRate.currentBandwidth,
+                     repeatedCopies,
+                     repeatedTicks,
+                     repeatedRate.windowSampleCount,
+                     repeatedReset));
+    if (! repeatedReset)
+        fail(L"the repeated pause reused the old waiting episode instead of collecting and resetting its actual rate window once");
 
     // Resume re-evaluates at once through the presentation post, not on the next slow tick.
     task->SetPaused(false);
@@ -17709,13 +17890,19 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 }
 #pragma warning(pop)
 
-void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept
+void FileOperationsSelfTest::NotifyTaskCompleted(FolderWindow* owner, std::uint64_t taskId, HRESULT hr) noexcept
 {
     SelfTestState& state = GetState();
     if (! state.running.load(std::memory_order_acquire))
     {
         return;
     }
+
+    // Task IDs are local to each engine. Only the actual shared completion
+    // destination owns this map; private fixtures read their own summaries.
+    // Owner provenance remains valid even after a private Task has retired.
+    if (owner != state.folderWindow)
+        return;
 
     CompletedTaskInfo info{};
     info.hr             = hr;
@@ -17881,7 +18068,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 {
     return false;
 }
-void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t /*taskId*/, HRESULT /*hr*/) noexcept
+void FileOperationsSelfTest::NotifyTaskCompleted(FolderWindow* /*owner*/, std::uint64_t /*taskId*/, HRESULT /*hr*/) noexcept
 {
 }
 bool FileOperationsSelfTest::IsRunning() noexcept

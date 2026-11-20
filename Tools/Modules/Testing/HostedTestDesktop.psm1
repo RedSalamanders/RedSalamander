@@ -1712,6 +1712,38 @@ function Write-RSHostedSetupFailureDiagnostic {
         # ErrorRecord if formatting or the diagnostic sink fails.
     }
 }
+function Write-RSHostedLifecycleDiagnostic {
+    # Fixed lifecycle rows and the existing retirement exception chain only;
+    # mirror Write-RSHostedSetupFailureDiagnostic's nonfatal/fatal sink policy.
+    param([Parameter(Mandatory)][string]$Stage, [AllowNull()]$Desktop, [AllowNull()]$ErrorRecord)
+    try {
+        if ($Stage -ceq 'entered') {
+            Write-Host ('Hosted Default desktop entered: ' + $Desktop.Name + '; foregroundBoundaryReady=' + $Desktop.ForegroundBoundaryReady)
+        } elseif ($Stage -ceq 'restore-result') {
+            Write-Host ('Hosted Default desktop retired: ' + $Desktop.Name + '; restored=' + $Desktop.Restored)
+        } else {
+            Write-Host ('[selftest-boundary] stage=' + $Stage + '; observedUtc=' + [DateTime]::UtcNow.ToString('o'))
+            if ($null -ne $ErrorRecord) {
+                Write-Host ('Hosted Default desktop retirement exception: ' + $ErrorRecord.Exception.ToString())
+            }
+        }
+    } catch [OutOfMemoryException] { throw }
+      catch [StackOverflowException] { throw }
+      catch [AccessViolationException] { throw }
+      catch {
+        # Logging cannot replace the captured action/retirement result.
+        $cause = $_.Exception
+        while ($cause -isnot [AggregateException] -and $cause -isnot [OutOfMemoryException] -and $cause -isnot [StackOverflowException] -and $cause -isnot [AccessViolationException] -and $null -ne $cause.InnerException) { $cause = $cause.InnerException }
+        $pending = [Collections.Generic.Queue[Exception]]::new(); $pending.Enqueue($cause)
+        while ($pending.Count -gt 0) {
+            $leaf = $pending.Dequeue()
+            if ($leaf -is [OutOfMemoryException] -or $leaf -is [StackOverflowException] -or $leaf -is [AccessViolationException]) { throw $cause }
+            if ($leaf -is [AggregateException]) { foreach ($inner in $leaf.InnerExceptions) { $pending.Enqueue($inner) } }
+            elseif ($null -ne $leaf.InnerException) { $pending.Enqueue($leaf.InnerException) }
+        }
+    }
+}
+
 function Invoke-RSWithHostedDefaultDesktop {
     <#
     .SYNOPSIS
@@ -1740,6 +1772,9 @@ function Invoke-RSWithHostedDefaultDesktop {
         Synchronous entry operation that closes its containment job before returning.
     .OUTPUTS
         Action output and boundary/readiness/restoration diagnostics, including the
+        action-start/return and before-retirement/retired/failure console phases.
+        These direct lifecycle facts cannot identify a foreign process creator.
+        The output also includes the
         bounded captured setup traversal/emitted text with visited nonaggregate messages, aggregate-summary-omitted markers, existing HResult and Win32 codes,
         and the complete exception chain when retirement fails. Original failures remain fatal.
     .NOTES
@@ -1764,6 +1799,8 @@ function Invoke-RSWithHostedDefaultDesktop {
         throw 'Hosted foreground boundaries are restricted to the project GitHub-hosted runner.'
     }
     $desktop = $null; $processScope = $null; $actionError = $null; $restoreError = $null
+    $setupPrimaryError = $null; $scopeRestoreError = $null
+    $actionDiagnosticError = $null; $beforeRetirementDiagnosticError = $null; $retirementDiagnosticError = $null
     try {
         if ($env:RS_HOSTED_ARM64_STOCK_PREPARATION -ceq '1') {
             [void](Invoke-RSHostedArm64StockPreparation -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))))
@@ -1771,26 +1808,58 @@ function Invoke-RSWithHostedDefaultDesktop {
         try {
             $desktop = New-RSHostedDefaultDesktop
         } catch {
+            $setupPrimaryError = $_
             Write-RSHostedSetupFailureDiagnostic -ErrorRecord $_
             throw
         }
         if ($desktop.ForegroundBoundaryReady -cne $true) { throw 'The hosted Default desktop has no verified foreground boundary.' }
-        Write-Host ('Hosted Default desktop entered: ' + $desktop.Name + '; foregroundBoundaryReady=' + $desktop.ForegroundBoundaryReady)
+        Write-RSHostedLifecycleDiagnostic -Stage 'entered' -Desktop $desktop
         $processScope = New-RSHostedDesktopProcessScope -Name $desktop.Name
+        Write-RSHostedLifecycleDiagnostic -Stage 'action-start'
         $result = & $Action
-    } catch { $actionError = $_ } finally {
+        Write-RSHostedLifecycleDiagnostic -Stage 'action-returned'
+    } catch {
+        $actionError = $_
+        if ($null -ne $setupPrimaryError -and -not [object]::ReferenceEquals($setupPrimaryError.Exception, $actionError.Exception)) {
+            # Preserve the original setup evidence while retaining the exact fatal
+            # exception instance promised by the existing setup-sink contract.
+            $actionError.Exception.Data['RSHostedSetupPrimaryError'] = $setupPrimaryError
+        }
+        try { Write-RSHostedLifecycleDiagnostic -Stage 'action-or-setup-failed' } catch { $actionDiagnosticError = $_ }
+    } finally {
         try {
-            try { if ($null -ne $processScope) { $processScope.Dispose() } }
-            finally { if ($null -ne $desktop) { $desktop.Dispose() } }
+            try {
+                try { Write-RSHostedLifecycleDiagnostic -Stage 'before-retirement' } catch { $beforeRetirementDiagnosticError = $_ }
+            }
+            finally {
+                try { if ($null -ne $processScope) { $processScope.Dispose() } } catch { $scopeRestoreError = $_ }
+                finally { if ($null -ne $desktop) { $desktop.Dispose() } }
+            }
+            if ($null -ne $scopeRestoreError) { throw $scopeRestoreError }
             if ($null -ne $desktop) {
-                Write-Host ('Hosted Default desktop retired: ' + $desktop.Name + '; restored=' + $desktop.Restored)
+                Write-RSHostedLifecycleDiagnostic -Stage 'restore-result' -Desktop $desktop
                 if ($desktop.Restored -ne $true) { throw 'The hosted Default desktop did not restore its original foreground and focus.' }
+                Write-RSHostedLifecycleDiagnostic -Stage 'retired'
             }
         } catch {
             $restoreError = $_
             # PowerShell's outer method-invocation message hides the native boundary cause.
-            Write-Host ('Hosted Default desktop retirement exception: ' + $_.Exception.ToString())
+            try { Write-RSHostedLifecycleDiagnostic -Stage 'retirement-failed' -ErrorRecord $_ } catch { $retirementDiagnosticError = $_ }
         }
+    }
+    if ($null -ne $scopeRestoreError -or $null -ne $actionDiagnosticError -or $null -ne $beforeRetirementDiagnosticError -or $null -ne $retirementDiagnosticError) {
+        # Keep the earlier primary alongside a fatal diagnostic after all owned
+        # retirement. A sink can rethrow the same exception instance at each row.
+        $records = @()
+        $causes = @()
+        foreach ($record in @($actionError, $scopeRestoreError, $restoreError, $actionDiagnosticError, $beforeRetirementDiagnosticError, $retirementDiagnosticError)) {
+            if ($null -eq $record) { continue }
+            $cause = $record.Exception
+            while ($cause -isnot [AggregateException] -and $cause -isnot [OutOfMemoryException] -and $cause -isnot [StackOverflowException] -and $cause -isnot [AccessViolationException] -and $null -ne $cause.InnerException) { $cause = $cause.InnerException }
+            if (@($causes | Where-Object { [object]::ReferenceEquals($_, $cause) }).Count -eq 0) { $records += $record; $causes += $cause }
+        }
+        if ($records.Count -eq 1) { throw $records[0] }
+        throw [AggregateException]::new('Native entry, hosted desktop retirement or fatal lifecycle diagnostics failed.', [Exception[]]@($records | ForEach-Object { $_.Exception }))
     }
     if ($null -ne $actionError -and $null -ne $restoreError) {
         throw [AggregateException]::new('Native entry and hosted desktop restoration both failed.', [Exception[]]@($actionError.Exception, $restoreError.Exception))

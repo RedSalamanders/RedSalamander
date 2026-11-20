@@ -18,6 +18,24 @@ profile/volume setup, the existing interactive lease wait, and contained process
 launch. Keep the parent console log when investigating a delay. The rows do not
 change native deadlines or qualify performance/coverage.
 
+`Run-AllTests.ps1` also logs direct owned launch facts for original execution,
+case inventory and failure classification: a per-launch join ID, actual no-window,
+hidden and redirection flags, requested desktop, captured PID/job query result,
+native exit, redirected-stream drain and containment-close return. Process creation
+identity is explicitly unavailable when the existing launch object does not expose
+it. Hosted boundaries log action and retirement phases separately. These rows do
+not observe other process creation; absent rows and a completed close do not prove
+background absence, descendant quiescence or the creator of a foreign Terminal.
+Nonfatal diagnostic failures preserve native/action/retirement results. Cleanup
+still runs if a fatal before-close or before-retirement diagnostic propagates;
+successful-close rows require the close call to return.
+Identity fields use the explicit property accessor: PowerShell's adapted dot and
+`.Value` reads can hide getter exceptions. Ordinary accessor failures retain an
+unavailable result and the underlying error code; fatal underlying causes propagate.
+Aggregate branches are preserved when classifying fatal causes. Earlier execution
+or cleanup errors remain alongside fatal diagnostics, both owned disposal attempts
+still run, and fatal setup diagnostics retain their original setup ErrorRecord.
+
 `Build-LocalSdkCandidate.ps1` explicitly builds the Release application and plugin
 closure against one independently hashed local DxUi descriptor. Supply the native
 Visual Studio `-MSBuildPath` selected for the application and a positive `-BuildNumber`

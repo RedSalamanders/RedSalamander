@@ -7,6 +7,340 @@ $helperModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $testSupport = Join-Path $PSScriptRoot 'TestSupport.psm1'
 Import-Module $testSupport -Force
 
+# Extract only the actual private diagnostic writer; never execute the runner.
+$launchTokens = $null; $launchErrors = $null
+$launchAst = [Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $repoRoot 'Tools/Run-AllTests.ps1'), [ref]$launchTokens, [ref]$launchErrors)
+$launchWriter = $launchAst.Find({ param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-RSSelfTestLaunchDiagnostic'
+}, $true)
+if (-not $launchWriter) { throw 'Missing actual private launch diagnostic writer.' }
+. ([scriptblock]::Create($launchWriter.Extent.Text))
+
+Describe 'Direct self-test launch facts' {
+    It 'retains a real CLR fatal getter with ordinary inner context after native and listing cleanup' {
+        if (-not ('RSLaunchFatalContextProbe' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+public sealed class RSLaunchFatalContextProbe {
+    public Exception Failure;
+    public int Id { get { return 48; } }
+    public int ExitCode { get { return 17; } }
+    public bool IsInContainmentJob { get { throw Failure; } }
+    public StringReader StandardOutput = new StringReader("{}");
+    public StringReader StandardError = new StringReader("");
+    public void WaitForExit() { }
+}
+'@
+        }
+        Import-Module $helperModule -ErrorAction Stop
+        & {
+            foreach($name in @('Invoke-RSSelfTestProcess','Invoke-RSSelfTestCaseList')) {
+                $definition=$launchAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+                . ([scriptblock]::Create($definition.Extent.Text))
+            }
+            $fixtureRoot=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('fatal-context-'+[guid]::NewGuid().ToString('N'))
+            $testRunContext=@{TestRoot=(Get-RSTestSandboxRoot -RepoRoot $repoRoot);RunRoot=$fixtureRoot}
+            $fatal=[OutOfMemoryException]::new('seeded fatal CLR with context',[InvalidOperationException]::new('ordinary inner context'))
+            $fixture=@{Closes=0; Child=$null}
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) $false }
+            function Invoke-RSInteractiveDesktopOperation { param($RequiresInteractiveDesktop,$Operation) & $Operation }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $fixture.Child=[RSLaunchFatalContextProbe]::new();$fixture.Child.Failure=$fatal
+                $fixture.Child
+            }
+            function Close-RSContainedProcess { param($Process) ++$fixture.Closes }
+            function Write-Host { param($Object) }
+            $entry=[pscustomobject]@{Path='fixture.exe';WorkingDirectory=$TestDrive;Arguments=@('--commands-selftest')}
+            foreach($kind in @('native','listing')) {
+                $r=Invoke-RSTestBlock {
+                    if($kind -eq 'native'){Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--commands-selftest')}
+                    else{Invoke-RSSelfTestCaseList -Entry $entry}
+                }
+                $r.Succeeded | Should Be $false
+                $pending=[Collections.Generic.Queue[Exception]]::new();$pending.Enqueue($r.Error.Exception)
+                $found=$false
+                while($pending.Count){$cause=$pending.Dequeue();if([object]::ReferenceEquals($cause,$fatal)){$found=$true};if($cause -is [AggregateException]){foreach($inner in $cause.InnerExceptions){$pending.Enqueue($inner)}}elseif($null -ne $cause.InnerException){$pending.Enqueue($cause.InnerException)}}
+                $found | Should Be $true
+                ([object]::ReferenceEquals($fatal.InnerException,$fixture.Child.Failure.InnerException)) | Should Be $true
+            }
+            $fixture.Closes | Should Be 2
+        }
+    }
+    It 'reads real CLR getter failures strictly and propagates their fatal underlying causes' {
+        if (-not ('RSLaunchDiagnosticGetterProbe' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+public sealed class RSLaunchDiagnosticGetterProbe {
+    public string Mode;
+    public int Id { get { return 45; } }
+    public bool IsInContainmentJob {
+        get {
+            if (Mode == "ordinary") throw new InvalidOperationException("private ordinary CLR getter");
+            if (Mode == "fatal") throw new AccessViolationException("seeded fatal CLR getter");
+            if (Mode == "oom") throw new OutOfMemoryException("seeded synthetic OOM CLR getter");
+            return true;
+        }
+    }
+}
+'@
+        }
+        & {
+            $rows=[Collections.Generic.List[string]]::new()
+            function Write-Host { param($Object) $rows.Add([string]$Object) }
+            $child=[RSLaunchDiagnosticGetterProbe]::new()
+            $child.Mode='ordinary'
+            Write-RSSelfTestLaunchDiagnostic -StartInfo ([Diagnostics.ProcessStartInfo]::new()) -InvocationKind 'original' -Stage 'started' -LaunchId 'ordinary-clr' -Process $child
+            $row=$rows[0].Substring('[selftest-launch] '.Length)|ConvertFrom-Json
+            $row.process_id | Should Be 45
+            ($null -eq $row.exact_test_job) | Should Be $true
+            $row.identity_error | Should Be ([InvalidOperationException]::new().HResult)
+            $rows[0] | Should Not Match 'private ordinary CLR getter'
+            foreach($mode in @('fatal','oom')) {
+                $child.Mode=$mode
+                $r=Invoke-RSTestBlock {
+                    Write-RSSelfTestLaunchDiagnostic -StartInfo ([Diagnostics.ProcessStartInfo]::new()) -InvocationKind 'original' -Stage 'started' -LaunchId 'fatal-clr' -Process $child
+                }
+                $r.Succeeded | Should Be $false
+                $expected=if($mode -eq 'fatal'){[AccessViolationException]}else{[OutOfMemoryException]}
+                $r.Error.Exception.GetBaseException().GetType() | Should Be $expected
+            }
+        }
+    }
+    It 'keeps missing and successfully null identity fields unavailable without inventing a getter error' {
+        & {
+            $rows=[Collections.Generic.List[string]]::new()
+            function Write-Host { param($Object) $rows.Add([string]$Object) }
+            foreach($child in @([pscustomobject]@{Id=46},[pscustomobject]@{Id=46;IsInContainmentJob=$null})) {
+                Write-RSSelfTestLaunchDiagnostic -StartInfo ([Diagnostics.ProcessStartInfo]::new()) -InvocationKind 'original' -Stage 'started' -LaunchId 'unavailable' -Process $child
+            }
+            foreach($text in $rows) {
+                $row=$text.Substring('[selftest-launch] '.Length)|ConvertFrom-Json
+                $row.process_id | Should Be 46
+                ($null -eq $row.exact_test_job) | Should Be $true
+                ($null -eq $row.identity_error) | Should Be $true
+            }
+        }
+    }
+    It 'starts both actual listing drains before emitting the started diagnostic' {
+        Import-Module $helperModule -ErrorAction Stop
+        $listingDefinition = $launchAst.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSSelfTestCaseList'
+        }, $true)
+        & {
+            . ([scriptblock]::Create($listingDefinition.Extent.Text))
+            $events = [Collections.Generic.List[string]]::new()
+            function Invoke-RSInteractiveDesktopOperation { param($RequiresInteractiveDesktop, $Operation) & $Operation }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $output = [pscustomobject]@{ Name='stdout'; Reader=[IO.StringReader]::new('{"suites":[{"suite":"Commands","cases":[]}]}') }
+                $errorOutput = [pscustomobject]@{ Name='stderr'; Reader=[IO.StringReader]::new('') }
+                foreach ($reader in @($output,$errorOutput)) {
+                    $reader | Add-Member ScriptMethod ReadToEndAsync {
+                        $events.Add($this.Name+'-drain-start')
+                        return $this.Reader.ReadToEndAsync()
+                    }
+                }
+                $p=[pscustomobject]@{Id=42;ExitCode=0;IsInContainmentJob=$true;StandardOutput=$output;StandardError=$errorOutput}
+                $p | Add-Member ScriptMethod WaitForExit { $events.Add('wait') }
+                $p
+            }
+            function Close-RSContainedProcess { param($Process) $events.Add('close') }
+            function Write-Host {
+                param($Object)
+                if ([string]$Object -match '"stage":"started"') {
+                    $events.Add('started-diagnostic')
+                    # This sink may block/fail: both reads must already be live.
+                }
+            }
+            $entry=[pscustomobject]@{Path='fixture.exe';WorkingDirectory=$TestDrive;Arguments=@('--commands-selftest')}
+            $listed=Invoke-RSSelfTestCaseList -Entry $entry
+            $listed.suites[0].suite | Should Be 'Commands'
+            ($events -join ',') | Should Be 'stdout-drain-start,stderr-drain-start,started-diagnostic,wait,close'
+        }
+    }
+    It 'guarantees actual native close across nonfatal sink failures and fatal before-close diagnostics' {
+        Import-Module $helperModule -ErrorAction Stop
+        $nativeDefinition = $launchAst.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSSelfTestProcess'
+        }, $true)
+        & {
+            . ([scriptblock]::Create($nativeDefinition.Extent.Text))
+            $fixtureRoot = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('launch-sink-' + [guid]::NewGuid().ToString('N'))
+            $testRunContext = @{ TestRoot = (Get-RSTestSandboxRoot -RepoRoot $repoRoot); RunRoot = $fixtureRoot }
+            $fixture = @{ Mode = 'host'; Closes = 0; Rows = [Collections.Generic.List[string]]::new() }
+            function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) $false }
+            function Invoke-RSInteractiveDesktopOperation { param($RequiresInteractiveDesktop, $Operation) & $Operation }
+            function Start-RSContainedProcess {
+                param($ProcessStartInfo)
+                $p = [pscustomobject]@{
+                    Id = 42; ExitCode = 17; IsInContainmentJob = $true
+                    StandardOutput = [IO.StringReader]::new('{"suites":[{"suite":"Commands","cases":[]}]}')
+                    StandardError = [IO.StringReader]::new('')
+                }
+                if ($fixture.Mode -like 'identity-*') {
+                    $p.PSObject.Properties.Remove('IsInContainmentJob')
+                    $p | Add-Member ScriptProperty IsInContainmentJob {
+                        if ($fixture.Mode -eq 'identity-fatal') { throw [AccessViolationException]::new('seeded fatal owned identity') }
+                        if ($fixture.Mode -eq 'identity-oom') { throw [OutOfMemoryException]::new('seeded synthetic OOM owned identity') }
+                        throw [InvalidOperationException]::new('private ordinary owned identity')
+                    }
+                }
+                $p | Add-Member ScriptMethod WaitForExit { if ($fixture.Mode -eq 'primary' -or $fixture.Mode -like 'combined*') { throw 'seeded original wait failure' } }
+                $p
+            }
+            function Close-RSContainedProcess {
+                param($Process)
+                ++$fixture.Closes
+                if ($fixture.Mode -in @('close-failure','combined-close')) { throw 'seeded original close failure' }
+            }
+            function Write-Host {
+                param($Object)
+                $text = [string]$Object
+                if ($text.StartsWith('[selftest-launch] ')) {
+                    if ($fixture.Mode -in @('host','primary')) { throw [Management.Automation.Host.HostException]::new('seeded host diagnostic sink') }
+                    if ($fixture.Mode -in @('fatal','combined','combined-close') -and $text -match '"stage":"before-close"') { throw [AccessViolationException]::new('seeded fatal launch sink') }
+                    $fixture.Rows.Add($text)
+                }
+            }
+            $entry = [pscustomobject]@{ Path = 'fixture.exe'; WorkingDirectory = $TestDrive }
+            (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest')) | Should Be 17
+            $fixture.Closes | Should Be 1
+            $fixture.Mode = 'primary'
+            $r = Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded original wait failure'
+            $fixture.Closes | Should Be 2
+            $fixture.Mode = 'fatal'
+            $r = Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded fatal launch sink'
+            $fixture.Closes | Should Be 3
+            ($fixture.Rows -join ' ') | Should Not Match '"stage":"closed"'
+            $fixture.Rows.Clear(); $fixture.Mode = 'close-failure'
+            $r = Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded original close failure'
+            $fixture.Closes | Should Be 4
+            ($fixture.Rows -join ' ') | Should Not Match '"stage":"closed"'
+            $listingDefinition = $launchAst.Find({ param($node)
+                $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSSelfTestCaseList'
+            }, $true)
+            . ([scriptblock]::Create($listingDefinition.Extent.Text))
+            $fixture.Rows.Clear(); $fixture.Mode = 'fatal'
+            $entry | Add-Member NoteProperty Arguments @('--commands-selftest')
+            $r = Invoke-RSTestBlock { Invoke-RSSelfTestCaseList -Entry $entry }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded fatal launch sink'
+            $fixture.Closes | Should Be 5
+            ($fixture.Rows -join ' ') | Should Not Match '"stage":"closed"'
+            $fixture.Mode='identity-ordinary'; $fixture.Rows.Clear()
+            (Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest')) | Should Be 17
+            $fixture.Closes | Should Be 6
+            $startedRow=@($fixture.Rows|ForEach-Object{$_.Substring('[selftest-launch] '.Length)|ConvertFrom-Json}|Where-Object stage -eq 'started')[0]
+            ($null -eq $startedRow.exact_test_job) | Should Be $true
+            $startedRow.identity_error | Should Be ([InvalidOperationException]::new().HResult)
+            $fixture.Mode='identity-fatal'; $fixture.Rows.Clear()
+            $r=Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded fatal owned identity'
+            $fixture.Closes | Should Be 7
+            ($fixture.Rows -join ' ') | Should Not Match '"stage":"closed"'
+            $fixture.Mode='identity-oom'; $fixture.Rows.Clear()
+            $r=Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded synthetic OOM owned identity'
+            $fixture.Closes | Should Be 8
+            $fixture.Mode='combined-close'; $fixture.Rows.Clear()
+            $r=Invoke-RSTestBlock { Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded original wait failure'
+            $r.Error.Exception.Message | Should Match 'seeded fatal launch sink'
+            $r.Error.Exception.Message | Should Match 'seeded original close failure'
+            $fixture.Closes | Should Be 9
+            ($fixture.Rows -join ' ') | Should Not Match '"stage":"closed"'
+            $fixture.Mode='combined'; $fixture.Rows.Clear()
+            $r=Invoke-RSTestBlock { Invoke-RSSelfTestCaseList -Entry $entry }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'seeded original wait failure'
+            $r.Error.Exception.Message | Should Match 'seeded fatal launch sink'
+            $fixture.Closes | Should Be 10
+            # The earlier nonzero native exit remains in its original create-only
+            # record even when a later before-close diagnostic cannot be emitted.
+            $exitRecords=@(Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'artifacts/native-process-exits') -Filter '*.json')
+            $exitRecords.Count | Should Be 4
+            @($exitRecords | Where-Object { (Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).exit_code -eq 17 }).Count | Should Be 4
+        }
+    }
+    It 'projects actual flags without private launch data or creator claims' {
+        & {
+            $rows = [Collections.Generic.List[string]]::new()
+            function Write-Host { param($Object) $rows.Add([string]$Object) }
+            $start = [Diagnostics.ProcessStartInfo]::new('C:\PrivateAccount\private-tool.exe')
+            $start.Arguments = '--private=secret'; $start.WorkingDirectory = 'C:\PrivateAccount'
+            $start.CreateNoWindow = $true; $start.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+            $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+            $child = [pscustomobject]@{ Id = 42; IsInContainmentJob = $true }
+            Write-RSSelfTestLaunchDiagnostic -StartInfo $start -InvocationKind 'listing' -Stage 'started' -LaunchId 'fixed-owned-launch' -Process $child -StreamsDrained 'pending'
+            Write-RSSelfTestLaunchDiagnostic -StartInfo $start -InvocationKind 'listing' -Stage 'closed' -LaunchId 'fixed-owned-launch' -Process $null -StreamsDrained 'complete' -NativeExitCode 17 -CloseCompleted $true
+            $row = $rows[0].Substring('[selftest-launch] '.Length) | ConvertFrom-Json
+            $row.create_no_window | Should Be $true
+            $row.hidden | Should Be $true
+            $row.stdout_redirected | Should Be $true
+            $row.stderr_redirected | Should Be $true
+            $row.process_id | Should Be 42
+            $row.exact_test_job | Should Be $true
+            $row.creation_identity | Should Be 'unavailable'
+            $row.scope | Should Match 'absence-uninformative;not-foreign-creator-proof'
+            $closed = $rows[1].Substring('[selftest-launch] '.Length) | ConvertFrom-Json
+            $closed.launch_id | Should Be $row.launch_id
+            $closed.native_exit_code | Should Be 17
+            $closed.redirected_streams_drained | Should Be 'complete'
+            $closed.containment_close_completed | Should Be $true
+            ($rows -join ' ') | Should Not Match 'PrivateAccount|private-tool|secret|--private'
+        }
+    }
+    It 'retains unavailable ownership when the existing process query fails' {
+        & {
+            $rows = [Collections.Generic.List[string]]::new()
+            function Write-Host { param($Object) $rows.Add([string]$Object) }
+            $child = [pscustomobject]@{ Id = 43 }
+            $child | Add-Member ScriptProperty IsInContainmentJob { throw [InvalidOperationException]::new('private query text') }
+            Write-RSSelfTestLaunchDiagnostic -StartInfo ([Diagnostics.ProcessStartInfo]::new()) -InvocationKind 'original' -Stage 'started' -LaunchId 'unavailable' -Process $child
+            $row = $rows[0].Substring('[selftest-launch] '.Length) | ConvertFrom-Json
+            $row.process_id | Should Be 43
+            ($null -eq $row.exact_test_job) | Should Be $true
+            ($null -ne $row.identity_error) | Should Be $true
+            $rows[0] | Should Not Match 'private query text'
+        }
+    }
+    It 'does not swallow a synthetic fatal identity observation' {
+        $child = [pscustomobject]@{ Id = 44 }
+        $child | Add-Member ScriptProperty IsInContainmentJob { throw [AccessViolationException]::new('seeded fatal identity query') }
+        $r = Invoke-RSTestBlock {
+            Write-RSSelfTestLaunchDiagnostic -StartInfo ([Diagnostics.ProcessStartInfo]::new()) -InvocationKind 'original' -Stage 'started' -LaunchId 'fatal-identity' -Process $child
+        }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded fatal identity query'
+    }
+    It 'preserves fatal causes in a multi-error getter aggregate' {
+        $child=[pscustomobject]@{Id=47}
+        $child|Add-Member ScriptProperty IsInContainmentJob {
+            throw [AggregateException]::new('seeded aggregate getter', [Exception[]]@(
+                [InvalidOperationException]::new('seeded ordinary getter companion'),
+                [OutOfMemoryException]::new('seeded synthetic OOM getter companion')))
+        }
+        $r=Invoke-RSTestBlock {
+            Write-RSSelfTestLaunchDiagnostic -StartInfo ([Diagnostics.ProcessStartInfo]::new()) -InvocationKind 'original' -Stage 'started' -LaunchId 'aggregate-getter' -Process $child
+        }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded ordinary getter companion'
+        $r.Error.Exception.Message | Should Match 'seeded synthetic OOM getter companion'
+    }
+}
+
 Describe 'Actual affected build selection and source barrier' {
     BeforeAll {
         Import-Module $helperModule -ErrorAction Stop
@@ -346,6 +680,13 @@ Describe 'Run-AllTests inventory desktop admission' {
             $admissions = [Collections.Generic.List[bool]]::new()
             $children = [Collections.Generic.List[object]]::new()
             $closed = [Collections.Generic.List[object]]::new()
+            $launchRows = [Collections.Generic.List[object]]::new()
+            function Write-Host {
+                param($Object)
+                if ([string]$Object -like '[[]selftest-launch] *') {
+                    $launchRows.Add((([string]$Object).Substring('[selftest-launch] '.Length) | ConvertFrom-Json))
+                }
+            }
             function Test-RSTestEntryRequiresInteractiveDesktop { param($Entry) return $Entry.RequiresInteractiveDesktop }
             function Invoke-RSInteractiveDesktopOperation {
                 param([bool]$RequiresInteractiveDesktop, $Operation)
@@ -386,6 +727,11 @@ Describe 'Run-AllTests inventory desktop admission' {
             $admissions.Count | Should Be 2
             $admissions[0] | Should Be $true
             $admissions[1] | Should Be $false
+            ($launchRows | Where-Object invocation -eq 'original' | ForEach-Object stage) -join ',' | Should Be 'before-start,started,exited,before-close,closed'
+            ($launchRows | Where-Object invocation -eq 'listing' | ForEach-Object stage) -join ',' | Should Be 'before-start,started,exited,before-close,closed'
+            @($launchRows | Where-Object { $_.stage -eq 'started' -and $_.create_no_window }).Count | Should Be 2
+            @($launchRows | Where-Object { $_.invocation -eq 'listing' -and $_.stage -eq 'exited' -and $_.redirected_streams_drained -eq 'complete' }).Count | Should Be 1
+            @($launchRows | Where-Object { $_.stage -eq 'closed' -and $_.containment_close_completed }).Count | Should Be 2
             # The selected marked root's drive supplies a real default without initializing another volume.
             $oldRoot = [Environment]::GetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', 'Process')
             $oldLegacy = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', 'Process')

@@ -216,6 +216,46 @@ Describe 'Visible native audit contracts' {
         $visibleVariantAudit.Succeeded | Should Be $false
         $visibleVariantAudit.Error.Exception.Message | Should Match '1 unallowed finding'
     }
+
+    It 'classifies only the exact hidden private FileOps owners and rejects visible or wrong-path variants' {
+        $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester `
+            -Case ('private-fileops-owner-audit-' + [guid]::NewGuid().ToString('N'))
+        $auditPath = Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1'
+        $definitions = @(
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases14_16.cpp'; Title = 'Owned popup lifetime fixture' },
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.QueuedAdmission.cpp'; Title = 'Owned clipboard admission fixture' }
+        )
+        foreach ($definition in $definitions) {
+            $path = Join-Path $fixture $definition.Path
+            [void][IO.Directory]::CreateDirectory((Split-Path $path))
+            $source = 'void Fixture() { owner.reset(CreateWindowExW(0, L"STATIC", L"' + $definition.Title + '", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr)); }'
+            $definition.Source = $source
+            [IO.File]::WriteAllText($path, $source)
+        }
+        $hidden = @(& $auditPath -RepoRoot $fixture -FailOnFindings)
+        $hidden.Count | Should Be 2
+        @($hidden | Where-Object { $_.Allowed -and $_.Visibility -eq 'test-only hidden FolderWindow owner' }).Count | Should Be 2
+
+        foreach ($definition in $definitions) {
+            $path = Join-Path $fixture $definition.Path
+            [IO.File]::WriteAllText($path, $definition.Source.Replace('WS_POPUP,', 'WS_POPUP | WS_VISIBLE,'))
+            $visible = @(& $auditPath -RepoRoot $fixture)
+            @($visible | Where-Object { -not $_.Allowed -and $_.Path -eq $definition.Path }).Count | Should Be 1
+            $visibleFailure = Invoke-RSTestBlock { & $auditPath -RepoRoot $fixture -FailOnFindings | Out-Null }
+            $visibleFailure.Succeeded | Should Be $false
+            $visibleFailure.Error.Exception.Message | Should Match '1 unallowed finding'
+            [IO.File]::WriteAllText($path, $definition.Source)
+
+            $wrongPath = Join-Path $fixture 'RedSalamander\SelfTest\FileOperations\UnexpectedOwner.cpp'
+            [IO.File]::WriteAllText($wrongPath, $definition.Source)
+            $wrongOwner = @(& $auditPath -RepoRoot $fixture)
+            @($wrongOwner | Where-Object { -not $_.Allowed -and $_.Path -match 'UnexpectedOwner\.cpp$' }).Count | Should Be 1
+            $wrongPathFailure = Invoke-RSTestBlock { & $auditPath -RepoRoot $fixture -FailOnFindings | Out-Null }
+            $wrongPathFailure.Succeeded | Should Be $false
+            $wrongPathFailure.Error.Exception.Message | Should Match '1 unallowed finding'
+            [IO.File]::Delete($wrongPath)
+        }
+    }
 }
 Describe 'Keyboard shortcut documentation drift contracts' {
     It 'binds the Alt+arrow folder-view chords to history and selected-name commands in code' {

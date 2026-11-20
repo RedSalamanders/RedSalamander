@@ -5071,7 +5071,7 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
     _fileOperations->DebugRecordCompletionApplyTidForSelfTest(GetCurrentThreadId());
     if (FileOperationsSelfTest::IsRunning())
     {
-        FileOperationsSelfTest::NotifyTaskCompleted(taskId, hr);
+        FileOperationsSelfTest::NotifyTaskCompleted(this, taskId, hr);
     }
 #endif
 

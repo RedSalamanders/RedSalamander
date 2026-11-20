@@ -634,3 +634,106 @@ remain pending. Console compatibility remains unproved; this creates no separate
 bespoke console-fixture gate. I65 stays **ACTIVE**, its first approved desktop clock
 is unstarted, and no Done move, generated changelog fold or qualification waiver
 is established.
+
+### Merged-audit qualification restart and preserved failures (2026-11-20)
+
+Qualification resumes in an isolated candidate from main `7ff4e90d95e71fb09c41fca5095ea0e867c57828`;
+the original audit checkout and shared main checkout remain preserved. The candidate
+uses exact CI engine `f965c7945aff98dbab352623a0cfbe333e7f282f` and unchanged H8
+API 4 source `7fb2ab71852087d93b3a3e5b3ba504c37f56267c`. Pinned x64 dependency
+provisioning and canonical Source restore passed; this is not a product build.
+
+The original merge `53d0a9d58257f53efe817f52a3c309a25454ca1b`
+[native CI run 43917127850](https://github.com/RedSalamanders/RedSalamander/actions/runs/43917127850)
+remains **FAILED**. Both native Release build steps passed, but native tests failed
+and production Release/ZIP gates did not execute. The x64 job's paused-Copy case
+reported 2 timer ticks, 10 renders and 2 owner ticks. Its isolated rerun passed;
+shuffle seed 1015184194 did not reach the cadence case, while seeds 587162809 and
+2023453774 passed that case despite other failures. These shuffles do not establish
+a reproduced shuffled cadence failure or prove its historical cause.
+
+The original ARM64 Commands child (PID 2932, exit 1) reported 964 passed, two failed
+and five declared opt-in skips: `cmd_pane_fileops_completed_group_and_navigation`
+lost its expected primary Dismiss action, and `modeless_window_ownership` refused
+foreground settling at Terminal PID 4408/HWND `0x25206BC`. The classifier's isolated
+first-case rerun passed (PID 296, exit 0); only afterward did boundary retirement
+refuse a different Terminal PID 9812/HWND `0x30604A8`. Neither observation identifies
+a Terminal creator. The original ZIP and source-bound raw results remain preserved
+under completed context `20261120T091126Z-30428-a0bb893801f94675bcfd20f87a859b82`,
+`scratch/qualification/RS53d0-ARM64-connector-original`; classifier success does not
+replace either original failure.
+
+The separate current-main source `7ff4e90d95e71fb09c41fca5095ea0e867c57828`
+[run 44665794670](https://github.com/RedSalamanders/RedSalamander/actions/runs/44665794670)
+also remains **FAILED** after both native Release builds passed. Its original x64
+Commands result was 965/1/5 (PID 7780, raw exit 1), failing the traversal-policy
+source guard; isolated PID 3188 also exited 1. Original FileOperations was 288/1/35
+(PID 6768, raw exit 1), failing `FileOps_ReviewRemediationContracts`; isolated
+PID 9172 passed, while three separate shuffle children exited 1. The last shuffle's
+47/26/251 is not the original result and does not establish a product cause.
+Both architectures' original ToolsPester result was 1449/7/0 and failed again on
+entry classification: formatter-sensitive Terminal/Floodgate guards and three
+stale project-skill paths were deterministic source-contract failures.
+
+Current-main ARM64 Compare exited 0. Its original Commands child 2568 exited 1
+with 962/3/6: `file_operations_phase0_typed_contract_source_guard`,
+`cmd_pane_fileops_popup_throughput_disclosure`, and
+`cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot`. Boundary retirement
+then refused foreign Terminal PID 1312/HWND `0x3403EE`, before any Commands classifier
+or ARM FileOperations child ran. The throughput trace separately observed Terminal
+PID 6008/HWND `0x1203AA` during cycle 21; the conflict-return trace observed foreign
+PID 3092 before View. These identities do not identify a creator or a product cause.
+Bounded reports remain in completed context
+`20261120T101925Z-69372-a67e9e20b9534e5ea73d4b46c73b01b5`,
+`scratch/review/current-main-44665794670-reports`, with exact entry joins in
+`20261120T102113Z-22260-eaa84ae763954edf8a57f5910a53d5bb`.
+Neither this run nor its classifier results replace the distinct original merge failures.
+
+The reviewed candidate repairs paused-rate projection, isolates destructive Phase14
+shutdown and strict-empty ClipboardReady work in private real owners, preserves
+legitimate retained rows and exact retained payloads, and routes completions using
+their actual owner rather than colliding engine-local IDs. Direct launch/retirement
+diagnostics preserve primary errors and mandatory cleanup without claiming foreign
+process ownership. These product/native fixture changes are implemented but remain
+unbuilt and unqualified. The failed diagnostic development campaigns remain retained,
+including V3's 42 passed/two failed and V4's first 37 passed/one failed. V3's later
+directory-metadata drift is separately recorded by observation SHA-256
+`F4A524D677389178DAE2571D4BBD532CFE1013F7A9E32800A16255B549329783`;
+no whole-inventory equality or acceptance/reuse is claimed for that failed archive.
+
+Final V5 diagnostic source passed the full affected pure campaign once: Pester 3.4.0,
+contained NoWindow child 60768, true exit 0, 51 passed/zero failed/zero skipped,
+unchanged measured code/test bytes and all 36 historical selected cases passed.
+Evidence is closed in completed context `20261120T101616Z-49784-d423f37ad606434390af55ba2c8de1b1`,
+`scratch/pure-review/failure-launch-v5-affected`; result SHA-256 is
+`1B960FFA095A6E49FD3BAF115787D12D34C1EBC6F2A8C9990D2435F714B4D1B4`.
+These managed/mock controls invoke no product executable, native sampler or desktop
+activation and do not establish full Tooling, native, platform or repository acceptance.
+
+The subsequent complete direct compiler-free Tools profile remains **FAILED**:
+1469 passed, two failed and one skipped, contained child 67280 raw exit 1, Pester
+3.4.0 and identical pre/post inventories of 28,472 repository files. Its closed
+context is `20261120T103141Z-3676-2c6082783ddb4a4ea3c4f2eb91106e3c`,
+`scratch/pure-tooling/current-profile-complete`. The audit failure exposed missing
+classifications for the two new hidden private fixture parents; exact call-site
+classifications and actual visible/wrong-path rejection controls passed the owning
+audit Describe 2/0/0 (child 63408, exit 0). The workspace fixture clone failed at a
+286-character path because the external driver used a deeper TEMP than the canonical
+runner's `scratch/process-temp`; the unchanged workspace Describe passed 9/0/0
+(child 10824, exit 0) using that canonical layout. No fixture or global Git setting
+was changed. The external driver's later access to an unavailable Pester 3
+`InconclusiveCount` property is a separate reporting error; raw XML/CLIXML and both
+source inventories were already saved. The derived failure report is separately
+sealed with SHA-256 `84D7E1A1430DF3CAEE1019A4D37E705950DBE6F8A57FEB10C5E5CE4EF9E0B144`.
+The explicit missing-built-ProductUiTests failure-report probe remains skipped and
+pending a build. These focused corrections do not turn the failed full-profile run
+green. Direct Pester evidence has no canonical validation promotion or build-receipt
+join and cannot replace required post-commit/profile-build PrePush tooling execution.
+
+I65 remains **ACTIVE**. The bounded Release historical-behavior/candidate observation
+pair, current-source Debug/Release builds and native scoped gates, actual ARM64,
+the four broad desktop entries, applicable unfiltered Full, provider/SMB/NAS obligations
+and normative closeout remain pending under their existing owners and contracts.
+The previously authorized first six-hour desktop window is still unstarted. No
+source commit, native build/test, workflow dispatch, publication, Done move or
+generated changelog fold is claimed by this integration update.
