@@ -2576,6 +2576,7 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _dbgConflictWaitBeforeSleepReached{false};
         std::atomic_uint32_t _dbgConflictDecisionWaitCount{0};
         std::atomic_uint32_t _dbgConflictDecisionTimeoutCount{0};
+        std::atomic_uint32_t _dbgConflictDecisionSignalCount{0};
         std::atomic_uint32_t _dbgConflictDecisionInfiniteWaitCount{0};
         std::atomic<DWORD> _dbgConflictQuietPeriodMs{static_cast<DWORD>(FileOperations::kAwaitingAnswerQuietMs)};
         std::atomic<bool> _dbgQueueWaitBeforeSleepGate{false};

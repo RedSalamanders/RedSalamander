@@ -2203,24 +2203,27 @@ struct KeepAwakeSelfTestApi final
         const Action expected =
             control == WaitControl::Preanswered || control == WaitControl::QuietResume || control == WaitControl::Spurious ? Action::Skip : Action::Cancel;
         const Action actual                = result.load(std::memory_order_acquire);
-        const bool awaiting                = task._awaitingUserDecision.load(std::memory_order_acquire);
+        const bool awaitingDecision        = task._awaitingUserDecision.load(std::memory_order_acquire);
         const uint32_t calls               = task._dbgConflictDecisionWaitCount.load(std::memory_order_acquire);
         const uint32_t timeouts            = task._dbgConflictDecisionTimeoutCount.load(std::memory_order_acquire);
+        const uint32_t signalWakes         = task._dbgConflictDecisionSignalCount.load(std::memory_order_acquire);
         const uint32_t quietWaits          = task._dbgConflictDecisionInfiniteWaitCount.load(std::memory_order_acquire);
         const uint32_t expectedSignalWakes = control == WaitControl::Precancelled ? 0u : 1u + static_cast<uint32_t>(repeatsQuietWait);
         // A timed wait can expire before the coarse tick count reaches the deadline.
         // Verify the real signal wakes and event-only waits independently of those timer resamples.
-        if (actual != expected || awaiting || timeouts > calls || calls - timeouts != expectedSignalWakes ||
+        if (actual != expected || awaitingDecision || timeouts > calls || calls - timeouts != signalWakes || signalWakes != expectedSignalWakes ||
             (prepublishedDecision ? timeouts != 0u : quietWaits != expectedSignalWakes))
         {
-            return fail(std::format(L"conflict wait control={} expected={} actual={} awaiting={} calls={} timeouts={} quietWaits={} expectedSignalWakes={}",
+            return fail(std::format(L"conflict wait control={} expected={} actual={} awaiting={} calls={} timeouts={} quietWaits={} "
+                                    L"signalWakes={} expectedSignalWakes={}",
                                     static_cast<unsigned int>(control),
                                     static_cast<unsigned int>(expected),
                                     static_cast<unsigned int>(actual),
-                                    awaiting,
+                                    awaitingDecision,
                                     calls,
                                     timeouts,
                                     quietWaits,
+                                    signalWakes,
                                     expectedSignalWakes));
         }
         Debug::Perf::Emit(L"FileOps.Power.ConflictWaitCalls", L"control,calls", 0u, static_cast<uint64_t>(control), calls, S_OK);
