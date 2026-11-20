@@ -5950,15 +5950,18 @@ private:
     const std::filesystem::path traversalPolicyHeaderPath = repoRoot / L"Common" / L"FileOperationTraversalPolicy.h";
     state.Require(ReadSourceFileUtf8(traversalPolicyHeaderPath, traversalPolicyHeader),
                   std::format(L"Failed to read {}.", traversalPolicyHeaderPath.wstring()));
-    state.Require(traversalPolicyHeader.find("kTraversalMaxDepth            = 128u") != std::string::npos &&
-                      traversalPolicyHeader.find("kTraversalMaxQueuedEntries      = 4'096u") != std::string::npos &&
-                      traversalPolicyHeader.find("kTraversalMaxQueuedPathBytes  = 16ull * 1024ull * 1024ull") != std::string::npos &&
-                      traversalPolicyHeader.find("kTraversalMaxMetadataBytes    = 8ull * 1024ull * 1024ull") != std::string::npos &&
-                      traversalPolicyHeader.find("kDiscoveryLowWater = 32u") != std::string::npos &&
-                      traversalPolicyHeader.find("kDiscoveryTarget   = 128u") != std::string::npos &&
-                      traversalPolicyHeader.find("kDiscoveryMaxTarget = 256u") != std::string::npos &&
-                      traversalPolicyHeader.find("DiscoveryQueueTarget") != std::string::npos &&
-                      traversalPolicyHeader.find("DiscoveryWorkerLimit") != std::string::npos,
+    // Formatting must not change the shared ceiling and reservation witnesses.
+    std::string compactTraversalPolicyHeader = traversalPolicyHeader;
+    std::erase_if(compactTraversalPolicyHeader, [](char value) noexcept { return value == ' ' || value == '\t' || value == '\r' || value == '\n'; });
+    state.Require(compactTraversalPolicyHeader.find("kTraversalMaxDepth=128u") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("kTraversalMaxQueuedEntries=4'096u") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("kTraversalMaxQueuedPathBytes=16ull*1024ull*1024ull") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("kTraversalMaxMetadataBytes=8ull*1024ull*1024ull") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("kDiscoveryLowWater=32u") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("kDiscoveryTarget=128u") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("kDiscoveryMaxTarget=256u") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("DiscoveryQueueTarget") != std::string::npos &&
+                      compactTraversalPolicyHeader.find("DiscoveryWorkerLimit") != std::string::npos,
                   L"The shared File Operations traversal policy must own the quantitative ceilings and identical reservation calculations.");
     state.Require(
         executorSource.find("FileOperationTraversalPolicy.h") != std::string::npos &&

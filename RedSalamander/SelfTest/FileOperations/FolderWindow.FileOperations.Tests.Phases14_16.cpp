@@ -3,7 +3,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 30'000ull))
     {
-        const HWND popup = FindCurrentProcessPopupWindow();
+        const HWND popup = state.phase14FileOps ? state.phase14FileOps->GetPopupHwndForSelfTest() : nullptr;
         Fail(std::format(L"Phase14_PopupHostLifetimeGuard timed out. stepState={} popup={} shutdownDone={}",
                          state.stepState,
                          popup != nullptr,
@@ -14,6 +14,50 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
     if (state.stepState == 0)
     {
         state.phase14ShutdownDone.store(false, std::memory_order_release);
+        if (! state.fileOps || ! state.folderWindow || state.fileOps->HasActiveOperations() || state.phase14Owner)
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard requires an idle shared engine and no prior private owner.");
+            return true;
+        }
+        state.fileOps->CollectCompletedTasks(state.phase14SharedCompletedBefore);
+        constexpr uint64_t kRetainedWitnessId = 0xF1400001ull;
+        if (std::ranges::any_of(state.phase14SharedCompletedBefore, [](const auto& summary) noexcept { return summary.taskId == kRetainedWitnessId; }))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard retained witness ID is already in use.");
+            return true;
+        }
+        FolderWindow::FileOperationState::CompletedTaskSummary retainedWitness{};
+        retainedWitness.taskId              = kRetainedWitnessId;
+        retainedWitness.operation           = FILESYSTEM_MOVE;
+        retainedWitness.resultHr            = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        retainedWitness.retainedSourceCount = 1u;
+        retainedWitness.retainedSourcePaths = {state.tempRoot / L"phase14-popup-reentry" / L"src" / L"source.bin"};
+        state.fileOps->DebugAppendCompletedTaskForSelfTest(std::move(retainedWitness));
+        state.phase14SharedRetainedWitness = kRetainedWitnessId;
+        state.fileOps->CollectCompletedTasks(state.phase14SharedCompletedBefore);
+        // Shutdown permanently retires a FileOperationState. Give this destructive
+        // fixture its own real HWND/completion destination, as the owned completion
+        // teardown case does, rather than retiring the engine used by later cases.
+        state.phase14Settings = {};
+        state.phase14Settings.fileOperations.emplace();
+        state.phase14Settings.fileOperations.value().autoDismissSuccess = false;
+        state.phase14Container.reset(
+            CreateWindowExW(0, L"STATIC", L"Owned popup lifetime fixture", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+        state.phase14Owner = std::make_unique<FolderWindow>();
+        state.phase14Owner->SetSettings(&state.phase14Settings);
+        if (! state.phase14Container || ! state.phase14Owner->Create(state.phase14Container.get(), 0, 0, 640, 480))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard failed to create its private completion owner.");
+            return true;
+        }
+        state.phase14Owner->ApplyTheme(state.folderWindow->GetTheme());
+        if (FAILED(state.phase14Owner->SetFileSystemPluginForPane(FolderWindow::Pane::Left, kPluginIdLocal)) ||
+            FAILED(state.phase14Owner->SetFileSystemPluginForPane(FolderWindow::Pane::Right, kPluginIdLocal)))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard failed to configure its private Local endpoints.");
+            return true;
+        }
+        state.phase14FileOps = state.phase14Owner->DebugGetFileOperationState();
 
         FolderWindow::InformationalTaskUpdate update{};
         update.kind  = FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories;
@@ -30,7 +74,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         update.finished = false;
         update.resultHr = S_OK;
 
-        const uint64_t infoTaskId = state.fileOps ? state.fileOps->CreateOrUpdateInformationalTask(update) : 0;
+        const uint64_t infoTaskId = state.phase14FileOps ? state.phase14FileOps->CreateOrUpdateInformationalTask(update) : 0;
         if (infoTaskId == 0)
         {
             Fail(L"Phase14_PopupHostLifetimeGuard failed to create an informational task.");
@@ -42,7 +86,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         return false;
     }
 
-    const HWND popup = FindCurrentProcessPopupWindow();
+    const HWND popup = state.phase14FileOps ? state.phase14FileOps->GetPopupHwndForSelfTest() : nullptr;
 
     if (state.stepState == 1)
     {
@@ -78,7 +122,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return true;
         }
 
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
+        state.taskA = StartFileOperationAndGetId(state.phase14FileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
                                                  std::nullopt,
@@ -107,15 +151,17 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return true;
         }
 
-        const auto completed = state.completedTasks.find(state.taskA.value());
-        if (completed == state.completedTasks.end())
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
+        state.phase14FileOps->CollectCompletedTasks(completedTasks);
+        const auto completed = std::ranges::find(completedTasks, state.taskA.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+        if (completed == completedTasks.end())
         {
             return false;
         }
 
-        if (FAILED(completed->second.hr))
+        if (FAILED(completed->resultHr))
         {
-            Fail(std::format(L"Phase14_PopupHostLifetimeGuard popup reentry copy failed: 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Phase14_PopupHostLifetimeGuard popup reentry copy failed: 0x{:08X}.", static_cast<unsigned long>(completed->resultHr)));
             return true;
         }
 
@@ -127,7 +173,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return true;
         }
 
-        if (! FindCurrentProcessPopupWindow())
+        if (! state.phase14FileOps->GetPopupHwndForSelfTest())
         {
             Fail(L"Phase14_PopupHostLifetimeGuard did not recreate the popup after it was destroyed during ShowWindow.");
             return true;
@@ -139,9 +185,10 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
 
     if (state.stepState == 3)
     {
-        auto work     = std::make_unique<Phase14ShutdownWork>();
-        work->fileOps = state.fileOps;
-        work->done    = &state.phase14ShutdownDone;
+        state.phase14PopupBeforeShutdown = state.phase14FileOps->GetPopupHwndForSelfTest();
+        auto work                        = std::make_unique<Phase14ShutdownWork>();
+        work->fileOps                    = state.phase14FileOps;
+        work->done                       = &state.phase14ShutdownDone;
 
         if (! TrySubmitThreadpoolCallback(Phase14ShutdownCallback, work.get(), nullptr))
         {
@@ -150,7 +197,8 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         }
 
         static_cast<void>(work.release());
-        state.stepState = 4;
+        state.phase14ShutdownSubmitted = true;
+        state.stepState                = 4;
         return false;
     }
 
@@ -161,12 +209,11 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return false;
         }
 
-        const HWND popupAfterShutdown = FindCurrentProcessPopupWindow();
+        const HWND popupAfterShutdown = IsWindow(state.phase14PopupBeforeShutdown) ? state.phase14PopupBeforeShutdown : nullptr;
         if (! popupAfterShutdown)
         {
             // Popup already self-closed after host lifetime ended; that's acceptable as long as we didn't crash.
-            RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
-            NextStep(state, SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke);
+            state.stepState = 5;
             return false;
         }
 
@@ -181,11 +228,116 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
 
     if (state.stepState == 5)
     {
-        if (FindCurrentProcessPopupWindow())
+        // Shutdown moves the owner's HWND lease before the UI thread closes the
+        // actual popup. Preserve the original actual-window retirement assertion.
+        if (IsWindow(state.phase14PopupBeforeShutdown))
         {
             return false;
         }
 
+        // A private task ID can equal an earlier shared one. Exercise both late
+        // routes after private task retirement, preserving any real shared receipt.
+        const uint64_t completedId = state.taskA.value();
+        std::optional<CompletedTaskInfo> savedCompletion;
+        if (const auto prior = state.completedTasks.find(completedId); prior != state.completedTasks.end())
+            savedCompletion = prior->second;
+        const auto restoreCompletion = wil::scope_exit([&]() noexcept
+        {
+            if (savedCompletion.has_value())
+                state.completedTasks.insert_or_assign(completedId, savedCompletion.value());
+            else
+                state.completedTasks.erase(completedId);
+        });
+        FileOperationsSelfTest::NotifyTaskCompleted(state.folderWindow, completedId, E_ABORT);
+        const bool sharedRecorded = state.completedTasks.contains(completedId) && state.completedTasks.at(completedId).hr == E_ABORT;
+        FileOperationsSelfTest::NotifyTaskCompleted(state.phase14Owner.get(), completedId, S_OK);
+        const bool privateIgnored = state.completedTasks.contains(completedId) && state.completedTasks.at(completedId).hr == E_ABORT;
+        FileOperationsSelfTest::NotifyTaskCompleted(state.folderWindow, completedId, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        const bool lateSharedRecorded =
+            state.completedTasks.contains(completedId) && state.completedTasks.at(completedId).hr == HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        if (state.phase14FileOps->FindTask(completedId) || ! sharedRecorded || ! privateIgnored || ! lateSharedRecorded)
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard lost actual completion-owner provenance after task retirement.");
+            return true;
+        }
+        state.phase14Owner.reset();
+        state.phase14FileOps = nullptr;
+        state.phase14Container.reset();
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> sharedCompleted;
+        state.fileOps->CollectCompletedTasks(sharedCompleted);
+        if (sharedCompleted.size() != state.phase14SharedCompletedBefore.size() || ! std::ranges::equal(sharedCompleted,
+                                                                                                        state.phase14SharedCompletedBefore,
+                                                                                                        [](const auto& after, const auto& before) noexcept
+        {
+            return after.taskId == before.taskId && after.operation == before.operation && after.resultHr == before.resultHr &&
+                   after.sourcePane == before.sourcePane && after.sourcePluginId == before.sourcePluginId &&
+                   after.sourcePluginShortId == before.sourcePluginShortId && after.sourceInstanceContext == before.sourceInstanceContext &&
+                   after.destinationPane == before.destinationPane && after.destinationPluginId == before.destinationPluginId &&
+                   after.destinationPluginShortId == before.destinationPluginShortId && after.destinationInstanceContext == before.destinationInstanceContext &&
+                   after.destinationFolder == before.destinationFolder && after.flags == before.flags &&
+                   after.retainedSourceCount == before.retainedSourceCount && after.unknownSourceCount == before.unknownSourceCount &&
+                   after.clipboardMoveAdmission == before.clipboardMoveAdmission && after.clipboardMoveConsumed == before.clipboardMoveConsumed &&
+                   after.clipboardMoveConsumptionStatus == before.clipboardMoveConsumptionStatus && after.retainedSourcePaths == before.retainedSourcePaths &&
+                   after.unknownSourcePaths == before.unknownSourcePaths &&
+                   std::ranges::equal(after.exactRetainedSourceItems,
+                                      before.exactRetainedSourceItems,
+                                      [](const auto& left, const auto& right) noexcept
+            {
+                return left.providerPath == right.providerPath && left.identity.objectId == right.identity.objectId &&
+                       left.identity.revisionId == right.identity.revisionId && left.identity.pathProfileId == right.identity.pathProfileId;
+            }) && after.interruptedOperationId == before.interruptedOperationId &&
+                   after.interruptedMoveBreadcrumbPath == before.interruptedMoveBreadcrumbPath &&
+                   after.interruptedMoveNoticeClaim == before.interruptedMoveNoticeClaim && after.interruptedMoveNotice == before.interruptedMoveNotice &&
+                   after.interruptedMoveNoticeExecuting == before.interruptedMoveNoticeExecuting;
+        }))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard changed the shared engine's retained completion inventory.");
+            return true;
+        }
+        state.fileOps->DismissCompletedTask(state.phase14SharedRetainedWitness.value());
+        state.phase14SharedRetainedWitness.reset();
+        const auto root = state.tempRoot / L"phase14-popup-reentry";
+        if (! SelfTest::EnsureDirectory(root / L"shared-dst"))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard could not prepare the post-shutdown admission witness.");
+            return true;
+        }
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 std::nullopt,
+                                                 state.fsLocal,
+                                                 {root / L"src" / L"source.bin"},
+                                                 root / L"shared-dst",
+                                                 FILESYSTEM_FLAG_NONE,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard retired the shared engine: next Copy admission failed.");
+            return true;
+        }
+        state.stepState = 6;
+        return false;
+    }
+
+    if (state.stepState == 6)
+    {
+        const auto completed = state.completedTasks.find(state.taskA.value());
+        if (completed == state.completedTasks.end())
+            return false;
+        const auto root = state.tempRoot / L"phase14-popup-reentry";
+        if (FAILED(completed->second.hr) || ! FilesEqualBytes(root / L"src" / L"source.bin", root / L"shared-dst" / L"source.bin"))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard post-shutdown shared Copy did not complete with exact source bytes.");
+            return true;
+        }
+        state.fileOps->DismissCompletedTask(state.taskA.value());
+        state.fileOps->DebugRemoveDiagnosticsForTask(state.taskA.value());
+        state.completedTasks.erase(state.taskA.value());
+        state.taskA.reset();
+        Debug::Perf::Emit(L"FileOps.SelfTest.PopupHostLifetimeIsolation", L"private-shutdown;shared-retained-inventory;next-copy-admitted", 0u, 1u, 0u, S_OK);
         RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
         NextStep(state, SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke);
         return false;

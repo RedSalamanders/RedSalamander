@@ -416,6 +416,17 @@ struct PopupTelemetryDebugSnapshot final
     uint64_t unattributedTaskSnapshots = 0u;
 };
 
+// Read-only publication facts for the real running-to-paused alignment witness.
+// Querying these scalars never advances the reducer, builds snapshots or paints.
+struct PopupRateSamplingDebugSnapshot final
+{
+    ULONGLONG lastUpdateTick = 0u;
+    double currentBandwidth  = 0.0;
+    bool hasSmoothedEta      = false;
+    bool hasProvisionalEta   = false;
+    size_t windowSampleCount = 0u;
+};
+
 // Opt-in UI-thread observations for the cadence case only. No text, paths, input
 // payloads or owning control references; a full buffer drops rows and counts loss.
 enum class PopupCadenceDebugEvent : uint8_t
@@ -1105,6 +1116,13 @@ public:
     // Synthetic input adapter to the real rate reducer; unlike scenario replacement,
     // this retains history and the hosted tree through a nonzero-to-paused transition.
     [[nodiscard]] bool DebugPauseRetainedVisualRateForSelfTest(uint64_t taskId) noexcept;
+    [[nodiscard]] bool DebugGetRateSamplingForSelfTest(uint64_t taskId, PopupRateSamplingDebugSnapshot& out) const noexcept;
+    // Real snapshot/reducer entry without a cadence refresh, for the missed-paint resume ordering.
+    // Does not inject progress or bypass rate-model state transitions.
+    void DebugUpdateRatesWithoutCadenceRefreshForSelfTest() noexcept
+    {
+        UpdateRates();
+    }
     void DebugStartCadenceCaptureForSelfTest(uint64_t taskId) noexcept
     {
         // Allocate once at explicit fixture admission, outside measured spans.
@@ -2136,7 +2154,8 @@ private:
     ULONGLONG _autoResizeAnimationStartTick = 0;
     ULONGLONG _uiMotionTimerDueTick         = 0;
     UINT _telemetryTimerIntervalMs          = 0u;
-    ULONGLONG _lastRateUpdateTick           = 0; // I63 slice F: UpdateRates runs at most once per telemetry interval
+    ULONGLONG _lastRateUpdateTick           = 0; // Telemetry sampling plus one reset when all open work becomes waiting.
+    bool _waitingRatesSynchronized          = false;
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<ID2D1DeviceContext> _target;

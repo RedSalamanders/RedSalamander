@@ -7,6 +7,12 @@ current PowerShell host and complete nested policy identity.
 In GitHub Actions, build and SDK reopen share explicit workflow selection validation
 and the PATH-only fallback. Dependency installation uses that same PATH-selected
 installation; a newer registered installation cannot silently replace it.
+Public `build.ps1` validates already prepared platform dependencies and the managed
+vcpkg pins, then binds the restored runtime path to both MSBuild launch paths and
+receipt metadata queries. Missing inputs report the pinned provisioning command.
+MSBuild takes its include and link inputs from the repository properties. SDK admission
+checks raw overrides before child binding clears ambient compiler and linker flags.
+Parent environment and existing lock order remain unchanged.
 
 Filtered Ghostty Commands qualification verifies archived native case bytes and
 selection, current source/artifact receipt, both aggregate summaries and invocation
@@ -17,6 +23,24 @@ Native startup diagnostics print the start and elapsed time of File Operations
 profile/volume setup, the existing interactive lease wait, and contained process
 launch. Keep the parent console log when investigating a delay. The rows do not
 change native deadlines or qualify performance/coverage.
+
+`Run-AllTests.ps1` also logs direct owned launch facts for original execution,
+case inventory and failure classification: a per-launch join ID, actual no-window,
+hidden and redirection flags, requested desktop, captured PID/job query result,
+native exit, redirected-stream drain and containment-close return. Process creation
+identity is explicitly unavailable when the existing launch object does not expose
+it. Hosted boundaries log action and retirement phases separately. These rows do
+not observe other process creation; absent rows and a completed close do not prove
+background absence, descendant quiescence or the creator of a foreign Terminal.
+Nonfatal diagnostic failures preserve native/action/retirement results. Cleanup
+still runs if a fatal before-close or before-retirement diagnostic propagates;
+successful-close rows require the close call to return.
+Identity fields use the explicit property accessor: PowerShell's adapted dot and
+`.Value` reads can hide getter exceptions. Ordinary accessor failures retain an
+unavailable result and the underlying error code; fatal underlying causes propagate.
+Aggregate branches are preserved when classifying fatal causes. Earlier execution
+or cleanup errors remain alongside fatal diagnostics, both owned disposal attempts
+still run, and fatal setup diagnostics retain their original setup ErrorRecord.
 
 `Build-LocalSdkCandidate.ps1` explicitly builds the Release application and plugin
 closure against one independently hashed local DxUi descriptor. Supply the native
@@ -785,3 +809,8 @@ Versioning concurrency fixtures retain asynchronous Hidden launches and exact pr
 ownership. The real installer batch keeps its inherited production routing; fixtures
 execute that same batch through the private no-window test seam. See the owning build
 and tooling governance contracts for authority and qualification boundaries.
+
+The internal BuildConsoleCheck borrows only a validated existing canonical active runner
+context, including a runner parent, without archiving it. Standalone use owns/archives its
+current-PID run and preserves validation plus archive errors. Explicit ScratchRoot/shared
+fixtures keep caller ownership. See [fixture lifetime](../Specs/Build/Build_ConsoleAndPaths.md#build-console-fixture-lifetime).

@@ -71,6 +71,11 @@ Key engineering specs for the current search stack and self-test contract:
 Use the `build.ps1` PowerShell script for easy building:
 
 ```powershell
+# One-time: install dependencies (writes to .build\vcpkg_installed\<platform>)
+Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1
+$vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $PWD.Path
+.\vcpkg-install.ps1 -Platform x64 -VcpkgExe $vcpkg.Executable -VcpkgRoot $vcpkg.RegistryRoot
+
 # Build entire solution in Debug configuration (default)
 .\build.ps1
 
@@ -410,18 +415,25 @@ and [`Specs/Installer/WingetIntegration.md`](Specs/Installer/WingetIntegration.m
 
 ### Installing dependencies
 
-build.ps1 bootstraps the tool and ports registry from the repository pins and
-restores the selected platform beneath .build before compiling. The installer
-uses the discovered Visual Studio installation and its default MSVC toolset.
-Visual Studio builds use the repository's restored headers and explicit link
-inputs. The dependency tree is shared across the selected platform's configurations.
-
-The installer can also prepare one platform explicitly once the pinned tool is present.
+Install all libraries from `vcpkg.json` into `.build\vcpkg_installed\<platform>\<triplet>`. Each platform has a
+private vcpkg metadata root so an ARM64 manifest install cannot purge x64 packages, or vice versa. The vcpkg executable itself must come from a
+managed Git checkout at the exact commit in vcpkg-tool.json. Prepare the independent tool and registry pins through the canonical helper:
 
 ```powershell
-.\vcpkg-install.ps1 -Platform ARM64 -VcpkgExe .\.build\vcpkg-tool\vcpkg.exe -VcpkgRoot .\.build\vcpkg-registry
+Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1
+$vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $PWD.Path
+.\vcpkg-install.ps1 -Platform x64 -VcpkgExe $vcpkg.Executable -VcpkgRoot $vcpkg.RegistryRoot
+
+# ARM64:
+.\vcpkg-install.ps1 -Platform ARM64 -VcpkgExe $vcpkg.Executable -VcpkgRoot $vcpkg.RegistryRoot
 ```
 
+The installer pins each triplet to the Visual Studio installation and default MSVC toolset the
+build discovers. `build.ps1` validates the prepared inputs before compiling. MSBuild uses
+the repository's explicit link inputs and runtime staging manifest. Missing inputs report the
+preparation command. After an interrupted install, repeat the pinned install for the affected
+platform with `-Clean -RepairInterrupted`. SDK admission retains its independent raw
+compiler-override checks.
 ### Adding New Libraries
 
 To add a new library:
@@ -430,7 +442,7 @@ To add a new library:
 .\.build\vcpkg-tool\vcpkg.exe add port <library-name>
 ```
 
-Build again to restore the updated manifest.
+Run the pinned installer again for each affected platform before building.
 
 ### Using vcpkg in Visual Studio
 

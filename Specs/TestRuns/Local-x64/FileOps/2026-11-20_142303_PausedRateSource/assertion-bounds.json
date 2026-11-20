@@ -1,0 +1,50 @@
+{
+  "sourceFile": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp",
+  "capturedSourceSHA256": "C7D9A49D24FFDF58044F13A79BF21800EB37871610DF9B333DB28EAEC3F9977F",
+  "originalPausedSettleMs": 600,
+  "originalRequestedMeasureMs": 2200,
+  "caps": {
+    "popupTaskSnapshots": 4,
+    "popupTimerTicks": 3,
+    "ownerRecoveryTicks": 4
+  },
+  "freshRateAgeLimitMs": 50,
+  "pauseCopiesMax": 1,
+  "repeatedCopiesRequired": 1,
+  "repeatedTicksRequired": 0,
+  "repeatedWindowSamplesRequired": 1,
+  "metricFieldRoles": {
+    "RepeatedPauseProjection": {
+      "durationUs": "literal zero",
+      "value0": "rate snapshot collection delta",
+      "value1": "popup timer tick delta"
+    },
+    "PauseProjectionUs": {
+      "durationUs": "immediate pause projection diagnostic interval",
+      "value0": "rate snapshot collection delta",
+      "value1": "rateCleared && noTimerTick conjunction success flag (1/0), not a timer-tick delta"
+    },
+    "Counters": {
+      "durationUs": "actual elapsed microseconds",
+      "value0": "popup timer tick delta",
+      "value1": "popup task-snapshot delta; trace label renders"
+    },
+    "ObserverRows": {
+      "timing": "emitted after measurement; not presented frames",
+      "value0": "diagnostic observer row count",
+      "value1": "lost diagnostic rows"
+    },
+    "CompletedCopies": {
+      "durationUs": "timer-tick delta in this emitting call, despite the serialized field name",
+      "value0": "presentation-build delta",
+      "value1": "projectable-scan delta",
+      "not": "filesystem copy count"
+    },
+    "OwnerHeartbeat": {
+      "durationUs": "actual elapsed microseconds",
+      "value0": "owner recovery-tick delta",
+      "value1": "presentation heartbeat interval milliseconds"
+    }
+  },
+  "supersedesAOnlyRoleDocumentation": "The immutable A-only packet labelled PauseProjectionUs.value1 as a tick delta. This derived combined document corrects that description from captured Runner lines10701-10706; raw A rows are unchanged."
+}

@@ -867,16 +867,24 @@ serves any root whose triplet text is identical. The functions live in `Tools/Mo
 keep the contract of DxUi's `Tools/VisualStudio.psm1` and `Tools/VcpkgTriplet.psm1`, a documented consumer interface of
 the pinned library. They are not imported, because this installer runs before the DxUi checkout is restored (the Ghostty
 ARM64 workflow installs first); a parity test compares both implementations whenever the pinned checkout is restored.
-build.ps1 restores the selected triplet through vcpkg-install.ps1 before the first
-MSBuild invocation, while holding the existing platform dependency lease. The child
-receives that lease through process delegation. A matching restore record allows
-reuse after the pinned manifest, tool, registry configuration, triplet, port overlays
-and default compiler inputs have been checked. The installer invalidates the record
-before replacing the staged inputs and publishes it after the successful merge.
-An explicitly authorized full-solution rebuild can repair an interrupted dependency
-operation using a delegated clean restore. The build clears contamination after
-successful validation.
+Public build.ps1 consumes the selected platform's already prepared canonical tree. It checks
+the required include, library and runtime directories and verifies both Git pins through
+Initialize-RSVcpkgToolContext. Missing inputs report the pinned preparation command.
+The installer can reuse a matching restore record. A clean repair uses the pinned installer
+with an explicit platform and `-Clean -RepairInterrupted`. The installer clears the shared
+dependency contamination marker under the platform lock after successful installation.
 
+Both direct and streaming MSBuild launches receive the runtime search path through
+AdditionalEnvironment under their existing profile/platform lock order.
+The receipt toolchain metadata query uses the same binding through canonical contained capture;
+receipt arguments record the actual tool and registry pins and the pinned binding recipe.
+The binding clears ambient compiler and linker flags and legacy forced vcpkg imports in
+child processes. The parent environment remains unchanged. SDK admission inspects the caller's
+raw overrides before binding. Existing SDK override refusals and dependency-header
+classification remain required.
+
+The governed installer retains its staging metadata and promotes only the triplet payload.
+The installer owns the package status database and the zero-warning build gate still applies.
 AWS SDK `1.11.880` is paired with the exact `aws-crt-cpp` `0.43.4` override,
 matching the SDK tag's `crt/aws-crt-cpp` submodule. CRT `0.43.0` lacks the
 ByteCursor Base64 overloads and encoded/decoded-length functions used by that

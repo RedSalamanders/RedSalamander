@@ -624,6 +624,90 @@ Describe 'Hosted Default desktop entry lifetime' {
         ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,entry-drained,retire-process-scope,restore'
         Assert-MockCalled Set-RSHostedDisplayMode -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
+    It 'records retirement after action return and retains a distinct refusal phase' {
+        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $true
+        $r.Output[0] | Should Be 7
+        $rows=$global:rsDefaultDesktopTest.DiagnosticText -join "`n"
+        $rows | Should Match '(?s)stage=action-start.*stage=action-returned.*stage=before-retirement.*restored=True.*stage=retired'
+        $rows | Should Not Match 'stage=retirement-failed'
+        $global:rsDefaultDesktopTest.DiagnosticText.Clear()
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        $rows=$global:rsDefaultDesktopTest.DiagnosticText -join "`n"
+        $rows | Should Match '(?s)stage=action-returned.*stage=before-retirement.*stage=retirement-failed'
+        $rows | Should Not Match 'stage=retired;'
+    }
+    It 'keeps action results and both cleanup operations when a nonfatal host sink throws' {
+        Mock Write-Host { throw [Management.Automation.Host.HostException]::new('seeded host sink failure') } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $true
+        $r.Output[0] | Should Be 7
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+        $global:rsDefaultDesktopTest.Events.Clear()
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded original native failure' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded original native failure'
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
+    It 'propagates fatal before-retirement diagnostics only after disposing both owned resources' {
+        Mock Write-Host {
+            if (($Object -join ' ') -match 'stage=before-retirement;') {
+                $global:rsDefaultDesktopTest.Events.Add('fatal-sink')
+                throw [AccessViolationException]::new('seeded fatal before retirement')
+            }
+        } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded fatal before retirement'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,fatal-sink,retire-process-scope,restore'
+    }
+    It 'retains fatal lifecycle identity with ordinary inner context after both owned disposals' {
+        $fatal=[OutOfMemoryException]::new('seeded fatal lifecycle with context',[InvalidOperationException]::new('ordinary lifecycle context'))
+        $global:rsDefaultDesktopTest | Add-Member NoteProperty FatalContext $fatal
+        Mock Write-Host {
+            if (($Object -join ' ') -match 'stage=before-retirement;') { throw $global:rsDefaultDesktopTest.FatalContext }
+        } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        ([object]::ReferenceEquals($r.Error.Exception,$fatal)) | Should Be $true
+        $r.Error.Exception.InnerException.Message | Should Be 'ordinary lifecycle context'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
+    It 'retains action and restoration primaries beside a fatal lifecycle aggregate after cleanup' {
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        Mock Write-Host {
+            if (($Object -join ' ') -match 'stage=retirement-failed;') {
+                throw [AggregateException]::new('seeded fatal lifecycle aggregate', [Exception[]]@(
+                    [InvalidOperationException]::new('seeded lifecycle companion'),
+                    [OutOfMemoryException]::new('seeded synthetic fatal lifecycle cause')))
+            }
+        } -ModuleName HostedTestDesktop
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded earlier action failure' } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded earlier action failure'
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        $r.Error.Exception.Message | Should Match 'seeded lifecycle companion'
+        $r.Error.Exception.Message | Should Match 'seeded synthetic fatal lifecycle cause'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
+    It 'retains a fatal scope disposal beside an independent desktop disposal failure' {
+        $global:rsDefaultDesktopTest.FailRestore=$true
+        $global:rsDefaultDesktopTest.Scope | Add-Member ScriptMethod Dispose {
+            $global:rsDefaultDesktopTest.Events.Add('retire-process-scope')
+            throw [AccessViolationException]::new('seeded fatal scope disposal')
+        } -Force
+        $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { 7 } }
+        $r.Succeeded | Should Be $false
+        $r.Error.Exception.Message | Should Match 'seeded fatal scope disposal'
+        $r.Error.Exception.Message | Should Match 'seeded restore failure'
+        ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create,process-scope,retire-process-scope,restore'
+    }
     It 'preserves a failing native entry after restoring the original desktop' {
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'seeded native entry failure' } }
         $r.Succeeded | Should Be $false
@@ -689,7 +773,12 @@ Describe 'Hosted Default desktop entry lifetime' {
             $global:rsDefaultDesktopTest.Events.Add('create')
             throw $global:rsDefaultDesktopTest.SetupError
         } -ModuleName HostedTestDesktop
-        Mock Write-Host { $global:rsDefaultDesktopTest.DiagnosticText.Add(($Object -join ' ')) } -ModuleName HostedTestDesktop
+        # This control owns the single bounded setup-exception rendering. Lifecycle
+        # phase rows have separate controls and do not belong in its count/budget.
+        Mock Write-Host {
+            $text=$Object -join ' '
+            if ($text -match '^Hosted Default desktop setup exception:') { $global:rsDefaultDesktopTest.DiagnosticText.Add($text) }
+        } -ModuleName HostedTestDesktop
         $r=Invoke-RSTestBlock { Invoke-RSWithHostedDefaultDesktop { throw 'must not execute' } }
         $r.Succeeded | Should Be $false
         $r.Error.FullyQualifiedErrorId | Should Be 'seeded-hosted-setup'
@@ -722,7 +811,7 @@ Describe 'Hosted Default desktop entry lifetime' {
         ([object]::ReferenceEquals($r.Error.Exception,$failure)) | Should Be $true
         $r.Error.Exception.Message | Should Be 'seeded primary setup error'
         ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
-        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly
+        Assert-MockCalled Write-Host -ModuleName HostedTestDesktop -Scope It -Times 1 -Exactly -ParameterFilter { ($Object -join ' ') -match '^Hosted Default desktop setup exception:' }
         Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
     It 'propagates a synthetic fatal diagnostic sink exception without resource exhaustion' {
@@ -740,6 +829,8 @@ Describe 'Hosted Default desktop entry lifetime' {
         $r.Succeeded | Should Be $false
         ([object]::ReferenceEquals($r.Error.Exception,$fatal)) | Should Be $true
         $r.Error.Exception.Message | Should Be 'seeded synthetic fatal diagnostic sink'
+        ([object]::ReferenceEquals($fatal.Data['RSHostedSetupPrimaryError'].Exception,$primary)) | Should Be $true
+        $fatal.Data['RSHostedSetupPrimaryError'].FullyQualifiedErrorId | Should Be 'seeded-hosted-fatal-primary'
         ($global:rsDefaultDesktopTest.Events -join ',') | Should Be 'create'
         Assert-MockCalled New-RSHostedDesktopProcessScope -ModuleName HostedTestDesktop -Scope It -Times 0 -Exactly
     }
@@ -1244,6 +1335,80 @@ Describe 'Approved hosted ARM64 stock preparation' {
         $completion.observation_limit | Should Match 'absence is not background-process absence or creator proof'
         $global:stockCloses.Count | Should Be 0
         @(Get-ChildItem $dir -Filter '*-intent.json').Count | Should Be 0
+    }
+}
+
+Describe 'Hosted console-host delegation precondition' {
+    BeforeEach {
+        $script:savedActions=$env:GITHUB_ACTIONS; $script:savedRunner=$env:RUNNER_ENVIRONMENT; $script:savedRepo=$env:GITHUB_REPOSITORY
+        $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
+        # In-memory registry only: no fixture reads or writes the real HKCU.
+        $global:consoleHostValues=@{}; $global:consoleHostWrites=[Collections.Generic.List[string]]::new()
+        $script:consoleHostRead={param($name) $global:consoleHostValues[$name]}
+        $script:consoleHostWrite={param($name,$value) $global:consoleHostWrites.Add($name); $global:consoleHostValues[$name]=$value}
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+    }
+    AfterEach {
+        $env:GITHUB_ACTIONS=$script:savedActions; $env:RUNNER_ENVIRONMENT=$script:savedRunner; $env:GITHUB_REPOSITORY=$script:savedRepo
+        Remove-Variable consoleHostValues,consoleHostWrites -Scope Global -ErrorAction SilentlyContinue
+    }
+    It 'refuses local, self-hosted and non-ARM64 invocation before any registry access' {
+        $arguments = @{
+            Phase = 'ReleaseTest'
+            Platform = 'ARM64'
+            QualificationScope = 'Normal'
+            TestRoot = 'X:\RedSalamander.Perf'
+            EvidenceDirectory = 'X:\RedSalamander.Perf\evidence'
+            SourceCommit = 'a' * 40
+        }
+        $env:GITHUB_ACTIONS='false'
+        { Set-RSHostedConsoleHostDelegation @arguments } | Should Throw 'hosted native ARM64 test roles'
+        $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='self-hosted'
+        { Set-RSHostedConsoleHostDelegation @arguments } | Should Throw 'hosted native ARM64 test roles'
+        $env:RUNNER_ENVIRONMENT='github-hosted'
+        $arguments.Platform='x64'
+        { Set-RSHostedConsoleHostDelegation @arguments } | Should Throw 'hosted native ARM64 test roles'
+    }
+    It 'writes both unset values, verifies them and records the prior state create-only' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-console-host-'+[guid]::NewGuid().ToString('N'))
+        $global:consoleHostValues['DelegationTerminal']='{00000000-0000-0000-0000-000000000000}'
+        $audit=& (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $script:consoleHostWrite
+        @($global:consoleHostWrites) -join ',' | Should Be 'DelegationConsole,DelegationTerminal'
+        $global:consoleHostValues['DelegationConsole'] | Should Be '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+        $global:consoleHostValues['DelegationTerminal'] | Should Be '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+        $record=Get-Content (Join-Path $dir 'delegation.json') -Raw | ConvertFrom-Json
+        $record.schema | Should Be 'red-salamander.hosted-console-host-delegation.v1'
+        $record.source_commit | Should Be ('a' * 40)
+        $record.verified | Should Be $true
+        $record.prior.DelegationConsole | Should BeNullOrEmpty
+        $record.prior.DelegationTerminal | Should Be '{00000000-0000-0000-0000-000000000000}'
+        @($record.changed) -join ',' | Should Be 'DelegationConsole,DelegationTerminal'
+        $audit.verified | Should Be $true
+        $global:consoleHostValues['DelegationConsole'] = $null
+        $repeat=Invoke-RSTestBlock { & (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $script:consoleHostWrite }
+        $repeat.Succeeded | Should Be $false
+        $repeat.Error.Exception.Message | Should Match 'already exists'
+        $global:consoleHostWrites.Count | Should Be 2
+        (Get-Content (Join-Path $dir 'delegation.json') -Raw | ConvertFrom-Json).observed_utc | Should Be $record.observed_utc
+    }
+    It 'leaves already selected values unchanged regardless of case' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-console-host-set-'+[guid]::NewGuid().ToString('N'))
+        $global:consoleHostValues['DelegationConsole']='{b23d10c0-e52e-411e-9d5b-c09fdf709c7d}'
+        $global:consoleHostValues['DelegationTerminal']='{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+        $audit=& (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $script:consoleHostWrite
+        $global:consoleHostWrites.Count | Should Be 0
+        @($audit.changed).Count | Should Be 0
+        $audit.verified | Should Be $true
+    }
+    It 'fails closed and still records the audit when a value does not read back' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-console-host-fail-'+[guid]::NewGuid().ToString('N'))
+        $ignoredWrite={param($name,$value) $global:consoleHostWrites.Add($name)}
+        $attempt=Invoke-RSTestBlock { & (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $ignoredWrite }
+        $attempt.Succeeded | Should Be $false
+        $attempt.Error.Exception.Message | Should Match 'DelegationConsole did not read back'
+        $record=Get-Content (Join-Path $dir 'delegation.json') -Raw | ConvertFrom-Json
+        $record.verified | Should Be $false
+        $record.error | Should Match 'did not read back'
     }
 }
 

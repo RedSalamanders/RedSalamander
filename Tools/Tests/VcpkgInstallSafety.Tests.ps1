@@ -778,74 +778,99 @@ Describe 'Hosted vcpkg install parity' {
     }
 }
 
-Describe 'Scripted native dependency restore' {
-    It 'restores pinned dependencies inside the platform lease before compiling' {
-        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $invoke = $source.IndexOf('function Invoke-MSBuild {')
-        $invoke | Should BeGreaterThan 0
-        $lock = $source.IndexOf('$sharedDependencyLock = Enter-RSArtifactOperationLock', $invoke)
-        $lock | Should BeGreaterThan $invoke
-        $restore = $source.IndexOf('Restore-RSBuildVcpkgDependencies', $lock)
-        $restore | Should BeGreaterThan $lock
-        $restore | Should BeLessThan $source.IndexOf('$logPath = New-ProcessLogPath', $invoke)
-        $source | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$SolutionDir'
-        $source | Should Match '-WorkingDirectory \$SolutionDir -DelegateArtifactOperation'
-        $source | Should Not Match 'Update-RSBuildVcpkgOverlayTriplet'
-    }
-
-    It 'records restore completion once and retries a failed attempt under StrictMode' {
-        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$null, [ref]$null)
-        $function = $ast.Find({
-            param($node)
-            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Restore-RSBuildVcpkgDependencies'
-        }, $true)
-        $function | Should Not BeNullOrEmpty
-        $initialization = $ast.Find({
-            param($node)
-            $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-                $node.Extent.Text -match '^\$script:vcpkgBuildDependenciesReady\s*=\s*\$false$'
-        }, $true)
-        $initialization | Should Not BeNullOrEmpty
-        $initialization.Extent.StartOffset | Should BeLessThan $function.Extent.StartOffset
-
-        $root = New-RSTemporaryVcpkgInstallSafetyRoot
-        try {
-            $probe = Join-Path $root 'strict-scripted-restore-probe.ps1'
-            Set-Content -LiteralPath $probe -Encoding utf8 -Value @(
-                'Set-StrictMode -Version Latest'
-                '$ErrorActionPreference = ''Stop'''
-                '$SolutionDir = $PSScriptRoot'
-                '$Platform = ''x64'''
-                '$script:attempts = 0'
-                '$script:sharedDependencyRepairAuthorized = $false'
-                $initialization.Extent.Text
-                'function Initialize-RSVcpkgToolContext { param($RepoRoot) return @{ Executable=''test-vcpkg''; RegistryRoot=''test-root'' } }'
-                'function Invoke-RSStreamingProcess {'
-                '    param($FilePath,$Arguments,$WorkingDirectory,[switch]$DelegateArtifactOperation)'
-                '    if (!$DelegateArtifactOperation -or ''-ReuseCurrent'' -notin $Arguments) { throw ''missing restore argument'' }'
-                '    $script:attempts++'
-                '    if ($script:attempts -eq 1) { return 23 }'
-                '    if (''-Clean'' -notin $Arguments -or ''-RepairInterrupted'' -notin $Arguments) { throw ''missing repair argument'' }'
-                '    return 0'
-                '}'
-                $function.Extent.Text
-                '$failure = $null'
-                'try { Restore-RSBuildVcpkgDependencies } catch { $failure = $_.Exception.Message }'
-                'if ($failure -notmatch ''exit code 23'' -or $script:vcpkgBuildDependenciesReady) { throw ''failed restore was accepted'' }'
-                '$script:sharedDependencyRepairAuthorized = $true'
-                'Restore-RSBuildVcpkgDependencies'
-                'Restore-RSBuildVcpkgDependencies'
-                'if (!$script:vcpkgBuildDependenciesReady -or $script:attempts -ne 2) { throw ''restore was repeated after success'' }'
-            )
-            $output = @(Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @('-NoProfile'; '-NonInteractive'; '-File'; $probe) 2>&1)
-            ($output -join [Environment]::NewLine) | Should Not Match 'cannot be retrieved because it has not been set'
-            $LASTEXITCODE | Should Be 0
-        } finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+Describe 'Pinned public build dependency binding' {
+    BeforeAll {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1') -ErrorAction Stop
+        $source = [IO.File]::ReadAllText((Join-Path $repoRoot 'build.ps1'))
+        $ast = [Management.Automation.Language.Parser]::ParseInput($source,[ref]$null,[ref]$null)
+        foreach ($name in @('Initialize-RSBuildVcpkgEnvironment','Invoke-MSBuild')) {
+            $definition = $ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)
+            . ([scriptblock]::Create($definition.Extent.Text))
         }
     }
 
+    It 'binds the prepared triplet without forced imports or ambient compiler and linker flags' {
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        $tool = Join-Path $root '.build/vcpkg-tool'
+        $installed = Join-Path $root '.build/vcpkg_installed/x64/x64-windows'
+        foreach ($directory in @('include','lib','bin')) {
+            [void][IO.Directory]::CreateDirectory((Join-Path $installed $directory))
+        }
+        & {
+            $observed=@{BootstrapCalls=0}
+            function Initialize-RSVcpkgToolContext { param($RepoRoot) ++$observed.BootstrapCalls; [pscustomobject]@{ToolRoot=$tool;ToolCommit=('a'*40);Baseline=('b'*40)} }
+            $parentCL=$env:CL; $parentLINK=$env:LINK; $parentRoot=$env:VcpkgRoot; $parentImports=$env:ForceImportBeforeCppTargets
+            try {
+                $env:CL='/DUNREVIEWED'; $env:LINK='/FORCE:UNRESOLVED'
+                $env:ForceImportBeforeCppTargets = 'unreviewed.props'
+                $binding=Initialize-RSBuildVcpkgEnvironment -RepoRoot $root -Platform x64 -Configuration Release
+                $binding.ToolCommit | Should Be ('a'*40)
+                $binding.Baseline | Should Be ('b'*40)
+                $psi=New-RSProcessStartInfo -FilePath 'fixture.exe' -WorkingDirectory $root -AdditionalEnvironment $binding.Environment
+                ($psi.Environment['Path'].Split([IO.Path]::PathSeparator)[0]) | Should Be (Join-Path $installed 'bin')
+                foreach ($name in @('CL','LINK','ForceImportBeforeCppTargets','ForceImportAfterCppTargets')) {
+                    $psi.Environment.ContainsKey($name) | Should Be $false
+                }
+                $env:CL | Should Be '/DUNREVIEWED'
+                $env:LINK | Should Be '/FORCE:UNRESOLVED'
+                $env:ForceImportBeforeCppTargets | Should Be 'unreviewed.props'
+                Remove-Item -LiteralPath (Join-Path $installed 'lib')
+                $r=Invoke-RSTestBlock { Initialize-RSBuildVcpkgEnvironment -RepoRoot $root -Platform x64 -Configuration Release }
+                $r.Succeeded | Should Be $false
+                $r.Error.Exception.Message | Should Match 'vcpkg-install.ps1 -Platform x64'
+                $observed.BootstrapCalls | Should Be 1
+            } finally {
+                $env:CL=$parentCL; $env:LINK=$parentLINK; $env:VcpkgRoot=$parentRoot; $env:ForceImportBeforeCppTargets=$parentImports
+            }
+        }
+        # The SDK reader must see raw overrides before canonical composition; its
+        # existing broker negative controls continue to own override admission.
+        $source=[IO.File]::ReadAllText((Join-Path $repoRoot 'build.ps1'))
+        $source.IndexOf('Open-CiApplicationSdkInput') | Should BeLessThan $source.IndexOf('$vcpkgBinding = Initialize-RSBuildVcpkgEnvironment')
+        $source.IndexOf('$vcpkgBinding = Initialize-RSBuildVcpkgEnvironment') | Should BeLessThan $source.IndexOf('$buildIdentity = Get-RSBuildIdentityBundle')
+        $source | Should Match 'Get-RSBuildIdentityBundle[\s\S]*?-AdditionalEnvironment \$script:buildVcpkgEnvironment'
+    }
+
+    It 'passes the actual canonical child environment through direct and streaming MSBuild phases under the platform lock' {
+        & {
+            $SolutionDir=$TestDrive; $Configuration='Release'; $Platform='x64'; $Rebuild=$false; $repairProjectName='fixture'
+            $artifactOperationScope=@{kind='build';configuration='Release';platform='x64'}
+            $script:buildVcpkgEnvironment=@{Path=$TestDrive;CL=$null;LINK=$null}
+            $events=[Collections.Generic.List[string]]::new()
+            $children=[Collections.Generic.List[object]]::new()
+            function Enter-RSArtifactOperationLock {param($RepoRoot,$Operation,$Scope) $events.Add('lock-'+$Scope.coordination); @{WasAbandoned=$false}}
+            function Exit-RSArtifactOperationLock {param($Lock) $events.Add('unlock')}
+            function Read-RSArtifactOperationContamination {param($RepoRoot,$Scope) $null}
+            function Assert-RSNoResidualArtifactToolProcesses {param($RepoRoot,$Scope)}
+            function New-ProcessLogPath {param($Prefix) Join-Path $TestDrive 'not-executed.log'}
+            function Get-RSMSBuildInvocationPlan {param($UseInteractiveTerminal,$LogPath) @{UseDirectConsole=$UseInteractiveTerminal;AdditionalArguments=@()}}
+            function Write-RSMSBuildDiagnosticSummary {param($LogPath)}
+            function Assert-NativeBuildDiagnostics {param($LogPath)}
+            function Invoke-RSProcess {
+                param($FilePath,$Arguments,$WorkingDirectory,$AdditionalEnvironment)
+                $events.Add('direct');$children.Add((New-RSProcessStartInfo -FilePath $FilePath -Arguments $Arguments -WorkingDirectory $WorkingDirectory -AdditionalEnvironment $AdditionalEnvironment));0
+            }
+            function Invoke-RSStreamingProcess {
+                param($FilePath,$Arguments,$WorkingDirectory,$LogPath,$OutputLineCallback,$AdditionalEnvironment)
+                $events.Add('streaming');$children.Add((New-RSProcessStartInfo -FilePath $FilePath -Arguments $Arguments -WorkingDirectory $WorkingDirectory -AdditionalEnvironment $AdditionalEnvironment));0
+            }
+            foreach($direct in @($false,$true)){
+                $script:UseInteractiveTerminal=$direct
+                (Invoke-MSBuild -MSBuildPath 'not-executed.exe' -Arguments @('/t:Build')) | Should Be 0
+            }
+            ($events -join ',') | Should Be 'lock-shared-dependency,streaming,unlock,lock-shared-dependency,direct,unlock'
+            $children.Count | Should Be 2
+            foreach($child in $children){
+                $child.Environment['Path'] | Should Be $TestDrive
+                $child.Environment.ContainsKey('CL') | Should Be $false
+                $child.Environment.ContainsKey('LINK') | Should Be $false
+                @($child.ArgumentList) -contains '/nr:false' | Should Be $true
+            }
+        }
+    }
+}
+
+Describe 'Explicit installer overlay MSBuild properties' -Tag RequiresBuildToolchain {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $msbuild = $null
     if (Test-Path -LiteralPath $vswhere -PathType Leaf) {

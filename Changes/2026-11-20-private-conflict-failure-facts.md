@@ -1,0 +1,1 @@
+- Retain the actual private conflict-wait control, decision, awaiting state, wait count and cap, infinite-wait count, and quiet budget when its existing assertion fails after the owned worker joins. The failure-only diagnostic preserves every wait, event, deadline and assertion; native qualification remains pending.

@@ -1,0 +1,67 @@
+{
+  "kind": "derived positive functional/work-count observation",
+  "rawNativeOutcome": "PASSED",
+  "nativeExit": 0,
+  "runnerExit": 2,
+  "repositoryVerdict": "NOT_EVALUATED",
+  "coverage": "filtered",
+  "nativeCaseArchiveRunId": "20261120T151701Z-60064-72307d4b81ed4f31a72567c7e2bc456a",
+  "operationRunId": "20261120T150335Z-24592-4d9aefe520b14409bc91d0d0aa4b66a6",
+  "nativeCounts": {
+    "skipped": 0,
+    "failed": 0,
+    "passed": 3
+  },
+  "cases": [
+    {
+      "status": "passed",
+      "reason": null,
+      "name": "Setup"
+    },
+    {
+      "status": "passed",
+      "reason": null,
+      "name": "FileOps_PopupIdleCadence"
+    },
+    {
+      "status": "passed",
+      "reason": null,
+      "name": "Cleanup_RestorePluginConfig"
+    }
+  ],
+  "freshNonzeroPause": {
+    "rateCopies": 1,
+    "rateCleared": true,
+    "ageMs": 0,
+    "noTimerTick": true,
+    "beforeRateBps": 3049.125418682546,
+    "publishedRateBps": 0
+  },
+  "pausedMeasurement": {
+    "projectableScans": 0,
+    "elapsedMs": 2209,
+    "uiCpuUs": 15625,
+    "popupTaskSnapshotCounter": 2,
+    "presentationBuilds": 0,
+    "intervalMs": 1000,
+    "withinOriginalCaps": true,
+    "ownerRecoveryTicks": 2,
+    "timerTicks": 2
+  },
+  "repeatedOrderingControl": {
+    "reset": true,
+    "rateCopies": 1,
+    "heldRateBps": 0,
+    "timerTicks": 0,
+    "windowSamples": 1,
+    "deliberatelyZeroSecondRate": true
+  },
+  "resumeRearmedMs": 2,
+  "retries": 0,
+  "repairAttempts": 0,
+  "blockingOrInvalidQuarantine": 0,
+  "nativeCommit": "",
+  "statisticalSpeedupClaim": false,
+  "codeEquivalenceClaim": false,
+  "fullOrMergedQualificationClaim": false
+}

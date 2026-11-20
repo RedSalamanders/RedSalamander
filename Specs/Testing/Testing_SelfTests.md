@@ -38,6 +38,39 @@ Preserve the parent console log when investigating a prelaunch gap. A start with
 a matching completion line identifies an unfinished phase, not a diagnosed cause
 or a successful test. These observations alone are not a controlled speed comparison.
 
+Direct native self-test launch diagnostics distinguish original execution, inventory
+and each existing classification mode with a per-launch join ID. Record actual PSI
+no-window/hidden/redirection flags, requested desktop, the retained launch object's
+PID and exact-job query result, native exit, redirected-stream drain and successful
+return from containment close. Creation identity remains unavailable when that
+object does not already expose it; diagnostics MUST NOT open another process or
+handle to enrich these rows. Hosted boundary action return, retirement attempt,
+successful restoration and retirement failure remain distinct console phases.
+These observations grant no admission or acceptance authority, do not change
+timeouts or assertions, and cannot identify a foreign Terminal's creator. Missing
+rows do not establish background absence; containment-close return alone does not
+prove descendant quiescence. Failure enrichment keeps its existing separate scope.
+Nonfatal identity, formatting or host-sink errors MUST NOT replace the native exit
+or captured action/retirement error. Before-close and before-retirement diagnostics
+sit inside cleanup-guaranteeing `finally` boundaries. Fatal diagnostic exceptions
+retain the existing propagation policy after owned cleanup; a successful-close row
+is emitted only after the close call returns.
+Read the retained object's identity fields through their explicit property
+accessors, since PowerShell adapted reads can silently turn a throwing CLR or
+script getter into null. Unwrap invocation wrappers before classifying the cause:
+an ordinary getter failure is unavailable with its error code, while fatal causes
+retain propagation after owned cleanup. A missing property or a successful null
+read remains unavailable without manufacturing a getter error.
+Invocation unwrapping MUST stop at an aggregate or fatal exception, then inspect
+every aggregate branch; following only its first inner exception can hide a fatal
+sibling. If a fatal diagnostic and
+an earlier native/listing/action/retirement error coexist, retain both through
+cleanup aggregation. Native exit records precede exit diagnostics. A fatal setup
+diagnostic retains the original setup ErrorRecord in `RSHostedSetupPrimaryError`
+exception data while preserving the fatal exception instance. Process-scope and
+desktop disposal are both attempted, and independent disposal errors remain in
+the propagated error chain.
+
 The File Operations apply-to-all convergence fixture holds one named per-item worker before its
 checkpoint until another worker publishes the conflict prompt, then witnesses the real non-owner
 wait before holding the prompt for 250 ms. It retains four conflicting files, one cached prompt,
@@ -61,6 +94,25 @@ admissions under the scheduler's queue lock, rather than combining separate work
 across a serialized handoff. Exclusive-fairness controls exercise the real admission boundary with
 spare shared capacity, an older exclusive waiter and a later independent transfer, retaining drain,
 cancellation and ineligible-waiter controls. These focused checks do not establish Full qualification.
+
+Destructive File Operations shutdown fixtures use a private real `FolderWindow` and
+its own engine and completion HWND. Retire the shutdown callback and the actual
+popup HWND before releasing that owner; a null owner-held popup lease alone does
+not prove the window closed. Failed retirement preserves the owner, providers and
+scratch and prohibits subsequent family reuse. Never clear the production
+completion-shutdown flag to reuse an engine. The popup lifetime case preserves
+shared retained completion paths, identities and action payloads across private
+shutdown and then requires a real Copy to be admitted and completed by the shared
+engine. Shared selftest completion bookkeeping accepts the actual originating
+`FolderWindow`, because task IDs are local to an engine; late private callbacks
+must not replace a shared completion with the same numeric ID, even after private
+task retirement. Strict-empty clipboard-ready token fixtures likewise use their
+own real owner and engine, retaining the existing empty-state, payload, barrier and
+replay assertions without dismissing legitimate history left on the shared owner.
+The two hidden Static parents have exact path, title, flags and geometry classifications
+in the remaining-Win32 audit; visible or wrong-path variants remain rejected.
+Exercise these boundaries in predecessor order as well as isolated selection;
+filtered successes do not qualify the broad shared-process suite.
 
 `R4A02_LiveOutputGuardChoices` uses a provider-native directory publisher whose child handles have
 closed before its top-level completion pause, so Skip, Queue, destructive consent and publication-index
@@ -538,7 +590,9 @@ runner. Focused source-contract tests guard both sides of this boundary.
 
 Source guards for clipboard admission must tolerate formatting whitespace while preserving
 the accepted-admission barrier and prohibition on terminal-success consumption. Their native
-counterparts remain required. Copy presentation fixtures must declare complete-size and logical
+counterparts remain required. Shared File Operations traversal policy source witnesses must
+ignore formatting whitespace, retain every quantitative ceiling and shared reservation-function
+and consumer assertion, and reject semantic substitutions. Copy presentation fixtures must declare complete-size and logical
 child-count availability explicitly: a positive listed size does not establish a complete total,
 and selected-root item counts must not substitute for unavailable copied-child counts. Localized
 written-byte fallback and supported child-count presentations retain separate assertions.
@@ -961,6 +1015,7 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Commands post-settle foreground diagnostics compare and describe the same captured HWND. The narrow observation adapter records HWND/PID/thread/class, explicit unavailable metadata/errors, UTC FILETIME in 100 ns units and monotonic tick without cursor, physical-input or title sampling. These sequential observations are not atomic ownership proof. A later reacquired HWND/PID cannot identify the owner at an earlier failure. The source-contract guard in `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` preserves this privacy boundary and unchanged admission/refusal behavior.
 - Failure-only process enrichment is separate from that narrow HWND sampler. Query only the captured HWND/PID, retain query-only noninheritable process handles through the final HWND/thread/PID relation sample, and report per-API availability/errors, creation time, session, any-job membership and bounded parent creation compatibility with NTSTATUS. The hosted boundary may capture minimal original-process creation identity at entry; extended queries remain failure-only. Known image categories are fixed; unknown images stay `other`. Log only canonical SHA256 of the exact UTF-16LE image-path bytes, never the raw path, arbitrary basename, title or command line. Sequential relation stability does not eliminate HWND ABA, parent creation compatibility is not creator/ownership proof, and any-job membership is not exact test-job membership. These facts never authorize close, input, restoration or another activation attempt. Existing help-case fake controls and focused source guards cover the variant; live native query outcomes remain separate evidence.
 - Hosted ARM64 stock preparation also captures minimal creation identity and UTC from its already held query-only process lease before the existing HWND/PID/thread recheck. Its completion retains only the first minimal foreground snapshot and the existing last-observation record, with observation counts. An Unknown refusal invokes the same managed observer synchronously on that exact tuple and borrowed lease; it never reopens the captured PID or selects a new foreground target. A positive captured creation time must match before parent enrichment; unavailable facts and changed relations remain explicit. Extended work is failure-only: one child read, at most one parent read and one final relation check, with held leases through that check. Nonfatal enrichment failure preserves the original refusal; fatal diagnostic exceptions follow existing propagation. These snapshots cannot establish background-process absence, process creator or hosted-runner ownership, and grant no additional stock classification, close, input, restoration or retry authority. Existing observation windows, polling, interactive leases and approved close predicates are unchanged. Managed fake controls and the durable source guard cover this pre-boundary variant; a compiler-free pass does not qualify actual ARM64 query outcomes.
+- On GitHub-hosted native ARM64, the adapter uses the existing stock-preparation role selection to set the default terminal for new consoles to Windows Console Host. It records both verified delegation settings with the source and attempt in the lane evidence. In run 44665794670, Terminal windows took foreground during Commands and the fixture refused foreign foreground restoration at retirement. Retain that refusal and all ownership checks. The native replay verifies the effect on the affected Commands cases and retirement.
 - Positive text/keyboard fixtures recheck native focus and foreground ownership by the admitted popup or its children immediately before the action after message pumping. Compare and diagnose the same captured HWNDs. Lost ownership is a failed prerequisite, never a skip or permission to reacquire foreign foreground. Background-negative controls retain logical targets and require no native text-session activation.
 - Before the persistent menu fixture queues its first root-hover event, require a live process/thread-owned, readable nonempty popup with its expected active root. Queue admission is not dispatch. A scoped UI-thread diagnostic interceptor retains only the pinned audited metadata events in fixed bounded storage, restores its prior sink/borrowed target before storage destruction, and reports retained/dropped/truncated counts. Its callback does not allocate, format, perform I/O or re-enter controls. Capture loss makes absent records inconclusive; instrumented timings include observer overhead and do not qualify production latency. Existing root-switch/closure and mouse-leave-negative assertions and deadlines remain mandatory.
 - The inspection-selection reentry fixture MUST establish `Selected` for a current
@@ -2128,6 +2183,8 @@ state why behavioral coverage is unavailable.
 Existing source-only guards must tolerate formatter alignment and line wrapping while
 retaining their required and forbidden expressions, uniqueness and ordering checks.
 Whitespace normalization does not turn a structural check into runtime evidence.
+Guidance-reading source guards must use the canonical project or shared skill paths
+named by `AGENTS.md`, including `.agents/skills/` for project skills.
 
 ## Menu and command-surface validation
 
@@ -3032,3 +3089,9 @@ an additional pre-move content scan, but must still verify the complete destinat
 inventory before publishing completion. Recovery with a pre-existing intent must
 also compare the current source inventory before moving it. The same-volume,
 no-overwrite, reparse and owned-disk checks remain mandatory.
+
+BuildConsoleCheck follows the [console fixture lifetime](../Build/Build_ConsoleAndPaths.md#build-console-fixture-lifetime)
+contract: existing canonical active Runner borrowing, standalone owned archival, fail-before-create
+validation, explicit/shared fixture compatibility and original/fatal error preservation. Its owning
+Pester file retains the original assertions and distinguishes boundary mocks from end-to-end/current
+canonical-module-copy coverage.

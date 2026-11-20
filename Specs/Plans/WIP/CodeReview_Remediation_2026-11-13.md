@@ -282,19 +282,23 @@ passes and BUG-09 pure source/format checks remain component observations, not
 execution of this composition. No build, native timing, PrePush, ABI, hosted or Full
 acceptance is claimed.
 
-After authorized actual application and settled source, compute and review the
-canonical derived PR workflow digest once; no old or partial digest delegates this
-candidate. Then account for noninteractive PrePush, zero-warning test-enabled full
-x64 Debug/Release solution builds and complete byte-verified receipts (188 outputs
-is prior expectation, not a fixed contract), published-head ARM64 Release
-CommandsUiAttribution's fixed four cases, fresh unfiltered x64 Debug/Release Full,
-and separate native ARM64 Release Full. Existing Full covers applicable local UI
-regressions once; add a filtered run only for a demonstrated coverage gap or failure
-investigation. SMB/resource prerequisites and separately owned I60 NAS/W5 work retain
-their actual contractual scope; no unrelated roadmap becomes a new merge gate.
-The authorized fresh 4–6 hour desktop window starts only after corrected RS builds
-and the ARM diagnostic, with conductor announcement and the existing three-minute
-teardown buffer. Its clock has not started. I65 remains **ACTIVE**.
+After focused branch proof and normal required PR checks, merge the normal follow-up
+PR with broad qualification explicitly pending. After the normal follow-up PR merges,
+reconcile the exact merged main commit/tree, then produce fresh test-enabled full-solution
+x64 Debug/Release Embedded builds and byte-verified receipts for that merged source.
+The unused authorized desktop window is capped at six hours including the existing
+three-minute teardown buffer and starts only after those corrected merged-source
+preparations pass. Native ARM64 Release Full and the fixed published-head
+CommandsUiAttribution diagnostic may run in parallel; neither ARM result is a prerequisite
+for starting local x64 desktop coverage. Broad qualification remains pending until its
+actual receipts/results are reviewed.
+
+Verify actual hosted GITHUB_SHA against the reconciled merged identity. If main advances,
+retain its distinct identity and pending state; do not relabel results. Branch-focused
+packets/receipts remain historical, even if a new HEAD has the same tree. Existing Full
+covers local regressions once; filtered follow-up is for a demonstrated gap/investigation.
+SMB/resource and I60 NAS/W5 work retain their contractual scope. I65 remains **ACTIVE**;
+the desktop clock has not started.
 
 ### Qualified H8 composition applied locally; consumer execution pending (2026-11-16)
 
@@ -634,3 +638,235 @@ remain pending. Console compatibility remains unproved; this creates no separate
 bespoke console-fixture gate. I65 stays **ACTIVE**, its first approved desktop clock
 is unstarted, and no Done move, generated changelog fold or qualification waiver
 is established.
+
+### Merged-audit qualification restart and preserved failures (2026-11-20)
+
+Qualification resumes in an isolated candidate from main `7ff4e90d95e71fb09c41fca5095ea0e867c57828`;
+the original audit checkout and shared main checkout remain preserved. The candidate
+uses exact CI engine `f965c7945aff98dbab352623a0cfbe333e7f282f` and unchanged H8
+API 4 source `7fb2ab71852087d93b3a3e5b3ba504c37f56267c`. Pinned x64 dependency
+provisioning and canonical Source restore passed; this is not a product build.
+
+The original merge `53d0a9d58257f53efe817f52a3c309a25454ca1b`
+[native CI run 43917127850](https://github.com/RedSalamanders/RedSalamander/actions/runs/43917127850)
+remains **FAILED**. Both native Release build steps passed, but native tests failed
+and production Release/ZIP gates did not execute. The x64 job's paused-Copy case
+reported 2 timer ticks, 10 renders and 2 owner ticks. Its isolated rerun passed;
+shuffle seed 1015184194 did not reach the cadence case, while seeds 587162809 and
+2023453774 passed that case despite other failures. These shuffles do not establish
+a reproduced shuffled cadence failure or prove its historical cause.
+
+The original ARM64 Commands child (PID 2932, exit 1) reported 964 passed, two failed
+and five declared opt-in skips: `cmd_pane_fileops_completed_group_and_navigation`
+lost its expected primary Dismiss action, and `modeless_window_ownership` refused
+foreground settling at Terminal PID 4408/HWND `0x25206BC`. The classifier's isolated
+first-case rerun passed (PID 296, exit 0); only afterward did boundary retirement
+refuse a different Terminal PID 9812/HWND `0x30604A8`. Neither observation identifies
+a Terminal creator. The original ZIP and source-bound raw results remain preserved
+under completed context `20261120T091126Z-30428-a0bb893801f94675bcfd20f87a859b82`,
+`scratch/qualification/RS53d0-ARM64-connector-original`; classifier success does not
+replace either original failure.
+
+The separate current-main source `7ff4e90d95e71fb09c41fca5095ea0e867c57828`
+[run 44665794670](https://github.com/RedSalamanders/RedSalamander/actions/runs/44665794670)
+also remains **FAILED** after both native Release builds passed. Its original x64
+Commands result was 965/1/5 (PID 7780, raw exit 1), failing the traversal-policy
+source guard; isolated PID 3188 also exited 1. Original FileOperations was 288/1/35
+(PID 6768, raw exit 1), failing `FileOps_ReviewRemediationContracts`; isolated
+PID 9172 passed, while three separate shuffle children exited 1. The last shuffle's
+47/26/251 is not the original result and does not establish a product cause.
+Both architectures' original ToolsPester result was 1449/7/0 and failed again on
+entry classification: formatter-sensitive Terminal/Floodgate guards and three
+stale project-skill paths were deterministic source-contract failures.
+
+Current-main ARM64 Compare exited 0. Its original Commands child 2568 exited 1
+with 962/3/6: `file_operations_phase0_typed_contract_source_guard`,
+`cmd_pane_fileops_popup_throughput_disclosure`, and
+`cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot`. Boundary retirement
+then refused foreign Terminal PID 1312/HWND `0x3403EE`, before any Commands classifier
+or ARM FileOperations child ran. The throughput trace separately observed Terminal
+PID 6008/HWND `0x1203AA` during cycle 21; the conflict-return trace observed foreign
+PID 3092 before View. These identities do not identify a creator or a product cause.
+Bounded reports remain in completed context
+`20261120T101925Z-69372-a67e9e20b9534e5ea73d4b46c73b01b5`,
+`scratch/review/current-main-44665794670-reports`, with exact entry joins in
+`20261120T102113Z-22260-eaa84ae763954edf8a57f5910a53d5bb`.
+Neither this run nor its classifier results replace the distinct original merge failures.
+
+The reviewed candidate repairs paused-rate projection, isolates destructive Phase14
+shutdown and strict-empty ClipboardReady work in private real owners, preserves
+legitimate retained rows and exact retained payloads, and routes completions using
+their actual owner rather than colliding engine-local IDs. Direct launch/retirement
+diagnostics preserve primary errors and mandatory cleanup without claiming foreign
+process ownership. These product/native fixture changes are implemented but remain
+unbuilt and unqualified. The failed diagnostic development campaigns remain retained,
+including V3's 42 passed/two failed and V4's first 37 passed/one failed. V3's later
+directory-metadata drift is separately recorded by observation SHA-256
+`F4A524D677389178DAE2571D4BBD532CFE1013F7A9E32800A16255B549329783`;
+no whole-inventory equality or acceptance/reuse is claimed for that failed archive.
+
+Final V5 diagnostic source passed the full affected pure campaign once: Pester 3.4.0,
+contained NoWindow child 60768, true exit 0, 51 passed/zero failed/zero skipped,
+unchanged measured code/test bytes and all 36 historical selected cases passed.
+Evidence is closed in completed context `20261120T101616Z-49784-d423f37ad606434390af55ba2c8de1b1`,
+`scratch/pure-review/failure-launch-v5-affected`; result SHA-256 is
+`1B960FFA095A6E49FD3BAF115787D12D34C1EBC6F2A8C9990D2435F714B4D1B4`.
+These managed/mock controls invoke no product executable, native sampler or desktop
+activation and do not establish full Tooling, native, platform or repository acceptance.
+
+The subsequent complete direct compiler-free Tools profile remains **FAILED**:
+1469 passed, two failed and one skipped, contained child 67280 raw exit 1, Pester
+3.4.0 and identical pre/post inventories of 28,472 repository files. Its closed
+context is `20261120T103141Z-3676-2c6082783ddb4a4ea3c4f2eb91106e3c`,
+`scratch/pure-tooling/current-profile-complete`. The audit failure exposed missing
+classifications for the two new hidden private fixture parents; exact call-site
+classifications and actual visible/wrong-path rejection controls passed the owning
+audit Describe 2/0/0 (child 63408, exit 0). The workspace fixture clone failed at a
+286-character path because the external driver used a deeper TEMP than the canonical
+runner's `scratch/process-temp`; the unchanged workspace Describe passed 9/0/0
+(child 10824, exit 0) using that canonical layout. No fixture or global Git setting
+was changed. The external driver's later access to an unavailable Pester 3
+`InconclusiveCount` property is a separate reporting error; raw XML/CLIXML and both
+source inventories were already saved. The derived failure report is separately
+sealed with SHA-256 `84D7E1A1430DF3CAEE1019A4D37E705950DBE6F8A57FEB10C5E5CE4EF9E0B144`.
+The explicit missing-built-ProductUiTests failure-report probe remains skipped and
+pending a build. These focused corrections do not turn the failed full-profile run
+green. Direct Pester evidence has no canonical validation promotion or build-receipt
+join and cannot replace required post-commit/profile-build PrePush tooling execution.
+
+I65 remains **ACTIVE**. The bounded Release historical-behavior/candidate observation
+pair, current-source Debug/Release builds and native scoped gates, actual ARM64,
+the four broad desktop entries, applicable unfiltered Full, provider/SMB/NAS obligations
+and normative closeout remain pending under their existing owners and contracts.
+The previously authorized first six-hour desktop window is still unstarted. No
+source commit, native build/test, workflow dispatch, publication, Done move or
+generated changelog fold is claimed by this integration update.
+
+### Public build integration repair after the failed A attempt (2026-11-20)
+
+The first ordinary local fix commit is d89e51f9dc52e7f9ac044b3eef1644e2f2865c8a.
+The serialized historical-behavior A attempt applied the reviewed product-only inverse,
+then its canonical selected x64 Release build FAILED: contained build child 63344 exited
+1 with 3,056 vcpkg overwrite warnings and one Terminal MSB3073 error after the locked
+aro download timed out at Codeberg (curl exit 28, zero received bytes). No compatible
+build receipt was published, no cadence case or desktop lease started, and no A negative
+premise or A/B measurement was established. The finally path restored the B source bytes
+and clean d89e identity; it did not restore or accept build outputs or receipts. The raw
+attempt remains in completed context
+20261120T112303Z-59380-b298168aad9b475f9b92075856a90be3,
+scratch/qualification/paused-rate-A; the selected failed-output preservation supplement is
+20261120T113719Z-42056-49a7a86a4e9f47799b9a0708cb405b54,
+scratch/qualification/A-failed-build-preservation.
+
+The dependency warning cause is a validated public build integration defect, not merely
+an external driver omission. The documented installer promoted staged payload without
+its status database; plain build.ps1 then ran the bundled Visual Studio root's manifest
+install into that populated canonical destination. The executable bytes matched, but
+four helper-script identities and six package ABIs differed, with actual DLL differences.
+All 3,056 warning rows were overwrite warnings, not an exemption from the zero-warning
+gate. The root/helper/status/ABI joins are preserved in completed context
+20261120T114239Z-69716-9c4c4aed99ae4509873350114c1fa19b,
+scratch/audit-forensics/A-vcpkg-warning-cause (report SHA-256
+BA035035D71ACD2AFDD364D6E507D2BBF1559625450184B9C0F2A4C076D58770).
+
+The accepted public repair validates prepared inputs, verifies canonical managed pins
+and applies child-only pinned integration to direct/streaming MSBuild and receipt
+metadata queries. It retains SDK raw-override refusal before composition, removes
+ambient CL/LINK concatenation and preserves existing locks and the zero-warning gate.
+It adds no package installer under a dependency lock, readiness cache, fabricated
+status/stamp or bundled-root fallback. Its 14-file source packet is
+20261120T120242Z-71584-eef48f84b7fe467d8f0eb292419c18e5,
+scratch/audit-repair/public-vcpkg-source-freeze-v1, patch SHA-256
+638AC3151EED41C89B98AF02E5715AC6AAC133803938FE2200F2CA1454B5FBF5.
+Root and independent source review accepted the exact frozen bytes. Source-bound pure
+Pester controls passed 16/0/0 with stable code/test hashes in completed context
+20261120T115749Z-65112-51c65ec1c93140a2ac7b22117f85e151,
+scratch/pure-review/public-vcpkg-focused-v2. The prior 12/2 fixture-development run is
+retained. This implementation/pure state grants no native or broader tooling acceptance.
+
+The person actually ran the manual prerequisite V3 and reported: "The property
+'PSIsContainer' cannot be found on this object". The deterministic first-root walker
+failure was reproduced before five-input verification or copying; no transferred cache
+or proof is claimed. The corrected V4 uses plain .NET ancestor traversal and the first
+canonical tar application. Its exact script SHA-256 is
+2CDF039FF300319526C7CD0B190A828377BAC8B6380C562B496BFDC3E04F8947.
+Safe actual path/resolver/negative controls passed 14/0 in completed context
+20261120T120300Z-44780-2bee4676522a4dd48510b2a4bf73c11e,
+scratch/manual-prerequisites/walker-v4; the unchanged earlier nine footer controls remain
+applicable. Root and independent source review accepted V4. The person subsequently
+executed the exact V4 script under PowerShell 7.6.10 (operator PID 8388). Its canonical
+archived report is in completed context
+20261120T121258Z-8388-a49315a07a2440bf9f6298856c675abd,
+scratch/manual-prerequisites/verified-Ghostty-inputs/manual-verified-inputs-report.json,
+SHA-256 0264C95A3873E613099FA81AE262F21C9402C3D1C785B2C2E740BF0AB4E705BB.
+CopyRequested and AllFiveVerified are true: all five layout/license readers exited zero,
+five copy rows were recorded, and Error is null. Independent destination hashes match all
+five locked inputs (2,311,712 bytes); canonical archive complete/intent records join the
+operator report and the original live run is absent. The derived reconciliation is in
+completed context 20261120T121413Z-10800-166f276ea7ad4d11b116ea6361a3c694,
+scratch/manual-prerequisites/V4-operator-reconciliation/operator-reconciliation.json,
+SHA-256 E818F1E0A9B9055C5DCA0BB5FE2983B8A9E6B6E65117E13E420CBF5AD6417D5A.
+This verifies the prerequisite cache transfer only; it establishes no build, A/B or native
+acceptance. Agents independently read the report and destination hashes without rerunning
+the archive/layout/license operations or copying the inputs.
+A prior agent archive/layout/license command was rejected before execution by automatic
+review with only "blocked by policy"; agents have not retried that action.
+
+This final integration metadata refresh records the canonical workflow digest and
+required structural checks in the integration freeze packet. Public modules/tests remain
+at their accepted frozen hashes. No second commit, package-payload repair, further
+source inverse, native build/test, workflow dispatch, publication or changelog fold is
+claimed here. Required canonical post-build PrePush, the behavior pair, current-source
+Debug/Release/native ARM64, broad desktop/Full/provider obligations and I65 closeout
+remain pending. The first desktop window remains unstarted; I65 remains ACTIVE.
+
+### Build-console lifetime follow-up prepared; merged-source qualification pending (2026-11-20)
+
+The B3 lifecycle helper preserves every original console/path assertion, validates
+borrowed canonical active ownership before creation, and archives only its standalone
+run with primary/fatal archive failures retained. Canonical Pester 3.4 owning coverage
+passed **17/0/0**, actual contained child 79528 exit 0, with source hashes unchanged
+through execution (run `20261120T153151Z-79528-df61e42c82e7426da5f68ea3ba0541bf`).
+The original end-to-end assertion body and representative current canonical module-closure
+fixture ran. Boundary mocks prove borrowing/refusal/error behavior; they are not real
+archive proof. Earlier outside-candidate 13/0 plus getter-delta5/0 remain separate
+preparation evidence. The first owning attempts 4/13 and 16/1 remain failed history;
+new mock assertions now explicitly use the current It scope, and the dead-owner control
+inspects the actual exception instead of Pester 3.4's empty-message Throw adapter.
+
+The reviewed [qualitative Source pair](../../TestRuns/Local-x64/FileOps/2026-11-20_142303_PausedRateSource/README.md)
+is supporting state-correctness and bounded-work evidence only. A source `c88af9df`
+(the reviewed five-hunk inverse in three product files) built with zero warnings/errors
+under its own `eddbd46d` receipt, then remained **FAILED**, native/runner exits 1/1,
+2 passed/1 failed/0 skipped. Its fresh nonzero paused rate stayed stale with no telemetry
+timer and no collection. The deliberate ZERO repeated-rate ordering control missed
+collection/reset. B source `736eff83` on `ebebc14b` built with zero warnings/errors under
+its own `870be6db` receipt, and the exact filtered case passed **3/0/0**, native exit 0,
+runner/operator exit 2: change verdict PASSED, repository NOT_EVALUATED. B cleared its
+fresh nonzero paused rate before another telemetry timer with one collection and reset
+the repeated ZERO-rate window with one collection. Both halves retained the original
+600 ms settle, 2200 ms measurement and 3/4/4 caps; actual paused counts were 2/2/2.
+Neither reproduced the earlier ten-render symptom. Single CPU observations (A 0,
+B 15,625 microseconds) are not benchmark samples or a speedup claim.
+
+All five common-input stages per half retained `8329dd08` (35,584 files, 199 command
+tlogs, 465 retained producer read-witness paths and 3,056 prepared payload files).
+The V5-to-V6 operator change was reporting selection only, with 15 safe controls;
+functional build/case/control code stayed unchanged. Each generated SDK/module identity
+matches its own receipt; no output swap, receipt relabel or executable-code-equivalence
+claim is made. Native metric commit fields remain empty; derived sidecars bind actual
+source and receipts. The original A parent selector failure and later read-only exact-ID
+reconciliation remain separate; Capture.StartedUtc denotes only a held invocation/launch
+window, not observed kernel ProcessStartTime. The tool-host rejection before B launch,
+curator-only preparation failures and their unchanged raw outcomes are retained privately.
+Final source/pin/output checks and owned actor/lease retirement completed; full B2 source
+was restored. B3 changes to tooling/docs do not promote these B2 branch receipts.
+The combined public subset supersedes only the A-only preparation's incorrect
+PauseProjectionUs.value1 description: it is the rateCleared && noTimerTick success flag.
+
+The ebeb selected Release build (zero warnings/errors) and Review native3/0/0/native0,
+filtered outer2/NOT_EVALUATED retain their original branch identities. Historical whole
+Tools1469/2/1 stays FAILED; SandboxAudit119 stays unclean. Debug/Release Full, exact merged-M
+preparation, ARM64/desktop, PrePush and closeout remain pending. PR225 source45fbc76214d24c9869f129fef382b19bb326eb19
+merged as53d0a9d58257f53efe817f52a3c309a25454ca1b; H8/API4 remains unchanged. No version6
+port, producer repin, output swap or receipt rebinding is part of this follow-up.

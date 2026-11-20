@@ -1067,3 +1067,38 @@ Describe 'Captured VSwhere metadata family' {
         foreach($row in $script:metadataAudit.Rows){$row.contained|Should Be $true;$row.delegated|Should Be $false;(Get-Process -Id $row.pid -ErrorAction SilentlyContinue)|Should BeNullOrEmpty}
     }
 }
+Describe 'Pinned metadata child environment' {
+    BeforeAll {
+        Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -ErrorAction Stop
+        Import-Module $helperModule -ErrorAction Stop
+        $script:pinnedMetadataModule=Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/BuildEvidence.psm1') -PassThru -ErrorAction Stop
+    }
+    It 'propagates child-only overrides through capture and the actual identity probe and preserves nonzero exits' {
+        $hostPath=(Get-Process -Id $PID).Path
+        $parent=$env:RS_PINNED_METADATA_FACT
+        try {
+            $env:RS_PINNED_METADATA_FACT='parent'
+            $arguments=@('-NoProfile','-NonInteractive','-Command','[Console]::Out.WriteLine($env:RS_PINNED_METADATA_FACT); [Console]::Error.WriteLine("fixed-probe-stderr"); exit 17')
+            $captured=Invoke-RSCapturedProcess -FilePath $hostPath -Arguments $arguments -WorkingDirectory $TestDrive -AdditionalEnvironment @{RS_PINNED_METADATA_FACT='child'}
+            $captured.ExitCode | Should Be 17
+            ($captured.StdOut -join ',') | Should Be 'child'
+            ($captured.StdErr -join ',') | Should Be 'fixed-probe-stderr'
+            $env:RS_PINNED_METADATA_FACT | Should Be 'parent'
+            $r=Invoke-RSTestBlock {
+                & $script:pinnedMetadataModule {
+                    param($path,$argv,$cwd)
+                    Invoke-RSNativeTextOutput -FilePath $path -Argument $argv -WorkingDirectory $cwd -AdditionalEnvironment @{RS_PINNED_METADATA_FACT='identity-child'}
+                } $hostPath $arguments $TestDrive
+            }
+            $r.Succeeded | Should Be $false
+            $r.Error.Exception.Message | Should Match 'exit 17: fixed-probe-stderr'
+            $good=@('-NoProfile','-NonInteractive','-Command','[Console]::Out.WriteLine($env:RS_PINNED_METADATA_FACT); exit 0')
+            $text=& $script:pinnedMetadataModule {
+                param($path,$argv,$cwd)
+                Invoke-RSNativeTextOutput -FilePath $path -Argument $argv -WorkingDirectory $cwd -AdditionalEnvironment @{RS_PINNED_METADATA_FACT='identity-child'}
+            } $hostPath $good $TestDrive
+            $text | Should Be 'identity-child'
+            $env:RS_PINNED_METADATA_FACT | Should Be 'parent'
+        } finally { $env:RS_PINNED_METADATA_FACT=$parent }
+    }
+}

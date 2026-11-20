@@ -1142,3 +1142,22 @@ Describe 'Vcpkg captured-launch cache closure' {
         Assert-MockCalled Get-RSBuildToolchainIdentity -ModuleName BuildEvidence -Times 13 -Exactly -Scope It
     }
 }
+
+Describe 'Pinned metadata identity binding' {
+    BeforeAll { Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/BuildEvidence.psm1') -ErrorAction Stop }
+    It 'uses the requested canonical environment in the actual receipt identity property query' {
+        Mock Invoke-RSNativeTextOutput -ModuleName BuildEvidence {
+            param($FilePath,$Argument,$WorkingDirectory,$AdditionalEnvironment)
+            '{"Properties":{"VCToolsInstallDir":"C:/fixture-vc/","VCToolsVersion":"14.52","WindowsSdkDir":"C:/fixture-sdk/","WindowsTargetPlatformVersion":"10.0","PreferredToolArchitecture":"x64"}}'
+        }
+        Mock New-RSBuildToolchainIdentityRecord -ModuleName BuildEvidence { @{actual='fixture'} }
+        Mock Get-RSGitSourcePaths -ModuleName BuildEvidence { @() }
+        Mock Get-RSGhosttyRuntimeIdentityDigest -ModuleName BuildEvidence { '0'*64 }
+        $identity=Get-RSBuildIdentityBundle -RepoRoot $TestDrive -MSBuildPath 'not-executed.exe' -Platform x64 -Configuration Release -AdditionalEnvironment @{VcpkgRoot='fixed-pinned-root';VcpkgManifestInstall='false'}
+        $identity.ToolchainIdentityRecord.actual | Should Be 'fixture'
+        Assert-MockCalled Invoke-RSNativeTextOutput -ModuleName BuildEvidence -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Argument -contains '-getProperty:VCToolsInstallDir,VCToolsVersion,WindowsSdkDir,WindowsTargetPlatformVersion,PreferredToolArchitecture' -and
+            $AdditionalEnvironment.VcpkgRoot -ceq 'fixed-pinned-root' -and $AdditionalEnvironment.VcpkgManifestInstall -ceq 'false'
+        }
+    }
+}

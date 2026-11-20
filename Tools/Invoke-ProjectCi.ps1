@@ -35,6 +35,7 @@ Filtered diagnostics require an exact passing case and remain NOT_EVALUATED for 
 DesktopProbe records hosted desktop identities and access errors without building, input or display changes.
 Hosted interactive native entries use a verified boundary on Default inside the existing entry lease and restore it after child drain.
 Eligible hosted native ARM64 entries may first request the two approved stock-window closes, retaining create-only marked-root evidence.
+Eligible hosted ARM64 test roles select Windows Console Host as the runner user's default terminal, with a create-only audit.
 Their neutral fixture may use one bounded registered nontext-key handoff after direct foreground refusal; native suite warnings and input assertions remain required.
 Paired comparisons retain the original desktop for both sources.
 See Specs/Build/Build_UnifiedCI.md for roles, input rules, evidence and manual actions.
@@ -157,6 +158,11 @@ if ($Phase -eq 'Production') {
     Write-CiProductionReceipt -Context $context -Archives $archives -TestModeDisabled $true -SmokePassed $true
     return
 }
+Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
+if (Get-RSHostedStockPreparationRequest -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope) {
+    Set-RSHostedConsoleHostDelegation -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope `
+        -TestRoot $env:REDSALAMANDER_TEST_ROOT -EvidenceDirectory $receiptDirectory -SourceCommit $context.batch.commit
+}
 $env:RSBuildEnableTests = 'true'
 if ($QualificationScope -ceq 'R0ePaired') { $env:RSBuildCompilerDebugInformation = 'Embedded' }
 if ($Phase -in @('ReleaseTestBuild','Qualification')) {
@@ -164,7 +170,6 @@ if ($Phase -in @('ReleaseTestBuild','Qualification')) {
     Test-PinnedDxUiMatrix
     if ($Phase -eq 'ReleaseTestBuild') { return }
 }
-Import-Module (Join-Path $root 'Tools/Modules/Testing/HostedTestDesktop.psm1') -Force
 if (-not (Get-Module -ListAvailable Pester | Where-Object Version -EQ '3.4.0')) {
     Install-Module Pester -RequiredVersion 3.4.0 -Scope CurrentUser -Force -SkipPublisherCheck
 }

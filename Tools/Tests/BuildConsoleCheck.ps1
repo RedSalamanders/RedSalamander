@@ -2,11 +2,38 @@
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 if(-not $Root){$Root=(& git -C $PSScriptRoot rev-parse --show-toplevel).Trim()}
+$ownedContext=$null
+$failure=$null
+$archiveFailure=$null
+$archive=$null
+try {
 if(-not $ScratchRoot){
     if((Split-Path $Root -Leaf)-eq 'bp28' -and $Root -like '*RedSalamander.Perf*' -or
        (Test-Path -LiteralPath (Join-Path $Root 'RedSalamander/RedSalamander.vcxproj'))){
         Import-Module (Join-Path $Root 'Tools/Modules/Testing/TestSandbox.psm1') -Scope Local
-        $ScratchRoot=New-RSTestSandboxScratchDirectory -RepoRoot $Root -Harness BuildConsole -Case Policy -RunId ('console-'+[guid]::NewGuid().ToString('N'))
+        Import-Module (Join-Path $Root 'Tools/Modules/Testing/TestRunPlan.Common.psm1') -Scope Local
+        if(-not [string]::IsNullOrWhiteSpace($env:REDSALAMANDER_TEST_RUN_ID)){
+            $owner=ConvertFrom-RSTestRunId -RunId $env:REDSALAMANDER_TEST_RUN_ID
+            if($null -eq $owner -or $owner.Format -cne 'Runner' -or $owner.ProcessId -le 0 -or $owner.ProcessId -gt [int]::MaxValue){throw 'BuildConsole requires a canonical active runner id.'}
+            # Validate before any context factory or scratch creator: this helper borrows
+            # an existing owner, including a runner parent, rather than adopting a new run.
+            $testRoot=Get-RSTestSandboxRoot -RepoRoot $Root
+            $existingRun=Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path $testRoot ('runs/'+$owner.RunId)) -RequireDescendant
+            if(-not [IO.Directory]::Exists($existingRun)){throw 'BuildConsole borrowed run root does not already exist.'}
+            $runItem=Get-Item -LiteralPath $existingRun -Force -ErrorAction Stop
+            # Same PID-reuse rule as the canonical stale-run resolver, scoped to the
+            # one requested owner instead of a root-wide process inventory.
+            $process=[Diagnostics.Process]::GetProcessById([int]$owner.ProcessId)
+            try {
+                if($process.get_HasExited() -or $runItem.get_CreationTimeUtc() -lt $process.get_StartTime().ToUniversalTime()){throw 'BuildConsole borrowed run owner is inactive or its PID was reused.'}
+            } finally {$process.Dispose()}
+            $context=New-RSTestRunContext -RepoRoot $Root -RunId $owner.RunId
+            if($context.RunId -cne $owner.RunId -or $context.TestRoot -ine $testRoot -or $context.RunRoot -ine $existingRun){throw 'BuildConsole borrowed context changed its validated identity.'}
+        }else{
+            $ownedContext=New-RSTestRunContext -RepoRoot $Root
+            $context=$ownedContext
+        }
+        $ScratchRoot=New-RSTestSandboxScratchDirectory -RepoRoot $Root -Harness BuildConsole -Case Policy -RunId $context.RunId
     }else{$ScratchRoot=Join-Path $Root ('.build/BuildConsoleTests/'+[guid]::NewGuid().ToString('N'))}
 }
 [void][IO.Directory]::CreateDirectory($ScratchRoot)
@@ -82,4 +109,21 @@ if($paths){
     Refuses {Initialize-DxUiOutputRoot -DependencyRoot $dependency -BuildIdentity $foreign} 'unverified'
     Require (Test-Path -LiteralPath (Join-Path $unverified 'foreign.txt')) 'Unverified output was removed.'
 }
+} catch {$failure=$_} finally {
+    if($null -ne $ownedContext -and [IO.Directory]::Exists($ownedContext.RunRoot)){
+        try {
+            $archive=Save-RSTestSandboxRunEvidence -TestRoot $ownedContext.TestRoot -RunId $ownedContext.RunId -Disposition $(if($null -eq $failure){'completed'}else{'interrupted'})
+            if($archive.Status -cne 'Archived'){throw 'BuildConsole standalone evidence was not archived.'}
+        } catch {$archiveFailure=$_}
+    }
+}
+if($null -ne $failure -and $null -ne $archiveFailure){
+    $combined=[AggregateException]::new('BuildConsole validation and standalone archival failed.',[Exception[]]@($failure.Exception,$archiveFailure.Exception))
+    $combined.Data['BuildConsolePrimaryError']=$failure
+    $combined.Data['BuildConsoleArchiveError']=$archiveFailure
+    throw $combined
+}
+if($null -ne $archiveFailure){throw $archiveFailure}
+if($null -ne $failure){throw $failure}
+if($null -ne $archive){Write-Host ('BuildConsole standalone evidence: '+$archive.RunRoot)}
 Write-Host 'PASS zero-warning results, green output, safe terminal links, plain launch commands and short-path collision refusal.'

@@ -60,8 +60,8 @@
     An explicit Clean still installs from staging.
 
 .PARAMETER RepairInterrupted
-    Allows a clean dependency repair delegated by a full-solution rebuild.
-    The parent build clears contamination only after successful validation.
+    Repairs an interrupted installation for one canonical platform under its
+    dependency lock. Requires Clean. Clears the marker after a successful install.
 
 .PARAMETER VcpkgExe
     Optional explicit path to vcpkg.exe (overrides automatic discovery). Use this if vcpkg
@@ -130,7 +130,6 @@ param(
 
     [switch]$ReuseCurrent,
 
-    [Parameter(DontShow)]
     [switch]$RepairInterrupted,
 
     [Parameter(HelpMessage = "Optional explicit path to vcpkg.exe")]
@@ -151,8 +150,8 @@ if ($Help) {
     return
 }
 
-if ($RepairInterrupted -and -not $Clean) {
-    throw 'An interrupted dependency repair requires Clean.'
+if ($RepairInterrupted -and (-not $Clean -or $Platform -notin @('x64', 'ARM64') -or $Triplet)) {
+    throw 'An interrupted dependency repair requires Clean and one explicit platform (x64 or ARM64) without a Triplet override.'
 }
 
 Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\VcpkgInstallSafety.psm1") -Force -ErrorAction Stop
@@ -372,14 +371,11 @@ try {
                     -AbandonedOwner $sharedDependencyLock.AbandonedOwner `
                     -Scope $sharedDependencyScope)
         }
-        if ($RepairInterrupted -and -not $sharedDependencyLock.IsDelegated) {
-            throw 'An interrupted dependency repair requires a delegated full-solution rebuild.'
-        }
         if (-not $RepairInterrupted -and (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $sharedDependencyScope)) {
             $markerPath = Get-RSArtifactContaminationMarkerPath `
                 -RepoRoot $repoRoot `
                 -Scope $sharedDependencyScope
-            throw "Shared vcpkg dependencies may be incomplete for platform $coordinationPlatform. Repair with a full-solution build.ps1 -Rebuild for that platform. Marker: $markerPath"
+            throw "Shared vcpkg dependencies may be incomplete for platform $coordinationPlatform. Repeat the pinned install with -Platform $coordinationPlatform -Clean -RepairInterrupted. Marker: $markerPath"
         }
         Assert-RSNoResidualArtifactToolProcesses `
             -RepoRoot $repoRoot `
@@ -520,10 +516,14 @@ foreach ($triplet in $tripletsToInstall) {
     if (Test-Path $expectedHeader) {
         Write-Host "OK: Found WIL headers for $triplet at: $expectedHeader" -ForegroundColor Green
     } else {
+        if ($RepairInterrupted) { throw "The repaired installation is missing the expected WIL header: $expectedHeader" }
         Write-Host "Warning: Expected WIL header for $triplet not found at: $expectedHeader" -ForegroundColor Yellow
         Write-Host "Install root contents:" -ForegroundColor Yellow
         Get-ChildItem -Path $platformInstallRoot -ErrorAction SilentlyContinue | Select-Object -First 20 Name
     }
+}
+if ($RepairInterrupted) {
+    Clear-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $sharedDependencyScope
 }
 }
 finally {
