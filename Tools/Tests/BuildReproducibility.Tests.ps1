@@ -127,6 +127,39 @@ Describe 'Declarative runtime dependency graph' {
         $targets | Should Match '<Delete\s+Files='
     }
 
+    It 'declares vcpkg link inputs and stages the previously implicit runtime DLLs' {
+        $props = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
+        $targets = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.targets') -Raw
+        $linkInputs = Get-Content -LiteralPath (Join-Path $repoRoot 'Build/VcpkgLinkDependencies.props') -Raw
+        $props | Should Match '<VcpkgAutoLink>false</VcpkgAutoLink>'
+        $targets | Should Match 'Build\\VcpkgLinkDependencies\.props'
+        $linkInputs | Should Not Match '\*\.lib|RedLauncher'
+        $linkInputs | Should Match 'libcurl-d\.lib'
+        $linkInputs | Should Match 'raw_rd\.lib'
+
+        foreach ($platform in 'x64', 'ARM64') {
+            foreach ($configuration in 'Debug', 'ASan Debug', 'Release') {
+                $manifest = Get-RSRuntimeDependencyManifest -RepoRoot $repoRoot -Configuration $configuration -Platform $platform
+                foreach ($dependency in @(
+                    @{ Project = 'Common'; Dll = 'blake3.dll'; Root = 'BuildOutput' },
+                    @{ Project = 'Common'; Dll = 'yyjson.dll'; Root = 'BuildOutput' },
+                    @{ Project = 'ViewerSqlite'; Dll = 'sqlite3.dll'; Root = 'Plugins' },
+                    @{ Project = 'ViewerSqlite'; Dll = 'yyjson.dll'; Root = 'Plugins' },
+                    @{ Project = 'ViewerPE'; Dll = 'pe-parse.dll'; Root = 'Plugins' },
+                    @{ Project = 'ViewerImgRaw'; Dll = 'spng.dll'; Root = 'Plugins' },
+                    @{ Project = 'FileSystemGoogleDrive'; Dll = 'libssh2.dll'; Root = 'Plugins' }
+                )) {
+                    @($manifest.Dependencies | Where-Object {
+                        $_.Projects -contains $dependency.Project -and
+                        $_.OutputName -ceq $dependency.Dll -and
+                        $_.OutputRoot -ceq $dependency.Root -and $_.Required
+                    }).Count | Should Be 1
+                }
+                @($manifest.Dependencies | Where-Object { $_.Projects -contains 'RedLauncher' }).Count | Should Be 0
+            }
+        }
+    }
+
     It 'honors test-harness definitions in Release and permits bounded build parallelism' {
         $props = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
         $targets = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.targets') -Raw
@@ -230,7 +263,9 @@ Describe 'Declarative runtime dependency graph' {
         )
         foreach ($platform in @('x64', 'ARM64')) {
             $manifest = Get-RSRuntimeDependencyManifest -RepoRoot $repoRoot -Configuration Debug -Platform $platform
-            $terminalDependencies = @($manifest.Dependencies | Where-Object { $_.Projects -contains 'Terminal' })
+            $terminalDependencies = @($manifest.Dependencies | Where-Object {
+                $_.Projects -contains 'Terminal' -and $_.OutputName -like 'TerminalRuntime\*'
+            })
             $terminalDependencies.Count | Should Be $expectedOutputs.Count
             @($terminalDependencies.OutputName | Sort-Object) -join "`n" |
                 Should Be (@($expectedOutputs | Sort-Object) -join "`n")

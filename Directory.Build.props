@@ -96,6 +96,7 @@
     <RSUseVcpkgManifest Condition="'$(IsLanguageResourceProject)'=='true'">false</RSUseVcpkgManifest>
     <VcpkgEnabled Condition="'$(IsLanguageResourceProject)'=='true'">false</VcpkgEnabled>
     <VcpkgEnableManifest Condition="'$(RSUseVcpkgManifest)'=='true'">true</VcpkgEnableManifest>
+    <VcpkgAutoLink>false</VcpkgAutoLink>
     <!-- Local SDK builds read an already restored triplet under its platform lease. -->
     <VcpkgManifestInstall Condition="'$(CiSdkContract)'=='LocalUnpinnedAbiV1'">false</VcpkgManifestInstall>
   </PropertyGroup>

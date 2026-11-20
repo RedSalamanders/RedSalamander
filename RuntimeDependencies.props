@@ -13,12 +13,28 @@
       <Source>ThirdParty\RedMonitor\LICENSE.txt</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>RedMonitor-LICENSE.txt</OutputName><Required>true</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="search-service-sqlite-debug">
-      <Projects>RedSalamanderSearchService</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Projects>RedSalamander;RedSalamanderSearchService;ViewerSqliteTests</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
       <Source>debug\bin\sqlite3.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>sqlite3.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="search-service-sqlite-release">
-      <Projects>RedSalamanderSearchService</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Projects>RedSalamander;RedSalamanderSearchService;ViewerSqliteTests</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
       <Source>bin\sqlite3.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>sqlite3.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="plugin-sqlite">
+      <Projects>FileSystem;ViewerSqlite</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>$(RSVcpkgRuntimeBinDir)sqlite3.dll</Source><OutputName>sqlite3.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="common-blake3">
+      <Projects>Common</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>$(RSVcpkgRuntimeBinDir)blake3.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>blake3.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="product-yyjson">
+      <Projects>Common;RedSalamander;SettingsSchemaTests;CrashHandlingTests;PluginContractTests;ProductUiTests;ViewerPETests</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>$(RSVcpkgRuntimeBinDir)yyjson.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>yyjson.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="viewer-pe">
+      <Projects>ViewerPE</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>$(RSVcpkgRuntimeBinDir)pe-parse.dll</Source><OutputName>pe-parse.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
 
     <RSRuntimeDependency Include="ghostty-vt-x64">
@@ -116,11 +132,11 @@
       <Source>bin\libcurl.dll</Source><OutputName>libcurl.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="curl-ssh-debug">
-      <Projects>FileSystemCurl</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
       <Source>debug\bin\libssh2.dll</Source><OutputName>libssh2.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="curl-ssh-release">
-      <Projects>FileSystemCurl</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
       <Source>bin\libssh2.dll</Source><OutputName>libssh2.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="openssl-ssl-debug-x64">
@@ -180,16 +196,16 @@
       <Source>bin\brotlidec.dll</Source><OutputName>brotlidec.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="nghttp2-debug">
-      <Projects>FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
       <Source>debug\bin\nghttp2.dll</Source><OutputName>nghttp2.dll</OutputName><Required>false</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="nghttp2d-debug">
-      <Projects>FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
       <Source>debug\bin\nghttp2d.dll</Source><OutputName>nghttp2d.dll</OutputName><Required>false</Required>
     </RSRuntimeDependency>
     <RSRuntimeDependency Include="nghttp2-release">
-      <Projects>FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
-      <Source>bin\nghttp2.dll</Source><OutputName>nghttp2.dll</OutputName><Required>false</Required>
+      <Projects>FileSystemCurl;FileSystemGoogleDrive</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\nghttp2.dll</Source><OutputName>nghttp2.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
 
     <RSRuntimeDependency Include="image-raw-debug">
@@ -240,13 +256,13 @@
       <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
       <Source>bin\z.dll</Source><OutputName>z.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
-    <RSRuntimeDependency Include="image-yyjson-debug">
-      <Projects>ViewerImgRaw</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
-      <Source>debug\bin\yyjson.dll</Source><OutputName>yyjson.dll</OutputName><Required>true</Required>
+    <RSRuntimeDependency Include="image-spng">
+      <Projects>ViewerImgRaw</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>$(RSVcpkgRuntimeBinDir)spng.dll</Source><OutputName>spng.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
-    <RSRuntimeDependency Include="image-yyjson-release">
-      <Projects>ViewerImgRaw</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
-      <Source>bin\yyjson.dll</Source><OutputName>yyjson.dll</OutputName><Required>true</Required>
+    <RSRuntimeDependency Include="plugin-yyjson">
+      <Projects>FileSystem;FileSystem7z;FileSystemCurl;FileSystemDummy;FileSystemGoogleDrive;FileSystemMicrosoftDrive;FileSystemMtp;FileSystemS3;Terminal;ViewerImgRaw;ViewerSpace;ViewerSqlite;ViewerText;ViewerVLC;ViewerWeb</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
+      <Source>$(RSVcpkgRuntimeBinDir)yyjson.dll</Source><OutputName>yyjson.dll</OutputName><Required>true</Required>
     </RSRuntimeDependency>
 
     <RSRuntimeDependency Include="webview2-debug">

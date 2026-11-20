@@ -113,7 +113,8 @@ post-release check.
 - CI cache keys include both pin files and CI must not mutate user-wide MSBuild state with `vcpkg integrate install`.
   The reusable build imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout through MSBuild's
   per-invocation `ForceImportBeforeCppTargets` / `ForceImportAfterCppTargets` properties, which must be set before
-  invoking `build.ps1` so automatic linking consumes the already-installed triplet libraries. The invocation disables
+  invoking `build.ps1` so the installed triplet supplies its include paths and app-local copy targets. First-party
+  binaries link the libraries declared in `Build/VcpkgLinkDependencies.props`. The invocation disables
   local-app-data discovery so a runner-level or user-wide integration cannot add a second, unpinned target import. It
   also sets `VcpkgXUseBuiltInApplocalDeps=false`: the pinned PowerShell copier writes copied destination paths to the
   vcpkg tlog consumed by build-receipt publication, while the built-in copier writes package source paths that the

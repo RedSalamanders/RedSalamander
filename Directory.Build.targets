@@ -80,6 +80,8 @@
   </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)RuntimeDependencies.props"
           Condition="'$(RSIsFirstPartyProject)'=='true' and Exists('$(MSBuildThisFileDirectory)RuntimeDependencies.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Build\VcpkgLinkDependencies.props"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(IsLanguageResourceProject)'!='true'" />
 
   <!-- OutDir is shared by many projects. A deployed dependency DLL is not a
        consumer-owned output: that consumer's Clean may run after another

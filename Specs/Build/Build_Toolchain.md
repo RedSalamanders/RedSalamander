@@ -905,6 +905,13 @@ which lets fail-closed build receipts authenticate only outputs beneath the
 selected build directory; the built-in copier's source-path tlog format is not a
 receipt declaration.
 
+First-party native projects disable vcpkg automatic linking. Each target names
+its direct vcpkg libraries in `Build/VcpkgLinkDependencies.props` and resolves them
+from the selected platform and configuration. Header-only ports do not add link
+inputs. `RuntimeDependencies.props` owns the staged direct, transitive and
+dynamically loaded port DLLs. RedLauncher has no third-party link inputs and
+retains its static CRT.
+
 The Ghostty private-runtime builder has its own reviewed shared-resource scopes.
 Its source, download, toolchain, cache, and product state beneath
 `.build\TerminalEngine` is shared across configurations and platforms in one

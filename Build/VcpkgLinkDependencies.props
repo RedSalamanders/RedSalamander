@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <RSVcpkgLibraryDir>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\lib\</RSVcpkgLibraryDir>
+    <RSVcpkgLibraryDir Condition="'$(Configuration)'!='Release'">$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\lib\</RSVcpkgLibraryDir>
+    <RSVcpkgCurlLibrary Condition="'$(Configuration)'=='Release'">libcurl.lib</RSVcpkgCurlLibrary>
+    <RSVcpkgCurlLibrary Condition="'$(Configuration)'!='Release'">libcurl-d.lib</RSVcpkgCurlLibrary>
+    <RSVcpkgRawLibrary Condition="'$(Configuration)'=='Release'">raw_r.lib</RSVcpkgRawLibrary>
+    <RSVcpkgRawLibrary Condition="'$(Configuration)'!='Release'">raw_rd.lib</RSVcpkgRawLibrary>
+  </PropertyGroup>
+
+  <!-- Each target lists its own link inputs. RuntimeDependencies.props owns the
+       DLLs loaded at runtime, including 7-Zip and transitive port DLLs. -->
+  <PropertyGroup>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='Common'">$(RSVcpkgLibraryDir)blake3.lib;$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='RedSalamander' or '$(MSBuildProjectName)'=='FileSystem' or '$(MSBuildProjectName)'=='ViewerSqlite'">$(RSVcpkgLibraryDir)sqlite3.lib;$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='RedSalamanderSearchService'">$(RSVcpkgLibraryDir)sqlite3.lib;$(RSVcpkgLibraryDir)ftxui-component.lib;$(RSVcpkgLibraryDir)ftxui-dom.lib;$(RSVcpkgLibraryDir)ftxui-screen.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='FileSystemCurl' or '$(MSBuildProjectName)'=='FileSystemGoogleDrive'">$(RSVcpkgLibraryDir)$(RSVcpkgCurlLibrary);$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='FileSystemS3'">$(RSVcpkgLibraryDir)aws-cpp-sdk-core.lib;$(RSVcpkgLibraryDir)aws-cpp-sdk-s3-crt.lib;$(RSVcpkgLibraryDir)aws-cpp-sdk-s3tables.lib;$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='ViewerImgRaw'">$(RSVcpkgLibraryDir)$(RSVcpkgRawLibrary);$(RSVcpkgLibraryDir)turbojpeg.lib;$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='ViewerPE'">$(RSVcpkgLibraryDir)pe-parse.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='ViewerSqliteTests'">$(RSVcpkgLibraryDir)sqlite3.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="'$(MSBuildProjectName)'=='ViewerWeb'">$(RSVcpkgLibraryDir)WebView2Loader.dll.lib;$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+    <RSVcpkgLinkLibraries Condition="
+        '$(MSBuildProjectName)'=='FileSystem7z' or
+        '$(MSBuildProjectName)'=='FileSystemDummy' or
+        '$(MSBuildProjectName)'=='FileSystemMicrosoftDrive' or
+        '$(MSBuildProjectName)'=='FileSystemMtp' or
+        '$(MSBuildProjectName)'=='Terminal' or
+        '$(MSBuildProjectName)'=='ViewerSpace' or
+        '$(MSBuildProjectName)'=='ViewerText' or
+        '$(MSBuildProjectName)'=='ViewerVLC' or
+        '$(MSBuildProjectName)'=='CrashHandlingTests' or
+        '$(MSBuildProjectName)'=='PluginContractTests' or
+        '$(MSBuildProjectName)'=='ProductUiTests' or
+        '$(MSBuildProjectName)'=='SettingsSchemaTests' or
+        '$(MSBuildProjectName)'=='ViewerPETests'">$(RSVcpkgLibraryDir)yyjson.lib</RSVcpkgLinkLibraries>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(RSVcpkgLinkLibraries)'!=''">
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies);$(RSVcpkgLinkLibraries)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>
