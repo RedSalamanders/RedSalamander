@@ -1247,6 +1247,80 @@ Describe 'Approved hosted ARM64 stock preparation' {
     }
 }
 
+Describe 'Hosted console-host delegation precondition' {
+    BeforeEach {
+        $script:savedActions=$env:GITHUB_ACTIONS; $script:savedRunner=$env:RUNNER_ENVIRONMENT; $script:savedRepo=$env:GITHUB_REPOSITORY
+        $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='github-hosted'; $env:GITHUB_REPOSITORY='RedSalamanders/RedSalamander'
+        # In-memory registry only: no fixture reads or writes the real HKCU.
+        $global:consoleHostValues=@{}; $global:consoleHostWrites=[Collections.Generic.List[string]]::new()
+        $script:consoleHostRead={param($name) $global:consoleHostValues[$name]}
+        $script:consoleHostWrite={param($name,$value) $global:consoleHostWrites.Add($name); $global:consoleHostValues[$name]=$value}
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Testing/TestSandbox.psm1') -Force
+    }
+    AfterEach {
+        $env:GITHUB_ACTIONS=$script:savedActions; $env:RUNNER_ENVIRONMENT=$script:savedRunner; $env:GITHUB_REPOSITORY=$script:savedRepo
+        Remove-Variable consoleHostValues,consoleHostWrites -Scope Global -ErrorAction SilentlyContinue
+    }
+    It 'refuses local, self-hosted and non-ARM64 invocation before any registry access' {
+        $arguments = @{
+            Phase = 'ReleaseTest'
+            Platform = 'ARM64'
+            QualificationScope = 'Normal'
+            TestRoot = 'X:\RedSalamander.Perf'
+            EvidenceDirectory = 'X:\RedSalamander.Perf\evidence'
+            SourceCommit = 'a' * 40
+        }
+        $env:GITHUB_ACTIONS='false'
+        { Set-RSHostedConsoleHostDelegation @arguments } | Should Throw 'hosted native ARM64 test roles'
+        $env:GITHUB_ACTIONS='true'; $env:RUNNER_ENVIRONMENT='self-hosted'
+        { Set-RSHostedConsoleHostDelegation @arguments } | Should Throw 'hosted native ARM64 test roles'
+        $env:RUNNER_ENVIRONMENT='github-hosted'
+        $arguments.Platform='x64'
+        { Set-RSHostedConsoleHostDelegation @arguments } | Should Throw 'hosted native ARM64 test roles'
+    }
+    It 'writes both unset values, verifies them and records the prior state create-only' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-console-host-'+[guid]::NewGuid().ToString('N'))
+        $global:consoleHostValues['DelegationTerminal']='{00000000-0000-0000-0000-000000000000}'
+        $audit=& (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $script:consoleHostWrite
+        @($global:consoleHostWrites) -join ',' | Should Be 'DelegationConsole,DelegationTerminal'
+        $global:consoleHostValues['DelegationConsole'] | Should Be '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+        $global:consoleHostValues['DelegationTerminal'] | Should Be '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+        $record=Get-Content (Join-Path $dir 'delegation.json') -Raw | ConvertFrom-Json
+        $record.schema | Should Be 'red-salamander.hosted-console-host-delegation.v1'
+        $record.source_commit | Should Be ('a' * 40)
+        $record.verified | Should Be $true
+        $record.prior.DelegationConsole | Should BeNullOrEmpty
+        $record.prior.DelegationTerminal | Should Be '{00000000-0000-0000-0000-000000000000}'
+        @($record.changed) -join ',' | Should Be 'DelegationConsole,DelegationTerminal'
+        $audit.verified | Should Be $true
+        $global:consoleHostValues['DelegationConsole'] = $null
+        $repeat=Invoke-RSTestBlock { & (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $script:consoleHostWrite }
+        $repeat.Succeeded | Should Be $false
+        $repeat.Error.Exception.Message | Should Match 'already exists'
+        $global:consoleHostWrites.Count | Should Be 2
+        (Get-Content (Join-Path $dir 'delegation.json') -Raw | ConvertFrom-Json).observed_utc | Should Be $record.observed_utc
+    }
+    It 'leaves already selected values unchanged regardless of case' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-console-host-set-'+[guid]::NewGuid().ToString('N'))
+        $global:consoleHostValues['DelegationConsole']='{b23d10c0-e52e-411e-9d5b-c09fdf709c7d}'
+        $global:consoleHostValues['DelegationTerminal']='{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+        $audit=& (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $script:consoleHostWrite
+        $global:consoleHostWrites.Count | Should Be 0
+        @($audit.changed).Count | Should Be 0
+        $audit.verified | Should Be $true
+    }
+    It 'fails closed and still records the audit when a value does not read back' {
+        $dir=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness 'tools-pester' -Case ('hosted-console-host-fail-'+[guid]::NewGuid().ToString('N'))
+        $ignoredWrite={param($name,$value) $global:consoleHostWrites.Add($name)}
+        $attempt=Invoke-RSTestBlock { & (Get-Module HostedTestDesktop) {param($d,$r,$w) Invoke-RSHostedConsoleHostDelegationCore -Directory $d -Read $r -Write $w -SourceCommit ('a' * 40)} $dir $script:consoleHostRead $ignoredWrite }
+        $attempt.Succeeded | Should Be $false
+        $attempt.Error.Exception.Message | Should Match 'DelegationConsole did not read back'
+        $record=Get-Content (Join-Path $dir 'delegation.json') -Raw | ConvertFrom-Json
+        $record.verified | Should Be $false
+        $record.error | Should Match 'did not read back'
+    }
+}
+
 Describe 'Hosted foreground chord managed contracts' {
     It 'releases only inserted key downs that have not already been released' {
         & (Get-Module HostedTestDesktop) { Initialize-RSHostedDesktopNative }
