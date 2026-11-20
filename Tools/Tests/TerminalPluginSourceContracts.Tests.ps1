@@ -704,7 +704,7 @@ Describe 'Embedded Terminal plugin source contracts' {
         $terminalProject | Should Not Match 'RSTerminalGhosttyAbi|RS_TERMINAL_GHOSTTY_CANDIDATE_ABI'
         $loaderHeader | Should Not Match 'ghostty_terminal_mode_get|RS_TERMINAL_GHOSTTY_CANDIDATE_ABI'
         $loader | Should Not Match 'ghostty_terminal_mode_get|RS_TERMINAL_GHOSTTY_CANDIDATE_ABI'
-        $loader | Should Match '(?s)GhosttyTerminalModeConfig config\{\};\s*config\.mode\s*=\s*mode;\s*const GhosttyResult result\s*=\s*terminalGet\(terminal, GHOSTTY_TERMINAL_DATA_MODE, &config\);'
+        $loader | Should Match '(?s)GhosttyTerminalModeConfig config\{\};\s*config\.mode\s*=\s*mode;\s*const GhosttyResult result = terminalGet\(terminal, GHOSTTY_TERMINAL_DATA_MODE, &config\);'
         $loader | Should Match '(?s)if \(result == GHOSTTY_SUCCESS\)\s*\{\s*value = config\.value;'
         $loader | Should Match 'static_assert\(! HasSizeMember<GhosttyTerminalModeConfig>\)'
         $loader | Should Match 'offsetof\(GhosttyTerminalModeConfig, value\) == sizeof\(GhosttyMode\)'

@@ -1,0 +1,68 @@
+{
+  "kind": "separate derived source/receipt binding; native rows unchanged",
+  "role": "product-only inverse A; five hunks in three product files; tests/instrumentation retained",
+  "branchBaseCommit": "ebebc14b003c38be28fa5918f85bca6456834d72",
+  "sourceSnapshot": "c88af9dfb191efb1c680dcfbcf6ac3cddb034b2b9f21e811f6cb88bda8e5e3d7",
+  "ownReceiptId": "eddbd46d19d06624bd78bd598feb870614c8ee6d25b1e0ff735947fb0da6f069",
+  "platform": "x64",
+  "configuration": "Release",
+  "testsEnabled": true,
+  "compilerDebugInformation": "ProgramDatabase",
+  "dependencyRecipe": "PinnedSource",
+  "h8Commit": "7fb2ab71852087d93b3a3e5b3ba504c37f56267c",
+  "h8PublicHeadersTree": "b04d3e96177b14c9f2cb30887e58a8ad63c17aeb",
+  "ownModuleSHA256": "3DF6809BDEC207D00DFFB346F619A63D77DF04AEF68D13D8A26D6D958AF6935E",
+  "ownGeneratedArchiveSHA256": "A2A58F24B9F350B11E3C47A096C3B2B59A9343DC93D753F544B778393FC62E2C",
+  "nativeMetricCommit": "",
+  "nativeCommitWasNotFilled": true,
+  "commonControlFileCount": 35584,
+  "observedCommandTlogs": 199,
+  "preparedPayloadFiles": 3056,
+  "heldBindings": [
+    {
+      "name": "V5Operator",
+      "SHA256": "106F7DFFAE5496149D9D60E92A505C779057C67664B267659A783C0DC2EF8449",
+      "beforeAfterHeldAndPathEqual": true
+    },
+    {
+      "name": "ControlPlan",
+      "SHA256": "CA6ABD5E158AF6C364B131B9BF3D8A0F676A7CEA6D215CE235C6FA23FE115E4C",
+      "beforeAfterHeldAndPathEqual": true
+    },
+    {
+      "name": "ProspectiveBinding",
+      "SHA256": "95A64654832698E67FF77768AD4CC743F275D0306B2A90B29096A9BD04C02831",
+      "beforeAfterHeldAndPathEqual": true
+    },
+    {
+      "name": "OriginalV4SourceFreeze",
+      "SHA256": "8329DD08AB39DBEBFB9CABE77DABB55691BBC0A0CB8908684BFC102C35C3156A",
+      "beforeAfterHeldAndPathEqual": true
+    },
+    {
+      "name": "CanonicalProtocolHost",
+      "SHA256": "E94166ED9F376559C1359BAFB08BC49E463A494C330F67644EC1D9F1FFEB5EE5",
+      "beforeAfterHeldAndPathEqual": true
+    }
+  ],
+  "restoredB2Snapshot": "736eff833c02f7f5763d03a61168f11ddd90052514760e2149662d678bd06774",
+  "restoredThreeProductFiles": true,
+  "sourceRecipeNotCrossBuildArchiveEquality": true,
+  "innerCompilerEnvironmentObserved": false,
+  "originalParentReporting": {
+    "exit": 1,
+    "reportSHA256": "5E2506F091F1D6EED658BBB1C711A0740C00EFAB02201B7F36FD739C56F57A46",
+    "oldNegativeAdmitted": false,
+    "postFailure": "Actual A child archive missing/ambiguous."
+  },
+  "laterReadOnlyReconciliation": {
+    "originalReportingFailurePreserved": true,
+    "leaseCloseErrors": 0,
+    "runId": "20261120T143350Z-73164-e8f1cd1fdf0b43db972c64c5efbc79f8",
+    "noSourceBuildNativeA_BExecuted": true,
+    "selection": "exact actor-returned RunID and PID, contained archive/report and held invocation/launch window; no observed kernel ProcessStartTime claimed",
+    "SHA256": "197E689F16ED50D4D59DF24DF40217E5AC629A4A3962686B87DBD55F705C7F35",
+    "allFiveIdentitiesEqual": true
+  },
+  "retainedProducerReadWitnessPaths": 465
+}

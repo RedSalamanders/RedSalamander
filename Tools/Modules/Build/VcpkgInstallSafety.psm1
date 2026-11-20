@@ -800,8 +800,13 @@ function Get-RSVcpkgBuildEnvironment {
     $bin = Join-Path $tripletRoot $(if ($debug) { 'debug/bin' } else { 'bin' })
     $props = Join-Path $ToolRoot 'scripts/buildsystems/msbuild/vcpkg.props'
     $targets = Join-Path $ToolRoot 'scripts/buildsystems/msbuild/vcpkg.targets'
-    foreach ($path in @($include,$lib,$props,$targets)) {
-        if (-not (Test-Path -LiteralPath $path)) { throw "Pinned vcpkg build input not found: $path" }
+    foreach ($inputPath in @(
+            @{ Path=$include; Type='Container' }, @{ Path=$lib; Type='Container' },
+            @{ Path=$props; Type='Leaf' }, @{ Path=$targets; Type='Leaf' })) {
+        $path = $inputPath.Path
+        if (-not (Test-Path -LiteralPath $path -PathType $inputPath.Type)) {
+            throw "Pinned vcpkg build input not found: $path. Prepare the selected platform first: import Tools/Modules/Build/VcpkgInstallSafety.psm1, call Initialize-RSVcpkgToolContext -RepoRoot '$RepoRoot', then run ./vcpkg-install.ps1 -Platform $Platform -VcpkgExe <context.Executable> -VcpkgRoot <context.RegistryRoot>."
+        }
     }
     $linkPaths = @($lib)
     $manual = Join-Path $lib 'manual-link'
@@ -818,8 +823,9 @@ function Get-RSVcpkgBuildEnvironment {
         VCPKG_DEFAULT_TRIPLET = $triplet
         VCPKG_INSTALLED_DIR = $installed
         VcpkgInstalledDir = $installed.TrimEnd('\') + '\'
-        CL = ('/I"{0}" {1}' -f $include,$env:CL).Trim()
-        LINK = ($linkFlags + ' ' + $env:LINK).Trim()
+        # These are generated dependency paths, not a channel for ambient compiler/linker flags.
+        CL = ('/I"{0}"' -f $include)
+        LINK = $linkFlags
         Path = $(if (Test-Path -LiteralPath $bin -PathType Container) { $bin + [IO.Path]::PathSeparator + $env:Path } else { $env:Path })
     }
 }

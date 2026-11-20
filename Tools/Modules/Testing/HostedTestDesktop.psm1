@@ -1616,6 +1616,114 @@ function Invoke-RSHostedStockPreparationCore {
     if($failure){throw $failure}
 }
 
+# Windows Console Host CLSID. Both per-user default-terminal values name it to
+# select classic conhost instead of the "Let Windows decide" Terminal handoff.
+$script:RSHostedConsoleHostClsid = '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+$script:RSHostedConsoleHostValueNames = @('DelegationConsole','DelegationTerminal')
+
+function Set-RSHostedConsoleHostDelegation {
+    <#
+    .SYNOPSIS
+        Makes new consoles on the hosted runner use the classic Windows Console Host.
+    .DESCRIPTION
+        For the existing hosted ARM64 stock-preparation roles, select Windows Console Host
+        for new console windows. Both HKCU\Console\%%Startup delegation values are read back
+        and recorded in a create-only audit. The foreground boundary retains its existing rules.
+    .PARAMETER Phase
+        Canonical adapter phase.
+    .PARAMETER Platform
+        Canonical native target platform.
+    .PARAMETER QualificationScope
+        Canonical adapter scope.
+    .PARAMETER TestRoot
+        Marked test sandbox root.
+    .PARAMETER EvidenceDirectory
+        Current hosted lane's evidence directory under the test root.
+    .PARAMETER SourceCommit
+        Source commit from the validated native batch descriptor.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Phase, [Parameter(Mandatory)][string]$Platform,
+          [Parameter(Mandatory)][string]$QualificationScope, [Parameter(Mandatory)][string]$TestRoot,
+          [Parameter(Mandatory)][string]$EvidenceDirectory,
+          [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceCommit)
+    $ErrorActionPreference='Stop'
+    if (-not (Get-RSHostedStockPreparationRequest -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope)) {
+        throw 'Console-host delegation is restricted to this repository''s hosted native ARM64 test roles.'
+    }
+    Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1')
+    $root = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path $TestRoot
+    $evidence = Assert-RSTestSandboxContainedPath -TestRoot $root -Path $EvidenceDirectory -RequireDescendant
+    $directory = Assert-RSTestSandboxContainedPath -TestRoot $root `
+        -Path (Join-Path $evidence ('console-host-' + [guid]::NewGuid().ToString('N'))) -RequireDescendant
+    [void][IO.Directory]::CreateDirectory($directory)
+    $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Console\%%Startup',$true)
+    if($null -eq $key){throw 'Cannot open HKCU\Console\%%Startup for writing.'}
+    try {
+        $read={param($name) $key.GetValue($name,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)}.GetNewClosure()
+        $write={param($name,$value) $key.SetValue($name,$value,[Microsoft.Win32.RegistryValueKind]::String)}.GetNewClosure()
+        $audit=Invoke-RSHostedConsoleHostDelegationCore -Directory $directory -Read $read -Write $write -SourceCommit $SourceCommit
+    } finally {$key.Dispose()}
+    Write-Host ('Hosted console host delegation: '+($audit|ConvertTo-Json -Depth 4 -Compress))
+}
+
+# Internal read/write/verify step, separated so fixtures supply an in-memory registry.
+function Invoke-RSHostedConsoleHostDelegationCore {
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][scriptblock]$Read,
+          [Parameter(Mandatory)][scriptblock]$Write, [Parameter(Mandatory)][string]$SourceCommit)
+    $ErrorActionPreference = 'Stop'
+    $clsid = $script:RSHostedConsoleHostClsid
+    $prior = [ordered]@{}
+    $after = [ordered]@{}
+    $changed = [Collections.Generic.List[string]]::new()
+    $failure = $null
+    $stream = [IO.File]::Open((Join-Path $Directory 'delegation.json'), [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    try {
+        try {
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                $prior[$name] = & $Read $name
+            }
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                if (-not [string]::Equals($prior[$name], $clsid, [StringComparison]::OrdinalIgnoreCase)) {
+                    & $Write $name $clsid
+                    $changed.Add($name)
+                }
+            }
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                $after[$name] = & $Read $name
+            }
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                if (-not [string]::Equals($after[$name], $clsid, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Console-host delegation value $name did not read back as the Windows Console Host."
+                }
+            }
+        } catch {
+            $failure = $_
+        }
+        $audit = [ordered]@{
+            schema = 'red-salamander.hosted-console-host-delegation.v1'
+            source_commit = $SourceCommit
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            key = 'HKCU\Console\%%Startup'
+            console_host_clsid = $clsid
+            prior = $prior
+            after = $after
+            changed = @($changed)
+            verified = $null -eq $failure
+            error = if ($failure) { $failure.Exception.Message } else { $null }
+            observed_utc = [DateTimeOffset]::UtcNow.ToString('o')
+        }
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($audit | ConvertTo-Json -Depth 4))
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally {
+        $stream.Dispose()
+    }
+    if ($failure) { throw $failure }
+    return $audit
+}
+
 function New-RSHostedDefaultDesktop {
     Initialize-RSHostedDesktopNative
     [RedSalamander.Testing.HostedDesktopNative]::EnterDefaultDesktop()
@@ -1712,6 +1820,38 @@ function Write-RSHostedSetupFailureDiagnostic {
         # ErrorRecord if formatting or the diagnostic sink fails.
     }
 }
+function Write-RSHostedLifecycleDiagnostic {
+    # Fixed lifecycle rows and the existing retirement exception chain only;
+    # mirror Write-RSHostedSetupFailureDiagnostic's nonfatal/fatal sink policy.
+    param([Parameter(Mandatory)][string]$Stage, [AllowNull()]$Desktop, [AllowNull()]$ErrorRecord)
+    try {
+        if ($Stage -ceq 'entered') {
+            Write-Host ('Hosted Default desktop entered: ' + $Desktop.Name + '; foregroundBoundaryReady=' + $Desktop.ForegroundBoundaryReady)
+        } elseif ($Stage -ceq 'restore-result') {
+            Write-Host ('Hosted Default desktop retired: ' + $Desktop.Name + '; restored=' + $Desktop.Restored)
+        } else {
+            Write-Host ('[selftest-boundary] stage=' + $Stage + '; observedUtc=' + [DateTime]::UtcNow.ToString('o'))
+            if ($null -ne $ErrorRecord) {
+                Write-Host ('Hosted Default desktop retirement exception: ' + $ErrorRecord.Exception.ToString())
+            }
+        }
+    } catch [OutOfMemoryException] { throw }
+      catch [StackOverflowException] { throw }
+      catch [AccessViolationException] { throw }
+      catch {
+        # Logging cannot replace the captured action/retirement result.
+        $cause = $_.Exception
+        while ($cause -isnot [AggregateException] -and $cause -isnot [OutOfMemoryException] -and $cause -isnot [StackOverflowException] -and $cause -isnot [AccessViolationException] -and $null -ne $cause.InnerException) { $cause = $cause.InnerException }
+        $pending = [Collections.Generic.Queue[Exception]]::new(); $pending.Enqueue($cause)
+        while ($pending.Count -gt 0) {
+            $leaf = $pending.Dequeue()
+            if ($leaf -is [OutOfMemoryException] -or $leaf -is [StackOverflowException] -or $leaf -is [AccessViolationException]) { throw $cause }
+            if ($leaf -is [AggregateException]) { foreach ($inner in $leaf.InnerExceptions) { $pending.Enqueue($inner) } }
+            elseif ($null -ne $leaf.InnerException) { $pending.Enqueue($leaf.InnerException) }
+        }
+    }
+}
+
 function Invoke-RSWithHostedDefaultDesktop {
     <#
     .SYNOPSIS
@@ -1740,6 +1880,9 @@ function Invoke-RSWithHostedDefaultDesktop {
         Synchronous entry operation that closes its containment job before returning.
     .OUTPUTS
         Action output and boundary/readiness/restoration diagnostics, including the
+        action-start/return and before-retirement/retired/failure console phases.
+        These direct lifecycle facts cannot identify a foreign process creator.
+        The output also includes the
         bounded captured setup traversal/emitted text with visited nonaggregate messages, aggregate-summary-omitted markers, existing HResult and Win32 codes,
         and the complete exception chain when retirement fails. Original failures remain fatal.
     .NOTES
@@ -1764,6 +1907,8 @@ function Invoke-RSWithHostedDefaultDesktop {
         throw 'Hosted foreground boundaries are restricted to the project GitHub-hosted runner.'
     }
     $desktop = $null; $processScope = $null; $actionError = $null; $restoreError = $null
+    $setupPrimaryError = $null; $scopeRestoreError = $null
+    $actionDiagnosticError = $null; $beforeRetirementDiagnosticError = $null; $retirementDiagnosticError = $null
     try {
         if ($env:RS_HOSTED_ARM64_STOCK_PREPARATION -ceq '1') {
             [void](Invoke-RSHostedArm64StockPreparation -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))))
@@ -1771,26 +1916,58 @@ function Invoke-RSWithHostedDefaultDesktop {
         try {
             $desktop = New-RSHostedDefaultDesktop
         } catch {
+            $setupPrimaryError = $_
             Write-RSHostedSetupFailureDiagnostic -ErrorRecord $_
             throw
         }
         if ($desktop.ForegroundBoundaryReady -cne $true) { throw 'The hosted Default desktop has no verified foreground boundary.' }
-        Write-Host ('Hosted Default desktop entered: ' + $desktop.Name + '; foregroundBoundaryReady=' + $desktop.ForegroundBoundaryReady)
+        Write-RSHostedLifecycleDiagnostic -Stage 'entered' -Desktop $desktop
         $processScope = New-RSHostedDesktopProcessScope -Name $desktop.Name
+        Write-RSHostedLifecycleDiagnostic -Stage 'action-start'
         $result = & $Action
-    } catch { $actionError = $_ } finally {
+        Write-RSHostedLifecycleDiagnostic -Stage 'action-returned'
+    } catch {
+        $actionError = $_
+        if ($null -ne $setupPrimaryError -and -not [object]::ReferenceEquals($setupPrimaryError.Exception, $actionError.Exception)) {
+            # Preserve the original setup evidence while retaining the exact fatal
+            # exception instance promised by the existing setup-sink contract.
+            $actionError.Exception.Data['RSHostedSetupPrimaryError'] = $setupPrimaryError
+        }
+        try { Write-RSHostedLifecycleDiagnostic -Stage 'action-or-setup-failed' } catch { $actionDiagnosticError = $_ }
+    } finally {
         try {
-            try { if ($null -ne $processScope) { $processScope.Dispose() } }
-            finally { if ($null -ne $desktop) { $desktop.Dispose() } }
+            try {
+                try { Write-RSHostedLifecycleDiagnostic -Stage 'before-retirement' } catch { $beforeRetirementDiagnosticError = $_ }
+            }
+            finally {
+                try { if ($null -ne $processScope) { $processScope.Dispose() } } catch { $scopeRestoreError = $_ }
+                finally { if ($null -ne $desktop) { $desktop.Dispose() } }
+            }
+            if ($null -ne $scopeRestoreError) { throw $scopeRestoreError }
             if ($null -ne $desktop) {
-                Write-Host ('Hosted Default desktop retired: ' + $desktop.Name + '; restored=' + $desktop.Restored)
+                Write-RSHostedLifecycleDiagnostic -Stage 'restore-result' -Desktop $desktop
                 if ($desktop.Restored -ne $true) { throw 'The hosted Default desktop did not restore its original foreground and focus.' }
+                Write-RSHostedLifecycleDiagnostic -Stage 'retired'
             }
         } catch {
             $restoreError = $_
             # PowerShell's outer method-invocation message hides the native boundary cause.
-            Write-Host ('Hosted Default desktop retirement exception: ' + $_.Exception.ToString())
+            try { Write-RSHostedLifecycleDiagnostic -Stage 'retirement-failed' -ErrorRecord $_ } catch { $retirementDiagnosticError = $_ }
         }
+    }
+    if ($null -ne $scopeRestoreError -or $null -ne $actionDiagnosticError -or $null -ne $beforeRetirementDiagnosticError -or $null -ne $retirementDiagnosticError) {
+        # Keep the earlier primary alongside a fatal diagnostic after all owned
+        # retirement. A sink can rethrow the same exception instance at each row.
+        $records = @()
+        $causes = @()
+        foreach ($record in @($actionError, $scopeRestoreError, $restoreError, $actionDiagnosticError, $beforeRetirementDiagnosticError, $retirementDiagnosticError)) {
+            if ($null -eq $record) { continue }
+            $cause = $record.Exception
+            while ($cause -isnot [AggregateException] -and $cause -isnot [OutOfMemoryException] -and $cause -isnot [StackOverflowException] -and $cause -isnot [AccessViolationException] -and $null -ne $cause.InnerException) { $cause = $cause.InnerException }
+            if (@($causes | Where-Object { [object]::ReferenceEquals($_, $cause) }).Count -eq 0) { $records += $record; $causes += $cause }
+        }
+        if ($records.Count -eq 1) { throw $records[0] }
+        throw [AggregateException]::new('Native entry, hosted desktop retirement or fatal lifecycle diagnostics failed.', [Exception[]]@($records | ForEach-Object { $_.Exception }))
     }
     if ($null -ne $actionError -and $null -ne $restoreError) {
         throw [AggregateException]::new('Native entry and hosted desktop restoration both failed.', [Exception[]]@($actionError.Exception, $restoreError.Exception))
@@ -1882,4 +2059,4 @@ function Invoke-RSWithHostedTestDesktop {
     if ($null -ne $restoreError) { throw $restoreError }
 }
 
-Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest
+Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest, Set-RSHostedConsoleHostDelegation

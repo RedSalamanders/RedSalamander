@@ -3041,7 +3041,11 @@ Specs\TestRuns\local_scratch
         $fileOps | Should Match 'GetWindowThreadProcessId\(candidate,\s*&processId\)'
         $fileOps | Should Match 'processId\s*==\s*GetCurrentProcessId\(\)'
         $phase05 | Should Match 'FindCurrentProcessPopupWindow\(\)'
-        $phase14 | Should Match 'FindCurrentProcessPopupWindow\(\)'
+        # Destructive Phase14 owns a private real host instead of discovering the
+        # shared process popup. Keep the exact owner-to-popup provenance chain.
+        $phase14 | Should Match 'state\.phase14Owner\s*=\s*std::make_unique<FolderWindow>\(\)'
+        $phase14 | Should Match 'state\.phase14Owner->Create\(state\.phase14Container\.get\(\),\s*0,\s*0,\s*640,\s*480\)'
+        $phase14 | Should Match '(?s)state\.phase14Owner->Create\(state\.phase14Container\.get\(\),.*?state\.phase14FileOps\s*=\s*state\.phase14Owner->DebugGetFileOperationState\(\);.*?const\s+HWND\s+popup\s*=\s*state\.phase14FileOps\s*\?\s*state\.phase14FileOps->GetPopupHwndForSelfTest\(\)\s*:\s*nullptr;'
         $phase05 | Should Not Match 'FindWindowW\(kPopupClassName'
         $phase14 | Should Not Match 'FindWindowW\(kPopupClassName'
     }
@@ -4704,7 +4708,7 @@ Specs\TestRuns\local_scratch
         $proofBridge | Should Not BeNullOrEmpty
         $proofBridge | Should Not Match 'pluginId|shortId|GetMetaData'
         $dummy | Should Match 'class DummyFileWriter final\s*:\s*public IFileWriter,\s*public IFileWriterCommitSizeProof'
-        $s3Io | Should Match 'class MultipartS3FileWriter final\s*:\s*public IFileWriter\s*,(?:\s*public\s+\w+\s*,)*\s*public\s+IFileWriterCommitSizeProof\b'
+        $s3Io | Should Match 'class MultipartS3FileWriter final\s*:\s*public IFileWriter,\s*public IFileWriterExpectedSize,\s*public IFileWriterCommitSizeProof'
         $microsoftDrive | Should Match 'class MicrosoftDriveFileWriter final\s*:\s*public IFileWriter,\s*public IFileWriterExpectedSize,\s*public IFileWriterCommitSizeProof'
         $bridgeQueue | Should Match 'SetFileOpsBridgeFailNextSourceGetSizeForSelfTest'
         $bridgeQueue | Should Match 'SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest'

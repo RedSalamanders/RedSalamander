@@ -6165,6 +6165,20 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVi
     return history->second.displayedBytesPerSec == 0.0;
 }
 
+bool FileOperationsPopupInternal::FileOperationsPopupState::DebugGetRateSamplingForSelfTest(uint64_t taskId, PopupRateSamplingDebugSnapshot& out) const noexcept
+{
+    out                = {};
+    const auto history = _rates.find(taskId);
+    if (history == _rates.end())
+        return false;
+    out.lastUpdateTick    = _lastRateUpdateTick;
+    out.currentBandwidth  = CurrentBandwidthForGraphMarker(history->second);
+    out.hasSmoothedEta    = history->second.hasSmoothedEta;
+    out.hasProvisionalEta = history->second.hasProvisionalEta;
+    out.windowSampleCount = history->second.windowCount;
+    return true;
+}
+
 void FileOperationsPopupInternal::FileOperationsPopupState::DebugRecordCadenceObservation(PopupCadenceDebugEvent event, UINT message, bool popupTimer) noexcept
 {
     if (! _debugCadenceEnabled)
@@ -6353,6 +6367,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
     RateUpdateTotals totals{};
     for (const RateSnapshot& task : snapshot)
     {
+        // A reducer sample may observe a resume even when no paint observed the active mode.
+        // A later pause must synchronize again rather than reuse that earlier waiting episode.
+        if (! task.finished && ! IsRateSamplingBlocked(task))
+            _waitingRatesSynchronized = false;
         seen[task.taskId] = true;
         AdvanceRateHistory(_rates[task.taskId], task, nowTick, totals);
     }
@@ -7126,6 +7144,24 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshTelemetryTime
     // the elapsed text and taskbar current at the waiting cadence instead of 10 frames a second.
     const bool work        = workState == TelemetryWork::Active;
     const bool waitingWork = workState == TelemetryWork::Waiting;
+    if (! waitingWork)
+        _waitingRatesSynchronized = false;
+    else if (! _waitingRatesSynchronized)
+    {
+        // A host animation paint can observe pause before another telemetry tick. Reset the
+        // published rate, ETA and sampling window before that paint selects the slow cadence;
+        // otherwise the first slow tick starts a new marker animation after the UI had settled.
+        // Once per waiting episode, never once per paint or per retained-history row.
+        _waitingRatesSynchronized = true;
+#ifdef ENABLE_TESTS
+        if (! debugVisualScenario.has_value())
+#endif
+        {
+            UpdateRates();
+            _lastRateUpdateTick = nowTick;
+            Invalidate(hwnd);
+        }
+    }
     // Active progress keeps its existing telemetry cadence. A changing progress
     // scalar must not repeatedly turn 100 ms sampling into the motion cadence.
     const bool explicitMotion = _uiMotionTimerDueTick != 0u && IsWindowVisible(hwnd) && ! IsIconic(hwnd) && ! _failureSurface;

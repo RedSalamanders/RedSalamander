@@ -860,23 +860,29 @@ serves any root whose triplet text is identical. The functions live in `Tools/Mo
 keep the contract of DxUi's `Tools/VisualStudio.psm1` and `Tools/VcpkgTriplet.psm1`, a documented consumer interface of
 the pinned library. They are not imported, because this installer runs before the DxUi checkout is restored (the Ghostty
 ARM64 workflow installs first); a parity test compares both implementations whenever the pinned checkout is restored.
-MSBuild's own manifest-mode install is not limited to an empty tree: vcpkg's `vcpkg.targets` runs it whenever `vcpkg.json`
-(or `vcpkg-configuration.json`) is newer than `.build\vcpkg_installed\<platform>\.msbuildstamp-<triplet>.<host>.stamp`, a
-stamp the governed installer never writes. It uses the same overlay. For first-party projects `Directory.Build.props`
-appends `"--overlay-triplets=.build\vcpkg-triplets\<platform>"` (absolute, quoted, no trailing backslash) to
-`VcpkgAdditionalInstallOptions` only when that directory holds `<triplet>.cmake`, so vcpkg never receives a directory that
-does not exist. Before each MSBuild run, inside the platform dependency lock, `build.ps1` refreshes that file through the
-same functions, installation and default toolset, copying the stock triplet of the vcpkg root MSBuild's integration
-installs with (an explicit `VcpkgRoot`, else the installation's bundled `VC\vcpkg`). The `x64-windows` and `arm64-windows`
-stock triplets of the bundled (VS 18) and pinned roots are byte-identical, so both writers produce the same bytes and do not
-alternate the package ABI. `build.ps1` skips the refresh when `VcpkgManifestInstall=false` or when no such root has the
-triplet. MSBuild's install still runs its own vcpkg root, scripts and `vcpkg\status` database, so its package ABIs differ
-from the installer's staged ones: when its stamp is stale it rebuilds what its own status lacks, with the pinned toolset.
-The inline install of the reusable CI workflow does not call the installer and keeps vcpkg's default toolset choice; CI then
-builds with `VcpkgManifestInstall=false`. The pin matters where the default toolset is older than the newest one installed
-beside it (the historical VS 18 Insiders 14.51-default/14.52-preview installation), above all for an ARM64 target on an x64 host when only the default toolset has
-that compiler.
+Public build.ps1 consumes the selected platform's already prepared canonical tree. It first
+validates the required include/library directories and pinned MSBuild imports, then verifies
+the managed executable and registry through Initialize-RSVcpkgToolContext and obtains the
+child binding through Get-RSVcpkgBuildEnvironment. Missing or invalid prepared inputs fail
+with the canonical bootstrap/installer command; compilation does not invoke a nested installer
+while holding the platform dependency lock and never falls back to Visual Studio's bundled root.
+The public build help and README preparation sequence have the same prerequisite.
 
+Both direct and streaming MSBuild launches, including SDK preflight, Clean and Build, receive
+that binding through AdditionalEnvironment under their existing profile/platform lock order.
+The receipt toolchain metadata query uses the same binding through canonical contained capture;
+receipt arguments record the actual tool and registry pins and the pinned binding recipe.
+The parent environment remains unchanged. Generated CL include and LINK library paths contain
+only canonical dependency paths, never concatenated ambient compiler/linker flags. SDK admission
+inspects the caller's raw overrides before binding; an admitted SDK child adds no synthetic CL
+override. Existing SDK override refusals and dependency-header classification remain required.
+
+The governed installer retains its staging metadata and promotes only the triplet payload.
+MSBuild installation is disabled for these prepared inputs: registering that payload through
+another root's status database is a duplicate install, and byte-identical executables or triplets
+do not prove equal helper-script/package ABIs. Do not manufacture status/stamp files or suppress
+overwrite warnings. The zero-warning gate remains unchanged. Package-payload repair, if needed
+after a failed earlier build, is separately owned and does not follow from source repair.
 AWS SDK `1.11.880` is paired with the exact `aws-crt-cpp` `0.43.4` override,
 matching the SDK tag's `crt/aws-crt-cpp` submodule. CRT `0.43.0` lacks the
 ByteCursor Base64 overloads and encoded/decoded-length functions used by that

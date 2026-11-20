@@ -268,6 +268,24 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'Native visible control creation'
+        Path          = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases14_16.cpp'
+        LinePattern   = 'CreateWindowExW\(0,\s*L"STATIC",\s*L"Owned popup lifetime fixture",\s*WS_POPUP,\s*0,\s*0,\s*640,\s*480,\s*nullptr,\s*nullptr,\s*GetModuleHandleW\(nullptr\),\s*nullptr\)\)'
+        Visibility    = 'test-only hidden FolderWindow owner'
+        Owner         = 'Phase14 popup lifetime self-test'
+        Reason        = 'The hidden Static parent hosts a private real FolderWindow so destructive shutdown cannot retire the shared engine; the exact call omits WS_VISIBLE.'
+        ExitCondition = 'Remove when the private shutdown fixture no longer needs a real HWND parent.'
+    },
+    @{
+        Category      = 'Native visible control creation'
+        Path          = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.QueuedAdmission.cpp'
+        LinePattern   = 'CreateWindowExW\(0,\s*L"STATIC",\s*L"Owned clipboard admission fixture",\s*WS_POPUP,\s*0,\s*0,\s*640,\s*480,\s*nullptr,\s*nullptr,\s*GetModuleHandleW\(nullptr\),\s*nullptr\)\)'
+        Visibility    = 'test-only hidden FolderWindow owner'
+        Owner         = 'Clipboard-ready admission self-test'
+        Reason        = 'The hidden Static parent hosts a private real FolderWindow for strict-empty clipboard admission without clearing shared retained history; the exact call omits WS_VISIBLE.'
+        ExitCondition = 'Remove when the private clipboard admission fixture no longer needs a real HWND parent.'
+    },
+    @{
+        Category      = 'Native visible control creation'
         Path          = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
         LinePattern   = '^target = CreateWindowExW\(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE'
         Visibility    = 'test-only message-only deferred-close receiver'

@@ -2215,7 +2215,7 @@ struct KeepAwakeSelfTestApi final
             (prepublishedDecision ? timeouts != 0u : quietWaits != expectedSignalWakes))
         {
             return fail(std::format(L"conflict wait control={} expected={} actual={} awaiting={} calls={} timeouts={} quietWaits={} "
-                                    L"signalWakes={} expectedSignalWakes={}",
+                                    L"signalWakes={} expectedSignalWakes={} quiet={} quietPeriodMs={}",
                                     static_cast<unsigned int>(control),
                                     static_cast<unsigned int>(expected),
                                     static_cast<unsigned int>(actual),
@@ -2224,7 +2224,9 @@ struct KeepAwakeSelfTestApi final
                                     timeouts,
                                     quietWaits,
                                     signalWakes,
-                                    expectedSignalWakes));
+                                    expectedSignalWakes,
+                                    task._awaitingAnswerQuiet.load(std::memory_order_acquire),
+                                    task._dbgConflictQuietPeriodMs.load(std::memory_order_relaxed)));
         }
         Debug::Perf::Emit(L"FileOps.Power.ConflictWaitCalls", L"control,calls", 0u, static_cast<uint64_t>(control), calls, S_OK);
     }

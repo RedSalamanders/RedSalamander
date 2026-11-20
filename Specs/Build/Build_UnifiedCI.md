@@ -185,6 +185,11 @@ current implementations use the same fixture. The adapter clears unselected inhe
 value afterward. See the self-test ownership contract.
 
 The adapter uses RSBuildEnableTests=true for Release test builds and Suite CI through the hosted desktop wrapper.
+On GitHub-hosted native ARM64, the existing stock-preparation role selection also selects Windows Console Host
+for new consoles before the interactive test run. The adapter verifies both user-level delegation settings and
+retains a source-bound `console-host-*/delegation.json` under the lane's marked-sandbox evidence. The desktop
+boundary still refuses restoration over a foreign foreground window. [Default terminal policy](https://learn.microsoft.com/en-us/windows/terminal/group-policy)
+
 Generated test scratch, logs and evidence stay in the governed marked RedSalamander.Perf sandbox. Downloaded frozen
 receipts and harness binaries are build inputs under .build/ci; native test generation does not write there. Full
 artifact-mutating qualification remains an explicit separate obligation.
@@ -255,8 +260,9 @@ SDK ABI reader must independently reject unsupported overrides rather than accep
 
 ### Manual diagnostics
 
-The manual native suite defaults to Full and platform `All`; explicit platform choices `x64` and `ARM64` select the
-matching existing pinned native runner. It may select CommandsHandoff, FileOpsVolumes or ViewerSpaceCapture, each mapped
+The manual native suite defaults to Normal (CI) and platform `All`; select Full explicitly for complete qualification.
+Explicit platform choices `x64` and `ARM64` select the matching existing pinned native runner.
+It may select CommandsHandoff, FileOpsVolumes or ViewerSpaceCapture, each mapped
 to one fixed diagnostic case. The adapter permits filtered runner exit 2 only after validating the exact archived native
 cases, quarantine state, profile and source-bound full-solution receipt. It labels that result filtered and
 NOT_EVALUATED for repository coverage and creates no regression or production receipt. Other phases reject these scopes

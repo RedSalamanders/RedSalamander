@@ -72,7 +72,9 @@ Use the `build.ps1` PowerShell script for easy building:
 
 ```powershell
 # One-time: install dependencies (writes to .build\vcpkg_installed\<platform>)
-.\vcpkg-install.ps1
+Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1
+$vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $PWD.Path
+.\vcpkg-install.ps1 -Platform x64 -VcpkgExe $vcpkg.Executable -VcpkgRoot $vcpkg.RegistryRoot
 
 # Build entire solution in Debug configuration (default)
 .\build.ps1
@@ -415,27 +417,23 @@ and [`Specs/Installer/WingetIntegration.md`](Specs/Installer/WingetIntegration.m
 
 Install all libraries from `vcpkg.json` into `.build\vcpkg_installed\<platform>\<triplet>`. Each platform has a
 private vcpkg metadata root so an ARM64 manifest install cannot purge x64 packages, or vice versa. The vcpkg executable itself must come from a
-Git checkout at the exact commit in `vcpkg-tool.json`. A repo-local `vcpkg\vcpkg.exe` is discovered automatically:
+managed Git checkout at the exact commit in vcpkg-tool.json. Prepare the independent tool and registry pins through the canonical helper:
 
 ```powershell
-git clone https://github.com/microsoft/vcpkg.git vcpkg
-git -C .\vcpkg checkout --detach ((Get-Content .\vcpkg-tool.json -Raw | ConvertFrom-Json).commit)
-.\vcpkg\bootstrap-vcpkg.bat
-
-.\vcpkg-install.ps1
+Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1
+$vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $PWD.Path
+.\vcpkg-install.ps1 -Platform x64 -VcpkgExe $vcpkg.Executable -VcpkgRoot $vcpkg.RegistryRoot
 
 # ARM64:
-.\vcpkg-install.ps1 -Platform ARM64
+.\vcpkg-install.ps1 -Platform ARM64 -VcpkgExe $vcpkg.Executable -VcpkgRoot $vcpkg.RegistryRoot
 ```
 
-The install script validates that local tool identity before modifying the selected platform root beneath `.build\vcpkg_installed`.
-It builds every triplet with the Visual Studio installation and the default MSVC toolset the build discovers (an overlay triplet
-beneath `.build\vcpkg-triplets`), not the newest toolset installed beside the default, which can lack an ARM64 compiler and is a
-link hazard for the compiled libraries; the first install after that change rebuilds the packages. The repository and
-CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step. CI
-imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout for the lifetime of the build so headers
-and the complete installed library set come from the same reviewed tool revision.
-
+The installer pins each triplet to the Visual Studio installation and default MSVC toolset the
+build discovers. Public build.ps1 validates these prepared inputs and binds pinned imports and
+canonical dependency paths to its MSBuild children and receipt metadata queries. It does not
+reinstall packages through a bundled Visual Studio root or require caller environment flags.
+Missing inputs report the preparation command. User-wide vcpkg integration is neither required
+nor permitted. SDK admission retains its independent raw compiler-override checks.
 ### Adding New Libraries
 
 To add a new library:

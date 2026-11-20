@@ -66,6 +66,7 @@ function Invoke-RSCapturedProcess {
         [Parameter(Mandatory)][string]$WorkingDirectory,
         [Parameter(Mandatory)][string]$FilePath,
         [Parameter(Mandatory)][string[]]$Arguments,
+        [hashtable]$AdditionalEnvironment = @{},
         [System.Text.Encoding]$StandardOutputEncoding
     )
     $stdoutLines = [Collections.Generic.List[string]]::new()
@@ -77,7 +78,8 @@ function Invoke-RSCapturedProcess {
         else { [void]$stdoutLines.Add([string]$Line) }
     }.GetNewClosure()
     $exitCode = Invoke-RSStreamingProcess -FilePath $FilePath -Arguments $Arguments `
-        -WorkingDirectory $WorkingDirectory -OutputLineCallback $captureLine -StandardOutputEncoding $StandardOutputEncoding
+        -WorkingDirectory $WorkingDirectory -OutputLineCallback $captureLine -StandardOutputEncoding $StandardOutputEncoding `
+        -AdditionalEnvironment $AdditionalEnvironment
     return [pscustomobject]@{
         ExitCode = [int]$exitCode
         StdOut = [string[]]$stdoutLines.ToArray()
