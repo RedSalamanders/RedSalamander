@@ -1,6 +1,7 @@
 # Private build module; import through its reviewed callers.
 Import-Module (Join-Path $PSScriptRoot 'MSBuildInvocation.psm1') -Scope Local -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'ArtifactOperationLock.psm1') -Scope Local -ErrorAction Stop
 function Assert-RSVcpkgTripletLeafName {
     [CmdletBinding()]
     param(
@@ -745,6 +746,12 @@ function Initialize-RSVcpkgToolContext {
         if ((Invoke-RSVcpkgBootstrapGit $toolRoot @('rev-parse', 'HEAD')) -cne $commit) {
             throw 'Pinned vcpkg tool identity mismatch.'
         }
+        $registryRecovery = $null
+        if ((Test-Path -LiteralPath $registryRoot) -and -not (Test-Path -LiteralPath (Join-Path $registryRoot '.git'))) {
+            $registryRecovery = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child ('.build/vcpkg-registry-recovery-' + [Guid]::NewGuid().ToString('N'))
+            Move-Item -LiteralPath $registryRoot -Destination $registryRecovery
+            Write-Host "Preserved incomplete vcpkg registry at $registryRecovery"
+        }
         if (Test-Path -LiteralPath $registryRoot) {
             $actualRoot = Invoke-RSVcpkgBootstrapGit $registryRoot @('rev-parse', '--show-toplevel')
             if ([IO.Path]::GetFullPath($actualRoot) -ine $registryRoot) { throw 'vcpkg registry is not its own managed Git checkout.' }
@@ -758,18 +765,39 @@ function Initialize-RSVcpkgToolContext {
         if ((Invoke-RSVcpkgBootstrapGit $registryRoot @('rev-parse', 'HEAD')) -cne $baseline) {
             throw 'Pinned vcpkg registry identity mismatch.'
         }
-        if ($recovery) {
-            $downloads = Join-Path $recovery 'downloads'
+        foreach ($checkout in @(
+                @{ Recovery = $recovery; Root = $toolRoot },
+                @{ Recovery = $registryRecovery; Root = $registryRoot })) {
+            if (-not $checkout.Recovery) { continue }
+            $downloads = Join-Path $checkout.Recovery 'downloads'
             Assert-RSVcpkgManagedBootstrapPath -RepoRoot $RepoRoot -Path $downloads
             if (Test-Path -LiteralPath $downloads -PathType Container) {
-                Move-Item -LiteralPath $downloads -Destination (Join-Path $toolRoot 'downloads')
+                Move-Item -LiteralPath $downloads -Destination (Join-Path $checkout.Root 'downloads')
             }
         }
-        $bootstrap = Join-Path $toolRoot 'bootstrap-vcpkg.bat'
-        $bootstrapExit = Invoke-RSVcpkgBootstrapPayload -BootstrapPath $bootstrap
-        if ($bootstrapExit -ne 0) { throw "Pinned vcpkg bootstrap failed with exit code $bootstrapExit." }
-        $executable = Join-Path $toolRoot 'vcpkg.exe'
-        if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'Pinned bootstrap did not produce vcpkg.exe.' }
+        $executable = Resolve-RSVcpkgSafeChildPath -Root $toolRoot -Child 'vcpkg.exe'
+        $executableIdentity = Resolve-RSVcpkgSafeChildPath -Root $toolRoot -Child 'vcpkg.exe.identity'
+        $reuseExecutable = $false
+        if ((Test-Path -LiteralPath $executable -PathType Leaf) -and
+            (Test-Path -LiteralPath $executableIdentity -PathType Leaf)) {
+            $actual = "$commit $((Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash)"
+            $reuseExecutable = [IO.File]::ReadAllText($executableIdentity) -ceq $actual
+        }
+        if (-not $reuseExecutable) {
+            $bootstrap = Join-Path $toolRoot 'bootstrap-vcpkg.bat'
+            $bootstrapExit = Invoke-RSVcpkgBootstrapPayload -BootstrapPath $bootstrap
+            if ($bootstrapExit -ne 0) { throw "Pinned vcpkg bootstrap failed with exit code $bootstrapExit." }
+            if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'Pinned bootstrap did not produce vcpkg.exe.' }
+
+            $stagedIdentity = Resolve-RSVcpkgSafeChildPath -Root $toolRoot -Child ('vcpkg.exe.identity-' + [guid]::NewGuid().ToString('N') + '.tmp')
+            try {
+                $actual = "$commit $((Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash)"
+                [IO.File]::WriteAllText($stagedIdentity,$actual,[Text.UTF8Encoding]::new($false))
+                [void](Publish-RSGuardedRepositoryFile -RepoRoot $RepoRoot -GuardedRelativeRoot '.build/vcpkg-tool' -StagedPath $stagedIdentity -DestinationPath $executableIdentity)
+            } finally {
+                if (Test-Path -LiteralPath $stagedIdentity -PathType Leaf) { [IO.File]::Delete($stagedIdentity) }
+            }
+        }
         Write-Host "Pinned vcpkg ready: tool=$commit baseline=$baseline schema=$toolSchema"
         return [pscustomobject]@{ ToolRoot=$toolRoot; RegistryRoot=$registryRoot; Executable=$executable; ToolCommit=$commit; Baseline=$baseline }
     } finally {
@@ -780,17 +808,18 @@ function Initialize-RSVcpkgToolContext {
 function Get-RSVcpkgBuildEnvironment {
     <#
     .SYNOPSIS
-        Bind a CI build to its pinned vcpkg integration and installed triplet.
+        Select the installed triplet and its runtime search path.
     .DESCRIPTION
-        Returns process-local environment values without installing user-wide
-        integration. Validates inputs before returning any changes. Callers apply
-        the values only to the child build/test lifetime or hosted job.
+        RuntimeOnly is for projects with scripted restore and explicit MSBuild
+        inputs. The legacy option set is retained for paired builds of older
+        sources that used the pinned vendor targets.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepoRoot,
         [Parameter(Mandatory)][string]$ToolRoot,
         [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
-        [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration)
+        [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration,
+        [switch]$RuntimeOnly)
     $triplet = if ($Platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
     $installed = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child ('.build/vcpkg_installed/' + $Platform.ToLowerInvariant())
     $tripletRoot = Join-Path $installed $triplet
@@ -798,6 +827,15 @@ function Get-RSVcpkgBuildEnvironment {
     $include = Join-Path $tripletRoot 'include'
     $lib = Join-Path $tripletRoot $(if ($debug) { 'debug/lib' } else { 'lib' })
     $bin = Join-Path $tripletRoot $(if ($debug) { 'debug/bin' } else { 'bin' })
+    $prepareMessage = "Prepare the selected platform first: import Tools/Modules/Build/VcpkgInstallSafety.psm1, call Initialize-RSVcpkgToolContext -RepoRoot '$RepoRoot', then run ./vcpkg-install.ps1 -Platform $Platform -VcpkgExe <context.Executable> -VcpkgRoot <context.RegistryRoot>."
+    if ($RuntimeOnly) {
+        foreach ($path in @($include,$lib,$bin)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+                throw "Pinned vcpkg build input not found: $path. $prepareMessage"
+            }
+        }
+        return [ordered]@{ Path = $bin + [IO.Path]::PathSeparator + $env:Path }
+    }
     $props = Join-Path $ToolRoot 'scripts/buildsystems/msbuild/vcpkg.props'
     $targets = Join-Path $ToolRoot 'scripts/buildsystems/msbuild/vcpkg.targets'
     foreach ($inputPath in @(
@@ -805,7 +843,7 @@ function Get-RSVcpkgBuildEnvironment {
             @{ Path=$props; Type='Leaf' }, @{ Path=$targets; Type='Leaf' })) {
         $path = $inputPath.Path
         if (-not (Test-Path -LiteralPath $path -PathType $inputPath.Type)) {
-            throw "Pinned vcpkg build input not found: $path. Prepare the selected platform first: import Tools/Modules/Build/VcpkgInstallSafety.psm1, call Initialize-RSVcpkgToolContext -RepoRoot '$RepoRoot', then run ./vcpkg-install.ps1 -Platform $Platform -VcpkgExe <context.Executable> -VcpkgRoot <context.RegistryRoot>."
+            throw "Pinned vcpkg build input not found: $path. $prepareMessage"
         }
     }
     $linkPaths = @($lib)

@@ -115,11 +115,11 @@ if ($Phase -ne 'Qualification') { $Configuration = 'Release' }
 Import-Module (Join-Path $root 'Tools/Modules/Build/VcpkgInstallSafety.psm1')
 if ($Phase -in @('ReleaseTestBuild','Production','Qualification')) {
     $vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $root
-    Run 'vcpkg-install.ps1' @('-Platform',$Platform,'-VcpkgExe',$vcpkg.Executable,'-VcpkgRoot',$vcpkg.RegistryRoot)
+    Run 'vcpkg-install.ps1' @('-Platform',$Platform,'-VcpkgExe',$vcpkg.Executable,'-VcpkgRoot',$vcpkg.RegistryRoot,'-ReuseCurrent')
 }
 # The test step must retain the build's environment identity without reinstalling.
 $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-tool'
-$environment = Get-RSVcpkgBuildEnvironment -RepoRoot $root -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration
+$environment = Get-RSVcpkgBuildEnvironment -RepoRoot $root -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration -RuntimeOnly
 $env:VCPKG_REGISTRY_ROOT = Resolve-RSVcpkgSafeChildPath -Root $root -Child '.build/vcpkg-registry'
 $number = [string]$context.batch.buildNumber
 $profile = @('-Platform',$Platform,'-Configuration',$Configuration)
@@ -130,13 +130,6 @@ if($Configuration -ceq 'Release' -and $Phase -cin @('ReleaseTestBuild','Producti
     $lock=Get-RSDxUiPin -RepoRoot $root
     $sdkDescriptor=Initialize-CiPinnedSdkInput -Context $context -SourceCommit $lock.commit -ApiRevision $lock.apiRevision
     if($sdkDescriptor){$sdkBuildArguments=@('-DxUiSdkInputDescriptor',$sdkDescriptor)}
-}
-# SDK ABI evaluation must see the actual compiler defaults. Canonical vcpkg
-# MSBuild imports supply package paths without adding a CL override. Preserve any
-# pre-existing caller override so the SDK reader can refuse it independently.
-if($sdkBuildArguments.Count -gt 0 -or ($Phase -ceq 'ReleaseTest' -and
-    (Test-Path -LiteralPath (Join-Path $root ".build/$Platform/$Configuration/DxUi.sdk-input.json") -PathType Leaf))){
-    $environment.Remove('CL')
 }
 foreach ($entry in $environment.GetEnumerator()) { [Environment]::SetEnvironmentVariable($entry.Key,$entry.Value,'Process') }
 Import-Module (Join-Path $root 'Tools/Modules/Testing/TestSandbox.psm1') -Force

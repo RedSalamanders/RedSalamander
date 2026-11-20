@@ -8,11 +8,11 @@ In GitHub Actions, build and SDK reopen share explicit workflow selection valida
 and the PATH-only fallback. Dependency installation uses that same PATH-selected
 installation; a newer registered installation cannot silently replace it.
 Public `build.ps1` validates already prepared platform dependencies and the managed
-vcpkg pins, then applies canonical integration to both MSBuild launch paths and
-receipt metadata queries. Missing inputs report the canonical provisioning command;
-there is no bundled-root fallback or nested package install. Generated dependency
-CL/LINK paths do not import ambient flags, and SDK admission checks raw overrides
-before child binding. Parent environment and existing lock order remain unchanged.
+vcpkg pins, then binds the restored runtime path to both MSBuild launch paths and
+receipt metadata queries. Missing inputs report the pinned provisioning command.
+MSBuild takes its include and link inputs from the repository properties. SDK admission
+checks raw overrides before child binding clears ambient compiler and linker flags.
+Parent environment and existing lock order remain unchanged.
 
 Filtered Ghostty Commands qualification verifies archived native case bytes and
 selection, current source/artifact receipt, both aggregate summaries and invocation
@@ -778,7 +778,7 @@ New or edited evidence retains the size, schema and identity gates; unavailable 
 tracked files. Hosted native checkout keeps complete public history so this inventory check executes.
 Changed evidence uses public origin/main before the legacy origin/master fallback.
 
-Unified native CI calls the canonical VcpkgInstallSafety pinned bootstrap, then vcpkg-install.ps1 for its selected platform, before applying process-local MSBuild integration. Incomplete restored tool directories are preserved; dependency installation retains its platform lock and pins. See Specs/Build/Build_Toolchain.md and Tools/Tests/VcpkgBootstrap.Tests.ps1.
+Local builds and native CI use the pinned VcpkgInstallSafety bootstrap and vcpkg-install.ps1 for the selected platform. The installer preserves incomplete tool directories and holds the platform dependency lock. MSBuild reads the restored headers and explicit link inputs. See Specs/Build/Build_Toolchain.md and Tools/Tests/VcpkgBootstrap.Tests.ps1.
 
 Qualified Release SDK inputs use the optional build descriptor and the sealed native receipt. Artifact reuse and separate installer packaging reopen the original authenticated dependency input; Source portable attestations refuse SDK recipes. See [the build contract](../Specs/Build/Build_Toolchain.md#qualified-pinned-dxui-sdk-inputs).
 

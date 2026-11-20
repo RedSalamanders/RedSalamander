@@ -161,12 +161,14 @@ function Get-RSBuildManifestScalar {
     param(
         [Parameter(Mandatory = $true)][string[]]$Line,
         [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$ManifestPath
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [switch]$Optional
     )
 
     $prefix = $Name + '='
     $values = @($Line | Where-Object { $_.StartsWith($prefix, [StringComparison]::Ordinal) } |
         ForEach-Object { $_.Substring($prefix.Length) })
+    if ($Optional -and $values.Count -eq 0) { return $null }
     if ($values.Count -ne 1 -or [string]::IsNullOrWhiteSpace($values[0])) {
         throw "Build artifact manifest must contain exactly one non-empty '$Name' row: $ManifestPath"
     }
@@ -429,8 +431,9 @@ function Get-RSBuildArtifactManifestDeclarations {
             [void]$runtime.Add($resolved)
         }
 
-        $tlogPath = Get-RSBuildManifestScalar -Line $lines -Name vcpkg_tlog -ManifestPath $manifestFile.FullName
-        if (Test-Path -LiteralPath $tlogPath -PathType Leaf) {
+        # Existing manifests can still carry the vcpkg app-local declaration.
+        $tlogPath = Get-RSBuildManifestScalar -Line $lines -Name vcpkg_tlog -ManifestPath $manifestFile.FullName -Optional
+        if ($tlogPath -and (Test-Path -LiteralPath $tlogPath -PathType Leaf)) {
             foreach ($candidate in @(Get-Content -LiteralPath $tlogPath -Encoding Unicode |
                     Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
                 $resolved = Resolve-RSVcpkgRuntimeOutputPath -RepoRoot $RepoRoot `

@@ -107,11 +107,15 @@ Describe 'Pinned cold-runner vcpkg provisioning' {
         $downloads = Join-Path $fixture.Consumer '.build/vcpkg-tool/downloads'
         [void][IO.Directory]::CreateDirectory($downloads)
         [IO.File]::WriteAllText((Join-Path $downloads 'archive.zip'),'preserved download')
+        $registryDownloads = Join-Path $fixture.Consumer '.build/vcpkg-registry/downloads'
+        [void][IO.Directory]::CreateDirectory($registryDownloads)
+        [IO.File]::WriteAllText((Join-Path $registryDownloads 'registry.zip'),'preserved registry download')
         $context = Initialize-RSVcpkgToolContext -RepoRoot $fixture.Consumer
         (Invoke-BootstrapFixtureGit $context.ToolRoot @('rev-parse','HEAD')) | Should Be $fixture.Tool
         (Invoke-BootstrapFixtureGit $context.RegistryRoot @('rev-parse','HEAD')) | Should Be $fixture.Baseline
         [IO.File]::Exists($context.Executable) | Should Be $true
         [IO.File]::ReadAllText((Join-Path $context.ToolRoot 'downloads/archive.zip')) | Should Be 'preserved download'
+        [IO.File]::ReadAllText((Join-Path $context.RegistryRoot 'downloads/registry.zip')) | Should Be 'preserved registry download'
         (Initialize-RSVcpkgToolContext -RepoRoot $fixture.Consumer).ToolCommit | Should Be $fixture.Tool
     }
 
@@ -171,6 +175,10 @@ Describe 'Pinned cold-runner vcpkg provisioning' {
                 $environment.ForceImportAfterCppTargets | Should Be (Join-Path $integration 'vcpkg.targets')
                 $environment.VcpkgManifestInstall | Should Be 'false'
                 $environment.LINK | Should Match 'manual-link'
+                $runtime = Get-RSVcpkgBuildEnvironment -RepoRoot $fixture.Consumer -ToolRoot $tool -Platform $platform -Configuration $configuration -RuntimeOnly
+                @($runtime.Keys) -join ',' | Should Be 'Path'
+                $runtime.Path.Split([IO.Path]::PathSeparator)[0] |
+                    Should Be (Join-Path $installed $(if ($expected -eq 'Debug') { 'debug/bin' } else { 'bin' }))
                 $env:CL | Should Be $oldCL
             }
         }

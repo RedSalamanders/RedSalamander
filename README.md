@@ -61,7 +61,7 @@ Key engineering specs for the current search stack and self-test contract:
 ### Prerequisites
 
 - **Visual Studio 2026** with C++ toolset **v145** (Desktop development with C++)
-- **vcpkg** (manifest mode) for dependencies
+- **Git and PowerShell 7** for the pinned vcpkg restore and build
 - **Windows 11 build 22000.2600 or later**
 
 ### Quick Start
@@ -429,20 +429,20 @@ $vcpkg = Initialize-RSVcpkgToolContext -RepoRoot $PWD.Path
 ```
 
 The installer pins each triplet to the Visual Studio installation and default MSVC toolset the
-build discovers. Public build.ps1 validates these prepared inputs and binds pinned imports and
-canonical dependency paths to its MSBuild children and receipt metadata queries. It does not
-reinstall packages through a bundled Visual Studio root or require caller environment flags.
-Missing inputs report the preparation command. User-wide vcpkg integration is neither required
-nor permitted. SDK admission retains its independent raw compiler-override checks.
+build discovers. `build.ps1` validates the prepared inputs before compiling. MSBuild uses
+the repository's explicit link inputs and runtime staging manifest. Missing inputs report the
+preparation command. After an interrupted install, repeat the pinned install for the affected
+platform with `-Clean -RepairInterrupted`. SDK admission retains its independent raw
+compiler-override checks.
 ### Adding New Libraries
 
 To add a new library:
 
 ```powershell
-.\vcpkg\vcpkg.exe add port <library-name>
+.\.build\vcpkg-tool\vcpkg.exe add port <library-name>
 ```
 
-Then re-run `.\vcpkg-install.ps1`.
+Run the pinned installer again for each affected platform before building.
 
 ### Using vcpkg in Visual Studio
 

@@ -80,6 +80,8 @@
   </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)RuntimeDependencies.props"
           Condition="'$(RSIsFirstPartyProject)'=='true' and Exists('$(MSBuildThisFileDirectory)RuntimeDependencies.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Build\VcpkgLinkDependencies.props"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(IsLanguageResourceProject)'!='true' and '$(RSUseVcpkgManifest)'!='false'" />
 
   <!-- OutDir is shared by many projects. A deployed dependency DLL is not a
        consumer-owned output: that consumer's Clean may run after another
@@ -315,7 +317,6 @@
       <_RSBuildArtifactManifestLine Include="project=$(MSBuildProjectName)" />
       <_RSBuildArtifactManifestLine Include="target=$(TargetPath)" />
       <_RSBuildArtifactManifestLine Include="tests_enabled=$(RSBuildEnableTests)" />
-      <_RSBuildArtifactManifestLine Include="vcpkg_tlog=$(TLogLocation)$(ProjectName).write.1u.tlog" />
       <_RSBuildArtifactManifestLine Include="dxui_link_tlog=$(TLogLocation)link.command.1.tlog" Condition="'$(RSDxUiConsumer)'=='true'" />
       <_RSBuildArtifactManifestLine Include="runtime=$(TargetPath).DxUi.json" Condition="'$(RSDxUiConsumer)'=='true'" />
       <_RSBuildArtifactManifestLine Include="@(NativeReferenceCopyLocalPaths->'runtime=%(FullDestinationPath)')"

@@ -8,7 +8,7 @@
     and verifies those bytes before publishing a successful build receipt.
     Requires the selected platform's prepared canonical vcpkg inputs. Use
     Initialize-RSVcpkgToolContext and vcpkg-install.ps1 before building. Verifies
-    the tool/registry pins and binds their imports and paths only to child
+    the tool/registry pins and binds the runtime search path only to child
     MSBuild processes; it never falls back to the Visual Studio vcpkg root or
     installs packages inside a dependency lock.
 .PARAMETER Configuration
@@ -324,7 +324,6 @@ $sdkBuildFailure = $null
 $sdkProperties = @()
 $stopwatch = [System.Diagnostics.Stopwatch]::new()
 $contaminationRepairAuthorized = $false
-$script:sharedDependencyRepairAuthorized = $false
 try {
     $operationTarget = if ($null -ne $unionSelection) { $unionSelection.ReceiptTarget } elseif ($ProjectName) { $ProjectName } else { 'solution' }
     $artifactOperationScope = @{
@@ -526,18 +525,15 @@ function Initialize-RSBuildVcpkgEnvironment {
     # bootstrap verifies tool/registry pins; it never installs packages here.
     param([Parameter(Mandatory)][string]$RepoRoot,
         [Parameter(Mandatory)][ValidateSet('x64','ARM64')][string]$Platform,
-        [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration,
-        [switch]$SdkInput)
+        [Parameter(Mandatory)][ValidateSet('Debug','ASan Debug','Release')][string]$Configuration)
 
     $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $RepoRoot -Child '.build/vcpkg-tool'
     # Fail with provisioning guidance before changing a cold tool cache.
-    $null = Get-RSVcpkgBuildEnvironment -RepoRoot $RepoRoot -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration
+    $environment = [hashtable](Get-RSVcpkgBuildEnvironment -RepoRoot $RepoRoot -ToolRoot $toolRoot -Platform $Platform -Configuration $Configuration -RuntimeOnly)
     $context = Initialize-RSVcpkgToolContext -RepoRoot $RepoRoot
-    $environment = [hashtable](Get-RSVcpkgBuildEnvironment -RepoRoot $RepoRoot -ToolRoot $context.ToolRoot -Platform $Platform -Configuration $Configuration)
-    if ($SdkInput) {
-        # SDK admission has already checked the caller's raw overrides. Preserve
-        # its compiler defaults without a synthetic CL override afterward.
-        $environment['CL'] = $null
+    # Explicit MSBuild inputs replace imported integration and ambient flags.
+    foreach ($name in @('CL','_CL_','LINK','_LINK_','ForceImportBeforeCppTargets','ForceImportAfterCppTargets')) {
+        $environment[$name] = $null
     }
     return [pscustomobject]@{ Environment=$environment; ToolCommit=$context.ToolCommit; Baseline=$context.Baseline }
 }
@@ -575,7 +571,7 @@ function Invoke-MSBuild {
         if ($sharedDependencyLock.WasAbandoned) {
             [void](Set-RSArtifactOperationContaminated `
                     -RepoRoot $SolutionDir `
-                    -Reason 'The previous MSBuild owner exited while it could have been writing shared vcpkg dependencies.' `
+                    -Reason 'The previous shared dependency lock owner exited unexpectedly.' `
                     -AbandonedOwner $sharedDependencyLock.AbandonedOwner `
                     -Scope $sharedDependencyScope)
         }
@@ -584,18 +580,8 @@ function Invoke-MSBuild {
             -RepoRoot $SolutionDir `
             -Scope $sharedDependencyScope
         if ($null -ne $sharedDependencyContamination) {
-            $script:sharedDependencyRepairAuthorized = Test-RSArtifactOperationRepairAllowed `
-                -Contamination $sharedDependencyContamination `
-                -Rebuild:$Rebuild `
-                -ProjectName $repairProjectName `
-                -Configuration $Configuration `
-                -Platform $Platform
-            if (-not $script:sharedDependencyRepairAuthorized) {
-                $markerPath = Get-RSArtifactContaminationMarkerPath `
-                    -RepoRoot $SolutionDir `
-                    -Scope $sharedDependencyScope
-                throw "Shared vcpkg dependencies may be incomplete after an interrupted MSBuild operation. Run a full-solution build.ps1 -Rebuild for platform $Platform. Marker: $markerPath"
-            }
+            $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $SolutionDir -Scope $sharedDependencyScope
+            throw "Shared vcpkg dependencies may be incomplete. Run ./vcpkg-install.ps1 -Platform $Platform -Clean -RepairInterrupted with the pinned tool and registry. Marker: $markerPath"
         }
         Assert-RSNoResidualArtifactToolProcesses `
             -RepoRoot $SolutionDir `
@@ -778,9 +764,9 @@ if ($DxUiSdkInputDescriptor) {
 }
 # SDK admission above must inspect the caller's original overrides before the
 # canonical child binding is composed. The calling-process environment is unchanged.
-$vcpkgBinding = Initialize-RSBuildVcpkgEnvironment -RepoRoot $SolutionDir -Platform $Platform -Configuration $Configuration -SdkInput:($null -ne $sdkInput)
+$vcpkgBinding = Initialize-RSBuildVcpkgEnvironment -RepoRoot $SolutionDir -Platform $Platform -Configuration $Configuration
 $script:buildVcpkgEnvironment = $vcpkgBinding.Environment
-$receiptBuildArguments += @('vcpkg-binding=pinned-process-local-v1', "vcpkg-tool=$($vcpkgBinding.ToolCommit)", "vcpkg-baseline=$($vcpkgBinding.Baseline)")
+$receiptBuildArguments += @('vcpkg-binding=explicit-link-inputs-v1', "vcpkg-tool=$($vcpkgBinding.ToolCommit)", "vcpkg-baseline=$($vcpkgBinding.Baseline)")
 Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates -Rebuild:$Rebuild -ProjectName $repairProjectName -SdkInput $sdkInput
 if($null -eq $sdkInput){
     $oldSdkRecord=Resolve-RSGuardedRepositoryPath -RepoRoot $SolutionDir -GuardedRelativeRoot ".build/$Platform/$Configuration" -Path (Join-Path $buildOutputDir 'DxUi.sdk-input.json')
@@ -1160,13 +1146,6 @@ function Assert-BuildOutputProcessNotRunning {
         Clear-RSArtifactOperationContaminated `
             -RepoRoot $SolutionDir `
             -Scope $artifactOperationScope
-    }
-    if ($script:sharedDependencyRepairAuthorized) {
-        $sharedDependencyScope = $artifactOperationScope.Clone()
-        $sharedDependencyScope['coordination'] = 'shared-dependency'
-        Clear-RSArtifactOperationContaminated `
-            -RepoRoot $SolutionDir `
-            -Scope $sharedDependencyScope
     }
 
     if ($Zip -or $GenerateWingetManifest) {

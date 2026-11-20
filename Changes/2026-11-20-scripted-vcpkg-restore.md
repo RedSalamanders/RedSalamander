@@ -1,0 +1,1 @@
+- Restore pinned vcpkg packages through the repository installer before native compilation.
