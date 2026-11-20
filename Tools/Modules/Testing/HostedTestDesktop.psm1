@@ -1616,6 +1616,114 @@ function Invoke-RSHostedStockPreparationCore {
     if($failure){throw $failure}
 }
 
+# Windows Console Host CLSID. Both per-user default-terminal values name it to
+# select classic conhost instead of the "Let Windows decide" Terminal handoff.
+$script:RSHostedConsoleHostClsid = '{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}'
+$script:RSHostedConsoleHostValueNames = @('DelegationConsole','DelegationTerminal')
+
+function Set-RSHostedConsoleHostDelegation {
+    <#
+    .SYNOPSIS
+        Makes new consoles on the hosted runner use the classic Windows Console Host.
+    .DESCRIPTION
+        For the existing hosted ARM64 stock-preparation roles, select Windows Console Host
+        for new console windows. Both HKCU\Console\%%Startup delegation values are read back
+        and recorded in a create-only audit. The foreground boundary retains its existing rules.
+    .PARAMETER Phase
+        Canonical adapter phase.
+    .PARAMETER Platform
+        Canonical native target platform.
+    .PARAMETER QualificationScope
+        Canonical adapter scope.
+    .PARAMETER TestRoot
+        Marked test sandbox root.
+    .PARAMETER EvidenceDirectory
+        Current hosted lane's evidence directory under the test root.
+    .PARAMETER SourceCommit
+        Source commit from the validated native batch descriptor.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Phase, [Parameter(Mandatory)][string]$Platform,
+          [Parameter(Mandatory)][string]$QualificationScope, [Parameter(Mandatory)][string]$TestRoot,
+          [Parameter(Mandatory)][string]$EvidenceDirectory,
+          [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$SourceCommit)
+    $ErrorActionPreference='Stop'
+    if (-not (Get-RSHostedStockPreparationRequest -Phase $Phase -Platform $Platform -QualificationScope $QualificationScope)) {
+        throw 'Console-host delegation is restricted to this repository''s hosted native ARM64 test roles.'
+    }
+    Import-Module (Join-Path $PSScriptRoot 'TestSandbox.psm1')
+    $root = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path $TestRoot
+    $evidence = Assert-RSTestSandboxContainedPath -TestRoot $root -Path $EvidenceDirectory -RequireDescendant
+    $directory = Assert-RSTestSandboxContainedPath -TestRoot $root `
+        -Path (Join-Path $evidence ('console-host-' + [guid]::NewGuid().ToString('N'))) -RequireDescendant
+    [void][IO.Directory]::CreateDirectory($directory)
+    $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Console\%%Startup',$true)
+    if($null -eq $key){throw 'Cannot open HKCU\Console\%%Startup for writing.'}
+    try {
+        $read={param($name) $key.GetValue($name,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)}.GetNewClosure()
+        $write={param($name,$value) $key.SetValue($name,$value,[Microsoft.Win32.RegistryValueKind]::String)}.GetNewClosure()
+        $audit=Invoke-RSHostedConsoleHostDelegationCore -Directory $directory -Read $read -Write $write -SourceCommit $SourceCommit
+    } finally {$key.Dispose()}
+    Write-Host ('Hosted console host delegation: '+($audit|ConvertTo-Json -Depth 4 -Compress))
+}
+
+# Internal read/write/verify step, separated so fixtures supply an in-memory registry.
+function Invoke-RSHostedConsoleHostDelegationCore {
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][scriptblock]$Read,
+          [Parameter(Mandatory)][scriptblock]$Write, [Parameter(Mandatory)][string]$SourceCommit)
+    $ErrorActionPreference = 'Stop'
+    $clsid = $script:RSHostedConsoleHostClsid
+    $prior = [ordered]@{}
+    $after = [ordered]@{}
+    $changed = [Collections.Generic.List[string]]::new()
+    $failure = $null
+    $stream = [IO.File]::Open((Join-Path $Directory 'delegation.json'), [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    try {
+        try {
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                $prior[$name] = & $Read $name
+            }
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                if (-not [string]::Equals($prior[$name], $clsid, [StringComparison]::OrdinalIgnoreCase)) {
+                    & $Write $name $clsid
+                    $changed.Add($name)
+                }
+            }
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                $after[$name] = & $Read $name
+            }
+            foreach ($name in $script:RSHostedConsoleHostValueNames) {
+                if (-not [string]::Equals($after[$name], $clsid, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Console-host delegation value $name did not read back as the Windows Console Host."
+                }
+            }
+        } catch {
+            $failure = $_
+        }
+        $audit = [ordered]@{
+            schema = 'red-salamander.hosted-console-host-delegation.v1'
+            source_commit = $SourceCommit
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            key = 'HKCU\Console\%%Startup'
+            console_host_clsid = $clsid
+            prior = $prior
+            after = $after
+            changed = @($changed)
+            verified = $null -eq $failure
+            error = if ($failure) { $failure.Exception.Message } else { $null }
+            observed_utc = [DateTimeOffset]::UtcNow.ToString('o')
+        }
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($audit | ConvertTo-Json -Depth 4))
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally {
+        $stream.Dispose()
+    }
+    if ($failure) { throw $failure }
+    return $audit
+}
+
 function New-RSHostedDefaultDesktop {
     Initialize-RSHostedDesktopNative
     [RedSalamander.Testing.HostedDesktopNative]::EnterDefaultDesktop()
@@ -1951,4 +2059,4 @@ function Invoke-RSWithHostedTestDesktop {
     if ($null -ne $restoreError) { throw $restoreError }
 }
 
-Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest
+Export-ModuleMember -Function Invoke-RSWithHostedTestDesktop, Get-RSHostedDesktopDiagnostics, Invoke-RSWithHostedDefaultDesktop, Get-RSHostedInputDesktopRequest, Get-RSHostedStockPreparationRequest, Set-RSHostedConsoleHostDelegation

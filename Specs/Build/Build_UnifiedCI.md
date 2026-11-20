@@ -185,6 +185,11 @@ current implementations use the same fixture. The adapter clears unselected inhe
 value afterward. See the self-test ownership contract.
 
 The adapter uses RSBuildEnableTests=true for Release test builds and Suite CI through the hosted desktop wrapper.
+On GitHub-hosted native ARM64, the existing stock-preparation role selection also selects Windows Console Host
+for new consoles before the interactive test run. The adapter verifies both user-level delegation settings and
+retains a source-bound `console-host-*/delegation.json` under the lane's marked-sandbox evidence. The desktop
+boundary still refuses restoration over a foreign foreground window. [Default terminal policy](https://learn.microsoft.com/en-us/windows/terminal/group-policy)
+
 Generated test scratch, logs and evidence stay in the governed marked RedSalamander.Perf sandbox. Downloaded frozen
 receipts and harness binaries are build inputs under .build/ci; native test generation does not write there. Full
 artifact-mutating qualification remains an explicit separate obligation.
