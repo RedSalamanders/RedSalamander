@@ -1,0 +1,1 @@
+- Bind public builds and receipt metadata queries to verified pinned vcpkg integration and prepared platform dependencies. Avoid a duplicate bundled-root install, preserve SDK override checks, keep generated compiler paths free of ambient flags, and report missing preparation clearly. Broader tooling and native qualification remain pending.

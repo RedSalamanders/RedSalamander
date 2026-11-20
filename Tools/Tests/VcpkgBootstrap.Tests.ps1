@@ -178,6 +178,38 @@ Describe 'Pinned cold-runner vcpkg provisioning' {
         Get-BootstrapFailure { Get-RSVcpkgBuildEnvironment -RepoRoot $fixture.Consumer -ToolRoot $tool -Platform x64 -Configuration Release } | Should Match 'build input not found'
     }
 
+    It 'keeps canonical compiler paths in the child without importing ambient CL or LINK flags' {
+        Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1') -ErrorAction Stop
+        $root = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('vcpkg-child-environment-' + [Guid]::NewGuid().ToString('N'))
+        $tool = Join-Path $root '.build/vcpkg-tool'
+        $integration = Join-Path $tool 'scripts/buildsystems/msbuild'
+        $installed = Join-Path $root '.build/vcpkg_installed/x64/x64-windows'
+        foreach ($directory in @($integration,(Join-Path $installed 'include'),(Join-Path $installed 'lib/manual-link'))) {
+            [void][IO.Directory]::CreateDirectory($directory)
+        }
+        foreach ($file in @('vcpkg.props','vcpkg.targets')) { [IO.File]::WriteAllText((Join-Path $integration $file),'<Project/>') }
+        $oldCL = $env:CL; $oldLINK = $env:LINK; $oldPath = $env:Path
+        try {
+            $env:CL = '/DUNREVIEWED_AMBIENT /FIambient.h'
+            $env:LINK = '/FORCE:UNRESOLVED /LIBPATH:ambient'
+            $environment = Get-RSVcpkgBuildEnvironment -RepoRoot $root -ToolRoot $tool -Platform x64 -Configuration Release
+            $child = New-RSProcessStartInfo -FilePath 'fixture.exe' -WorkingDirectory $root -AdditionalEnvironment ([hashtable]$environment)
+            $child.Environment['CL'] | Should Be ('/I"{0}"' -f (Join-Path $installed 'include'))
+            $child.Environment['LINK'] | Should Match 'manual-link'
+            $child.Environment['LINK'] | Should Not Match 'UNRESOLVED|ambient'
+            $child.Environment['VcpkgManifestInstall'] | Should Be 'false'
+            $child.Environment['ForceImportBeforeCppTargets'] | Should Be (Join-Path $integration 'vcpkg.props')
+            $env:CL | Should Be '/DUNREVIEWED_AMBIENT /FIambient.h'
+            $env:LINK | Should Be '/FORCE:UNRESOLVED /LIBPATH:ambient'
+            $env:Path | Should Be $oldPath
+            Remove-Item -LiteralPath (Join-Path $integration 'vcpkg.targets')
+            [void][IO.Directory]::CreateDirectory((Join-Path $integration 'vcpkg.targets'))
+            Get-BootstrapFailure { Get-RSVcpkgBuildEnvironment -RepoRoot $root -ToolRoot $tool -Platform x64 -Configuration Release } | Should Match 'Initialize-RSVcpkgToolContext.*vcpkg-install.ps1 -Platform x64'
+        } finally {
+            $env:CL = $oldCL; $env:LINK = $oldLINK
+        }
+    }
+
     It 'provisions dependencies only for native build roles before the first build invocation' {
         $adapter = [IO.File]::ReadAllText((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'))
         $staticEnd = $adapter.IndexOf("if ($" + "Phase -ne 'Qualification')")

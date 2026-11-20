@@ -7,6 +7,12 @@ current PowerShell host and complete nested policy identity.
 In GitHub Actions, build and SDK reopen share explicit workflow selection validation
 and the PATH-only fallback. Dependency installation uses that same PATH-selected
 installation; a newer registered installation cannot silently replace it.
+Public `build.ps1` validates already prepared platform dependencies and the managed
+vcpkg pins, then applies canonical integration to both MSBuild launch paths and
+receipt metadata queries. Missing inputs report the canonical provisioning command;
+there is no bundled-root fallback or nested package install. Generated dependency
+CL/LINK paths do not import ambient flags, and SDK admission checks raw overrides
+before child binding. Parent environment and existing lock order remain unchanged.
 
 Filtered Ghostty Commands qualification verifies archived native case bytes and
 selection, current source/artifact receipt, both aggregate summaries and invocation

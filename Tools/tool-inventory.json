@@ -2023,7 +2023,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Construct manifest-derived artifact/runtime closure with normalized omitted/empty/null project unions with fail-closed legacy/current vcpkg app-local path normalization, complete Ghostty product-input identity, canonical compiler/linker/RC/SDK identity, content-addressed local receipts, and receipt-derived portable payload evidence. Root build capture can require uniform manifest test surfaces before packaging and publication. Ghostty runtime/cache identity includes closed-package guarded paths and indirect canonical JSON/process/MSBuild helpers. Captures independently reopened dependency build arguments before profile mutation and closes the reader before rebuild. Repeated receipt publication validates complete candidate/stored records and full governing projections, preserves the first immutable bytes and republishes their exact canonical pointer; first publication is create-only.",
-      "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs.",
+      "usage": "Import from build.ps1, Run-AllTests.ps1, same-workflow portable producer/consumers, and focused build-evidence tests; vcpkg tlogs may name deployed profile outputs or canonical platform-root sources that resolve beside the declared target, while one MSBuild-resolved toolchain record and digest bind cache keys, receipts, portable attestations, and workflow outputs. Identity probes reuse contained capture with explicit child-only canonical environment overrides.",
       "consumerClosure": "derived-references",
       "usedBy": [
         "Tools/Tests/BuildReproducibility.Tests.ps1",
@@ -2039,7 +2039,8 @@
         "Tools/Tests/R0ePairedValidation.Tests.ps1",
         "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
         "Tools/Modules/Build/DxUiDependency.psm1",
-        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1"
+        "Tools/Modules/Testing/HostedDiagnosticEvidence.psm1",
+        "Tools/Tests/ProcessStreaming.Tests.ps1"
       ],
       "prerequisites": [
         "PowerShell 7.4 or newer",
@@ -2050,7 +2051,8 @@
         "Tools/Modules/Build/ArtifactOperationLock.psm1",
         "Tools/Modules/Testing/ValidationFingerprint.psm1",
         "Tools/Modules/Packaging/RuntimeDependencies.psm1",
-        "Specs/Build/Build_DxUiSdkInput.schema.json"
+        "Specs/Build/Build_DxUiSdkInput.schema.json",
+        "Tools/Modules/Build/ProcessStreaming.psm1"
       ],
       "sideEffects": [
         "Source snapshot functions read Git and hash repository files",
@@ -2112,7 +2114,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Launch contained no-window children with sanitized environments and concurrent streams; provide a silent stdout/stderr/exit projection for metadata callers without artifact-write delegation. Interactive payload routing remains caller-owned. Graph/HEAD metadata consumers reuse capture; provisioning Git writes retain delegated streaming. An optional per-child stdout decoder is explicit at known Git callers; non-Git defaults and stderr decoding are unchanged.",
-      "usage": "Import from build and test orchestration that requires live subprocess output.",
+      "usage": "Import from build and test orchestration that requires live subprocess output. Silent metadata capture forwards optional AdditionalEnvironment through the same child launcher without mutating its parent.",
       "usedBy": [
         "Tools/Restore-DxUi.ps1",
         "Tools/Modules/Build/VcpkgInstallSafety.psm1",
@@ -2175,7 +2177,9 @@
         "Tools/Run-AllTests.ps1",
         "Tools/SanitizedEnvironment.ps1",
         "Tools/Tests/BuildReproducibility.Tests.ps1",
-        "Tools/Tests/DxUiDependency.Tests.ps1"
+        "Tools/Tests/DxUiDependency.Tests.ps1",
+        "Tools/Tests/VcpkgBootstrap.Tests.ps1",
+        "Tools/Tests/VcpkgInstallSafety.Tests.ps1"
       ],
       "prerequisites": [
         "Exact pinned .ci-engine/Tools/Modules/Ci.Policy.psm1"
@@ -2204,7 +2208,7 @@
       "visibility": "internal",
       "lifecycle": "active",
       "purpose": "Validate manifest floors and exact overrides plus vcpkg triplet names, confine install and merge paths to safe repository children, and pin every installed triplet to the discovered Visual Studio installation's default MSVC toolset through overlay triplets. Restore and bootstrap the exact tool/ports identities and expose process-local hosted integration for cold builds. Provisioning Git retains captured merged diagnostics and artifact delegation under its existing lock; the optional cat-file probe uses read-only capture and exact exit.",
-      "usage": "Import from vcpkg installation tooling before mutating install roots; build.ps1 refreshes the same overlay triplet before MSBuild's manifest install. Unified native build roles bootstrap then invoke the canonical platform installer before MSBuild.",
+      "usage": "Import from governed installation and public build preparation. Public build.ps1 validates prepared platform inputs, verifies managed pins and applies the canonical child binding; package installation remains separate under its platform lock.",
       "usedBy": [
         "vcpkg-install.ps1",
         "build.ps1",
@@ -2226,7 +2230,8 @@
       ],
       "outputs": [
         "Manifest-to-registry compatibility results, validated vcpkg child paths, merge results, and overlay triplet files pinned to the default MSVC toolset",
-        ".build/vcpkg-tool and .build/vcpkg-registry with verified independent pins; process-local integration values"
+        ".build/vcpkg-tool and .build/vcpkg-registry with verified independent pins; process-local integration values",
+        "Validated prepared-input binding with canonical generated CL/LINK paths, no ambient flag concatenation, and actionable provisioning errors"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [

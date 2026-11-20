@@ -737,3 +737,81 @@ and normative closeout remain pending under their existing owners and contracts.
 The previously authorized first six-hour desktop window is still unstarted. No
 source commit, native build/test, workflow dispatch, publication, Done move or
 generated changelog fold is claimed by this integration update.
+
+### Public build integration repair after the failed A attempt (2026-11-20)
+
+The first ordinary local fix commit is d89e51f9dc52e7f9ac044b3eef1644e2f2865c8a.
+The serialized historical-behavior A attempt applied the reviewed product-only inverse,
+then its canonical selected x64 Release build FAILED: contained build child 63344 exited
+1 with 3,056 vcpkg overwrite warnings and one Terminal MSB3073 error after the locked
+aro download timed out at Codeberg (curl exit 28, zero received bytes). No compatible
+build receipt was published, no cadence case or desktop lease started, and no A negative
+premise or A/B measurement was established. The finally path restored the B source bytes
+and clean d89e identity; it did not restore or accept build outputs or receipts. The raw
+attempt remains in completed context
+20261120T112303Z-59380-b298168aad9b475f9b92075856a90be3,
+scratch/qualification/paused-rate-A; the selected failed-output preservation supplement is
+20261120T113719Z-42056-49a7a86a4e9f47799b9a0708cb405b54,
+scratch/qualification/A-failed-build-preservation.
+
+The dependency warning cause is a validated public build integration defect, not merely
+an external driver omission. The documented installer promoted staged payload without
+its status database; plain build.ps1 then ran the bundled Visual Studio root's manifest
+install into that populated canonical destination. The executable bytes matched, but
+four helper-script identities and six package ABIs differed, with actual DLL differences.
+All 3,056 warning rows were overwrite warnings, not an exemption from the zero-warning
+gate. The root/helper/status/ABI joins are preserved in completed context
+20261120T114239Z-69716-9c4c4aed99ae4509873350114c1fa19b,
+scratch/audit-forensics/A-vcpkg-warning-cause (report SHA-256
+BA035035D71ACD2AFDD364D6E507D2BBF1559625450184B9C0F2A4C076D58770).
+
+The accepted public repair validates prepared inputs, verifies canonical managed pins
+and applies child-only pinned integration to direct/streaming MSBuild and receipt
+metadata queries. It retains SDK raw-override refusal before composition, removes
+ambient CL/LINK concatenation and preserves existing locks and the zero-warning gate.
+It adds no package installer under a dependency lock, readiness cache, fabricated
+status/stamp or bundled-root fallback. Its 14-file source packet is
+20261120T120242Z-71584-eef48f84b7fe467d8f0eb292419c18e5,
+scratch/audit-repair/public-vcpkg-source-freeze-v1, patch SHA-256
+638AC3151EED41C89B98AF02E5715AC6AAC133803938FE2200F2CA1454B5FBF5.
+Root and independent source review accepted the exact frozen bytes. Source-bound pure
+Pester controls passed 16/0/0 with stable code/test hashes in completed context
+20261120T115749Z-65112-51c65ec1c93140a2ac7b22117f85e151,
+scratch/pure-review/public-vcpkg-focused-v2. The prior 12/2 fixture-development run is
+retained. This implementation/pure state grants no native or broader tooling acceptance.
+
+The person actually ran the manual prerequisite V3 and reported: "The property
+'PSIsContainer' cannot be found on this object". The deterministic first-root walker
+failure was reproduced before five-input verification or copying; no transferred cache
+or proof is claimed. The corrected V4 uses plain .NET ancestor traversal and the first
+canonical tar application. Its exact script SHA-256 is
+2CDF039FF300319526C7CD0B190A828377BAC8B6380C562B496BFDC3E04F8947.
+Safe actual path/resolver/negative controls passed 14/0 in completed context
+20261120T120300Z-44780-2bee4676522a4dd48510b2a4bf73c11e,
+scratch/manual-prerequisites/walker-v4; the unchanged earlier nine footer controls remain
+applicable. Root and independent source review accepted V4. The person subsequently
+executed the exact V4 script under PowerShell 7.6.10 (operator PID 8388). Its canonical
+archived report is in completed context
+20261120T121258Z-8388-a49315a07a2440bf9f6298856c675abd,
+scratch/manual-prerequisites/verified-Ghostty-inputs/manual-verified-inputs-report.json,
+SHA-256 0264C95A3873E613099FA81AE262F21C9402C3D1C785B2C2E740BF0AB4E705BB.
+CopyRequested and AllFiveVerified are true: all five layout/license readers exited zero,
+five copy rows were recorded, and Error is null. Independent destination hashes match all
+five locked inputs (2,311,712 bytes); canonical archive complete/intent records join the
+operator report and the original live run is absent. The derived reconciliation is in
+completed context 20261120T121413Z-10800-166f276ea7ad4d11b116ea6361a3c694,
+scratch/manual-prerequisites/V4-operator-reconciliation/operator-reconciliation.json,
+SHA-256 E818F1E0A9B9055C5DCA0BB5FE2983B8A9E6B6E65117E13E420CBF5AD6417D5A.
+This verifies the prerequisite cache transfer only; it establishes no build, A/B or native
+acceptance. Agents independently read the report and destination hashes without rerunning
+the archive/layout/license operations or copying the inputs.
+A prior agent archive/layout/license command was rejected before execution by automatic
+review with only "blocked by policy"; agents have not retried that action.
+
+This final integration metadata refresh records the canonical workflow digest and
+required structural checks in the integration freeze packet. Public modules/tests remain
+at their accepted frozen hashes. No second commit, package-payload repair, further
+source inverse, native build/test, workflow dispatch, publication or changelog fold is
+claimed here. Required canonical post-build PrePush, the behavior pair, current-source
+Debug/Release/native ARM64, broad desktop/Full/provider obligations and I65 closeout
+remain pending. The first desktop window remains unstarted; I65 remains ACTIVE.
