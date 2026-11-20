@@ -111,14 +111,10 @@ post-release check.
   baseline schema. A baseline bump that raises the schema must update the tool
   pin in the same reviewed change.
 - CI cache keys include both pin files and CI must not mutate user-wide MSBuild state with `vcpkg integrate install`.
-  The reusable build imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout through MSBuild's
-  per-invocation `ForceImportBeforeCppTargets` / `ForceImportAfterCppTargets` properties, which must be set before
-  invoking `build.ps1` so the installed triplet supplies its include paths and app-local copy targets. First-party
-  binaries link the libraries declared in `Build/VcpkgLinkDependencies.props`. The invocation disables
-  local-app-data discovery so a runner-level or user-wide integration cannot add a second, unpinned target import. It
-  also sets `VcpkgXUseBuiltInApplocalDeps=false`: the pinned PowerShell copier writes copied destination paths to the
-  vcpkg tlog consumed by build-receipt publication, while the built-in copier writes package source paths that the
-  fail-closed receipt boundary must reject.
+  Each build consumes the selected platform's scripted restore and explicit linker
+  inputs. RuntimeDependencies.props declares the deployed vcpkg DLLs that build
+  receipts and portable packaging check.
+
 - `build.ps1 -MaxCpuCount <N>` may bound MSBuild workers when a machine cannot reliably initialize the default
   number of compiler/resource processes. Zero retains MSBuild's default.
 

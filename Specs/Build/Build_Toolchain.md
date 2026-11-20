@@ -538,9 +538,9 @@ ATL/MFC or .NET SDK directories cannot satisfy the linker and otherwise cause th
 Roslyn inline-task compiler to repeat CS1668 for every project.
 
 Each invocation uses a unique artifact-manifest root. Every built first-party application
-or DLL declares its target path, effective test surface, current vcpkg write-tlog inputs,
-and governed runtime dependencies there. Receipt outputs and runtime closures are derived
-from those current declarations, not from a recursive scan of surviving output files. A
+or DLL declares its target path and effective test surface. The shared runtime dependency
+manifest supplies each project's staged runtime inputs. Receipt outputs and runtime closures are derived
+from the current declarations. A
 full-solution build rejects an undeclared executable or DLL in the selected output profile.
 A targeted build may coexist with unrelated pre-existing files, but it MUST NOT attest
 them. This prevents stale or removed binaries from bootstrapping into new authority.
@@ -577,7 +577,7 @@ qualification retain their full-solution gate. Expected native paths must appear
 in the receipt even when the actual file is missing; missing paths cannot disappear
 from admission through a filesystem-existence filter.
 
-Vcpkg write-tlog entries have two supported forms: legacy `applocal.ps1` destination
+Historical artifact manifests can carry vcpkg write-tlog entries in two forms: legacy `applocal.ps1` destination
 paths already beneath the selected output profile, and built-in `z-applocal` source paths
 beneath the repository's canonical `.build/vcpkg_installed/<platform>/` root. A source
 entry resolves only to the same-named deployed file beside that project's declared target.
@@ -748,13 +748,20 @@ matching MUST apply that same prefix mapping to `vcpkg`, compiler, and linker
 command lines that reference the platform-scoped canonical root or custom staging triplet paths; process
 name alone, another repository, or the opposite architecture is not evidence.
 
-CI stages its managed executable-tool checkout and download cache under
+The build stages its managed executable-tool checkout under
 `.build/vcpkg-tool`, matching the generated-output boundary used by source
 snapshots. The checkout must not appear as an untracked nested repository at
 the product root. Its executable and manifest pins remain separately verified;
 the source-integrity check must not gain an exclusion for a root `vcpkg/` checkout.
 
-Initialize-RSVcpkgToolContext in the canonical VcpkgInstallSafety module owns hosted tool/bootstrap setup. It verifies both Git pins and tools schemas, preserves incomplete restored tool directories, reuses compatible downloads, refuses dirty checkouts and reparse points, and serializes only shared tool provisioning. Ports installation remains in vcpkg-install.ps1 under its selected platform dependency lock. Get-RSVcpkgBuildEnvironment validates the matching installed tree and returns pinned process-local integration; it never installs user-wide MSBuild integration. Automatic test, production and manual native build phases all establish this cold-runner prerequisite before MSBuild.
+Initialize-RSVcpkgToolContext owns pinned bootstrap for both local and hosted builds.
+It verifies the Git identities and tools schemas, checks each managed checkout and
+reuses the executable after verifying its recorded hash and tool commit. It preserves
+incomplete checkouts and compatible downloads and holds the provisioning lock only
+while validating or provisioning the tool. Ports installation uses the same repository
+installer locally and in CI. The workflow cache includes the managed registry downloads.
+The historical paired-build environment helper retains its legacy integration options
+for an older side. Current hosted jobs request only the runtime search path.
 
 The `vcpkg-tool.json` executable revision and `vcpkg.json` `builtin-baseline`
 remain independent identities. When a caller materializes them as separate
@@ -860,22 +867,15 @@ serves any root whose triplet text is identical. The functions live in `Tools/Mo
 keep the contract of DxUi's `Tools/VisualStudio.psm1` and `Tools/VcpkgTriplet.psm1`, a documented consumer interface of
 the pinned library. They are not imported, because this installer runs before the DxUi checkout is restored (the Ghostty
 ARM64 workflow installs first); a parity test compares both implementations whenever the pinned checkout is restored.
-MSBuild's own manifest-mode install is not limited to an empty tree: vcpkg's `vcpkg.targets` runs it whenever `vcpkg.json`
-(or `vcpkg-configuration.json`) is newer than `.build\vcpkg_installed\<platform>\.msbuildstamp-<triplet>.<host>.stamp`, a
-stamp the governed installer never writes. It uses the same overlay. For first-party projects `Directory.Build.props`
-appends `"--overlay-triplets=.build\vcpkg-triplets\<platform>"` (absolute, quoted, no trailing backslash) to
-`VcpkgAdditionalInstallOptions` only when that directory holds `<triplet>.cmake`, so vcpkg never receives a directory that
-does not exist. Before each MSBuild run, inside the platform dependency lock, `build.ps1` refreshes that file through the
-same functions, installation and default toolset, copying the stock triplet of the vcpkg root MSBuild's integration
-installs with (an explicit `VcpkgRoot`, else the installation's bundled `VC\vcpkg`). The `x64-windows` and `arm64-windows`
-stock triplets of the bundled (VS 18) and pinned roots are byte-identical, so both writers produce the same bytes and do not
-alternate the package ABI. `build.ps1` skips the refresh when `VcpkgManifestInstall=false` or when no such root has the
-triplet. MSBuild's install still runs its own vcpkg root, scripts and `vcpkg\status` database, so its package ABIs differ
-from the installer's staged ones: when its stamp is stale it rebuilds what its own status lacks, with the pinned toolset.
-The inline install of the reusable CI workflow does not call the installer and keeps vcpkg's default toolset choice; CI then
-builds with `VcpkgManifestInstall=false`. The pin matters where the default toolset is older than the newest one installed
-beside it (the historical VS 18 Insiders 14.51-default/14.52-preview installation), above all for an ARM64 target on an x64 host when only the default toolset has
-that compiler.
+build.ps1 restores the selected triplet through vcpkg-install.ps1 before the first
+MSBuild invocation, while holding the existing platform dependency lease. The child
+receives that lease through process delegation. A matching restore record allows
+reuse after the pinned manifest, tool, registry configuration, triplet, port overlays
+and default compiler inputs have been checked. The installer invalidates the record
+before replacing the staged inputs and publishes it after the successful merge.
+An explicitly authorized full-solution rebuild can repair an interrupted dependency
+operation using a delegated clean restore. The build clears contamination after
+successful validation.
 
 AWS SDK `1.11.880` is paired with the exact `aws-crt-cpp` `0.43.4` override,
 matching the SDK tag's `crt/aws-crt-cpp` submodule. CRT `0.43.0` lacks the
@@ -889,28 +889,13 @@ the SQLite (`3.54.1`), libjpeg-turbo, curl, AWS SDK and CRT entries.
 See [the SDK's CRT source](https://github.com/aws/aws-sdk-cpp/tree/1.11.880/crt/aws-crt-cpp)
 and [the paired CRT declarations](https://github.com/awslabs/aws-crt-cpp/blob/v0.43.4/include/aws/crt/Types.h).
 
-Official clean-runner builds MUST NOT assume that the Visual Studio image includes
-user-wide vcpkg MSBuild integration. After the governed install succeeds, the
-caller imports `scripts/buildsystems/msbuild/vcpkg.props` and `vcpkg.targets` from
-the exact executable-tool checkout for that process only, disables manifest
-installation during MSBuild, and binds `VcpkgInstalledDir` to the canonical
-platform-scoped `.build\vcpkg_installed\<platform>\` root. A direct compiler
-include fallback may name that same installed triplet. The imported build-system
-files, installed headers/libraries, executable-tool checkout, and ports/version
-registry therefore remain separately pinned inputs; no user-wide integration or
-runner-ambient package path is an allowed substitute. These official build paths
-MUST set `VcpkgXUseBuiltInApplocalDeps=false` before MSBuild. The pinned
-PowerShell app-local copier records copied destination paths in the project tlog,
-which lets fail-closed build receipts authenticate only outputs beneath the
-selected build directory; the built-in copier's source-path tlog format is not a
-receipt declaration.
-
-First-party native projects disable vcpkg automatic linking. Each target names
-its direct vcpkg libraries in `Build/VcpkgLinkDependencies.props` and resolves them
-from the selected platform and configuration. Header-only ports do not add link
-inputs. `RuntimeDependencies.props` owns the staged direct, transitive and
-dynamically loaded port DLLs. RedLauncher has no third-party link inputs and
-retains its static CRT.
+First-party native projects disable vcpkg MSBuild integration through VcpkgEnabled.
+The scripted installer owns the restored tree. Build/VcpkgLinkDependencies.props
+takes headers and explicit libraries from the matching platform and configuration,
+including Debug libraries for ASan Debug. RuntimeDependencies.props owns staged
+direct, transitive and dynamically loaded port DLLs. RedLauncher has no third-party
+link inputs and retains its static CRT. Historical receipts can still resolve their
+recorded app-local tlog entries through the same path validation.
 
 The Ghostty private-runtime builder has its own reviewed shared-resource scopes.
 Its source, download, toolchain, cache, and product state beneath

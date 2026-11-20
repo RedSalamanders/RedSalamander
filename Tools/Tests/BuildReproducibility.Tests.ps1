@@ -131,6 +131,7 @@ Describe 'Declarative runtime dependency graph' {
         $props = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
         $targets = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.targets') -Raw
         $linkInputs = Get-Content -LiteralPath (Join-Path $repoRoot 'Build/VcpkgLinkDependencies.props') -Raw
+        $props | Should Match '<VcpkgEnabled>false</VcpkgEnabled>'
         $props | Should Match '<VcpkgAutoLink>false</VcpkgAutoLink>'
         $targets | Should Match 'Build\\VcpkgLinkDependencies\.props'
         $linkInputs | Should Not Match '\*\.lib|RedLauncher'
@@ -180,7 +181,7 @@ Describe 'Declarative runtime dependency graph' {
         $targets | Should Match 'Name="RSWriteBuildArtifactManifest"'
         $targets | Should Match 'DependsOnTargets="RSCopyAsanRuntime"'
         $targets | Should Match 'tests_enabled=\$\(RSBuildEnableTests\)'
-        $targets | Should Match 'vcpkg_tlog=\$\(TLogLocation\)\$\(ProjectName\)\.write\.1u\.tlog'
+        $targets | Should Not Match 'vcpkg_tlog='
         $targets | Should Match 'runtime=\$\(TargetDir\)\$\(RSAsanRuntimeFileName\)'
         $targets | Should Match "EnableASAN.*ConfigurationType.*Application.*RSAsanRuntimeSourcePath"
         $targets | Should Match '_RSLibraryPathForBuildEnvironment'
@@ -857,12 +858,8 @@ Describe 'Pinned build-tool and CI identity' {
         $props | Should Match '<RSVcpkgPlatformScope[^>]*>arm64</RSVcpkgPlatformScope>'
         $props | Should Match '<VcpkgInstalledDir[^>]*>\$\(RSBuildRoot\)vcpkg_installed\\\$\(RSVcpkgPlatformScope\)\\</VcpkgInstalledDir>'
         $ci | Should Match 'VCPKG_INSTALLED_DIR:.*\\vcpkg_installed\\\$\{\{ inputs\.platform'
-        # The installer splats its arguments; VcpkgInstallSafety also executes
-        # the live workflow's platform, overlay and native-failure branches.
-        $ci | Should Match '\$vcpkgArguments\s*=\s*@\(\s*''install'','
-        $ci | Should Match '''--x-install-root'',\s*\$env:VCPKG_INSTALLED_DIR'
-        $ci | Should Match '&\s+"\$env:VCPKG_ROOT\\vcpkg\.exe"\s+@vcpkgArguments'
-        $ci | Should Match '\$vcpkgRoot\s*=\s*Join-Path \$env:VCPKG_INSTALLED_DIR \$triplet'
+        $ci | Should Match 'vcpkg-install\.ps1 -Platform \$platform .*?-VcpkgRoot \$env:VCPKG_REGISTRY_ROOT -ReuseCurrent'
+        $ci | Should Not Match 'Normalize vcpkg install root|--x-install-root'
         $ci | Should Match "hashFiles\('vcpkg\.json',\ 'vcpkg-configuration\.json',\ 'vcpkg-tool\.json',\ 'vcpkg-install\.ps1',\ 'Tools/Modules/Build/VcpkgInstallSafety\.psm1',\ 'Tools/Modules/Build/VcpkgToolIdentity\.psm1',\ 'Tools/Modules/Build/MSBuildInvocation\.psm1',\ 'Tools/Modules/Build/ArtifactOperationLock\.psm1',\ 'Tools/Modules/Build/ProcessStreaming\.psm1',\ 'Tools/Modules/Build/SanitizedEnvironment\.psm1',\ '\.ci/project\.json',\ 'Build/vcpkg-ports/\*\*'\)"
         $ci | Should Match 'id:\s*toolchain_identity'
         $ci | Should Match 'Get-RSBuildToolchainIdentity'
@@ -876,25 +873,13 @@ Describe 'Pinned build-tool and CI identity' {
         $bootstrap.IndexOf('$toolSchema -lt $portsSchema') | Should BeLessThan $bootstrap.IndexOf("@('checkout', '--detach', " + '$commit)')
         $bootstrap | Should Match "Update the pins together"
         $ci | Should Not Match 'vcpkg(?:\.exe)?\s+integrate\s+install'
-        $ci | Should Match '\$env:ForceImportBeforeCppTargets\s*=\s*\$vcpkgProps'
-        $ci | Should Match '\$env:ForceImportAfterCppTargets\s*=\s*\$vcpkgTargets'
-        $ci | Should Match '\$isDebugConfiguration\s*=\s*"\$\{\{ inputs\.configuration \}\}"\s+-like\s+"\*Debug\*"'
-        $ci | Should Match '\$env:VcpkgConfiguration\s*=\s*\$vcpkgConfiguration'
-        $ci | Should Match 'if \(\$isDebugConfiguration\) \{ "debug\\lib" \} else \{ "lib" \}'
-        $ci | Should Match 'if \(\$isDebugConfiguration\) \{ "debug\\bin" \} else \{ "bin" \}'
-        $ci | Should Match '\$env:VcpkgManifestInstall\s*=\s*"false"'
-        $ci | Should Match '\$env:VcpkgXUseBuiltInApplocalDeps\s*=\s*"false"'
-        $ci | Should Match '\$env:VCPkgLocalAppDataDisabled\s*=\s*"true"'
-        $ci | Should Match '\$vcpkgMsbuildRoot\s*=\s*Join-Path \$env:VCPKG_ROOT "scripts\\buildsystems\\msbuild"'
-        $ci | Should Match '\$vcpkgProps\s*=\s*Join-Path \$vcpkgMsbuildRoot "vcpkg\.props"'
-        $ci | Should Match '\$vcpkgTargets\s*=\s*Join-Path \$vcpkgMsbuildRoot "vcpkg\.targets"'
+        $ci | Should Not Match 'ForceImportBeforeCppTargets|ForceImportAfterCppTargets|VcpkgXUseBuiltInApplocalDeps'
+        $ci | Should Match 'Get-RSVcpkgBuildEnvironment .*?-RuntimeOnly'
         $ci | Should Match 'VCPKG_ROOT:.*\\\.build\\vcpkg-tool'
-        $ci | Should Match '\.build/vcpkg-tool/downloads'
+        $ci | Should Match '\.build/vcpkg-registry/downloads'
         $bootstrap | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$RepoRoot -Child ''\.build/vcpkg-tool'''
         $ci | Should Not Match 'git clone \$toolRepository \.\\\\vcpkg'
-        $ci.IndexOf('$env:ForceImportBeforeCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
-        $ci.IndexOf('$env:ForceImportAfterCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
-        $ci.IndexOf('$env:VcpkgXUseBuiltInApplocalDeps') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
+        $ci.IndexOf('Get-RSVcpkgBuildEnvironment') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
         $ci.IndexOf('Resolve canonical toolchain identity') | Should BeLessThan $ci.IndexOf('Cache vcpkg')
 
         # Restore and save are separate so a successful dependency build is cached even when the
@@ -928,9 +913,9 @@ Describe 'Pinned build-tool and CI identity' {
         $bootstrap | Should Match '\.build/vcpkg-registry'
         $bootstrap | Should Match '''worktree'', ''add'', ''--detach'', \$registryRoot, \$baseline'
         $bootstrap | Should Match '''rev-parse'', ''HEAD''\)\) -cne \$baseline'
-        $ci | Should Match '"--vcpkg-root=\$env:VCPKG_REGISTRY_ROOT"'
-        $ci | Should Match '"--downloads-root=\$downloadsRoot"'
-        $ci.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ci.IndexOf('"--vcpkg-root=$env:VCPKG_REGISTRY_ROOT"')
+        $ci | Should Match '-VcpkgRoot \$env:VCPKG_REGISTRY_ROOT'
+        $ci | Should Match '\.build/vcpkg-registry/downloads'
+        $ci.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ci.IndexOf('-VcpkgRoot $env:VCPKG_REGISTRY_ROOT')
     }
 
     It 'keeps native ARM64 regression behind main admission and PRs compiler-free' {

@@ -1,13 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
-    <RSVcpkgLibraryDir>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\lib\</RSVcpkgLibraryDir>
-    <RSVcpkgLibraryDir Condition="'$(Configuration)'!='Release'">$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\lib\</RSVcpkgLibraryDir>
+    <RSVcpkgPackageDir>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\</RSVcpkgPackageDir>
+    <RSVcpkgLibraryDir>$(RSVcpkgPackageDir)lib\</RSVcpkgLibraryDir>
+    <RSVcpkgLibraryDir Condition="'$(Configuration)'!='Release'">$(RSVcpkgPackageDir)debug\lib\</RSVcpkgLibraryDir>
+    <ExternalIncludePath>$(ExternalIncludePath);$(RSVcpkgPackageDir)include</ExternalIncludePath>
     <RSVcpkgCurlLibrary Condition="'$(Configuration)'=='Release'">libcurl.lib</RSVcpkgCurlLibrary>
     <RSVcpkgCurlLibrary Condition="'$(Configuration)'!='Release'">libcurl-d.lib</RSVcpkgCurlLibrary>
     <RSVcpkgRawLibrary Condition="'$(Configuration)'=='Release'">raw_r.lib</RSVcpkgRawLibrary>
     <RSVcpkgRawLibrary Condition="'$(Configuration)'!='Release'">raw_rd.lib</RSVcpkgRawLibrary>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(RSVcpkgPackageDir)include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(RSVcpkgPackageDir)include</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
 
   <!-- Each target lists its own link inputs. RuntimeDependencies.props owns the
        DLLs loaded at runtime, including 7-Zip and transitive port DLLs. -->

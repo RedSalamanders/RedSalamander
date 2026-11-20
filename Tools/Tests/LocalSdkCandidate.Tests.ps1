@@ -153,7 +153,7 @@ Describe 'Actual local SDK output ownership' -Tag RequiresBuildToolchain {
             foreach($name in @('OutDir','IntDir')){[IO.Path]::GetFullPath($metadata.$name).StartsWith(($isolated+[IO.Path]::DirectorySeparatorChar),[StringComparison]::OrdinalIgnoreCase) | Should Be $true}
             [IO.Path]::GetFullPath($metadata.VcpkgInstalledDir).StartsWith((Join-Path $localSdkCandidateRepo '.build/vcpkg_installed/'),[StringComparison]::OrdinalIgnoreCase) | Should Be $true
             $metadata.VcpkgManifestInstall | Should Be false
-            if($project.Name -in @('RedSalamander','Common','FileSystem7z','FileSystemDummy')){$metadata.VcpkgEnableManifest | Should Be true}
+            $metadata.VcpkgEnableManifest | Should Be false
         }
         Test-Path -LiteralPath $isolated | Should Be $false
         Write-Host ('PASS isolated output/dependency metadata for '+$projects.Count+' native solution projects; no compilation or ABI acceptance.')

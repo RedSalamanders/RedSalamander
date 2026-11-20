@@ -755,94 +755,14 @@ Describe 'Vcpkg dependency pins' {
 }
 
 Describe 'Hosted vcpkg install parity' {
-    It 'executes the real CI argument selection with pinned triplets, ARM64 ports and failure propagation' {
-        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml')
-        $step = [Array]::IndexOf($workflow, '      - name: Install dependencies')
-        $step | Should BeGreaterThan 0
-        $body = [Collections.Generic.List[string]]::new()
-        $reading = $false
-        for ($index = $step + 1; $index -lt $workflow.Count; ++$index) {
-            $line = $workflow[$index]
-            if ($line -eq '        run: |') { $reading = $true; continue }
-            if (-not $reading) { continue }
-            if ($line.StartsWith('      - name:')) { break }
-            if ($line.StartsWith('          ')) { $body.Add($line.Substring(10)) }
-            elseif ([string]::IsNullOrWhiteSpace($line)) { $body.Add('') }
-            else { throw "Unexpected install-step indentation: $line" }
-        }
-        $scriptText = $body -join "`n"
-        $launcher = '& "$env:VCPKG_ROOT\vcpkg.exe" @vcpkgArguments'
-        $import = 'Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1 -Force'
-        $scriptText.Contains($launcher) | Should Be $true
-        $scriptText.Contains($import) | Should Be $true
-        # Only resolve the real helper import and intercept the native launch.
-        # All actual workflow branches, arguments, path guards and exit checks execute.
-        $escapedModule = $helperModule.Replace("'", "''")
-        $scriptText = $scriptText.Replace($import, "Import-Module '$escapedModule' -Scope Local")
-        $scriptText = $scriptText.Replace($launcher, 'Invoke-CapturedVcpkg @vcpkgArguments')
-        $fixture = New-RSTemporaryVcpkgInstallSafetyRoot
-        $names = @('GITHUB_ACTIONS','GITHUB_WORKSPACE','MSBUILD_EXE_PATH','VCPKG_ROOT','VCPKG_REGISTRY_ROOT','VCPKG_INSTALLED_DIR','VCPKG_DEFAULT_TRIPLET')
-        $saved = @{}
-        foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
-        $savedLastExitCode = $global:LASTEXITCODE
-        try {
-            $workspace = Join-Path $fixture 'workspace with spaces'
-            $registry = Join-Path $fixture 'registry'
-            $installation = Join-Path $fixture 'selected VS 18'
-            [void][IO.Directory]::CreateDirectory($workspace)
-            [void][IO.Directory]::CreateDirectory((Join-Path $registry 'versions/a-'))
-            [void][IO.Directory]::CreateDirectory((Join-Path $registry 'triplets'))
-            [void][IO.Directory]::CreateDirectory((Join-Path $installation 'VC/Auxiliary/Build'))
-            [IO.File]::WriteAllText((Join-Path $workspace 'vcpkg.json'), '{"name":"fixture","dependencies":[{"name":"aws-c-common","version>=":"1.0.3"}]}')
-            [IO.File]::WriteAllText((Join-Path $registry 'versions/a-/aws-c-common.json'), '{"versions":[{"version":"1.0.3","port-version":0}]}')
-            [IO.File]::WriteAllText((Join-Path $registry 'triplets/x64-windows.cmake'), "set(VCPKG_TARGET_ARCHITECTURE x64)`n")
-            [IO.File]::WriteAllText((Join-Path $registry 'triplets/arm64-windows.cmake'), "set(VCPKG_TARGET_ARCHITECTURE arm64)`n")
-            [IO.File]::WriteAllText((Join-Path $installation 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt'), '14.52.37025')
-            $env:GITHUB_ACTIONS = 'true'
-            $env:GITHUB_WORKSPACE = $workspace
-            $env:MSBUILD_EXE_PATH = Join-Path $installation 'MSBuild/Current/Bin/amd64/MSBuild.exe'
-            $env:VCPKG_ROOT = Join-Path $fixture 'tool'
-            $env:VCPKG_REGISTRY_ROOT = $registry
-            $env:VCPKG_INSTALLED_DIR = Join-Path $workspace '.build/installed'
-            function Invoke-CapturedVcpkg {
-                $script:capturedInstallArguments = @($args)
-                $global:LASTEXITCODE = $script:capturedInstallExitCode
-            }
-            foreach ($case in @(
-                    @{Triplet='x64-windows';Scope='x64';Ports=$false;Exit=0;Error=$null},
-                    @{Triplet='arm64-windows';Scope='arm64';Ports=$true;Exit=0;Error=$null},
-                    @{Triplet='arm64-windows';Scope='arm64';Ports=$true;Exit=17;Error='exit code 17'},
-                    @{Triplet='x86-windows';Scope='';Ports=$false;Exit=0;Error='Unsupported CI triplet'})) {
-                $env:VCPKG_DEFAULT_TRIPLET = $case.Triplet
-                $script:capturedInstallArguments = @()
-                $script:capturedInstallExitCode = $case.Exit
-                $errorMessage = $null
-                try { & ([scriptblock]::Create($scriptText)) } catch { $errorMessage = $_.Exception.Message }
-                if ($case.Error) { $errorMessage | Should Match $case.Error }
-                else { $errorMessage | Should BeNullOrEmpty }
-                if (-not $case.Scope) {
-                    $script:capturedInstallArguments.Count | Should Be 0
-                    continue
-                }
-                $arguments = $script:capturedInstallArguments
-                $arguments[0] | Should Be 'install'
-                ($arguments -contains "--vcpkg-root=$registry") | Should Be $true
-                $tripletIndex = [Array]::IndexOf($arguments, '--triplet')
-                $tripletIndex | Should BeGreaterThan 0
-                $arguments[$tripletIndex + 1] | Should Be $case.Triplet
-                $directory = Join-Path $workspace ('.build/vcpkg-triplets/' + $case.Scope)
-                ($arguments -contains "--overlay-triplets=$directory") | Should Be $true
-                $portsArgument = '--overlay-ports=' + (Join-Path $workspace 'Build/vcpkg-ports')
-                ($arguments -contains $portsArgument) | Should Be $case.Ports
-                $tripletText = [IO.File]::ReadAllText((Join-Path $directory ($case.Triplet + '.cmake')))
-                $tripletText | Should Match 'VCPKG_PLATFORM_TOOLSET_VERSION "14\.52"'
-                $tripletText | Should Match ([regex]::Escape($installation.Replace('\','\\')))
-            }
-        } finally {
-            foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
-            $global:LASTEXITCODE = $savedLastExitCode
-            Remove-Item -LiteralPath $fixture -Recurse -Force
-        }
+    It 'delegates the hosted install to the pinned repository installer' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
+        $workflow | Should Match '(?s)- name: Install dependencies.*?\$platform = ''\$\{\{ inputs\.platform \}\}''.*?vcpkg-install\.ps1 -Platform \$platform .*?-VcpkgRoot \$env:VCPKG_REGISTRY_ROOT -ReuseCurrent'
+        $workflow | Should Not Match '--x-install-root|Normalize vcpkg install root'
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg-install.ps1') -Raw
+        $source | Should Match '--overlay-triplets'
+        $source | Should Match '(?s)if \(\$triplet -like ''arm64-\*''\) \{.*?--overlay-ports'
+        $source | Should Match 'throw "vcpkg install failed for triplet'
     }
 
     It 'invalidates the hosted dependency cache when the overlays or their helper change' {
@@ -858,65 +778,69 @@ Describe 'Hosted vcpkg install parity' {
     }
 }
 
-Describe 'MSBuild manifest install toolset pin' {
-    It 'refreshes the installer''s overlay triplet before MSBuild can install, inside the platform dependency lock' {
+Describe 'Scripted native dependency restore' {
+    It 'restores pinned dependencies inside the platform lease before compiling' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-
         $invoke = $source.IndexOf('function Invoke-MSBuild {')
         $invoke | Should BeGreaterThan 0
         $lock = $source.IndexOf('$sharedDependencyLock = Enter-RSArtifactOperationLock', $invoke)
         $lock | Should BeGreaterThan $invoke
-        $overlay = $source.IndexOf('Update-RSBuildVcpkgOverlayTriplet', $lock)
-        $overlay | Should BeGreaterThan $lock
-        $overlay | Should BeLessThan $source.IndexOf('$logPath = New-ProcessLogPath', $invoke)
-        $source | Should Match '\$visualStudioInstallation = Get-RSVcpkgVisualStudioInstallation'
-        $source | Should Match 'Get-RSVcpkgDefaultToolset -Installation \$visualStudioInstallation'
-        $source | Should Match 'Update-RSVcpkgOverlayTriplet'
-        $source | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$SolutionDir -Child "\.build\\vcpkg-triplets\\'
+        $restore = $source.IndexOf('Restore-RSBuildVcpkgDependencies', $lock)
+        $restore | Should BeGreaterThan $lock
+        $restore | Should BeLessThan $source.IndexOf('$logPath = New-ProcessLogPath', $invoke)
+        $source | Should Match 'Initialize-RSVcpkgToolContext -RepoRoot \$SolutionDir'
+        $source | Should Match '-WorkingDirectory \$SolutionDir -DelegateArtifactOperation'
+        $source | Should Not Match 'Update-RSBuildVcpkgOverlayTriplet'
     }
 
-    It 'initializes the once-per-build overlay flag so callers under StrictMode can build' {
-        # Run-AllTests and Test-Changes invoke build.ps1 under Set-StrictMode -Version Latest; reading the flag before any
-        # assignment then throws and every governed build fails. Run the real function text in its own script scope.
+    It 'records restore completion once and retries a failed attempt under StrictMode' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$null, [ref]$null)
         $function = $ast.Find({
-                param($node)
-                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Update-RSBuildVcpkgOverlayTriplet'
-            }, $false)
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Restore-RSBuildVcpkgDependencies'
+        }, $true)
         $function | Should Not BeNullOrEmpty
-        # Script-level (possibly inside build.ps1's top-level try block), never inside a function body.
-        $initialization = @($ast.FindAll({
-                    param($node)
-                    if ($node -isnot [System.Management.Automation.Language.AssignmentStatementAst] -or
-                        $node.Extent.Text -notmatch '^\$script:vcpkgOverlayTripletRefreshed\s*=\s*\$false$') {
-                        return $false
-                    }
-                    for ($parent = $node.Parent; $null -ne $parent; $parent = $parent.Parent) {
-                        if ($parent -is [System.Management.Automation.Language.FunctionDefinitionAst]) { return $false }
-                    }
-                    return $true
-                }, $true))
-        $initialization.Count | Should Be 1
-        $initialization[0].Extent.StartOffset | Should BeLessThan $function.Extent.StartOffset
+        $initialization = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Extent.Text -match '^\$script:vcpkgBuildDependenciesReady\s*=\s*\$false$'
+        }, $true)
+        $initialization | Should Not BeNullOrEmpty
+        $initialization.Extent.StartOffset | Should BeLessThan $function.Extent.StartOffset
 
         $root = New-RSTemporaryVcpkgInstallSafetyRoot
         try {
-            $probe = Join-Path $root 'strict-overlay-flag-probe.ps1'
+            $probe = Join-Path $root 'strict-scripted-restore-probe.ps1'
             Set-Content -LiteralPath $probe -Encoding utf8 -Value @(
                 'Set-StrictMode -Version Latest'
                 '$ErrorActionPreference = ''Stop'''
-                $initialization[0].Extent.Text
+                '$SolutionDir = $PSScriptRoot'
+                '$Platform = ''x64'''
+                '$script:attempts = 0'
+                '$script:sharedDependencyRepairAuthorized = $false'
+                $initialization.Extent.Text
+                'function Initialize-RSVcpkgToolContext { param($RepoRoot) return @{ Executable=''test-vcpkg''; RegistryRoot=''test-root'' } }'
+                'function Invoke-RSStreamingProcess {'
+                '    param($FilePath,$Arguments,$WorkingDirectory,[switch]$DelegateArtifactOperation)'
+                '    if (!$DelegateArtifactOperation -or ''-ReuseCurrent'' -notin $Arguments) { throw ''missing restore argument'' }'
+                '    $script:attempts++'
+                '    if ($script:attempts -eq 1) { return 23 }'
+                '    if (''-Clean'' -notin $Arguments -or ''-RepairInterrupted'' -notin $Arguments) { throw ''missing repair argument'' }'
+                '    return 0'
+                '}'
                 $function.Extent.Text
-                '$env:VcpkgManifestInstall = ''false'''
-                'Update-RSBuildVcpkgOverlayTriplet'
-                'Update-RSBuildVcpkgOverlayTriplet'
-                'if (-not $script:vcpkgOverlayTripletRefreshed) { throw ''overlay flag was not recorded'' }'
+                '$failure = $null'
+                'try { Restore-RSBuildVcpkgDependencies } catch { $failure = $_.Exception.Message }'
+                'if ($failure -notmatch ''exit code 23'' -or $script:vcpkgBuildDependenciesReady) { throw ''failed restore was accepted'' }'
+                '$script:sharedDependencyRepairAuthorized = $true'
+                'Restore-RSBuildVcpkgDependencies'
+                'Restore-RSBuildVcpkgDependencies'
+                'if (!$script:vcpkgBuildDependenciesReady -or $script:attempts -ne 2) { throw ''restore was repeated after success'' }'
             )
             $output = @(Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @('-NoProfile'; '-NonInteractive'; '-File'; $probe) 2>&1)
-            $exitCode = $LASTEXITCODE
             ($output -join [Environment]::NewLine) | Should Not Match 'cannot be retrieved because it has not been set'
-            $exitCode | Should Be 0
+            $LASTEXITCODE | Should Be 0
         } finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -936,30 +860,23 @@ Describe 'MSBuild manifest install toolset pin' {
         }
     }
 
-    It 'passes the overlay to the MSBuild manifest install only when the overlay triplet exists' -Skip:($null -eq $msbuild) {
-        $root = New-RSTemporaryVcpkgInstallSafetyRoot
-        try {
-            $buildRoot = (Join-Path $root 'build') + '\'
-            $project = Join-Path $repoRoot 'Common\Common\Common.vcxproj'
-            $evaluate = {
-                param([string]$Platform)
-                $output = Invoke-RSTestFixtureNative -FilePath $msbuild -Arguments @($project; '/nologo'; '/p:Configuration=Debug'; "/p:Platform=$Platform"; "/p:RSBuildRoot=$buildRoot"; '-getProperty:VcpkgAdditionalInstallOptions')
-                if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate $project for $Platform." }
-                return (($output -join "`n").Trim())
+    It 'evaluates explicit MSBuild library paths with integration disabled' -Skip:($null -eq $msbuild) {
+        $project = Join-Path $repoRoot 'Plugins\FileSystemCurl\FileSystemCurl.vcxproj'
+        foreach ($platform in @('x64','ARM64')) {
+            $scope = $platform.ToLowerInvariant()
+            foreach ($configuration in @('Release','Debug','ASan Debug')) {
+                $output = Invoke-RSTestFixtureNative -FilePath $msbuild -Arguments @(
+                    $project; '/nologo'; '/nr:false'; "/p:Configuration=$configuration"; "/p:Platform=$platform";
+                    '-getProperty:VcpkgEnabled,VcpkgEnableManifest,VcpkgManifestInstall,RSVcpkgLinkLibraries')
+                $LASTEXITCODE | Should Be 0
+                $metadata = ($output -join [Environment]::NewLine | ConvertFrom-Json).Properties
+                foreach ($name in @('VcpkgEnabled','VcpkgEnableManifest','VcpkgManifestInstall')) {
+                    $metadata.$name | Should Be 'false'
+                }
+                $lib = if ($configuration -eq 'Release') { 'lib\libcurl.lib' } else { 'debug\lib\libcurl-d.lib' }
+                $expected = Join-Path $repoRoot ".build\vcpkg_installed\$scope\$scope-windows\$lib"
+                ($metadata.RSVcpkgLinkLibraries.Split(';') -contains $expected) | Should Be $true
             }
-
-            # No overlay yet (neither vcpkg-install.ps1 nor build.ps1 ran): vcpkg must not get a directory that does not exist.
-            (& $evaluate 'x64') | Should Not Match 'overlay-triplets'
-
-            foreach ($platform in @(@{ Name = 'x64'; Scope = 'x64'; Triplet = 'x64-windows' }, @{ Name = 'ARM64'; Scope = 'arm64'; Triplet = 'arm64-windows' })) {
-                $overlayDirectory = Join-Path $buildRoot "vcpkg-triplets\$($platform.Scope)"
-                New-Item -ItemType Directory -Path $overlayDirectory -Force | Out-Null
-                [System.IO.File]::WriteAllText((Join-Path $overlayDirectory "$($platform.Triplet).cmake"), "set(VCPKG_TARGET_ARCHITECTURE x)`n")
-                # Quoted, and without a trailing backslash that would escape the closing quote on the vcpkg command line.
-                (& $evaluate $platform.Name) | Should Match ('"--overlay-triplets=' + [regex]::Escape($overlayDirectory) + '"')
-            }
-        } finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }

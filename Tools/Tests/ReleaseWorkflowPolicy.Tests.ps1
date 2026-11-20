@@ -726,7 +726,7 @@ Describe 'Release workflow source contracts' {
         $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
         $workflow | Should Match 'Import-Module Pester -RequiredVersion 3\.4\.0 -Force'
         $workflow | Should Match 'Install-Module Pester -RequiredVersion 3\.4\.0'
-        $workflow | Should Match 'GetEnvironmentVariable\(\$name, ''Process''\)'
+        $workflow | Should Match '"Path=\$env:Path" >> \$env:GITHUB_ENV'
         $workflow | Should Match '>> \$env:GITHUB_ENV'
         $workflow | Should Match 'Native \$env:RS_TEST_SUITE suite failed with exit code'
         $workflow | Should Match 'MaxCpuCount\s*=\s*2'
@@ -952,17 +952,9 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow.IndexOf('Bootstrap the pinned vcpkg tool') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Install pinned ARM64 dependencies')
         $ghosttyProductWorkflow.IndexOf('Initialize-RSVcpkgToolContext') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('.\vcpkg-install.ps1')
         $ghosttyProductWorkflow.IndexOf('.\vcpkg-install.ps1') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Build admitted Debug ARM64 product with tests')
-        $ghosttyProductWorkflow | Should Match 'Configure pinned ARM64 vcpkg build integration'
-        $ghosttyProductWorkflow | Should Match "Resolve-Path -LiteralPath \.\\\.build\\vcpkg_installed\\arm64"
-        $ghosttyProductWorkflow | Should Match 'Join-Path \$toolRoot ''scripts\\buildsystems\\msbuild'''
-        $ghosttyProductWorkflow | Should Match 'ForceImportBeforeCppTargets\s*=\s*\$vcpkgProps'
-        $ghosttyProductWorkflow | Should Match 'ForceImportAfterCppTargets\s*=\s*\$vcpkgTargets'
-        $ghosttyProductWorkflow | Should Match 'VcpkgManifestInstall\s*=\s*''false'''
-        $ghosttyProductWorkflow | Should Match 'VcpkgXUseBuiltInApplocalDeps\s*=\s*''false'''
-        $ghosttyProductWorkflow | Should Match 'VCPKG_INSTALLED_DIR\s*=\s*\$installedRoot'
-        $ghosttyProductWorkflow | Should Match 'VcpkgInstalledDir\s*=\s*\$installedRoot\.TrimEnd\(''\\''\) \+ ''\\'''
-        $ghosttyProductWorkflow | Should Match 'CL\s*=.*?/I"\{0\}".*?\$includeRoot'
-        $ghosttyProductWorkflow.IndexOf('Configure pinned ARM64 vcpkg build integration') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Build admitted Debug ARM64 product with tests')
+        $ghosttyProductWorkflow | Should Match 'Get-RSVcpkgBuildEnvironment .*?-Platform ARM64 -Configuration Debug -RuntimeOnly'
+        $ghosttyProductWorkflow | Should Not Match 'ForceImportBeforeCppTargets|ForceImportAfterCppTargets|VcpkgXUseBuiltInApplocalDeps'
+        $ghosttyProductWorkflow.IndexOf('Select pinned ARM64 runtime PATH') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('Build admitted Debug ARM64 product with tests')
         $ghosttyProductWorkflow | Should Match 'RSBuildEnableTests:\s*''true'''
         $ghosttyProductWorkflow | Should Match '(?s)build\.ps1.*?-Configuration Debug.*?-Platform ARM64.*?-Rebuild'
         $ghosttyProductWorkflow | Should Match 'Build-GhosttyTerminalRuntime\.ps1 -Platform ARM64 -Offline -PassThru'

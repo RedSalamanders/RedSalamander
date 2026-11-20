@@ -231,7 +231,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_INSTALLED_DIR }}
-            .build/vcpkg-tool/downloads
+            .build/vcpkg-registry/downloads
           key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-tool.json', 'vcpkg-install.ps1', 'Tools/Modules/Build/VcpkgInstallSafety.psm1', 'Tools/Modules/Build/VcpkgToolIdentity.psm1', 'Tools/Modules/Build/MSBuildInvocation.psm1', 'Tools/Modules/Build/ArtifactOperationLock.psm1', 'Tools/Modules/Build/ProcessStreaming.psm1', 'Tools/Modules/Build/SanitizedEnvironment.psm1', '.ci/project.json', 'Build/vcpkg-ports/**') }}
 
       - name: Cache pinned Terminal runtime inputs and product
@@ -255,62 +255,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1 -Force
-          Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath (Join-Path $env:GITHUB_WORKSPACE 'vcpkg.json') -RegistryRoot $env:VCPKG_REGISTRY_ROOT
-          $installation = Get-RSVcpkgVisualStudioInstallation
-          $toolset = Get-RSVcpkgDefaultToolset -Installation $installation
-          $triplet = $env:VCPKG_DEFAULT_TRIPLET
-          $platformScope = if ($triplet -eq 'arm64-windows') { 'arm64' } elseif ($triplet -eq 'x64-windows') { 'x64' } else { throw "Unsupported CI triplet: $triplet" }
-          $overlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child ".build\vcpkg-triplets\$platformScope" -Description 'CI triplet overlay'
-          $overlay = Update-RSVcpkgOverlayTriplet -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $env:VCPKG_REGISTRY_ROOT -Triplet $triplet) -Toolset $toolset -OutputDirectory $overlayDirectory
-          # The executable stays at vcpkg-tool.json's commit; the baseline's registry checkout supplies ports and versions.
-          # Downloads stay beneath the tool checkout, where the vcpkg cache keeps them.
-          $downloadsRoot = Join-Path $env:VCPKG_ROOT 'downloads'
-          $vcpkgArguments = @('install', "--vcpkg-root=$env:VCPKG_REGISTRY_ROOT", "--downloads-root=$downloadsRoot", '--triplet', $triplet,
-                             '--x-manifest-root', $env:GITHUB_WORKSPACE, '--x-install-root', $env:VCPKG_INSTALLED_DIR, "--overlay-triplets=$($overlay.Directory)")
-          if ($triplet -eq 'arm64-windows') { $vcpkgArguments += '--overlay-ports=' + (Join-Path $env:GITHUB_WORKSPACE 'Build/vcpkg-ports') }
-          & "$env:VCPKG_ROOT\vcpkg.exe" @vcpkgArguments
-          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed with exit code $LASTEXITCODE." }
-
-      - name: Normalize vcpkg install root
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $triplet = $env:VCPKG_DEFAULT_TRIPLET
-          $dest = Join-Path $env:VCPKG_INSTALLED_DIR $triplet
-          $expected = Join-Path $dest "include\wil\com.h"
-          if (Test-Path $expected) {
-            Write-Host "$dest already contains WIL headers."
-            exit 0
-          }
-
-          $candidates = @(
-            (Join-Path $env:VCPKG_ROOT "installed\$triplet"),
-            (Join-Path $env:VCPKG_ROOT "installed\${triplet}-release")
-          )
-
-          $source = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $source) {
-            Write-Host "Expected WIL header not found at: $expected" -ForegroundColor Yellow
-            Write-Host "Searched install roots:" -ForegroundColor Yellow
-            $candidates | ForEach-Object { Write-Host "  - $_" }
-            Write-Host "$env:VCPKG_INSTALLED_DIR contents:" -ForegroundColor Yellow
-            Get-ChildItem -Path $env:VCPKG_INSTALLED_DIR -ErrorAction SilentlyContinue | Select-Object Name
-            Write-Host "vcpkg contents:" -ForegroundColor Yellow
-            Get-ChildItem -Path $env:VCPKG_ROOT -ErrorAction SilentlyContinue | Select-Object Name
-            throw "vcpkg install root not found to normalize."
-          }
-
-          Write-Host "Syncing $source -> $dest"
-          New-Item -ItemType Directory -Path $dest -Force | Out-Null
-          & robocopy.exe $source $dest /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-          if ($LASTEXITCODE -ge 8) {
-            throw "robocopy failed with exit code $LASTEXITCODE"
-          }
-
-          if (-not (Test-Path $expected)) {
-            throw "Expected WIL header not found after sync: $expected"
-          }
+          $platform = '${{ inputs.platform }}'
+          .\vcpkg-install.ps1 -Platform $platform -VcpkgExe (Join-Path $env:VCPKG_ROOT 'vcpkg.exe') -VcpkgRoot $env:VCPKG_REGISTRY_ROOT -ReuseCurrent
 
       - name: Save vcpkg cache
         if: steps.vcpkg_cache.outputs.cache-hit != 'true'
@@ -318,7 +264,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_INSTALLED_DIR }}
-            .build/vcpkg-tool/downloads
+            .build/vcpkg-registry/downloads
           key: ${{ steps.vcpkg_cache.outputs.cache-primary-key }}
 
       # ── Build ────────────────────────────────────────────────────────
@@ -328,57 +274,11 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          # CI runners don't always include Visual Studio's vcpkg MSBuild integration component.
-          # Provide vcpkg include/lib paths explicitly so compilation and linking can resolve dependencies.
-          $triplet = $env:VCPKG_DEFAULT_TRIPLET
-          $vcpkgRoot = Join-Path $env:VCPKG_INSTALLED_DIR $triplet
-          $incRoot = Join-Path $vcpkgRoot "include"
-          $isDebugConfiguration = "${{ inputs.configuration }}" -like "*Debug*"
-          $vcpkgConfiguration = if ($isDebugConfiguration) { "Debug" } else { "Release" }
-          $libRoot = Join-Path $vcpkgRoot $(if ($isDebugConfiguration) { "debug\lib" } else { "lib" })
-          $binRoot = Join-Path $vcpkgRoot $(if ($isDebugConfiguration) { "debug\bin" } else { "bin" })
-
-          if (-not (Test-Path $incRoot)) { throw "vcpkg include root not found: $incRoot" }
-          if (-not (Test-Path $libRoot)) { throw "vcpkg lib root not found: $libRoot" }
-
-          # Import the pinned checkout's MSBuild integration for this build only. The targets add
-          # the installed libraries themselves (not merely /LIBPATH), without mutating user-wide
-          # MSBuild state.
-          $vcpkgMsbuildRoot = Join-Path $env:VCPKG_ROOT "scripts\buildsystems\msbuild"
-          $vcpkgProps = Join-Path $vcpkgMsbuildRoot "vcpkg.props"
-          $vcpkgTargets = Join-Path $vcpkgMsbuildRoot "vcpkg.targets"
-          if (-not (Test-Path $vcpkgProps)) { throw "Pinned vcpkg MSBuild props not found: $vcpkgProps" }
-          if (-not (Test-Path $vcpkgTargets)) { throw "Pinned vcpkg MSBuild targets not found: $vcpkgTargets" }
-
-          $env:ForceImportBeforeCppTargets = $vcpkgProps
-          $env:ForceImportAfterCppTargets = $vcpkgTargets
-          $env:VcpkgRoot = $env:VCPKG_ROOT
-          $env:VcpkgConfiguration = $vcpkgConfiguration
-          $env:VcpkgManifestInstall = "false"
-          # BuildEvidence consumes the vcpkg tlog as an output declaration.
-          # The built-in copier records source paths there; the pinned
-          # PowerShell copier records the copied destination paths.
-          $env:VcpkgXUseBuiltInApplocalDeps = "false"
-          $env:VCPkgLocalAppDataDisabled = "true"
-
-          $env:CL = "/I`"$incRoot`" $env:CL"
-
-          $linkPaths = @($libRoot)
-          $libManualRoot = Join-Path $libRoot "manual-link"
-          if (Test-Path $libManualRoot) { $linkPaths += $libManualRoot }
-          $linkFlags = ($linkPaths | ForEach-Object { "/LIBPATH:`"$_`"" }) -join ' '
-          $env:LINK = "$linkFlags $env:LINK"
-
-          if (Test-Path $binRoot) { $env:Path = "$binRoot;$env:Path" }
-
-          # Fresh Full rebuilds after artifact-writing tests in a later step.
-          # Preserve the same process-local integration for that re-attestation.
+          Import-Module ./Tools/Modules/Build/VcpkgInstallSafety.psm1
+          $environment = Get-RSVcpkgBuildEnvironment -RepoRoot $env:GITHUB_WORKSPACE -ToolRoot $env:VCPKG_ROOT -Platform '${{ inputs.platform }}' -Configuration '${{ inputs.configuration }}' -RuntimeOnly
+          $env:Path = $environment.Path
           if ('${{ inputs.run_full_tests }}' -eq 'true') {
-            foreach ($name in @('ForceImportBeforeCppTargets', 'ForceImportAfterCppTargets', 'VcpkgRoot',
-                                'VcpkgConfiguration', 'VcpkgManifestInstall', 'VcpkgXUseBuiltInApplocalDeps',
-                                'VCPkgLocalAppDataDisabled', 'CL', 'LINK', 'Path')) {
-              "$name=$([Environment]::GetEnvironmentVariable($name, 'Process'))" >> $env:GITHUB_ENV
-            }
+            "Path=$env:Path" >> $env:GITHUB_ENV
           }
 
           $buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"

@@ -754,7 +754,7 @@ New or edited evidence retains the size, schema and identity gates; unavailable 
 tracked files. Hosted native checkout keeps complete public history so this inventory check executes.
 Changed evidence uses public origin/main before the legacy origin/master fallback.
 
-Unified native CI calls the canonical VcpkgInstallSafety pinned bootstrap, then vcpkg-install.ps1 for its selected platform, before applying process-local MSBuild integration. Incomplete restored tool directories are preserved; dependency installation retains its platform lock and pins. See Specs/Build/Build_Toolchain.md and Tools/Tests/VcpkgBootstrap.Tests.ps1.
+Local builds and native CI use the pinned VcpkgInstallSafety bootstrap and vcpkg-install.ps1 for the selected platform. The installer preserves incomplete tool directories and holds the platform dependency lock. MSBuild reads the restored headers and explicit link inputs. See Specs/Build/Build_Toolchain.md and Tools/Tests/VcpkgBootstrap.Tests.ps1.
 
 Qualified Release SDK inputs use the optional build descriptor and the sealed native receipt. Artifact reuse and separate installer packaging reopen the original authenticated dependency input; Source portable attestations refuse SDK recipes. See [the build contract](../Specs/Build/Build_Toolchain.md#qualified-pinned-dxui-sdk-inputs).
 

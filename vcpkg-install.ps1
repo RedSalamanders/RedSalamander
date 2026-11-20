@@ -55,6 +55,14 @@
     two-triplet selection, both supported triplets are cleaned. Unselected/custom
     triplets and the other platform's install metadata are preserved.
 
+.PARAMETER ReuseCurrent
+    Reuses a triplet installed by this script when its restore inputs match.
+    An explicit Clean still installs from staging.
+
+.PARAMETER RepairInterrupted
+    Allows a clean dependency repair delegated by a full-solution rebuild.
+    The parent build clears contamination only after successful validation.
+
 .PARAMETER VcpkgExe
     Optional explicit path to vcpkg.exe (overrides automatic discovery). Use this if vcpkg
     is installed in a non-standard location or to use a specific vcpkg version.
@@ -120,6 +128,11 @@ param(
     [Parameter(HelpMessage = "Delete only selected triplet directories before installing")]
     [switch]$Clean,
 
+    [switch]$ReuseCurrent,
+
+    [Parameter(DontShow)]
+    [switch]$RepairInterrupted,
+
     [Parameter(HelpMessage = "Optional explicit path to vcpkg.exe")]
     [string]$VcpkgExe = $null,
 
@@ -136,6 +149,10 @@ $ErrorActionPreference = "Stop"
 if ($Help) {
     Get-Help $PSCommandPath -Full
     return
+}
+
+if ($RepairInterrupted -and -not $Clean) {
+    throw 'An interrupted dependency repair requires Clean.'
 }
 
 Import-Module (Join-Path $PSScriptRoot "Tools\Modules\Build\VcpkgInstallSafety.psm1") -Force -ErrorAction Stop
@@ -355,7 +372,10 @@ try {
                     -AbandonedOwner $sharedDependencyLock.AbandonedOwner `
                     -Scope $sharedDependencyScope)
         }
-        if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $sharedDependencyScope) {
+        if ($RepairInterrupted -and -not $sharedDependencyLock.IsDelegated) {
+            throw 'An interrupted dependency repair requires a delegated full-solution rebuild.'
+        }
+        if (-not $RepairInterrupted -and (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $sharedDependencyScope)) {
             $markerPath = Get-RSArtifactContaminationMarkerPath `
                 -RepoRoot $repoRoot `
                 -Scope $sharedDependencyScope
@@ -377,6 +397,61 @@ foreach ($triplet in $tripletsToInstall) {
     $tripletStagingRoot = Resolve-RSVcpkgSafeChildPath -Root $stagingRoot -Child $triplet -Description "triplet staging root"
     $destinationTripletPath = Resolve-RSVcpkgSafeChildPath -Root $platformInstallRoot -Child $triplet -Description "destination triplet path"
     New-Item -ItemType Directory -Path $platformInstallRoot -Force | Out-Null
+
+    # Resolve the same compiler-pinned overlay for both the reuse check and vcpkg.
+    $tripletOverlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $tripletOverlayRoot -Child $platformScopeName -Description "triplet overlay directory"
+    $tripletOverlay = Update-RSVcpkgOverlayTriplet `
+        -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $vcpkgRegistryRoot -Triplet $triplet) `
+        -Toolset $msvcToolset `
+        -OutputDirectory $tripletOverlayDirectory
+    Write-Host "Overlay triplet $($tripletOverlay.Path) $(if ($tripletOverlay.Changed) { 'written' } else { 'unchanged' })" -ForegroundColor Cyan
+
+    $installInputs = @(
+        $PSCommandPath
+        (Join-Path $repoRoot 'vcpkg.json')
+        (Join-Path $repoRoot 'vcpkg-configuration.json')
+        (Join-Path $repoRoot 'vcpkg-tool.json')
+        (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1')
+        (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgToolIdentity.psm1')
+        (Join-Path $repoRoot 'Tools/Modules/Build/MSBuildInvocation.psm1')
+        (Join-Path $repoRoot 'Tools/Modules/Build/ArtifactOperationLock.psm1')
+        (Join-Path $repoRoot 'Tools/Modules/Build/ProcessStreaming.psm1')
+        (Join-Path $repoRoot 'Tools/Modules/Build/SanitizedEnvironment.psm1')
+        (Join-Path $repoRoot '.ci/project.json')
+        $tripletOverlay.Path
+        $vcpkgExePath
+    )
+    if ($triplet -like 'arm64-*') {
+        $installInputs += @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Build/vcpkg-ports') -File -Recurse |
+            Sort-Object FullName | Select-Object -ExpandProperty FullName)
+    }
+    $restoreIdentity = [ordered]@{
+        triplet = $triplet
+        registry = $vcpkgRegistryRoot
+        compiler = $msvcToolset.Version
+        hostTriplet = $env:VCPKG_DEFAULT_HOST_TRIPLET
+        featureFlags = $env:VCPKG_FEATURE_FLAGS
+        inputs = @(foreach ($inputPath in $installInputs) {
+            if (Test-Path -LiteralPath $inputPath -PathType Leaf) {
+                [ordered]@{ path = $inputPath; sha256 = (Get-FileHash -LiteralPath $inputPath -Algorithm SHA256).Hash }
+            }
+        })
+    } | ConvertTo-Json -Depth 5 -Compress
+    $identityPath = Resolve-RSVcpkgSafeChildPath -Root $platformInstallRoot -Child ".$triplet.restore.json" -Description 'vcpkg restore identity'
+    $expectedHeader = Join-Path $destinationTripletPath 'include/wil/com.h'
+    if ($ReuseCurrent -and -not $Clean -and -not $env:VCPKG_OVERLAY_TRIPLETS -and -not $env:VCPKG_OVERLAY_PORTS -and
+        (Test-Path -LiteralPath $identityPath -PathType Leaf) -and
+        (Test-Path -LiteralPath $expectedHeader -PathType Leaf) -and
+        (Test-Path -LiteralPath (Join-Path $destinationTripletPath 'lib') -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path $destinationTripletPath 'debug/lib') -PathType Container) -and
+        ([IO.File]::ReadAllText($identityPath) -ceq $restoreIdentity)) {
+        Write-Host "Restored $triplet inputs match: $destinationTripletPath" -ForegroundColor Green
+        continue
+    }
+    if (Test-Path -LiteralPath $identityPath -PathType Leaf) {
+        [IO.File]::Delete($identityPath)
+    }
+
     if ($Clean -and (Test-Path -LiteralPath $destinationTripletPath)) {
         Write-Host "Cleaning selected install: $destinationTripletPath" -ForegroundColor Yellow
         Remove-Item -LiteralPath $destinationTripletPath -Recurse -Force
@@ -385,14 +460,6 @@ foreach ($triplet in $tripletsToInstall) {
         Remove-Item -LiteralPath $tripletStagingRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Path $tripletStagingRoot -Force | Out-Null
-
-    # The selected vcpkg root's own triplet, copied and pinned; vcpkg takes an overlay in place of the triplet of the same name.
-    $tripletOverlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $tripletOverlayRoot -Child $platformScopeName -Description "triplet overlay directory"
-    $tripletOverlay = Update-RSVcpkgOverlayTriplet `
-        -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $vcpkgRegistryRoot -Triplet $triplet) `
-        -Toolset $msvcToolset `
-        -OutputDirectory $tripletOverlayDirectory
-    Write-Host "Overlay triplet $($tripletOverlay.Path) $(if ($tripletOverlay.Changed) { 'written' } else { 'unchanged' })" -ForegroundColor Cyan
 
     $vcpkgArguments = [System.Collections.Generic.List[string]]::new()
     foreach ($argument in @(
@@ -433,6 +500,16 @@ foreach ($triplet in $tripletsToInstall) {
         New-Item -ItemType Directory -Path $destinationTripletPath -Force | Out-Null
         Copy-Item -Path (Join-Path $stagedTripletPath '*') -Destination $destinationTripletPath -Recurse -Force
         Write-Host "Installed $triplet into: $destinationTripletPath" -ForegroundColor Green
+    }
+    if ((Test-Path -LiteralPath $expectedHeader -PathType Leaf) -and -not $env:VCPKG_OVERLAY_TRIPLETS -and -not $env:VCPKG_OVERLAY_PORTS) {
+        $stagedIdentity = Resolve-RSVcpkgSafeChildPath -Root $platformInstallRoot -Child (".$triplet.restore-" + [guid]::NewGuid().ToString('N') + '.tmp')
+        try {
+            [IO.File]::WriteAllText($stagedIdentity,$restoreIdentity,[Text.UTF8Encoding]::new($false))
+            [void](Publish-RSGuardedRepositoryFile -RepoRoot $repoRoot -GuardedRelativeRoot ".build/vcpkg_installed/$platformScopeName" `
+                -StagedPath $stagedIdentity -DestinationPath $identityPath)
+        } finally {
+            if (Test-Path -LiteralPath $stagedIdentity -PathType Leaf) { [IO.File]::Delete($stagedIdentity) }
+        }
     }
 }
 

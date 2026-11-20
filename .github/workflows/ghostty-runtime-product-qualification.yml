@@ -98,54 +98,16 @@ jobs:
           .\vcpkg-install.ps1 `
             -Platform ARM64 `
             -VcpkgExe .\.build\vcpkg-tool\vcpkg.exe `
-            -VcpkgRoot .\.build\vcpkg-registry
+            -VcpkgRoot .\.build\vcpkg-registry -ReuseCurrent
           if ($LASTEXITCODE -ne 0) { throw "ARM64 dependency installation failed with exit code $LASTEXITCODE." }
 
-      - name: Configure pinned ARM64 vcpkg build integration
+      - name: Select pinned ARM64 runtime PATH
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $toolRoot = (Resolve-Path -LiteralPath .\.build\vcpkg-tool).Path
-          $installedRoot = (Resolve-Path -LiteralPath .\.build\vcpkg_installed\arm64).Path
-          $triplet = 'arm64-windows'
-          $tripletRoot = Join-Path $installedRoot $triplet
-          $includeRoot = Join-Path $tripletRoot 'include'
-          $msbuildRoot = Join-Path $toolRoot 'scripts\buildsystems\msbuild'
-          $vcpkgProps = Join-Path $msbuildRoot 'vcpkg.props'
-          $vcpkgTargets = Join-Path $msbuildRoot 'vcpkg.targets'
-          foreach ($requiredPath in @(
-              $includeRoot,
-              (Join-Path $tripletRoot 'debug\lib'),
-              (Join-Path $tripletRoot 'lib'),
-              $vcpkgProps,
-              $vcpkgTargets)) {
-            if (-not (Test-Path -LiteralPath $requiredPath)) {
-              throw "Pinned ARM64 vcpkg build input not found: $requiredPath"
-            }
-          }
-
-          # Hosted runners do not guarantee the Visual Studio vcpkg integration
-          # component. Import the pinned checkout process-locally and bind it to
-          # the repository-owned install root; never mutate user-wide MSBuild.
-          $environment = [ordered]@{
-            ForceImportBeforeCppTargets = $vcpkgProps
-            ForceImportAfterCppTargets = $vcpkgTargets
-            VcpkgRoot = $toolRoot
-            VcpkgManifestInstall = 'false'
-            # BuildEvidence consumes the vcpkg tlog as an output declaration.
-            # The built-in copier records source paths there; the pinned
-            # PowerShell copier records the copied destination paths.
-            VcpkgXUseBuiltInApplocalDeps = 'false'
-            VCPkgLocalAppDataDisabled = 'true'
-            VCPKG_DEFAULT_TRIPLET = $triplet
-            VCPKG_INSTALLED_DIR = $installedRoot
-            VcpkgInstalledDir = $installedRoot.TrimEnd('\') + '\'
-            CL = ('/I"{0}" {1}' -f $includeRoot, $env:CL).Trim()
-          }
-          foreach ($entry in $environment.GetEnumerator()) {
-            "{0}={1}" -f $entry.Key, $entry.Value |
-              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          }
+          Import-Module ./Tools/Modules/Build/VcpkgInstallSafety.psm1
+          $environment = Get-RSVcpkgBuildEnvironment -RepoRoot $env:GITHUB_WORKSPACE -ToolRoot .\.build\vcpkg-tool -Platform ARM64 -Configuration Debug -RuntimeOnly
+          "Path=$($environment.Path)" >> $env:GITHUB_ENV
 
       - name: Build admitted Debug ARM64 product with tests
         shell: pwsh

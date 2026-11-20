@@ -61,7 +61,7 @@ Key engineering specs for the current search stack and self-test contract:
 ### Prerequisites
 
 - **Visual Studio 2026** with C++ toolset **v145** (Desktop development with C++)
-- **vcpkg** (manifest mode) for dependencies
+- **Git and PowerShell 7** for the pinned vcpkg restore and build
 - **Windows 11 build 22000.2600 or later**
 
 ### Quick Start
@@ -71,9 +71,6 @@ Key engineering specs for the current search stack and self-test contract:
 Use the `build.ps1` PowerShell script for easy building:
 
 ```powershell
-# One-time: install dependencies (writes to .build\vcpkg_installed\<platform>)
-.\vcpkg-install.ps1
-
 # Build entire solution in Debug configuration (default)
 .\build.ps1
 
@@ -413,38 +410,27 @@ and [`Specs/Installer/WingetIntegration.md`](Specs/Installer/WingetIntegration.m
 
 ### Installing dependencies
 
-Install all libraries from `vcpkg.json` into `.build\vcpkg_installed\<platform>\<triplet>`. Each platform has a
-private vcpkg metadata root so an ARM64 manifest install cannot purge x64 packages, or vice versa. The vcpkg executable itself must come from a
-Git checkout at the exact commit in `vcpkg-tool.json`. A repo-local `vcpkg\vcpkg.exe` is discovered automatically:
+build.ps1 bootstraps the tool and ports registry from the repository pins and
+restores the selected platform beneath .build before compiling. The installer
+uses the discovered Visual Studio installation and its default MSVC toolset.
+Visual Studio builds use the repository's restored headers and explicit link
+inputs. The dependency tree is shared across the selected platform's configurations.
+
+The installer can also prepare one platform explicitly once the pinned tool is present.
 
 ```powershell
-git clone https://github.com/microsoft/vcpkg.git vcpkg
-git -C .\vcpkg checkout --detach ((Get-Content .\vcpkg-tool.json -Raw | ConvertFrom-Json).commit)
-.\vcpkg\bootstrap-vcpkg.bat
-
-.\vcpkg-install.ps1
-
-# ARM64:
-.\vcpkg-install.ps1 -Platform ARM64
+.\vcpkg-install.ps1 -Platform ARM64 -VcpkgExe .\.build\vcpkg-tool\vcpkg.exe -VcpkgRoot .\.build\vcpkg-registry
 ```
-
-The install script validates that local tool identity before modifying the selected platform root beneath `.build\vcpkg_installed`.
-It builds every triplet with the Visual Studio installation and the default MSVC toolset the build discovers (an overlay triplet
-beneath `.build\vcpkg-triplets`), not the newest toolset installed beside the default, which can lack an ARM64 compiler and is a
-link hazard for the compiled libraries; the first install after that change rebuilds the packages. The repository and
-CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step. CI
-imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout for the lifetime of the build so headers
-and the complete installed library set come from the same reviewed tool revision.
 
 ### Adding New Libraries
 
 To add a new library:
 
 ```powershell
-.\vcpkg\vcpkg.exe add port <library-name>
+.\.build\vcpkg-tool\vcpkg.exe add port <library-name>
 ```
 
-Then re-run `.\vcpkg-install.ps1`.
+Build again to restore the updated manifest.
 
 ### Using vcpkg in Visual Studio
 

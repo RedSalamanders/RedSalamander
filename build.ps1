@@ -517,41 +517,23 @@ function Find-MSBuild {
 
 
 # Script-scope state is initialized before use: Run-AllTests and Test-Changes invoke this script under Set-StrictMode -Version Latest.
-$script:vcpkgOverlayTripletRefreshed = $false
+$script:vcpkgBuildDependenciesReady = $false
 
-function Update-RSBuildVcpkgOverlayTriplet {
-    # MSBuild's manifest install runs whenever vcpkg.json is newer than its stamp, and Directory.Build.props passes it the overlay
-    # triplet vcpkg-install.ps1 writes. Refresh that file here the same way (same installation, its default MSVC toolset, same
-    # path), so neither installer falls back to vcpkg's newest toolset. Once per build, inside the platform dependency lock.
-    if ($script:vcpkgOverlayTripletRefreshed) {
-        return
-    }
-    $script:vcpkgOverlayTripletRefreshed = $true
-    if ($env:VcpkgManifestInstall -eq 'false') {
-        # The caller (CI) installs with the governed installer first and disables MSBuild's install.
-        return
-    }
+function Restore-RSBuildVcpkgDependencies {
+    if ($script:vcpkgBuildDependenciesReady) { return }
 
-    $triplet = if ($Platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
-    $visualStudioInstallation = Get-RSVcpkgVisualStudioInstallation
-    # The vcpkg root MSBuild's integration installs with: an explicit VcpkgRoot, else the installation's bundled vcpkg. Their
-    # x64-windows and arm64-windows triplets match the pinned tool's byte for byte, so both installers write the same file.
-    $stockTriplet = @($env:VcpkgRoot, (Join-Path $visualStudioInstallation 'VC\vcpkg')) |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        ForEach-Object { Join-Path $_ "triplets\$triplet.cmake" } |
-        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
-        Select-Object -First 1
-    if (-not $stockTriplet) {
-        # No vcpkg MSBuild integration to install with; an existing overlay from vcpkg-install.ps1 stays as it is.
-        return
+    $tool = Initialize-RSVcpkgToolContext -RepoRoot $SolutionDir
+    $restoreArguments = @(
+        '-NoProfile', '-NonInteractive', '-File', (Join-Path $SolutionDir 'vcpkg-install.ps1'),
+        '-Platform', $Platform, '-VcpkgExe', $tool.Executable, '-VcpkgRoot', $tool.RegistryRoot, '-ReuseCurrent'
+    )
+    if ($script:sharedDependencyRepairAuthorized) {
+        $restoreArguments += @('-Clean','-RepairInterrupted')
     }
-
-    $msvcToolset = Get-RSVcpkgDefaultToolset -Installation $visualStudioInstallation
-    $overlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $SolutionDir -Child ".build\vcpkg-triplets\$($Platform.ToLowerInvariant())" -Description "vcpkg triplet overlay directory"
-    $overlay = Update-RSVcpkgOverlayTriplet -StockTripletPath $stockTriplet -Toolset $msvcToolset -OutputDirectory $overlayDirectory
-    if ($overlay.Changed) {
-        Write-Host "vcpkg overlay triplet $($overlay.Path) written: MSVC $($msvcToolset.MajorMinor) of $visualStudioInstallation" -ForegroundColor Cyan
-    }
+    $restoreExit = Invoke-RSStreamingProcess -FilePath 'pwsh' -Arguments $restoreArguments `
+        -WorkingDirectory $SolutionDir -DelegateArtifactOperation
+    if ($restoreExit -ne 0) { throw "Scripted vcpkg restore for $Platform failed with exit code $restoreExit." }
+    $script:vcpkgBuildDependenciesReady = $true
 }
 
 function Invoke-MSBuild {
@@ -587,7 +569,7 @@ function Invoke-MSBuild {
         if ($sharedDependencyLock.WasAbandoned) {
             [void](Set-RSArtifactOperationContaminated `
                     -RepoRoot $SolutionDir `
-                    -Reason 'The previous MSBuild owner exited while it could have been writing shared vcpkg dependencies.' `
+                    -Reason 'The previous build owner exited while it could have been restoring shared vcpkg dependencies.' `
                     -AbandonedOwner $sharedDependencyLock.AbandonedOwner `
                     -Scope $sharedDependencyScope)
         }
@@ -612,7 +594,7 @@ function Invoke-MSBuild {
         Assert-RSNoResidualArtifactToolProcesses `
             -RepoRoot $SolutionDir `
             -Scope $sharedDependencyScope
-        Update-RSBuildVcpkgOverlayTriplet
+        Restore-RSBuildVcpkgDependencies
 
         $logPath = New-ProcessLogPath -Prefix 'msbuild'
         $script:LastProcessLogPath = $logPath
