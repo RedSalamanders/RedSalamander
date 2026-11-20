@@ -809,3 +809,8 @@ Versioning concurrency fixtures retain asynchronous Hidden launches and exact pr
 ownership. The real installer batch keeps its inherited production routing; fixtures
 execute that same batch through the private no-window test seam. See the owning build
 and tooling governance contracts for authority and qualification boundaries.
+
+The internal BuildConsoleCheck borrows only a validated existing canonical active runner
+context, including a runner parent, without archiving it. Standalone use owns/archives its
+current-PID run and preserves validation plus archive errors. Explicit ScratchRoot/shared
+fixtures keep caller ownership. See [fixture lifetime](../Specs/Build/Build_ConsoleAndPaths.md#build-console-fixture-lifetime).

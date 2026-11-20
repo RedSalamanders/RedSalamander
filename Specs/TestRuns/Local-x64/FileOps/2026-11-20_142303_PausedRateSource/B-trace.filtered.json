@@ -1,0 +1,47 @@
+[
+  {
+    "sourceLine": 103,
+    "sourceLineSHA256": "ACEF396B424C41DE4F0B4CFB7268555B49B59D2AF1C2E639C60E65A454F120B2",
+    "text": "[29584187] Popup idle cadence: aligned pause: ageMs=0 beforeRate=3049.125418682546 publishedRate=0 rateCleared=true noTimerTick=true rateCopies=1"
+  },
+  {
+    "sourceLine": 104,
+    "sourceLineSHA256": "98756EBB9CD5F7FAA4B045C212DDE2876DFBC7BF8D2B182940D9351CE0ADFCEC",
+    "text": "[29587687] Popup idle cadence: engine-paused: elapsedMs=2209 timerTicks=2 renders=2 intervalMs=1000 ownerTicks=2 heartbeatMs=1000 presentationBuilds=0 projectableScans=0 uiCpuUs=15625"
+  },
+  {
+    "sourceLine": 106,
+    "sourceLineSHA256": "27FE4BBB10CC0A29F7C034DFA48A63F24711E5B5567268306C4C22D2B3EA65EC",
+    "text": "[29587687] Popup idle cadence: repeated pause: heldRate=0 rateCopies=1 timerTicks=0 windowSamples=1 reset=true"
+  },
+  {
+    "sourceLine": 107,
+    "sourceLineSHA256": "355AA6E3E87E5FF4262E4A745A63F31FCD6A563DE2A2ACAC534F0BB81CD24D65",
+    "text": "[29587687] Popup idle cadence: resume re-armed the 100 ms cadence in 2 ms"
+  },
+  {
+    "sourceLine": 108,
+    "sourceLineSHA256": "D625F80663F799CFE203E2ADA934FC4CBFE37DC29EEB3E138BD065517EC8F9DA",
+    "text": "[29587703] Popup idle cadence: engine-paused-through-resume observer: rows=128 lost=0 (opt-in fixed storage; graph/host queries add diagnostic overhead; output follows measurement)"
+  },
+  {
+    "sourceLine": 243,
+    "sourceLineSHA256": "275CF66B453FECF10D37D1EB68ABB3AECA630DA27B4E62F6D9775A1571BF06C3",
+    "text": "[29588484] PerformCleanup: restoring file-operations settings snapshot"
+  },
+  {
+    "sourceLine": 244,
+    "sourceLineSHA256": "FBF79CCC6578D5B677D4FAB304ED83F6C907C11411339D3E9272FED1FD4B9932",
+    "text": "[29588484] PerformCleanup: restored file-operations settings snapshot"
+  },
+  {
+    "sourceLine": 245,
+    "sourceLineSHA256": "62C95FAA0EE147228AB1A750C0EB01ECED81C8C0FE235F1D8F63F2E3E5F8C5DD",
+    "text": "[29588484] PerformCleanup: restoring app theme snapshot"
+  },
+  {
+    "sourceLine": 246,
+    "sourceLineSHA256": "10E3831BFC2D08BEAE30AE6BCD6B87A8F1A9BCAF45557FBFDDCCAA9B75B955E4",
+    "text": "[29588484] PerformCleanup: restored app theme snapshot"
+  }
+]

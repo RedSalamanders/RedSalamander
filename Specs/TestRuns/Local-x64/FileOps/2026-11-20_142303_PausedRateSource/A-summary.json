@@ -1,0 +1,65 @@
+{
+  "kind": "derived supporting negative only",
+  "rawOutcome": "FAILED",
+  "operationRunId": "20261120T140855Z-69720-e942400244f240e681e775c7de4d003a",
+  "nativeCaseArchiveRunId": "20261120T142303Z-71668-c330287a8bf3437d81293d0d74b8e1f7",
+  "build": {
+    "exit": 0,
+    "errors": 0,
+    "warnings": 0
+  },
+  "runnerExit": 1,
+  "nativeExit": 1,
+  "nativeCounts": {
+    "failed": 1,
+    "skipped": 0,
+    "passed": 2
+  },
+  "cases": [
+    {
+      "name": "Setup",
+      "status": "passed",
+      "reason": null
+    },
+    {
+      "name": "FileOps_PopupIdleCadence",
+      "status": "failed",
+      "reason": "Popup idle cadence failed: the pause paint did not clear its retained rate and ETA before another telemetry tick, or collected rates more than once; the repeated pause reused the old waiting episode instead of collecting and resetting its actual rate window once; 2 cadence assertion(s) failed. See individual witnesses in the trace."
+    },
+    {
+      "name": "Cleanup_RestorePluginConfig",
+      "status": "passed",
+      "reason": null
+    }
+  ],
+  "freshNonzeroPause": {
+    "ageMs": 0,
+    "noTimerTick": true,
+    "rateCopies": 0,
+    "publishedRateBps": 3031.076581576027,
+    "beforeRateBps": 3031.076581576027,
+    "rateCleared": false
+  },
+  "pausedMeasurement": {
+    "withinOriginalCaps": true,
+    "timerTicks": 2,
+    "ownerRecoveryTicks": 2,
+    "elapsedMs": 2208,
+    "popupTaskSnapshotCounter": 2
+  },
+  "repeatedOrderingControl": {
+    "heldRateBps": 0.0,
+    "windowSamples": 1,
+    "rateCopies": 0,
+    "timerTicks": 0,
+    "deliberatelyZeroSecondRate": true,
+    "reset": false
+  },
+  "reviewedInterpretation": "immediate stale projection and missed per-episode collection only",
+  "originalTenRenderSymptomReproduced": false,
+  "statisticalSpeedupClaim": false,
+  "codeEquivalenceClaim": false,
+  "fullOrMergedQualificationClaim": false,
+  "rawStatusesRelabelled": false,
+  "originalACurationPairState": "B_PENDING"
+}

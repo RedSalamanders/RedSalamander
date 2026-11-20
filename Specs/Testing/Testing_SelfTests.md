@@ -3088,3 +3088,9 @@ an additional pre-move content scan, but must still verify the complete destinat
 inventory before publishing completion. Recovery with a pre-existing intent must
 also compare the current source inventory before moving it. The same-volume,
 no-overwrite, reparse and owned-disk checks remain mandatory.
+
+BuildConsoleCheck follows the [console fixture lifetime](../Build/Build_ConsoleAndPaths.md#build-console-fixture-lifetime)
+contract: existing canonical active Runner borrowing, standalone owned archival, fail-before-create
+validation, explicit/shared fixture compatibility and original/fatal error preservation. Its owning
+Pester file retains the original assertions and distinguishes boundary mocks from end-to-end/current
+canonical-module-copy coverage.

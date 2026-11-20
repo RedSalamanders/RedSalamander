@@ -282,19 +282,23 @@ passes and BUG-09 pure source/format checks remain component observations, not
 execution of this composition. No build, native timing, PrePush, ABI, hosted or Full
 acceptance is claimed.
 
-After authorized actual application and settled source, compute and review the
-canonical derived PR workflow digest once; no old or partial digest delegates this
-candidate. Then account for noninteractive PrePush, zero-warning test-enabled full
-x64 Debug/Release solution builds and complete byte-verified receipts (188 outputs
-is prior expectation, not a fixed contract), published-head ARM64 Release
-CommandsUiAttribution's fixed four cases, fresh unfiltered x64 Debug/Release Full,
-and separate native ARM64 Release Full. Existing Full covers applicable local UI
-regressions once; add a filtered run only for a demonstrated coverage gap or failure
-investigation. SMB/resource prerequisites and separately owned I60 NAS/W5 work retain
-their actual contractual scope; no unrelated roadmap becomes a new merge gate.
-The authorized fresh 4–6 hour desktop window starts only after corrected RS builds
-and the ARM diagnostic, with conductor announcement and the existing three-minute
-teardown buffer. Its clock has not started. I65 remains **ACTIVE**.
+After focused branch proof and normal required PR checks, merge the normal follow-up
+PR with broad qualification explicitly pending. After the normal follow-up PR merges,
+reconcile the exact merged main commit/tree, then produce fresh test-enabled full-solution
+x64 Debug/Release Embedded builds and byte-verified receipts for that merged source.
+The unused authorized desktop window is capped at six hours including the existing
+three-minute teardown buffer and starts only after those corrected merged-source
+preparations pass. Native ARM64 Release Full and the fixed published-head
+CommandsUiAttribution diagnostic may run in parallel; neither ARM result is a prerequisite
+for starting local x64 desktop coverage. Broad qualification remains pending until its
+actual receipts/results are reviewed.
+
+Verify actual hosted GITHUB_SHA against the reconciled merged identity. If main advances,
+retain its distinct identity and pending state; do not relabel results. Branch-focused
+packets/receipts remain historical, even if a new HEAD has the same tree. Existing Full
+covers local regressions once; filtered follow-up is for a demonstrated gap/investigation.
+SMB/resource and I60 NAS/W5 work retain their contractual scope. I65 remains **ACTIVE**;
+the desktop clock has not started.
 
 ### Qualified H8 composition applied locally; consumer execution pending (2026-11-16)
 
@@ -815,3 +819,54 @@ source inverse, native build/test, workflow dispatch, publication or changelog f
 claimed here. Required canonical post-build PrePush, the behavior pair, current-source
 Debug/Release/native ARM64, broad desktop/Full/provider obligations and I65 closeout
 remain pending. The first desktop window remains unstarted; I65 remains ACTIVE.
+
+### Build-console lifetime follow-up prepared; merged-source qualification pending (2026-11-20)
+
+The B3 lifecycle helper preserves every original console/path assertion, validates
+borrowed canonical active ownership before creation, and archives only its standalone
+run with primary/fatal archive failures retained. Canonical Pester 3.4 owning coverage
+passed **17/0/0**, actual contained child 79528 exit 0, with source hashes unchanged
+through execution (run `20261120T153151Z-79528-df61e42c82e7426da5f68ea3ba0541bf`).
+The original end-to-end assertion body and representative current canonical module-closure
+fixture ran. Boundary mocks prove borrowing/refusal/error behavior; they are not real
+archive proof. Earlier outside-candidate 13/0 plus getter-delta5/0 remain separate
+preparation evidence. The first owning attempts 4/13 and 16/1 remain failed history;
+new mock assertions now explicitly use the current It scope, and the dead-owner control
+inspects the actual exception instead of Pester 3.4's empty-message Throw adapter.
+
+The reviewed [qualitative Source pair](../../TestRuns/Local-x64/FileOps/2026-11-20_142303_PausedRateSource/README.md)
+is supporting state-correctness and bounded-work evidence only. A source `c88af9df`
+(the reviewed five-hunk inverse in three product files) built with zero warnings/errors
+under its own `eddbd46d` receipt, then remained **FAILED**, native/runner exits 1/1,
+2 passed/1 failed/0 skipped. Its fresh nonzero paused rate stayed stale with no telemetry
+timer and no collection. The deliberate ZERO repeated-rate ordering control missed
+collection/reset. B source `736eff83` on `ebebc14b` built with zero warnings/errors under
+its own `870be6db` receipt, and the exact filtered case passed **3/0/0**, native exit 0,
+runner/operator exit 2: change verdict PASSED, repository NOT_EVALUATED. B cleared its
+fresh nonzero paused rate before another telemetry timer with one collection and reset
+the repeated ZERO-rate window with one collection. Both halves retained the original
+600 ms settle, 2200 ms measurement and 3/4/4 caps; actual paused counts were 2/2/2.
+Neither reproduced the earlier ten-render symptom. Single CPU observations (A 0,
+B 15,625 microseconds) are not benchmark samples or a speedup claim.
+
+All five common-input stages per half retained `8329dd08` (35,584 files, 199 command
+tlogs, 465 retained producer read-witness paths and 3,056 prepared payload files).
+The V5-to-V6 operator change was reporting selection only, with 15 safe controls;
+functional build/case/control code stayed unchanged. Each generated SDK/module identity
+matches its own receipt; no output swap, receipt relabel or executable-code-equivalence
+claim is made. Native metric commit fields remain empty; derived sidecars bind actual
+source and receipts. The original A parent selector failure and later read-only exact-ID
+reconciliation remain separate; Capture.StartedUtc denotes only a held invocation/launch
+window, not observed kernel ProcessStartTime. The tool-host rejection before B launch,
+curator-only preparation failures and their unchanged raw outcomes are retained privately.
+Final source/pin/output checks and owned actor/lease retirement completed; full B2 source
+was restored. B3 changes to tooling/docs do not promote these B2 branch receipts.
+The combined public subset supersedes only the A-only preparation's incorrect
+PauseProjectionUs.value1 description: it is the rateCleared && noTimerTick success flag.
+
+The ebeb selected Release build (zero warnings/errors) and Review native3/0/0/native0,
+filtered outer2/NOT_EVALUATED retain their original branch identities. Historical whole
+Tools1469/2/1 stays FAILED; SandboxAudit119 stays unclean. Debug/Release Full, exact merged-M
+preparation, ARM64/desktop, PrePush and closeout remain pending. PR225 source45fbc76214d24c9869f129fef382b19bb326eb19
+merged as53d0a9d58257f53efe817f52a3c309a25454ca1b; H8/API4 remains unchanged. No version6
+port, producer repin, output swap or receipt rebinding is part of this follow-up.

@@ -1,7 +1,7 @@
 # Native build policy, console results and dependency paths
 
 Status: normative intended contract
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-20
 
 ## Compiler and linker policy
 
@@ -90,3 +90,19 @@ Owner: repository build maintainers. Review by 2027-01-31.
 The evaluated-profile check rejects the exception in other profiles.
 See https://learn.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warning-c4746.
 The green footer duration measures the public entrypoint through result publication, including restore, admission and attestation. Native compilation phase timings and workload performance receipts retain their separate meanings.
+
+## Build-console fixture lifetime
+
+The internal BuildConsoleCheck preserves its console/path assertions. Without explicit
+ScratchRoot, borrow only an existing canonical Runner-format context under the selected
+marked root. Validate the contained run directory before any context/scratch factory;
+require its live owner (including a runner parent), rejecting a directory older than
+that process's start under the canonical PID-reuse rule. Missing, fallback, unauthorized
+or unavailable ownership fails before creation. Never archive a borrowed run.
+
+Without an inherited id, own one canonical current-PID run and archive it on success or
+failure. Report success only after Archived; retain primary and archive errors together,
+including fatal descendants after the archive attempt. Explicit ScratchRoot/shared fake-root
+fixtures keep caller ownership. Owning Pester preserves the original end-to-end assertions
+and tests the lifecycle boundary plus a representative current canonical module-copy bp28
+fixture. That is not a historical copy-list claim; TestSandbox already depends on Common.
