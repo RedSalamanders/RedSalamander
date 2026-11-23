@@ -257,6 +257,26 @@ I65 remains ACTIVE. Compose this checkpoint and owning-spec additions with the
 separate VSwhere and accepted producer-pin changes; keep the existing RS fragment
 and do not fold CHANGELOG.
 
+### BUG-09 long-path cleanup observation repair prepared (2026-11-23)
+
+Exact M `1895ee443289e3275cf61402a971d55b884879a2` x64 Debug Full preserved a
+FileOperations failure in `FileOps_LocalAncestryMarkerProofCost`: the first deep
+existing-parent cohort completed 98 guard calls/guard-status rows, the successful proof
+checks, and the actual Copy/payload checks, then the plain-path
+`std::filesystem::directory_iterator` failed during the owned control-parent cleanup
+observation. The run recorded primary ReFS/alternate NTFS; source/target fixture strings
+were 749/747 characters and the enumerated parent exceeded `MAX_PATH`. The API error
+value was not retained, so no specific Win32 cause is asserted. The exact failed run is
+immutable at
+`Z:/RedSalamander.Perf/evidence/completed-runs/20261123T122737Z-84824-3896c883c2c34a50ac58d81e877d7375`.
+
+The R-based correction uses `Common::Paths::ToExtendedWin32Path` for that enumeration,
+retains fail-closed marker/error checks, and reports cohort, error value and path length.
+No timing, cohort, copy-witness, skip or acceptance rule changed. Compiler/native
+validation has not yet been run on this correction; the matching focused Release case,
+paired ReFS/NTFS evidence review and required broader Release/Full gates remain pending.
+I65 remains ACTIVE.
+
 ### Composed H8 API4 candidate prepared privately (2026-11-15)
 
 This unapplied private candidate combines the reviewed three-VSwhere metadata

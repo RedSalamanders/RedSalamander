@@ -2709,6 +2709,11 @@ and 768 timed proofs. Warmups and 16 subsequent untimed actual Copy routing/byte
 are separately labelled and excluded. The Copy constructs its own production task/gate;
 no observation from A grants it authority. Source and destination bytes must match the
 synthetic 4 KiB payload with source retained, and owned markers/fixture roots must retire.
+The post-Copy control-parent enumeration MUST use `Common::Paths::ToExtendedWin32Path`
+because deep cohorts exceed `MAX_PATH`. It MUST still fail closed if enumeration
+returns an error or an `inside-source-check.*` marker remains; diagnostics identify the
+cohort, system error value and path length. This cleanup observation remains outside
+the timed guard/proof samples and does not change cohort counts or measurement order.
 
 `FileOps.SelfTest.AncestryGateCallUs` retains every outer lifetime sample, block/window/
 iteration/order/role, guard state and outcome; `AncestryGateGuardStatus` retains actual

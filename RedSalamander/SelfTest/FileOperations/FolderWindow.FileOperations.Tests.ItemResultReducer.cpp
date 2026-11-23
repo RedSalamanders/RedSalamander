@@ -5821,13 +5821,17 @@ struct KeepAwakeSelfTestApi final
                 for (size_t row = proofAfter.size(); row < witnessProof.size(); ++row)
                     if (witnessProof[row].hr != S_OK || witnessProof[row].value1 == 0u)
                         return reject(L"untimed Copy marker-proof routing witness failed");
+                const std::filesystem::path cleanupObservationParent(Common::Paths::ToExtendedWin32Path(existingDestinationParent.native()));
                 std::error_code listError;
-                for (std::filesystem::directory_iterator entry(existingDestinationParent, listError), end; ! listError && entry != end;
+                for (std::filesystem::directory_iterator entry(cleanupObservationParent, listError), end; ! listError && entry != end;
                      entry.increment(listError))
                     if (entry->path().filename().native().starts_with(L"inside-source-check."))
-                        return reject(L"ancestry marker survived its owned handle lifetime");
+                        return reject(std::format(L"ancestry marker survived its owned handle lifetime: cohort={}", cohort));
                 if (listError)
-                    return reject(L"ancestry control-parent cleanup observation failed");
+                    return reject(std::format(L"ancestry control-parent cleanup observation failed: cohort={} error={} pathLength={}",
+                                              cohort,
+                                              listError.value(),
+                                              existingDestinationParent.native().size()));
                 ++copyWitnesses;
                 Debug::Perf::Emit(L"FileOps.SelfTest.AncestryGateCopyWitness", cohort, 0u, 1u, 0u, copied);
             }
