@@ -5780,6 +5780,41 @@ struct KeepAwakeSelfTestApi final
                     if (sample.hr != S_OK || sample.value1 == 0u || sample.value1 > 1024u || sample.value0 != sample.value1 + fixedLookups)
                         return reject(L"outside-marker status, candidate-probe or attribute-lookup accounting changed");
                 }
+                // The missing8 shape measures the full missing-parent chain above. A real Copy
+                // requires its selected destination folder to exist, so materialize only that
+                // owned parent chain after every measured guard/proof assertion has completed.
+                // The final selected leaf stays absent and the untimed witness uses the same path.
+                if (shape == 2u && ! SelfTest::EnsureDirectory(destinationParent))
+                    return reject(std::format(L"missing8 Copy witness could not materialize its owned destination parents: cohort={} pathLength={}",
+                                              cohort,
+                                              destinationParent.native().size()));
+
+                const std::wstring copyDestinationParentText =
+                    shape == 3u ? Common::Paths::ToExtendedWin32Path(destinationParent.native()) : destinationParent.native();
+                FileOperations::QualifiedEndpoint copyDestinationEndpoint = destinationEndpoint;
+                if (shape == 2u &&
+                    (! FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
+                                                                     Common::Paths::ToExtendedWin32Path(destinationParent.native()),
+                                                                     FILESYSTEM_COPY,
+                                                                     L"builtin/file-system",
+                                                                     L"host/default",
+                                                                     copyDestinationEndpoint) ||
+                     copyDestinationEndpoint.rootId.empty() || ! copyDestinationEndpoint.pathIdentity.has_value() ||
+                     ! FileOperations::QualifiedEndpointsReferToSameRoot(destinationEndpoint, copyDestinationEndpoint) ||
+                     FileOperations::QualifiedEndpointsReferToSameRoot(sourceEndpoint, copyDestinationEndpoint)))
+                    return reject(std::format(L"missing8 actual Copy parent did not qualify on the cohort destination root: cohort={} pathLength={}",
+                                              cohort,
+                                              destinationParent.native().size()));
+
+                unsigned long finalTargetAttributes = 0u;
+                const std::wstring finalTargetText = Common::Paths::ToExtendedWin32Path(target.native());
+                const HRESULT finalTargetHr = io->GetAttributes(finalTargetText.c_str(), &finalTargetAttributes);
+                if (finalTargetHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                    return reject(std::format(L"untimed Copy witness final leaf must be absent under its qualified parent: cohort={} hr=0x{:08X} pathLength={}",
+                                              cohort,
+                                              static_cast<unsigned long>(finalTargetHr),
+                                              target.native().size()));
+
                 // Untimed actual task routing witness, only after both observation treatments have finished.
                 // No baseline observation is passed to this task: it must run its own production gate.
                 using State = FolderWindow::FileOperationState;
@@ -5787,9 +5822,9 @@ struct KeepAwakeSelfTestApi final
                 plan.intent                         = FileOperations::TransferIntent::Copy;
                 plan.strategy                       = FileOperations::OperationStrategy::Copy;
                 plan.sourceEndpoint                 = sourceEndpoint;
-                plan.destinationEndpoint            = destinationEndpoint;
+                plan.destinationEndpoint            = copyDestinationEndpoint;
                 plan.selectedItems                  = {{.providerPath = sourceText}};
-                plan.destination.providerFolderPath = shape == 3u ? Common::Paths::ToExtendedWin32Path(destinationParent.native()) : destinationParent.native();
+                plan.destination.providerFolderPath = copyDestinationParentText;
                 State::Task task(*state.fileOps);
                 task._operation                = FILESYSTEM_COPY;
                 task._executionMode            = State::ExecutionMode::PerItem;
@@ -5803,35 +5838,67 @@ struct KeepAwakeSelfTestApi final
                                                    FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(plan)}}),
                                                {.fileSystem      = state.fsLocal,
                                                 .folder          = destinationParent,
-                                                .pluginId        = destinationEndpoint.pluginId,
+                                                .pluginId        = copyDestinationEndpoint.pluginId,
                                                 .pluginShortId   = L"file",
-                                                .instanceContext = destinationEndpoint.instanceId});
+                                                .instanceContext = copyDestinationEndpoint.instanceId});
                 task.InitializeSourceItemResultBuilders();
                 const auto diagnosticCleanup = wil::scope_exit([&]() noexcept { state.fileOps->DebugRemoveDiagnosticsForTask(task._taskId); });
                 const HRESULT prepared       = task.PrepareMutationInterlockScopes();
                 const HRESULT copied         = FAILED(prepared) ? prepared : task.ExecuteOperation();
                 std::string sourceBytes;
                 std::string copiedBytes;
-                if (copied != S_OK || ! ReadFileTextFsIo(io, selected / L"payload.bin", sourceBytes) || sourceBytes != bytes ||
-                    ! ReadFileTextFsIo(io, target / L"payload.bin", copiedBytes) || copiedBytes != bytes)
-                    return reject(L"untimed actual Copy did not publish exact bytes while retaining its source");
+                const bool sourceRead         = ReadFileTextFsIo(io, selected / L"payload.bin", sourceBytes);
+                const bool destinationRead    = ReadFileTextFsIo(io, target / L"payload.bin", copiedBytes);
+                const bool sourceBytesMatch   = sourceRead && sourceBytes == bytes;
+                const bool destinationMatches = destinationRead && copiedBytes == bytes;
+                if (copied != S_OK || ! sourceBytesMatch || ! destinationMatches)
+                    return reject(std::format(L"untimed actual Copy witness failed: cohort={} prepared=0x{:08X} copied=0x{:08X} sourceRead={} sourceBytesMatch={} destinationRead={} destinationBytesMatch={} sourcePathLength={} targetPathLength={}",
+                                              cohort,
+                                              static_cast<unsigned long>(prepared),
+                                              static_cast<unsigned long>(copied),
+                                              sourceRead,
+                                              sourceBytesMatch,
+                                              destinationRead,
+                                              destinationMatches,
+                                              selected.native().size(),
+                                              target.native().size()));
                 std::vector<PerfMetricSample> witnessProof;
                 if (! TryReadPerfMetricSamples("FileOps.Transfer.InsideSourceProbeUs", witnessProof) || witnessProof.size() <= proofAfter.size())
                     return reject(L"untimed Copy did not actually traverse the production marker-proof gate");
                 for (size_t row = proofAfter.size(); row < witnessProof.size(); ++row)
                     if (witnessProof[row].hr != S_OK || witnessProof[row].value1 == 0u)
                         return reject(L"untimed Copy marker-proof routing witness failed");
-                const std::filesystem::path cleanupObservationParent(Common::Paths::ToExtendedWin32Path(existingDestinationParent.native()));
-                std::error_code listError;
-                for (std::filesystem::directory_iterator entry(cleanupObservationParent, listError), end; ! listError && entry != end;
-                     entry.increment(listError))
-                    if (entry->path().filename().native().starts_with(L"inside-source-check."))
-                        return reject(std::format(L"ancestry marker survived its owned handle lifetime: cohort={}", cohort));
-                if (listError)
-                    return reject(std::format(L"ancestry control-parent cleanup observation failed: cohort={} error={} pathLength={}",
-                                              cohort,
-                                              listError.value(),
-                                              existingDestinationParent.native().size()));
+                std::wstring cleanupFailure;
+                const auto verifyMarkerCleanup = [&](const std::filesystem::path& parent, std::wstring_view role) noexcept
+                {
+                    std::error_code listError;
+                    const std::filesystem::path cleanupParent(Common::Paths::ToExtendedWin32Path(parent.native()));
+                    for (std::filesystem::directory_iterator entry(cleanupParent, listError), end; ! listError && entry != end;
+                         entry.increment(listError))
+                    {
+                        if (entry->path().filename().native().starts_with(L"inside-source-check."))
+                        {
+                            cleanupFailure = std::format(L"ancestry marker survived its owned handle lifetime: cohort={} parent={} pathLength={}",
+                                                         cohort,
+                                                         role,
+                                                         parent.native().size());
+                            return false;
+                        }
+                    }
+                    if (listError)
+                    {
+                        cleanupFailure = std::format(L"ancestry control-parent cleanup observation failed: cohort={} parent={} error={} pathLength={}",
+                                                     cohort,
+                                                     role,
+                                                     listError.value(),
+                                                     parent.native().size());
+                        return false;
+                    }
+                    return true;
+                };
+                if (! verifyMarkerCleanup(existingDestinationParent, L"original-nearest-ancestor") ||
+                    (destinationParent != existingDestinationParent && ! verifyMarkerCleanup(destinationParent, L"materialized-copy-parent")))
+                    return reject(cleanupFailure);
                 ++copyWitnesses;
                 Debug::Perf::Emit(L"FileOps.SelfTest.AncestryGateCopyWitness", cohort, 0u, 1u, 0u, copied);
             }
