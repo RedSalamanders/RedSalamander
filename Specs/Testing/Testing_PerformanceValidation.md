@@ -2706,9 +2706,21 @@ it never executes a task, authorizes a transfer or claims a negative ancestry re
 B invokes that same guard and the actual marker proof. One untimed A/B warmup precedes
 six literal alternating ABBA/BAAB blocks, four calls per window: 1,536 timed guard calls
 and 768 timed proofs. Warmups and 16 subsequent untimed actual Copy routing/byte witnesses
-are separately labelled and excluded. The Copy constructs its own production task/gate;
-no observation from A grants it authority. Source and destination bytes must match the
-synthetic 4 KiB payload with source retained, and owned markers/fixture roots must retire.
+are separately labelled and excluded. For `deep32-missing8`, the eight missing destination
+parents remain absent through every timed guard and proof, including that cohort's 96-call
+window and proof-row/count assertions. Only after those measurements close does the fixture
+create the owned parent chain for the untimed real Copy witness; it keeps the final selected
+leaf absent and qualifies the Copy parent on the same destination root. This witness setup
+does not alter the measured missing-parent treatment. The Copy constructs its own production
+task/gate; no observation from A grants it authority. Source and destination bytes must match
+the synthetic 4 KiB payload with source retained, and owned markers/fixture roots must retire.
+The post-Copy control-parent enumeration MUST use `Common::Paths::ToExtendedWin32Path`
+because deep cohorts exceed `MAX_PATH`. It MUST still fail closed if enumeration
+returns an error or an `inside-source-check.*` marker remains; diagnostics identify the
+cohort, parent role, system error value and path length. Check both the original nearest
+existing control ancestor and, for `deep32-missing8`, the newly materialized Copy parent.
+This cleanup observation remains outside the timed guard/proof samples and does not change
+cohort counts or measurement order.
 
 `FileOps.SelfTest.AncestryGateCallUs` retains every outer lifetime sample, block/window/
 iteration/order/role, guard state and outcome; `AncestryGateGuardStatus` retains actual

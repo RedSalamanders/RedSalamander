@@ -257,6 +257,51 @@ I65 remains ACTIVE. Compose this checkpoint and owning-spec additions with the
 separate VSwhere and accepted producer-pin changes; keep the existing RS fragment
 and do not fold CHANGELOG.
 
+### BUG-09 long-path cleanup observation repair prepared (2026-11-23)
+
+Exact M `1895ee443289e3275cf61402a971d55b884879a2` x64 Debug Full preserved a
+FileOperations failure in `FileOps_LocalAncestryMarkerProofCost`: the first deep
+existing-parent cohort completed 98 guard calls/guard-status rows, the successful proof
+checks, and the actual Copy/payload checks, then the plain-path
+`std::filesystem::directory_iterator` failed during the owned control-parent cleanup
+observation. The run recorded primary ReFS/alternate NTFS; source/target fixture strings
+were 749/747 characters and the enumerated parent exceeded `MAX_PATH`. The API error
+value was not retained, so no specific Win32 cause is asserted. The exact failed run is
+immutable at
+`Z:/RedSalamander.Perf/evidence/completed-runs/20261123T122737Z-84824-3896c883c2c34a50ac58d81e877d7375`.
+
+The R-based correction uses `Common::Paths::ToExtendedWin32Path` for that enumeration,
+retains fail-closed marker/error checks, and reports cohort, error value and path length.
+No timing, cohort, copy-witness, skip or acceptance rule changed. Compiler/native
+validation has not yet been run on this correction; the matching focused Release case,
+paired ReFS/NTFS evidence review and required broader Release/Full gates remain pending.
+I65 remains ACTIVE.
+
+### BUG-09 deep32-missing8 untimed Copy fixture completion (2026-11-23)
+
+The first focused Debug attempt at the I65 candidate reached the third A/B cohort,
+`deep32-missing8`. Its timed guard/proof rows completed with the last eight destination
+parents absent; the subsequent real Copy could not proceed through those absent parents
+and returned `0x80070003` (`ERROR_PATH_NOT_FOUND`), then entered the ordinary conflict-prompt
+wait. No third Copy witness or destination payload was emitted. A sealed pre-retirement diagnostic snapshot
+is retained under
+`Z:/RedSalamander.Perf/runs/20261123T153218Z-94764-6f3bb60239c54f2485608dd072112788/scratch/qualification/FileOps_LocalAncestryMarkerProofCost/Debug/retirement-snapshot-20261123T160946Z`;
+the originating process was still awaiting its prompt at snapshot time. This is fixture
+setup evidence, not a production prompt-policy failure or completed qualification. The
+exact owner-job closure later retired that process; the run remains retained/incomplete,
+with no canonical completed-run archive, native exit record or Run-AllTests summary.
+The corresponding outer retirement outcome records interruption and absent archive.
+
+The follow-up changes only the untimed witness setup: after the fixed measurement and proof
+count assertions, it creates the owned missing parent chain, separately qualifies that
+actual Copy parent, and confirms the final leaf is still absent using the extended Win32
+path. It preserves all 16 production-gated 4 KiB Copy witnesses, source-retention checks,
+1,536 timed guards, 768 timed proofs and missing8 proof accounting. Cleanup checks both the
+original nearest ancestor and the newly materialized Copy parent with extended paths and
+fail-closed marker/error handling. No prompt policy, skip, timing span or acceptance rule
+changes. Compiler-free checks remain pending; the focused native Debug case and required
+Release/paired-root evidence remain pending. I65 remains ACTIVE.
+
 ### Composed H8 API4 candidate prepared privately (2026-11-15)
 
 This unapplied private candidate combines the reviewed three-VSwhere metadata
