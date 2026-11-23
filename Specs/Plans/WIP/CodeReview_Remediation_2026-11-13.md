@@ -870,3 +870,31 @@ Tools1469/2/1 stays FAILED; SandboxAudit119 stays unclean. Debug/Release Full, e
 preparation, ARM64/desktop, PrePush and closeout remain pending. PR225 source45fbc76214d24c9869f129fef382b19bb326eb19
 merged as53d0a9d58257f53efe817f52a3c309a25454ca1b; H8/API4 remains unchanged. No version6
 port, producer repin, output swap or receipt rebinding is part of this follow-up.
+
+### Pester copied-module fixture isolation (2026-11-23)
+
+The hosted Q ToolsPesterTests failure came from the ordered pair: canonical root module
+imports, the real bp28 copied-module BuildConsole fixture, then the global
+ArtifactOperationLock import and `InModuleScope ArtifactOperationLock`. Before the
+fixture the lookup succeeds; after it, all six affected modules also exist under the
+copied `Tools/Modules` path, and Pester 3.4.0 reports multiple named script modules.
+The unpatched reproduction is archive run
+`20261123T113224Z-43112-135e0a49391547579eef1dd03570d593`;
+`scratch/I65/pester-module-ambiguity/attempt-08/stdout.txt` SHA-256 is
+`7F72A8214817FDB269D43CE06E56F546426F17A6707A9A0283553BFFD9158C3F`; module inventory
+`scratch/I65/pester-module-ambiguity/attempt-08/after.json` has SHA-256
+`73AC05D76A91B1A14158D23AFEB0F0A0F0C659BD397BBFA96908150C14CD3F92`. That hidden
+PowerShell run was not proven Job-contained.
+
+The fixture now uses `Invoke-RSTestFixtureNative` to start a contained no-window child
+using the same PowerShell executable as the runner, with the marked run and TEMP
+inherited. The owning test asserts the helper's zero exit and success output, then
+verifies no module path under the copied fixture remains in the caller. The canonical
+ordered replay passed 18/0/0 with native exit 0 in run
+`20261123T114622Z-84816-db3b981db67f445f92681108f8d4c7e0`; its
+`scratch/I65/pester-isolated-ordered-final/ordered-test-output.txt` SHA-256 is
+`8BFCF13B532AC77D5797A4215DC71B95138EF4AA336F16BE6417F3D4C3716757`. A prior 17/1
+replay imported the target module from shared main instead of this isolated worktree;
+it is retained as a mixed-root driver error, not a product result. This focused result
+verifies the fixture isolation fix; native CI remains pending. I65 remains ACTIVE;
+merged-source Debug/Release Full, PrePush, ARM64, desktop and provider gates remain open.

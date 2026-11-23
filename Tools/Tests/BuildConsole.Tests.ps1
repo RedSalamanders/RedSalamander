@@ -9,6 +9,7 @@ Describe 'Build console fixture run lifetime' {
         $script:buildConsoleHelper=Join-Path $PSScriptRoot 'BuildConsoleCheck.ps1'
         Import-Module (Join-Path $script:buildConsoleRepo 'Tools/Modules/Testing/TestSandbox.psm1')
         Import-Module (Join-Path $script:buildConsoleRepo 'Tools/Modules/Testing/TestRunPlan.Common.psm1')
+        Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -ErrorAction Stop
         # Exercise the real lifecycle around a sentinel/failing body; the original
         # end-to-end test above still executes every console/path assertion.
         $text=[IO.File]::ReadAllText($script:buildConsoleHelper)
@@ -28,7 +29,20 @@ Describe 'Build console fixture run lifetime' {
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Build/BuildConsole.psm1') -Destination (Join-Path $fixture 'Build/BuildConsole.psm1')
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Tools/Modules/Build/DxUiPaths.psm1') -Destination (Join-Path $fixture 'Build/DxUiPaths.psm1')
         (Test-Path -LiteralPath (Join-Path $fixture 'Tools/Modules/Testing/TestRunPlan.Common.psm1')) | Should Be $true
-        & $script:buildConsoleHelper -Root $fixture
+        # The fixture imports its copied module closure. Keep those copies out of
+        # the owning Pester session, where later InModuleScope calls resolve by name.
+        $fixturePowerShell=(Get-Process -Id $PID -ErrorAction Stop).Path
+        [string]::IsNullOrWhiteSpace($fixturePowerShell) | Should Be $false
+        $arguments=@('-NoLogo','-NoProfile','-NonInteractive','-File',$script:buildConsoleHelper,'-Root',$fixture)
+        $helperOutput=@(Invoke-RSTestFixtureNative -FilePath $fixturePowerShell -Arguments $arguments -WorkingDirectory $fixture)
+        $global:LASTEXITCODE | Should Be 0
+        ($helperOutput -join "`n") | Should Match 'PASS zero-warning results'
+        $fixtureRoot=[IO.Path]::GetFullPath($fixture).TrimEnd('\')+'\'
+        $loadedFixtureModules=@(Get-Module -All | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_.Path) -and
+            [IO.Path]::GetFullPath($_.Path).StartsWith($fixtureRoot,[StringComparison]::OrdinalIgnoreCase)
+        })
+        $loadedFixtureModules.Count | Should Be 0
     }
 
     It 'preserves explicit scratch compatibility without borrowing an invalid run id' {
