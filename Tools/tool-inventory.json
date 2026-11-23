@@ -4875,6 +4875,7 @@
         "Tools/Tests/SharedToolingModules.Tests.ps1",
         "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
         "Tools/Tests/ValidationFingerprint.Tests.ps1",
+        "Tools/Tests/BuildConsole.Tests.ps1",
         "Tools/Tests/ToolInventory.Tests.ps1"
       ],
       "replacement": null
@@ -5257,11 +5258,12 @@
         "Explicit functions write dependency markers or owned fixture data; import is read-only"
       ],
       "visibility": "internal",
-      "purpose": "Run unchanged console/path assertions and focused borrowed/standalone lifecycle, error and current shared-fixture closure checks through Pester.",
-      "usage": "Use through the existing build/tooling entrypoints.",
+      "purpose": "Run unchanged console/path assertions and focused borrowed/standalone lifecycle, error and current shared-fixture closure checks through Pester. The copied-module fixture runs through a contained child using the runner's PowerShell executable and proves it leaves no alternate module paths in the Pester caller.",
+      "usage": "Use through the existing build/tooling entrypoints; the copied-module fixture uses TestSupport.psm1 for contained execution.",
       "prerequisites": [
         "PowerShell",
         "Git",
+        "Tools/Tests/TestSupport.psm1",
         "Initialized marked test sandbox for fixture tests"
       ],
       "lifecycle": "active",

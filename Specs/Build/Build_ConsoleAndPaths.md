@@ -105,4 +105,9 @@ failure. Report success only after Archived; retain primary and archive errors t
 including fatal descendants after the archive attempt. Explicit ScratchRoot/shared fake-root
 fixtures keep caller ownership. Owning Pester preserves the original end-to-end assertions
 and tests the lifecycle boundary plus a representative current canonical module-copy bp28
-fixture. That is not a historical copy-list claim; TestSandbox already depends on Common.
+fixture. The copied-module fixture starts a contained no-window child using the same
+PowerShell executable as the runner, through `TestSupport.psm1`, inheriting the marked run
+and test temporary root. It verifies the actual helper's zero exit and success output, then
+confirms none of the fixture's copied modules entered the Pester caller; this keeps later
+name-based `InModuleScope` lookups unambiguous. That is not a historical copy-list claim;
+TestSandbox already depends on Common.

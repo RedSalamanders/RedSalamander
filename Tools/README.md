@@ -813,4 +813,6 @@ and tooling governance contracts for authority and qualification boundaries.
 The internal BuildConsoleCheck borrows only a validated existing canonical active runner
 context, including a runner parent, without archiving it. Standalone use owns/archives its
 current-PID run and preserves validation plus archive errors. Explicit ScratchRoot/shared
-fixtures keep caller ownership. See [fixture lifetime](../Specs/Build/Build_ConsoleAndPaths.md#build-console-fixture-lifetime).
+fixtures keep caller ownership. The copied-module Pester fixture starts a contained
+no-window child using the runner's PowerShell executable via `TestSupport.psm1`, so its
+alternate module paths stay out of the Pester process. See [fixture lifetime](../Specs/Build/Build_ConsoleAndPaths.md#build-console-fixture-lifetime).
