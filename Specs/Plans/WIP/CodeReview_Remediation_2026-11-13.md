@@ -898,3 +898,17 @@ replay imported the target module from shared main instead of this isolated work
 it is retained as a mixed-root driver error, not a product result. This focused result
 verifies the fixture isolation fix; native CI remains pending. I65 remains ACTIVE;
 merged-source Debug/Release Full, PrePush, ARM64, desktop and provider gates remain open.
+
+### Scripted-vcpkg query compatibility (2026-11-23)
+
+The merged-M Full run `20261123T122737Z-84824-3896c883c2c34a50ac58d81e877d7375`
+exposed two stale tooling contracts after PR #240: the residual-process classifier
+still required removed `VcpkgManifestRoot`, and the SDK adapter test still required
+the removed CL-deletion guard instead of PATH-only `-RuntimeOnly` binding. The narrow
+follow-up checks current `VcpkgEnabled=false` / `VcpkgEnableManifest=false` policy and
+the actual RuntimeOnly helper and environment application. The two exact Pester 3.4.0
+cases passed 2/0/0 with exit 0 in archived run
+`20261123T133037Z-91472-a6869b3e9595449fb5bd27baba6b2110`; output SHA-256 is
+`5dc4bd84b075f2a7087ef0c5652d70e12fc390692cfffe9f7f6ffdadae131288`. The PR
+execution digest is refreshed. Broader Full and hosted qualification remain pending;
+this does not qualify a product build or the separate runtime-copy failure. I65 remains ACTIVE.

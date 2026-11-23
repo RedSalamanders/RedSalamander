@@ -14,6 +14,12 @@ MSBuild takes its include and link inputs from the repository properties. SDK ad
 checks raw overrides before child binding clears ambient compiler and linker flags.
 Parent environment and existing lock order remain unchanged.
 
+Residual-build checks exempt a linked RedSalamander worktree only for a strict,
+side-effect-free MSBuild property query with matching root policy. The check requires
+MSBuild vcpkg integration disabled for scripted restore (`VcpkgEnabled=false`,
+`VcpkgEnableManifest=false`) alongside the exact output and installed-triplet roots;
+matching props text does not establish evaluated build output ownership.
+
 Filtered Ghostty Commands qualification verifies archived native case bytes and
 selection, current source/artifact receipt, both aggregate summaries and invocation
 identity before accepting directed exit 2. Repository coverage remains NOT_EVALUATED.

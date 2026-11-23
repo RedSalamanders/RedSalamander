@@ -1,0 +1,1 @@
+- Keep residual-build query provenance and RuntimeOnly binding aligned with the scripted vcpkg contract.
