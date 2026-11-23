@@ -585,6 +585,8 @@ build-evidence command surface after each such boundary before snapshotting, re-
 or publishing evidence. Shared evidence modules MUST NOT force-reload a dependency they
 do not own, because removing that dependency can also remove commands imported by the
 runner. Focused source-contract tests guard both sides of this boundary.
+Fixtures that import a copied repository module tree run in a contained child process.
+This preserves the canonical module owners for subsequent in-process Pester cases.
 
 ## Result Contract
 
