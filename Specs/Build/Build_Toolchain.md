@@ -984,8 +984,10 @@ root, generic Configuration/Platform evidence is attributed to a separate
 worktree only when that project is inside a verified linked Git worktree of this
 same repository, its `.git` admin directory has a valid backpointer and
 common-directory record, and its root `Directory.Build.props` is byte-identical
-to this checkout's canonical policy. The project, its ancestors through both
-repository roots, and both policy files must be free of reparse points. That text
+to this checkout's canonical policy. That policy keeps MSBuild vcpkg integration
+disabled for scripted restore (`VcpkgEnabled=false`, `VcpkgEnableManifest=false`).
+The project, its ancestors through both repository roots, and both policy files
+must be free of reparse points. That text
 check does not prove evaluated output roots: inherited MSBuild properties,
 project properties, or later imports can redirect a build. Therefore the
 linked-worktree exception applies only to a strictly query-only invocation with

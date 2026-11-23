@@ -868,40 +868,46 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
         (Get-FileHash -LiteralPath $adapter).Hash | Should Be $originalHash
     }
 
-    It 'prepares SDK inputs before applying integration and preserves inherited compiler overrides' {
+    It 'uses runtime-only vcpkg binding and preserves inherited compiler overrides' {
         $tokens=$null;$errors=$null
-        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'),[ref]$tokens,[ref]$errors)
+        $adapter=Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'
+        $ast=[Management.Automation.Language.Parser]::ParseFile($adapter,[ref]$tokens,[ref]$errors)
         @($errors).Count | Should Be 0
-        $guard=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.IfStatementAst] -and $n.Extent.Text.StartsWith('if($sdkBuildArguments.Count -gt 0')},$true))
-        $guard.Count|Should Be 1
+        $runtime=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Get-RSVcpkgBuildEnvironment' -and @($n.CommandElements | Where-Object {$_ -is [Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -ceq 'RuntimeOnly'}).Count -eq 1},$true))
         $prepare=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Initialize-CiPinnedSdkInput'},$true))
         $apply=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Extent.Text.Contains('$environment.GetEnumerator()')},$true))
+        $runtime.Count|Should Be 1
         $prepare.Count|Should Be 1
         $apply.Count|Should Be 1
-        ($prepare[0].Extent.StartOffset -lt $guard[0].Extent.StartOffset)|Should Be $true
-        ($guard[0].Extent.EndOffset -lt $apply[0].Extent.StartOffset)|Should Be $true
-        $body=[scriptblock]::Create($guard[0].Extent.Text)
-        $savedCL=$env:CL
+        ($runtime[0].Extent.StartOffset -lt $prepare[0].Extent.StartOffset)|Should Be $true
+        ($prepare[0].Extent.EndOffset -lt $apply[0].Extent.StartOffset)|Should Be $true
+        $body=[scriptblock]::Create($apply[0].Extent.Text)
+        $runtimeModule=Import-Module (Join-Path $repoRoot 'Tools/Modules/Build/VcpkgInstallSafety.psm1') -PassThru -ErrorAction Stop
+        $fixtureRoot=Join-Path $TestDrive 'runtime-only-vcpkg'
+        $toolRoot=Join-Path $fixtureRoot '.build/vcpkg-tool'
+        $installed=Join-Path $fixtureRoot '.build/vcpkg_installed/x64/x64-windows'
+        $include=Join-Path $installed 'include';$lib=Join-Path $installed 'lib';$bin=Join-Path $installed 'bin'
+        foreach($directory in @($include,$lib,$bin)){[void][IO.Directory]::CreateDirectory($directory)}
+        $savedPath=$env:Path;$savedCL=$env:CL;$savedLINK=$env:LINK;$savedForceBefore=$env:ForceImportBeforeCppTargets;$savedForceAfter=$env:ForceImportAfterCppTargets
         try{
+            $env:Path='inherited runtime path'
             $env:CL='inherited override remains visible'
-            foreach($phase in @('ReleaseTestBuild','ReleaseTest','Production','Qualification')){
-                foreach($sdk in @($false,$true)){foreach($record in @($false,$true)){
-                    $result=& {
-                        param($Body,$Phase,$Sdk,$Record,$FixtureRoot)
-                        $root=Join-Path $FixtureRoot 'Recording fixture';$Platform='x64';$Configuration='Release'
-                        $sdkBuildArguments=@(if($Sdk){'-DxUiSdkInputDescriptor';'fixture.json'})
-                        $environment=[ordered]@{CL='synthetic vcpkg include';LINK='original libraries';ForceImportBeforeCppTargets='canonical.props'}
-                        function Test-Path {param($LiteralPath,$PathType) return $Record}
-                        . $Body
-                        return $environment
-                    } $body $phase $sdk $record $TestDrive
-                    $result.Contains('CL')|Should Be (-not($sdk -or ($phase -ceq 'ReleaseTest' -and $record)))
-                    $result.LINK|Should Be 'original libraries'
-                    $result.ForceImportBeforeCppTargets|Should Be 'canonical.props'
-                    $env:CL|Should Be 'inherited override remains visible'
-                }}
-            }
-        }finally{$env:CL=$savedCL}
+            $env:LINK='inherited linker override remains visible'
+            $env:ForceImportBeforeCppTargets='inherited before import remains visible'
+            $env:ForceImportAfterCppTargets='inherited after import remains visible'
+            $environment=& $runtimeModule { param($Root,$ToolRoot) Get-RSVcpkgBuildEnvironment -RepoRoot $Root -ToolRoot $ToolRoot -Platform x64 -Configuration Release -RuntimeOnly } $fixtureRoot $toolRoot
+            @($environment.Keys).Count|Should Be 1
+            @($environment.Keys)[0]|Should Be 'Path'
+            $expectedPath=$bin+[IO.Path]::PathSeparator+'inherited runtime path'
+            $environment.Path|Should Be $expectedPath
+            $root=$fixtureRoot;$Platform='x64';$Configuration='Release'
+            . $body
+            $env:Path|Should Be $expectedPath
+            $env:CL|Should Be 'inherited override remains visible'
+            $env:LINK|Should Be 'inherited linker override remains visible'
+            $env:ForceImportBeforeCppTargets|Should Be 'inherited before import remains visible'
+            $env:ForceImportAfterCppTargets|Should Be 'inherited after import remains visible'
+        }finally{$env:Path=$savedPath;$env:CL=$savedCL;$env:LINK=$savedLINK;$env:ForceImportBeforeCppTargets=$savedForceBefore;$env:ForceImportAfterCppTargets=$savedForceAfter}
     }
 }
 
