@@ -1,0 +1,1 @@
+- Isolate the copied BuildConsole fixture modules during tooling regression and verify the SDK adapter's runtime-only vcpkg binding.

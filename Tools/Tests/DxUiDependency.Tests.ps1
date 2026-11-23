@@ -868,40 +868,38 @@ function Run {param($Script,$CommandArguments) $Probe.commands.Add(@{script=$Scr
         (Get-FileHash -LiteralPath $adapter).Hash | Should Be $originalHash
     }
 
-    It 'prepares SDK inputs before applying integration and preserves inherited compiler overrides' {
-        $tokens=$null;$errors=$null
-        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'),[ref]$tokens,[ref]$errors)
+    It 'prepares SDK inputs before applying the runtime-only vcpkg environment' {
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $repoRoot 'Tools/Invoke-ProjectCi.ps1'), [ref]$tokens, [ref]$errors)
         @($errors).Count | Should Be 0
-        $guard=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.IfStatementAst] -and $n.Extent.Text.StartsWith('if($sdkBuildArguments.Count -gt 0')},$true))
-        $guard.Count|Should Be 1
-        $prepare=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq 'Initialize-CiPinnedSdkInput'},$true))
-        $apply=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.ForEachStatementAst] -and $n.Extent.Text.Contains('$environment.GetEnumerator()')},$true))
-        $prepare.Count|Should Be 1
-        $apply.Count|Should Be 1
-        ($prepare[0].Extent.StartOffset -lt $guard[0].Extent.StartOffset)|Should Be $true
-        ($guard[0].Extent.EndOffset -lt $apply[0].Extent.StartOffset)|Should Be $true
-        $body=[scriptblock]::Create($guard[0].Extent.Text)
-        $savedCL=$env:CL
-        try{
-            $env:CL='inherited override remains visible'
-            foreach($phase in @('ReleaseTestBuild','ReleaseTest','Production','Qualification')){
-                foreach($sdk in @($false,$true)){foreach($record in @($false,$true)){
-                    $result=& {
-                        param($Body,$Phase,$Sdk,$Record,$FixtureRoot)
-                        $root=Join-Path $FixtureRoot 'Recording fixture';$Platform='x64';$Configuration='Release'
-                        $sdkBuildArguments=@(if($Sdk){'-DxUiSdkInputDescriptor';'fixture.json'})
-                        $environment=[ordered]@{CL='synthetic vcpkg include';LINK='original libraries';ForceImportBeforeCppTargets='canonical.props'}
-                        function Test-Path {param($LiteralPath,$PathType) return $Record}
-                        . $Body
-                        return $environment
-                    } $body $phase $sdk $record $TestDrive
-                    $result.Contains('CL')|Should Be (-not($sdk -or ($phase -ceq 'ReleaseTest' -and $record)))
-                    $result.LINK|Should Be 'original libraries'
-                    $result.ForceImportBeforeCppTargets|Should Be 'canonical.props'
-                    $env:CL|Should Be 'inherited override remains visible'
-                }}
-            }
-        }finally{$env:CL=$savedCL}
+        $binding = @($ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'Get-RSVcpkgBuildEnvironment'
+        }, $true))
+        $prepare = @($ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'Initialize-CiPinnedSdkInput'
+        }, $true))
+        $apply = @($ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.ForEachStatementAst] -and $node.Extent.Text.Contains('$environment.GetEnumerator()')
+        }, $true))
+        $binding.Count | Should Be 1
+        $prepare.Count | Should Be 1
+        $apply.Count | Should Be 1
+        ($binding[0].CommandElements.Extent.Text -ccontains '-RuntimeOnly') | Should Be $true
+        $binding[0].Extent.EndOffset | Should BeLessThan $apply[0].Extent.StartOffset
+        $prepare[0].Extent.EndOffset | Should BeLessThan $apply[0].Extent.StartOffset
+
+        $overrideAssignments = @($ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left.Extent.Text -in @('$env:CL', '$env:_CL_', '$env:LINK', '$env:_LINK_',
+                    '$env:ForceImportBeforeCppTargets', '$env:ForceImportAfterCppTargets')
+        }, $true))
+        $overrideAssignments.Count | Should Be 0
     }
 }
 

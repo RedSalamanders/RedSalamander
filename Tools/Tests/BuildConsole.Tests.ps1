@@ -9,6 +9,7 @@ Describe 'Build console fixture run lifetime' {
         $script:buildConsoleHelper=Join-Path $PSScriptRoot 'BuildConsoleCheck.ps1'
         Import-Module (Join-Path $script:buildConsoleRepo 'Tools/Modules/Testing/TestSandbox.psm1')
         Import-Module (Join-Path $script:buildConsoleRepo 'Tools/Modules/Testing/TestRunPlan.Common.psm1')
+        Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -ErrorAction Stop
         # Exercise the real lifecycle around a sentinel/failing body; the original
         # end-to-end test above still executes every console/path assertion.
         $text=[IO.File]::ReadAllText($script:buildConsoleHelper)
@@ -28,7 +29,20 @@ Describe 'Build console fixture run lifetime' {
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Build/BuildConsole.psm1') -Destination (Join-Path $fixture 'Build/BuildConsole.psm1')
         Copy-Item -LiteralPath (Join-Path $script:buildConsoleRepo 'Tools/Modules/Build/DxUiPaths.psm1') -Destination (Join-Path $fixture 'Build/DxUiPaths.psm1')
         (Test-Path -LiteralPath (Join-Path $fixture 'Tools/Modules/Testing/TestRunPlan.Common.psm1')) | Should Be $true
-        & $script:buildConsoleHelper -Root $fixture
+        # The copied closure contains modules that later tests resolve by name.
+        # Borrow this run's sandbox in a separate process to keep one owner per module in Pester.
+        $output = @(Invoke-RSTestFixtureNative -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments @(
+            '-NoProfile', '-NonInteractive', '-File', $script:buildConsoleHelper, '-Root', $fixture
+        ) 2>&1)
+        $exitCode = $LASTEXITCODE
+        $transcript = $output -join [Environment]::NewLine
+        if ($exitCode -ne 0) { throw "Build console fixture exited $exitCode.`n$transcript" }
+        $transcript | Should Match '(?m)^PASS zero-warning results'
+        $fixturePrefix = [IO.Path]::GetFullPath($fixture).TrimEnd('\') + '\'
+        $fixtureModules = @(Get-Module -All | Where-Object {
+            $_.Path -and $_.Path.StartsWith($fixturePrefix, [StringComparison]::OrdinalIgnoreCase)
+        })
+        $fixtureModules.Count | Should Be 0
     }
 
     It 'preserves explicit scratch compatibility without borrowing an invalid run id' {
