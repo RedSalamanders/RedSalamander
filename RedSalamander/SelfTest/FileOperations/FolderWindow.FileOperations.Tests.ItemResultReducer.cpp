@@ -5792,23 +5792,22 @@ struct KeepAwakeSelfTestApi final
                 const std::wstring copyDestinationParentText =
                     shape == 3u ? Common::Paths::ToExtendedWin32Path(destinationParent.native()) : destinationParent.native();
                 FileOperations::QualifiedEndpoint copyDestinationEndpoint = destinationEndpoint;
-                if (shape == 2u &&
-                    (! FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
-                                                                     Common::Paths::ToExtendedWin32Path(destinationParent.native()),
-                                                                     FILESYSTEM_COPY,
-                                                                     L"builtin/file-system",
-                                                                     L"host/default",
-                                                                     copyDestinationEndpoint) ||
-                     copyDestinationEndpoint.rootId.empty() || ! copyDestinationEndpoint.pathIdentity.has_value() ||
-                     ! FileOperations::QualifiedEndpointsReferToSameRoot(destinationEndpoint, copyDestinationEndpoint) ||
-                     FileOperations::QualifiedEndpointsReferToSameRoot(sourceEndpoint, copyDestinationEndpoint)))
+                if (shape == 2u && (! FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
+                                                                                    Common::Paths::ToExtendedWin32Path(destinationParent.native()),
+                                                                                    FILESYSTEM_COPY,
+                                                                                    L"builtin/file-system",
+                                                                                    L"host/default",
+                                                                                    copyDestinationEndpoint) ||
+                                    copyDestinationEndpoint.rootId.empty() || ! copyDestinationEndpoint.pathIdentity.has_value() ||
+                                    ! FileOperations::QualifiedEndpointsReferToSameRoot(destinationEndpoint, copyDestinationEndpoint) ||
+                                    FileOperations::QualifiedEndpointsReferToSameRoot(sourceEndpoint, copyDestinationEndpoint)))
                     return reject(std::format(L"missing8 actual Copy parent did not qualify on the cohort destination root: cohort={} pathLength={}",
                                               cohort,
                                               destinationParent.native().size()));
 
                 unsigned long finalTargetAttributes = 0u;
-                const std::wstring finalTargetText = Common::Paths::ToExtendedWin32Path(target.native());
-                const HRESULT finalTargetHr = io->GetAttributes(finalTargetText.c_str(), &finalTargetAttributes);
+                const std::wstring finalTargetText  = Common::Paths::ToExtendedWin32Path(target.native());
+                const HRESULT finalTargetHr         = io->GetAttributes(finalTargetText.c_str(), &finalTargetAttributes);
                 if (finalTargetHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
                     return reject(std::format(L"untimed Copy witness final leaf must be absent under its qualified parent: cohort={} hr=0x{:08X} pathLength={}",
                                               cohort,
@@ -5852,7 +5851,8 @@ struct KeepAwakeSelfTestApi final
                 const bool sourceBytesMatch   = sourceRead && sourceBytes == bytes;
                 const bool destinationMatches = destinationRead && copiedBytes == bytes;
                 if (copied != S_OK || ! sourceBytesMatch || ! destinationMatches)
-                    return reject(std::format(L"untimed actual Copy witness failed: cohort={} prepared=0x{:08X} copied=0x{:08X} sourceRead={} sourceBytesMatch={} destinationRead={} destinationBytesMatch={} sourcePathLength={} targetPathLength={}",
+                    return reject(std::format(L"untimed actual Copy witness failed: cohort={} prepared=0x{:08X} copied=0x{:08X} sourceRead={} "
+                                              L"sourceBytesMatch={} destinationRead={} destinationBytesMatch={} sourcePathLength={} targetPathLength={}",
                                               cohort,
                                               static_cast<unsigned long>(prepared),
                                               static_cast<unsigned long>(copied),
@@ -5873,15 +5873,12 @@ struct KeepAwakeSelfTestApi final
                 {
                     std::error_code listError;
                     const std::filesystem::path cleanupParent(Common::Paths::ToExtendedWin32Path(parent.native()));
-                    for (std::filesystem::directory_iterator entry(cleanupParent, listError), end; ! listError && entry != end;
-                         entry.increment(listError))
+                    for (std::filesystem::directory_iterator entry(cleanupParent, listError), end; ! listError && entry != end; entry.increment(listError))
                     {
                         if (entry->path().filename().native().starts_with(L"inside-source-check."))
                         {
-                            cleanupFailure = std::format(L"ancestry marker survived its owned handle lifetime: cohort={} parent={} pathLength={}",
-                                                         cohort,
-                                                         role,
-                                                         parent.native().size());
+                            cleanupFailure = std::format(
+                                L"ancestry marker survived its owned handle lifetime: cohort={} parent={} pathLength={}", cohort, role, parent.native().size());
                             return false;
                         }
                     }
