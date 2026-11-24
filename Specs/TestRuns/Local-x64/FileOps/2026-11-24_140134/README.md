@@ -18,7 +18,7 @@ the original object. The injected lost result after the case change was reconcil
 stored spelling, bound identity and content.
 
 The marked sandbox retains the raw trace. The six archived rows come from original lines 749, 751, 752, 754, 755, 757.
-The source contained 58720827 bytes and 148579 rows.
-Its SHA-256 was `866a6c6ed56016b85763c8050766bf38bd3752b5097923485a5900d24eee303c`.
+The completed archive contains 66513156 bytes and 167239 rows.
+Its SHA-256 was `7e3974d04c4f4daec9cd1ca5f088b21e2be424888e412dd540f148d81ad30940`.
 The four observations are single-item Debug controls. A paired baseline, Release, multi-item
 cancellation and live SMB Rename qualification remain open.

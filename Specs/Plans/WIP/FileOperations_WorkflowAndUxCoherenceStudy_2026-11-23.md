@@ -12,11 +12,15 @@ passed through its exact no-activation selection. The branch also contains the f
 and throughput changes. Implementation started at `bbb57a572`. Drift from the study baseline affected the ancestry-cleanup
 test and its evidence contracts.
 
-The latest non-activating x64 Debug PrePush passed all 14 executed entries. It recorded 1,799 passes, zero
-failures, and 27 environment skips. Four interactive entries and the remaining qualification below are open.
-
 [PR #246](https://github.com/RedSalamanders/RedSalamander/pull/246) merged into `main` at `bcaa59d10`.
-The next slice checks exact Local Rename spelling after a failed report and exercises the legacy information class.
+Its non-activating x64 Debug PrePush executed 14 entries with 1,799 passes, zero failures and 27 environment skips.
+[The first main Release attempt](https://github.com/RedSalamanders/RedSalamander/actions/runs/45405656554/attempts/1)
+timed out downloading a Ghostty build dependency on both architectures before native regression tests. The failed jobs
+were retried. Four desktop-lease entries and the qualification below remain open.
+
+The follow-up x64 Debug PR selection on `842ac811a` executed 12 entries with 1,507 passes and zero failures.
+Repository coverage remains `NOT_EVALUATED`. The current candidate also includes Queue/Parallel persistence,
+bulk-pause ownership and a dedicated live SMB Rename case. Their native validation is pending.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -35,8 +39,14 @@ The next slice checks exact Local Rename spelling after a failed report and exer
     rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
   - [ ] Qualify exact Local and SMB for nested rows, case-only hops, legacy API fallbacks and blocking watchers. Compare
     single- and 100-item Rename costs, including handle peaks and cancellation.
-  - [ ] Run the Local exact-rename refusal, legacy fallback, collision and lost-response controls. Current environment
-    lacks an approved live SMB target, which is required for the corresponding Windows SMB and Samba qualification.
+  - [x] Run the Local exact Rename refusal, legacy fallback, collision and lost-response controls.
+    [The x64 Debug record](../../TestRuns/Local-x64/FileOps/2026-11-24_140134/README.md) retains their timings and receipts.
+  - [x] Register the approved SMB test directory and confirm a read-only listing and mapping through `remote_file_smb`.
+    The case passed in run `20261124T143343Z-95336-b6a780d1e7104d7092573afd510ba4d0`.
+  - [ ] Run the dedicated exact Rename case on the registered endpoint. The second SMB server implementation still
+    needs an approved target.
+  - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
+    scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
     including changed parents and decoys.
   - [ ] Qualify new-name Rename on Curl, Drive, and Graph and its result receipts before enabling each protocol or
@@ -52,6 +62,10 @@ The next slice checks exact Local Rename spelling after a failed report and exer
   Match card and mirror scopes and authority, including stage cleanup and post-publication results.
 - [ ] **S4–S5.** Queue controls and persistence, shared cap, completed grouping, mirror focus and Issues entry.
   Recheck I60/I64 ownership and verify interlocks, pause provenance, retention, UIA and focus.
+  - [ ] Verify that Queue/Parallel persists across owners and the Start option applies to one submission.
+    The settings and popup controls are implemented.
+  - [ ] Verify Pause all during preparation and queue waits, and Resume all with prior individual pauses and a later
+    admission. The engine, popup and focused controls are implemented.
 - [ ] **S6–S7.** Options parity, asynchronous Create Directory and archives, and useful results. Preserve saved
   settings. Qualify worker cancellation, exit, refresh and cleanup.
 - [ ] **S8.** Keep the owning specifications, consistency ledger and user guide current. The first ingress, exact
