@@ -938,7 +938,7 @@
         "Product mode may populate .build/TerminalEngine and Product outputs",
         "Candidate mode is confined to .build/TerminalEngineUpgrade and cannot publish the pairing header",
         "May download locked source inputs unless offline",
-        "Launches native children through kill-on-close containment, each bounded to 30 minutes plus 120 seconds of post-exit output drain; a stalled contained tree is snapshotted and terminated, and the build fails",
+        "Launches native children through kill-on-close containment with a default 30-minute deadline and 120-second post-exit output deadline. Source downloads have a 540-second deadline and the pinned Zig toolchain has a 4,020-second deadline. A stalled tree is snapshotted and terminated, and the build fails",
         "Takes the session-wide R: mapping lease only while an actual rebuild maps, uses, and unmaps the canonical drive"
       ],
       "outputs": [
@@ -3415,7 +3415,7 @@
         "Product mode may update only .build/TerminalEngine and its pairing header",
         "Candidate mode may update only .build/TerminalEngineUpgrade and never writes a pairing header",
         "May download locked inputs when not offline",
-        "Launches kill-on-close contained native children, terminating a contained tree that exceeds its 30-minute exit or 120-second output-drain bound"
+        "Launches kill-on-close contained native children with a default 30-minute exit deadline, 540 seconds for source archives or 4,020 seconds for the pinned Zig toolchain, plus a 120-second post-exit output deadline"
       ],
       "outputs": [
         "Validated lock records and digests",

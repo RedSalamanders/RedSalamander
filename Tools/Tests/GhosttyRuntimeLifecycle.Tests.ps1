@@ -34,27 +34,58 @@ function New-RSGhosttyLockedPackageFixture {
 }
 
 Describe 'Ghostty archive download retries' {
-    It 'bounds both actual archive callers without broad permanent-error retries' {
+    It 'gives only the pinned Zig bootstrap a larger transfer budget while bounding both callers' {
         $tokens=$null;$errors=$null
         $ast=[Management.Automation.Language.Parser]::ParseFile($modulePath,[ref]$tokens,[ref]$errors)
         @($errors).Count | Should Be 0
         $calls=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and
             $node.GetCommandName() -ceq 'Invoke-CheckedProcess' -and $node.Extent.Text.Contains('Get-RSGhosttyRuntimeDownloadArguments')},$true))
         $calls.Count | Should Be 2
-        foreach($call in $calls){$call.Extent.Text | Should Match '-TimeoutSeconds 540'}
-        $arguments=& (Get-Module GhosttyRuntimeLifecycle) {Get-RSGhosttyRuntimeDownloadArguments -Uri 'https://example.invalid/pinned.zip' -Destination 'fixture.partial'}
-        foreach($pair in @(@('--retry','3'),@('--retry-delay','2'),@('--retry-max-time','360'),@('--connect-timeout','20'),@('--max-time','120'))){
-            $arguments[[Array]::IndexOf($arguments,$pair[0])+1] | Should Be $pair[1]
+        $zigCall = @($calls | Where-Object { $_.Extent.Text.Contains('$zigArchiveUri') })
+        $sourceCall = @($calls | Where-Object { $_.Extent.Text.Contains('$dependency.sourceArchive.url') })
+        $zigCall.Count | Should Be 1
+        $sourceCall.Count | Should Be 1
+        $zigCall[0].Extent.Text | Should Match '-ZigToolchainArchive\b'
+        $zigCall[0].Extent.Text | Should Match '-TimeoutSeconds 4020\b'
+        $sourceCall[0].Extent.Text | Should Not Match '-ZigToolchainArchive\b'
+        $sourceCall[0].Extent.Text | Should Match '-TimeoutSeconds 540\b'
+
+        foreach ($zig in @($false, $true)) {
+            $arguments = & (Get-Module GhosttyRuntimeLifecycle) {
+                param($isZig)
+                Get-RSGhosttyRuntimeDownloadArguments -Uri 'https://example.invalid/pinned.zip' -Destination 'fixture.partial' -ZigToolchainArchive:$isZig
+            } $zig
+            $expected = [ordered]@{
+                '--retry' = '3'
+                '--retry-delay' = '2'
+                '--retry-max-time' = '360'
+                '--connect-timeout' = '20'
+                '--max-time' = '120'
+            }
+            if ($zig) {
+                $expected['--max-time'] = '3600'
+                $expected['--speed-limit'] = '1024'
+                $expected['--speed-time'] = '120'
+            } else {
+                ($arguments -contains '--speed-limit') | Should Be $false
+                ($arguments -contains '--speed-time') | Should Be $false
+            }
+            foreach ($argument in $expected.GetEnumerator()) {
+                $index = [Array]::IndexOf($arguments, $argument.Key)
+                $index | Should BeGreaterThan -1
+                $arguments[$index + 1] | Should BeExactly $argument.Value
+            }
+            ($arguments -contains '--retry-all-errors') | Should Be $false
         }
-        ($arguments -contains '--retry-all-errors') | Should Be $false
     }
 
     It 'executes real curl against owned loopback responses: <Name>' -TestCases @(
-        @{Name='504 then exact success';Codes=@(504,200);ExpectedRequests=2;ExpectedExit=0},
-        @{Name='404 is permanent';Codes=@(404);ExpectedRequests=1;ExpectedExit=22},
-        @{Name='504 retry count is bounded';Codes=@(504,504,504,504);ExpectedRequests=4;ExpectedExit=22}
+        @{Name='504 then exact source success';Codes=@(504,200);ExpectedRequests=2;ExpectedExit=0;Zig=$false},
+        @{Name='504 then exact Zig success';Codes=@(504,200);ExpectedRequests=2;ExpectedExit=0;Zig=$true},
+        @{Name='404 is permanent';Codes=@(404);ExpectedRequests=1;ExpectedExit=22;Zig=$true},
+        @{Name='504 retry count is bounded';Codes=@(504,504,504,504);ExpectedRequests=4;ExpectedExit=22;Zig=$false}
     ) {
-        param($Name,$Codes,$ExpectedRequests,$ExpectedExit)
+        param($Name,$Codes,$ExpectedRequests,$ExpectedExit,$Zig)
         if(-not ('RSGhosttyDownloadHttpV1' -as [type])){
             Add-Type -TypeDefinition @'
 using System;
@@ -105,7 +136,10 @@ public sealed class RSGhosttyDownloadHttpV1 : IDisposable {
         try {
             $destination=Join-Path $TestDrive ($Name.Replace(' ','-')+'.partial')
             $uri="http://127.0.0.1:$($server.Port)/synthetic-archive"
-            $arguments=& (Get-Module GhosttyRuntimeLifecycle) {param($u,$p) Get-RSGhosttyRuntimeDownloadArguments -Uri $u -Destination $p} $uri $destination
+            $arguments = & (Get-Module GhosttyRuntimeLifecycle) {
+                param($archiveUri, $archivePath, $isZig)
+                Get-RSGhosttyRuntimeDownloadArguments -Uri $archiveUri -Destination $archivePath -ZigToolchainArchive:$isZig
+            } $uri $destination $Zig
             $info=New-RSProcessStartInfo -FilePath (Get-Command curl.exe -ErrorAction Stop).Source -Arguments $arguments -WorkingDirectory ([string]$TestDrive)
             $info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
             $child=Start-RSContainedProcess -ProcessStartInfo $info
