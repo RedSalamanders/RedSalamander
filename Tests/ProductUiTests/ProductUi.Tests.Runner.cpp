@@ -1,6 +1,7 @@
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "DxUiThemePalette.h"
 #include "FileMetadataFormatting.h"
+#include "FileOperationBandwidth.h"
 #include "FileOperationsCompletedGroupLayout.h"
 #include "FileOperationsFooterLayout.h"
 #include "FolderViewEmptyStateLayout.h"
@@ -23,6 +24,7 @@
 #include "WindowSizing.h"
 #include "YyjsonHelpers.h"
 #include <DxUi/DxUi.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cassert>
@@ -779,6 +781,10 @@ void TestBinaryThroughputGrammarPreservesBoundaryPoliciesAndRoundTrips()
     Require(TryParseBinaryThroughputText(controlWrapped, c0, parsed) && parsed == 1048576u,
             "Preferences preserves its historical C0-through-space boundary trimming");
     Require(! TryParseBinaryThroughputText(controlWrapped, ascii, parsed), "the popup preserves its narrower six-character ASCII whitespace boundary");
+
+    constexpr std::array<uint64_t, 8u> expectedPresets{{0u, 1048576u, 5242880u, 10485760u, 52428800u, 104857600u, 524288000u, 1073741824u}};
+    Require(std::ranges::equal(FileOperations::kBandwidthPresets, expectedPresets, {}, &FileOperations::BandwidthPreset::bytesPerSecond),
+            "Preferences, start options and the running card share all eight ordered binary bandwidth presets");
 
     constexpr std::array<uint64_t, 7u> roundTripValues{{0u, 1u, 1024u, 1048576u, 1073741824u, 1048577u, (std::numeric_limits<uint64_t>::max)()}};
     for (const uint64_t value : roundTripValues)

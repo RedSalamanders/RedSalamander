@@ -27,6 +27,7 @@
 #include "ConnectionManagerWindow.h"
 #include "ConnectionProfileUtils.h"
 #include "ConnectionSecrets.h"
+#include "FileOperationBandwidth.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
 #include "SettingsHotReload.h"
@@ -2146,16 +2147,12 @@ private:
                        {HOST_FILE_OPERATION_EXECUTION_PARALLEL, LoadStringResource(nullptr, IDS_FILEOPS_BTN_MODE_PARALLEL)}},
                       options.executionMode);
 
-            std::vector<RedSalamander::Ui::AlertOptionChoice> bandwidthChoices{
-                {0u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_UNLIMITED)},
-                {1ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_1_MIB)},
-                {5ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_5_MIB)},
-                {10ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_10_MIB)},
-                {50ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_50_MIB)},
-                {100ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_100_MIB)},
-                {500ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB)},
-                {1ull << 30u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB)},
-            };
+            std::vector<RedSalamander::Ui::AlertOptionChoice> bandwidthChoices;
+            bandwidthChoices.reserve(FileOperations::kBandwidthPresets.size() + 1u);
+            for (const auto& preset : FileOperations::kBandwidthPresets)
+            {
+                bandwidthChoices.push_back({preset.bytesPerSecond, LoadStringResource(nullptr, preset.labelId)});
+            }
             const bool hasCurrentBandwidth =
                 std::ranges::any_of(bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
             if (! hasCurrentBandwidth)

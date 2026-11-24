@@ -50,8 +50,8 @@ Task controls (what you can click):
 - **Skip counting**: shown while the card is counting ahead of the work. It stops the count from running ahead so the operation can use its full speed. It does not skip any check (see [“Counting items…” and totals](#counting-items-and-totals)).
 - **Speed Limit** *(Copy/Move)*: sets a per-task bandwidth cap:
   - **Unlimited**
-  - presets: `1 MiB/s`, `5 MiB/s`, `10 MiB/s`, `50 MiB/s`, `100 MiB/s`, `1 GiB/s`
-  - **Custom…** accepts inputs like `3KB`, `4MB`, `1GB` (optional `/s`).
+  - Presets include `1`, `5`, `10`, `50`, `100` and `500 MiB/s`, plus `1 GiB/s`.
+  - **Custom…** accepts inputs such as `3 KiB/s`, `4 MiB/s` or `1 GiB/s`. `/s` is optional and older spellings such as `4MB` still work.
 - **More...** *(completed tasks)*: opens the commands that apply to the finished task, such as **Reveal item**, **Open destination**, **Show log** and **Export issues**. When only one command applies, the task shows that command as its own button instead of a menu.
 - **Dismiss**: removes a completed task summary from the popup.
 
@@ -253,8 +253,8 @@ When an operation starts, RedSalamander creates a **task** and shows it in the F
 This page owns host-wide defaults that apply to newly created tasks (the label in parentheses is the section heading on the page):
 
 - **Verify copied files** (Verification): after a file is copied, compares the copy with the original, which may read every copied byte again. Off by default. With it on, a task's bar has two halves, copying then verifying; a divider in the verifying color separates them, and the verifying half fills with hatching in that color. A finished task reads **100%** only when everything was verified; otherwise its card says **Not verified** or **Verified N%** next to the bar. **Copy with Options** (`Shift+F5`) and **Move with Options** (`Shift+F6`) can change it for a single task without changing Preferences.
-- **Default speed limit** (Bandwidth): seeds new copy/move tasks with **Unlimited**, a preset (`1 MiB/s` through `500 MiB/s`), or **Custom**. There is no GiB/s preset; use **Custom** for faster rates.
-- **Custom limit**: the throughput used when **Custom** is selected, a value such as `128KB`, `5MB`, or `1GB`.
+- **Default speed limit** (Bandwidth) sets the initial speed for Copy and Move. Choose **Unlimited**, the same presets through `1 GiB/s` offered in the start options and running card, or **Custom**.
+- **Custom limit** accepts inputs such as `128 KiB/s`, `5 MiB/s` or `1 GiB/s`.
 - **Auto-dismiss successful tasks** (Advanced): automatically clears completed tasks that succeeded or were canceled, and closes the popup when nothing remains.
 - **Show informational notes from file operations** (Advanced): shows notes about expected outcomes (inherited permissions, questions you answered, skipped links) on task cards and in the issues pane. Off by default; the notes are always kept in the task log (see [Results: warnings, errors and notes](#results-warnings-errors-and-notes)).
 - **Also show file-operation questions over the pane** (Advanced): when a task waits for your decision about a folder a pane shows, the question also appears over that pane (see [Answering a question from the pane](#answering-a-question-from-the-pane)). On by default; the question always stays on the task card.

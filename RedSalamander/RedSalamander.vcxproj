@@ -258,6 +258,7 @@
     <ClInclude Include="..\Common\PaneVisualState.h" />
     <ClInclude Include="..\Common\Blake3Digest.h" />
     <ClInclude Include="..\Common\FileOperationTraversalPolicy.h" />
+    <ClInclude Include="FileOperationBandwidth.h" />
     <ClInclude Include="FileOperationConfirmation.h" />
     <ClInclude Include="FolderViewInternal.h" />
     <ClInclude Include="FolderViewSortPolicy.h" />
