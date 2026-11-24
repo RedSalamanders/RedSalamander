@@ -12622,13 +12622,15 @@ struct FileOperationsPopupTestFixture final
 
 // Inspect the raw hosted tree without a visibility filter. A collapsed card
 // must retire its providers, not merely mark stale controls offscreen.
-[[nodiscard]] bool CountCompletedTaskRawProviders(HWND popup, const std::array<uint64_t, 3>& taskIds, std::array<size_t, 3>& outCounts) noexcept
+template <size_t TaskCount>
+[[nodiscard]] bool CountCompletedTaskRawProviders(HWND popup, const std::array<uint64_t, TaskCount>& taskIds, std::array<size_t, TaskCount>& outCounts) noexcept
 {
     outCounts.fill(0u);
-    if (! popup || taskIds[0] == 0u || taskIds[1] == 0u || taskIds[2] == 0u || taskIds[0] == taskIds[1] || taskIds[0] == taskIds[2] || taskIds[1] == taskIds[2])
+    if (! popup || std::ranges::any_of(taskIds, [&](uint64_t taskId) noexcept { return taskId == 0u || std::ranges::count(taskIds, taskId) != 1; }))
         return false;
 
-    const std::array<std::wstring, 3> taskIdText{{std::to_wstring(taskIds[0]), std::to_wstring(taskIds[1]), std::to_wstring(taskIds[2])}};
+    std::array<std::wstring, TaskCount> taskIdText{};
+    std::ranges::transform(taskIds, taskIdText.begin(), [](uint64_t taskId) { return std::to_wstring(taskId); });
     constexpr std::wstring_view kTaskPrefix   = L"FileOperations.Task.";
     constexpr std::wstring_view kActionPrefix = L"FileOperations.Action.";
     bool propertyReadable                     = true;
@@ -13138,15 +13140,24 @@ struct FileOperationsPopupTestFixture final
         std::this_thread::sleep_for(20ms);
     }
     state.Require(successCollapseObserved, L"Failed to observe the completed success task after its UI-thread auto-collapse transition.");
-    state.Require(successLayout.completedGroupVisible, L"Multiple completed file-operation cards should show a Completed (N) group.");
+    using CompletedSummary                  = FolderWindow::FileOperationState::CompletedTaskSummary;
+    constexpr uint64_t cleanCompanionTaskId = 0xFA260001u;
+    CompletedSummary cleanCompanion{};
+    cleanCompanion.taskId        = cleanCompanionTaskId;
+    cleanCompanion.operation     = FILESYSTEM_COPY;
+    cleanCompanion.resultHr      = S_OK;
+    cleanCompanion.completedTick = GetTickCount64();
+    fileOps->DebugAppendCompletedTaskForSelfTest(std::move(cleanCompanion));
+    RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    successLayout        = {};
+    successLayout.taskId = successTaskId;
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout), L"Read the layout with both clean results.");
+    state.Require(successLayout.completedGroupVisible, L"Two clean file operations should show a Completed (N) group.");
     state.Require(successLayout.completedGroupExpanded, L"Completed group should start expanded so completed-card actions remain discoverable.");
     state.Require(successLayout.completedGroupAnimationEnabled, L"Completed group should use bounded expand/collapse motion when reduced motion is off.");
-    state.Require(successLayout.completedGroupCount == 3u,
-                  std::format(L"Completed group should contain exactly the three case-owned file-operation cards; saw {}.", successLayout.completedGroupCount));
-    state.Require(successLayout.completedGroupCompletedCount + successLayout.completedGroupPartialCount + successLayout.completedGroupFailedCount +
-                          successLayout.completedGroupCanceledCount ==
-                      successLayout.completedGroupCount,
-                  L"Completed-group result badges should classify every grouped operation exactly once.");
+    state.Require(successLayout.completedGroupCount == 2u && successLayout.completedGroupCompletedCount == 2u &&
+                      successLayout.completedGroupCanceledCount == 0u,
+                  L"The Completed group should show exactly the two clean successes.");
     state.Require(successLayout.completedGroupVisibleTaskCount == successLayout.completedGroupCount,
                   std::format(L"Expanded completed group should show all grouped tasks; visible={}, total={}.",
                               successLayout.completedGroupVisibleTaskCount,
@@ -13154,11 +13165,11 @@ struct FileOperationsPopupTestFixture final
     state.Require(successLayout.taskAutoCollapsedOnCompletion, L"Completed success task should auto-collapse when it first finishes.");
     state.Require(successLayout.taskCompactRow, L"Auto-collapsed completed success task should render as a compact row.");
     state.Require(successLayout.taskCompactProgressVisible, L"Auto-collapsed completed success task should keep compact progress visible.");
-    const std::array<uint64_t, 3> completedTaskIds{{taskId.value(), aggregateConflictTaskId, successTaskId}};
+    const std::array<uint64_t, 4> completedTaskIds{{taskId.value(), aggregateConflictTaskId, successTaskId, cleanCompanionTaskId}};
     // Compact cards legitimately have no Dismiss action. Witness task-owned
     // raw providers across the virtualized viewport without requiring one
     // presentation's caption or forcing every task into the same frame.
-    std::array<bool, 3> witnessedTaskProviders{};
+    std::array<bool, completedTaskIds.size()> witnessedTaskProviders{};
     {
         wil::com_ptr_nothrow<IRawElementProviderSimple> footer;
         wil::com_ptr_nothrow<IRawElementProviderFragment> fragment;
@@ -13176,7 +13187,7 @@ struct FileOperationsPopupTestFixture final
         if (page != 0u)
             SendMessageW(popup, WM_VSCROLL, SB_PAGEDOWN, 0);
         RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-        std::array<size_t, 3> expandedTaskProviders{};
+        std::array<size_t, completedTaskIds.size()> expandedTaskProviders{};
         const bool expandedTreeComplete = CountCompletedTaskRawProviders(popup, completedTaskIds, expandedTaskProviders);
         state.Require(expandedTreeComplete, L"The expanded raw UIA provider traversal must complete before collapse.");
         if (! state.failure.empty())
@@ -13381,13 +13392,9 @@ struct FileOperationsPopupTestFixture final
         collapsedGroupLayout.completedGroupVisibleTaskCount == 0u,
         std::format(L"Collapsed completed group should hide grouped task rows; saw {} visible.", collapsedGroupLayout.completedGroupVisibleTaskCount));
     state.Require(collapsedGroupLayout.completedGroupCompletedCount == successLayout.completedGroupCompletedCount &&
-                      collapsedGroupLayout.completedGroupPartialCount == successLayout.completedGroupPartialCount &&
-                      collapsedGroupLayout.completedGroupFailedCount == successLayout.completedGroupFailedCount &&
                       collapsedGroupLayout.completedGroupCanceledCount == successLayout.completedGroupCanceledCount,
-                  L"Collapsed completed group should preserve Completed, Partial, Failed, and Canceled badge counts.");
+                  L"Collapsed completed group should preserve the Completed and Canceled badge counts.");
     const size_t expectedBadgeTooltipCount = static_cast<size_t>(collapsedGroupLayout.completedGroupCompletedCount != 0u) +
-                                             static_cast<size_t>(collapsedGroupLayout.completedGroupPartialCount != 0u) +
-                                             static_cast<size_t>(collapsedGroupLayout.completedGroupFailedCount != 0u) +
                                              static_cast<size_t>(collapsedGroupLayout.completedGroupCanceledCount != 0u);
     const std::wstring collapsedGroupDiagnostics =
         std::format(L"Collapsed result badges should expose one tooltip region per nonzero category; expected {}, saw {}. "
@@ -13418,21 +13425,18 @@ struct FileOperationsPopupTestFixture final
                   L"Collapsed result badge tooltips should explain the category instead of repeating the visible count.");
     state.Require(collapsedGroupLayout.completedGroupClearTooltipEmpty, L"Clear completed should not expose a tooltip that merely repeats its visible label.");
     state.Require(collapsedGroupLayout.taskHiddenByCompletedGroup, L"Selected completed task should report hidden while the group is collapsed.");
-    std::array<size_t, 3> collapsedTaskProviders{};
-    const bool collapsedTreeComplete = CountCompletedTaskRawProviders(popup, completedTaskIds, collapsedTaskProviders);
-    const std::wstring retirementDiagnostics =
-        std::format(L"First collapsed frame must retire all three tasks' raw hosted UIA controls, including offscreen descendants; "
-                    L"traversal={}, providers={}/{}/{} for task IDs {}/{}/{}.",
-                    collapsedTreeComplete,
-                    collapsedTaskProviders[0],
-                    collapsedTaskProviders[1],
-                    collapsedTaskProviders[2],
-                    completedTaskIds[0],
-                    completedTaskIds[1],
-                    completedTaskIds[2]);
-    Trace(retirementDiagnostics);
+    const std::array<uint64_t, 2> groupedTaskIds{{successTaskId, cleanCompanionTaskId}};
+    std::array<size_t, groupedTaskIds.size()> collapsedTaskProviders{};
+    const bool collapsedTreeComplete = CountCompletedTaskRawProviders(popup, groupedTaskIds, collapsedTaskProviders);
     state.Require(collapsedTreeComplete && std::ranges::all_of(collapsedTaskProviders, [](size_t count) noexcept { return count == 0u; }),
-                  retirementDiagnostics);
+                  L"The first collapsed frame must retire both clean tasks' hosted UIA controls.");
+    for (const uint64_t problemTaskId : {taskId.value(), aggregateConflictTaskId})
+    {
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot problemLayout{};
+        problemLayout.taskId = problemTaskId;
+        state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, problemLayout) && ! problemLayout.taskHiddenByCompletedGroup,
+                      L"Collapsed clean results must leave problem cards visible.");
+    }
 
     FileOperationsPopupInternal::PopupSelfTestInvoke expandCompletedGroup{};
     expandCompletedGroup.kind = FileOperationsPopupInternal::PopupHitTest::Kind::CompletedGroupToggle;
@@ -13557,8 +13561,7 @@ struct FileOperationsPopupTestFixture final
         return false;
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> beforeClear;
     fileOps->CollectCompletedTasks(beforeClear);
-    state.Require(beforeClear.size() == 3u && std::ranges::any_of(beforeClear, [&](const auto& item) noexcept { return item.taskId == successTaskId; }),
-                  L"Clear-completed must start with the three actual completed operations.");
+    state.Require(beforeClear.size() == completedTaskIds.size(), L"Clear completed should start with all four case-owned results.");
     state.Require(DirectedSelfTestInputWarning::TryActivateOwnedWindow(popup) &&
                       InvokeExactFileOperationsActionForSelfTest(
                           popup, FileOperationsPopupInternal::PopupHitTest::Kind::CompletedGroupClear, 0u, 0u, IDS_FILEOPS_BTN_CLEAR_COMPLETED),
@@ -13573,7 +13576,8 @@ struct FileOperationsPopupTestFixture final
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
         fileOps->CollectCompletedTasks(completed);
-        return completed.empty();
+        return completed.size() == 2u && std::ranges::any_of(completed, [&](const auto& item) noexcept { return item.taskId == taskId.value(); }) &&
+               std::ranges::any_of(completed, [&](const auto& item) noexcept { return item.taskId == aggregateConflictTaskId; });
     },
                              clearWait)
                                        .conditionMet;
@@ -13584,7 +13588,7 @@ struct FileOperationsPopupTestFixture final
                                           [&](const auto& item) noexcept
     { return item.taskId == neighbor.taskId && ! item.finished && item.makeFileListCollecting; }) &&
                       TextFileEqualsForFileOpsPrompt(successSource, "new payload") && TextFileEqualsForFileOpsPrompt(successDest, "new payload"),
-                  L"Clear-completed must remove only completed records, not its live neighbor or published file bytes.");
+                  L"Clear completed must preserve both problem records, the live neighbor and the published file bytes.");
     return state.failure.empty();
 }
 

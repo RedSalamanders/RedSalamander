@@ -790,8 +790,7 @@ template <typename VerifyProvider>
     allResults.name      = L"136-completed-group-all-results-expanded";
     auto unknownResult   = result[25].tasks.front();
     unknownResult.taskId = 5u;
-    // An interrupted-Move restart notice stays outside the Completed group, so the group's
-    // Unknown member is an ordinary finished task with an indeterminate result.
+    // Use a regular indeterminate result to test that it stays visible beside the clean group.
     unknownResult.interruptedMoveNotice  = false;
     unknownResult.interruptedOperationId = 0u;
     unknownResult.resultSummary          = L"Résultat inconnu. Vérifiez la source et la destination.";
@@ -3107,26 +3106,26 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                     {
                         ++groupBadgeWitnessCount;
                         PopupLayoutDebugSnapshot painted{};
-                        const bool read                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), painted);
-                        const std::wstring partialName = FormatStringResource(nullptr, IDS_FMT_FILEOPS_BADGE_PARTIAL_TOOLTIP, 1ul);
-                        const std::wstring unknownName = FormatStringResource(nullptr, IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP, 1ul);
-                        const bool allGlyphsDrawn      = std::ranges::all_of(painted.completedGroupPaintedGlyphs, [](wchar_t glyph) { return glyph != L'\0'; });
-                        const bool fits       = read && painted.completedGroupExpectedBadges == 5u && painted.completedGroupPaintedBadges == 5u &&
-                                                painted.completedGroupPaintedBadgeMask == 31u && painted.completedGroupBadgeCountsFit &&
+                        const bool read                  = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), painted);
+                        const std::wstring completedName = FormatStringResource(nullptr, IDS_FMT_FILEOPS_BADGE_COMPLETED_TOOLTIP, 1ul);
+                        const std::wstring canceledName  = FormatStringResource(nullptr, IDS_FMT_FILEOPS_BADGE_CANCELED_TOOLTIP, 1ul);
+                        const bool allGlyphsDrawn = std::ranges::all_of(painted.completedGroupPaintedGlyphs, [](wchar_t glyph) { return glyph != L'\0'; });
+                        const bool fits       = read && painted.completedGroupExpectedBadges == 2u && painted.completedGroupPaintedBadges == 2u &&
+                                                painted.completedGroupPaintedBadgeMask == 3u && painted.completedGroupBadgeCountsFit &&
                                                 painted.completedGroupBadgeTooltipsInformative && allGlyphsDrawn &&
-                                                painted.completedGroupPaintedGlyphs[1] != painted.completedGroupPaintedGlyphs[2] &&
-                                                painted.completedGroupHostedNames[1] == partialName && painted.completedGroupHostedNames[2] == unknownName &&
-                                                partialName != unknownName;
+                                                painted.completedGroupPaintedGlyphs[0] != painted.completedGroupPaintedGlyphs[1] &&
+                                                painted.completedGroupHostedNames[0] == completedName && painted.completedGroupHostedNames[1] == canceledName &&
+                                                completedName != canceledName;
                         completedSemanticsFit = completedSemanticsFit && fits;
-                        AppendLog(std::format(L"CompletedGroupBadgePaint: {} dpi={} width={} partialGlyph=U+{:04X} unknownGlyph=U+{:04X} partialName='{}' "
-                                              L"unknownName='{}' fit={}",
+                        AppendLog(std::format(L"CompletedGroupBadgePaint: {} dpi={} width={} completedGlyph=U+{:04X} canceledGlyph=U+{:04X} completedName='{}' "
+                                              L"canceledName='{}' fit={}",
                                               scenario.name,
                                               dpi,
                                               widthDip,
+                                              static_cast<unsigned int>(painted.completedGroupPaintedGlyphs[0]),
                                               static_cast<unsigned int>(painted.completedGroupPaintedGlyphs[1]),
-                                              static_cast<unsigned int>(painted.completedGroupPaintedGlyphs[2]),
+                                              painted.completedGroupHostedNames[0],
                                               painted.completedGroupHostedNames[1],
-                                              painted.completedGroupHostedNames[2],
                                               fits));
                     }
                     if (themeIndex == 0u && widthDip == 480 && scenario.tasks.size() == 1u)
@@ -3220,8 +3219,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                           (group.completedGroupExpanded ||
                                            (group.completedGroupPaintedBadges == group.completedGroupExpectedBadges && group.completedGroupBadgeCountsFit)) &&
                                           (scenario.name != L"137-completed-group-all-results-collapsed" ||
-                                           (group.completedGroupExpectedBadges == 5u && group.completedGroupPaintedBadges == 5u &&
-                                            group.completedGroupPaintedBadgeMask == 31u));
+                                           (group.completedGroupExpectedBadges == 2u && group.completedGroupPaintedBadges == 2u &&
+                                            group.completedGroupPaintedBadgeMask == 3u));
                         terminalPresentationFits = terminalPresentationFits && fits;
                         AppendLog(std::format(L"CompletedGroupLabelFit: {} dpi={} width={} expectedBadges={} paintedBadges={} clearFits={} fit={}",
                                               scenario.name,

@@ -618,6 +618,7 @@ using the foreground. It restores cursor/foreground state. Static capture remain
 
 The supplied-review safety cases use `ProductUiTests` (directory decoding and destination-bound payloads),
 `-Suite FileOps -CaseFilter FileOps_ReviewRemediationContracts -NonInteractive` (parent pinning and typed prerequisite results),
+`-Suite FileOps -CaseFilter FileOps_ClearCompletedScope -NonInteractive` (painted clean results, retained problems and interrupted-Move recovery),
 and exact noninteractive `FileOps_SmallFileCopyCost` / `FileOps_CrossRootLocalCopy` selections.
 XP-09 reports an unreachable share as skipped, with no cross-root qualification. The small-file
 benchmark checks actual names and bytes on both routes outside its timed interval and exercises

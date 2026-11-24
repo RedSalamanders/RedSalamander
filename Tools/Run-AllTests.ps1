@@ -94,6 +94,7 @@
     Run only the matching case name or prefix (passed as --selftest-case=...).
     Exact FileOps SMB Rename provider cases may run with -NonInteractive. Select
     FileOps_SmbExactRenameProvider or FileOps_SmbCorroboratedRenameProvider for the relevant binding route.
+    FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
 
 .PARAMETER CommandsFamily
     With Suite Commands, runs one governed Commands source family in its own process.

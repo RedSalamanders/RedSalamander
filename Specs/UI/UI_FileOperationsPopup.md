@@ -234,8 +234,7 @@ By task state (I35 R9.7):
 
 The engine returns the IDs it actually asked to cancel; a second Cancel all adds its IDs to a set that
 has not resolved yet. When every one of them has finished (or left the engine; a card still inside its
-reveal delay is still running) and every member of the completed group is a clean success or a clean
-cancel (no Partial, Failed or Indeterminate member, no warning or error), the group collapses once so
+reveal delay is still running) and every visible terminal File Operations result is clean, the group collapses once so
 its badges and `Clear completed` are in view. The user's own expand or collapse wins: toggling the
 group before the set resolves cancels the pending collapse, and nothing is stored. A group with any
 problem member keeps the state the user left it in (R9.5).
@@ -967,18 +966,17 @@ card's normal actions without disabling later completed-card auto-collapse. Comp
 status signal and task name on one line. A final published byte/item denominator permits a mini
 progress meter plus localized percent text. While discovery is open and transfer is active, the
 compact row shows a marquee and no meter or percent text. A row with completed
-work but no denominator MUST NOT render a misleading `0%` meter. When at least two completed file-operation cards remain visible, the
-popup groups them under `Completed (N)`, expanded by default; the one exception is the one-time
-collapse after an accepted Cancel all whose members all ended clean (see Footer, Cancel all). `Clear completed` is the first control
-in the group header and the disclosure chevron occupies the same trailing 18-DIP lane as task-card
-chevrons. Interrupted-Move restart notices are never group members: they stay standalone cards in
-both group states, so no badge hides them and the group count and badges exclude them. `Clear completed`
-removes exactly the member task IDs the group header covered when it was last painted, captured with
-that header; a task that finished after that paint stays, and an invocation before any header is
-published removes nothing. It never acknowledges an interrupted-Move breadcrumb, and the engine's bulk
-clear refuses breadcrumb-backed summaries even if one were listed. The chevron hides/shows completed
-rows without dismissing them. While collapsed, the header
-shows separate nonzero badges for Completed, Partial, Indeterminate, Failed, and Canceled result counts. Task-card
+work but no denominator MUST NOT render a misleading `0%` meter. When at least two file-operation cards
+have completed or canceled without warnings or errors, the popup groups them under `Completed (N)`.
+Information notes do not affect eligibility. Failed, Partial and Indeterminate results, results with
+warnings or errors, and interrupted-Move recovery notices stay visible on their own cards.
+The group starts expanded and supports one-time collapse after Cancel all as described under Footer.
+`Clear completed` is the first control in the header. The disclosure chevron shares the 18-DIP trailing
+lane used by task cards. The header captures the exact member task IDs it covered when last painted.
+`Clear completed` removes only those IDs. A later result stays, and an unpublished header has no
+clear scope. Recovery notices keep their explicit acknowledgement and breadcrumb guard.
+The chevron hides or shows the grouped cards. The collapsed header shows separate nonzero counts for
+Completed and Canceled. Task-card
 height and completed-group visibility animate together with bounded smoothstep easing over 260 ms.
 User-triggered disclosure motion temporarily advances at a 16-ms cadence, then returns to the
 telemetry timer (100 ms, or the 1 s waiting cadence when every open task waits); reduced motion snaps
