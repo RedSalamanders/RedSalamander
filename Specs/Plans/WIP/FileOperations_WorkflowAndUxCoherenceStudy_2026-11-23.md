@@ -12,8 +12,8 @@ passed through its exact no-activation selection. The branch also contains the f
 and throughput changes. Implementation started at `bbb57a572`. Drift from the study baseline affected the ancestry-cleanup
 test and its evidence contracts.
 
-Non-activating x64 Debug PrePush finished with one Git metadata fixture failure. The focused rerun passed.
-The broad result and four pending interactive entries are recorded below.
+The latest non-activating x64 Debug PrePush passed all 14 executed entries. It recorded 1,799 passes, zero
+failures, and 27 environment skips. Four interactive entries and the remaining qualification below are open.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -134,6 +134,13 @@ The broad result and four pending interactive entries are recorded below.
   `20261124T115346Z-19596-42d9378fb9594838b3962c7997e4d76a` and `20261124T120125Z-12688-ad787f3e6bed48438c508063879e91db`.
   The [paired Preparing evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-24_130014/README.md) records matching synthetic cadence and a 16-byte increase
   in the measured task object. Repository coverage remained `NOT_EVALUATED` for these selections.
+
+- Non-activating x64 Debug PrePush on `b4bdf0086`, run `20261124T120545Z-65304-4582af4137ca4af0ae165551a14d61f7`,
+  used final full-solution receipt `2b5b5c2dbda57d43a2e8e7f927e99782e335afbb224d75eee2899c208dbf8c92`.
+  All 14 executed entries passed their gates. The run recorded 1,799 passed, zero failed, and 27 environment skips.
+  Tools Pester passed all 1,496 cases, including the earlier Git metadata fixture. Change coverage was `PASSED`.
+  Repository coverage remained `NOT_EVALUATED` with Commands, File Operations, and both interactive viewer entries
+  pending. Release and live-provider evidence remain open.
 
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.
