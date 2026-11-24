@@ -6478,8 +6478,8 @@ public:
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot mixedEligibility{};
     state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({paused, discovering}, mixedEligibility),
                   L"Failed to build mixed bulk-control eligibility summary.");
-    state.Require(mixedEligibility.footerPauseResumeAllVisible && ! mixedEligibility.footerPauseResumeAllPauses,
-                  L"A paused started task plus an unstarted discovery task should offer Resume all, not Pause all.");
+    state.Require(mixedEligibility.footerPauseResumeAllVisible && mixedEligibility.footerPauseResumeAllPauses,
+                  L"Pause all includes an unstarted discovery task and preserves a separate pause.");
 
     discovering.started = true;
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot startedEligibility{};
@@ -6487,6 +6487,14 @@ public:
                   L"Failed to build started bulk-control eligibility summary.");
     state.Require(startedEligibility.footerPauseResumeAllVisible && startedEligibility.footerPauseResumeAllPauses,
                   L"A started unpaused task should make the eligible bulk command Pause all.");
+
+    discovering.started      = false;
+    discovering.paused       = true;
+    discovering.pausedByBulk = true;
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot bulkEligibility{};
+    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({paused, discovering}, bulkEligibility) && bulkEligibility.footerPauseResumeAllVisible &&
+                      ! bulkEligibility.footerPauseResumeAllPauses,
+                  L"Resume all is available for a bulk-paused discovery task.");
 
     SYSTEMTIME utc{};
     utc.wYear   = 2024;

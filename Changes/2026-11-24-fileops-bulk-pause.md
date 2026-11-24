@@ -1,0 +1,1 @@
+- Pause all now includes tasks still preparing or waiting in the queue. Resume all releases the pauses set by Pause all and preserves individual pauses.

@@ -2654,6 +2654,12 @@ report is informational only and grants no mutation authority.
 
 ## Cancellation and lifetime
 
+Pause all captures the unfinished live tasks in the current File Operations owner. Preparation
+may still perform nonmutating work before the execution gate. Resume all releases bulk pauses and
+preserves prior individual pauses, queue order, overlap waits, transfer admission and decisions.
+Later admissions start with their normal state. An individual Resume releases that task's explicit
+pause and preserves its independent wait gates.
+
 Task cancellation or stop exits every host pause/conflict wait even while Queue mode
 or a peer-owned conflict remains active. A cancelled queue-paused transfer drains
 independently of its predecessor: the predecessor may remain user-paused, and the

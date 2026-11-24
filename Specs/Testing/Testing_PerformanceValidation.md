@@ -2609,6 +2609,11 @@ settings. It restores the original saved and live modes before measuring cadence
 `FileOps.Settings.EnqueueUs` and `FileOps.Settings.SaveUs` for the `queue default` changes to account
 for foreground enqueue and deferred persistence separately.
 
+The same case checks bulk pause ownership with a private engine. It exercises the capture of
+preparing and queued tasks, a prior individual pause, a stopping task and a later admission. The
+popup model keeps a captured queue wait and keeps Resume all available when another task arrives.
+Capture `FileOps.Queue.BulkPauseUs` for the duration and visited task count of each command.
+
 ## Completed-card collapse after telemetry stops (2026-10-18)
 
 `FileOps_ReviewRemediationContracts` includes a private, no-activation production popup whose live

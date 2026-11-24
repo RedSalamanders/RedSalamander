@@ -8917,7 +8917,7 @@ using TickResult = std::optional<bool>;
     task->RequestCancel();
     task->SetPaused(true); // Stale row and bulk-pause callers must not re-arm a pause.
     task->SetDesiredSpeedLimit(1234u);
-    operations->SetAllRunningTasksPaused(true);
+    operations->SetAllTasksPaused(true);
     if (operations->RunQueuedTaskNow(taskId.value()) || operations->MoveQueuedTask(taskId.value(), true))
         return reject(L"stopping task still accepts queue decisions");
     TaskSnapshot stopping{};
@@ -9920,7 +9920,9 @@ using TickResult = std::optional<bool>;
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
     if (! DebugValidateFileOperationsPreparingPresentation())
-        fail(L"Preparing elapsed status must advance before execution and preserve the short chip and queue priority");
+        fail(L"Preparing elapsed status and bulk pause controls must respect queue priority and group ownership");
+    if (! State::DebugValidateBulkPauseOwnershipForSelfTest())
+        fail(L"Pause all must capture live preparation and preserve independent pauses and queue waits when resumed");
     auto* folder     = TryGetFolderWindow(state.mainWindow);
     auto* operations = TryGetFileOps(folder);
     if (! folder || ! operations || operations->HasActiveOperations())

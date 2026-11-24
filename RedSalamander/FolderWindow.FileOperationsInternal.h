@@ -1986,7 +1986,13 @@ struct FolderWindow::FileOperationState
         void RequestCancel() noexcept;
         // R0f cancel-watch predicate for this task's worker threads (see SynchronousIoCancelWatch.h).
         [[nodiscard]] static bool ShouldCancelSynchronousIo(void* context) noexcept;
-        void SetPaused(bool paused) noexcept;
+        enum class PauseReason : uint8_t
+        {
+            None,
+            Individual,
+            Bulk,
+        };
+        void SetPaused(bool paused, PauseReason reason = PauseReason::Individual) noexcept;
         void TogglePause() noexcept;
         void SetDesiredSpeedLimit(uint64_t bytesPerSecond) noexcept;
         void NoteLiveOutputPublished(std::wstring_view providerPath) noexcept;
@@ -2024,6 +2030,7 @@ struct FolderWindow::FileOperationState
         [[nodiscard]] TaskLifecyclePhase GetLifecyclePhase() const noexcept;
         [[nodiscard]] std::shared_ptr<const PreparationSnapshot> LoadPreparationSnapshot() const noexcept;
         ULONGLONG GetEnteredOperationTick() const noexcept;
+        [[nodiscard]] PauseReason GetPauseReason() const noexcept;
         bool IsPaused() const noexcept;
         bool IsWaitingForOthers() const noexcept;
         // R4-A02-1: the user chose Queue after these tasks for a same-host overlap; the admission wait is
@@ -2377,7 +2384,7 @@ struct FolderWindow::FileOperationState
         std::atomic<ULONGLONG> _enteredOperationTick{0};
         std::atomic<bool> _cancelled{false};
         std::atomic<ULONGLONG> _cancelRequestedTick{0};
-        std::atomic<bool> _paused{false};
+        std::atomic<PauseReason> _pauseReason{PauseReason::None};
         std::atomic<bool> _queuePaused{false};
         std::atomic<uint64_t> _rateSamplingStateGeneration{0};
         std::atomic<unsigned int> _liveOutputWaitCount{0};
@@ -2825,7 +2832,7 @@ struct FolderWindow::FileOperationState
     // A fresh queue-order key, larger than every task id and key handed out so far (it consumes an
     // id from the admission counter), for a task that must enter the queue behind a younger peer.
     [[nodiscard]] uint64_t AllocateLateQueueOrderKey() noexcept;
-    void SetAllRunningTasksPaused(bool paused) noexcept;
+    void SetAllTasksPaused(bool paused) noexcept;
     // Requests cancellation of every unfinished task not already canceled and returns their IDs
     // (I35 R9.5: the popup's one-time completed-group collapse follows exactly this cohort).
     std::vector<uint64_t> CancelAll() noexcept;
@@ -2939,6 +2946,7 @@ struct FolderWindow::FileOperationState
     // path; the caller removes the recorded summary with DebugRemoveDiagnosticsForTask.
     [[nodiscard]] CompletedTaskSummary DebugRecordCompletedTaskForSelfTest(Task& task) noexcept;
     bool DebugValidateRetainedSourceActionForSelfTest(uint64_t taskId, IFileSystem* fileSystem) noexcept;
+    [[nodiscard]] static bool DebugValidateBulkPauseOwnershipForSelfTest() noexcept;
     bool DebugFlushPendingSettingsSaveForSelfTest(DWORD timeoutMs) noexcept;
     SettingsSaveDebugSnapshot DebugGetSettingsSaveSnapshotForSelfTest() noexcept;
     void DebugForceNextFileOperationCompletedPostFailure() noexcept;

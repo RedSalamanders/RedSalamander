@@ -323,6 +323,7 @@ struct TaskSnapshot
 
     bool started                       = false;
     bool paused                        = false;
+    bool pausedByBulk                  = false;
     bool hasProgressCallbacks          = false;
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG operationStartTick       = 0;
