@@ -25,7 +25,8 @@ bulk-pause ownership and a dedicated live SMB Rename case. Correcting the SMB ch
 first build failure. The selected x64 Debug build on `6df121e23` completed with zero warnings and zero errors, and
 the non-activating popup and repeat-decision selections passed. A guarded Win32 check on both SMB endpoints
 showed that a read-data watcher is required to reproduce the sharing violation. The earlier PrePush stopped after
-its build so the corrected witness can run on the Windows endpoint before the next PrePush.
+its build to correct the witness. The corrected live Windows SMB case passed on `92c2b2762`. Scoped
+PrePush is the next merge gate.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -56,7 +57,10 @@ its build so the corrected witness can run on the Windows endpoint before the ne
     Read-data handles denied competing DELETE opens on the owned parent and ancestor. Absolute no-replace Rename
     preserved the occupied target and moved the file to a free sibling. The first endpoint returned `ERROR_INVALID_PARAMETER`
     for `FileIdInfo`. Windows SMB returned an exact ID. These observations leave the host route and full namespace proof open.
-  - [ ] Run live exact Rename on Windows SMB with the corrected watcher and implement and qualify the corroborated route.
+  - [x] Run live exact Rename on Windows SMB with the corrected watcher. The nested, case-only, collision,
+    watcher and 100-item checks passed. The [focused record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_161520/README.md)
+    retains the run identity and timing. Release, legacy fallback hops and host cancellation remain open.
+  - [ ] Implement and qualify the corroborated Rename route on the endpoint without exact identity.
   - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
     scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
