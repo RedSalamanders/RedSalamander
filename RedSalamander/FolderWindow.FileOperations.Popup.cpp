@@ -1831,8 +1831,8 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         }
         case TaskStatusKind::Preparing:
         {
-            const ULONGLONG opStartTick = task.operationStartTick;
-            const uint64_t elapsedSec   = (opStartTick > 0 && nowTick >= opStartTick) ? static_cast<uint64_t>((nowTick - opStartTick) / 1000ull) : 0ull;
+            const ULONGLONG startTick = task.preparationStartTick;
+            const uint64_t elapsedSec = startTick > 0 && nowTick >= startTick ? (nowTick - startTick) / 1000ull : 0ull;
             return elapsedSec > 0 ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_PREPARING_TIME, FormatDurationHms(elapsedSec))
                                   : LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
         }
@@ -5690,6 +5690,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         activeTaskIds[snap.taskId] = true;
         snap.operation             = task->GetOperation();
         snap.lifecyclePhase        = static_cast<uint8_t>(task->GetLifecyclePhase());
+        snap.preparationStartTick  = task->_preparationStartTick.load(std::memory_order_acquire);
 
         snap.totalItems                     = task->_publishedProgressTotalItems.load(std::memory_order_acquire);
         snap.completedItems                 = task->_publishedProgressCompletedItems.load(std::memory_order_acquire);
@@ -11766,19 +11767,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 {
                     const bool showPreparing = TaskShowsPreparingStatus(task);
 
-                    if (showPreparing)
+                    if (task.statusKind == TaskStatusKind::Preparing)
                     {
-                        const ULONGLONG opStartTick = task.operationStartTick;
-                        const uint64_t elapsedSec =
-                            (opStartTick > 0 && nowTick >= opStartTick) ? static_cast<uint64_t>((nowTick - opStartTick) / 1000ull) : 0ull;
-                        const std::wstring prepText = elapsedSec > 0
-                                                          ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_PREPARING_TIME, FormatDurationHms(elapsedSec))
-                                                          : LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
+                        const std::wstring prepText = StatusTextForTask(task, task.statusKind, nowTick);
                         const D2D1_RECT_F prepRc    = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                         _target->DrawTextW(prepText.data(), static_cast<UINT32>(prepText.size()), _bodyFormat.get(), prepRc, _subTextBrush.get());
                         textY += lineH;
                     }
-                    else
+                    else if (! showPreparing)
                     {
                         const double itemsPerSec     = history ? history->displayedItemsPerSec : 0.0;
                         const std::wstring speedText = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_ITEMS, itemsPerSec);
@@ -17813,6 +17809,31 @@ bool DebugFileOperationsStreamColorSlotsRemainUniqueUnderPermutation() noexcept
         }
     }
     return history.streamProgressCount == 4u;
+}
+
+bool DebugValidateFileOperationsPreparingPresentation() noexcept
+{
+    using Snapshot = FileOperationsPopupInternal::TaskSnapshot;
+    using Status   = Snapshot::StatusKind;
+    Snapshot task{};
+    task.operation            = FILESYSTEM_DELETE;
+    task.preparationStartTick = 10'000u;
+    const auto shortLabel     = LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
+    const auto elapsedLabel   = FormatStringResource(nullptr, IDS_FMT_FILEOPS_PREPARING_TIME, FormatDurationHms(1u));
+    constexpr std::array preparingPhases{FileOperations::TaskLifecyclePhase::Preparing,
+                                         FileOperations::TaskLifecyclePhase::AwaitingAcceptance,
+                                         FileOperations::TaskLifecyclePhase::PreparingExecution};
+    for (const auto phase : preparingPhases)
+    {
+        task.lifecyclePhase = static_cast<uint8_t>(phase);
+        const auto status   = ResolveTaskStatusKind(task);
+        if (status != Status::Preparing || AccessibleStatusTextForTask(task, status, 9'999u) != shortLabel ||
+            AccessibleStatusTextForTask(task, status, 10'999u) != shortLabel || AccessibleStatusTextForTask(task, status, 11'000u) != elapsedLabel ||
+            StatusChipTextForTask(task, status, 11'000u) != shortLabel)
+            return false;
+    }
+    task.waitingInQueue = true;
+    return ResolveTaskStatusKind(task) == Status::Waiting;
 }
 
 bool DebugValidateFileOperationsStoppingPresentation() noexcept

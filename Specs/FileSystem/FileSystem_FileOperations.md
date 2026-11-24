@@ -593,6 +593,11 @@ pre-consumption decision is unresolved. `Ready` means common preparation and eve
 acceptance/clipboard receipt have succeeded. Pause, conflict, verification, and discovery are
 orthogonal facts; they neither replace the lifecycle nor authorize a skipped transition.
 
+The task records its preparation start using a monotonic clock when it is created. A deferred
+directory Delete entering `PreparingExecution` after reservation publishes a fresh start before
+leaving the queue presentation. The popup uses this start for preparation elapsed time. The
+operation start still marks execution for transfer and completion accounting.
+
 Preparing is selected-root/top-level proportional. The worker qualifies a scheduled Rename plan
 when applicable, validates the immutable plan group, binds the selected top-level mutation/interlock
 scopes, publishes one immutable authority-free `PreparationSnapshot`, runs the one

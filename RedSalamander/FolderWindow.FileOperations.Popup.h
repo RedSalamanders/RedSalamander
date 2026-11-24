@@ -326,6 +326,7 @@ struct TaskSnapshot
     bool hasProgressCallbacks          = false;
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG operationStartTick       = 0;
+    ULONGLONG preparationStartTick     = 0;
 
     bool waitingForOthers                = false;
     bool waitingInQueue                  = false;
@@ -2460,6 +2461,7 @@ void DebugFailNextFileOperationsFailureSurfaceButtonSetup(unsigned int ordinal) 
 [[nodiscard]] bool DebugValidateFileOperationsVerificationPresentation() noexcept;
 [[nodiscard]] bool DebugValidateFileOperationsMissingSourcePresentation(std::wstring& failure) noexcept;
 [[nodiscard]] bool DebugValidateFileOperationsStoppingPresentation() noexcept;
+[[nodiscard]] bool DebugValidateFileOperationsPreparingPresentation() noexcept;
 [[nodiscard]] float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 void DebugPublishFileOperationsPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 [[nodiscard]] bool DebugFileOperationsTaskHasKnownCompactProgress(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;

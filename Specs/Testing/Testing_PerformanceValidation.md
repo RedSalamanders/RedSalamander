@@ -2585,6 +2585,15 @@ files/folders/bytes must represent committed removals even before a selected roo
 metrics/results and harness captures under the governed archive limits; report any missing baseline
 or blocked profile rather than inferring a speedup or full qualification from these focused runs.
 
+## Preparing status and popup cadence
+
+`FileOps_PopupIdleCadence` checks the full Preparing status before execution and at the first
+whole second with a fixed clock. The short chip stays stable and queue status has precedence.
+`FileOps_ReviewRemediationContracts` uses a real Local directory Delete reservation to verify
+the preparation clock restarts before execution. Compare the existing
+`FileOps.PopupCadence.Counters` rows for matching running, paused, prompting, queued and idle
+fixtures. `FileOps.Admission.TaskLayoutBytes` tracks the per-task storage cost.
+
 ## Completed-card collapse after telemetry stops (2026-10-18)
 
 `FileOps_ReviewRemediationContracts` includes a private, no-activation production popup whose live

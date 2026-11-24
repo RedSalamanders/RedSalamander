@@ -471,6 +471,10 @@ The card consumes the engine-owned `TaskLifecyclePhase`; it MUST NOT infer Prepa
 progress, zero totals, or a worker that has not emitted a transfer callback. `Preparing` and
 `AwaitingAcceptance` and `PreparingExecution` render as Preparing. `Ready` is a transition boundary before Waiting/Running;
 after queue reservation, `PreparingExecution` covers strict directory acquisition and consent without regressing the engine lifecycle.
+Preparing elapsed time reflects the task's monotonic preparation start at whole-second precision.
+It starts over for reserved directory Delete preparation, so earlier queue time stays out of the
+new elapsed value. The full accessible status and the Delete card's preparation detail use the
+same clock and wording. Queue, pause, decision, and cancellation status take precedence.
 `Terminal` remains an engine fact. The normal finalizer also enters lifecycle `Stopping`, so
 that phase alone MUST NOT imply cancellation. The popup snapshots `Task::CancelRequestedDurable`
 as cancellation authority, published before `RequestCancel` exposes the lifecycle phase. An

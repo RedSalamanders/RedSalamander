@@ -39,7 +39,9 @@ The broad result and four pending interactive entries are recorded below.
 - [ ] **S2.** Complete progress projection and paired measurements.
   - [x] Preserve sampling through decision, live-output, pause and queue transitions. Freeze history while stopping
     and keep a running peer's ETA. The model and paced idle-cadence selections passed.
-  - [ ] Cover credential waits and preparing elapsed time. Align the popup and taskbar snapshots.
+  - [ ] Verify the Preparing elapsed clock at task creation and after directory Delete reservation. The implementation
+    and the exact popup/admission tests are ready for x64 Debug verification.
+  - [ ] Cover credential waits and align the popup and taskbar snapshots.
   - [ ] Collect paired allocation, timing, history and active-peer evidence.
 - [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
   Match card and mirror scopes and authority, including stage cleanup and post-publication results.

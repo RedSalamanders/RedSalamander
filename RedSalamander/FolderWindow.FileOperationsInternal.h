@@ -2220,6 +2220,7 @@ struct FolderWindow::FileOperationState
         std::atomic<uint64_t> _admissionKey{0u};
         std::atomic<std::shared_ptr<const SelectedAdmissionView>> _selectedAdmission;
         std::atomic<TaskLifecyclePhase> _lifecyclePhase{TaskLifecyclePhase::Preparing};
+        std::atomic<ULONGLONG> _preparationStartTick{GetTickCount64()};
         std::optional<BatchRenameAdmissionInput> _pendingBatchRenameAdmission;
         FileSystemOperation _operation = FILESYSTEM_COPY;
         ExecutionMode _executionMode   = ExecutionMode::PerItem;

@@ -83,6 +83,8 @@ For Copy and Move of selected files on local disks, RedSalamander freshly checks
 
 RedSalamander does not scan a folder tree twice just to get totals. Copy, Move and Delete use one traversal to count a tree while handing each item to the operation as it is found. A task starts with a brief **Preparing...** step in which RedSalamander checks the selection and destination. Deleting to the Recycle Bin is carried out by Windows, which reports only the items you selected, so that card counts your selection rather than everything inside a folder.
 
+Preparing status details show elapsed time after the first second. For a queued permanent folder Delete, the elapsed time for final checks starts when the task gets its turn.
+
 While the count is still open, the totals are not final, so the card shows what is known instead of guessing:
 
 - Copy/Move shows bytes written first, followed by **Counting…** or **Counting… Folders: N · Files: N**, next to the counting signal. The Counting label marks provisional totals; those numbers are not completed counts.

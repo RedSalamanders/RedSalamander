@@ -9919,6 +9919,8 @@ using TickResult = std::optional<bool>;
         recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
+    if (! DebugValidateFileOperationsPreparingPresentation())
+        fail(L"Preparing elapsed status must advance before execution and preserve the short chip and queue priority");
     auto* folder     = TryGetFolderWindow(state.mainWindow);
     auto* operations = TryGetFileOps(folder);
     if (! folder || ! operations || operations->HasActiveOperations())

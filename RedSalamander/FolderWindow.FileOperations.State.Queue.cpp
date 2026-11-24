@@ -2532,7 +2532,10 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
             // Publish the monotonic preparation phase before withdrawing queue presentation;
             // strict acquisition and confirmation must never appear as transfer execution.
             if (admission->hasDeferredDirectoryDeletes)
+            {
+                task._preparationStartTick.store(GetTickCount64(), std::memory_order_release);
                 task.PublishLifecyclePhase(FileOperations::TaskLifecyclePhase::PreparingExecution);
+            }
             if (waitForOthers)
                 task._waitForOthers.store(false, std::memory_order_release);
             task.SetWaitingInQueue(false);
