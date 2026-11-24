@@ -10255,7 +10255,11 @@ using TickResult = std::optional<bool>;
     const auto destination       = root / L"destination";
     const auto queuedSource      = root / L"queued-source" / L"payload.bin";
     const auto queuedDestination = root / L"queued-destination";
-    if (! RecreateEmptyDirectory(root) || ! WriteTestFile(source, 8193u) || ! WriteTestFile(destination / L"payload.bin", 4097u) ||
+    // Give the sampler post-answer byte reports over several ticks. A tiny copy can reach
+    // publication before the first baseline after the wait, leaving no measured running rate.
+    constexpr size_t kCadenceCopyBytes   = 8u * 1024u * 1024u;
+    constexpr uint64_t kCadenceCopyLimit = 2u * 1024u * 1024u;
+    if (! RecreateEmptyDirectory(root) || ! WriteTestFile(source, kCadenceCopyBytes) || ! WriteTestFile(destination / L"payload.bin", 4097u) ||
         ! WriteTestFile(queuedSource, 4099u) || ! SelfTest::EnsureDirectory(queuedDestination))
         return reject(L"owned scratch unavailable");
     static constexpr std::array<uint64_t, 4> historyIds{{0xF26A2026100903A1ull, 0xF26A2026100903A2ull, 0xF26A2026100903A3ull, 0xF26A2026100903A4ull}};
@@ -10449,7 +10453,7 @@ using TickResult = std::optional<bool>;
                                                      destination,
                                                      FILESYSTEM_FLAG_NONE,
                                                      false,
-                                                     0u,
+                                                     kCadenceCopyLimit,
                                                      State::ExecutionMode::PerItem,
                                                      false,
                                                      folder->GetFileSystem(FolderWindow::Pane::Right));

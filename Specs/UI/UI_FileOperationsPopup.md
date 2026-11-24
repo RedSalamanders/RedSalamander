@@ -2059,6 +2059,8 @@ wait that starts and ends while the popup is hidden still restarts measuring whe
 The previous graph history stays visible when measuring resumes. Stopping freezes recorded samples
 while actual work counters can change. Paused and stopping tasks do not contribute to the running
 transfer ETA. A deletion names no transfer stall. The stall text is part of the label's accessible text.
+The idle-cadence self-test uses a paced real Copy with post-answer byte reports before requiring a
+running rate and checking that Pause settles the popup without altering the history.
 Copy/Move keeps the speed's right edge fixed on the Throughput heading; the ETA has its independent
 row beside the counts. Measure the full current speed/stall text, wrapping it below the heading's
 label when necessary and reserving that complete height above the plot. A wrapped stall label can

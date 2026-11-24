@@ -60,6 +60,16 @@ Drift from the study baseline affected the ancestry-cleanup test and its evidenc
 | `FileOps_RateWindowDisplay` | Passed | `20261124T080756Z-60876-09d1cdd6f4c049b79b05e52c6d9e390a` |
 | `FileOps_CancelAllNeverStarted` | Passed | `20261124T080835Z-60876-ea661fa63ee5419c97544e2d3586433a` |
 
+- The same-folder repair `56a5d9d08` also built cleanly in test-enabled x64 Debug. Its receipt
+  is `ec35a64c2ee51216f7ffc47c35477e25558c67d6eb85c3b849788fd5a9544d56`.
+  The approved first focus window ended before this build finished.
+
+| Selection on `56a5d9d08` | Result | Run ID |
+|---|---|---|
+| `FileOps_RepeatDecisionContracts` | Passed without activation | `20261124T081614Z-64872-f5cb2a98b9c542b181b3b8a97ec8192d` |
+| `FileOps_IdentityInterlockWaiting` | Passed without activation | `20261124T081715Z-64872-a7b1ace66f8f4fb58da7eb79d89dabd8` |
+| `FileOps_PopupIdleCadence` | Failed because the tiny fixture reached publication before a new rate could be measured. The fixture now paces a real transfer across several samples. Rerun pending. | `20261124T081817Z-64872-e3f005a81f5c48649ca3a0dd4aaff921` |
+
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.
 
