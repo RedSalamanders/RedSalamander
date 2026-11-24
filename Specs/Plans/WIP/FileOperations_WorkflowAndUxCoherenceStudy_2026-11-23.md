@@ -6,22 +6,22 @@
 
 ## Implementation checklist
 
-**Current work (2026-11-24).** The next increment brings Local Recycle batching to context-menu, Find and Viewer
-admission. The branch has the first ingress, exact Batch Rename handle-lifetime, and throughput
-changes. The test-enabled x64 Debug solution build and paced throughput rerun passed. PrePush uncovered two stale
-source guards. Both were corrected, and the source-contract file passed its focused rerun. The repaired same-folder
-Ctrl+drag is ready for the exact no-activation selection. Implementation started at `bbb57a572`. Drift from the study baseline affected the
-ancestry-cleanup test and its evidence contracts.
+**Current work (2026-11-24).** Local Recycle batching reached context-menu, Find and Viewer admission. Find and Viewer
+each used one Shell batch for twelve sibling files, and Viewer Cancel kept the files. The repaired same-folder Ctrl+drag
+passed through its exact no-activation selection. The branch also contains the first exact Batch Rename handle-lifetime
+and throughput changes. Implementation started at `bbb57a572`. Drift from the study baseline affected the ancestry-cleanup
+test and its evidence contracts.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
   - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
-  - [ ] Rerun the same-folder Ctrl+drag guard through its new exact no-activation selection after the Windows provider
-    instance fix. Expand clipboard, blocked Retry and read-only case coverage as needed for the workflow walkthrough.
+  - [x] Rerun the same-folder Ctrl+drag guard through its exact no-activation selection after the Windows provider instance fix.
+  - [ ] Expand clipboard, blocked Retry and read-only case coverage as needed for the workflow walkthrough.
   - [ ] Verify the implemented short Copy-only Move question across mixed plans, changed endpoints, and Cut/queue
     preservation. The focused source-retention case passed.
-  - [ ] **In progress.** Route Local Recycle from context menu, Find and Viewer through the existing bulk executor.
-    Check prompt counts, results, Shell calls and settled resources against the per-item route.
+  - [x] Route Local Recycle through the existing bulk executor. The focused Find and Viewer runs verified prompt counts,
+    preserved files on Cancel, and compared Shell calls and settled resources against the per-item route.
+  - [ ] Exercise the context-menu surface in the walkthrough and repeat the Local measurements on Release.
   - [ ] Implement typed per-item Recycle availability and direct permanent consent for known-unavailable routes.
     Prove mixed-group routing, consent scope and unchanged handling after an unknown result.
 - [ ] **S1.** Qualify Rename by route.
@@ -101,6 +101,18 @@ ancestry-cleanup test and its evidence contracts.
   recorded 11 ticks and 11 renders, paused, prompting and queued each recorded one tick and one render,
   and completed idle recorded zero. The changed live-copy workload requires a matched workload for a
   cost comparison. Allocation, retained history and concurrent active-peer measurements remain open.
+
+- The first Recycle fixture candidate `fcbcea4ce` failed to compile because it passed an integer to the steady-clock
+  timer. The corrected candidate `f5aa393f0` rebuilt with zero warnings and zero errors in x64 Debug. Receipt
+  `9fb00c721b37714ca6f6f3dff919e0ddb520d01a822043a34ecd0954a3ba6804`.
+  Run `20261124T102043Z-60344-b9aaba78a56e498da31ba7e65186af3b` passed the Local Recycle routes, one-prompt checks
+  and exact purging. The [paired ingress evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-24_112639/README.md)
+  retains the call counts, time, handles, private bytes and focused scope.
+- The no-activation policy and all 243 source contracts passed in
+  `20261124T102042Z-59168-e61c6ec3728c48cfae1399bc22ef9065`. The native Commands
+  `folderView_drop_integrity_guards` selection used the same x64 Debug receipt, reported zero pending interactive
+  entries, and passed in `20261124T102827Z-74852-3e73f64a46ac464cad850a29feed1a0f`. Both focused native runs
+  reported `NOT_EVALUATED` at repository scope.
 
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.
