@@ -65,6 +65,12 @@ result lists the missing item separately; it does not say that the item was left
 to cut that missing source again. A destination that lacks a required capability still reports its
 own unsupported-operation error when the source exists.
 
+### Rename a local item
+
+Press **F2**, edit the name, and press **Enter**. If a case-only rename reports a failure,
+RedSalamander checks the item's exact spelling on disk. A result it cannot verify appears as
+**Outcome unknown** with details in the File Operations popup.
+
 ### Informational task cards
 
 Some background work is displayed as read-only **informational** cards in the same popup (for example **Compare Directories** and **Change Case**).

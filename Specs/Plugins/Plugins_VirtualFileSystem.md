@@ -1476,6 +1476,10 @@ original object still exists. A failed pathname operation followed by unavailabl
 reconciliation reports `outcomeKnown == FALSE`; it must not inherit the pre-call default. Delete and
 `AbortOwnedObject` obey the same rule as rename.
 
+For Local bound case-only rename reconciliation, exact identity and the final leaf spelling are
+both required. The committed and original spellings must be distinguishable. The Local provider's
+legacy information-class fallback keeps the same held handle and conditional replacement policy.
+
 An operation-wide `FILESYSTEM_FLAG_ALLOW_OVERWRITE` bit does not fabricate
 `expectedDestination`. If the final name is absent, publication remains exclusive and returns the
 new bound authority. Providers must not select a replacement-only writer or fail for a missing

@@ -2574,7 +2574,16 @@ conflict again is a contract failure, not a reason to reprompt indefinitely. The
 that receipt in one conditional `RenameIfUnchanged` attempt, obtains a fresh receipt after a proven
 replacement race, or terminates without mutating either object.
 
-Case-only Local rename uses an exclusive cryptographically unpredictable temporary sibling
+The Local provider's exact bound rename tries `FileRenameInfoEx` and uses one legacy
+`FileRenameInfo` call on the same handle when the information class is rejected, including
+`ERROR_CALL_NOT_IMPLEMENTED`. Both calls preserve the approved replacement policy. Access denial
+and other failures use the existing outcome reconciliation. For a case-only request with a failed
+rename report, the identity probe also verifies the exact leaf on the opened object. Only the proved
+destination spelling yields a committed result, and only the proved original spelling yields a
+known non-commit. Both names resolving exactly to the same identity, or unavailable spelling proof,
+leaves the result unknown.
+
+The pathname-based Local case-only fallback uses an exclusive cryptographically unpredictable temporary sibling
 (`<leaf>.<32 hex>.rs-bak`). Entropy
 failure or a raced existing temporary name stops before the source is moved; the temporary hop never
 uses replacement semantics against an unowned object.

@@ -2585,6 +2585,15 @@ files/folders/bytes must represent committed removals even before a selected roo
 metrics/results and harness captures under the governed archive limits; report any missing baseline
 or blocked profile rather than inferring a speedup or full qualification from these focused runs.
 
+## Local exact Rename receipts
+
+The Debug object-binding export uses owned Local files to exercise a refused case-only request,
+a legacy no-replace collision, a legacy free-name publish, and recovery of a case-only commit
+after a failed report. It checks storage spelling, independent file identity, retained occupant
+content and receipt axes. `FileOps.Local.ExactRenameSelfTestUs` records bounded call duration,
+publication and outcome-known flags. `FileOps.Local.RenameLegacyFallback` counts actual legacy
+attempts. The injected information-class refusal needs separate Windows SMB and Samba coverage.
+
 ## Preparing status and popup cadence
 
 `FileOps_PopupIdleCadence` checks the full Preparing status before execution and at the first

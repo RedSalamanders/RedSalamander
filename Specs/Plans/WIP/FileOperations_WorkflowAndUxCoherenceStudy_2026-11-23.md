@@ -15,6 +15,9 @@ test and its evidence contracts.
 The latest non-activating x64 Debug PrePush passed all 14 executed entries. It recorded 1,799 passes, zero
 failures, and 27 environment skips. Four interactive entries and the remaining qualification below are open.
 
+[PR #246](https://github.com/RedSalamanders/RedSalamander/pull/246) merged into `main` at `bcaa59d10`.
+The next slice checks exact Local Rename spelling after a failed report and exercises the legacy information class.
+
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
   - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
@@ -32,6 +35,8 @@ failures, and 27 environment skips. Four interactive entries and the remaining q
     rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
   - [ ] Qualify exact Local and SMB for nested rows, case-only hops, legacy API fallbacks and blocking watchers. Compare
     single- and 100-item Rename costs, including handle peaks and cancellation.
+  - [ ] Run the Local exact-rename refusal, legacy fallback, collision and lost-response controls. Current environment
+    lacks an approved live SMB target, which is required for the corresponding Windows SMB and Samba qualification.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
     including changed parents and decoys.
   - [ ] Qualify new-name Rename on Curl, Drive, and Graph and its result receipts before enabling each protocol or
@@ -55,6 +60,10 @@ failures, and 27 environment skips. Four interactive entries and the remaining q
   admission. Move to Done after all required rows have evidence or an accepting owner for the exact transferred gate.
 
 ### Validation checkpoints
+
+- The first exact Rename candidate `ab51279e6` stopped at compilation in
+  `20261124T134444Z-100080-5b6b4d2e1e1046718998105aec11af0c`. WIL's final-path adapter requires its owned string type.
+  The corrected candidate uses `wil::unique_cotaskmem_string` for the spelling proof.
 
 - `dc30fb46b` built with zero warnings and zero errors using `build.ps1 -Configuration Debug -Platform x64
   -ProjectNames RedSalamander` with tests enabled. Build receipt
