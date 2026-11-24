@@ -6,6 +6,19 @@
 
 ## Implementation checklist
 
+**Samba F2 Rename (2026-11-24).** The first no-activation run reached an active-callback assertion
+while Preparing captured the selected source. The task now declares a balanced callback scope around
+that synchronous provider call. The assertion remains in place. The test-enabled harness routes CRT
+assertions to standard error and its failure report. The 20 focused failure-report checks, including
+the native assertion controls, passed in `20261124T164133Z-97372-233c6dc7388c4dcf912e8f73efb7ba85`.
+The next run exposed stale write times on metadata-only SMB opens. The provider now captures comparable
+timestamps with read-data access, and the host reports a source change before dispatch as a refused
+operation. The final x64 Debug run `20261124T173007Z-100696-ce72a4511ad04f9e9076f0aa92525ad2` passed
+setup, the live case and cleanup. It verified folder and case-only Rename, Keep both, cancellation,
+refusal after a source change and 100 provider renames. The zero-warning, zero-error build and metrics
+are recorded in the [Samba archive](../../TestRuns/4cb089111a23/FileOps/2026-11-24_173737/README.md).
+Release, native ARM64 and the remaining Rename entry points are open.
+
 **RubyGloom F2 qualification (2026-11-24).** The no-activation x64 Debug run
 `20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` hit a callback-scope assertion during
 Preparing. The isolated process was stopped and the failed trace and assertion were preserved.
@@ -81,7 +94,8 @@ PrePush is the next merge gate.
   - [x] Run live exact Rename on Windows SMB with the corrected watcher. The nested, case-only, collision,
     watcher and 100-item checks passed. The [focused record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_161520/README.md)
     retains the run identity and timing. Release, legacy fallback hops and host cancellation remain open.
-  - [ ] Implement and qualify the corroborated Rename route on the endpoint without exact identity.
+  - [x] Implement and exercise corroborated F2 Rename on the configured Samba endpoint without exact file identity.
+    The non-activating x64 Debug run passed action, refusal, cancel, throughput and fixture cleanup controls.
   - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
     scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,

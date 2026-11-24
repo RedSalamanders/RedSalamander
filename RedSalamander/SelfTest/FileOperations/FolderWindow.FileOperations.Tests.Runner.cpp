@@ -14330,7 +14330,7 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
                 removedLeaves = false;
             }
         }
-        // A Recycle Bin or SMB lease can briefly block a leaf. Once the named
+        // An SMB share can temporarily refuse a leaf removal. Once the named
         // pass ends, the shared no-follow cleanup checks what still remains.
         return SelfTest::RemoveAll(fixture);
     };
