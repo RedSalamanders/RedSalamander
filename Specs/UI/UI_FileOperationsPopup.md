@@ -545,7 +545,7 @@ operation's endpoints or consent policy.
 `HostFileOperationPromptOptions` in/out snapshot. The host renders its finite choices as four
 option rows, with available choices invokable by keyboard, mouse, and UIA, and writes accepted values back only for the
 affirmative action. Links exposes Preserve/Skip, Verify exposes Off/On, Start exposes Queue/Parallel,
-and Bandwidth cycles Unlimited, the standard presets, plus the captured custom value when needed.
+and Bandwidth cycles the [shared presets](#speed-and-stalls) and includes the captured non-preset value when present.
 Flattening the choices into an unstructured message string or rereading Preferences/provider
 configuration after acceptance is forbidden. Cancel leaves the caller snapshot unchanged, admits no
 task, and consumes no clipboard sequence.
@@ -2167,6 +2167,11 @@ the existing bounded history, without synthesizing zero samples for the hidden i
 The configured speed limit belongs in the shared current-value selector/flyout, not as the graph
 marker. Its visible value is `Limit: Unlimited` or the localized compact configured rate; the whole
 selector opens the choices and it has no separate primary action.
+
+Preferences, explicit start options and the running card use the same bandwidth catalog. Its ordered
+values are Unlimited, 1, 5, 10, 50, 100 and 500 MiB/s, and 1 GiB/s. The choices use localized IEC
+labels and binary byte values. Custom examples use IEC units. The shared parser accepts legacy
+spellings such as `4MB` with the same binary meaning.
 
 In Rainbow theme, graph history keeps per-sample colors stable as samples scroll. It MUST NOT blink or
 cycle historic samples by time.

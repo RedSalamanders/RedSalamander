@@ -1,0 +1,1 @@
+- Share the File Operations speed presets across Preferences, start options and running tasks. The list includes 500 MiB/s and 1 GiB/s, and Custom uses IEC examples while preserving the saved values and accepted input spellings.

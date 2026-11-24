@@ -5,11 +5,11 @@
 #include "Preferences.FileOperations.h"
 
 #include <algorithm>
-#include <array>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "FileOperationBandwidth.h"
 #include "Helpers.h"
 #include "ThroughputParsing.h"
 #include "UiMetrics.h"
@@ -32,24 +32,10 @@ using DxUi::Panel;
 using DxUi::TextField;
 using DxUi::Toggle;
 
-constexpr uint64_t kMiB                      = 1024ull * 1024ull;
-constexpr size_t kBandwidthCustomPresetIndex = 7u;
+using FileOperations::BandwidthPreset;
+using FileOperations::kBandwidthPresets;
 
-struct BandwidthPreset
-{
-    uint64_t bytesPerSecond = 0;
-    UINT labelId            = 0u;
-};
-
-constexpr std::array<BandwidthPreset, kBandwidthCustomPresetIndex> kBandwidthPresets = {{
-    {0ull, IDS_PREFS_FILEOPS_BANDWIDTH_UNLIMITED},
-    {1ull * kMiB, IDS_PREFS_FILEOPS_BANDWIDTH_1_MIB},
-    {5ull * kMiB, IDS_PREFS_FILEOPS_BANDWIDTH_5_MIB},
-    {10ull * kMiB, IDS_PREFS_FILEOPS_BANDWIDTH_10_MIB},
-    {50ull * kMiB, IDS_PREFS_FILEOPS_BANDWIDTH_50_MIB},
-    {100ull * kMiB, IDS_PREFS_FILEOPS_BANDWIDTH_100_MIB},
-    {500ull * kMiB, IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB},
-}};
+constexpr size_t kBandwidthCustomPresetIndex = kBandwidthPresets.size();
 
 struct FileOperationsToggleCardDx
 {

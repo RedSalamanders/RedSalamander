@@ -2,6 +2,7 @@
 #include "WindowActivation.h"
 
 #include "DxUiThemePalette.h"
+#include "FileOperationBandwidth.h"
 #include "FileOperationConfirmation.h"
 #include "FileOperationsFooterLayout.h"
 #include "FileSystemPathIdentity.h"
@@ -13674,21 +13675,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     const uint64_t currentLimit = fixture ? fixture->desiredSpeedLimitBytesPerSecond : task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
-    constexpr UINT kCmdUnlimited  = 1u;
     constexpr UINT kCmdCustom     = 2u;
     constexpr UINT kCmdPresetBase = 10u;
 
-    static constexpr std::array<uint64_t, 6> kPresets = {{
-        1ull * 1024ull * 1024ull,
-        5ull * 1024ull * 1024ull,
-        10ull * 1024ull * 1024ull,
-        50ull * 1024ull * 1024ull,
-        100ull * 1024ull * 1024ull,
-        1ull * 1024ull * 1024ull * 1024ull,
-    }};
-
     std::vector<DxUi::MenuFlyoutItem> items;
-    items.reserve(kPresets.size() + 4u);
+    items.reserve(FileOperations::kBandwidthPresets.size() + 3u);
 
     auto appendRadioItem = [&](UINT commandId, std::wstring text, bool checked) noexcept
     {
@@ -13700,18 +13691,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         items.push_back(std::move(item));
     };
 
-    appendRadioItem(kCmdUnlimited, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED), currentLimit == 0);
-
     DxUi::MenuFlyoutItem separator{};
     separator.kind = DxUi::MenuItemKind::Separator;
-    items.push_back(separator);
 
-    for (size_t i = 0; i < kPresets.size(); ++i)
+    for (size_t index = 0; index < FileOperations::kBandwidthPresets.size(); ++index)
     {
-        const uint64_t bytesPerSecond = kPresets[i];
-        appendRadioItem(kCmdPresetBase + static_cast<UINT>(i),
-                        FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond)),
-                        currentLimit == bytesPerSecond);
+        const auto& preset = FileOperations::kBandwidthPresets[index];
+        appendRadioItem(kCmdPresetBase + static_cast<UINT>(index), LoadStringResource(nullptr, preset.labelId), currentLimit == preset.bytesPerSecond);
+        if (preset.bytesPerSecond == 0u)
+        {
+            items.push_back(separator);
+        }
     }
 
     items.push_back(separator);
@@ -13761,14 +13751,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         const UINT chosen      = static_cast<UINT>(chosenOpt.value());
         uint64_t newLimit      = selectedTask->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const uint64_t current = newLimit;
-        if (chosen == kCmdUnlimited)
-        {
-            newLimit = 0;
-        }
-        else if (chosen >= kCmdPresetBase && chosen < (kCmdPresetBase + static_cast<UINT>(kPresets.size())))
+        if (chosen >= kCmdPresetBase && chosen < kCmdPresetBase + static_cast<UINT>(FileOperations::kBandwidthPresets.size()))
         {
             const size_t index = static_cast<size_t>(chosen - kCmdPresetBase);
-            newLimit           = kPresets[index];
+            newLimit           = FileOperations::kBandwidthPresets[index].bytesPerSecond;
         }
         else if (chosen == kCmdCustom)
         {
