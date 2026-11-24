@@ -23,7 +23,9 @@ The follow-up x64 Debug PR selection on `842ac811a` executed 12 entries with 1,5
 Repository coverage remains `NOT_EVALUATED`. The current candidate also includes Queue/Parallel persistence,
 bulk-pause ownership and a dedicated live SMB Rename case. Correcting the SMB child-family registration cleared the
 first build failure. The selected x64 Debug build on `6df121e23` completed with zero warnings and zero errors, and
-the non-activating popup and repeat-decision selections passed. The next gate is the scoped PrePush run.
+the non-activating popup and repeat-decision selections passed. A guarded Win32 check on both SMB endpoints
+showed that a read-data watcher is required to reproduce the sharing violation. The earlier PrePush stopped after
+its build so the corrected witness can run on the Windows endpoint before the next PrePush.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -49,8 +51,12 @@ the non-activating popup and repeat-decision selections passed. The next gate is
   - [x] Exercise the exact Rename eligibility check on the registered SMB endpoint. The Local provider opened the
     owned file and corroborated that exact file identity was unavailable. The Rename case skipped in run
     `20261124T145318Z-86896-cf65eb1fac8447518ff7509d6d3dfe51`.
-  - [ ] Qualify live exact Rename on supported SMB endpoints and the corroborated route on the registered endpoint.
-    The second SMB server implementation still needs an approved target.
+  - [x] Prepare the separately approved Windows SMB test directory.
+  - [x] Compare the namespace guard on both endpoints in diagnostic run `20261124T150306Z-85228-8ce4ce9864d743b0bd18f932d4bb5879`.
+    Read-data handles denied competing DELETE opens on the owned parent and ancestor. Absolute no-replace Rename
+    preserved the occupied target and moved the file to a free sibling. The first endpoint returned `ERROR_INVALID_PARAMETER`
+    for `FileIdInfo`. Windows SMB returned an exact ID. These observations leave the host route and full namespace proof open.
+  - [ ] Run live exact Rename on Windows SMB with the corrected watcher and implement and qualify the corroborated route.
   - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
     scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
