@@ -632,6 +632,10 @@ controls. An unavailable SMB resource is a skip, never real SMB qualification. U
 case filters with `Tools/Run-AllTests.ps1 -Suite FileOps -NonInteractive`; broad families keep their
 interactive lease. See `Specs/Testing/Testing_PerformanceValidation.md` for metrics and acceptance.
 
+`FileOps_SmbExactRenameProvider` is a separate exact, non-activating selection for the registered
+SMB root. It creates one owned child, checks exact Rename on nested names, then removes that child.
+An endpoint without exact file binding skips the case after corroboration.
+
 ## Product documentation captures
 
 Run the exact `cmd_product_documentation_gallery` Commands case with

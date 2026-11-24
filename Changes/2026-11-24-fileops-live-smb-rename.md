@@ -1,0 +1,1 @@
+- Add a focused live SMB check for exact Rename, stored spelling, occupied destinations and blocking handles.

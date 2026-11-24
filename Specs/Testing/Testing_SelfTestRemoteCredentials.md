@@ -132,12 +132,12 @@ the configured value is an absolute UNC directory below the share, contains no `
 `..` segment, and includes a path segment containing `selftest` (case-insensitive).
 
 Write-capable FileOps cases (I35 owner decision D-10.1) may use the same root under the same
-fail-closed rules: `FileOps_SmbCopyThroughputVariance` and `FileOps_SmbManagedMoveLeavesNoStage`
-write only below a unique per-run child (`<case>-<pid>-<tick>`) of the validated root, never
-outside it and never through a link, and remove that child on exit. An unreachable root skips them;
-an unset root runs them against the loopback administrative-share alias of the local test root
-instead, which is always available but cannot reproduce a NAS redirector, so its numbers are
-directional only. The share's server-side `@Recycle` bin may keep deleted run data until the server
+fail-closed rules: `FileOps_SmbCopyThroughputVariance`, `FileOps_SmbManagedMoveLeavesNoStage` and
+`FileOps_SmbExactRenameProvider` write only below a unique per-run child (`<case>-<pid>-<tick>`) of the validated root, never
+outside it or through a link, and remove that child on exit. The cases skip an unreachable root.
+The exact Rename case also skips when the root is unset or the provider proves exact file identity
+is unavailable. The throughput and managed Move cases can use the sandbox loopback alias when the
+root is unset. Loopback numbers remain directional for NAS behavior. The share's server-side `@Recycle` bin may keep deleted run data until the server
 empties it; cleanup assertions check only the visible tree.
 
 Note: `remote_s3_pagination` can only *prove* multi-page behavior when the chosen S3 root has **more than 1000 immediate children**
