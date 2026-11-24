@@ -1027,6 +1027,7 @@ struct SelfTestState
         FileOps_SelectionShapeLocal,
         FileOps_SelectionShapeSmb,
         FileOps_SmbExactRenameProvider,
+        FileOps_SmbCorroboratedRenameProvider,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -1677,6 +1678,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::FileOps_SelectionShapeLocal: return L"FileOps_SelectionShapeLocal";
         case SelfTestState::Step::FileOps_SelectionShapeSmb: return L"FileOps_SelectionShapeSmb";
         case SelfTestState::Step::FileOps_SmbExactRenameProvider: return L"FileOps_SmbExactRenameProvider";
+        case SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider: return L"FileOps_SmbCorroboratedRenameProvider";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -1868,6 +1870,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_SelectionShapeLocal,
     SelfTestState::Step::FileOps_SelectionShapeSmb,
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
+    SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns, // R0f-SMB - a wedged synchronous provider call returns on cancel
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,       // R0f-SMB - read/write/create/rename/delete on a loopback share
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,        // R0f-SMB - Recycle on a share keeps every item and asks before permanent delete
@@ -2238,15 +2241,16 @@ constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyR1dPreparing{{
     SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,
 }};
 
-constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilyR0fSmbContainment{{
+constexpr std::array kFileOpsFamilyR0fSmbContainment{
     SelfTestState::Step::FileOps_SmbExactRenameProvider,
+    SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,
     SelfTestState::Step::R0fSmb_NestedTreeCopyToShare,
     SelfTestState::Step::R0fSmb_BridgeTreeCopyToShare,
     SelfTestState::Step::R0fSmb_ManagedMoveTreeToShare,
-}};
+};
 
 constexpr std::array<SelfTestState::Step, 3> kFileOpsFamilyR0fCurlContainment{{
     SelfTestState::Step::R0fCurl_FakeFtpReadWriteCreateDelete,
@@ -14264,6 +14268,249 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     return removeFixture();
 }
 
+[[nodiscard]] bool RunFileOpsSmbCorroboratedRenameChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+{
+    using Task        = FolderWindow::FileOperationState::Task;
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"SMB corroborated Rename: {}", reason));
+        return false;
+    };
+    const auto share = ResolveSmbSelfTestRootForSelfTest(unavailableReason);
+    if (! share.has_value())
+        return true;
+    const DWORD attributes = GetFileAttributesW(share.value().c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+        return reject(L"registered SMB root is unavailable or redirects");
+    auto* folder                             = TryGetFolderWindow(state.mainWindow);
+    auto* operations                         = TryGetFileOps(folder);
+    const wil::com_ptr<IFileSystem> provider = folder != nullptr ? folder->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
+    if (! operations || ! provider || operations->HasActiveOperations())
+        return reject(L"the test pane or its worker quiet point is unavailable");
+
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return reject(L"no-activation guard unavailable");
+    const auto fixture = std::filesystem::path(share.value()) / std::format(L"corroborated-rename-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    std::error_code error;
+    if (! std::filesystem::create_directory(fixture, error))
+        return reject(L"could not create a unique owned child");
+    const auto nested             = fixture / L"parent" / L"nested";
+    constexpr unsigned int kCount = 100u;
+    unsigned int seededLeaves     = 0u;
+    unsigned int renamedLeaves    = 0u;
+    const auto removeFixture      = [&]() noexcept
+    {
+        if (GetFileAttributesW(fixture.c_str()) == INVALID_FILE_ATTRIBUTES)
+        {
+            const DWORD status = GetLastError();
+            if (status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND)
+                return true;
+        }
+        if (seededLeaves > 0u)
+        {
+            for (const auto& directory : {std::filesystem::path(share.value()), fixture, nested.parent_path(), nested})
+            {
+                const DWORD current = GetFileAttributesW(directory.c_str());
+                if (current == INVALID_FILE_ATTRIBUTES || (current & FILE_ATTRIBUTE_DIRECTORY) == 0u || (current & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+                    return reject(L"the bulk fixture directory cannot be verified for cleanup");
+            }
+        }
+        // Use the recorded name of each generated leaf. The remove result itself
+        // handles missing leaves without a separate SMB attribute cache lookup.
+        bool removedLeaves = true;
+        for (unsigned int index = 0u; index < seededLeaves; ++index)
+        {
+            const auto leaf = index < renamedLeaves ? std::format(L"after-{}.txt", index) : std::format(L"before-{}.txt", index);
+            std::error_code removalError;
+            static_cast<void>(std::filesystem::remove(nested / leaf, removalError));
+            if (removalError && removedLeaves)
+            {
+                AppendLog(std::format(L"SMB corroborated Rename cleanup: {} returned error {}", leaf, removalError.value()));
+                removedLeaves = false;
+            }
+        }
+        // A Recycle Bin or SMB lease can briefly block a leaf. Once the named
+        // pass ends, the shared no-follow cleanup checks what still remains.
+        return SelfTest::RemoveAll(fixture);
+    };
+    auto cleanup = wil::scope_exit([&]() noexcept
+    {
+        ReleaseFileOpsInlineRenameBeforeMutationPauseForSelfTest();
+        SetFileOpsInlineRenameBeforeMutationPauseForSelfTest(false);
+        if (CancelOutstandingSelfTestOperations(operations))
+            static_cast<void>(removeFixture());
+    });
+
+    const auto source                         = nested / L"source.txt";
+    const auto occupied                       = nested / L"occupied.txt";
+    const auto keepBoth                       = nested / L"occupied (2).txt";
+    const auto caseOnly                       = nested / L"OCCUPIED (2).TXT";
+    const auto folderSource                   = nested / L"folder";
+    const auto folderDestination              = nested / L"folder-renamed";
+    constexpr std::string_view kSourceBytes   = "I66 owned source";
+    constexpr std::string_view kOccupantBytes = "I66 unrelated occupant";
+    if (! std::filesystem::create_directories(folderSource, error) || ! SelfTest::WriteTextFile(source, kSourceBytes) ||
+        ! SelfTest::WriteTextFile(occupied, kOccupantBytes) || ! SelfTest::WriteTextFile(folderSource / L"child.txt", kSourceBytes))
+        return reject(L"could not seed the owned nested fixture");
+
+    wil::com_ptr<IFileSystemObjectBinding> exact;
+    wil::com_ptr<IFileSystemCorroboratedRename> corroboration;
+    wil::com_ptr<IFileSystemIO> io;
+    if (provider->QueryInterface(__uuidof(IFileSystemObjectBinding), exact.put_void()) != S_OK || ! exact ||
+        provider->QueryInterface(__uuidof(IFileSystemCorroboratedRename), corroboration.put_void()) != S_OK || ! corroboration ||
+        provider->QueryInterface(__uuidof(IFileSystemIO), io.put_void()) != S_OK || ! io)
+        return reject(L"the pane does not expose the Local Rename interfaces");
+
+    constexpr auto readFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    wil::com_ptr<IFileSystemBoundObject> identity;
+    const HRESULT exactHr = exact->BindObject(source.c_str(), readFlags, identity.put());
+    if (exactHr == S_OK && identity)
+    {
+        unavailableReason = L"The registered SMB endpoint exposes exact identity. The exact Rename case owns this route.";
+        return true;
+    }
+    if (exactHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || identity)
+        return reject(std::format(L"source binding produced 0x{:08X} before capability was established", static_cast<unsigned long>(exactHr)));
+
+    const auto hasBytes = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+    const auto hasExactLeaf = [](const std::filesystem::path& path) noexcept
+    {
+        WIN32_FIND_DATAW found{};
+        const wil::unique_hfind query(FindFirstFileW(path.c_str(), &found));
+        return query && std::wstring_view(found.cFileName) == path.filename().native();
+    };
+    const auto start = [&](const std::filesystem::path& from, const std::filesystem::path& to, uint64_t& taskId) noexcept
+    {
+        const HRESULT admitted = operations->AdmitInlineRename(FolderWindow::Pane::Left, provider, from, to.filename().native(), &taskId);
+        if (admitted != S_OK || taskId == 0u)
+            return reject(std::format(L"F2 admission produced 0x{:08X}", static_cast<unsigned long>(admitted)));
+        return true;
+    };
+    const auto waitFor = [&](uint64_t taskId, HRESULT expected) noexcept
+    {
+        const auto completed = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return state.completedTasks.contains(taskId);
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(8)), .operationName = L"SMB corroborated F2 completion"});
+        if (! completed.conditionMet)
+            return reject(L"F2 task did not reach its completion callback");
+        const HRESULT actual = state.completedTasks.at(taskId).hr;
+        return actual == expected || reject(std::format(L"F2 completion produced 0x{:08X}", static_cast<unsigned long>(actual)));
+    };
+
+    const auto startSingle = std::chrono::steady_clock::now();
+    uint64_t folderTask    = 0u;
+    if (! start(folderSource, folderDestination, folderTask) || ! waitFor(folderTask, S_OK) || ! hasExactLeaf(folderDestination) ||
+        hasExactLeaf(folderSource) || ! hasBytes(folderDestination / L"child.txt", kSourceBytes))
+        return reject(L"normal F2 folder Rename did not preserve the nested child");
+    Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"single host folder", Debug::Perf::ElapsedUs(startSingle), 1u, 0u, S_OK);
+
+    uint64_t collisionTask = 0u;
+    if (! start(source, occupied, collisionTask))
+        return false;
+    std::optional<Task::ConflictPromptState> prompt;
+    const auto prompted = RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        prompt = TryGetConflictPromptCopy(operations->FindTask(collisionTask));
+        return prompt.has_value() && ! prompt->metadataLoading;
+    },
+        {.timeout = SelfTest::Scale(std::chrono::seconds(8)), .operationName = L"SMB corroborated F2 name conflict"});
+    auto* task = operations->FindTask(collisionTask);
+    if (! prompted.conditionMet || ! task || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+        PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) || PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceReadOnly) ||
+        PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) || ! hasBytes(source, kSourceBytes) || ! hasBytes(occupied, kOccupantBytes))
+        return reject(L"an occupied name did not preserve both files and offer only safe recovery");
+    if (! task->SubmitConflictDecision(prompt.value().generation, Task::ConflictAction::KeepBoth, false) || ! waitFor(collisionTask, S_OK) ||
+        ! hasExactLeaf(keepBoth) || ! hasBytes(keepBoth, kSourceBytes) || ! hasBytes(occupied, kOccupantBytes) || hasExactLeaf(source))
+        return reject(L"Keep both did not publish to a free sibling");
+
+    uint64_t caseTask = 0u;
+    if (! start(keepBoth, caseOnly, caseTask) || ! waitFor(caseTask, S_OK) || ! hasExactLeaf(caseOnly) || hasExactLeaf(keepBoth) ||
+        ! hasBytes(caseOnly, kSourceBytes))
+        return reject(L"the case-only F2 Rename did not verify its stored spelling");
+
+    const auto pauseBeforeDispatch = [&](const std::filesystem::path& destination, uint64_t& taskId) noexcept
+    {
+        SetFileOpsInlineRenameBeforeMutationPauseForSelfTest(true);
+        if (! start(caseOnly, destination, taskId))
+            return false;
+        const auto blocked = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+            return HasFileOpsInlineRenameBeforeMutationPauseEnteredForSelfTest();
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(8)), .operationName = L"pause corroborated F2 before provider dispatch"});
+        return blocked.conditionMet || reject(L"corroborated F2 did not reach its controlled pre-dispatch pause");
+    };
+    const auto releaseDispatch = []() noexcept
+    {
+        ReleaseFileOpsInlineRenameBeforeMutationPauseForSelfTest();
+        SetFileOpsInlineRenameBeforeMutationPauseForSelfTest(false);
+    };
+    const auto canceled   = nested / L"cancel-not-published.txt";
+    uint64_t canceledTask = 0u;
+    if (! pauseBeforeDispatch(canceled, canceledTask))
+        return false;
+    task = operations->FindTask(canceledTask);
+    if (! task)
+        return reject(L"the paused F2 task is unavailable for cancellation");
+    const auto cancelStart = std::chrono::steady_clock::now();
+    task->RequestCancel();
+    releaseDispatch();
+    if (! waitFor(canceledTask, HRESULT_FROM_WIN32(ERROR_CANCELLED)) || ! hasExactLeaf(caseOnly) || ! hasBytes(caseOnly, kSourceBytes) ||
+        hasExactLeaf(canceled))
+        return reject(L"canceling the paused corroborated F2 changed the source or published a target");
+    Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"host cancel before dispatch", Debug::Perf::ElapsedUs(cancelStart), 1u, 0u, S_OK);
+
+    const auto stale                               = nested / L"stale-not-published.txt";
+    constexpr std::string_view kChangedSourceBytes = "I66 source changed while paused";
+    uint64_t staleTask                             = 0u;
+    if (! pauseBeforeDispatch(stale, staleTask))
+        return false;
+    if (! SelfTest::WriteTextFile(caseOnly, kChangedSourceBytes))
+        return reject(L"could not change the owned source while its captured task waited");
+    const auto staleStart = std::chrono::steady_clock::now();
+    releaseDispatch();
+    if (! waitFor(staleTask, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)) || ! hasExactLeaf(caseOnly) || ! hasBytes(caseOnly, kChangedSourceBytes) ||
+        hasExactLeaf(stale))
+        return reject(L"an edited source must produce a pre-dispatch revision refusal and preserve its new bytes");
+    Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"host stale source before dispatch", Debug::Perf::ElapsedUs(staleStart), 1u, 0u, S_OK);
+
+    for (unsigned int index = 0u; index < kCount; ++index)
+    {
+        seededLeaves = index + 1u;
+        if (! SelfTest::WriteTextFile(nested / std::format(L"before-{}.txt", index), kSourceBytes))
+            return reject(L"could not seed the 100-item fixture");
+    }
+    const auto batchStart = std::chrono::steady_clock::now();
+    for (unsigned int index = 0u; index < kCount; ++index)
+    {
+        const auto from = nested / std::format(L"before-{}.txt", index);
+        const auto to   = nested / std::format(L"after-{}.txt", index);
+        wil::com_ptr<IFileSystemCorroboratedRenameSource> token;
+        const HRESULT capture = corroboration->CaptureCorroboratedRenameSource(from.c_str(), nullptr, token.put());
+        if (capture != S_OK || ! token)
+            return reject(std::format(L"100-item capture failed at item {} (0x{:08X})", index, static_cast<unsigned long>(capture)));
+        FileSystemCorroboratedRenameResult receipt{};
+        const HRESULT hr     = token->RenameToFreeSibling(to.filename().c_str(), nullptr, &receipt);
+        const bool committed = hr == S_OK && receipt.mutationAttempted == TRUE && receipt.mutation.outcomeKnown == TRUE &&
+                               receipt.mutation.mutationCommitted == TRUE && receipt.mutation.originalStillPresent == FALSE;
+        if (committed)
+            renamedLeaves = index + 1u;
+        if (! committed || ! hasExactLeaf(to) || hasExactLeaf(from) || ! hasBytes(to, kSourceBytes))
+            return reject(std::format(L"100-item Rename failed at item {} (0x{:08X})", index, static_cast<unsigned long>(hr)));
+    }
+    Debug::Perf::Emit(L"FileOps.Smb.CorroboratedRenameControlUs", L"100 provider items", Debug::Perf::ElapsedUs(batchStart), kCount, 0u, S_OK);
+    if (operations->HasActiveOperations())
+        return reject(L"the owned Rename tasks were still active at cleanup");
+    if (! removeFixture())
+        return reject(L"the owned SMB Rename fixture could not be removed");
+    cleanup.release();
+    return true;
+}
+
 // I42: run identical fresh fixtures as a directory and as the equivalent Ctrl+A leaf list. Observe
 // actual admitted native transfer phases, not selected-root worker counts, and compare every destination byte.
 [[nodiscard]] bool RunFileOpsSelectionShapeChecks(SelfTestState& state, bool smb, std::wstring& unavailableReason) noexcept
@@ -17283,6 +17530,25 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsSmbExactRenameProviderChecks(state, unavailableReason))
             {
                 Fail(L"The live SMB exact Rename controls failed. See the per-item result in the File Operations trace.");
+                return true;
+            }
+            RecordCurrentPhase(state,
+                               unavailableReason.empty() ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::skipped,
+                               unavailableReason);
+            NextStep(state, SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_SmbCorroboratedRenameProvider:
+        {
+            static bool active = false;
+            if (active || ! TryGetFolderWindow(state.mainWindow))
+                return false;
+            active            = true;
+            const auto finish = wil::scope_exit([]() noexcept { active = false; });
+            std::wstring unavailableReason;
+            if (! RunFileOpsSmbCorroboratedRenameChecks(state, unavailableReason))
+            {
+                Fail(L"The live SMB corroborated Rename controls failed. See the File Operations trace.");
                 return true;
             }
             RecordCurrentPhase(state,

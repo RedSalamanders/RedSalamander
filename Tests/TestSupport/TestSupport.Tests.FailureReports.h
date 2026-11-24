@@ -13,10 +13,9 @@
 #endif
 #include <windows.h>
 
-// A test process never waits on a dialog. In a Debug build a failed runtime check (an STL range check, a CRT assertion)
-// otherwise opens a modal Abort/Retry/Ignore box on the desktop: an unattended run hangs until its watchdog ends it, and an
-// attended one interrupts the person at the desktop. The report goes to stderr, which the suite log keeps, and the check
-// ends the process with exit code 3 (the dialog's Abort), with no Windows Error Reporting dialog either.
+// Failed standard assertions, Debug CRT assertions and STL checks in a test process go to stderr.
+// Having an stderr stream lets the test runner retain the report. The failing check exits with code 3
+// without opening a CRT or Windows Error Reporting dialog.
 //
 // Modeled on DxUi's Tests/Support/TestSupport.Tests.FailureReports.h. Every native test entry point calls it first
 // (Tools/Tests/FailureReportRouting.Tests.ps1 enforces that), and the product executables call it only on their
@@ -40,6 +39,7 @@ inline int __cdecl EndOnFailureReport(int reportType, wchar_t* message, int* ret
 // Call first in the process entry point: before any test can fail a check.
 inline void RouteFailureReportsAwayFromDialogs() noexcept
 {
+    static_cast<void>(_set_error_mode(_OUT_TO_STDERR));
     static_cast<void>(_set_abort_behavior(0u, _WRITE_ABORT_MSG | _CALL_REPORTFAULT));
     static_cast<void>(SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX));
 #if defined(_DEBUG)

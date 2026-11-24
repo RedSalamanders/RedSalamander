@@ -136,6 +136,15 @@ controls. The host checks every strict root before requesting any handoff and ab
 or mutation on failure, including an older provider's `E_NOINTERFACE`. See the Delete contract in
 `Specs/FileSystem/FileSystem_FileOperations.md` for reservation, confirmation and release ordering.
 
+`IFileSystemCorroboratedRename` (`fed503c6-991a-4e3a-a4e1-e7a62b4eedba`) is separately queried on the
+built-in Local provider. `CaptureCorroboratedRenameSource` returns the optional operation-scoped
+`IFileSystemCorroboratedRenameSource` (`5bb8d452-2e64-4d88-8e58-7dcdd8344f96`). Both interfaces keep the
+existing vtables and IIDs unchanged. The capture retains facts and lineage without retaining filesystem
+handles or operation controls. It grants one same-parent no-replace operation on a validated leaf.
+A known non-commit permits the same token to be revalidated and reused. A commit or indeterminate
+attempt closes the token. The caller initializes both record sizes and validates the strict dispatch
+and mutation facts before recovery. See [the provider contract](Plugins_VirtualFileSystem.md#inline-rename).
+
 `IFileSystemRouteCapabilities` (`{1e924d87-2e62-4ab4-9f37-c565d465f25e}`)
 is a separate interface queried from `IFileSystem`. It is the sole executable
 route-capability authority for the current source-tree/release generation.

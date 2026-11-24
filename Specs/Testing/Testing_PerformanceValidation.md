@@ -2601,7 +2601,19 @@ case-only Rename through the Local provider, an occupied destination and a read-
 denies delete sharing. The watcher must produce a sharing violation. It rebinds the published object and checks the receipt, spelling and payload. Collect
 `FileOps.Smb.ExactRenameControlUs` for a single item and 100 independent operations, including
 rebind verification. The case explicitly skips a proved absence of exact binding capability.
-Full Rename qualification also needs host cancellation, handle peaks and corroborated routes.
+Full exact Rename qualification also needs host cancellation and handle peaks.
+
+## Live SMB corroborated Rename
+
+`FileOps_SmbCorroboratedRenameProvider` uses a dedicated SMB child on an endpoint that can open
+ordinary objects without exact IDs. It drives the normal F2 worker for a nested folder, a
+name collision with Keep both, a case-only rename, and cancellation before dispatch.
+It also runs 100 independent provider captures and renames, checking content, spelling
+and receipt for each one. Collect `FileOps.Smb.CorroboratedRenameControlUs` for host-folder
+completion, the cancellation round and the provider series. The provider emits capture
+and mutation duration and guarded directory counts under `FileOps.Local.CorroboratedRename`.
+The Debug plugin contract separately exercises a blocked source handle, a replaced ancestor
+and a lost response after a real mutation.
 
 ## Preparing status and popup cadence
 

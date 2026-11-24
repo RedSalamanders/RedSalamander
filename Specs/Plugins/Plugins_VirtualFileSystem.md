@@ -1568,19 +1568,45 @@ through the exact published authority after stage promotion because promotion cl
 Hidden/Temporary state. Any failed feature is returned in the exact loss mask; it is never silently
 claimed from the JSON profile.
 
-Inline Rename capability and executable authority are deliberately separate claims during the
-Phase 1 cutover:
+#### Inline Rename
+
+Base Rename capability admits a task. Executing the task also requires qualified mutation authority.
 
 | Provider path profile | Base `rename` claim | Object binding / conditional rename | Current host behavior |
 |---|---:|---:|---|
-| Local FileSystem | `true` | Implemented and contract-tested | `RenamePlan(InlineRename)` executes on a File Operations worker after exact source/parent binding and revalidation. |
+| Local FileSystem | `true` | Implemented and contract-tested | `RenamePlan(InlineRename)` executes on a File Operations worker with exact binding, or through qualified corroboration when its parent chain and source lack exact identity. |
 | FileSystemDummy, Microsoft Drive, and S3 flat-prefix | May be `true` | Not implemented in the current slice | Admission may publish a task, but interlock preparation fails closed before provider mutation and the failed task remains visible. Advertising base Rename does not imply identity-owned Inline Rename execution. |
 | 7-Zip, Curl, Google Drive, and every profile advertising `rename: false` | `false` | Absent or irrelevant | Admission rejects before task publication; FolderView presents the existing pane error overlay because no central task exists. |
 
-No provider may bypass this matrix by falling back from a failed bound Inline Rename to pathname
-`RenameItem`. Providers that want executable Inline Rename must implement and contract-test
-`IFileSystemObjectBinding::BindObject(...FILESYSTEM_BIND_RENAME...)` and
-`IFileSystemBoundObject::RenameIfUnchanged` for the queried path profile.
+Providers execute exact Inline Rename through `IFileSystemObjectBinding::BindObject` with
+`FILESYSTEM_BIND_RENAME` and `IFileSystemBoundObject::RenameIfUnchanged`. A failed bound mutation
+grants no authority for pathname `RenameItem`.
+
+The built-in Local provider's `IFileSystemCorroboratedRename` capture requires a successful
+no-follow open of a regular file or directory and an explicitly unsupported exact-ID query.
+A missing object, failed open, error from the identity query, or reparse point ends capture.
+The token compares protection attributes, file size where applicable, creation and write times,
+and available volume serial and legacy file index. A different object with identical observed
+facts can pass the comparison.
+
+Capture and execution open the drive or share root and each plain descendant through the prior
+held directory. Read-list access with no DELETE sharing pins the namespace. A remote root must
+report an online SMB 2 or later transport from its open handle. Every directory must supply
+an exact ID or a matching nonzero legacy index and volume observation. Capture
+releases all handles. Both phases open the source for read-data and attributes so SMB metadata
+caching cannot give capture an older write time. Execution checks the lineage again, opens the
+source relative to the pinned parent with DELETE access and without write or delete sharing,
+and compares the captured source facts. It checks cancellation before dispatch and submits one native `FileRenameInformation`
+operation on that source handle. The new name is a simple sibling leaf with a null root and
+replacement disabled. The case-only result requires the requested spelling from the guarded
+parent. The route creates no backup or temporary sibling.
+
+The receipt reports whether the mutation call was entered and supplies `FileSystemItemMutationResult`.
+A refused call before dispatch proves no application mutation. It can leave source disposition
+unobserved if revalidation failed. The host records publication as NotAttempted and retains the
+failure reason. A known collision keeps both names. A missing or contradictory receipt or
+unconfirmed result after dispatch yields an indeterminate outcome and ends recovery.
+Batch Rename, Change Case, and exact destination Replace keep their own authority requirements.
 
 #### Provider path-name identity (`names`) (mandatory)
 

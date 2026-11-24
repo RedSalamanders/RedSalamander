@@ -175,6 +175,9 @@ struct LocalDirectoryIdentity final
                                                             const LocalDirectoryIdentity& identity,
                                                             const FileSystemBasicInformation& info) noexcept;
 
+// The first enumeration on a guarded parent verifies the spelling of one case-only Rename.
+[[nodiscard]] HRESULT VerifyLocalRenameLeaf(HANDLE parent, std::wstring_view target) noexcept;
+
 // Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded
 // while background worker threads or threadpool callbacks are active.
 extern const int kFileSystemModuleAnchor;

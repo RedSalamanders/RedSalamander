@@ -794,7 +794,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Verify that every native test entry point and the test-enabled product executables route a failed Debug-CRT or STL check away from the CRT's modal dialog, and that a built ProductUiTests.exe ends its hidden failure-report self-test within a bound, with exit code 3 and the report in Debug and ASan Debug and exit code 0 in Release.",
+      "purpose": "Verify that native test entry points and test-enabled product executables route failed standard assertions, Debug CRT assertions and STL checks away from dialogs. Built ProductUiTests failure-report cases check the explicit stderr mode, bounded exit with code 3 and a report in Debug and ASan Debug, and exit code 0 in Release.",
       "usage": "Run with Pester or the current tooling test aggregate; the behavioral checks run each built profile's ProductUiTests.exe that carries the switch and skip, with a named reason, when none is built.",
       "usedBy": [
         "Tools/Run-AllTests.ps1"
@@ -805,7 +805,7 @@
         "A built ProductUiTests.exe for the behavioral checks"
       ],
       "sideEffects": [
-        "Starts each built ProductUiTests.exe with --failure-report-self-test and ends only a process it started, after a 30-second bound"
+        "Starts each built ProductUiTests.exe with its supported --failure-report-self-test and --failure-report-assert-self-test switches and ends only a process it started after a 30-second bound"
       ],
       "outputs": [
         "Pester pass/fail results"
@@ -1584,7 +1584,7 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Build, verify the selected executable/plugin receipt closure, project non-secret machine resources, and execute canonical validation with fail-closed normalized results and typed 0..5 exits. Each contained FileOperations launch isolates its LOCALAPPDATA in governed scratch without changing the parent environment. After artifact re-attestation, cached receipt bindings and downstream entry fingerprints describe the same verified receipt. Noninteractive planning and execution report empty or nonempty desktop-pending selections without blocking admitted entries. Standalone scheduling retains later entries when the cheap selection is empty, including PR-deferred Full. Early-exit case inventory does not acquire the desktop lease; actual tests retain declared desktop admission. Rejected validation contracts append their reason codes and unallowed skipped case names without losing earlier diagnostics or changing executed case statuses. Re-attestation preserves the independently verified dependency recipe, key, manifest and original SDK descriptor before native execution. Alternate-volume opt-in uses only existing explicitly initialized marked roots and never creates or marks a physical drive-root sandbox. Optional RequireCleanQuarantine rejects invalid or blocking parsed state before native work and forbids every repair dispatch; default-false callers retain the ordinary blocking repair lane. All three tracked build-graph enumerations use contained no-window metadata capture and refuse nonzero discovery before governance admission.",
-      "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
+      "usage": "Use -Suite PR (the pull-request/push gate), CI (the nightly suite), or Full with -ValidationMode Fresh for authoritative gates, Full Resume/Affected for their documented narrower roles, or a focused suite/family for iteration. Exact SMB Rename case filters select one of the two guarded binding routes without activation. Test-generated local data and validation evidence stay beneath exact X:/RedSalamander.Perf; select X with -TestRoot or REDSALAMANDER_TEST_ROOT and use -AllowExternalTestRoot only for first initialization. All six x64/ARM64 Debug/Release/ASan Debug profiles are admitted; Full artifact writers and native inventory use that exact profile.",
       "usedBy": [
         "Developers",
         "CI workflows",

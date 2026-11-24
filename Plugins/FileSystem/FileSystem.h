@@ -118,6 +118,7 @@ class FileSystem final : public IFileSystem,
                          public IFileSystemCooperativeCopy,
                          public FileSystemRouteCapabilitiesBase,
                          public IFileSystemObjectBinding,
+                         public IFileSystemCorroboratedRename,
                          public IFileSystemExpectedOccupantPublication,
                          public IFileSystemIdentityDelete,
                          public IFileSystemSearch,
@@ -249,6 +250,9 @@ public:
 
     HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept override;
+    HRESULT STDMETHODCALLTYPE CaptureCorroboratedRenameSource(const wchar_t* path,
+                                                              const FileSystemOptions* options,
+                                                              IFileSystemCorroboratedRenameSource** source) noexcept override;
     // IFileSystemExpectedOccupantPublication: Replace at a location that opens a file and cannot identify it.
     HRESULT STDMETHODCALLTYPE ReadExpectedOccupant(const wchar_t* path, FileSystemExpectedOccupant* occupant) noexcept override;
     HRESULT STDMETHODCALLTYPE PublishOverExpectedOccupant(IFileSystemBoundObject* ownedStage,

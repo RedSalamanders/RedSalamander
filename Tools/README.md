@@ -328,7 +328,8 @@ publication.
 
 The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemediationContracts`, `FileOps_CrossRootLocalCopy`,
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb` and
-`FileOps_SmbExactRenameProvider` storage and route regressions run without activation or a desktop
+`FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
+run without activation or a desktop
 lease, alongside `FileOps_RepeatDecisionContracts` and the two reviewed folder-progress
 witnesses. Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox

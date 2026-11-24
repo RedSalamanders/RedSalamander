@@ -324,6 +324,8 @@ struct MutationInterlockScope
     // I35 R7.3: why a Recycle root's best-effort by-name pin failed while the task prepared (its refused
     // Recycle then says so instead of offering a delete by name); S_OK otherwise.
     HRESULT byNamePinStatus = S_OK;
+    // An inline Rename source observation holds no filesystem handles while this scope waits.
+    wil::com_ptr<IFileSystemCorroboratedRenameSource> corroboratedRenameSource;
 };
 
 enum class TaskLifecyclePhase : uint8_t
