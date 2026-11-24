@@ -2597,8 +2597,8 @@ attempts. The injected information-class refusal needs separate Windows SMB and 
 ## Live SMB exact Rename
 
 `FileOps_SmbExactRenameProvider` uses the configured SMB test child to verify nested new-name and
-case-only Rename through the Local provider, an occupied destination and a watcher that denies
-delete sharing. It rebinds the published object and checks the receipt, spelling and payload. Collect
+case-only Rename through the Local provider, an occupied destination and a read-data watcher that
+denies delete sharing. The watcher must produce a sharing violation. It rebinds the published object and checks the receipt, spelling and payload. Collect
 `FileOps.Smb.ExactRenameControlUs` for a single item and 100 independent operations, including
 rebind verification. The case explicitly skips a proved absence of exact binding capability.
 Full Rename qualification also needs host cancellation, handle peaks and corroborated routes.

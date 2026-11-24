@@ -14195,13 +14195,18 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         return ReadFileTextFsIo(io, path, actual) && actual == expected;
     };
     {
-        wil::unique_hfile watcher(CreateFileW(
-            source.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+        wil::unique_hfile watcher(CreateFileW(source.c_str(),
+                                              FILE_READ_DATA | FILE_READ_ATTRIBUTES,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                              nullptr,
+                                              OPEN_EXISTING,
+                                              FILE_FLAG_OPEN_REPARSE_POINT,
+                                              nullptr));
         if (! watcher)
             return reject(L"could not open the watcher that refuses delete sharing");
         const HRESULT blocked = binding->BindObject(source.c_str(), renameFlags, probe.put());
         Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"watcher", 0u, 0u, 0u, blocked);
-        if (SUCCEEDED(blocked) || probe || ! leafMatches(source, true) || ! hasBytes(source, kSourceBytes))
+        if (blocked != HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || probe || ! leafMatches(source, true) || ! hasBytes(source, kSourceBytes))
             return reject(L"the watcher did not block rename authority or the source changed");
     }
 
