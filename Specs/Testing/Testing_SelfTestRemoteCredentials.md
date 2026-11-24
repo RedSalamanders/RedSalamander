@@ -133,10 +133,11 @@ the configured value is an absolute UNC directory below the share, contains no `
 
 Write-capable FileOps cases (I35 owner decision D-10.1) may use the same root under the same
 fail-closed rules: `FileOps_SmbCopyThroughputVariance`, `FileOps_SmbManagedMoveLeavesNoStage` and
-`FileOps_SmbExactRenameProvider` write only below a unique per-run child (`<case>-<pid>-<tick>`) of the validated root, never
+`FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` write only below a unique per-run
+child (`<case>-<pid>-<tick>`) of the validated root, never
 outside it or through a link, and remove that child on exit. The cases skip an unreachable root.
-The exact Rename case also skips when the root is unset or the provider proves exact file identity
-is unavailable. The throughput and managed Move cases can use the sandbox loopback alias when the
+Both Rename cases also skip when the root is unset. An explicitly unsupported exact-ID query
+skips the exact case, and a successful exact bind skips the corroborated case. The throughput and managed Move cases can use the sandbox loopback alias when the
 root is unset. Loopback numbers remain directional for NAS behavior. The share's server-side `@Recycle` bin may keep deleted run data until the server
 empties it; cleanup assertions check only the visible tree.
 

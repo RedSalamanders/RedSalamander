@@ -635,6 +635,9 @@ interactive lease. See `Specs/Testing/Testing_PerformanceValidation.md` for metr
 `FileOps_SmbExactRenameProvider` is a separate exact, non-activating selection for the registered
 SMB root. It creates one owned child, checks exact Rename on nested names, then removes that child.
 An endpoint without exact file binding skips the case after corroboration.
+`FileOps_SmbCorroboratedRenameProvider` uses the same live sandbox to check the F2 worker, Keep both,
+case-only spelling, cancel before dispatch, and 100 independent no-replace provider operations.
+It skips if exact binding is available.
 
 ## Product documentation captures
 

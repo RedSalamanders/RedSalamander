@@ -6,18 +6,31 @@
 
 ## Implementation checklist
 
-**RubyGloom F2 qualification (2026-11-24).** The no-activation x64 Debug run
-`20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` hit a callback-scope assertion during
-Preparing. The isolated process was stopped and the failed trace and assertion were preserved.
-The candidate now opens the callback scope during provider capture and explicitly routes standard
-assertions to stderr in test processes. The rebuilt failure-report control and live Rename rerun
-are pending.
+**Samba F2 Rename (2026-11-24).** No-activation run
+`20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` reached an active-callback assertion while
+Preparing captured the selected source. The owned process was stopped and the failure artifacts were retained. The task now declares a balanced callback scope around
+that synchronous provider call. The assertion remains in place. The test-enabled harness routes CRT
+assertions to standard error and its failure report. The 20 focused failure-report checks, including
+the native assertion controls, passed in `20261124T164133Z-97372-233c6dc7388c4dcf912e8f73efb7ba85`.
+The next run exposed stale write times on metadata-only SMB opens. The provider now captures comparable
+timestamps with read-data access, and the host reports a source change before dispatch as a refused
+operation. The final x64 Debug run `20261124T173007Z-100696-ce72a4511ad04f9e9076f0aa92525ad2` passed
+setup, the live case and cleanup. It verified folder and case-only Rename, Keep both, cancellation,
+refusal after a source change and 100 provider renames. The zero-warning, zero-error build and metrics
+are recorded in the [Samba archive](../../TestRuns/4cb089111a23/FileOps/2026-11-24_173737/README.md).
+Release, native ARM64 and the remaining Rename entry points are open.
 
 **Queue and pause qualification (2026-11-24).** The x64 Release `FileOps_PopupIdleCadence` run
 `20261124T162210Z-62860-6cd00aef04f241ceacedc1d1d503eb17` passed setup, the case and cleanup.
 The previous Debug PrePush was stopped to correct the scheduler source test's typed pause boundary.
 That source test group passed all 192 checks in `20261124T163442Z-63668-ee7d2800de8c432db58fb14adf325401`.
-The exact candidate still needs a complete non-activating PrePush.
+[PR #247](https://github.com/RedSalamanders/RedSalamander/pull/247) merged at `6c6717856`. Its
+non-activating x64 Debug PrePush reported 1,799 passes, one S3 timing failure and 26 environment skips in
+`20261124T164838Z-89552-dffa46df698d44afb067f341a3560aba`. PluginContractTests passed on the same
+verified binaries in isolated run `20261124T180310Z-86824-456dbfff52324fbea1ca3dccb4c3a99d`. The
+final head added a test alignment change and passed the affected settings and hosted checks.
+Four desktop entries and [main native Release qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45455678346)
+remain open.
 
 **Follow-up qualification (2026-11-24).** Scoped PrePush on `e3e5ac280` built cleanly. Its standalone settings entry
 failed because the Queue default regression fixture attempted to write over seeded legacy settings without the loaded
@@ -46,8 +59,7 @@ bulk-pause ownership and a dedicated live SMB Rename case. Correcting the SMB ch
 first build failure. The selected x64 Debug build on `6df121e23` completed with zero warnings and zero errors, and
 the non-activating popup and repeat-decision selections passed. A guarded Win32 check on both SMB endpoints
 showed that a read-data watcher is required to reproduce the sharing violation. The earlier PrePush stopped after
-its build to correct the witness. The corrected live Windows SMB case passed on `92c2b2762`. Scoped
-PrePush is the next merge gate.
+its build to correct the witness. The corrected live Windows SMB case passed on `92c2b2762`.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -81,7 +93,8 @@ PrePush is the next merge gate.
   - [x] Run live exact Rename on Windows SMB with the corrected watcher. The nested, case-only, collision,
     watcher and 100-item checks passed. The [focused record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_161520/README.md)
     retains the run identity and timing. Release, legacy fallback hops and host cancellation remain open.
-  - [ ] Implement and qualify the corroborated Rename route on the endpoint without exact identity.
+  - [x] Implement and exercise corroborated F2 Rename on the configured Samba endpoint without exact file identity.
+    The non-activating x64 Debug run passed action, refusal, cancel, throughput and fixture cleanup controls.
   - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
     scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,

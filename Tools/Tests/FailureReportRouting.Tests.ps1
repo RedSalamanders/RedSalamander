@@ -4,7 +4,10 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot '../Modules/Build/RedMonitorDependency.psm1') -Force
 $routingCall = 'RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();'
-$selfTestSwitch = '--failure-report-self-test'
+$failureReportCases = @(
+    @{ Switch = '--failure-report-self-test'; ExpectedReport = 'failure-report self-test fails this check on purpose' }
+    @{ Switch = '--failure-report-assert-self-test'; ExpectedReport = 'standard-assert self-test fails this check on purpose' }
+)
 $selfTestTimeoutMilliseconds = 30000
 
 function Get-RSRoutingSource {
@@ -93,13 +96,16 @@ function Get-RSNativeTestProjects {
 function Test-RSExecutableContainsSelfTestSwitch {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Path
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Switch
     )
 
     # The switch is a wide literal in the executable; an executable built before it existed cannot honor it. ISO-8859-1 maps every
     # byte to one character, so the UTF-16 bytes of the switch can be searched for as a string.
     $byteEncoding = [System.Text.Encoding]::GetEncoding(28591)
-    $pattern = $byteEncoding.GetString([System.Text.Encoding]::Unicode.GetBytes($selfTestSwitch))
+    $pattern = $byteEncoding.GetString([System.Text.Encoding]::Unicode.GetBytes($Switch))
     return $byteEncoding.GetString([System.IO.File]::ReadAllBytes($Path)).Contains($pattern)
 }
 
@@ -110,10 +116,13 @@ function Invoke-RSBoundedFailureReportRun {
         [Parameter(Mandatory = $true)]
         [string]$ExecutablePath,
 
+        [Parameter(Mandatory = $true)]
+        [string]$Switch,
+
         [int]$TimeoutMilliseconds = $selfTestTimeoutMilliseconds
     )
 
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new($ExecutablePath, $selfTestSwitch)
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new($ExecutablePath, $Switch)
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
@@ -171,7 +180,8 @@ Describe 'Failure-report routing keeps test processes off the desktop' {
             }
         }
 
-        It 'clears the CRT abort message and fault report, and keeps the error mode off the Windows Error Reporting dialog' {
+        It 'routes standard assertions to stderr and suppresses the CRT abort message and Windows Error Reporting dialog' {
+            $header | Should Match '_set_error_mode\(_OUT_TO_STDERR\)'
             $header | Should Match '_set_abort_behavior\(0u,\s*_WRITE_ABORT_MSG \| _CALL_REPORTFAULT\)'
             $header | Should Match 'SetErrorMode\(GetErrorMode\(\) \| SEM_FAILCRITICALERRORS \| SEM_NOGPFAULTERRORBOX\)'
         }
@@ -247,6 +257,12 @@ Describe 'Failure-report routing keeps test processes off the desktop' {
             $source | Should Match '(?s)#else\s+std::fputs\("A Release build has no runtime checks to report\.\\n", stdout\);\s+return 0;\s+#endif'
         }
 
+        It 'checks the explicit GUI CRT output mode before failing a standard assertion on purpose' {
+            $source = Get-RSRoutingSource -RelativePath 'Tests\ProductUiTests\ProductUi.Tests.Runner.cpp'
+            $source | Should Match 'std::wstring_view\(argv\[1\]\) == L"--failure-report-assert-self-test"'
+            $source | Should Match '(?s)Require\(_set_error_mode\(_REPORT_ERRMODE\) == _OUT_TO_STDERR,.*?\);\s*#ifndef NDEBUG\s+assert\(\s*!\s*"the standard-assert self-test fails this check on purpose"\);'
+        }
+
         # Debug and ASan Debug end as the CRT dialog's Abort would (exit code 3, the report on stderr); Release has no such checks.
         # A run that waits on a dialog is ended after the bound, and only that exact process is ended.
         $platforms = @('x64')
@@ -256,8 +272,18 @@ Describe 'Failure-report routing keeps test processes off the desktop' {
         $runs = @(foreach ($platform in $platforms) {
                 foreach ($configuration in @('Debug', 'ASan Debug', 'Release')) {
                     $executable = Join-Path $repoRoot ('.build\{0}\{1}\ProductUiTests.exe' -f $platform, $configuration)
-                    if ((Test-Path -LiteralPath $executable -PathType Leaf) -and (Test-RSExecutableContainsSelfTestSwitch -Path $executable)) {
-                        [pscustomobject]@{ Platform = $platform; Configuration = $configuration; Path = $executable }
+                    if (Test-Path -LiteralPath $executable -PathType Leaf) {
+                        foreach ($case in $failureReportCases) {
+                            if (Test-RSExecutableContainsSelfTestSwitch -Path $executable -Switch $case.Switch) {
+                                [pscustomobject]@{
+                                    Platform = $platform
+                                    Configuration = $configuration
+                                    Path = $executable
+                                    Switch = $case.Switch
+                                    ExpectedReport = $case.ExpectedReport
+                                }
+                            }
+                        }
                     }
                 }
             })
@@ -268,15 +294,15 @@ Describe 'Failure-report routing keeps test processes off the desktop' {
         }
 
         foreach ($run in $runs) {
-            It "ends the $($run.Platform) $($run.Configuration) run within $($selfTestTimeoutMilliseconds / 1000) seconds without waiting on a dialog" {
-                $result = Invoke-RSBoundedFailureReportRun -ExecutablePath $run.Path
+            It "ends $($run.Switch) in $($run.Platform) $($run.Configuration) within $($selfTestTimeoutMilliseconds / 1000) seconds without waiting on a dialog" {
+                $result = Invoke-RSBoundedFailureReportRun -ExecutablePath $run.Path -Switch $run.Switch
                 $result.Exited | Should Be $true
                 if ($run.Configuration -eq 'Release') {
                     $result.ExitCode | Should Be 0
                 }
                 else {
                     $result.ExitCode | Should Be 3
-                    $result.Output | Should Match 'failure-report self-test fails this check on purpose'
+                    $result.Output | Should Match $run.ExpectedReport
                     $result.Output | Should Not Match 'returned instead of ending'
                 }
             }

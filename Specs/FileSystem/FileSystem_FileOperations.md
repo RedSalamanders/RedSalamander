@@ -2536,13 +2536,23 @@ that admits transfer leaves), fills both from the answer, or fails the task on i
 provider's reason and a `preparation.destinationName` diagnostic before any interlock or mutation;
 execution keeps its own re-query against that admitted join.
 
-Inline Rename does not enter the source mutation phase until the worker is about to call
-`RenameIfUnchanged`. A provider-name refusal during Preparing reports typed
+Inline Rename enters the source mutation phase as the worker calls `RenameIfUnchanged` or the
+corroborated source token. A provider-name refusal during Preparing reports typed
 `Failed`/`NotAttempted`/`Retained` with the provider's status, as for other pre-Ready failures.
 An executor pre-bind or other early failure reports `Failed`/`NotPublished`/`Retained`; an
 early Skip retains its own skipped result. None becomes `Unknown` merely because no mutation
 receipt was produced. Batch Rename retains its task-wide mutation gate because its executor may
 touch multiple roots.
+
+For Inline Rename on Local or SMB, an explicitly unsupported exact parent chain may enter
+the provider's corroborated no-replace route if the provider also proves the selected source
+opens with no exact identity. Preparation holds its immutable source token while waiting in a
+conservative write scope. It revalidates the destination leaf and executes through the provider
+on the worker. A stale capture or canceled pre-dispatch call accounts for no attempted mutation.
+The source disposition stays unknown when its current presence could not be proved.
+A known name collision can offer Keep both using the next available typed sibling name.
+The provider still enforces no-replace against an external creator. Keep both does not offer
+any replacement action. An unknown mutation result ends the task without replay.
 
 If the host rejects the request before publishing a task, FolderView shows a localized pane-scoped
 operation error because no task card exists. After successful task publication, failure presentation

@@ -237,6 +237,48 @@ __int64 FileTimeToInt64(const FILETIME& fileTime) noexcept
 }
 } // namespace
 
+HRESULT FileSystemInternal::VerifyLocalRenameLeaf(HANDLE parent, std::wstring_view target) noexcept
+{
+    const auto query            = GetNtQueryDirectoryFile();
+    const auto statusToDosError = GetRtlNtStatusToDosError();
+    if (! query || ! statusToDosError)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+    // This is the first enumeration on the parent guard. A native exact-name filter
+    // returns the server's stored spelling without scanning all its siblings on the host.
+    UNICODE_STRING name{};
+    name.Length        = static_cast<USHORT>(target.size() * sizeof(wchar_t));
+    name.MaximumLength = name.Length;
+    name.Buffer        = const_cast<wchar_t*>(target.data());
+    alignas(FileInfo) std::array<std::byte, sizeof(FileInfo) + 255u * sizeof(wchar_t)> buffer{};
+    IO_STATUS_BLOCK io{};
+    const NTSTATUS status = query(parent,
+                                  nullptr,
+                                  nullptr,
+                                  nullptr,
+                                  &io,
+                                  buffer.data(),
+                                  static_cast<ULONG>(buffer.size()),
+                                  NtFileInformationClass::FileFullDirectoryInformation,
+                                  TRUE,
+                                  &name,
+                                  TRUE);
+    if (status != 0)
+    {
+        const ULONG error = statusToDosError(status);
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+
+    constexpr size_t nameOffset = offsetof(FileInfo, FileName);
+    if (io.Information < nameOffset || io.Information > buffer.size())
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    const auto* entry = reinterpret_cast<const FileInfo*>(buffer.data());
+    if (entry->FileNameSize > io.Information - nameOffset || entry->FileNameSize % sizeof(wchar_t) != 0u)
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    const std::wstring_view observed(entry->FileName, entry->FileNameSize / sizeof(wchar_t));
+    return observed == target ? S_OK : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+}
+
 FilesInformation::FilesInformation()
 {
     _buffer.resize(kDefaultBufferSize, std::byte{0});

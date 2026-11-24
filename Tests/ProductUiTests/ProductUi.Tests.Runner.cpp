@@ -25,6 +25,7 @@
 #include <DxUi/DxUi.h>
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -1699,6 +1700,18 @@ int wmain(int argc, wchar_t** argv)
         return 1;
 #else
         std::fputs("A Release build has no runtime checks to report.\n", stdout);
+        return 0;
+#endif
+    }
+
+    if (argc == 2 && argv != nullptr && argv[1] != nullptr && std::wstring_view(argv[1]) == L"--failure-report-assert-self-test")
+    {
+        Require(_set_error_mode(_REPORT_ERRMODE) == _OUT_TO_STDERR, "standard assertions require stderr even in GUI tests");
+#ifndef NDEBUG
+        assert(! "the standard-assert self-test fails this check on purpose");
+        std::fputs("The failed check returned instead of ending the run.\n", stderr);
+        return 1;
+#else
         return 0;
 #endif
     }

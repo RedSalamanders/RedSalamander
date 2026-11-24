@@ -257,6 +257,23 @@ using RtlNtStatusToDosError_t = ULONG(NTAPI*)(NTSTATUS);
     return function;
 }
 
+using NtSetInformationFile_t = NTSTATUS(NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, FILE_INFORMATION_CLASS);
+
+[[nodiscard]] NtSetInformationFile_t GetNtSetInformationFile() noexcept
+{
+    static const NtSetInformationFile_t function = []() noexcept -> NtSetInformationFile_t
+    {
+        const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+        if (ntdll == nullptr)
+            return nullptr;
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: GetProcAddress is the supported dynamic ntdll binding boundary.
+        return reinterpret_cast<NtSetInformationFile_t>(::GetProcAddress(ntdll, "NtSetInformationFile"));
+#pragma warning(pop)
+    }();
+    return function;
+}
+
 [[nodiscard]] RtlNtStatusToDosError_t GetRtlNtStatusToDosError() noexcept
 {
     static const RtlNtStatusToDosError_t function = []() noexcept -> RtlNtStatusToDosError_t
@@ -6147,7 +6164,429 @@ namespace
     identity.fileIndex          = index;
     return S_OK;
 }
+
+struct LocalRenameSourceFacts final
+{
+    DWORD attributes         = 0;
+    uint64_t sizeBytes       = 0;
+    uint64_t creationTime    = 0;
+    uint64_t lastWriteTime   = 0;
+    DWORD volumeSerialNumber = 0;
+    uint64_t fileIndex       = 0;
+
+    bool operator==(const LocalRenameSourceFacts&) const noexcept = default;
+};
+
+struct LocalRenameSourceCapture final
+{
+    std::wstring path;
+    std::wstring root;
+    std::wstring parent;
+    std::wstring leaf;
+    std::vector<std::wstring> directories;
+    std::vector<FileSystemInternal::LocalDirectoryIdentity> lineage;
+    LocalRenameSourceFacts facts;
+};
+
+[[nodiscard]] HRESULT GetLocalRenameLastError() noexcept
+{
+    const DWORD error = GetLastError();
+    return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+}
+
+[[nodiscard]] HRESULT ParseLocalRenameSourcePath(std::wstring_view path, LocalRenameSourceCapture& capture) noexcept
+{
+    if (! Common::Paths::IsFullyAbsoluteWindowsPath(path) || path.size() >= 32u * 1024u)
+        return E_INVALIDARG;
+    capture.path.assign(path);
+    std::ranges::replace(capture.path, L'/', L'\\');
+    capture.root                = Common::Paths::ToExtendedWin32Path(ExtractDriveRoot(capture.path));
+    const std::wstring extended = Common::Paths::ToExtendedWin32Path(capture.path);
+    if (! Common::Paths::IsSameOrDescendantNormalizedWindowsPath(capture.root, extended) || extended.size() <= capture.root.size())
+        return E_INVALIDARG;
+
+    for (size_t start = capture.root.size();;)
+    {
+        const size_t separator            = extended.find(L'\\', start);
+        const std::wstring_view component = std::wstring_view(extended).substr(start, separator == std::wstring::npos ? separator : separator - start);
+        // Existing Windows names can contain trailing dots and spaces. Streams, dot segments and
+        // wildcard or native path syntax cannot be interpreted as a single no-follow child.
+        if (! Common::Paths::IsSingleChildPathComponent(component) || component.find_first_of(L":*?\"<>|") != std::wstring_view::npos)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        if (separator == std::wstring::npos)
+        {
+            capture.leaf.assign(component);
+            capture.parent = capture.directories.empty() ? capture.root : extended.substr(0u, start - 1u);
+            return S_OK;
+        }
+        if (capture.directories.size() == 1023u)
+            return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+        capture.directories.emplace_back(component);
+        start = separator + 1u;
+    }
+}
+
+[[nodiscard]] HRESULT OpenLocalRenameChild(
+    HANDLE parent, std::wstring_view child, ACCESS_MASK access, ULONG share, ULONG flags, wil::unique_handle& handle) noexcept
+{
+    const auto createFile       = GetNtCreateFile();
+    const auto statusToDosError = GetRtlNtStatusToDosError();
+    if (! createFile || ! statusToDosError)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+    UNICODE_STRING name{};
+    name.Length        = static_cast<USHORT>(child.size() * sizeof(wchar_t));
+    name.MaximumLength = name.Length;
+    name.Buffer        = const_cast<wchar_t*>(child.data());
+    OBJECT_ATTRIBUTES attributes{};
+    constexpr ULONG dontReparse = 0x1000u; // OBJ_DONT_REPARSE.
+    InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE | dontReparse, parent, nullptr);
+    IO_STATUS_BLOCK io{};
+    const NTSTATUS status = createFile(handle.put(),
+                                       access | SYNCHRONIZE,
+                                       &attributes,
+                                       &io,
+                                       nullptr,
+                                       0u,
+                                       share,
+                                       FILE_OPEN,
+                                       FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | flags,
+                                       nullptr,
+                                       0u);
+    if (status == 0 && handle)
+        return S_OK;
+    const ULONG error = statusToDosError(status);
+    return HRESULT_FROM_WIN32(error == ERROR_NOT_SUPPORTED ? ERROR_OPEN_FAILED : (error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE));
+}
+
+[[nodiscard]] HRESULT ReadLocalRenameDirectoryIdentity(HANDLE directory,
+                                                       [[maybe_unused]] const std::wstring& path,
+                                                       FileSystemInternal::LocalDirectoryIdentity& identity) noexcept
+{
+    FILE_ATTRIBUTE_TAG_INFO tag{};
+    if (! GetFileInformationByHandleEx(directory, FileAttributeTagInfo, &tag, sizeof(tag)))
+        return GetLocalRenameLastError();
+    if ((tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+        return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+
+    LocalObjectIdentityPayload exact{};
+    const HRESULT exactHr =
+        LocalDirectoryFileIdUnsupportedForSelfTest(path) ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) : QueryExactLocalObjectIdentity(directory, exact);
+    if (exactHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+        return QueryLocalDirectoryFileIndex(directory, identity);
+    if (FAILED(exactHr))
+        return exactHr;
+
+    identity.proof              = FileSystemInternal::LocalDirectoryIdentity::Proof::FileId;
+    identity.volumeSerialNumber = exact.volumeSerialNumber;
+    identity.fileId             = exact.fileId;
+    return S_OK;
+}
+
+[[nodiscard]] bool SameLocalRenameDirectory(const FileSystemInternal::LocalDirectoryIdentity& expected,
+                                            const FileSystemInternal::LocalDirectoryIdentity& current) noexcept
+{
+    using Proof = FileSystemInternal::LocalDirectoryIdentity::Proof;
+    if (expected.proof != current.proof || expected.volumeSerialNumber != current.volumeSerialNumber)
+        return false;
+    if (expected.proof == Proof::FileId)
+        return std::memcmp(&expected.fileId, &current.fileId, sizeof(expected.fileId)) == 0;
+    return expected.proof == Proof::FileIndex && expected.fileIndex == current.fileIndex;
+}
+
+[[nodiscard]] HRESULT OpenLocalRenameLineage(const LocalRenameSourceCapture& capture,
+                                             const FileSystemOptions* options,
+                                             std::vector<FileSystemInternal::LocalDirectoryIdentity>& observed,
+                                             std::vector<wil::unique_handle>& pins) noexcept
+{
+    // Read-list access makes a real deny-delete share guard. An attributes-only open
+    // can leave competing DELETE opens possible. Each child opens relative to the held
+    // parent so a drive mapping or share alias cannot redirect subsequent opens.
+    constexpr DWORD access = FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES;
+    constexpr DWORD share  = FILE_SHARE_READ | FILE_SHARE_WRITE;
+    const size_t depth     = capture.directories.size() + 1u;
+    pins.reserve(depth);
+    observed.resize(depth);
+    std::wstring currentPath = capture.root;
+    for (size_t index = 0; index < depth; ++index)
+    {
+        const HRESULT control = FileSystemCheckOperationControl(options);
+        if (FAILED(control))
+            return control;
+
+        if (index == 0u)
+        {
+            auto& root = pins.emplace_back(
+                CreateFileW(currentPath.c_str(), access, share, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+            if (! root)
+                return GetLocalRenameLastError();
+            if (FileSystemInternal::IsRemoteStoragePath(capture.root))
+            {
+                FILE_REMOTE_PROTOCOL_INFO protocol{};
+                if (! GetFileInformationByHandleEx(root.get(), FileRemoteProtocolInfo, &protocol, sizeof(protocol)))
+                    return GetLocalRenameLastError();
+                constexpr ULONG smbProtocol     = 0x00020000u; // WNNC_NET_SMB.
+                constexpr size_t protocolPrefix = offsetof(FILE_REMOTE_PROTOCOL_INFO, Flags) + sizeof(protocol.Flags);
+                if (protocol.StructureVersion == 0u || protocol.StructureSize < protocolPrefix || protocol.Protocol != smbProtocol ||
+                    protocol.ProtocolMajorVersion < 2u || (protocol.Flags & REMOTE_PROTOCOL_INFO_FLAG_OFFLINE) != 0u)
+                    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+        }
+        else
+        {
+            const auto& component = capture.directories[index - 1u];
+            const HANDLE parent   = pins.back().get();
+            const HRESULT open    = OpenLocalRenameChild(parent, component, access, share, FILE_DIRECTORY_FILE, pins.emplace_back());
+            if (FAILED(open))
+                return open;
+            currentPath = FileSystemInternal::AppendPath(currentPath, component);
+        }
+
+        const HRESULT read = ReadLocalRenameDirectoryIdentity(pins.back().get(), currentPath, observed[index]);
+        if (FAILED(read))
+            return read;
+        if (! capture.lineage.empty() && ! SameLocalRenameDirectory(capture.lineage[index], observed[index]))
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+
+    Debug::Perf::EmitValue(L"FileOps.Local.CorroboratedRename.DirectoryPins", static_cast<uint64_t>(pins.size()), S_OK);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ReadLocalCorroboratedRenameFacts(HANDLE file, [[maybe_unused]] const std::wstring& path, LocalRenameSourceFacts& facts) noexcept
+{
+    LocalObjectIdentityPayload exact{};
+    HRESULT identityHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+#if defined(ENABLE_TESTS)
+    if (! IsBindIdentityUnsupportedForSelfTest(path.c_str()))
+#endif
+        identityHr = QueryExactLocalObjectIdentity(file, exact);
+    if (identityHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+        return FAILED(identityHr) ? identityHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (! GetFileInformationByHandle(file, &info))
+        return GetLocalRenameLastError();
+    if ((info.dwFileAttributes & (FILE_ATTRIBUTE_DEVICE | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+    const auto pack                   = [](DWORD high, DWORD low) noexcept { return (static_cast<uint64_t>(high) << 32u) | low; };
+    constexpr DWORD ignoredAttributes = FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_NORMAL;
+    facts.attributes                  = info.dwFileAttributes & ~ignoredAttributes;
+    facts.sizeBytes                   = (facts.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? 0u : pack(info.nFileSizeHigh, info.nFileSizeLow);
+    facts.creationTime                = pack(info.ftCreationTime.dwHighDateTime, info.ftCreationTime.dwLowDateTime);
+    facts.lastWriteTime               = pack(info.ftLastWriteTime.dwHighDateTime, info.ftLastWriteTime.dwLowDateTime);
+    facts.volumeSerialNumber          = info.dwVolumeSerialNumber;
+    facts.fileIndex                   = pack(info.nFileIndexHigh, info.nFileIndexLow);
+    if (facts.fileIndex == (std::numeric_limits<uint64_t>::max)())
+        facts.fileIndex = 0u;
+    return S_OK;
+}
+
+class LocalCorroboratedRenameSource final : public IFileSystemCorroboratedRenameSource
+{
+public:
+    LocalCorroboratedRenameSource(FileSystem* owner, LocalRenameSourceCapture capture) noexcept : _owner(owner), _capture(std::move(capture))
+    {
+    }
+
+    LocalCorroboratedRenameSource(const LocalCorroboratedRenameSource&)            = delete;
+    LocalCorroboratedRenameSource(LocalCorroboratedRenameSource&&)                 = delete;
+    LocalCorroboratedRenameSource& operator=(const LocalCorroboratedRenameSource&) = delete;
+    LocalCorroboratedRenameSource& operator=(LocalCorroboratedRenameSource&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** object) noexcept override
+    {
+        if (object == nullptr)
+            return E_POINTER;
+        *object = nullptr;
+        if (iid != __uuidof(IUnknown) && iid != __uuidof(IFileSystemCorroboratedRenameSource))
+            return E_NOINTERFACE;
+        *object = static_cast<IFileSystemCorroboratedRenameSource*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _references.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _references.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (remaining == 0u)
+            delete this;
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameToFreeSibling(const wchar_t* leaf,
+                                                  const FileSystemOptions* options,
+                                                  FileSystemCorroboratedRenameResult* result) noexcept override
+    {
+        if (result == nullptr)
+            return E_POINTER;
+        if (result->sizeBytes != sizeof(FileSystemCorroboratedRenameResult))
+            return E_INVALIDARG;
+        *result = {};
+
+        Debug::Perf::Scope perf(L"FileOps.Local.CorroboratedRename.MutationUs");
+        const HRESULT hr = Rename(leaf, options, *result);
+        perf.SetHr(hr);
+        return hr;
+    }
+
+private:
+    [[nodiscard]] HRESULT Rename(const wchar_t* leaf, const FileSystemOptions* options, FileSystemCorroboratedRenameResult& result) noexcept
+    {
+        if (leaf == nullptr || _capture.leaf == leaf)
+            return E_INVALIDARG;
+        const HRESULT initialControl = FileSystemCheckOperationControl(options);
+        if (FAILED(initialControl))
+            return initialControl;
+
+        FileSystemChildNameValidation validation{};
+        validation.sizeBytes       = sizeof(validation);
+        const HRESULT validationHr = _owner->ValidateChildName(_capture.parent.c_str(), leaf, FILESYSTEM_RENAME, &validation);
+        if (FAILED(validationHr) || validation.status != FILESYSTEM_CHILD_NAME_VALID)
+            return FAILED(validationHr) ? validationHr : validation.failureStatus;
+
+        if (! _available.exchange(false, std::memory_order_acq_rel))
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        const auto restoreIfSafe = wil::scope_exit([&]() noexcept
+        {
+            if (result.mutationAttempted == FALSE || (result.mutation.outcomeKnown == TRUE && result.mutation.mutationCommitted == FALSE))
+                _available.store(true, std::memory_order_release);
+        });
+
+        std::vector<FileSystemInternal::LocalDirectoryIdentity> currentLineage;
+        std::vector<wil::unique_handle> pins;
+        const HRESULT lineageHr = OpenLocalRenameLineage(_capture, options, currentLineage, pins);
+        if (FAILED(lineageHr))
+            return lineageHr;
+
+        wil::unique_handle file;
+        const HRESULT open = OpenLocalRenameChild(pins.back().get(), _capture.leaf, FILE_READ_DATA | FILE_READ_ATTRIBUTES | DELETE, FILE_SHARE_READ, 0u, file);
+        if (FAILED(open))
+            return open;
+        LocalRenameSourceFacts facts{};
+        const HRESULT read = ReadLocalCorroboratedRenameFacts(file.get(), _capture.path, facts);
+        if (FAILED(read))
+            return read;
+        if (facts != _capture.facts)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+
+        const auto rename           = GetNtSetInformationFile();
+        const auto statusToDosError = GetRtlNtStatusToDosError();
+        if (! rename || ! statusToDosError)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        const std::wstring_view target(leaf);
+        const size_t nameBytes = target.size() * sizeof(wchar_t);
+        std::vector<std::byte> buffer(sizeof(FILE_RENAME_INFO) + nameBytes);
+        auto* info           = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+        info->FileNameLength = static_cast<DWORD>(nameBytes);
+        std::memcpy(info->FileName, target.data(), nameBytes);
+
+        const HRESULT control = FileSystemCheckOperationControl(options);
+        if (FAILED(control))
+            return control;
+        // The native FileRenameInformation structure shares FILE_RENAME_INFO's legacy layout.
+        // A simple leaf with a null root is relative to the source handle's parent.
+        constexpr auto fileRenameInformation = static_cast<FILE_INFORMATION_CLASS>(10);
+        IO_STATUS_BLOCK io{};
+        result.mutationAttempted = TRUE;
+        const NTSTATUS status    = rename(file.get(), &io, info, static_cast<ULONG>(buffer.size()), fileRenameInformation);
+        if (status != 0)
+        {
+            const ULONG error = statusToDosError(status);
+            if (error == ERROR_ALREADY_EXISTS || error == ERROR_FILE_EXISTS || error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION)
+            {
+                result.mutation.outcomeKnown         = TRUE;
+                result.mutation.originalStillPresent = TRUE;
+                return HRESULT_FROM_WIN32(error);
+            }
+            return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+        }
+
+#if defined(ENABLE_TESTS)
+        const std::wstring targetPath = FileSystemInternal::AppendPath(_capture.parent, target);
+        if (ConsumeMatchingPathInjectionForSelfTest(targetPath.c_str(),
+                                                    kRenameCommittedFailurePathEnvVar,
+                                                    kRenameCommittedFailureFiredEnvVar,
+                                                    L"FileOps.Local.CorroboratedRename.CommittedFailureInjected"))
+            return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+#endif
+
+        if (OrdinalString::EqualsNoCase(_capture.leaf, target))
+        {
+            const HRESULT spelling = FileSystemInternal::VerifyLocalRenameLeaf(pins.back().get(), target);
+            if (FAILED(spelling))
+            {
+                Debug::Perf::EmitValue(L"FileOps.Local.CorroboratedRename.SpellingUnconfirmed", 1u, spelling);
+                return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            }
+        }
+        result.mutation.outcomeKnown      = TRUE;
+        result.mutation.mutationCommitted = TRUE;
+        return S_OK;
+    }
+
+    wil::com_ptr<FileSystem> _owner;
+    const LocalRenameSourceCapture _capture;
+    std::atomic<ULONG> _references{1u};
+    std::atomic<bool> _available{true};
+};
 } // namespace
+
+HRESULT STDMETHODCALLTYPE FileSystem::CaptureCorroboratedRenameSource(const wchar_t* path,
+                                                                      const FileSystemOptions* options,
+                                                                      IFileSystemCorroboratedRenameSource** source) noexcept
+{
+    if (source == nullptr)
+        return E_POINTER;
+    *source = nullptr;
+    if (path == nullptr)
+        return E_INVALIDARG;
+
+    Debug::Perf::Scope perf(L"FileOps.Local.CorroboratedRename.CaptureUs");
+    const auto performCapture = [&]() noexcept -> HRESULT
+    {
+        const HRESULT control = FileSystemCheckOperationControl(options);
+        if (FAILED(control))
+            return control;
+        LocalRenameSourceCapture capture{};
+        const HRESULT pathHr = ParseLocalRenameSourcePath(path, capture);
+        if (FAILED(pathHr))
+            return pathHr;
+#if defined(ENABLE_TESTS)
+        if (IsBindOpenNotSupportedForSelfTest(path))
+            return HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
+#endif
+        std::vector<wil::unique_handle> pins;
+        std::vector<FileSystemInternal::LocalDirectoryIdentity> lineage;
+        const HRESULT lineageHr = OpenLocalRenameLineage(capture, options, lineage, pins);
+        if (FAILED(lineageHr))
+            return lineageHr;
+
+        // A metadata-only SMB open can return cached write times. Read-data access
+        // observes the same timestamp as the eventual mutation handle.
+        wil::unique_handle file;
+        const HRESULT open = OpenLocalRenameChild(
+            pins.back().get(), capture.leaf, FILE_READ_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 0u, file);
+        if (FAILED(open))
+            return open;
+        const HRESULT read = ReadLocalCorroboratedRenameFacts(file.get(), capture.path, capture.facts);
+        if (FAILED(read))
+            return read;
+        capture.lineage = std::move(lineage);
+        auto owned      = std::make_unique<LocalCorroboratedRenameSource>(this, std::move(capture));
+        *source         = owned.release();
+        return S_OK;
+    };
+    const HRESULT hr = performCapture();
+    perf.SetHr(hr);
+    return hr;
+}
 
 bool FileSystemInternal::IsRemoteStoragePath(std::wstring_view path) noexcept
 {
@@ -6405,6 +6844,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemCorroboratedRename))
+    {
+        *ppvObject = static_cast<IFileSystemCorroboratedRename*>(this);
+        AddRef();
+        return S_OK;
+    }
     if (riid == __uuidof(IFileSystemObjectBinding))
     {
         *ppvObject = static_cast<IFileSystemObjectBinding*>(this);

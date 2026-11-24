@@ -7424,8 +7424,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     };
 
 #ifdef ENABLE_TESTS
-    // A self-test run never waits on a dialog: a failed Debug-CRT or STL check ends the run with its report on stderr and exit code 3
-    // instead of opening a modal Abort/Retry/Ignore box. An interactive run keeps its dialogs, which a developer can attach to.
+    // An assertion or failed STL check in a self-test exits with code 3 and sends its report to stderr.
+    // Interactive Debug runs retain their debugger dialogs.
     if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest"))
     {
         RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();

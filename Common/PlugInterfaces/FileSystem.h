@@ -1376,6 +1376,31 @@ interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept = 0;
 };
 
+// Optional source capture for a provider that opens a regular object but definitively cannot
+// obtain its exact identity. This token holds corroboration and parent lineage, never an exact
+// bound object or a handle across queueing. It may rename only to a validated leaf in that parent.
+struct FileSystemCorroboratedRenameResult
+{
+    uint32_t sizeBytes     = sizeof(FileSystemCorroboratedRenameResult);
+    BOOL mutationAttempted = FALSE;
+    FileSystemItemMutationResult mutation{sizeof(FileSystemItemMutationResult), FALSE, FALSE, FALSE};
+};
+
+interface __declspec(uuid("5bb8d452-2e64-4d88-8e58-7dcdd8344f96")) __declspec(novtable) IFileSystemCorroboratedRenameSource : public IUnknown
+{
+    // Before dispatch, mutationAttempted is FALSE and the source disposition may be unknown.
+    // After dispatch, S_OK requires a known commit and the old name removed. An unknown receipt
+    // closes the token just like a commit. A verified collision preserves the source and occupant.
+    virtual HRESULT STDMETHODCALLTYPE RenameToFreeSibling(
+        const wchar_t* leaf, const FileSystemOptions* options, FileSystemCorroboratedRenameResult* result) noexcept = 0;
+};
+
+interface __declspec(uuid("fed503c6-991a-4e3a-a4e1-e7a62b4eedba")) __declspec(novtable) IFileSystemCorroboratedRename : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE CaptureCorroboratedRenameSource(
+        const wchar_t* path, const FileSystemOptions* options, IFileSystemCorroboratedRenameSource** source) noexcept = 0;
+};
+
 // The facts a provider reads on an existing destination it can open and cannot identify. The host
 // keeps them from the user's decision to the publication and never interprets them.
 struct FileSystemExpectedOccupant

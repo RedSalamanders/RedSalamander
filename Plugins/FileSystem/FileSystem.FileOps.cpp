@@ -12415,6 +12415,124 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         DWORD read = 0u;
         return file && ReadFile(file.get(), &firstByte, sizeof(firstByte), &read, nullptr) != FALSE && read == sizeof(firstByte);
     };
+#if defined(ENABLE_TESTS)
+    {
+        constexpr wchar_t unsupportedIdEnv[] = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
+        const auto ancestor                  = root / L"rename-ancestor";
+        const auto parent                    = ancestor / L"rename-parent";
+        const auto source                    = parent / L"source.bin";
+        const auto occupied                  = parent / L"occupied.bin";
+        const auto movedAncestor             = root / L"moved-rename-ancestor";
+        const auto movedParent               = movedAncestor / parent.filename();
+        const auto renamed                   = parent / L"renamed.bin";
+        const auto caseRenamed               = parent / L"RENAMED.BIN";
+        const auto lost                      = parent / L"lost-result.bin";
+        const auto stale                     = parent / L"unexpected.bin";
+        const auto reset                     = wil::scope_exit([&]() noexcept
+        {
+            static_cast<void>(SetEnvironmentVariableW(unsupportedIdEnv, nullptr));
+            for (const auto* path : {&source, &occupied, &renamed, &caseRenamed, &lost, &stale})
+                static_cast<void>(DeleteFileW(path->c_str()));
+            static_cast<void>(DeleteFileW((movedParent / lost.filename()).c_str()));
+            for (const auto* path : {&parent, &ancestor, &movedParent, &movedAncestor})
+                static_cast<void>(RemoveDirectoryW(path->c_str()));
+        });
+        wil::com_ptr<IFileSystemCorroboratedRename> rename;
+        wil::com_ptr<IFileSystemCorroboratedRenameSource> token;
+        if (! check(SUCCEEDED(fileSystem->QueryInterface(__uuidof(IFileSystemCorroboratedRename), rename.put_void())) && rename &&
+                        CreateDirectoryW(ancestor.c_str(), nullptr) != FALSE && CreateDirectoryW(parent.c_str(), nullptr) != FALSE &&
+                        writeFile(source, std::byte{0x31}) && writeFile(occupied, std::byte{0x61}),
+                    L"corroborated Rename should create its owned nested fixtures"))
+            return;
+        if (! check(rename->CaptureCorroboratedRenameSource(source.c_str(), nullptr, token.put()) == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! token,
+                    L"a source with an exact ID stays on the bound Rename route") ||
+            ! check(SetEnvironmentVariableW(unsupportedIdEnv, ancestor.c_str()) != FALSE &&
+                        rename->CaptureCorroboratedRenameSource(source.c_str(), nullptr, token.put()) == S_OK && token,
+                    L"a successful identity-less source open captures the guarded lineage"))
+            return;
+
+        const auto hasByte = [&](const std::filesystem::path& path, std::byte expected) noexcept
+        {
+            std::byte actual{};
+            return readFirstByte(path, actual) && actual == expected;
+        };
+        FileSystemCorroboratedRenameResult mutation{};
+        const HRESULT collisionHr = token->RenameToFreeSibling(occupied.filename().c_str(), nullptr, &mutation);
+        if (! check((collisionHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || collisionHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)) &&
+                        mutation.mutationAttempted == TRUE && mutation.mutation.outcomeKnown == TRUE && mutation.mutation.mutationCommitted == FALSE &&
+                        mutation.mutation.originalStillPresent == TRUE && hasByte(source, std::byte{0x31}) && hasByte(occupied, std::byte{0x61}),
+                    L"native no-replace Rename must preserve an unrelated occupant and the admitted source"))
+            return;
+
+        FileSystemOptions expired{};
+        expired.sizeBytes           = sizeof(expired);
+        expired.deadlineTickCount64 = GetTickCount64();
+        if (! check(token->RenameToFreeSibling(renamed.filename().c_str(), &expired, &mutation) == HRESULT_FROM_WIN32(ERROR_TIMEOUT) &&
+                        mutation.mutationAttempted == FALSE && hasByte(source, std::byte{0x31}),
+                    L"an expired Rename stops before mutation"))
+            return;
+
+        {
+            wil::unique_hfile watch(CreateFileW(source.c_str(),
+                                                FILE_READ_DATA | FILE_READ_ATTRIBUTES,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_ATTRIBUTE_NORMAL,
+                                                nullptr));
+            if (! check(watch && token->RenameToFreeSibling(renamed.filename().c_str(), nullptr, &mutation) == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) &&
+                            mutation.mutationAttempted == FALSE && hasByte(source, std::byte{0x31}),
+                        L"a competing read-data handle must block the exclusive source open"))
+                return;
+        }
+        if (! check(token->RenameToFreeSibling(renamed.filename().c_str(), nullptr, &mutation) == S_OK && mutation.mutationAttempted == TRUE &&
+                        mutation.mutation.outcomeKnown == TRUE && mutation.mutation.mutationCommitted == TRUE &&
+                        mutation.mutation.originalStillPresent == FALSE && hasByte(renamed, std::byte{0x31}) &&
+                        GetFileAttributesW(source.c_str()) == INVALID_FILE_ATTRIBUTES,
+                    L"guarded native Rename publishes to the requested free sibling"))
+            return;
+        if (! check(token->RenameToFreeSibling(lost.filename().c_str(), nullptr, &mutation) == HRESULT_FROM_WIN32(ERROR_BUSY) &&
+                        mutation.mutationAttempted == FALSE,
+                    L"a committed token cannot issue another mutation"))
+            return;
+
+        token.reset();
+        if (! check(rename->CaptureCorroboratedRenameSource(renamed.c_str(), nullptr, token.put()) == S_OK && token &&
+                        token->RenameToFreeSibling(caseRenamed.filename().c_str(), nullptr, &mutation) == S_OK && mutation.mutation.outcomeKnown == TRUE &&
+                        mutation.mutation.mutationCommitted == TRUE && hasByte(caseRenamed, std::byte{0x31}),
+                    L"a case-only corroborated Rename requires the stored spelling"))
+            return;
+
+        token.reset();
+        if (! check(rename->CaptureCorroboratedRenameSource(caseRenamed.c_str(), nullptr, token.put()) == S_OK && token &&
+                        SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_PATH", lost.c_str()) != FALSE,
+                    L"lost Rename response must be armed for one owned destination"))
+            return;
+        const auto clearLost = wil::scope_exit([&]() noexcept
+        {
+            static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_PATH", nullptr));
+            static_cast<void>(SetEnvironmentVariableW(L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_FIRED", nullptr));
+        });
+        if (! check(token->RenameToFreeSibling(lost.filename().c_str(), nullptr, &mutation) == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
+                        mutation.mutationAttempted == TRUE && mutation.mutation.outcomeKnown == FALSE && hasByte(lost, std::byte{0x31}) &&
+                        token->RenameToFreeSibling(stale.filename().c_str(), nullptr, &mutation) == HRESULT_FROM_WIN32(ERROR_BUSY),
+                    L"a lost response leaves an unknown result and grants no replay even if the mutation committed"))
+            return;
+
+        token.reset();
+        if (! check(rename->CaptureCorroboratedRenameSource(lost.c_str(), nullptr, token.put()) == S_OK && token &&
+                        MoveFileExW(ancestor.c_str(), movedAncestor.c_str(), 0u) != FALSE && CreateDirectoryW(ancestor.c_str(), nullptr) != FALSE &&
+                        CreateDirectoryW(parent.c_str(), nullptr) != FALSE && writeFile(lost, std::byte{0x41}),
+                    L"capture should release its guard handles before a queued task runs"))
+            return;
+        if (! check(token->RenameToFreeSibling(stale.filename().c_str(), nullptr, &mutation) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) &&
+                        mutation.mutationAttempted == FALSE && hasByte(lost, std::byte{0x41}) && hasByte(movedParent / lost.filename(), std::byte{0x31}) &&
+                        GetFileAttributesW(stale.c_str()) == INVALID_FILE_ATTRIBUTES,
+                    L"changed ancestor lineage must refuse both the replacement and displaced source"))
+            return;
+    }
+#endif
+
     const auto writeStage = [&](IFileWriter* writer, std::byte firstByte) noexcept -> bool
     {
         if (writer == nullptr)

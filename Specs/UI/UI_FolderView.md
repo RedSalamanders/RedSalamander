@@ -834,6 +834,9 @@ waiting, failure, partial, canceled, or indeterminate state reveals the task imm
 running task is revealed after 500 ms; a clean success before that deadline creates no task card or
 completed row, still refreshes the pane, and retains focus by renamed identity. Once revealed, the
 card follows normal task rules and never becomes silent. Tests use a fake clock or zero delay.
+On a Local or SMB path that supplies corroborated Rename authority, F2 can use a free sibling
+with the same clean-completion behavior. If the requested sibling already exists, Keep both
+uses a new sibling and preserves the occupant.
 Batch Rename and any F2 action that opens Batch Rename use ordinary queue/card behavior.
 - **Backspace**: Navigate to parent folder, including from a settled failed-enumeration overlay when the current folder no longer exists.
 - **F3/F5/F6/F7/F8**: FolderWindow-global operations (view/copy/move/mkdir/delete) per `Specs/UI/UI_CommandMenuKeyboard.md`.

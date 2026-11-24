@@ -6432,7 +6432,8 @@ struct ConflictPromptBeginResult
                                                             const DeferredConsentPromptFacts* consentFacts = nullptr,
                                                             bool exactExecutionPaths                       = false,
                                                             bool allowReadOnlyDelete                       = false,
-                                                            bool allowDiscardSource                        = false) noexcept
+                                                            bool allowDiscardSource                        = false,
+                                                            bool allowCorroboratedRenameKeepBoth           = false) noexcept
 {
     const auto selectedAdmission = task.LoadSelectedAdmission();
     // Exact paths are supplied only by an executor holding this mutation's bound authority.
@@ -6506,7 +6507,7 @@ struct ConflictPromptBeginResult
     }
     const bool sameSizeAndDate =
         itemComparison.date == FileOperations::ConflictDateRelation::Same && itemComparison.size == FileOperations::ConflictSizeRelation::Same;
-    const bool allowKeepBoth                  = IsKeepBothActionEligible(task, perItemCookie, bucket, promptDestinationPath);
+    const bool allowKeepBoth                  = allowCorroboratedRenameKeepBoth || IsKeepBothActionEligible(task, perItemCookie, bucket, promptDestinationPath);
     Task::ConflictDecisionScope decisionScope = BuildConflictDecisionScope(task, perItemCookie, bucket, sourceMetadata, destinationMetadata);
     if (allowKeepBoth && perItemCookie != nullptr)
     {
@@ -12172,8 +12173,38 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                     {
                         return E_INVALIDARG;
                     }
-                    const HRESULT hr =
-                        builder.Add(_fileSystem.get(), typedPlan.endpoint, parent, FileOperations::MutationInterlockAccess::WriteSource, true, false);
+                    HRESULT hr = builder.Add(_fileSystem.get(), typedPlan.endpoint, parent, FileOperations::MutationInterlockAccess::WriteSource, true, false);
+                    if (hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && typedPlan.origin == FileOperations::RenameOrigin::InlineRename &&
+                        plans->size() == 1u && typedPlan.finalMappings.size() == 1u && FileOperations::IsLocalFileSystemEndpoint(typedPlan.endpoint))
+                    {
+                        wil::com_ptr<IFileSystemCorroboratedRename> capability;
+                        const HRESULT query = _fileSystem->QueryInterface(__uuidof(IFileSystemCorroboratedRename), capability.put_void());
+                        if (query == E_NOINTERFACE)
+                            return hr;
+                        if (query != S_OK || ! capability)
+                            return FAILED(query) ? query : E_UNEXPECTED;
+
+                        FileSystemOptions options{};
+                        InitializeFileSystemOptions(options);
+                        wil::com_ptr<IFileSystemCorroboratedRenameSource> source;
+#ifdef ENABLE_TESTS
+                        _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
+                        const auto dbgCallbackScope = wil::scope_exit([&] noexcept { _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
+#endif
+                        const HRESULT capture = capability->CaptureCorroboratedRenameSource(step.source.providerPath.c_str(), &options, source.put());
+                        if (capture != S_OK || ! source)
+                            return FAILED(capture) ? capture : E_UNEXPECTED;
+
+                        hr = builder.Add(_fileSystem.get(), typedPlan.endpoint, parent, FileOperations::MutationInterlockAccess::WriteSource, false, false);
+                        if (SUCCEEDED(hr))
+                        {
+                            if (builder.scopes.size() != 1u)
+                                return E_UNEXPECTED;
+                            auto& scope                      = builder.scopes.front();
+                            scope.conservativeIdentityDomain = true;
+                            scope.corroboratedRenameSource   = std::move(source);
+                        }
+                    }
                     if (FAILED(hr))
                     {
                         return hr;
@@ -15000,13 +15031,17 @@ HRESULT FolderWindow::FileOperationState::Task::FinalizeTypedItemResults(HRESULT
         // user or host canceled or skipped: that decision is the item's terminal cause, the unknown
         // axis stays visible on the item and still blocks Retry, and the task ends Canceled or
         // completed with skipped items.
-        anyIndeterminate =
-            anyIndeterminate || item->completion == FileOperations::ItemCompletion::Indeterminate ||
-            (item->completion != FileOperations::ItemCompletion::Canceled && item->completion != FileOperations::ItemCompletion::Skipped &&
-             (item->publication == FileOperations::PublicationState::Unknown || item->sourceDisposition == FileOperations::SourceDisposition::Unknown));
-        anyCompleted = anyCompleted || item->completion == FileOperations::ItemCompletion::Completed;
-        anySkipped   = anySkipped || item->completion == FileOperations::ItemCompletion::Skipped;
-        anyCanceled  = anyCanceled || item->completion == FileOperations::ItemCompletion::Canceled;
+        // A Rename refused before dispatch may leave the current source unobserved.
+        // Its publication axis still establishes that this task issued no mutation.
+        const bool unknownSourceAfterPossibleMutation =
+            item->sourceDisposition == FileOperations::SourceDisposition::Unknown &&
+            (_operation != FILESYSTEM_RENAME || item->publication != FileOperations::PublicationState::NotAttempted);
+        anyIndeterminate = anyIndeterminate || item->completion == FileOperations::ItemCompletion::Indeterminate ||
+                           (item->completion != FileOperations::ItemCompletion::Canceled && item->completion != FileOperations::ItemCompletion::Skipped &&
+                            (item->publication == FileOperations::PublicationState::Unknown || unknownSourceAfterPossibleMutation));
+        anyCompleted     = anyCompleted || item->completion == FileOperations::ItemCompletion::Completed;
+        anySkipped       = anySkipped || item->completion == FileOperations::ItemCompletion::Skipped;
+        anyCanceled      = anyCanceled || item->completion == FileOperations::ItemCompletion::Canceled;
         if (item->completion == FileOperations::ItemCompletion::Failed)
         {
             anyFailed = true;
@@ -15228,29 +15263,39 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
     {
         return E_INVALIDARG;
     }
-    const auto queryNameContract = [&]() noexcept
-    {
-        return FileSystemRouteContract::QueryChildNameContract(_fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
-    };
+    const auto queryNameContract = [&](std::wstring_view leaf) noexcept
+    { return FileSystemRouteContract::QueryChildNameContract(_fileSystem.get(), parentPath, leaf, FILESYSTEM_RENAME, rename->endpoint.pluginId); };
     const auto nameContractMatchesAdmission = [&](const FileSystemRouteContract::ChildNameContractResult& contract) noexcept
     {
         return contract.state == FileSystemRouteContract::QueryState::Available && contract.nameStatus == FILESYSTEM_CHILD_NAME_VALID &&
                contract.joinedPath == step.providerJoinedPath && contract.collisionKey == step.providerCollisionKey;
     };
-    const FileSystemRouteContract::ChildNameContractResult initialNameContract = queryNameContract();
+    const FileSystemRouteContract::ChildNameContractResult initialNameContract = queryNameContract(step.finalLeafName);
     if (! nameContractMatchesAdmission(initialNameContract))
     {
         return initialNameContract.state == FileSystemRouteContract::QueryState::Available && FAILED(initialNameContract.failureStatus)
                    ? initialNameContract.failureStatus
                    : (FAILED(initialNameContract.status) ? initialNameContract.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
     }
-    const std::wstring destinationPath = initialNameContract.joinedPath;
+    std::wstring destinationPath    = initialNameContract.joinedPath;
+    std::wstring activeLeaf         = step.finalLeafName;
+    std::wstring activeCollisionKey = initialNameContract.collisionKey;
     if (destinationPath.empty() || destinationPath == sourcePath)
     {
         return S_FALSE;
     }
 
-    switch (GuardLiveOutputBeforeInvalidation(sourcePath, FileOperations::MutationInterlockAccess::WriteSource))
+    const auto parentScope = std::ranges::find_if(scopes,
+                                                  [&](const FileOperations::MutationInterlockScope& scope) noexcept
+    {
+        return FileOperations::QualifiedEndpointsReferToSameRoot(scope.endpoint, rename->endpoint) &&
+               EquivalentPath(rename->endpoint.pathIdentity.value(), scope.providerPath, parentPath);
+    });
+    if (parentScope == scopes.end() || (! parentScope->root && ! parentScope->corroboratedRenameSource))
+        return E_UNEXPECTED;
+    const auto& corroborated = parentScope->corroboratedRenameSource;
+
+    switch (GuardLiveOutputBeforeInvalidation(sourcePath, FileOperations::MutationInterlockAccess::WriteSource, ! corroborated))
     {
         case LiveOutputGuardDisposition::Skip: return S_FALSE;
         case LiveOutputGuardDisposition::Cancel: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -15275,26 +15320,19 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
     constexpr FileSystemBindFlags metadataBindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
     constexpr FileSystemBindFlags destinationReplacementBindFlags =
         static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION);
-    FileOperations::ObjectBindingResult source =
-        FileOperations::BindObjectAuthority(_fileSystem.get(), sourcePath, rename->endpoint.profileId, sourceBindFlags);
-    if (source.state != FileOperations::ObjectBindingState::Bound)
+    FileOperations::ObjectBindingResult source{};
+    if (! corroborated)
     {
-        return FAILED(source.status) ? source.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-    }
-
-    const auto parentScope = std::ranges::find_if(scopes,
-                                                  [&](const FileOperations::MutationInterlockScope& scope) noexcept
-    {
-        return FileOperations::QualifiedEndpointsReferToSameRoot(scope.endpoint, rename->endpoint) &&
-               EquivalentPath(rename->endpoint.pathIdentity.value(), scope.providerPath, parentPath);
-    });
-    if (parentScope == scopes.end() || ! parentScope->root)
-    {
-        return E_UNEXPECTED;
+        source = FileOperations::BindObjectAuthority(_fileSystem.get(), sourcePath, rename->endpoint.profileId, sourceBindFlags);
+        if (source.state != FileOperations::ObjectBindingState::Bound)
+            return FAILED(source.status) ? source.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
     std::optional<FileOperations::ConflictObservationReference> acceptedObservation;
-    const auto recordStatus = [&](HRESULT status, bool completed) noexcept
+    const auto recordStatus = [&](HRESULT status,
+                                  bool completed,
+                                  FileOperations::SourceDisposition failureSource = FileOperations::SourceDisposition::Retained,
+                                  bool beforeCorroboratedDispatch                 = false) noexcept
     {
         FileOperations::FileOperationItemResult result{};
         result.conflictObservation  = acceptedObservation;
@@ -15314,10 +15352,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
         {
             result.status            = HRESULT_FROM_WIN32(ERROR_CANCELLED);
             result.publication       = FileOperations::PublicationState::NotAttempted;
-            result.sourceDisposition = FileOperations::SourceDisposition::Retained;
+            result.sourceDisposition = failureSource;
             result.completion        = FileOperations::ItemCompletion::Canceled;
         }
-        else if (status == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE))
+        else if (! beforeCorroboratedDispatch && status == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE))
         {
             result.publication       = FileOperations::PublicationState::Unknown;
             result.sourceDisposition = FileOperations::SourceDisposition::Unknown;
@@ -15325,8 +15363,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
         }
         else
         {
-            result.publication       = FileOperations::PublicationState::NotPublished;
-            result.sourceDisposition = FileOperations::SourceDisposition::Retained;
+            result.publication = beforeCorroboratedDispatch ? FileOperations::PublicationState::NotAttempted : FileOperations::PublicationState::NotPublished;
+            result.sourceDisposition = failureSource;
             result.completion        = FileOperations::ItemCompletion::Failed;
         }
         static_cast<void>(StoreTypedItemResult(std::move(result)));
@@ -15369,7 +15407,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
     cookie.operationDestinationPath = destinationPath;
     FileSystemFlags itemFlags       = FILESYSTEM_FLAG_NONE;
     wil::com_ptr<IFileSystemBoundObject> grantedExpectedDestination;
-    unsigned int retryCount = 0u;
+    unsigned int retryCount    = 0u;
+    size_t nextKeepBothOrdinal = 2u;
     for (;;)
     {
         WaitWhilePaused();
@@ -15379,8 +15418,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
 
-        const FileSystemRouteContract::ChildNameContractResult currentNameContract = queryNameContract();
-        if (! nameContractMatchesAdmission(currentNameContract) || currentNameContract.joinedPath != destinationPath)
+        const FileSystemRouteContract::ChildNameContractResult currentNameContract = queryNameContract(activeLeaf);
+        if (currentNameContract.state != FileSystemRouteContract::QueryState::Available || currentNameContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
+            currentNameContract.collisionKey != activeCollisionKey || currentNameContract.joinedPath != destinationPath)
         {
             const HRESULT status = currentNameContract.state == FileSystemRouteContract::QueryState::Available && FAILED(currentNameContract.failureStatus)
                                        ? currentNameContract.failureStatus
@@ -15389,33 +15429,39 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
             return status;
         }
 
-        const HRESULT revalidationHr = revalidateBeforeMutation();
-        if (FAILED(revalidationHr))
-        {
-            recordStatus(revalidationHr, false);
-            return revalidationHr;
-        }
-
-        FileOperations::ObjectBindingResult destination =
-            FileOperations::BindObjectAuthority(_fileSystem.get(), destinationPath, rename->endpoint.profileId, destinationReplacementBindFlags);
+        FileOperations::ObjectBindingResult destination{};
         bool destinationIsSource = false;
-        if (destination.state == FileOperations::ObjectBindingState::Bound)
+        if (! corroborated)
         {
-            const HRESULT sameHr = sameBoundObject(destination.authority, destinationIsSource);
-            if (FAILED(sameHr))
+            const HRESULT revalidationHr = revalidateBeforeMutation();
+            if (FAILED(revalidationHr))
             {
-                recordStatus(sameHr, false);
-                return sameHr;
+                recordStatus(revalidationHr, false);
+                return revalidationHr;
+            }
+
+            destination = FileOperations::BindObjectAuthority(_fileSystem.get(), destinationPath, rename->endpoint.profileId, destinationReplacementBindFlags);
+            if (destination.state == FileOperations::ObjectBindingState::Bound)
+            {
+                const HRESULT sameHr = sameBoundObject(destination.authority, destinationIsSource);
+                if (FAILED(sameHr))
+                {
+                    recordStatus(sameHr, false);
+                    return sameHr;
+                }
+            }
+            else if (destination.state != FileOperations::ObjectBindingState::Missing)
+            {
+                const HRESULT destinationHr = FAILED(destination.status) ? destination.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                recordStatus(destinationHr, false);
+                return destinationHr;
             }
         }
-        else if (destination.state != FileOperations::ObjectBindingState::Missing)
-        {
-            const HRESULT destinationHr = FAILED(destination.status) ? destination.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-            recordStatus(destinationHr, false);
-            return destinationHr;
-        }
 
-        HRESULT renameHr = S_OK;
+        HRESULT renameHr                                = S_OK;
+        FileOperations::SourceDisposition failureSource = FileOperations::SourceDisposition::Retained;
+        bool beforeCorroboratedDispatch                 = false;
+        bool corroboratedCollision                      = false;
         FileSystemConditionalMutationResult mutation{};
         mutation.sizeBytes = sizeof(mutation);
         wil::com_ptr<IFileSystemBoundObject> renamedObject;
@@ -15442,36 +15488,71 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
 #endif
             FileSystemOptions options{};
             InitializeFileSystemOptions(options);
-            IFileSystemBoundObject* expectedDestination =
-                grantedExpectedDestination
-                    ? grantedExpectedDestination.get()
-                    : (destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource ? destination.authority.boundObject.get()
-                                                                                                               : nullptr);
             MarkSourceItemMutationPossible(0u);
-            renameHr = source.authority.boundObject->RenameIfUnchanged(
-                destinationPath.c_str(), expectedDestination, itemFlags, &options, &mutation, renamedObject.put());
-            if (SUCCEEDED(renameHr))
+            if (corroborated)
             {
-                if (! renamedObject || mutation.sizeBytes != sizeof(mutation) || mutation.outcomeKnown == FALSE || mutation.mutationCommitted == FALSE ||
-                    mutation.originalStillPresent != FALSE)
+                FileSystemCorroboratedRenameResult attempted{};
+                // A provider that returns without initializing the receipt grants no retry.
+                attempted.mutationAttempted     = 2;
+                attempted.mutation.outcomeKnown = 2;
+                renameHr                        = corroborated->RenameToFreeSibling(activeLeaf.c_str(), &options, &attempted);
+                const auto& receipt             = attempted.mutation;
+                const bool valid = attempted.sizeBytes == sizeof(attempted) && (attempted.mutationAttempted == TRUE || attempted.mutationAttempted == FALSE) &&
+                                   receipt.sizeBytes == sizeof(receipt) && FileSystemRouteContract::IsValidItemMutationResultPrefix(receipt) &&
+                                   receipt.ownedStageDisposition == FileSystemOwnedStageDisposition::NotApplicable;
+                if (valid && attempted.mutationAttempted == FALSE && FAILED(renameHr) && receipt.outcomeKnown == FALSE &&
+                    receipt.originalStillPresent == FALSE && receipt.mutationCommitted == FALSE)
                 {
-                    renameHr = E_UNEXPECTED;
+                    beforeCorroboratedDispatch = true;
+                    failureSource              = FileOperations::SourceDisposition::Unknown;
+                    if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
+                        renameHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                }
+                else if (valid && attempted.mutationAttempted == TRUE &&
+                         ((renameHr == S_OK && receipt.outcomeKnown == TRUE && receipt.mutationCommitted == TRUE && receipt.originalStillPresent == FALSE) ||
+                          FileSystemRouteContract::ClassifyFailedMutation(true, renameHr, &receipt) ==
+                              FileSystemRouteContract::MutationClassification::RetryableNoCommit))
+                {
+                    // The provider proves either publication or a refusal that kept the source.
+                    corroboratedCollision = renameHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || renameHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
                 }
                 else
                 {
-                    const FileOperations::ObjectRevalidationResult published = FileOperations::RevalidateObjectAuthority(
-                        _fileSystem.get(), destinationPath, rename->endpoint.profileId, metadataBindFlags, source.authority);
-                    if (published.state != FileOperations::ObjectRevalidationState::Same)
-                    {
-                        renameHr = FAILED(published.status) ? published.status : HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
-                    }
+                    renameHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
                 }
             }
-            else if (mutation.sizeBytes != sizeof(mutation) || mutation.outcomeKnown == FALSE || mutation.mutationCommitted != FALSE)
+            else
             {
-                // A failed conditional mutation that may already have committed cannot be retried or
-                // presented as an ordinary name conflict. The final namespace state is indeterminate.
-                renameHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+                IFileSystemBoundObject* expectedDestination =
+                    grantedExpectedDestination
+                        ? grantedExpectedDestination.get()
+                        : (destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource ? destination.authority.boundObject.get()
+                                                                                                                   : nullptr);
+                renameHr = source.authority.boundObject->RenameIfUnchanged(
+                    destinationPath.c_str(), expectedDestination, itemFlags, &options, &mutation, renamedObject.put());
+                if (SUCCEEDED(renameHr))
+                {
+                    if (! renamedObject || mutation.sizeBytes != sizeof(mutation) || mutation.outcomeKnown == FALSE || mutation.mutationCommitted == FALSE ||
+                        mutation.originalStillPresent != FALSE)
+                    {
+                        renameHr = E_UNEXPECTED;
+                    }
+                    else
+                    {
+                        const FileOperations::ObjectRevalidationResult published = FileOperations::RevalidateObjectAuthority(
+                            _fileSystem.get(), destinationPath, rename->endpoint.profileId, metadataBindFlags, source.authority);
+                        if (published.state != FileOperations::ObjectRevalidationState::Same)
+                        {
+                            renameHr = FAILED(published.status) ? published.status : HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+                        }
+                    }
+                }
+                else if (mutation.sizeBytes != sizeof(mutation) || mutation.outcomeKnown == FALSE || mutation.mutationCommitted != FALSE)
+                {
+                    // A failed conditional mutation that may already have committed cannot be retried or
+                    // presented as an ordinary name conflict. The final namespace state is indeterminate.
+                    renameHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+                }
             }
         }
 
@@ -15487,7 +15568,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
             recordStatus(S_OK, true);
             ClearConflictPrompt(*this);
             Debug::Perf::Emit(L"FileOps.InlineRename.ExecuteUs",
-                              L"identity-bound",
+                              corroborated ? L"corroborated" : L"identity-bound",
                               PerfElapsedUs(executeStartedUs),
                               static_cast<uint64_t>(sourcePath.size() + destinationPath.size()) * sizeof(wchar_t),
                               1u,
@@ -15495,9 +15576,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
             return S_OK;
         }
 
-        if (renameHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE))
+        if (renameHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) ||
+            (beforeCorroboratedDispatch &&
+             (IsCancellationOutcome(renameHr) || renameHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) || IsMissingPathStatus(renameHr))))
         {
-            recordStatus(renameHr, false);
+            recordStatus(renameHr, false, failureSource, beforeCorroboratedDispatch);
             return renameHr;
         }
 
@@ -15523,12 +15606,59 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
                                 allowRetry,
                                 retryCount,
                                 false,
-                                destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource);
+                                destination.state == FileOperations::ObjectBindingState::Bound && ! destinationIsSource,
+                                nullptr,
+                                false,
+                                false,
+                                false,
+                                corroboratedCollision);
         ConflictAction action = promptBegin.action;
         acceptedObservation   = promptBegin.acceptedObservation;
         if (promptBegin.ownsPrompt)
         {
             action = WaitForConflictDecision(*this, &cookie, promptBegin.decisionScope, &acceptedObservation).first;
+        }
+
+        if (action == ConflictAction::KeepBoth && corroboratedCollision)
+        {
+            // The probe only chooses a name. The provider still guards that leaf with
+            // native no-replace at the moment of mutation.
+            unsigned long sourceAttributes = 0u;
+            const HRESULT attributesHr     = fileSystemIo ? fileSystemIo->GetAttributes(sourcePath.c_str(), &sourceAttributes) : E_NOINTERFACE;
+            if (FAILED(attributesHr))
+            {
+                recordStatus(attributesHr, false, FileOperations::SourceDisposition::Unknown, true);
+                return attributesHr;
+            }
+            std::wstring candidate;
+            const HRESULT candidateHr = FindAvailableUniqueSiblingPath(
+                fileSystemIo.get(), initialNameContract.joinedPath, (sourceAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u, nextKeepBothOrdinal, candidate);
+            if (FAILED(candidateHr))
+            {
+                recordStatus(candidateHr, false);
+                return candidateHr;
+            }
+            std::wstring candidateLeaf;
+            if (! TryGetFileSystemLeafName(rename->endpoint.pathIdentity.value(), candidate, candidateLeaf))
+            {
+                recordStatus(E_UNEXPECTED, false);
+                return E_UNEXPECTED;
+            }
+            const auto contract = queryNameContract(candidateLeaf);
+            if (contract.state != FileSystemRouteContract::QueryState::Available || contract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
+                contract.joinedPath != candidate)
+            {
+                const HRESULT status = FAILED(contract.failureStatus) ? contract.failureStatus
+                                       : FAILED(contract.status)      ? contract.status
+                                                                      : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                recordStatus(status, false);
+                return status;
+            }
+            activeLeaf                      = std::move(candidateLeaf);
+            activeCollisionKey              = contract.collisionKey;
+            destinationPath                 = std::move(candidate);
+            cookie.operationDestinationPath = destinationPath;
+            continue;
         }
 
         if (action == ConflictAction::Overwrite)
@@ -15575,12 +15705,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
             // as S_FALSE, as every other operation does.
             const HRESULT skippedHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
             FileOperations::FileOperationItemResult result{};
-            result.conflictObservation  = acceptedObservation;
-            result.sourceIndex          = 0u;
-            result.strategy             = FileOperations::OperationStrategy::Native;
-            result.publication          = FileOperations::PublicationState::NotPublished;
-            result.verification         = FileOperations::VerificationState::NotApplicable;
-            result.sourceDisposition    = FileOperations::SourceDisposition::Retained;
+            result.conflictObservation = acceptedObservation;
+            result.sourceIndex         = 0u;
+            result.strategy            = FileOperations::OperationStrategy::Native;
+            result.publication  = beforeCorroboratedDispatch ? FileOperations::PublicationState::NotAttempted : FileOperations::PublicationState::NotPublished;
+            result.verification = FileOperations::VerificationState::NotApplicable;
+            result.sourceDisposition    = failureSource;
             result.completion           = FileOperations::ItemCompletion::Skipped;
             result.status               = S_FALSE;
             result.finalSourcePath      = sourcePath;
@@ -15591,7 +15721,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
         }
 
         const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-        recordStatus(cancelledHr, false);
+        recordStatus(cancelledHr, false, failureSource, beforeCorroboratedDispatch);
         return cancelledHr;
     }
 }
