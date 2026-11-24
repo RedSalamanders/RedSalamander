@@ -1143,7 +1143,7 @@ void TestFileOperationQueueDefaultSettings(bool& success)
           success);
 
     // Reuse the loaded revision when saving over the legacy fixture.
-    Settings settings = std::move(legacy);
+    Settings settings                               = std::move(legacy);
     settings.fileOperations.emplace().queueNewTasks = false;
     Settings parallel{};
     Check(SaveSettings(appId, settings) == S_OK && TryLoadSettingsNoRecovery(appId, parallel) == S_OK && parallel.fileOperations.has_value() &&
