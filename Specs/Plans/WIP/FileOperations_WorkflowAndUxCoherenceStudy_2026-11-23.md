@@ -39,8 +39,8 @@ The broad result and four pending interactive entries are recorded below.
 - [ ] **S2.** Complete progress projection and paired measurements.
   - [x] Preserve sampling through decision, live-output, pause and queue transitions. Freeze history while stopping
     and keep a running peer's ETA. The model and paced idle-cadence selections passed.
-  - [ ] Verify the Preparing elapsed clock at task creation and after directory Delete reservation. The implementation
-    and the exact popup/admission tests are ready for x64 Debug verification.
+  - [x] Verify the Preparing elapsed clock at task creation and after directory Delete reservation. The focused x64
+    Debug popup and admission cases passed without desktop activation.
   - [ ] Cover credential waits and align the popup and taskbar snapshots.
   - [ ] Collect paired allocation, timing, history and active-peer evidence.
 - [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
@@ -127,6 +127,13 @@ The broad result and four pending interactive entries are recorded below.
   same head in run `20261124T111258Z-31232-3274593ad723444a99aecc4248262b88`. The broad verdict remains `FAILED`.
   Commands, File Operations, and both interactive viewer entries remain pending. The sandbox audit reported
   the same 13 existing findings as the earlier broad run.
+
+- The test-enabled x64 Debug build at `9d4b49d71` used receipt
+  `43a396a5e2b5167cea0ff4a6b0182faf99f8f0ab718727869e833ec1e1e24d20`. `FileOps_PopupIdleCadence` and
+  `FileOps_ReviewRemediationContracts` passed without activation in runs
+  `20261124T115346Z-19596-42d9378fb9594838b3962c7997e4d76a` and `20261124T120125Z-12688-ad787f3e6bed48438c508063879e91db`.
+  The [paired Preparing evidence](../../TestRuns/4cb089111a23/FileOps/2026-11-24_130014/README.md) records matching synthetic cadence and a 16-byte increase
+  in the measured task object. Repository coverage remained `NOT_EVALUATED` for these selections.
 
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.
