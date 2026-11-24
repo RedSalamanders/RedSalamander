@@ -568,6 +568,29 @@ struct FileSystemCapabilitiesV2
            left.casePreserving == right.casePreserving && left.caseOnlyRename == right.caseOnlyRename;
 }
 
+enum class RecycleAvailability : uint8_t
+{
+    Unknown,
+    Available,
+    Unavailable,
+};
+
+[[nodiscard]] RecycleAvailability GetRecycleAvailability(const FileSystemCapabilitiesV2& capabilities) noexcept
+{
+    if (! capabilities.recycleOperation)
+        return RecycleAvailability::Unavailable;
+    // Local publishes the guarded Shell route. The Shell can refuse an individual
+    // file or folder, including on a redirected network path.
+    return NavigationLocation::EqualsNoCase(capabilities.providerId, L"builtin/file-system") ? RecycleAvailability::Unknown : RecycleAvailability::Available;
+}
+
+[[nodiscard]] FileOperations::DeleteMode ResolveDeleteMode(const FileSystemCapabilitiesV2& capabilities, FileSystemFlags flags) noexcept
+{
+    return (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 && GetRecycleAvailability(capabilities) != RecycleAvailability::Unavailable
+               ? FileOperations::DeleteMode::Recycle
+               : FileOperations::DeleteMode::Permanent;
+}
+
 [[nodiscard]] bool CapabilitiesAllowSameFileSystemOperation(const FileSystemCapabilitiesV2& capabilities,
                                                             FileSystemOperation operation,
                                                             FileSystemFlags flags = FILESYSTEM_FLAG_NONE) noexcept
@@ -580,7 +603,7 @@ struct FileSystemCapabilitiesV2
     {
         case FILESYSTEM_COPY: return capabilities.copyOperation;
         case FILESYSTEM_MOVE: return capabilities.moveOperation;
-        case FILESYSTEM_DELETE: return (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? capabilities.recycleOperation : capabilities.deleteOperation;
+        case FILESYSTEM_DELETE: return ResolveDeleteMode(capabilities, flags) == FileOperations::DeleteMode::Recycle || capabilities.deleteOperation;
         case FILESYSTEM_RENAME: return capabilities.renameOperation;
         case FILESYSTEM_CREATE_DIRECTORY: return capabilities.createDirectoryOperation;
         default: return true;
@@ -2476,6 +2499,7 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
         FileOperations::QualifiedEndpoint endpoint;
         std::vector<size_t> originalIndices;
         std::vector<FileSystemCapabilitiesV2> capabilities;
+        FileOperations::DeleteMode deleteMode = FileOperations::DeleteMode::Recycle;
     };
     std::vector<SourcePartition> sourcePartitions;
     sourcePartitions.reserve(sourcePaths.size());
@@ -2491,8 +2515,12 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
             return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MalformedEndpoint);
         }
 
-        const auto matching = std::ranges::find_if(sourcePartitions, [&](const SourcePartition& partition) noexcept {
-            return partition.endpoint.profileId == capabilities->pathProfileId && partition.endpoint.rootId == capabilities->rootId;
+        const auto deleteMode = operation == FILESYSTEM_DELETE ? ResolveDeleteMode(capabilities.value(), flags) : FileOperations::DeleteMode::Recycle;
+        const auto matching   = std::ranges::find_if(sourcePartitions,
+                                                     [&](const SourcePartition& partition) noexcept
+        {
+            return partition.endpoint.profileId == capabilities->pathProfileId && partition.endpoint.rootId == capabilities->rootId &&
+                   partition.deleteMode == deleteMode;
         });
         if (matching != sourcePartitions.end())
         {
@@ -2507,7 +2535,8 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
         }
 
         SourcePartition partition{};
-        partition.endpoint = FileOperations::QualifiedEndpoint{
+        partition.deleteMode = deleteMode;
+        partition.endpoint   = FileOperations::QualifiedEndpoint{
             .pluginId                            = sourcePluginId,
             .instanceId                          = sourceInstanceId,
             .profileId                           = capabilities->pathProfileId,
@@ -2765,7 +2794,7 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
 
             FileOperations::DeletePlan deletion{};
             deletion.endpoint = partition.endpoint;
-            deletion.mode     = (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? FileOperations::DeleteMode::Recycle : FileOperations::DeleteMode::Permanent;
+            deletion.mode     = partition.deleteMode;
             if (deletion.mode == FileOperations::DeleteMode::Permanent)
             {
                 // C1: no provider call here. A provider without bound objects runs its
@@ -2826,13 +2855,22 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     Debug::Perf::EmitValue(L"fileops.plan.source_count", sourceCount);
     Debug::Perf::EmitValue(L"fileops.plan.payload_bytes", payloadBytes);
 
+    const bool hasPermanentDelete = operation == FILESYSTEM_DELETE && std::ranges::any_of(sourcePartitions, [](const SourcePartition& partition) noexcept {
+        return partition.deleteMode == FileOperations::DeleteMode::Permanent;
+    });
+    const bool hasRecycle         = operation == FILESYSTEM_DELETE && std::ranges::any_of(sourcePartitions, [](const SourcePartition& partition) noexcept {
+        return partition.deleteMode == FileOperations::DeleteMode::Recycle;
+    });
+    const auto admittedFlags      = hasPermanentDelete && ! hasRecycle ? static_cast<FileSystemFlags>(flags & ~FILESYSTEM_FLAG_USE_RECYCLE_BIN) : flags;
+
     ExecutionMode executionMode = ExecutionMode::PerItem;
-    if (construction.executionMode.has_value())
+    if (! hasPermanentDelete && construction.executionMode.has_value())
     {
         executionMode = construction.executionMode.value();
     }
-    else if (operation == FILESYSTEM_DELETE && std::ranges::all_of(plans,
-                                                                   [](const FileOperations::FileOperationPlan& plan) noexcept
+    else if (hasRecycle && ! hasPermanentDelete &&
+             std::ranges::all_of(plans,
+                                 [](const FileOperations::FileOperationPlan& plan) noexcept
     {
         const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
         return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Recycle && FileOperations::IsLocalFileSystemEndpoint(deletion->endpoint);
@@ -2849,7 +2887,7 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     admission.destinationPane            = destinationPane;
     admission.fileSystem                 = fileSystem;
     admission.destinationFileSystem      = std::move(destinationFileSystem);
-    admission.flags                      = flags;
+    admission.flags                      = admittedFlags;
     admission.executionMode              = executionMode;
     admission.resolvedItems              = std::move(resolvedItems);
     admission.sourcePluginShortId        = sourcePluginShortId;
@@ -4668,26 +4706,15 @@ void FolderWindow::CommandDelete(Pane pane)
         return;
     }
 
-    // Keep the pane's existing provider bulk path. Local Recycle can group
-    // same-parent paths into a single Shell operation per batch.
+    // Homogeneous Local Recycle can group sibling paths into one Shell batch.
+    // Admission chooses per-item execution if any items require permanent consent.
     const bool waitForOthers                                        = _fileOperations->ShouldQueueNewTask();
     const std::optional<FileSystemPathIdentity> removalPathIdentity = TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
     const uint64_t removalFocusToken = removalPathIdentity.has_value() ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value()) : 0u;
     uint64_t taskId                  = 0u;
     const FileOperationPromptDispatchScope promptDispatch(*this);
-    const HRESULT startHr = _fileOperations->AdmitOperation(FILESYSTEM_DELETE,
-                                                            pane,
-                                                            std::nullopt,
-                                                            state.fileSystem,
-                                                            std::move(paths),
-                                                            {},
-                                                            flags,
-                                                            waitForOthers,
-                                                            0,
-                                                            FileOperationState::ExecutionMode::BulkItems,
-                                                            false,
-                                                            nullptr,
-                                                            &taskId);
+    const HRESULT startHr = _fileOperations->AdmitOperation(
+        FILESYSTEM_DELETE, pane, std::nullopt, state.fileSystem, std::move(paths), {}, flags, waitForOthers, 0, std::nullopt, false, nullptr, &taskId);
     if (SUCCEEDED(startHr) && taskId != 0u && removalFocusToken != 0u)
     {
         _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId,

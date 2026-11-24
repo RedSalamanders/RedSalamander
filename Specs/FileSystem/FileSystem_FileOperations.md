@@ -1858,6 +1858,21 @@ Such an unexpected partial mutation remains `Failed`/`Retained` and aggregates a
 does not inherit this shortcut: shell-owned work remains unknown unless its per-item completion sink
 provides terminal mutation truth.
 
+Delete admission resolves each selected path against the typed provider route. An available
+Delete route with an explicit Recycle refusal requires permanent consent before mutation. A Local
+descriptor that offers the guarded Shell route still leaves the item's Recycle support unknown.
+The requested Recycle mode uses that guarded route when support is unknown. An unavailable
+or unqualified provider route cannot grant either operation. Move's Delete source uses the same
+known-unavailable shortcut with its own one-per-task consent. A guarded attempt reaches that consent
+only with a proved non-commit and the original still present.
+
+A mixed selection admits separate Recycle and Permanent Delete plans under one task. Permanent
+consent covers only the permanent plans and discloses the accompanying Recycle count. Cancel
+stops the entire task before either group mutates. Accepted permanent items use the per-item
+executor, a typed consent receipt and the existing object or by-name checks. Recycle items
+retain their guards and receipt rules. A homogeneous Local Recycle task still uses Shell batching
+where its ingress can benefit from it.
+
 Recycle never deletes permanently. Local Recycle runs the Shell's `IFileOperation` without its
 confirmation UI, which would otherwise answer the Shell's own "delete permanently?" question when it
 cannot recycle an item. The Shell offers each item to the progress sink's `PreDeleteItem` with

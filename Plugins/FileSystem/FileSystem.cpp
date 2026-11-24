@@ -108,6 +108,7 @@ constexpr std::wstring_view kBindIdentityNamespaceRootEnvVar = L"REDSALAMANDER_F
 // refuses the open itself); it stays set until the test clears it.
 constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar   = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
 constexpr std::wstring_view kBindDeleteAccessDeniedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_DELETE_ACCESS_DENIED_PATH";
+constexpr std::wstring_view kRecycleUnsupportedPathEnvVar     = L"REDSALAMANDER_FILEOPS_RECYCLE_CAPABILITY_UNAVAILABLE_PATH";
 // I35 R7.3: a smaller entry bound for the listing of a folder deleted by name (a number of entries).
 constexpr std::wstring_view kDeleteByNameEntryBudgetEnvVar = L"REDSALAMANDER_FILEOPS_BYNAME_ENTRY_BUDGET";
 // I35 R7.3: the listing of a folder deleted by name reports no file index (a redirector without id listings).
@@ -209,8 +210,8 @@ constexpr std::wstring_view kDeleteCommittedRetainedFiredEnvVar = L"REDSALAMANDE
     return false;
 }
 
-// True while the persistent open-failure injection names exactly `path`.
-[[nodiscard]] bool IsBindOpenFailureForSelfTest(const wchar_t* path, std::wstring_view variable) noexcept
+// Matches one exact configured path for an owned provider test.
+[[nodiscard]] bool MatchesPersistentTestPath(const wchar_t* path, std::wstring_view variable) noexcept
 {
     if (path == nullptr || path[0] == L'\0')
     {
@@ -233,7 +234,7 @@ constexpr std::wstring_view kDeleteCommittedRetainedFiredEnvVar = L"REDSALAMANDE
 
 [[nodiscard]] bool IsBindOpenNotSupportedForSelfTest(const wchar_t* path) noexcept
 {
-    return IsBindOpenFailureForSelfTest(path, kBindOpenNotSupportedPathEnvVar);
+    return MatchesPersistentTestPath(path, kBindOpenNotSupportedPathEnvVar);
 }
 #endif
 
@@ -7133,22 +7134,26 @@ HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSyst
     descriptor.readOperation            = true;
     descriptor.writeOperation           = true;
     descriptor.recycleOperation         = true;
-    descriptor.boundDelete              = true;
-    descriptor.conditionalDelete        = true;
-    descriptor.exclusiveStage           = true;
-    descriptor.conditionalPublish       = true;
-    descriptor.committedSize            = true;
-    descriptor.preserveFileLink         = true;
-    descriptor.preserveDirectoryLink    = true;
-    descriptor.retargetInTree           = false; // literal Preserve: the host never rewrites a link payload
-    descriptor.exactLinkRemoval         = true;
-    descriptor.exportCopyAll            = true;
-    descriptor.exportMoveAll            = true;
-    descriptor.importCopyAll            = true;
-    descriptor.importMoveAll            = true;
-    descriptor.preferredSeparator       = L'\\';
-    descriptor.acceptedSeparators       = L"\\/";
-    descriptor.windowsChildNames        = true;
+#if defined(ENABLE_TESTS)
+    if (operation == FILESYSTEM_DELETE && MatchesPersistentTestPath(path, kRecycleUnsupportedPathEnvVar))
+        descriptor.recycleOperation = false;
+#endif
+    descriptor.boundDelete           = true;
+    descriptor.conditionalDelete     = true;
+    descriptor.exclusiveStage        = true;
+    descriptor.conditionalPublish    = true;
+    descriptor.committedSize         = true;
+    descriptor.preserveFileLink      = true;
+    descriptor.preserveDirectoryLink = true;
+    descriptor.retargetInTree        = false; // literal Preserve: the host never rewrites a link payload
+    descriptor.exactLinkRemoval      = true;
+    descriptor.exportCopyAll         = true;
+    descriptor.exportMoveAll         = true;
+    descriptor.importCopyAll         = true;
+    descriptor.importMoveAll         = true;
+    descriptor.preferredSeparator    = L'\\';
+    descriptor.acceptedSeparators    = L"\\/";
+    descriptor.windowsChildNames     = true;
 
     std::lock_guard lock(_stateMutex);
     descriptor.copyMoveMaxConcurrency         = std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
@@ -7341,7 +7346,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
     wil::unique_handle file;
 #if defined(ENABLE_TESTS)
-    if ((requestedFlags & FILESYSTEM_BIND_DELETE) != 0u && IsBindOpenFailureForSelfTest(path, kBindDeleteAccessDeniedPathEnvVar))
+    if ((requestedFlags & FILESYSTEM_BIND_DELETE) != 0u && MatchesPersistentTestPath(path, kBindDeleteAccessDeniedPathEnvVar))
     {
         Debug::Perf::EmitCounter(L"FileOps.Local.BindDeleteAccessDeniedInjected");
         SetLastError(ERROR_ACCESS_DENIED);

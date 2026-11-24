@@ -1784,6 +1784,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Složka není prázdná. Zk
     IDS_FILEOPS_CONFLICT_BTN_DELETE_ALL_BY_NAME           "Smazat všechny zbývající podle názvu"
     IDS_FILEOPS_CONSENT_BY_NAME_CHECKED                   "Toto umístění nedokáže prokázat, na který objekt název odkazuje, a proto Red Salamander maže podle názvu jen to, co nyní vypíše: každou vybranou položku a veškerý obsah vybrané složky. Každá položka se těsně před smazáním znovu zkontroluje (atributy, data a velikost souboru): mazání se zastaví u položky, která se změnila, a nic, co přibylo po vypsání, se nikdy nesmaže. Změnu, která zachová velikost a data souboru, nelze poznat a některé síťové sdílené složky hlásí nedávné změny opožděně, takže se mazání může zastavit, až když část složky už zmizela."
     IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER                 "Některé z těchto položek mohou zůstat po přerušeném kopírování nebo přesunu: jejich data mohou být neúplná, nebo může jít o jedinou kopii originálu."
+    IDS_FILEOPS_CONSENT_ALSO_RECYCLE                      "Také přesunout {0} do Koše."
     IDS_FILEOPS_NOTE_DELETED_BY_NAME                      "Smazáno podle názvu: toto umístění nedokáže prokázat, na který objekt název odkazuje."
     IDS_FILEOPS_NOTE_RECYCLE_ESCALATED_BY_NAME            "Na vaši žádost smazáno podle názvu: Koš položku nemohl přijmout a toto umístění nedokáže prokázat, na který objekt název odkazuje."
     IDS_CMD_CLEANUP_LEFTOVERS                             "Uklidit pozůstatky přerušených operací"
