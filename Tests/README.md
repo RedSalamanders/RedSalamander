@@ -120,6 +120,15 @@ It uses the marked test sandbox and synthetic blocked-I/O fixture. Prefix, combi
 case-variant and proof-injected selections keep the normal interactive Commands
 admission. This focused case does not qualify the other Commands cases.
 
+The synthetic FolderView drop contract can also run without activation.
+
+```powershell
+.\Tools\Run-AllTests.ps1 -Suite Commands -CaseFilter folderView_drop_integrity_guards -NonInteractive
+```
+
+The exact selection passes synthetic key flags and owned client coordinates to
+the drop handler. It uses the same case and proof restrictions as the cache case.
+
 ## 2. Compare Directories Self-Test Suite
 
 **Flag:** `--compare-selftest`

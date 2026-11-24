@@ -139,6 +139,7 @@ Describe 'Product documentation capture fixtures' {
         $startupAdmission.Value | Should Match 'hasArg\(L"--commands-selftest"\)'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_product_documentation_gallery"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"folderView_drop_integrity_guards"'
         foreach ($flag in @('--selftest', '--compare-selftest', '--fileops-selftest')) {
             $startupAdmission.Value | Should Match ([regex]::Escape('! hasArg(L"' + $flag + '")'))
         }
@@ -147,8 +148,8 @@ Describe 'Product documentation capture fixtures' {
         }
         $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
         $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
-        $runner | Should Match 'const bool noActivationDirectoryCacheCase\s*=\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
-        $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectoryCacheCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
+        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
         $bypass.Success | Should Be $true
         $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)
         $prepareIndex = $runner.IndexOf('PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext)', [StringComparison]::Ordinal)
@@ -156,6 +157,12 @@ Describe 'Product documentation capture fixtures' {
         $bypass.Index | Should BeLessThan $prepareIndex
         $interactiveIndex = $runner.IndexOf('else if (! options.listCasesOnly)', $bypass.Index, [StringComparison]::Ordinal)
         $interactiveIndex | Should BeGreaterThan $bypass.Index
+        $shellCommands = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.ShellCommands.cpp'
+        $dropCase = [regex]::Match($shellCommands, '(?ms)^\[\[nodiscard\]\] bool TestFolderViewDropIntegrityGuards\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $dropCase.Success | Should Be $true
+        $dropCase.Value | Should Match 'DebugPerformFileDropForSelfTest'
+        $dropCase.Value | Should Match 'MK_CONTROL'
+        $dropCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|DoDragDrop)\s*\('
         $interactiveIndex | Should BeLessThan $warningIndex
         $interactiveIndex | Should BeLessThan $prepareIndex
     }

@@ -204,6 +204,12 @@ exception requires that exact case filter with both flaky and order proof inject
 empty. Prefixes, case variants, combined filters and proof-injected runs retain the
 ordinary Commands warning, window isolation and interactive desktop classification.
 
+The exact Commands case `folderView_drop_integrity_guards` has the same admission rule.
+It submits synthetic drop data, key flags and owned client coordinates to the real
+FolderView drop handler in the marked sandbox. The UI thread's no-activation guard
+stays active through task and pane cleanup. Physical drag and input acceptance
+remain in the interactive suite.
+
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse
 capture if that isolation fails, and restore all original environment states.

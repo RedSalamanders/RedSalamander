@@ -1145,31 +1145,37 @@ It 'binds post-writer fingerprints to the restored receipt and matches seeded Re
 }
 }
 
-Describe 'Commands directory-cache no-activation admission' {
+Describe 'Direct Commands no-activation admission' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop
     }
 
-    It 'admits only the exact unproven cache case without activation or a desktop lease' {
-        $caseName = 'cmd_directory_cache_invalidation_during_enumeration_is_retained'
-        foreach ($case in @($caseName, "$caseName`_", $caseName.ToUpperInvariant(), "$caseName ", "$caseName,cmd_natural_name_sorting_contracts", '')) {
-            $plan = @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
-                -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
-            $exact = $case -ceq $caseName
-            $plan.Count | Should Be 1
-            $plan[0].RequiresInteractiveDesktop | Should Be (-not $exact)
-            ($plan[0].ResourceClasses -contains 'interactive-desktop') | Should Be (-not $exact)
-            ($plan[0].EnvironmentInputs -contains 'env.interactive-desktop') | Should Be (-not $exact)
-            ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be $exact
-        }
+    It 'admits only one exact cache or drop case without proofs or a desktop lease' {
+        foreach ($caseName in @('cmd_directory_cache_invalidation_during_enumeration_is_retained', 'folderView_drop_integrity_guards')) {
+            $arguments = @{
+                Suite = 'Commands'
+                RepoRoot = $repoRoot
+                Platform = 'x64'
+                Configuration = 'Debug'
+                RedSalamanderExePath = Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe'
+            }
+            foreach ($case in @($caseName, ($caseName + '*'), ($caseName + '_'), $caseName.ToUpperInvariant(), "$caseName ", "$caseName,cmd_natural_name_sorting_contracts", '')) {
+                $plan = @(Get-RSTestRunPlan @arguments -CaseFilter $case)
+                $exact = $case -ceq $caseName
+                $plan.Count | Should Be 1
+                $plan[0].RequiresInteractiveDesktop | Should Be (-not $exact)
+                ($plan[0].ResourceClasses -contains 'interactive-desktop') | Should Be (-not $exact)
+                ($plan[0].EnvironmentInputs -contains 'env.interactive-desktop') | Should Be (-not $exact)
+                ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be $exact
+            }
 
-        foreach ($proof in @('SelfTestFlakyProofCase', 'SelfTestOrderProofCase')) {
-            $arguments = @{ Suite='Commands'; RepoRoot=$repoRoot; Platform='x64'; Configuration='Debug';
-                RedSalamanderExePath=(Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe'); CaseFilter=$caseName }
-            $arguments[$proof] = $caseName
-            $entry = @(Get-RSTestRunPlan @arguments)[0]
-            $entry.RequiresInteractiveDesktop | Should Be $true
-            ($entry.Arguments -contains '--selftest-no-activate') | Should Be $false
+            foreach ($proof in @('SelfTestFlakyProofCase', 'SelfTestOrderProofCase')) {
+                $arguments[$proof] = $caseName
+                $entry = @(Get-RSTestRunPlan @arguments -CaseFilter $caseName)[0]
+                $entry.RequiresInteractiveDesktop | Should Be $true
+                ($entry.Arguments -contains '--selftest-no-activate') | Should Be $false
+                [void]$arguments.Remove($proof)
+            }
         }
     }
 }

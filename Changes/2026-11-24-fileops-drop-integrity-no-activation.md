@@ -1,0 +1,1 @@
+- Run the focused FolderView drop-integrity checks in the marked sandbox without taking desktop focus. The broad Commands suite retains its interactive test window.

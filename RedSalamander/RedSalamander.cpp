@@ -7520,7 +7520,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     std::wstring selectedCaptureProof;
     const bool selectedNoActivationCommandsCase = hasArg(L"--commands-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
                                                   (selectedCaptureCase == L"cmd_product_documentation_gallery" ||
-                                                   selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained") &&
+                                                   selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained" ||
+                                                   selectedCaptureCase == L"folderView_drop_integrity_guards") &&
                                                   ! hasArg(L"--selftest") && ! hasArg(L"--compare-selftest") && ! hasArg(L"--fileops-selftest") &&
                                                   ! getArgValue(L"--selftest-flaky-proof-case=", selectedCaptureProof) &&
                                                   ! getArgValue(L"--selftest-order-proof-case=", selectedCaptureProof) &&

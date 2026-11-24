@@ -10,14 +10,14 @@
 admission. The branch has the first ingress, exact Batch Rename handle-lifetime, and throughput
 changes. The test-enabled x64 Debug solution build and paced throughput rerun passed. PrePush uncovered two stale
 source guards. Both were corrected, and the source-contract file passed its focused rerun. The repaired same-folder
-Ctrl+drag still needs a desktop rerun. Implementation started at `bbb57a572`. Drift from the study baseline affected the
+Ctrl+drag is ready for the exact no-activation selection. Implementation started at `bbb57a572`. Drift from the study baseline affected the
 ancestry-cleanup test and its evidence contracts.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
   - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
-  - [ ] Rerun the same-folder Ctrl+drag guard after the Windows provider instance fix. Expand clipboard, blocked Retry
-    and read-only case coverage as needed for the workflow walkthrough.
+  - [ ] Rerun the same-folder Ctrl+drag guard through its new exact no-activation selection after the Windows provider
+    instance fix. Expand clipboard, blocked Retry and read-only case coverage as needed for the workflow walkthrough.
   - [ ] Verify the implemented short Copy-only Move question across mixed plans, changed endpoints, and Cut/queue
     preservation. The focused source-retention case passed.
   - [ ] **In progress.** Route Local Recycle from context menu, Find and Viewer through the existing bulk executor.
