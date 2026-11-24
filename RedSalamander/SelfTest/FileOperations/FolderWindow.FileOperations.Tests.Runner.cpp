@@ -11325,6 +11325,8 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
                         result.optionScrollAfterDip));
     require(result.arrowActivationKeepsScroll, L"cycling a visible option with an arrow key moved the scrolled content");
     require(result.spaceActivationKeepsScroll, L"cycling a visible option with Space moved the scrolled content");
+    require(result.checkBoxExposesToggle, L"the repeat checkbox must expose UIA CheckBox and its checked Toggle state");
+    require(result.checkBoxKeepsLabelAndReportsToggle, L"UIA Toggle must preserve the checkbox label and scroll position and report its new state");
     require(result.iconFixtureScrolls, L"fixture: the tall alert does not scroll or shows no icon");
     require(result.iconInsideVisibleBody,
             std::format(L"the prompt icon [{:.1f}, {:.1f}] is not centred in the visible body [{:.1f}, {:.1f}]",
@@ -16599,12 +16601,19 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             inProgress       = true;
             const auto reset = wil::scope_exit([]() noexcept { inProgress = false; });
-            if (! DebugFileOpsConflictActionPolicyCoverageForSelfTest() || ! RunFileOpsAccessDeniedSkipScopeChecks(state) ||
-                ! RunFileOpsMetadataConsentRootScopeChecks(state) || ! RunFileOpsKeepBothNestedRepeatChecks(state))
+            const auto check = [](std::wstring_view name, auto&& run) noexcept
             {
-                Fail(L"File Operations repeated-choice contracts failed; see policy witnesses in the trace.");
+                if (run())
+                    return true;
+                Fail(std::format(L"File Operations repeated-choice check failed: {}.", name));
+                return false;
+            };
+            if (! check(L"action placement and scope matrix", [] { return DebugFileOpsConflictActionPolicyCoverageForSelfTest(); }) ||
+                ! check(L"conflict broker", [] { return RunFileOpsConflictBrokerChecks(); }) ||
+                ! check(L"Access Denied Skip scope", [&] { return RunFileOpsAccessDeniedSkipScopeChecks(state); }) ||
+                ! check(L"metadata consent root scope", [&] { return RunFileOpsMetadataConsentRootScopeChecks(state); }) ||
+                ! check(L"Keep Both nested repeat", [&] { return RunFileOpsKeepBothNestedRepeatChecks(state); }))
                 return true;
-            }
             RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
             NextStep(state, SelfTestState::Step::FileOps_SkipCountingPresentation);
             return false;

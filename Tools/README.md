@@ -330,8 +330,8 @@ The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemedi
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb` and
 `FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
 run without activation or a desktop
-lease, alongside `FileOps_RepeatDecisionContracts` and the two reviewed folder-progress
-witnesses. Broad filters, other suites and proof injections retain normal desktop requirements.
+lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed
+folder-progress cases. Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
 files and simulated unsupported destination IDs, plus capacity/exclusive waiting-card captures.
 The source-contract guard retains the host bridge route for these qualified new-file jobs.

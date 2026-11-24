@@ -622,7 +622,7 @@ template <typename VerifyProvider>
         }
     }
     using Hit = FileOperationsPopupInternal::PopupHitTest::Kind;
-    // The file-exists decision publishes Skip all as a direct button, so it has no More flyout to capture.
+    // The ordinary file-exists decision uses a repeat checkbox and direct actions.
     for (const auto menu : {Hit::FooterOptions, Hit::FooterQueueMode, Hit::TaskCompletedMore, Hit::TaskSpeedLimit})
     {
         const std::wstring_view name = menu == Hit::FooterOptions       ? L"menu-options"

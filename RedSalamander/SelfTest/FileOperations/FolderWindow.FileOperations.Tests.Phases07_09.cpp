@@ -7392,9 +7392,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_TypeMismatchNoOverwrite:
         }
 
         if (PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
+            ! prompt->applyToAllEligible)
         {
-            Fail(L"A file-on-folder type mismatch must offer Keep both and Skip all, but never Overwrite.");
+            Fail(L"A file-on-folder type mismatch must offer Keep both, Skip and the single repeat control.");
             return true;
         }
 
@@ -7522,9 +7523,9 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
             return true;
         }
         if (! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) || ! prompt->applyToAllEligible)
+            PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) || ! prompt->applyToAllEligible)
         {
-            Fail(L"Local file-on-directory conflict must offer Keep both, Skip, and an exactly scoped Skip all grant.");
+            Fail(L"Local file-on-directory conflict must offer Keep both, Skip and the scoped Apply to all checkbox.");
             return true;
         }
 
@@ -7682,11 +7683,11 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
 
         if (prompt->bucket != Task::ConflictBucket::DestinationLink || ! prompt->destinationMetadata.isLink ||
             ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
             PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) || ! prompt->applyToAllEligible ||
             prompt->destinationMetadata.linkKind != Task::ConflictLinkKind::Junction)
         {
-            Fail(L"Destination-link conflict must expose Replace link / Keep both / Skip all without Overwrite and scope the grant to junctions.");
+            Fail(L"Destination-link conflict must offer Replace link, Keep both and Skip, with its checkbox scoped to junctions.");
             return true;
         }
 
@@ -7916,9 +7917,9 @@ case SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll:
         }
 
         if (! prompt->applyToAllEligible || ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
+            PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
         {
-            Fail(L"Skip and explicit Skip all actions were not offered for the reusable file-collision class.");
+            Fail(L"The reusable file collision must present Skip and one Apply to all checkbox.");
             return true;
         }
 

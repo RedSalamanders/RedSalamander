@@ -157,7 +157,7 @@ directory object.
     when the route qualifies: the source is an exactly bound regular file, both endpoints are Local,
     the destination proves what it publishes, and every folder above the destination is a plain
     directory. The bridge then raises the typed decision before any byte is read, with both items'
-    size and date, and offers Keep both, Skip, Skip all and Cancel. Replace and Replace read-only
+    size and date, and offers Keep both, Skip and Cancel. An eligible task can repeat Skip through the checkbox. Replace and Replace read-only
     are offered when the destination provider can publish over the occupant the user is shown
     (I63 B2, `IFileSystemExpectedOccupantPublication`; the Local provider implements it for a
     regular file it opens and cannot identify, never for a link or a folder, and not while the
@@ -1511,17 +1511,14 @@ left under its temporary sibling.
 | Sharing/access/transient provider error | Retry / Skip / Cancel | Cancel | Exact error class |
 | Recycle failed | Delete permanently / Skip / Cancel; in a multi-item task also the direct action Delete all remaining permanently, immediately before Cancel | Cancel | Never the checkbox; only the explicit task-scoped choice (see Delete and Recycle) |
 
-Decisions are one-shot unless the user explicitly selects an eligible scope. **Skip All** is Skip
-plus explicit Apply-to-all for that row. It is a direct action before Cancel; it moves under
-**More…** only when a second additional action shares that menu, because a menu is never published
-for a single command. Disk full exposes it beside Retry and Cancel when its destination scope is
-qualified. It is never available
-for Recycle escalation. A digest match never auto-Skips. Keep Both preview names are advisory until
+Ordinary decisions use one repeat checkbox when the typed scope is eligible. Use **Apply to all**
+when several offered actions can repeat and **Apply to all when skipping** when only Skip can repeat.
+Disk full offers the distinct action **Skip remaining at this destination** for a qualified storage
+scope. Recycle escalation has its own explicit permanent-delete grant. A digest match never auto-Skips. Keep Both preview names are advisory until
 create-exclusive publication succeeds. The task cache key is the complete typed scope: conflict
 class, source kind, destination kind, source path profile, destination path profile, and—when the
 destination is a link—the exact known link kind. Unknown link kinds remain one-shot. Skip with the
-Apply-to-all checkbox checked records the same scoped Skip grant as Skip All; unchecked Skip applies
-only to the current item. Retry always authorizes one attempt and is never cached, even when the
+Apply-to-all checkbox checked records a scoped Skip grant. Unchecked Skip applies only to the current item. Retry always authorizes one attempt and is never cached, even when the
 checkbox is checked. Cached choices remain confined to the current task and matching scope;
 different parent folders alone do not require another decision. Skip for AccessDenied,
 SharingViolation, PathTooLong and NetworkOffline ignores source/destination/link kind while
@@ -1547,8 +1544,8 @@ partial-tree witness; both modes must retain exactly two explicit prompts and no
 DiskFull is an endpoint-storage failure whose only reusable action is Skip. Its repeat scope
 normalizes file/folder/link shape while retaining task, class, source/destination profile and
 qualified destination root. Bulk uses a common qualified admitted destination; missing/ambiguous
-qualification withholds Skip all with an explanation. A qualified prompt offers Retry / Skip all /
-Cancel directly, with no checkbox/overflow, and caches only the explicit Skip all choice. Other
+qualification presents Retry and Cancel with an explanation. A qualified prompt offers Retry,
+Skip remaining at this destination and Cancel directly. The storage-scope action records the Skip grant. Other
 conflict classes retain their original typed shape boundaries except the four non-mutating Skip
 failure families above. Read-only permanent-delete consent
 is a separate, explicit action after a provider proves the read-only blocker. A checked Apply to all
@@ -1593,10 +1590,9 @@ name conflicts. The I26 placement approved on 2026-09-19 publishes eligible acti
 order Keep Both, Overwrite (displayed as Replace / French Remplacer), Skip, Cancel; it removes the
 three-primary-button cap for these collisions. Read-only/link variants retain their specific action
 identity, label and authority gates in the replacement slot. Width never moves these choices into
-More; the consumer wraps them. Skip All remains a distinct scoped action, published directly before
-Cancel (I63 slice C): the policy publishes overflow only when two or more actions remain outside the
-primary group, and a single remaining action becomes a direct action without changing the default or
-Escape action. Recycle escalation's task-scoped grant follows the same rule (I63 decision D-6): alone
+More; the consumer wraps them. The policy publishes overflow when two or more actions remain
+outside the primary group. A single remaining action appears directly before Cancel with the same
+default and Escape action. Recycle escalation's task-scoped grant follows the same rule (I63 decision D-6): alone
 outside the primary group, it is a direct action immediately before Cancel, never the default and never
 the Escape action. Other conflict classes retain their published order and safe defaults, including Queue after
 for same-host overlap.
@@ -1759,7 +1755,7 @@ Overwrite.
 
 If a provider returns a collision to the outer item executor without consuming the shared issue
 callback, that status carries no exact destination authority. The host may still offer Retry, Keep
-Both, Skip, Skip All, or Cancel when otherwise valid, but MUST withhold Overwrite, Replace read-only,
+Both, Skip, or Cancel when otherwise valid, but MUST withhold Overwrite, Replace read-only,
 and Replace link. A destructive button is never offered merely because an HRESULT resembles Exists.
 
 A no-overwrite atomic-final or direct-final writer may report an appeared occupant as a known

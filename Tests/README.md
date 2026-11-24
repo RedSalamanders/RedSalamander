@@ -632,6 +632,11 @@ controls. An unavailable SMB resource is a skip, never real SMB qualification. U
 case filters with `Tools/Run-AllTests.ps1 -Suite FileOps -NonInteractive`; broad families keep their
 interactive lease. See `Specs/Testing/Testing_PerformanceValidation.md` for metrics and acceptance.
 
+`FileOps_AlertOverlayUxAccessibility` runs as an exact FileOps selection without desktop activation. It exercises
+the owned overlay with a local activation blocker and checks for zero foreground requests. Its
+UI Automation checks include the repeat checkbox's Toggle pattern, stable label, scroll position
+and state-change event. Use `-Suite FileOps -CaseFilter FileOps_AlertOverlayUxAccessibility -NonInteractive`.
+
 `FileOps_SmbExactRenameProvider` is a separate exact, non-activating selection for the registered
 SMB root. It creates one owned child, checks exact Rename on nested names, then removes that child.
 An endpoint without exact file binding skips the case after corroboration.

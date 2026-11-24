@@ -1265,6 +1265,7 @@ void CopyPublishedConflictPolicy(const FolderWindow::FileOperationState::Task::C
     destination.defaultAction           = RawConflictAction(source.defaultAction);
     destination.escapeAction            = RawConflictAction(source.escapeAction);
     destination.applyToAllEligible      = source.applyToAllEligible;
+    destination.applyToAllOnlySkip      = source.applyToAllOnlySkip;
     destination.skipAllEligible         = source.skipAllEligible;
     destination.repeatUnavailableReason = static_cast<uint8_t>(source.repeatUnavailableReason);
     destination.sourceIsDirectory  = source.sourceMetadata.objectKindKnown ? source.sourceMetadata.isDirectory
@@ -7995,7 +7996,8 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
         case PopupHitTest::Kind::TaskConflictMore: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE);
         case PopupHitTest::Kind::TaskConflictInspectSource: return LoadStringResource(nullptr, IDS_FILEOPS_INSPECTION_SOURCE);
         case PopupHitTest::Kind::TaskConflictInspectDestination: return LoadStringResource(nullptr, IDS_FILEOPS_INSPECTION_DESTINATION);
-        case PopupHitTest::Kind::TaskConflictToggleApplyToAll: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
+        case PopupHitTest::Kind::TaskConflictToggleApplyToAll:
+            return LoadStringResource(nullptr, hit.data != 0u ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
         case PopupHitTest::Kind::TaskConflictAction:
         {
             ConflictBucket bucket         = ConflictBucket::Unknown;
@@ -8267,7 +8269,8 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::MeasureConflictAc
                                                rightToLeft ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
     if (! _controlsHost.GetHwnd())
         return E_PENDING;
-    const std::wstring scopeLabel = task.conflict.applyToAllEligible ? LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL) : std::wstring{};
+    const UINT scopeLabelId       = task.conflict.applyToAllOnlySkip ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL;
+    const std::wstring scopeLabel = task.conflict.applyToAllEligible ? LoadStringResource(nullptr, scopeLabelId) : std::wstring{};
     const float widthDip          = _controlsHost.PixelsToDip(widthPx);
     if (cached.format.get() == format && cached.widthDip == widthDip && cached.dpi == _dpi && cached.rightToLeft == rightToLeft && cached.count == count &&
         cached.labels == labels && cached.scopeLabel == scopeLabel)
@@ -12594,6 +12597,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 applyBtn.hit.kind             = PopupHitTest::Kind::TaskConflictToggleApplyToAll;
                                 applyBtn.hit.taskId           = task.taskId;
                                 applyBtn.hit.promptGeneration = task.conflict.generation;
+                                applyBtn.hit.data             = task.conflict.applyToAllOnlySkip ? 1u : 0u;
                                 _buttons.push_back(applyBtn);
                             }
 
@@ -16576,8 +16580,11 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                                                                             checkbox->GetTooltipText() == discardSourceScopeHelp &&
                                                                             checkbox->GetAccessibleHelpText() == discardSourceScopeHelp;
                             result.conflictApplyToAllScopeHelpEmpty       = checkbox->GetTooltipText().empty() && checkbox->GetAccessibleHelpText().empty();
-                            result.conflictScopeLabelFits = hostedLabelFits(*checkbox, button.bounds, true) &&
-                                                            checkbox->GetText() == LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
+                            result.conflictScopeLabelFits =
+                                hostedLabelFits(*checkbox, button.bounds, true) &&
+                                checkbox->GetText() ==
+                                    LoadStringResource(nullptr,
+                                                       button.hit.data != 0u ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
                         }
                     }
                 }
