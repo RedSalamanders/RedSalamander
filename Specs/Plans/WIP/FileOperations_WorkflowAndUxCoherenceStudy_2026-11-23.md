@@ -6,14 +6,48 @@
 
 ## Implementation checklist
 
+**RubyGloom F2 qualification (2026-11-24).** The no-activation x64 Debug run
+`20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` hit a callback-scope assertion during
+Preparing. The isolated process was stopped and the failed trace and assertion were preserved.
+The candidate now opens the callback scope during provider capture and explicitly routes standard
+assertions to stderr in test processes. The rebuilt failure-report control and live Rename rerun
+are pending.
+
+**Queue and pause qualification (2026-11-24).** The x64 Release `FileOps_PopupIdleCadence` run
+`20261124T162210Z-62860-6cd00aef04f241ceacedc1d1d503eb17` passed setup, the case and cleanup.
+The previous Debug PrePush was stopped to correct the scheduler source test's typed pause boundary.
+That source test group passed all 192 checks in `20261124T163442Z-63668-ee7d2800de8c432db58fb14adf325401`.
+The exact candidate still needs a complete non-activating PrePush.
+
+**Follow-up qualification (2026-11-24).** Scoped PrePush on `e3e5ac280` built cleanly. Its standalone settings entry
+failed because the Queue default regression fixture attempted to write over seeded legacy settings without the loaded
+revision. The correction in `5d35248ee` keeps that revision. Its targeted x64 Debug run
+`20261124T155409Z-53376-27107cd039834ad6bf9ddce9a4b2cca7` passed SettingsSchemaTests with zero build warnings or
+errors. The source-inventory check also required the Commands one-field persistence case for `queueNewTasks`. The
+candidate adds that case using the existing fixture table. Four foreground entries and the full repository verdict
+remain open.
+
 **Current work (2026-11-24).** Local Recycle batching reached context-menu, Find and Viewer admission. Find and Viewer
 each used one Shell batch for twelve sibling files, and Viewer Cancel kept the files. The repaired same-folder Ctrl+drag
 passed through its exact no-activation selection. The branch also contains the first exact Batch Rename handle-lifetime
 and throughput changes. Implementation started at `bbb57a572`. Drift from the study baseline affected the ancestry-cleanup
 test and its evidence contracts.
 
-The latest non-activating x64 Debug PrePush passed all 14 executed entries. It recorded 1,799 passes, zero
-failures, and 27 environment skips. Four interactive entries and the remaining qualification below are open.
+[PR #246](https://github.com/RedSalamanders/RedSalamander/pull/246) merged into `main` at `bcaa59d10`.
+Its non-activating x64 Debug PrePush executed 14 entries with 1,799 passes, zero failures and 27 environment skips.
+[The first main Release attempt](https://github.com/RedSalamanders/RedSalamander/actions/runs/45405656554/attempts/1)
+timed out downloading a Ghostty build dependency on both architectures before native regression tests.
+[Attempt 2](https://github.com/RedSalamanders/RedSalamander/actions/runs/45405656554/attempts/2) hit the same timeout.
+Four desktop-lease entries and the qualification below remain open.
+
+The follow-up x64 Debug PR selection on `842ac811a` executed 12 entries with 1,507 passes and zero failures.
+Repository coverage remains `NOT_EVALUATED`. The current candidate also includes Queue/Parallel persistence,
+bulk-pause ownership and a dedicated live SMB Rename case. Correcting the SMB child-family registration cleared the
+first build failure. The selected x64 Debug build on `6df121e23` completed with zero warnings and zero errors, and
+the non-activating popup and repeat-decision selections passed. A guarded Win32 check on both SMB endpoints
+showed that a read-data watcher is required to reproduce the sharing violation. The earlier PrePush stopped after
+its build to correct the witness. The corrected live Windows SMB case passed on `92c2b2762`. Scoped
+PrePush is the next merge gate.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -32,6 +66,24 @@ failures, and 27 environment skips. Four interactive entries and the remaining q
     rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
   - [ ] Qualify exact Local and SMB for nested rows, case-only hops, legacy API fallbacks and blocking watchers. Compare
     single- and 100-item Rename costs, including handle peaks and cancellation.
+  - [x] Run the Local exact Rename refusal, legacy fallback, collision and lost-response controls.
+    [The x64 Debug record](../../TestRuns/Local-x64/FileOps/2026-11-24_140134/README.md) retains their timings and receipts.
+  - [x] Register the approved SMB test directory and confirm a read-only listing and mapping through `remote_file_smb`.
+    The case passed in run `20261124T143343Z-95336-b6a780d1e7104d7092573afd510ba4d0`.
+  - [x] Exercise the exact Rename eligibility check on the registered SMB endpoint. The Local provider opened the
+    owned file and corroborated that exact file identity was unavailable. The Rename case skipped in run
+    `20261124T145318Z-86896-cf65eb1fac8447518ff7509d6d3dfe51`.
+  - [x] Prepare the separately approved Windows SMB test directory.
+  - [x] Compare the namespace guard on both endpoints in diagnostic run `20261124T150306Z-85228-8ce4ce9864d743b0bd18f932d4bb5879`.
+    Read-data handles denied competing DELETE opens on the owned parent and ancestor. Absolute no-replace Rename
+    preserved the occupied target and moved the file to a free sibling. The first endpoint returned `ERROR_INVALID_PARAMETER`
+    for `FileIdInfo`. Windows SMB returned an exact ID. These observations leave the host route and full namespace proof open.
+  - [x] Run live exact Rename on Windows SMB with the corrected watcher. The nested, case-only, collision,
+    watcher and 100-item checks passed. The [focused record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_161520/README.md)
+    retains the run identity and timing. Release, legacy fallback hops and host cancellation remain open.
+  - [ ] Implement and qualify the corroborated Rename route on the endpoint without exact identity.
+  - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
+    scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
     including changed parents and decoys.
   - [ ] Qualify new-name Rename on Curl, Drive, and Graph and its result receipts before enabling each protocol or
@@ -45,8 +97,17 @@ failures, and 27 environment skips. Four interactive entries and the remaining q
   - [ ] Collect paired allocation, timing, history and active-peer evidence.
 - [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
   Match card and mirror scopes and authority, including stage cleanup and post-publication results.
+  - [x] Rerun the existing repeat-decision contract. The x64 Debug selection passed in
+    `20261124T145409Z-86896-a97bc8a5503d4a98b153e3aba31f7647`.
 - [ ] **S4–S5.** Queue controls and persistence, shared cap, completed grouping, mirror focus and Issues entry.
   Recheck I60/I64 ownership and verify interlocks, pause provenance, retention, UIA and focus.
+  - [x] Verify that the popup stores Queue/Parallel and a new owner reads the saved default.
+  - [x] Verify bulk pause ownership in the engine and popup model. Preparing and queued tasks are included.
+    Resume all preserves the earlier individual pause and queue gate. The paired cadence measurements and
+    save timings are in the [x64 Debug record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_155152/README.md)
+    and [x64 Release record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_163108/README.md).
+  - [ ] Verify the Start option's one-submission scope and the new pause behavior through the full interactive
+    walkthrough, including focus, UIA, and a pending mutation.
 - [ ] **S6–S7.** Options parity, asynchronous Create Directory and archives, and useful results. Preserve saved
   settings. Qualify worker cancellation, exit, refresh and cleanup.
 - [ ] **S8.** Keep the owning specifications, consistency ledger and user guide current. The first ingress, exact
@@ -55,6 +116,10 @@ failures, and 27 environment skips. Four interactive entries and the remaining q
   admission. Move to Done after all required rows have evidence or an accepting owner for the exact transferred gate.
 
 ### Validation checkpoints
+
+- The first exact Rename candidate `ab51279e6` stopped at compilation in
+  `20261124T134444Z-100080-5b6b4d2e1e1046718998105aec11af0c`. WIL's final-path adapter requires its owned string type.
+  The corrected candidate uses `wil::unique_cotaskmem_string` for the spelling proof.
 
 - `dc30fb46b` built with zero warnings and zero errors using `build.ps1 -Configuration Debug -Platform x64
   -ProjectNames RedSalamander` with tests enabled. Build receipt

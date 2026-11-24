@@ -3809,6 +3809,7 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     GetBool(fileOperations, "popupFooterOnly", settings.popupFooterOnly);
     GetBool(fileOperations, "popupCompactDensity", settings.popupCompactDensity);
     GetBool(fileOperations, "popupThroughputExpanded", settings.popupThroughputExpanded);
+    GetBool(fileOperations, "queueNewTasks", settings.queueNewTasks);
     GetBool(fileOperations, "verifyAfterCopy", settings.verifyAfterCopy);
     GetBool(fileOperations, "diagnosticsInfoEnabled", settings.diagnosticsInfoEnabled);
     GetBool(fileOperations, "diagnosticsDebugEnabled", settings.diagnosticsDebugEnabled);
@@ -5525,7 +5526,8 @@ bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOpera
     return fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.showInformationalNotes != defaults.showInformationalNotes ||
            fileOperations.mirrorDecisionsInPane != defaults.mirrorDecisionsInPane || fileOperations.popupFooterOnly != defaults.popupFooterOnly ||
            fileOperations.popupCompactDensity != defaults.popupCompactDensity || fileOperations.popupThroughputExpanded != defaults.popupThroughputExpanded ||
-           fileOperations.verifyAfterCopy != defaults.verifyAfterCopy || fileOperations.maxParallelTransfers != defaults.maxParallelTransfers ||
+           fileOperations.queueNewTasks != defaults.queueNewTasks || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
+           fileOperations.maxParallelTransfers != defaults.maxParallelTransfers ||
            fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
            fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
@@ -8071,6 +8073,10 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
             if (settings.fileOperations->popupThroughputExpanded != defaults.popupThroughputExpanded)
             {
                 yyjson_mut_obj_add_bool(doc, fileOperations, "popupThroughputExpanded", settings.fileOperations->popupThroughputExpanded);
+            }
+            if (settings.fileOperations->queueNewTasks != defaults.queueNewTasks)
+            {
+                yyjson_mut_obj_add_bool(doc, fileOperations, "queueNewTasks", settings.fileOperations->queueNewTasks);
             }
 
             if (settings.fileOperations->verifyAfterCopy != defaults.verifyAfterCopy)

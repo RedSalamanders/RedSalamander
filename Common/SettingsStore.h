@@ -356,6 +356,7 @@ struct FileOperationsSettings
     bool popupFooterOnly                         = false;
     bool popupCompactDensity                     = false;
     bool popupThroughputExpanded                 = true;
+    bool queueNewTasks                           = true;
     bool verifyAfterCopy                         = false;
     uint32_t maxParallelTransfers                = 4;
     uint32_t crossFsBridgeBufferSizeKB           = 4096;

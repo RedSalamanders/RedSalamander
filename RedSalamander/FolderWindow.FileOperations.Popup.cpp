@@ -1387,18 +1387,18 @@ using PopupStatusVisualTone = FileOperationsPopupInternal::PopupStatusVisualTone
 
 struct GlobalFileOperationsStatusSummary
 {
-    uint32_t running              = 0;
-    uint32_t stopping             = 0;
-    uint32_t waiting              = 0;
-    uint32_t needAttention        = 0;
-    uint32_t activeRunning        = 0;
-    uint32_t paused               = 0;
-    uint32_t pauseEligibleRunning = 0;
-    uint32_t pauseEligiblePaused  = 0;
-    uint64_t completedBytes       = 0;
-    uint64_t totalBytes           = 0;
-    uint64_t completedItems       = 0;
-    uint64_t totalItems           = 0;
+    uint32_t running        = 0;
+    uint32_t stopping       = 0;
+    uint32_t waiting        = 0;
+    uint32_t needAttention  = 0;
+    uint32_t activeRunning  = 0;
+    uint32_t paused         = 0;
+    uint32_t bulkPausable   = 0;
+    uint32_t bulkPaused     = 0;
+    uint64_t completedBytes = 0;
+    uint64_t totalBytes     = 0;
+    uint64_t completedItems = 0;
+    uint64_t totalItems     = 0;
     // Progress weights are separate from transferred-byte counters. A verified copy
     // contributes its equally weighted transfer/proof fraction, using its byte total
     // as the cohort weight. Double accumulation avoids uint64 saturation bias here.
@@ -2215,6 +2215,14 @@ struct TerminalAxisBadge final
             continue;
         }
 
+        if (status != TaskStatusKind::Stopping)
+        {
+            if (task.pausedByBulk)
+                ++summary.bulkPaused;
+            else if (! task.paused)
+                ++summary.bulkPausable;
+        }
+
         if (StatusNeedsAttention(status))
         {
             ++summary.needAttention;
@@ -2229,21 +2237,9 @@ struct TerminalAxisBadge final
             if (status == TaskStatusKind::Stopping)
                 ++summary.stopping;
             if (status == TaskStatusKind::Paused)
-            {
                 ++summary.paused;
-                if (task.started)
-                {
-                    ++summary.pauseEligiblePaused;
-                }
-            }
             else
-            {
                 ++summary.activeRunning;
-                if (task.started && status != TaskStatusKind::Stopping)
-                {
-                    ++summary.pauseEligibleRunning;
-                }
-            }
         }
 
         if (presentation.includeInAggregateCohort)
@@ -2382,12 +2378,12 @@ struct TerminalAxisBadge final
 
 [[nodiscard]] bool HasFooterPauseResumeAllControl(const GlobalFileOperationsStatusSummary& summary) noexcept
 {
-    return summary.pauseEligibleRunning > 0 || summary.pauseEligiblePaused > 0;
+    return summary.bulkPausable > 0 || summary.bulkPaused > 0;
 }
 
 [[nodiscard]] bool FooterPauseResumeAllShouldPause(const GlobalFileOperationsStatusSummary& summary) noexcept
 {
-    return summary.pauseEligibleRunning > 0;
+    return summary.bulkPaused == 0 && summary.bulkPausable > 0;
 }
 
 // An interrupted-Move restart notice stays a standalone card: it is never hidden behind a
@@ -5821,8 +5817,11 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             snap.conflict.overlapTaskId      = task->_conflictArbiter.prompt.overlapTaskId;
         }
 
+        using PauseReason                   = FolderWindow::FileOperationState::Task::PauseReason;
+        const PauseReason pauseReason       = task->GetPauseReason();
         snap.started                        = task->HasStarted();
-        snap.paused                         = task->IsPaused();
+        snap.paused                         = pauseReason != PauseReason::None;
+        snap.pausedByBulk                   = pauseReason == PauseReason::Bulk;
         snap.waitingForOthers               = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
         snap.waitingInQueue                 = task->IsWaitingInQueue();
         snap.waitingForIdentityInterlock    = snap.waitingInQueue && task->_waitingForIdentityInterlock.load(std::memory_order_acquire);
@@ -8226,7 +8225,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::HandleHostedKeyDown(
             return true;
         if (route == HostedTaskSpaceKeyRoute::ControlActivation)
             return false;
-        if (auto* task = fileOps ? fileOps->FindTask(hit.taskId) : nullptr; task && task->HasStarted())
+        if (auto* task = fileOps ? fileOps->FindTask(hit.taskId) : nullptr; task && (task->HasStarted() || task->IsPaused()))
         {
             task->TogglePause();
             Invalidate(hwnd);
@@ -12819,11 +12818,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         else if (showCopyMoveControls && ! speedLimitText.empty())
                         {
-                            // A queued task has nothing to pause yet; Cancel and the speed limit
-                            // (which applies once it starts) are the only meaningful controls,
-                            // plus Start now when the task is explicitly waiting behind others.
-                            const bool showPause    = task.started;
-                            const bool showStartNow = ! task.started && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
+                            // A bulk-paused task can be resumed on its own card. Start now becomes
+                            // available when queue order is the remaining wait.
+                            const bool showPause    = task.started || task.paused;
+                            const bool showStartNow = ! task.started && ! task.paused && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
                                                       ! task.waitingForParallelTransferSlot && ! task.waitingForExclusiveTransfer &&
                                                       (task.waitingForOthers || task.waitingInQueue);
                             const float actionCount = (showPause ? 1.0f : 0.0f) + (showStartNow ? 1.0f : 0.0f) + 2.0f;
@@ -12904,8 +12902,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         else
                         {
-                            const bool showPause    = task.started;
-                            const bool showStartNow = ! task.started && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
+                            const bool showPause    = task.started || task.paused;
+                            const bool showStartNow = ! task.started && ! task.paused && ! task.overlapQueued && ! task.waitingForIdentityInterlock &&
                                                       ! task.waitingForParallelTransferSlot && ! task.waitingForExclusiveTransfer &&
                                                       (task.waitingForOthers || task.waitingInQueue);
                             if (showPause)
@@ -15280,7 +15278,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
                 pause = FooterPauseResumeAllShouldPause(BuildGlobalStatusSummary(BuildSnapshot()));
             }
 
-            fileOps->SetAllRunningTasksPaused(pause);
+            fileOps->SetAllTasksPaused(pause);
         }
         Invalidate(hwnd);
         return 0;
@@ -17833,7 +17831,25 @@ bool DebugValidateFileOperationsPreparingPresentation() noexcept
             return false;
     }
     task.waitingInQueue = true;
-    return ResolveTaskStatusKind(task) == Status::Waiting;
+    if (ResolveTaskStatusKind(task) != Status::Waiting)
+        return false;
+
+    Snapshot individual{};
+    individual.taskId   = 1u;
+    individual.paused   = true;
+    task.taskId         = 2u;
+    const auto canPause = BuildGlobalStatusSummary({individual, task});
+    if (! HasFooterPauseResumeAllControl(canPause) || ! FooterPauseResumeAllShouldPause(canPause))
+        return false;
+
+    task.paused       = true;
+    task.pausedByBulk = true;
+    Snapshot arriving{};
+    arriving.taskId         = 3u;
+    arriving.lifecyclePhase = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Preparing);
+    const auto shouldResume = BuildGlobalStatusSummary({individual, task, arriving});
+    return ResolveTaskStatusKind(task) == Status::Waiting && HasFooterPauseResumeAllControl(shouldResume) && ! FooterPauseResumeAllShouldPause(shouldResume) &&
+           ! HasFooterPauseResumeAllControl(BuildGlobalStatusSummary({individual}));
 }
 
 bool DebugValidateFileOperationsStoppingPresentation() noexcept
@@ -17897,7 +17913,7 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
             ! GraphOverlayTextForStatus(candidate, candidate.statusKind, animate).empty() || animate ||
             BuildTaskHeaderText(candidate, L"Copy", 0u).find(LoadStringResource(nullptr, IDS_FILEOPS_STATUS_STOPPING)) != std::wstring::npos ||
             summary.running != 1u || summary.stopping != 1u || summary.activeRunning != 1u || summary.needAttention != 0u || summary.waiting != 0u ||
-            summary.pauseEligibleRunning != 0u || summary.pauseEligiblePaused != 0u || HasFooterPauseResumeAllControl(summary) ||
+            summary.bulkPausable != 0u || summary.bulkPaused != 0u || HasFooterPauseResumeAllControl(summary) ||
             FormatGlobalStatusSummaryText(summary) != FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_STOPPING_COUNT, 1ul) ||
             candidate.completedBytes != task.completedBytes || candidate.totalBytes != task.totalBytes)
             return false;
@@ -17920,8 +17936,7 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
     if (! BuildGlobalStatusSummary({uncanceled}, &rates).hasAggregateEta)
         return false;
     const auto mixed = BuildGlobalStatusSummary({task, uncanceled});
-    if (mixed.running != 2u || mixed.stopping != 1u || mixed.pauseEligibleRunning != 1u || mixed.pauseEligiblePaused != 0u ||
-        ! HasFooterPauseResumeAllControl(mixed))
+    if (mixed.running != 2u || mixed.stopping != 1u || mixed.bulkPausable != 1u || mixed.bulkPaused != 0u || ! HasFooterPauseResumeAllControl(mixed))
         return false;
     const auto taskbar = BuildGlobalTaskbarProgressModel(summary);
     if (! progress.includeInAggregateCohort || ! progress.showThroughputGraph || ! progress.determinate || progress.fraction != 0.25 ||

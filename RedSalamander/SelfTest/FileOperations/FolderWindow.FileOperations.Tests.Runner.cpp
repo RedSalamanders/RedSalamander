@@ -1026,6 +1026,7 @@ struct SelfTestState
         DiscoveryScope_MultipleFoldersLiveProgress,
         FileOps_SelectionShapeLocal,
         FileOps_SelectionShapeSmb,
+        FileOps_SmbExactRenameProvider,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -1675,6 +1676,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::DiscoveryScope_MultipleFoldersLiveProgress: return L"DiscoveryScope_MultipleFoldersLiveProgress";
         case SelfTestState::Step::FileOps_SelectionShapeLocal: return L"FileOps_SelectionShapeLocal";
         case SelfTestState::Step::FileOps_SelectionShapeSmb: return L"FileOps_SelectionShapeSmb";
+        case SelfTestState::Step::FileOps_SmbExactRenameProvider: return L"FileOps_SmbExactRenameProvider";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -1865,6 +1867,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::DiscoveryScope_MultipleFoldersLiveProgress,             // I37 - distinct roots publish monotonic aggregate progress
     SelfTestState::Step::FileOps_SelectionShapeLocal,
     SelfTestState::Step::FileOps_SelectionShapeSmb,
+    SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns, // R0f-SMB - a wedged synchronous provider call returns on cancel
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,       // R0f-SMB - read/write/create/rename/delete on a loopback share
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,        // R0f-SMB - Recycle on a share keeps every item and asks before permanent delete
@@ -2235,7 +2238,8 @@ constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyR1dPreparing{{
     SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,
 }};
 
-constexpr std::array<SelfTestState::Step, 6> kFileOpsFamilyR0fSmbContainment{{
+constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilyR0fSmbContainment{{
+    SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,
@@ -8917,7 +8921,7 @@ using TickResult = std::optional<bool>;
     task->RequestCancel();
     task->SetPaused(true); // Stale row and bulk-pause callers must not re-arm a pause.
     task->SetDesiredSpeedLimit(1234u);
-    operations->SetAllRunningTasksPaused(true);
+    operations->SetAllTasksPaused(true);
     if (operations->RunQueuedTaskNow(taskId.value()) || operations->MoveQueuedTask(taskId.value(), true))
         return reject(L"stopping task still accepts queue decisions");
     TaskSnapshot stopping{};
@@ -9920,7 +9924,9 @@ using TickResult = std::optional<bool>;
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
     if (! DebugValidateFileOperationsPreparingPresentation())
-        fail(L"Preparing elapsed status must advance before execution and preserve the short chip and queue priority");
+        fail(L"Preparing elapsed status and bulk pause controls must respect queue priority and group ownership");
+    if (! State::DebugValidateBulkPauseOwnershipForSelfTest())
+        fail(L"Pause all must capture live preparation and preserve independent pauses and queue waits when resumed");
     auto* folder     = TryGetFolderWindow(state.mainWindow);
     auto* operations = TryGetFileOps(folder);
     if (! folder || ! operations || operations->HasActiveOperations())
@@ -9995,6 +10001,29 @@ using TickResult = std::optional<bool>;
                              row.graph.reducedMotion));
         }
     };
+
+    // Exercise the real footer command handler on the sandboxed application settings, then
+    // give a new owner the value read from disk. Restore the saved and live values independently.
+    {
+        const bool savedQueue = ! g_settings.fileOperations.has_value() || g_settings.fileOperations->queueNewTasks;
+        const bool liveQueue  = operations->GetQueueNewTasks();
+        operations->ApplyQueueMode(! savedQueue);
+        Common::Settings::Settings reloaded{};
+        const bool loaded =
+            operations->DebugFlushPendingSettingsSaveForSelfTest(5'000u) && Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", reloaded) == S_OK;
+        const bool persistedQueue = ! reloaded.fileOperations.has_value() || reloaded.fileOperations->queueNewTasks;
+        auto newOwner             = std::make_unique<FolderWindow>();
+        newOwner->SetSettings(&reloaded);
+        State newOperations(*newOwner);
+        if (! loaded || persistedQueue == savedQueue || operations->GetQueueNewTasks() == savedQueue || newOperations.GetQueueNewTasks() == savedQueue)
+        {
+            fail(L"the footer mode must persist its selection and seed the next owner from saved settings");
+        }
+        operations->ApplyQueueMode(savedQueue);
+        operations->SetQueueNewTasks(liveQueue);
+        if (! operations->DebugFlushPendingSettingsSaveForSelfTest(5'000u))
+            return reject(L"the original queue default could not be restored");
+    }
 
     // 1. Synthetic popup on a private engine: the cadence each declared task state selects, and the
     //    path-detail motion check (x-lifetime#3). Nothing here admits work or touches the user's popup.
@@ -14083,6 +14112,158 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     return passed;
 }
 
+[[nodiscard]] bool RunFileOpsSmbExactRenameProviderChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
+{
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"SMB exact Rename: {}", reason));
+        return false;
+    };
+    const auto share = ResolveSmbSelfTestRootForSelfTest(unavailableReason);
+    if (! share.has_value())
+        return true;
+    const DWORD attributes = GetFileAttributesW(share.value().c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+        return reject(L"the registered root is unavailable or is a reparse point");
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return reject(L"no-activation guard unavailable");
+
+    const auto fixture = std::filesystem::path(share.value()) / std::format(L"exact-rename-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    std::error_code error;
+    if (! std::filesystem::create_directory(fixture, error))
+        return reject(L"could not create a unique owned child");
+    auto cleanup             = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(fixture)); });
+    const auto removeFixture = [&]() noexcept
+    {
+        if (! SelfTest::RemoveAll(fixture))
+            return reject(L"could not remove the owned SMB fixture");
+        cleanup.release();
+        return true;
+    };
+    const auto nested = fixture / L"parent" / L"nested";
+    if (! std::filesystem::create_directories(nested, error))
+        return reject(L"could not create the nested test directory");
+
+    wil::com_ptr<IFileSystemObjectBinding> binding;
+    wil::com_ptr<IFileSystemIO> io;
+    if (! state.fsLocal || FAILED(state.fsLocal->QueryInterface(__uuidof(IFileSystemObjectBinding), binding.put_void())) || ! binding ||
+        FAILED(state.fsLocal->QueryInterface(__uuidof(IFileSystemIO), io.put_void())) || ! io)
+        return reject(L"the Local filesystem provider lacks the required interfaces");
+
+    const auto source                         = nested / L"source.txt";
+    const auto occupied                       = nested / L"occupied.txt";
+    const auto destination                    = nested / L"renamed.txt";
+    const auto caseOnly                       = nested / L"RENAMED.txt";
+    constexpr std::string_view kSourceBytes   = "I66 owned source";
+    constexpr std::string_view kOccupantBytes = "I66 unrelated occupant";
+    if (! SelfTest::WriteTextFile(source, kSourceBytes) || ! SelfTest::WriteTextFile(occupied, kOccupantBytes))
+        return reject(L"could not write the owned fixtures");
+
+    constexpr auto readFlags   = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    constexpr auto renameFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
+    wil::com_ptr<IFileSystemBoundObject> probe;
+    const HRESULT capability = binding->BindObject(source.c_str(), readFlags, probe.put());
+    if (capability == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && ! probe)
+    {
+        wil::com_ptr<IFileSystemExpectedOccupantPublication> corroboration;
+        FileSystemExpectedOccupant facts{};
+        facts.sizeBytes = sizeof(facts);
+        if (FAILED(state.fsLocal->QueryInterface(__uuidof(IFileSystemExpectedOccupantPublication), corroboration.put_void())) || ! corroboration ||
+            corroboration->ReadExpectedOccupant(source.c_str(), &facts) != S_OK || facts.fileSizeBytes != kSourceBytes.size())
+            return reject(L"the refusal was not corroborated by an open of the owned file");
+        unavailableReason = L"The provider opened the owned file and reported that exact file identity is unavailable on this SMB endpoint.";
+        AppendLog(unavailableReason);
+        return removeFixture();
+    }
+    if (capability != S_OK || ! probe)
+        return reject(std::format(L"exact identity probe failed (0x{:08X})", static_cast<unsigned long>(capability)));
+    probe.reset();
+
+    const auto leafMatches = [](const std::filesystem::path& path, bool exact) noexcept
+    {
+        WIN32_FIND_DATAW data{};
+        const wil::unique_hfind found(FindFirstFileW(path.c_str(), &data));
+        if (found)
+            return (std::wstring_view(data.cFileName) == path.filename().native()) == exact;
+        const DWORD lastError = GetLastError();
+        return ! exact && (lastError == ERROR_FILE_NOT_FOUND || lastError == ERROR_PATH_NOT_FOUND);
+    };
+    const auto hasBytes = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+    {
+        std::string actual;
+        return ReadFileTextFsIo(io, path, actual) && actual == expected;
+    };
+    {
+        wil::unique_hfile watcher(CreateFileW(source.c_str(),
+                                              FILE_READ_DATA | FILE_READ_ATTRIBUTES,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                              nullptr,
+                                              OPEN_EXISTING,
+                                              FILE_FLAG_OPEN_REPARSE_POINT,
+                                              nullptr));
+        if (! watcher)
+            return reject(L"could not open the watcher that refuses delete sharing");
+        const HRESULT blocked = binding->BindObject(source.c_str(), renameFlags, probe.put());
+        Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"watcher", 0u, 0u, 0u, blocked);
+        if (blocked != HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || probe || ! leafMatches(source, true) || ! hasBytes(source, kSourceBytes))
+            return reject(L"the watcher did not block rename authority or the source changed");
+    }
+
+    FileSystemOptions options{};
+    options.sizeBytes       = sizeof(options);
+    const auto verifyRename = [&](const std::filesystem::path& from, const std::filesystem::path& to, bool occupiedTarget) noexcept
+    {
+        wil::com_ptr<IFileSystemBoundObject> bound, published, rebound;
+        const HRESULT bind = binding->BindObject(from.c_str(), renameFlags, bound.put());
+        if (bind != S_OK || ! bound)
+            return reject(std::format(L"rename bind failed (0x{:08X})", static_cast<unsigned long>(bind)));
+        FileSystemConditionalMutationResult receipt{};
+        receipt.sizeBytes    = sizeof(receipt);
+        const HRESULT hr     = bound->RenameIfUnchanged(to.c_str(), nullptr, FILESYSTEM_FLAG_NONE, &options, &receipt, published.put());
+        BOOL same            = FALSE;
+        const bool confirmed = occupiedTarget ? FAILED(hr) && receipt.outcomeKnown && ! receipt.mutationCommitted && receipt.originalStillPresent &&
+                                                    ! published && leafMatches(from, true) && hasBytes(from, kSourceBytes) && hasBytes(to, kOccupantBytes)
+                                              : hr == S_OK && receipt.outcomeKnown && receipt.mutationCommitted && ! receipt.originalStillPresent &&
+                                                    published && binding->BindObject(to.c_str(), readFlags, rebound.put()) == S_OK && rebound &&
+                                                    bound->IsSameObject(rebound.get(), &same) == S_OK && same && leafMatches(to, true) &&
+                                                    leafMatches(from, false) && hasBytes(to, kSourceBytes);
+        if (! confirmed)
+            AppendLog(std::format(L"SMB exact Rename control '{}' to '{}' returned 0x{:08X}, known={}, committed={}, sourcePresent={}",
+                                  from.filename().native(),
+                                  to.filename().native(),
+                                  static_cast<unsigned long>(hr),
+                                  receipt.outcomeKnown != FALSE,
+                                  receipt.mutationCommitted != FALSE,
+                                  receipt.originalStillPresent != FALSE));
+        return confirmed;
+    };
+
+    if (! verifyRename(source, occupied, true))
+        return reject(L"the unrelated destination was not preserved with a known non-commit");
+    const auto singleStart = std::chrono::steady_clock::now();
+    if (! verifyRename(source, destination, false))
+        return reject(L"nested Rename to a new name lacked a matching identity, spelling, receipt or content");
+    Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"single", Debug::Perf::ElapsedUs(singleStart), 1u, 0u, S_OK);
+    if (! verifyRename(destination, caseOnly, false))
+        return reject(L"case-only Rename did not publish the exact requested spelling and identity");
+
+    constexpr unsigned int kBatchCount = 100u;
+    for (unsigned int index = 0; index < kBatchCount; ++index)
+    {
+        if (! SelfTest::WriteTextFile(nested / std::format(L"before-{}.txt", index), kSourceBytes))
+            return reject(L"could not write the 100-item fixture");
+    }
+    const auto batchStart = std::chrono::steady_clock::now();
+    for (unsigned int index = 0; index < kBatchCount; ++index)
+    {
+        if (! verifyRename(nested / std::format(L"before-{}.txt", index), nested / std::format(L"after-{}.txt", index), false))
+            return reject(std::format(L"100-item controlled Rename failed at item {}", index));
+    }
+    Debug::Perf::Emit(L"FileOps.Smb.ExactRenameControlUs", L"100 items", Debug::Perf::ElapsedUs(batchStart), kBatchCount, 0u, S_OK);
+    return removeFixture();
+}
+
 // I42: run identical fresh fixtures as a directory and as the equivalent Ctrl+A leaf list. Observe
 // actual admitted native transfer phases, not selected-root worker counts, and compare every destination byte.
 [[nodiscard]] bool RunFileOpsSelectionShapeChecks(SelfTestState& state, bool smb, std::wstring& unavailableReason) noexcept
@@ -17093,7 +17274,21 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             {
                 RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
             }
-            NextStep(state, smb ? SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns : SelfTestState::Step::FileOps_SelectionShapeSmb);
+            NextStep(state, smb ? SelfTestState::Step::FileOps_SmbExactRenameProvider : SelfTestState::Step::FileOps_SelectionShapeSmb);
+            return false;
+        }
+        case SelfTestState::Step::FileOps_SmbExactRenameProvider:
+        {
+            std::wstring unavailableReason;
+            if (! RunFileOpsSmbExactRenameProviderChecks(state, unavailableReason))
+            {
+                Fail(L"The live SMB exact Rename controls failed. See the per-item result in the File Operations trace.");
+                return true;
+            }
+            RecordCurrentPhase(state,
+                               unavailableReason.empty() ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::skipped,
+                               unavailableReason);
+            NextStep(state, SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns);
             return false;
         }
         case SelfTestState::Step::FileOps_CancelAllNeverStarted:

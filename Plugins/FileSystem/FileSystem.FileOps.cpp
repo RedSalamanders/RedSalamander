@@ -12681,6 +12681,109 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         static_cast<void>(SetEnvironmentVariableW(kDeleteCommittedFailureFiredEnv, nullptr));
     });
 
+#if defined(ENABLE_TESTS)
+    {
+        constexpr wchar_t exPathEnv[]   = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_PATH";
+        constexpr wchar_t exErrorEnv[]  = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_ERROR";
+        constexpr wchar_t exFiredEnv[]  = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_FIRED";
+        const auto source               = root / L"ExactRename.BIN";
+        const auto caseDestination      = root / L"exactrename.bin";
+        const auto occupiedDestination  = root / L"occupied-rename.bin";
+        const auto legacyDestination    = root / L"LegacyRename.BIN";
+        const auto recoveredDestination = root / L"legacyrename.bin";
+        const auto resetFixture         = wil::scope_exit([&]() noexcept
+        {
+            for (const auto name : {exPathEnv, exErrorEnv, exFiredEnv, kRenameCommittedFailurePathEnv, kRenameCommittedFailureFiredEnv})
+                static_cast<void>(SetEnvironmentVariableW(name, nullptr));
+            for (const auto* path : {&source, &caseDestination, &occupiedDestination, &legacyDestination, &recoveredDestination})
+                static_cast<void>(DeleteFileW(path->c_str()));
+        });
+        const auto hasExactLeaf         = [](const std::filesystem::path& path) noexcept
+        {
+            WIN32_FIND_DATAW data{};
+            const wil::unique_hfind found(FindFirstFileW(path.c_str(), &data));
+            return found && std::wstring_view(data.cFileName) == GetPathLeaf(path.native());
+        };
+        constexpr auto renameFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_READ_METADATA);
+        wil::com_ptr<IFileSystemBoundObject> boundSource;
+        if (! check(writeFile(source, std::byte{0x75}) && writeFile(occupiedDestination, std::byte{0x76}) &&
+                        SUCCEEDED(binding->BindObject(source.c_str(), renameFlags, boundSource.put())) && boundSource,
+                    L"exact rename fixture must bind its own regular file and seed an independent collision"))
+            return;
+
+        struct RenameAttempt final
+        {
+            FileSystemConditionalMutationResult result{};
+            wil::com_ptr<IFileSystemBoundObject> destination;
+            HRESULT hr = E_PENDING;
+        };
+        const auto attemptRename = [&](const std::filesystem::path& destination, std::wstring_view detail) noexcept
+        {
+            RenameAttempt attempt{};
+            attempt.result.sizeBytes = sizeof(attempt.result);
+            const auto started       = std::chrono::steady_clock::now();
+            attempt.hr =
+                boundSource->RenameIfUnchanged(destination.c_str(), nullptr, FILESYSTEM_FLAG_NONE, &options, &attempt.result, attempt.destination.put());
+            Debug::Perf::Emit(L"FileOps.Local.ExactRenameSelfTestUs",
+                              detail,
+                              Debug::Perf::ElapsedUs(started),
+                              static_cast<uint64_t>(attempt.result.mutationCommitted),
+                              static_cast<uint64_t>(attempt.result.outcomeKnown),
+                              attempt.hr);
+            return attempt;
+        };
+        const auto failEx = [&](const std::filesystem::path& destination, DWORD error) noexcept
+        {
+            const std::wstring code = std::to_wstring(error);
+            return SetEnvironmentVariableW(exFiredEnv, nullptr) != FALSE && SetEnvironmentVariableW(exErrorEnv, code.c_str()) != FALSE &&
+                   SetEnvironmentVariableW(exPathEnv, destination.c_str()) != FALSE;
+        };
+        if (! check(failEx(caseDestination, ERROR_ACCESS_DENIED), L"case-only Ex access-denied injection must be armed"))
+            return;
+        const auto refused = attemptRename(caseDestination, L"case-only refusal");
+        if (! check(refused.hr == E_ACCESSDENIED && ! refused.destination && refused.result.outcomeKnown && ! refused.result.mutationCommitted &&
+                        refused.result.originalStillPresent && hasExactLeaf(source) && ! hasExactLeaf(caseDestination) &&
+                        GetEnvironmentVariableW(exFiredEnv, nullptr, 0u) != 0u,
+                    L"a refused case-only rename must retain the original spelling instead of reporting a commit from the alias"))
+            return;
+
+        if (! check(failEx(occupiedDestination, ERROR_CALL_NOT_IMPLEMENTED), L"occupied legacy rename injection must be armed"))
+            return;
+        const auto collision = attemptRename(occupiedDestination, L"legacy collision");
+        firstByte            = {};
+        if (! check(FAILED(collision.hr) && ! collision.destination && collision.result.outcomeKnown && ! collision.result.mutationCommitted &&
+                        collision.result.originalStillPresent && hasExactLeaf(source) && readFirstByte(occupiedDestination, firstByte) &&
+                        firstByte == std::byte{0x76} && GetEnvironmentVariableW(exFiredEnv, nullptr, 0u) != 0u,
+                    L"legacy exact rename must preserve the original and the independent destination occupant"))
+            return;
+
+        if (! check(failEx(legacyDestination, ERROR_CALL_NOT_IMPLEMENTED), L"free-name legacy rename injection must be armed"))
+            return;
+        const auto legacy = attemptRename(legacyDestination, L"legacy free name");
+        if (! check(legacy.hr == S_OK && legacy.destination && legacy.result.outcomeKnown && legacy.result.mutationCommitted &&
+                        ! legacy.result.originalStillPresent && ! hasExactLeaf(source) && hasExactLeaf(legacyDestination) &&
+                        GetEnvironmentVariableW(exFiredEnv, nullptr, 0u) != 0u,
+                    L"CALL_NOT_IMPLEMENTED must publish the same exact source using the legacy no-replace call"))
+            return;
+
+        if (! check(SetEnvironmentVariableW(kRenameCommittedFailurePathEnv, recoveredDestination.c_str()) != FALSE,
+                    L"case-only post-commit failure injection must be armed"))
+            return;
+        const auto recovered = attemptRename(recoveredDestination, L"case-only recovery");
+        wil::com_ptr<IFileSystemBoundObject> observed;
+        BOOL sameFinal = FALSE;
+        firstByte      = {};
+        if (! check(recovered.hr == S_OK && recovered.destination && recovered.result.outcomeKnown && recovered.result.mutationCommitted &&
+                        ! recovered.result.originalStillPresent && ! hasExactLeaf(legacyDestination) && hasExactLeaf(recoveredDestination) &&
+                        GetEnvironmentVariableW(kRenameCommittedFailureFiredEnv, nullptr, 0u) != 0u &&
+                        SUCCEEDED(binding->BindObject(recoveredDestination.c_str(), readFlags, observed.put())) && observed &&
+                        SUCCEEDED(boundSource->IsSameObject(observed.get(), &sameFinal)) && sameFinal && readFirstByte(recoveredDestination, firstByte) &&
+                        firstByte == std::byte{0x75},
+                    L"case-only reconciliation must recover a real commit with exact spelling, persistent identity and original bytes"))
+            return;
+    }
+#endif
+
     static_cast<void>(SetEnvironmentVariableW(kStageIdentityPathEnv, retainedStagePath.c_str()));
     wil::com_ptr<IFileWriter> retainedWriter;
     wil::com_ptr<IFileSystemBoundObject> retainedStage;

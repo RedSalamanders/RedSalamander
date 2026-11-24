@@ -586,8 +586,17 @@ bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long wa
     return SUCCEEDED(resultHr);
 }
 
+namespace
+{
+[[nodiscard]] bool GetQueueDefaultFromSettings(const Common::Settings::Settings* settings) noexcept
+{
+    return ! settings || ! settings->fileOperations.has_value() || settings->fileOperations->queueNewTasks;
+}
+} // namespace
+
 FolderWindow::FileOperationState::FileOperationState(FolderWindow& owner) : _owner(owner)
 {
+    LoadQueueDefaultFromSettings();
     _uiLifetime = std::make_shared<int>(0);
     LoadInterruptedMoveBreadcrumbs();
 }
@@ -750,6 +759,40 @@ void FolderWindow::FileOperationState::FlushPendingSettingsSave() noexcept
 }
 
 #ifdef ENABLE_TESTS
+bool FolderWindow::FileOperationState::DebugValidateBulkPauseOwnershipForSelfTest() noexcept
+{
+    FolderWindow owner;
+    FileOperationState operations(owner);
+    const auto addTask = [&]() noexcept -> Task& { return *operations._tasks.emplace_back(std::make_unique<Task>(operations)); };
+
+    Task& individuallyPaused = addTask();
+    individuallyPaused.SetPaused(true);
+    Task& preparing = addTask();
+    Task& queued    = addTask();
+    queued._queuePaused.store(true, std::memory_order_release);
+    Task& stopping = addTask();
+    stopping.RequestCancel();
+
+    using PauseReason = Task::PauseReason;
+    operations.SetAllTasksPaused(true);
+    if (individuallyPaused.GetPauseReason() != PauseReason::Individual || preparing.HasStarted() || preparing.GetPauseReason() != PauseReason::Bulk ||
+        queued.GetPauseReason() != PauseReason::Bulk || ! queued.IsQueuePaused() || stopping.IsPaused())
+        return false;
+
+    Task& arriving = addTask();
+    if (arriving.IsPaused())
+        return false;
+
+    operations.SetAllTasksPaused(false);
+    if (! individuallyPaused.IsPaused() || preparing.IsPaused() || queued.IsPaused() || ! queued.IsQueuePaused() || arriving.IsPaused())
+        return false;
+
+    operations.SetAllTasksPaused(true);
+    preparing.TogglePause();
+    return ! preparing.IsPaused() && individuallyPaused.GetPauseReason() == PauseReason::Individual && queued.GetPauseReason() == PauseReason::Bulk &&
+           queued.IsQueuePaused();
+}
+
 bool FolderWindow::FileOperationState::DebugFlushPendingSettingsSaveForSelfTest(DWORD timeoutMs) noexcept
 {
     return SettingsHotReload::FlushQueuedSettingsSaves(timeoutMs);
@@ -2840,6 +2883,11 @@ void FolderWindow::FileOperationState::SetQueueNewTasks(bool queue) noexcept
     _queueNewTasks.store(queue, std::memory_order_release);
 }
 
+void FolderWindow::FileOperationState::LoadQueueDefaultFromSettings() noexcept
+{
+    SetQueueNewTasks(GetQueueDefaultFromSettings(_owner._settings));
+}
+
 bool FolderWindow::FileOperationState::GetQueueNewTasks() const noexcept
 {
     return _queueNewTasks.load(std::memory_order_acquire);
@@ -2847,7 +2895,7 @@ bool FolderWindow::FileOperationState::GetQueueNewTasks() const noexcept
 
 void FolderWindow::FileOperationState::ApplyQueueMode(bool queue) noexcept
 {
-    _queueNewTasks.store(queue, std::memory_order_release);
+    SetQueueNewTasks(queue);
 
     std::vector<Task*> tasks;
     CollectTasks(tasks);
@@ -2876,6 +2924,16 @@ void FolderWindow::FileOperationState::ApplyQueueMode(bool queue) noexcept
 
     UpdateQueuePausedTasks();
     NotifyQueueChanged();
+
+    if (_owner._settings && GetQueueDefaultFromSettings(_owner._settings) != queue)
+    {
+        auto& settings = *_owner._settings;
+        if (! settings.fileOperations.has_value())
+            settings.fileOperations.emplace();
+        settings.fileOperations->queueNewTasks = queue;
+        PruneFileOperationsSettingsIfDefault(settings);
+        QueueSettingsSave(L"queue default");
+    }
 }
 
 bool FolderWindow::FileOperationState::RunQueuedTaskNow(uint64_t taskId) noexcept
@@ -3035,20 +3093,22 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
     return true;
 }
 
-void FolderWindow::FileOperationState::SetAllRunningTasksPaused(bool paused) noexcept
+void FolderWindow::FileOperationState::SetAllTasksPaused(bool paused) noexcept
 {
+    const uint64_t startedUs = PerfNowUs();
     std::vector<Task*> tasks;
     CollectTasks(tasks);
 
     for (Task* task : tasks)
     {
-        if (! task || ! task->HasStarted() || task->CancelRequestedDurable() || task->_taskFinished.load(std::memory_order_acquire))
-        {
+        if (! task || task->CancelRequestedDurable() || task->_taskFinished.load(std::memory_order_acquire))
             continue;
-        }
 
-        task->SetPaused(paused);
+        task->SetPaused(paused, Task::PauseReason::Bulk);
     }
+
+    if (Debug::Perf::IsCaptureEnabled())
+        Debug::Perf::Emit(L"FileOps.Queue.BulkPauseUs", paused ? L"pause" : L"resume", PerfElapsedUs(startedUs), tasks.size(), 0u, S_OK);
 }
 
 bool FolderWindow::FileOperationState::HasCancelableOperations() noexcept

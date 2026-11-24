@@ -1,0 +1,1 @@
+- File Operations checks the original and requested spelling after a failed case-only rename. It also uses the legacy rename call when Windows reports that the extended information class is unimplemented.

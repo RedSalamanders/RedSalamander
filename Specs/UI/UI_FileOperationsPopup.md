@@ -361,6 +361,10 @@ item calls `ApplyQueueMode(...)`, and choosing the current item is idempotent. I
 animated sliding thumb or keep a second UI-local mode state. It uses the shared DxUi current-value
 selector chrome: one whole click target, flat borderless rest state, quiet chevron, shared hover
 animation across the complete target, and no split-button divider or nested chevron button.
+The footer saves the selected mode through the deferred settings writer as the default for new
+submissions. A new owner loads that default, and missing settings use Queue. Starting a single task
+with an explicit mode leaves the saved default alone. The selecting owner's existing live transition
+and per-task safety interlocks continue to apply.
 
 A flyout opened from a popup button MUST use the invoking button's width as its minimum root-surface
 width. Longer localized labels, shortcut columns, and other flyout content may expand the surface
@@ -929,13 +933,14 @@ In high-contrast themes, the card-level stripe, applicable chip and tone semanti
 ok statuses retain a glyph plus text signal. The non-client caption status glyph is suppressed in
 high contrast so system caption contrast is not compromised.
 
-Queued file-operation cards MUST expose `Start now` before the task begins. The action releases only
-that task's wait gate and MUST NOT flip the global footer Queue/Parallel setting. The footer MUST
-expose a bulk `Pause all` command while any active started task is running and a bulk `Resume all`
-command when started tasks are paused with no unpaused running tasks. Bulk pause/resume toggles only
-the per-task manual pause state for started live tasks and MUST NOT clear queue gating or change the
-global Queue/Parallel mode. Discovering/preparing tasks that have not entered execution are not bulk-command
-eligible and MUST NOT change a `Resume all` decision back to `Pause all`.
+Queued file-operation cards expose `Start now` when the task is eligible to run and queue order
+holds its place. The action releases that task's queue-order wait and preserves the global footer
+Queue/Parallel setting. The footer exposes
+`Pause all` for live tasks that can be paused, including preparation and queue waits. Once paused in
+bulk, any remaining bulk pause keeps `Resume all` available, even if another task arrives.
+`Resume all` releases the pauses added by the bulk action. Individual pauses, decisions, queue
+gates and the Queue/Parallel mode keep their existing authority. A paused task can also be resumed
+from its own card.
 
 Every task has a stable engine-owned queue-order key. The popup orders all active cards by that one
 key, then by task ID, so a card does not change position when its task starts; only a reorder or a

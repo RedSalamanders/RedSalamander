@@ -14271,7 +14271,7 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
     _workerReleased.notify_all();
     {
         std::scoped_lock lock(_pauseMutex);
-        _paused.store(false, std::memory_order_release);
+        _pauseReason.store(PauseReason::None, std::memory_order_release);
     }
     UpdateKeepAwake(); // I63 G7: a stopping task counts as running until it finishes
     {
@@ -14300,35 +14300,39 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
     GetPerItemTaskScheduler().NotifyWorkAvailable();
 }
 
-void FolderWindow::FileOperationState::Task::SetPaused(bool paused) noexcept
+void FolderWindow::FileOperationState::Task::SetPaused(bool paused, PauseReason reason) noexcept
 {
+    bool pauseChanged = false;
     {
         std::scoped_lock lock(_pauseMutex);
-        // RequestCancel takes this same mutex to unpause. A stale UI or bulk-pause
-        // decision must not re-arm a pause after cancellation has been published.
-        if (paused && CancelRequestedDurable())
+        // RequestCancel takes this same mutex to clear pauses after publishing cancellation.
+        if (paused && (CancelRequestedDurable() || _taskFinished.load(std::memory_order_acquire)))
             return;
-        const bool wasPaused = _paused.load(std::memory_order_relaxed);
-        if (wasPaused == paused)
-        {
-            return;
-        }
 
-        _paused.store(paused, std::memory_order_release);
+        const PauseReason previous = _pauseReason.load(std::memory_order_relaxed);
+        if (reason == PauseReason::Bulk && previous == PauseReason::Individual)
+            return;
+
+        const PauseReason current = paused ? reason : PauseReason::None;
+        if (previous == current)
+            return;
+
+        _pauseReason.store(current, std::memory_order_release);
+        pauseChanged = (previous == PauseReason::None) != (current == PauseReason::None);
     }
 
-    MarkRateSamplingStateChanged();
-    UpdateKeepAwake(); // I63 G7: a paused task releases the request before it can resume and takes it before the worker wakes
-    if (! paused)
+    if (pauseChanged)
     {
-        _pauseCv.notify_all();
+        MarkRateSamplingStateChanged();
+        UpdateKeepAwake(); // The task drops its request on pause and reacquires it before the worker wakes.
+        if (! paused)
+            _pauseCv.notify_all();
     }
-    // Publish pause entry as well as resume: the popup must clear its retained rate before
-    // selecting the waiting cadence, rather than starting that transition on its first slow tick.
+    // The footer also needs changes to pause ownership when the task stays paused.
     if (_state)
         _state->RequestTaskPresentationRefresh();
-
-    GetPerItemTaskScheduler().NotifyWorkAvailable();
+    if (pauseChanged)
+        GetPerItemTaskScheduler().NotifyWorkAvailable();
 }
 
 void FolderWindow::FileOperationState::Task::NotifyTelemetryWorkResumed() noexcept
@@ -14341,7 +14345,7 @@ void FolderWindow::FileOperationState::Task::NotifyTelemetryWorkResumed() noexce
 
 void FolderWindow::FileOperationState::Task::TogglePause() noexcept
 {
-    SetPaused(! _paused.load(std::memory_order_acquire));
+    SetPaused(! IsPaused());
 }
 
 void FolderWindow::FileOperationState::Task::SetDesiredSpeedLimit(uint64_t bytesPerSecond) noexcept
@@ -14522,9 +14526,14 @@ ULONGLONG FolderWindow::FileOperationState::Task::GetEnteredOperationTick() cons
     return _enteredOperationTick.load(std::memory_order_acquire);
 }
 
+FolderWindow::FileOperationState::Task::PauseReason FolderWindow::FileOperationState::Task::GetPauseReason() const noexcept
+{
+    return _pauseReason.load(std::memory_order_acquire);
+}
+
 bool FolderWindow::FileOperationState::Task::IsPaused() const noexcept
 {
-    return _paused.load(std::memory_order_acquire);
+    return GetPauseReason() != PauseReason::None;
 }
 
 bool FolderWindow::FileOperationState::Task::IsWaitingForOthers() const noexcept
@@ -14737,7 +14746,7 @@ void FolderWindow::FileOperationState::Task::UpdateKeepAwake() noexcept
         facts.admitted       = _reservedOperation.load(std::memory_order_acquire) || _enteredOperation.load(std::memory_order_acquire);
         facts.finished       = _taskFinished.load(std::memory_order_acquire);
         facts.stopping       = CancelRequestedDurable();
-        facts.userPaused     = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+        facts.userPaused     = IsPaused() || _queuePaused.load(std::memory_order_acquire);
         facts.awaitingAnswer = _awaitingUserDecision.load(std::memory_order_acquire) && _awaitingAnswerQuiet.load(std::memory_order_acquire);
         return facts;
     });
@@ -15115,7 +15124,7 @@ void FolderWindow::FileOperationState::Task::WaitWhilePaused(const std::atomic<b
         {
             return;
         }
-        const bool shouldPause     = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+        const bool shouldPause     = IsPaused() || _queuePaused.load(std::memory_order_acquire);
         bool shouldWaitForConflict = false;
         {
             std::scoped_lock lock(_conflictArbiter.mutex);
@@ -15138,7 +15147,7 @@ void FolderWindow::FileOperationState::Task::WaitWhilePaused(const std::atomic<b
             _pauseCv.wait(lock,
                           [&]
             {
-                const bool stillPaused = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+                const bool stillPaused = IsPaused() || _queuePaused.load(std::memory_order_acquire);
                 return ! stillPaused || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested() ||
                        (externalStop != nullptr && externalStop->load(std::memory_order_acquire));
             });
@@ -15151,7 +15160,7 @@ void FolderWindow::FileOperationState::Task::WaitWhilePaused(const std::atomic<b
         _conflictArbiter.cv.wait(lock,
                                  [&]
         {
-            const bool stillPaused = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+            const bool stillPaused = IsPaused() || _queuePaused.load(std::memory_order_acquire);
             const bool waitingForConflict =
                 _conflictArbiter.prompt.active && _conflictArbiter.ownerThreadId != 0 && _conflictArbiter.ownerThreadId != currentThreadId;
             const bool ready = ! waitingForConflict || stillPaused || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested() ||
@@ -29276,5 +29285,8 @@ void FolderWindow::ApplyFileOperationSettings() noexcept
     const uint32_t limit = _settings && _settings->fileOperations.has_value() ? _settings->fileOperations->maxParallelTransfers : 4u;
     GetConnectionConcurrencyLimiter().ConfigureSharedTransfers(limit);
     if (_fileOperations)
+    {
+        _fileOperations->LoadQueueDefaultFromSettings();
         _fileOperations->NotifyQueueChanged();
+    }
 }

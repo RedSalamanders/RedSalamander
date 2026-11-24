@@ -566,3 +566,6 @@ Specs/TestRuns/4cb089111a23/Terminal/20261029_175658_ci146-ghostty14-current/** 
 /Specs/TestRuns/4cb089111a23/Testing/2026-11-14_225602_DxUiGitCapture/** -text -whitespace
 
 /Specs/TestRuns/Local-x64/FileOps/2026-11-20_142303_PausedRateSource/** -text -whitespace
+/Specs/TestRuns/Local-x64/FileOps/2026-11-24_140134/perf_metrics.jsonl -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-11-24_155152/perf_metrics.jsonl -text -whitespace
+/Specs/TestRuns/4cb089111a23/FileOps/2026-11-24_161520/perf_metrics.jsonl -text -whitespace

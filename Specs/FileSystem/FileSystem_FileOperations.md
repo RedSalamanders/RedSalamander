@@ -2574,7 +2574,16 @@ conflict again is a contract failure, not a reason to reprompt indefinitely. The
 that receipt in one conditional `RenameIfUnchanged` attempt, obtains a fresh receipt after a proven
 replacement race, or terminates without mutating either object.
 
-Case-only Local rename uses an exclusive cryptographically unpredictable temporary sibling
+The Local provider's exact bound rename tries `FileRenameInfoEx` and uses one legacy
+`FileRenameInfo` call on the same handle when the information class is rejected, including
+`ERROR_CALL_NOT_IMPLEMENTED`. Both calls preserve the approved replacement policy. Access denial
+and other failures use the existing outcome reconciliation. For a case-only request with a failed
+rename report, the identity probe also verifies the exact leaf on the opened object. Only the proved
+destination spelling yields a committed result, and only the proved original spelling yields a
+known non-commit. Both names resolving exactly to the same identity, or unavailable spelling proof,
+leaves the result unknown.
+
+The pathname-based Local case-only fallback uses an exclusive cryptographically unpredictable temporary sibling
 (`<leaf>.<32 hex>.rs-bak`). Entropy
 failure or a raced existing temporary name stops before the source is moved; the temporary hop never
 uses replacement semantics against an unowned object.
@@ -2644,6 +2653,12 @@ The File Operations UI exposes no Batch Rename Resume or Roll back action. Its c
 report is informational only and grants no mutation authority.
 
 ## Cancellation and lifetime
+
+Pause all captures the unfinished live tasks in the current File Operations owner. Preparation
+may still perform nonmutating work before the execution gate. Resume all releases bulk pauses and
+preserves prior individual pauses, queue order, overlap waits, transfer admission and decisions.
+Later admissions start with their normal state. An individual Resume releases that task's explicit
+pause and preserves its independent wait gates.
 
 Task cancellation or stop exits every host pause/conflict wait even while Queue mode
 or a peer-owned conflict remains active. A cancelled queue-paused transfer drains
@@ -3516,7 +3531,8 @@ mutate only objects proven created/changed by the original task.
 
 Host settings:
 
-- `fileOperations.mode`: Queue or Parallel;
+- `fileOperations.queueNewTasks`: saved popup default for new work (Boolean, `true` for Queue on a
+  fresh profile and `false` for Parallel). An explicit Start option applies to that submission.
 - concurrency and bandwidth controls already exposed;
 - `fileOperations.verifyAfterCopy`: Boolean, default false;
 - `fileOperations.maxParallelTransfers`: integer, default four, range one through sixteen;

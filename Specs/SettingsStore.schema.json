@@ -1222,6 +1222,12 @@
           "title": "Expanded Throughput",
           "description": "Use an expanded throughput graph by default for new or recreated eligible file-operation task cards. Existing cards keep their current live disclosure state."
         },
+        "queueNewTasks": {
+          "type": "boolean",
+          "default": true,
+          "title": "Queue New Tasks",
+          "description": "Use Queue as the default for new file operations. The File Operations popup saves Parallel when the value is false."
+        },
         "verifyAfterCopy": {
           "type": "boolean",
           "default": false,

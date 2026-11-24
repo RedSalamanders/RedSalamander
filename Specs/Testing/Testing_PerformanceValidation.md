@@ -2585,6 +2585,24 @@ files/folders/bytes must represent committed removals even before a selected roo
 metrics/results and harness captures under the governed archive limits; report any missing baseline
 or blocked profile rather than inferring a speedup or full qualification from these focused runs.
 
+## Local exact Rename receipts
+
+The Debug object-binding export uses owned Local files to exercise a refused case-only request,
+a legacy no-replace collision, a legacy free-name publish, and recovery of a case-only commit
+after a failed report. It checks storage spelling, independent file identity, retained occupant
+content and receipt axes. `FileOps.Local.ExactRenameSelfTestUs` records bounded call duration,
+publication and outcome-known flags. `FileOps.Local.RenameLegacyFallback` counts actual legacy
+attempts. The injected information-class refusal needs separate Windows SMB and Samba coverage.
+
+## Live SMB exact Rename
+
+`FileOps_SmbExactRenameProvider` uses the configured SMB test child to verify nested new-name and
+case-only Rename through the Local provider, an occupied destination and a read-data watcher that
+denies delete sharing. The watcher must produce a sharing violation. It rebinds the published object and checks the receipt, spelling and payload. Collect
+`FileOps.Smb.ExactRenameControlUs` for a single item and 100 independent operations, including
+rebind verification. The case explicitly skips a proved absence of exact binding capability.
+Full Rename qualification also needs host cancellation, handle peaks and corroborated routes.
+
 ## Preparing status and popup cadence
 
 `FileOps_PopupIdleCadence` checks the full Preparing status before execution and at the first
@@ -2593,6 +2611,17 @@ whole second with a fixed clock. The short chip stays stable and queue status ha
 the preparation clock restarts before execution. Compare the existing
 `FileOps.PopupCadence.Counters` rows for matching running, paused, prompting, queued and idle
 fixtures. `FileOps.Admission.TaskLayoutBytes` tracks the per-task storage cost.
+
+`FileOps_PopupIdleCadence` also selects the opposite Queue/Parallel footer mode on an idle,
+non-activating application owner, flushes pending writes, and creates a second owner from the saved
+settings. It restores the original saved and live modes before measuring cadence. Capture
+`FileOps.Settings.EnqueueUs` and `FileOps.Settings.SaveUs` for the `queue default` changes to account
+for foreground enqueue and deferred persistence separately.
+
+The same case checks bulk pause ownership with a private engine. It exercises the capture of
+preparing and queued tasks, a prior individual pause, a stopping task and a later admission. The
+popup model keeps a captured queue wait and keeps Resume all available when another task arrives.
+Capture `FileOps.Queue.BulkPauseUs` for the duration and visited task count of each command.
 
 ## Completed-card collapse after telemetry stops (2026-10-18)
 

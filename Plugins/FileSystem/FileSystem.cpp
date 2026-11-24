@@ -22,6 +22,8 @@
 #include <winioctl.h>
 #include <winternl.h>
 
+#include <wil/filesystem.h>
+
 #include <yyjson.h>
 
 #pragma comment(lib, "Shell32.lib")
@@ -112,6 +114,9 @@ constexpr std::wstring_view kDeleteByNameEntryBudgetEnvVar = L"REDSALAMANDER_FIL
 constexpr std::wstring_view kDeleteByNameListWithoutIndexEnvVar = L"REDSALAMANDER_FILEOPS_BYNAME_LIST_WITHOUT_INDEX";
 constexpr std::wstring_view kRenameCommittedFailurePathEnvVar   = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_PATH";
 constexpr std::wstring_view kRenameCommittedFailureFiredEnvVar  = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_FIRED";
+constexpr std::wstring_view kRenameExFailurePathEnvVar          = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_PATH";
+constexpr std::wstring_view kRenameExFailureErrorEnvVar         = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_ERROR";
+constexpr std::wstring_view kRenameExFailureFiredEnvVar         = L"REDSALAMANDER_FILEOPS_RENAME_EX_FAILURE_FIRED";
 constexpr std::wstring_view kDeleteCommittedFailurePathEnvVar   = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_PATH";
 constexpr std::wstring_view kDeleteCommittedFailureFiredEnvVar  = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_FIRED";
 constexpr std::wstring_view kDeleteCommittedRetainedPathEnvVar  = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_RETAINED_PATH";
@@ -4639,22 +4644,29 @@ public:
         renameInfo->FileNameLength = static_cast<DWORD>(fileNameBytes);
         std::memcpy(renameInfo->FileName, extendedDestination.data(), fileNameBytes);
 
-        bool renamed = SetFileInformationByHandle(_file.get(), FileRenameInfoEx, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE;
-        DWORD error  = renamed ? ERROR_SUCCESS : GetLastError();
-        if (! renamed)
+        bool renamed = false;
+        DWORD error  = ERROR_SUCCESS;
+#if defined(ENABLE_TESTS)
+        if (ConsumeMatchingPathInjectionForSelfTest(
+                destinationPath, kRenameExFailurePathEnvVar, kRenameExFailureFiredEnvVar, L"FileOps.Local.RenameExFailureInjected"))
         {
-            if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
-            {
-                renameInfo->ReplaceIfExists = replaceIfExists != FALSE ? static_cast<BOOLEAN>(TRUE) : static_cast<BOOLEAN>(FALSE);
-                if (SetFileInformationByHandle(_file.get(), FileRenameInfo, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE)
-                {
-                    renamed = true;
-                }
-                else
-                {
-                    error = GetLastError();
-                }
-            }
+            error = ReadSelfTestMetadataMask(kRenameExFailureErrorEnvVar);
+        }
+        else
+#endif
+        {
+            renamed = SetFileInformationByHandle(_file.get(), FileRenameInfoEx, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE;
+            error   = renamed ? ERROR_SUCCESS : GetLastError();
+        }
+        if (! renamed &&
+            (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED || error == ERROR_CALL_NOT_IMPLEMENTED))
+        {
+            // A rejected information class permits one legacy call with the same handle and replacement policy.
+            Debug::Perf::EmitCounter(L"FileOps.Local.RenameLegacyFallback");
+            renameInfo->Flags           = 0u;
+            renameInfo->ReplaceIfExists = static_cast<BOOLEAN>(replaceIfExists != FALSE);
+            renamed                     = SetFileInformationByHandle(_file.get(), FileRenameInfo, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE;
+            error                       = renamed ? ERROR_SUCCESS : GetLastError();
         }
 
 #if defined(ENABLE_TESTS)
@@ -4669,9 +4681,18 @@ public:
 #endif
         if (! renamed)
         {
-            bool sameAtDestination    = false;
-            const HRESULT reconcileHr = PathRefersToThisObject(extendedDestination, sameAtDestination);
-            if (SUCCEEDED(reconcileHr) && sameAtDestination)
+            const std::wstring extendedOriginal = FileSystemInternal::ToExtendedPath(_path);
+            const bool caseOnly                 = FileSystemInternal::GetPathLeaf(extendedOriginal) != FileSystemInternal::GetPathLeaf(extendedDestination) &&
+                                                  OrdinalString::EqualsNoCase(extendedOriginal, extendedDestination);
+            bool sameAtDestination              = false;
+            bool sameAtOriginal                 = false;
+            const HRESULT destinationHr         = PathRefersToThisObject(extendedDestination, caseOnly, sameAtDestination);
+            const bool atDestination            = SUCCEEDED(destinationHr) && sameAtDestination;
+            const HRESULT originalHr            = ! atDestination || caseOnly ? PathRefersToThisObject(extendedOriginal, caseOnly, sameAtOriginal) : S_FALSE;
+
+            // A case-insensitive open can find the same object under either spelling. Require the reported
+            // leaf spelling and rule out a second matching name before reducing a case-only result.
+            if (atDestination && (! caseOnly || (SUCCEEDED(originalHr) && ! sameAtOriginal)))
             {
                 _path                        = destinationPath;
                 result->mutationCommitted    = TRUE;
@@ -4679,10 +4700,7 @@ public:
                 return S_OK;
             }
 
-            bool sameAtOriginal      = false;
-            const HRESULT originalHr = IsRetainedHandleIdentity(_identity) ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
-                                                                           : PathRefersToThisObject(FileSystemInternal::ToExtendedPath(_path), sameAtOriginal);
-            if (SUCCEEDED(originalHr) && sameAtOriginal)
+            if (SUCCEEDED(originalHr) && sameAtOriginal && (! caseOnly || (SUCCEEDED(destinationHr) && ! sameAtDestination)))
             {
                 return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
             }
@@ -4860,7 +4878,7 @@ private:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT PathRefersToThisObject(const std::wstring& extendedPath, bool& same) const noexcept
+    [[nodiscard]] HRESULT PathRefersToThisObject(const std::wstring& extendedPath, bool requireExactLeaf, bool& same) const noexcept
     {
         same = false;
         if (IsRetainedHandleIdentity(_identity))
@@ -4890,7 +4908,22 @@ private:
         {
             return identityHr;
         }
-        same = std::memcmp(&currentIdentity, &_identity, sizeof(_identity)) == 0;
+        if (std::memcmp(&currentIdentity, &_identity, sizeof(_identity)) != 0)
+        {
+            return S_OK;
+        }
+        if (requireExactLeaf)
+        {
+            wil::unique_cotaskmem_string normalizedPath;
+            const HRESULT pathHr = wil::GetFinalPathNameByHandleW(current.get(), normalizedPath, wil::VolumePrefix::None);
+            if (FAILED(pathHr))
+            {
+                return pathHr;
+            }
+            same = normalizedPath && FileSystemInternal::GetPathLeaf(normalizedPath.get()) == FileSystemInternal::GetPathLeaf(extendedPath);
+            return S_OK;
+        }
+        same = true;
         return S_OK;
     }
 
