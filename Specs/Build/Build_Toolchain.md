@@ -917,14 +917,16 @@ and unmaps `R:`. An existing mapping is never removed automatically: the builder
 reports the mapping and the exact manual inspection/removal commands. Every native
 child is launched through the kill-on-close containment helper.
 
-Locked Ghostty/Zig source archive downloads retry only curl's documented transient transport/HTTP failures,
-including HTTP 504, up to three retries with a two-second delay. Connection establishment is bounded to 20s
-and each transfer attempt to 120s; the retry-start window is 360s and the contained download process has a
-separate 540s failure bound. The existing output-drain bound still applies. A permanent HTTP failure remains
-fatal and successful transport never waives exact archive/content/executable/license hashes or layout checks.
-Offline runs never download. Partial files are never accepted as a qualified archive. See the
-[curl retry contract](https://curl.se/docs/manpage.html#--retry); this policy retries the dependency operation,
-without retrying or relabeling an entire native build/test campaign.
+Locked Ghostty and Zig archive downloads retry curl's documented transient transport and HTTP failures,
+including HTTP 504, up to three times with a two-second delay. Connection establishment has a 20-second
+deadline and the retry-start window is 360 seconds. Source archives allow 120 seconds per transfer and a
+540-second contained process. The pinned Zig toolchain archive allows 3,600 seconds per transfer to
+accommodate sustained low bandwidth on hosted runners. Curl ends a Zig transfer when the rate stays below
+1,024 bytes per second for 120 seconds. The 4,020-second contained process deadline covers the retry-start
+window, one full Zig transfer and 60 seconds of margin. The 120-second post-exit output deadline also applies.
+Permanent HTTP failures fail the build. Archive, content, executable and license hash checks and layout
+checks are required after download. Offline runs use the verified cache. Partial files cannot qualify.
+The retry applies to the dependency download. [curl retry contract](https://curl.se/docs/manpage.html#--retry)
 
 Packaging has a separate repository-wide coordination scope because x64 and
 ARM64 packaging can both publish beneath `.build\AppPackages`. The lock is acquired

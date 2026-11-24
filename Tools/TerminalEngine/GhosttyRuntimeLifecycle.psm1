@@ -8,11 +8,22 @@ Import-Module $exportIdentityModule -Scope Local -ErrorAction Stop
 Import-Module $canonicalJsonModule -Scope Local -ErrorAction Stop
 
 function Get-RSGhosttyRuntimeDownloadArguments {
-    param([Parameter(Mandatory)][string]$Uri,[Parameter(Mandatory)][string]$Destination)
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter(Mandatory)][string]$Destination,
+        [switch]$ZigToolchainArchive
+    )
+
     # curl retries only its documented transient transport/HTTP failures. Permanent HTTP errors and
     # successful-but-wrong bytes still fail through the existing exit, archive and exact SHA-256 gates.
+    $transferBounds = if ($ZigToolchainArchive) {
+        # Hosted runners can make steady progress on the 100 MB toolchain at tens of KB per second.
+        @('--max-time', '3600', '--speed-limit', '1024', '--speed-time', '120')
+    } else {
+        @('--max-time', '120')
+    }
     return @('--fail', '--location', '--silent', '--show-error', '--retry', '3', '--retry-delay', '2',
-        '--retry-max-time', '360', '--connect-timeout', '20', '--max-time', '120', '--output', $Destination, $Uri)
+        '--retry-max-time', '360', '--connect-timeout', '20') + $transferBounds + @('--output', $Destination, $Uri)
 }
 
 function Assert-RSGhosttyRuntimeLockHash {
@@ -891,10 +902,11 @@ inline constexpr std::wstring_view kSha256 = L"$Sha256";
             Remove-Item -LiteralPath $temporaryArchive -Force
         }
         $curlCommand = Get-Command curl.exe -ErrorAction Stop
+        # The contained-process bound covers the retry-start window, one full transfer and 60 seconds of margin.
         [void](Invoke-CheckedProcess `
                 -FilePath $curlCommand.Source `
-                -ArgumentList (Get-RSGhosttyRuntimeDownloadArguments -Uri $zigArchiveUri -Destination $temporaryArchive) `
-                -TimeoutSeconds 540 `
+                -ArgumentList (Get-RSGhosttyRuntimeDownloadArguments -Uri $zigArchiveUri -Destination $temporaryArchive -ZigToolchainArchive) `
+                -TimeoutSeconds 4020 `
                 -WorkingDirectory $downloadsRoot)
         Move-Item -LiteralPath $temporaryArchive -Destination $zigArchive
     }

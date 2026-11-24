@@ -120,9 +120,11 @@ Validation rejections retain a `validation_acceptance` failure with the rejected
 contract's reason codes. Unallowed skips name the missing cases; successful
 assertions and earlier failure details remain visible in the same result.
 
-Locked Ghostty/Zig archive downloads use bounded transient HTTP/transport retries before failing the
-build. Permanent failures, wrong hashes and invalid archive layouts remain fatal; offline builds do not
-download. See `Build-GhosttyTerminalRuntime.ps1` help and `Specs/Build/Build_Toolchain.md` for the bounds.
+Locked Ghostty and Zig archive downloads retry transient HTTP and transport failures within fixed time
+limits. The pinned Zig toolchain has a longer transfer deadline and a minimum transfer rate to handle
+slow hosted runners. Permanent failures, wrong hashes and invalid archive layouts fail the build.
+Offline builds use the verified cache. See `Build-GhosttyTerminalRuntime.ps1` help and
+`Specs/Build/Build_Toolchain.md` for the bounds.
 
 The manual native suite defaults to Full. Its explicit CommandsHandoff, FileOpsVolumes and
 ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
