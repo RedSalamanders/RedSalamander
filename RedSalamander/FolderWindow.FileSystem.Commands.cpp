@@ -10598,6 +10598,11 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     if (RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
         return;
 
+    const HWND folderWindow = _hWnd.get();
+    const FileOperationPromptDispatchScope promptDispatch(*this);
+    const auto ownerAvailable = [&]() noexcept
+    { return ! _fileOperationResetDeferred && folderWindow && _hWnd.get() == folderWindow && IsWindow(folderWindow) != FALSE; };
+
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     if (! state.fileSystem)
@@ -10627,6 +10632,8 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     const std::filesystem::path base = folder.value();
     const auto showFailure           = [&](std::wstring_view path, HRESULT failure) noexcept
     {
+        if (! ownerAvailable())
+            return;
         std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         std::wstring message;
         if (failure == E_NOTIMPL || failure == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
@@ -10643,9 +10650,10 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     };
 
     const HWND folderViewToRestore    = state.hFolderView.get();
-    const auto restoreFolderViewFocus = wil::scope_exit([this, pane, folderViewToRestore]() noexcept
+    const auto restoreFolderViewFocus = wil::scope_exit([&, folderViewToRestore]() noexcept
     {
-        if (folderViewToRestore && IsWindow(folderViewToRestore) != FALSE)
+        if (ownerAvailable() && ! IsFileOperationsExitPending() && folderViewToRestore && state.hFolderView.get() == folderViewToRestore &&
+            IsWindow(folderViewToRestore) != FALSE)
         {
             SetActivePane(pane);
             FocusPaneFolderView(pane);
@@ -10666,6 +10674,8 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         return;
     }
 
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+        return;
     EnsureFileOperations();
     if (! _fileOperations)
     {
@@ -10694,8 +10704,10 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     }
 
     const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(pluginShortId, instanceContext, base);
-    const auto folderName                   = PromptForCreateDirectoryName(ownerWindow, displayPath.wstring(), initialName, _theme);
-    if (! folderName.has_value() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+        return;
+    const auto folderName = PromptForCreateDirectoryName(ownerWindow, displayPath.wstring(), initialName, _theme);
+    if (! folderName.has_value() || ! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
         return;
 
     const std::wstring requestedName = folderName.value();
@@ -10718,6 +10730,8 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
             showFailure(candidateName, admissionHr);
             return;
         }
+        if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+            return;
         const std::filesystem::path& newFolderPath = createAdmission.candidateProviderPath;
 
         HRESULT hr = S_OK;
@@ -10749,6 +10763,8 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
             };
             DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
             cache.NotifyPathCreated(fileSystem.get(), newFolderPath);
+            if (! ownerAvailable())
+                return;
             if (displaysParent(state))
             {
                 state.folderView.RememberFocusedItemForFolder(base, candidateName);
@@ -10767,6 +10783,8 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         constexpr HRESULT fileExistsHr    = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
         if (autoSuffix && (hr == alreadyExistsHr || hr == fileExistsHr))
         {
+            if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+                return;
             continue;
         }
 

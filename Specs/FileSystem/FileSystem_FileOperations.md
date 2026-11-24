@@ -13,8 +13,9 @@ development. The host, every shipped provider, Dummy, and all tests use one ABI 
 no capability-v1 adapter or dual parser.
 
 Create Directory uses the provider command path and the typed admission contract. An accepted
-application exit or window close refuses it before the name prompt and at submission. The prompt
-captures the provider instance and parent, so later pane navigation cannot redirect the operation.
+application exit or window close refuses it before the name prompt and at submission. An owner
+shut down while the modal prompt dispatches messages cannot admit the mutation. The prompt captures
+the provider instance and parent, so later pane navigation cannot redirect the operation.
 Completion refreshes a pane only when it still displays that parent on the captured route.
 Admission keeps the provider's name or route failure for the pane feedback.
 The host queries capability v2 for the concrete parent and provider-joined candidate with
