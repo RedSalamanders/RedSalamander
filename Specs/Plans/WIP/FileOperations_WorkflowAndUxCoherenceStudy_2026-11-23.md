@@ -12,6 +12,9 @@ passed through its exact no-activation selection. The branch also contains the f
 and throughput changes. Implementation started at `bbb57a572`. Drift from the study baseline affected the ancestry-cleanup
 test and its evidence contracts.
 
+Non-activating x64 Debug PrePush finished with one Git metadata fixture failure. The focused rerun passed.
+The broad result and four pending interactive entries are recorded below.
+
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
   - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
@@ -113,6 +116,15 @@ test and its evidence contracts.
   `folderView_drop_integrity_guards` selection used the same x64 Debug receipt, reported zero pending interactive
   entries, and passed in `20261124T102827Z-74852-3e73f64a46ac464cad850a29feed1a0f`. Both focused native runs
   reported `NOT_EVALUATED` at repository scope.
+
+- Non-activating x64 Debug PrePush on `ee6b50125` built the full solution with zero warnings and zero errors.
+  Run `20261124T103514Z-56072-2c2e7c56ea8d414db4ac0a1efb117d4c`, final receipt
+  `0ebf0408ac73876d33fdccf4295efff3dd8917ee68a5b5415c53564d82d8fb6b`. The run recorded 1,798 passed, one failed, and 27 skipped.
+  Thirteen of fourteen entries passed their gates. The unchanged Git metadata fixture found a `sleep` process
+  when it looked up an exited PowerShell probe by numeric PID. Its focused group passed all three cases on the
+  same head in run `20261124T111258Z-31232-3274593ad723444a99aecc4248262b88`. The broad verdict remains `FAILED`.
+  Commands, File Operations, and both interactive viewer entries remain pending. The sandbox audit reported
+  the same 13 existing findings as the earlier broad run.
 
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.
