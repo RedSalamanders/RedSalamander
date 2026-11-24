@@ -5198,7 +5198,7 @@ Specs\TestRuns\local_scratch
         $threadMainBlock | Should Match '_workerReleased\.store\(true[\s\S]{0,120}_workerReleased\.notify_all\(\)'
         $threadMainBlock | Should Match '_workerReleased\.wait\(false,'
         $requestCancelStart = $state.IndexOf('void FolderWindow::FileOperationState::Task::RequestCancel() noexcept')
-        $requestCancelEnd = $state.IndexOf('void FolderWindow::FileOperationState::Task::SetPaused(bool paused) noexcept', $requestCancelStart)
+        $requestCancelEnd = $state.IndexOf('void FolderWindow::FileOperationState::Task::SetPaused(', $requestCancelStart)
         $requestCancelStart | Should BeGreaterThan -1
         $requestCancelEnd | Should BeGreaterThan $requestCancelStart
         $requestCancelBlock = $state.Substring($requestCancelStart, $requestCancelEnd - $requestCancelStart)

@@ -6,6 +6,19 @@
 
 ## Implementation checklist
 
+**RubyGloom F2 qualification (2026-11-24).** The no-activation x64 Debug run
+`20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` hit a callback-scope assertion during
+Preparing. The isolated process was stopped and the failed trace and assertion were preserved.
+The candidate now opens the callback scope during provider capture and explicitly routes standard
+assertions to stderr in test processes. The rebuilt failure-report control and live Rename rerun
+are pending.
+
+**Queue and pause qualification (2026-11-24).** The x64 Release `FileOps_PopupIdleCadence` run
+`20261124T162210Z-62860-6cd00aef04f241ceacedc1d1d503eb17` passed setup, the case and cleanup.
+The previous Debug PrePush was stopped to correct the scheduler source test's typed pause boundary.
+That source test group passed all 192 checks in `20261124T163442Z-63668-ee7d2800de8c432db58fb14adf325401`.
+The exact candidate still needs a complete non-activating PrePush.
+
 **Follow-up qualification (2026-11-24).** Scoped PrePush on `e3e5ac280` built cleanly. Its standalone settings entry
 failed because the Queue default regression fixture attempted to write over seeded legacy settings without the loaded
 revision. The correction in `5d35248ee` keeps that revision. Its targeted x64 Debug run
@@ -91,7 +104,8 @@ PrePush is the next merge gate.
   - [x] Verify that the popup stores Queue/Parallel and a new owner reads the saved default.
   - [x] Verify bulk pause ownership in the engine and popup model. Preparing and queued tasks are included.
     Resume all preserves the earlier individual pause and queue gate. The paired cadence measurements and
-    save timings are in [the focused x64 Debug record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_155152/README.md).
+    save timings are in the [x64 Debug record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_155152/README.md)
+    and [x64 Release record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_163108/README.md).
   - [ ] Verify the Start option's one-submission scope and the new pause behavior through the full interactive
     walkthrough, including focus, UIA, and a pending mutation.
 - [ ] **S6–S7.** Options parity, asynchronous Create Directory and archives, and useful results. Preserve saved
