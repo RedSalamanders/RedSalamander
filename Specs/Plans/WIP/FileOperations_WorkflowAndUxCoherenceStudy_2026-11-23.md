@@ -6,6 +6,18 @@
 
 ## Implementation checklist
 
+**Delivery checkpoint (2026-11-24).**
+
+- [x] Merged ingress, Local Recycle batching and Preparing progress through [PR #246](https://github.com/RedSalamanders/RedSalamander/pull/246).
+- [x] Merged exact Rename, Queue/Parallel persistence and pause ownership through [PR #247](https://github.com/RedSalamanders/RedSalamander/pull/247). The x64 Debug Windows SMB and x64 Release popup-cadence cases passed.
+- [x] Merged corroborated F2 Rename and the Preparing assertion repair through [PR #248](https://github.com/RedSalamanders/RedSalamander/pull/248). Live Samba x64 Debug and Release passed the guarded Rename and fixture cleanup.
+- [x] Merged the bounded pinned Zig download fix through [PR #250](https://github.com/RedSalamanders/RedSalamander/pull/250). A fresh x64 Debug solution build verified the archive and executable hashes and emitted zero warnings and errors.
+- [x] Passed the authorized x64 Debug decision-mirror focus, queue order and Clear completed checks in `20261124T194522Z-93024-b369633f9e2a41aab5bf8a539d4d9d13`. This pass exercised the repeat-choice build and ended in under three minutes.
+- [ ] Land the typed Recycle and repeat-choice contracts in [PR #249](https://github.com/RedSalamanders/RedSalamander/pull/249) and [PR #251](https://github.com/RedSalamanders/RedSalamander/pull/251). Their x64 Debug exact cases passed. Broader local results and real remote Recycle are open.
+- [ ] Finish Create Directory admission and shared bandwidth presets in [PR #252](https://github.com/RedSalamanders/RedSalamander/pull/252) and [PR #253](https://github.com/RedSalamanders/RedSalamander/pull/253). The initial focused x64 Debug cases passed. The modal-exit and current-main preset retests are running.
+- [ ] Verify clean-only Completed grouping. The implementation and private popup witness keep failed, partial, uncertain and warning results outside Clear completed. All 66 focused runner-plan checks passed. Native evidence is pending.
+- [ ] Finish the stage gates below and qualify native x64 and ARM64. [The first main Release run with the repaired download window](https://github.com/RedSalamanders/RedSalamander/actions/runs/45474460298) awaits a result.
+
 **Samba F2 Rename (2026-11-24).** No-activation run
 `20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` reached an active-callback assertion while
 Preparing captured the selected source. The owned process was stopped and the failure artifacts were retained. The task now declares a balanced callback scope around
@@ -18,7 +30,12 @@ operation. The final x64 Debug run `20261124T173007Z-100696-ce72a4511ad04f9e9076
 setup, the live case and cleanup. It verified folder and case-only Rename, Keep both, cancellation,
 refusal after a source change and 100 provider renames. The zero-warning, zero-error build and metrics
 are recorded in the [Samba archive](../../TestRuns/4cb089111a23/FileOps/2026-11-24_173737/README.md).
-Release, native ARM64 and the remaining Rename entry points are open.
+The exact [PR #248](https://github.com/RedSalamanders/RedSalamander/pull/248) head also passed live
+x64 Release in `20261124T184411Z-73888-00b41fc751a8491c9177872df1459797`. Its 100 Rename operations took
+23.912 seconds. The related non-activating Debug PrePush recorded 1,801 passes, one unchanged
+ProcessStreaming timeout and 26 environment skips. The original failure is retained. All 18
+ProcessStreaming checks passed in isolation on the same head. Native ARM64 and the remaining Rename
+entry points are open.
 
 **Queue and pause qualification (2026-11-24).** The x64 Release `FileOps_PopupIdleCadence` run
 `20261124T162210Z-62860-6cd00aef04f241ceacedc1d1d503eb17` passed setup, the case and cleanup.
@@ -29,8 +46,7 @@ non-activating x64 Debug PrePush reported 1,799 passes, one S3 timing failure an
 `20261124T164838Z-89552-dffa46df698d44afb067f341a3560aba`. PluginContractTests passed on the same
 verified binaries in isolated run `20261124T180310Z-86824-456dbfff52324fbea1ca3dccb4c3a99d`. The
 final head added a test alignment change and passed the affected settings and hosted checks.
-Four desktop entries and [main native Release qualification](https://github.com/RedSalamanders/RedSalamander/actions/runs/45455678346)
-remain open.
+Four broad desktop entries remain open. Both [main native Release jobs for this head](https://github.com/RedSalamanders/RedSalamander/actions/runs/45456742533) failed while downloading the pinned Zig archive before native test execution.
 
 **Follow-up qualification (2026-11-24).** Scoped PrePush on `e3e5ac280` built cleanly. Its standalone settings entry
 failed because the Queue default regression fixture attempted to write over seeded legacy settings without the loaded
