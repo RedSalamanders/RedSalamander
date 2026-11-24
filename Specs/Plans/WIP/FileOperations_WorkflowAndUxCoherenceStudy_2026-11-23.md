@@ -21,8 +21,9 @@ Four desktop-lease entries and the qualification below remain open.
 
 The follow-up x64 Debug PR selection on `842ac811a` executed 12 entries with 1,507 passes and zero failures.
 Repository coverage remains `NOT_EVALUATED`. The current candidate also includes Queue/Parallel persistence,
-bulk-pause ownership and a dedicated live SMB Rename case. The first combined build stopped because the new case was
-missing from the SMB child family. The family is now registered. A fresh native run remains required.
+bulk-pause ownership and a dedicated live SMB Rename case. Correcting the SMB child-family registration cleared the
+first build failure. The selected x64 Debug build on `6df121e23` completed with zero warnings and zero errors, and
+the non-activating popup and repeat-decision selections passed. The next gate is the scoped PrePush run.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
@@ -45,8 +46,11 @@ missing from the SMB child family. The family is now registered. A fresh native 
     [The x64 Debug record](../../TestRuns/Local-x64/FileOps/2026-11-24_140134/README.md) retains their timings and receipts.
   - [x] Register the approved SMB test directory and confirm a read-only listing and mapping through `remote_file_smb`.
     The case passed in run `20261124T143343Z-95336-b6a780d1e7104d7092573afd510ba4d0`.
-  - [ ] Run the dedicated exact Rename case on the registered endpoint. The second SMB server implementation still
-    needs an approved target.
+  - [x] Exercise the exact Rename eligibility check on the registered SMB endpoint. The Local provider opened the
+    owned file and corroborated that exact file identity was unavailable. The Rename case skipped in run
+    `20261124T145318Z-86896-cf65eb1fac8447518ff7509d6d3dfe51`.
+  - [ ] Qualify live exact Rename on supported SMB endpoints and the corroborated route on the registered endpoint.
+    The second SMB server implementation still needs an approved target.
   - [ ] Verify FTP and SCP with isolated test credentials. The dedicated profile selectors are registered and the
     scoped authentication setup was blocked before a live run.
   - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
@@ -62,12 +66,16 @@ missing from the SMB child family. The family is now registered. A fresh native 
   - [ ] Collect paired allocation, timing, history and active-peer evidence.
 - [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
   Match card and mirror scopes and authority, including stage cleanup and post-publication results.
+  - [x] Rerun the existing repeat-decision contract. The x64 Debug selection passed in
+    `20261124T145409Z-86896-a97bc8a5503d4a98b153e3aba31f7647`.
 - [ ] **S4–S5.** Queue controls and persistence, shared cap, completed grouping, mirror focus and Issues entry.
   Recheck I60/I64 ownership and verify interlocks, pause provenance, retention, UIA and focus.
-  - [ ] Verify that Queue/Parallel persists across owners and the Start option applies to one submission.
-    The settings and popup controls are implemented.
-  - [ ] Verify Pause all during preparation and queue waits, and Resume all with prior individual pauses and a later
-    admission. The engine, popup and focused controls are implemented.
+  - [x] Verify that the popup stores Queue/Parallel and a new owner reads the saved default.
+  - [x] Verify bulk pause ownership in the engine and popup model. Preparing and queued tasks are included.
+    Resume all preserves the earlier individual pause and queue gate. The paired cadence measurements and
+    save timings are in [the focused x64 Debug record](../../TestRuns/4cb089111a23/FileOps/2026-11-24_155152/README.md).
+  - [ ] Verify the Start option's one-submission scope and the new pause behavior through the full interactive
+    walkthrough, including focus, UIA, and a pending mutation.
 - [ ] **S6–S7.** Options parity, asynchronous Create Directory and archives, and useful results. Preserve saved
   settings. Qualify worker cancellation, exit, refresh and cleanup.
 - [ ] **S8.** Keep the owning specifications, consistency ledger and user guide current. The first ingress, exact
