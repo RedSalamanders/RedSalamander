@@ -6,6 +6,12 @@
 
 ## Implementation checklist
 
+**Follow-up qualification (2026-11-24).** Scoped PrePush on `e3e5ac280` built cleanly. Its standalone settings entry
+failed because the Queue default regression fixture attempted to write over seeded legacy settings without the loaded
+revision. The correction in `5d35248ee` keeps that revision. Its targeted x64 Debug run
+`20261124T155409Z-53376-27107cd039834ad6bf9ddce9a4b2cca7` passed SettingsSchemaTests with zero build warnings or
+errors. Four foreground entries and the full repository verdict remain open.
+
 **Current work (2026-11-24).** Local Recycle batching reached context-menu, Find and Viewer admission. Find and Viewer
 each used one Shell batch for twelve sibling files, and Viewer Cancel kept the files. The repaired same-folder Ctrl+drag
 passed through its exact no-activation selection. The branch also contains the first exact Batch Rename handle-lifetime
