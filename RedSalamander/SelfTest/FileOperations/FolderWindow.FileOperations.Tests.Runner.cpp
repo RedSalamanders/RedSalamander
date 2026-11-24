@@ -2238,7 +2238,8 @@ constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyR1dPreparing{{
     SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,
 }};
 
-constexpr std::array<SelfTestState::Step, 6> kFileOpsFamilyR0fSmbContainment{{
+constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilyR0fSmbContainment{{
+    SelfTestState::Step::FileOps_SmbExactRenameProvider,
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,
     SelfTestState::Step::R0fSmb_LoopbackRecycleNeverDestroys,
