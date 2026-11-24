@@ -910,6 +910,9 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 
 #### Create Directory (`cmd/pane/createDirectory`)
 
+- The name prompt captures the current parent and provider instance. Create Directory refuses new work
+  once its window or application has accepted a close, including a close accepted while the prompt waits.
+  A successful action refreshes the captured parent in panes that still display it.
 - The initial suggestion enumerates the parent exactly once through `IFileSystem::ReadDirectoryInfo`, converts every existing child name through the active provider collision-key method (an existing child the provider cannot key is skipped, never a reason to refuse the command), validates and keys each default/suffixed candidate through the composite child-name contract, and selects the first provider-valid untaken key.
 - Final qualification uses the composite typed child-name result. Provider Invalid preserves its exact HRESULT; missing, unsupported, malformed, or changed facts fail before mutation. The command uses the provider-owned joined path and never guesses a separator or reapplies Win32 child-name validation after provider acceptance.
 - An automatic suffix Retry repeats provider validation/join/key qualification for the candidate. It never uses plugin short IDs or host case folding to decide whether a sibling name is taken.

@@ -12,7 +12,11 @@ The implementation may change public and host-internal payloads while this progr
 development. The host, every shipped provider, Dummy, and all tests use one ABI version. There is
 no capability-v1 adapter or dual parser.
 
-Create Directory remains a provider command outside `StartOperation`, but not outside admission.
+Create Directory uses the provider command path and the typed admission contract. An accepted
+application exit or window close refuses it before the name prompt and at submission. The prompt
+captures the provider instance and parent, so later pane navigation cannot redirect the operation.
+Completion refreshes a pane only when it still displays that parent on the captured route.
+Admission keeps the provider's name or route failure for the pane feedback.
 The host queries capability v2 for the concrete parent and provider-joined candidate with
 `FILESYSTEM_CREATE_DIRECTORY`, requires `operations.createDirectory: true`, matching non-empty
 path-scoped `rootId`/`pathProfile`, one feasible provider-native component, and exact immediate-child

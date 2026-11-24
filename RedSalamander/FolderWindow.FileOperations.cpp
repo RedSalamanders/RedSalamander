@@ -4574,10 +4574,11 @@ void FolderWindow::ShowFileOperationRefusedForPendingExit(Pane pane, FileSystemO
     Debug::Warning(L"FolderWindow: a new file operation was refused because {} is pending (op={}).",
                    FileOperationsExitPendingReason(),
                    static_cast<unsigned int>(operation));
-    const UINT operationId = operation == FILESYSTEM_COPY     ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY)
-                             : operation == FILESYSTEM_MOVE   ? static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE)
-                             : operation == FILESYSTEM_RENAME ? static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME)
-                                                              : static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
+    const UINT operationId = operation == FILESYSTEM_COPY               ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY)
+                             : operation == FILESYSTEM_MOVE             ? static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE)
+                             : operation == FILESYSTEM_RENAME           ? static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME)
+                             : operation == FILESYSTEM_CREATE_DIRECTORY ? static_cast<UINT>(IDS_CAPTION_CREATE_DIR)
+                                                                        : static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
     std::wstring title     = LoadStringResource(nullptr, windowClosing ? IDS_CAPTION_FILEOPS_CLOSE_WINDOW : IDS_CAPTION_FILEOPS_EXIT);
     std::wstring message   = FormatStringResource(nullptr,
                                                   windowClosing ? IDS_FMT_PANE_FILEOP_REFUSED_CLOSE_PENDING : IDS_FMT_PANE_FILEOP_REFUSED_EXIT_PENDING,

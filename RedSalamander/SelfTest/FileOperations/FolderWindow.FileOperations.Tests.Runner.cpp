@@ -12595,6 +12595,14 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         folder->CommandMoveToOtherPane(kSource, false);
         return S_OK;
     }) &&
+                         attempt(L"pane Create Directory",
+                                 kSource,
+                                 IDS_CAPTION_CREATE_DIR,
+                                 [&]() noexcept
+    {
+        folder->CommandCreateDirectory(kSource);
+        return S_OK;
+    }) &&
                          attempt(L"pane Permanent delete",
                                  kSource,
                                  IDS_FILEOP_OPERATION_DELETE,
@@ -12611,7 +12619,7 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         DWORD performed  = DROPEFFECT_NONE;
         const HRESULT hr = destinationView->DebugPerformFileDropForSelfTest({payload}, DROPEFFECT_COPY, &performed);
         // The pane alert explains the refusal; FolderView must not replace it with a generic failure.
-        return refusedHr(L"drag and drop", hr, S_OK) ? S_OK : E_FAIL;
+        return refusedHr(L"drag and drop", hr, DRAGDROP_S_CANCEL) && performed == DROPEFFECT_NONE ? S_OK : E_FAIL;
     }) &&
                          attempt(L"clipboard Move admission",
                                  std::nullopt,
