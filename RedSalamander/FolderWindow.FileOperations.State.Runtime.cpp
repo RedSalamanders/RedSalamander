@@ -1158,10 +1158,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
 
     std::vector<DWORD> sourcePathAttributesHint;
 
-    const uint64_t knownCopyOnlyMoveCount   = std::accumulate(plans.begin(),
-                                                              plans.end(),
-                                                              uint64_t{0u},
-                                                              [](const uint64_t current, const FileOperations::FileOperationPlan& plan) noexcept
+    const uint64_t knownCopyOnlyMoveCount = std::accumulate(plans.begin(),
+                                                            plans.end(),
+                                                            uint64_t{0u},
+                                                            [](const uint64_t current, const FileOperations::FileOperationPlan& plan) noexcept
     {
         const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
         if (transfer == nullptr || transfer->intent != FileOperations::TransferIntent::Move ||
@@ -1171,8 +1171,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         }
         return SaturatingAdd(current, transfer->selectedItems.size());
     });
-    const bool transferConfirmationRequired = requireConfirmation || knownCopyOnlyMoveCount > 0u;
-    bool copyOnlyMoveDisclosed              = false;
+    bool copyOnlyMoveDisclosed            = false;
 
     if (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE)
     {
@@ -1234,7 +1233,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         const HostFileOperationVerificationAvailability verificationAvailability = PlannedVerificationAvailability(plans);
         const bool verificationImpossible                                        = verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
                                                                                    verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
-        if (! transferConfirmationRequired && verificationImpossible && options.verifyAfterCopy)
+        if (! requireConfirmation && verificationImpossible && options.verifyAfterCopy)
         {
             options.verifyAfterCopy = false;
             for (FileOperations::FileOperationPlan& plan : plans)
@@ -1243,10 +1242,47 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
             }
         }
 
-        // The source attribute hints feed the popup's completed file/folder counters for every
-        // transfer, so they are captured whenever the pane selection matches the sources. Only the
-        // non-revertable confirmation itself depends on transferConfirmationRequired.
-        if (transferConfirmationRequired)
+        if (! requireConfirmation && knownCopyOnlyMoveCount != 0u)
+        {
+            const uint64_t moveCount = static_cast<uint64_t>(sourcePaths.size()) - knownCopyOnlyMoveCount;
+            const std::wstring toText =
+                destinationDisplayIdentity ? JoinFileSystemPath(*destinationDisplayIdentity, destinationFolder.native(), {}) : destinationFolder.native();
+            std::wstring message = moveCount == 0u ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_COPY_ONLY_QUESTION, toText)
+                                                   : FormatStringResource(nullptr,
+                                                                          IDS_FMT_FILEOPS_MIXED_MOVE_QUESTION,
+                                                                          FormatFileOperationCountNoun(FileOperationCountNoun::Item, moveCount),
+                                                                          FormatFileOperationCountNoun(FileOperationCountNoun::Item, knownCopyOnlyMoveCount),
+                                                                          toText);
+            if (groupMoveClipboardSequence.has_value())
+            {
+                message.append(L"\r\n\r\n");
+                message.append(LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING));
+            }
+            const std::wstring caption = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_MOVE);
+            HostPromptRequest prompt{};
+            prompt.sizeBytes     = sizeof(prompt);
+            prompt.scope         = HOST_ALERT_SCOPE_WINDOW;
+            prompt.severity      = HOST_ALERT_INFO;
+            prompt.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
+            prompt.targetWindow  = IngressPromptAnchor(sourcePane);
+            prompt.title         = caption.c_str();
+            prompt.message       = message.c_str();
+            prompt.defaultResult = HOST_PROMPT_RESULT_CANCEL;
+            prompt.presentation  = moveCount == 0u ? HOST_PROMPT_PRESENTATION_COPY : HOST_PROMPT_PRESENTATION_MOVE_CONTINUE;
+
+            HostPromptResult result = HOST_PROMPT_RESULT_NONE;
+            const HRESULT hrPrompt  = HostShowPrompt(prompt, nullptr, &result);
+            if (_completionShutdown.load(std::memory_order_acquire))
+            {
+                return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+            }
+            if (FAILED(hrPrompt) || result != HOST_PROMPT_RESULT_OK)
+            {
+                return S_FALSE;
+            }
+            copyOnlyMoveDisclosed = true;
+        }
+        else if (requireConfirmation)
         {
             NonRevertableFileOperationPromptCounts counts{};
             counts.fileCount                 = fileCount;
@@ -1416,8 +1452,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         }
         else
         {
-            const std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, fromText);
-            const std::wstring caption = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_DELETE);
+            const std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_RECYCLE, what, fromText);
+            const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_MOVE_TO_RECYCLE_BIN);
 
             HostPromptRequest prompt{};
             prompt.sizeBytes     = sizeof(prompt);
@@ -1428,7 +1464,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
             prompt.title         = caption.c_str();
             prompt.message       = message.c_str();
             prompt.defaultResult = HOST_PROMPT_RESULT_CANCEL;
-            prompt.presentation  = HOST_PROMPT_PRESENTATION_DELETE;
+            prompt.presentation  = HOST_PROMPT_PRESENTATION_RECYCLE;
 
             HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
             const HRESULT hrPrompt        = HostShowPrompt(prompt, nullptr, &promptResult);
@@ -2778,7 +2814,8 @@ FolderWindow::FileOperationState::PopupTelemetryWork FolderWindow::FileOperation
             return PopupTelemetryWork::Active;
         // IsWaitingInQueue is set only while the worker is held before EnterOperation admits it;
         // leaving that wait clears it and posts a presentation change.
-        if (task->IsPaused() || task->IsQueuePaused() || task->IsWaitingInQueue())
+        if (task->IsPaused() || task->IsQueuePaused() || task->IsWaitingInQueue() || task->IsWaitingForOthers() ||
+            task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u || task->_awaitingUserDecision.load(std::memory_order_acquire))
             continue;
         std::scoped_lock promptLock(task->_conflictArbiter.mutex);
         const auto& prompt = task->_conflictArbiter.prompt;

@@ -2304,7 +2304,8 @@ struct TerminalAxisBadge final
             summary.hasUnknownActiveTransferBytes = true;
         }
 
-        if (! rates || ! presentation.includeInAggregateCohort || (task.operation != FILESYSTEM_COPY && task.operation != FILESYSTEM_MOVE))
+        if (! rates || ! presentation.includeInAggregateCohort || task.paused || task.cancellationRequested ||
+            (task.operation != FILESYSTEM_COPY && task.operation != FILESYSTEM_MOVE))
         {
             continue;
         }
@@ -3709,7 +3710,7 @@ bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task
 {
     // I35 R10.2: a question waiting for the user moves no bytes by design. That is neither
     // throughput nor a stall, so it is measured like a pause.
-    return task.paused || task.queuePaused || task.waitingInQueue || task.waitingForDecision;
+    return task.paused || task.queuePaused || task.waitingInQueue || task.waitingForOthers || task.waitingForDecision || task.stopping;
 }
 
 void AddHueWeight(std::array<FileOperationsPopupInternal::RateHistory::HueWeight, FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample>& weights,
@@ -4352,7 +4353,7 @@ void AdvanceRateHistory(FileOperationsPopupInternal::RateHistory& history,
         history.initialized              = true;
         history.lastProgressCallbackTick = task.lastProgressCallbackTick;
         history.lastDisplaySampleTick    = nowTick;
-        history.lastStateChangeTick      = task.progressStateChangeTick;
+        history.lastStateGeneration      = task.progressStateGeneration;
         history.lastByteAdvanceTick      = nowTick;
         history.lastByteReportTick       = task.lastByteProgressTick;
         ResetRateWindow(history, nowTick);
@@ -4361,13 +4362,13 @@ void AdvanceRateHistory(FileOperationsPopupInternal::RateHistory& history,
         return;
     }
 
-    if (task.progressStateChangeTick > history.lastStateChangeTick || blocked)
+    if (! task.finished && (task.progressStateGeneration != history.lastStateGeneration || blocked))
     {
         // Pause, queue waits, a question for the user and the resume after them restart the
         // measurement: a resumed task's speed is measured from the resume, never averaged with the
         // pause, and nothing is displayed while it moves nothing by design. The report cadence goes on
         // from the resume: the gap spanning the pause is not part of it.
-        history.lastStateChangeTick      = std::max(history.lastStateChangeTick, task.progressStateChangeTick);
+        history.lastStateGeneration      = task.progressStateGeneration;
         history.lastProgressCallbackTick = task.lastProgressCallbackTick;
         history.lastDisplaySampleTick    = nowTick;
         history.lastByteAdvanceTick      = nowTick;
@@ -4378,13 +4379,13 @@ void AdvanceRateHistory(FileOperationsPopupInternal::RateHistory& history,
         SyncRateStreamBaselines(history, task);
         ResetRateWindow(history, nowTick);
         AppendRateWindowSample(history, task, nowTick);
+        history.displayedBytesPerSec             = 0.0;
+        history.displayedVerificationBytesPerSec = 0.0;
+        history.displayedItemsPerSec             = 0.0;
+        history.hasSmoothedEta                   = false;
+        history.hasProvisionalEta                = false;
         if (blocked)
         {
-            history.displayedBytesPerSec             = 0.0;
-            history.displayedVerificationBytesPerSec = 0.0;
-            history.displayedItemsPerSec             = 0.0;
-            history.hasSmoothedEta                   = false;
-            history.hasProvisionalEta                = false;
             return;
         }
     }
@@ -5821,7 +5822,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
         snap.started                        = task->HasStarted();
         snap.paused                         = task->IsPaused();
-        snap.waitingForOthers               = task->IsWaitingForOthers();
+        snap.waitingForOthers               = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
         snap.waitingInQueue                 = task->IsWaitingInQueue();
         snap.waitingForIdentityInterlock    = snap.waitingInQueue && task->_waitingForIdentityInterlock.load(std::memory_order_acquire);
         snap.waitingForParallelTransferSlot = snap.waitingInQueue && task->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
@@ -6157,9 +6158,9 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVi
     rate.completedItems           = task->completedItems;
     rate.totalBytes               = task->totalBytes;
     rate.lastProgressCallbackTick = task->lastProgressCallbackTick;
-    rate.progressStateChangeTick  = GetTickCount64();
+    rate.progressStateGeneration  = history->second.lastStateGeneration + 1u;
     RateUpdateTotals totals{};
-    AdvanceRateHistory(history->second, rate, rate.progressStateChangeTick, totals);
+    AdvanceRateHistory(history->second, rate, GetTickCount64(), totals);
     task->paused               = true;
     _hostedAccessibleTextFlush = true;
     return history->second.displayedBytesPerSec == 0.0;
@@ -6303,20 +6304,20 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             }
         }
 
-        snap.progressStateChangeTick = task->_rateSamplingStateChangeTick.load(std::memory_order_acquire);
-        snap.started                 = task->HasStarted();
-        snap.paused                  = task->IsPaused();
-        snap.waitingForOthers        = task->IsWaitingForOthers();
-        snap.waitingInQueue          = task->IsWaitingInQueue();
-        snap.queuePaused             = task->IsQueuePaused();
-        snap.lastByteProgressTick    = task->_lastByteProgressTick.load(std::memory_order_acquire);
+        snap.started              = task->HasStarted();
+        snap.paused               = task->IsPaused();
+        snap.waitingForOthers     = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
+        snap.waitingInQueue       = task->IsWaitingInQueue();
+        snap.queuePaused          = task->IsQueuePaused();
+        snap.lastByteProgressTick = task->_lastByteProgressTick.load(std::memory_order_acquire);
         snap.stallKind = RateStallKindFor(task->_progressStallPhase.load(std::memory_order_acquire), task->_progressStallSide.load(std::memory_order_acquire));
         snap.speedLimitBytesPerSecond = task->_effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         snap.stopping                 = task->CancelRequestedDurable();
         {
             std::scoped_lock lock(task->_conflictArbiter.mutex);
-            snap.waitingForDecision = task->_conflictArbiter.prompt.active;
+            snap.waitingForDecision = task->_conflictArbiter.prompt.active || task->_awaitingUserDecision.load(std::memory_order_acquire);
         }
+        snap.progressStateGeneration = task->_rateSamplingStateGeneration.load(std::memory_order_acquire);
 
         result.push_back(snap);
     }
@@ -13508,7 +13509,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ConfirmCancelAll(HWN
     prompt.targetWindow  = hwnd;
     prompt.title         = title.c_str();
     prompt.message       = message.c_str();
-    prompt.defaultResult = HOST_PROMPT_RESULT_OK;
+    prompt.defaultResult = HOST_PROMPT_RESULT_CANCEL;
 
     const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
     HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
@@ -17659,7 +17660,6 @@ bool DebugBuildFileOperationsGraphFairnessHistorySnapshot(FileOperationsPopupInt
         task.inFlightFileCount        = 4u;
         task.completedBytes           = bucket * 400u;
         task.lastProgressCallbackTick = bucket * kRateSampleBucketMs;
-        task.progressStateChangeTick  = task.lastProgressCallbackTick;
         for (size_t i = 0; i < task.inFlightFileCount; ++i)
         {
             auto& stream            = task.inFlightFiles[i];
@@ -18318,7 +18318,7 @@ bool DebugRunFileOperationsRateModel(FileSystemOperation operation,
         task.completedItems           = tick.completedItems;
         task.lastProgressCallbackTick = tick.lastProgressCallbackTick;
         task.lastByteProgressTick     = tick.lastByteProgressTick;
-        task.progressStateChangeTick  = tick.progressStateChangeTick;
+        task.progressStateGeneration  = tick.progressStateGeneration;
         task.stallKind                = tick.stallKind;
         task.speedLimitBytesPerSecond = tick.speedLimitBytesPerSecond;
         task.paused                   = tick.paused;

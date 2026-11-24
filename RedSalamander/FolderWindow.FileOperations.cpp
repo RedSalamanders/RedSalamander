@@ -3538,8 +3538,36 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
     std::wstring sourcePluginShortIdOverride;
     std::optional<std::wstring> sourceInstanceIdOverride;
 
-    if (isCopyMove && ! request.sourceContextSpecified &&
-        CompareStringOrdinal(destinationState.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) != CSTR_EQUAL)
+    if (request.origin == FolderView::FileOperationRequest::Origin::MoveFolderPicker)
+    {
+        if (request.operation != FILESYSTEM_MOVE || ! request.destinationFolder.has_value() || ! request.destinationFolder->is_absolute())
+        {
+            return E_INVALIDARG;
+        }
+
+        // The Shell picker returns a Windows directory. The originating pane supplied the sources.
+        if (! NavigationLocation::EqualsNoCase(destinationState.pluginId, L"builtin/file-system"))
+        {
+            const auto* localEntry = FileSystemPluginManager::GetInstance().FindPluginById(L"builtin/file-system");
+            if (! localEntry || ! localEntry->fileSystem || localEntry->disabled || ! localEntry->loadable || localEntry->shortId.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+            if (! CanCrossFileSystemCopyMove(fileSystem,
+                                             request.sourcePaths.front().native(),
+                                             destinationState.pluginId,
+                                             localEntry->fileSystem,
+                                             request.destinationFolder->native(),
+                                             localEntry->id,
+                                             FILESYSTEM_MOVE))
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+            destinationFileSystem = localEntry->fileSystem;
+        }
+    }
+    else if (isCopyMove && ! request.sourceContextSpecified &&
+             CompareStringOrdinal(destinationState.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) != CSTR_EQUAL)
     {
         const FileSystemPluginManager::PluginEntry* localEntry = FileSystemPluginManager::GetInstance().FindPluginById(L"builtin/file-system");
         if (! localEntry || ! localEntry->fileSystem || localEntry->disabled || ! localEntry->loadable || localEntry->shortId.empty())
@@ -3589,45 +3617,29 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
         }
         else if (leftMatches && rightMatches)
         {
-            const auto isUnderFolder = [](std::wstring_view folder, std::wstring_view path) noexcept -> bool
+            const auto capabilities = TryGetCapabilities(_leftPane.fileSystem, request.sourcePaths.front().native(), request.operation, request.sourcePluginId);
+            if (! capabilities.has_value() || ! HasStablePathIdentity(capabilities.value()))
             {
-                while (! folder.empty() && (folder.back() == L'\\' || folder.back() == L'/'))
-                {
-                    folder.remove_suffix(1);
-                }
-                if (folder.empty() || path.size() <= folder.size())
-                {
-                    return false;
-                }
-
-                if (! OrdinalString::StartsWithNoCase(path, folder))
-                {
-                    return false;
-                }
-
-                const wchar_t next = path[folder.size()];
-                return next == L'\\' || next == L'/';
-            };
-
-            bool inferredSourcePane = false;
-            if (! request.sourcePaths.empty())
-            {
-                const std::wstring_view firstPath = request.sourcePaths.front().native();
-
-                const auto leftFolder  = _leftPane.folderView.GetFolderPath();
-                const auto rightFolder = _rightPane.folderView.GetFolderPath();
-
-                const bool underLeft  = leftFolder.has_value() && isUnderFolder(leftFolder->native(), firstPath);
-                const bool underRight = rightFolder.has_value() && isUnderFolder(rightFolder->native(), firstPath);
-
-                if (underLeft ^ underRight)
-                {
-                    sourcePane         = underLeft ? Pane::Left : Pane::Right;
-                    inferredSourcePane = true;
-                }
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             }
-
-            if (! inferredSourcePane)
+            const FileSystemPathIdentity& identity = capabilities->pathIdentity.value();
+            const auto selectsFromPane             = [&](const PaneState& state) noexcept
+            {
+                const auto folder = state.folderView.GetFolderPath();
+                return folder.has_value() && std::ranges::all_of(request.sourcePaths,
+                                                                 [&](const std::filesystem::path& path) noexcept
+                {
+                    std::wstring parent;
+                    return TryGetFileSystemParentPath(identity, path.native(), parent) && EquivalentPath(identity, folder->native(), parent);
+                });
+            };
+            const bool fromLeft  = selectsFromPane(_leftPane);
+            const bool fromRight = selectsFromPane(_rightPane);
+            if (fromLeft != fromRight)
+            {
+                sourcePane = fromLeft ? Pane::Left : Pane::Right;
+            }
+            else if (! fromLeft || _leftPane.fileSystem.get() != _rightPane.fileSystem.get())
             {
                 return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             }
@@ -3690,6 +3702,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             case FolderView::FileOperationRequest::Origin::PackCleanup: return FileOperations::DeleteOrigin::PackCleanup;
             case FolderView::FileOperationRequest::Origin::UnpackCleanup: return FileOperations::DeleteOrigin::UnpackCleanup;
             case FolderView::FileOperationRequest::Origin::PaneCommand:
+            case FolderView::FileOperationRequest::Origin::MoveFolderPicker:
             case FolderView::FileOperationRequest::Origin::ClipboardPaste:
             case FolderView::FileOperationRequest::Origin::InternalDrop:
             case FolderView::FileOperationRequest::Origin::ExternalDrop: return FileOperations::DeleteOrigin::PaneCommand;

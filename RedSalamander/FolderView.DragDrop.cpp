@@ -692,21 +692,27 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
     }
 
     const bool hasModifier = (keyState & (MK_CONTROL | MK_SHIFT)) != 0 || (GetKeyState(VK_MENU) & 0x8000) != 0;
-    if (! hasModifier && effect == DROPEFFECT_COPY && (allowedEffects & DROPEFFECT_MOVE) != 0 &&
+    const bool localSource = ! internalDrop || OrdinalString::EqualsNoCase(sourcePluginId, L"builtin/file-system");
+    if (! hasModifier && localSource && SupportsLocalFileDropClipboard() && effect == DROPEFFECT_COPY && (allowedEffects & DROPEFFECT_MOVE) != 0 &&
         std::ranges::all_of(paths, [&](const std::filesystem::path& source) noexcept { return AreSameLocalVolume(source, destination); }))
     {
         effect = DROPEFFECT_MOVE;
     }
 
-    const std::filesystem::path normalizedDestination = destination.lexically_normal();
-    for (const auto& source : paths)
+    // Delegated Copy/Move uses the host's provider path and object identity checks.
+    // Only the direct test fallback and Shell link path use the lexical guard here.
+    if (! _fileOperationRequestCallback || effect == DROPEFFECT_LINK)
     {
-        const std::filesystem::path normalizedSource = source.lexically_normal();
-        const std::filesystem::path sourceParent     = normalizedSource.parent_path().lexically_normal();
-        if ((! sourceParent.empty() && OrdinalString::EqualsNoCasePath(sourceParent, normalizedDestination)) ||
-            IsSameOrDescendantPath(normalizedSource.native(), normalizedDestination.native()))
+        const std::filesystem::path normalizedDestination = destination.lexically_normal();
+        for (const auto& source : paths)
         {
-            return DRAGDROP_S_CANCEL;
+            const std::filesystem::path normalizedSource = source.lexically_normal();
+            const std::filesystem::path sourceParent     = normalizedSource.parent_path().lexically_normal();
+            if ((! sourceParent.empty() && OrdinalString::EqualsNoCasePath(sourceParent, normalizedDestination)) ||
+                IsSameOrDescendantPath(normalizedSource.native(), normalizedDestination.native()))
+            {
+                return DRAGDROP_S_CANCEL;
+            }
         }
     }
 
@@ -739,6 +745,10 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                 request.flags                  = flags;
 
                 operationHr = _fileOperationRequestCallback(std::move(request));
+                if (operationHr == S_FALSE)
+                {
+                    return DRAGDROP_S_CANCEL;
+                }
                 if (SUCCEEDED(operationHr) && effect == DROPEFFECT_MOVE && ! internalDrop)
                 {
                     // The host operation is asynchronous. Reporting MOVE here would authorize an external

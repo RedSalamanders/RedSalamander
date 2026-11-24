@@ -3603,14 +3603,34 @@ struct ClipboardDropEffectReadStatus
     state.Require(WaitForPathExistsForShellCommandTest(destRoot / gamma.filename(), SelfTest::Scale(5000ms)),
                   L"External asynchronous MOVE task should eventually commit through the host.");
 
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, destRoot, SelfTest::Scale(3000ms)) &&
+                      WaitForPaneItems(FolderWindow::Pane::Right, {L"Archive", L"Work", L"beta.txt", L"delta.txt", L"gamma.txt"}, SelfTest::Scale(3000ms)),
+                  L"Both panes must show the same enumerated folder for Ctrl+drag.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    existingTaskIds             = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    performed                   = DROPEFFECT_NONE;
+    const auto sameFolderSource = destRoot / beta.filename();
+    const auto sibling          = destRoot / L"beta (2).txt";
+    dropHr                      = folderView->DebugPerformFileDropForSelfTest(
+        {sameFolderSource}, DROPEFFECT_COPY, &performed, POINT{-1, -1}, false, DROPEFFECT_COPY | DROPEFFECT_MOVE, MK_CONTROL);
+    state.Require(dropHr == S_OK && performed == DROPEFFECT_COPY, L"Ctrl+drag into the same folder must use Copy.");
+    static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, destRoot, L"Same-folder Ctrl+drag"));
+    state.Require(WaitForPathExistsForShellCommandTest(sibling, SelfTest::Scale(5000ms)) && ReadUtf8TextFileForCommandSelfTest(sameFolderSource) == L"beta" &&
+                      ReadUtf8TextFileForCommandSelfTest(sibling) == L"beta",
+                  L"Same-folder Ctrl+drag must preserve the original and create a matching sibling.");
+
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, workSub);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, workSub, SelfTest::Scale(3000ms)),
                   L"Failed to enumerate descendant target for self-drop rejection.");
     existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
     performed       = DROPEFFECT_MOVE;
     dropHr          = folderView->DebugPerformFileDropForSelfTest({work}, DROPEFFECT_MOVE, &performed);
-    state.Require(dropHr == DRAGDROP_S_CANCEL && performed == DROPEFFECT_NONE,
-                  std::format(L"Drop into own descendant should cancel; hr=0x{:08X}, effect={}.",
+    state.Require((dropHr == DRAGDROP_S_CANCEL || FAILED(dropHr)) && performed == DROPEFFECT_NONE,
+                  std::format(L"Drop into own descendant must be refused; hr=0x{:08X}, effect={}.",
                               static_cast<unsigned long>(dropHr),
                               static_cast<unsigned long>(performed)));
     state.Require(! ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms)).has_value(),

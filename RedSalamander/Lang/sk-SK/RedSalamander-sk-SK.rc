@@ -195,7 +195,7 @@ BEGIN
         MENUITEM "&Kopírovať",                     IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
         MENUITEM "Kopírovať s &možnosťami...",     IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
         MENUITEM "&Presunúť/premenovať",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
-        MENUITEM "Presunúť/premenovať s možnosťam&i...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "Presunúť s možnosťam&i...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Zbaliť...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
         MENUITEM "&Rozbaliť...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
@@ -1410,6 +1410,7 @@ BEGIN
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "Kopírovať {0}:\r\nod: {1}\r\n\r\nkomu: {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Presunúť {0}:\r\nod: {1}\r\n\r\nkomu: {2}"
     IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             "Natrvalo odstrániť {0}:\r\nod: {1}\r\n\r\nToto sa nedá vrátiť späť."
+    IDS_FMT_FILEOPS_CONFIRM_RECYCLE                      "Presunúť {0} do Koša?\r\nZ: {1}"
     IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP          "Táto operácia nemôže byť zameraná na rovnakú položku alebo podpriečinok.\r\n\r\nZdroj:\r\n{0}\r\n\r\nCieľový priečinok:\r\n{1}"
     IDS_FILEOPS_LOCATION_MULTIPLE                        "Viaceré miesta"
     IDS_FMT_FILEOPS_COUNT_ITEM                           "{0:L} položiek"
@@ -1481,7 +1482,7 @@ BEGIN
     IDS_FILEOPS_GRAPH_WAITING                             "Čaká sa na dokončenie predchádzajúceho"
     IDS_FILEOPS_GRAPH_DISCOVERING                         "Počítanie položiek…"
     IDS_CAPTION_FILEOPS_CANCEL_ALL                        "Zrušiť všetky operácie"
-    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Naozaj chcete zrušiť všetky čakajúce operácie so súbormi?"
+    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Zrušiť všetky prebiehajúce aj čakajúce operácie so súbormi?"
     IDS_CAPTION_FILEOPS_EXIT                              "Ukončiť aplikáciu"
     IDS_MSG_FILEOPS_CANCEL_ALL_EXIT                       "Operácie so súbormi stále prebiehajú.\n\nZrušiť všetky operácie a ukončiť?"
     IDS_CAPTION_FILEOPS_CLOSE_WINDOW                      "Zavrieť okno"
@@ -1495,6 +1496,7 @@ BEGIN
     IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           "Názov alebo cesta položky nie sú pre túto operáciu platné."
     IDS_FILEOPS_CONFLICT_TARGET                           "Požadovaný cieľ odkazu nie je dostupný."
     IDS_FILEOPS_CONFLICT_READONLY                         "Položka je len na čítanie."
+    IDS_FILEOPS_CONFLICT_READONLY_EXISTS                  "Súbor s týmto názvom už existuje a je len na čítanie."
     IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "Prístup odmietnutý."
     IDS_FILEOPS_CONFLICT_SHARING                          "Súbor sa používa."
     IDS_FILEOPS_CONFLICT_DISK_FULL                        "Disk je plný. Uvoľnite miesto a skúste to znova."
@@ -1655,6 +1657,8 @@ BEGIN
     IDS_FILEOPS_NOTE_RECYCLE_ESCALATED                    "Na vašu žiadosť natrvalo odstránené: Kôš nemohol položku prijať."
     IDS_FILEOPS_NOTE_CLEANUP_COMMITTED_WITH_ERROR         "Originál bol odstránený, hoci umiestnenie ohlásilo chybu."
     IDS_FMT_FILEOPS_CONFIRM_COPY_ONLY_MOVE                "Položky, ktoré odtiaľto nemožno presunúť: {0:L}. Skopírujú sa a originály zostanú zachované."
+    IDS_FMT_FILEOPS_COPY_ONLY_QUESTION                    "Skopírovať položky a ponechať originály?\r\nDo: {0}"
+    IDS_FMT_FILEOPS_MIXED_MOVE_QUESTION                   "Presunúť {0} a skopírovať {1} so zachovaním originálov kópií?\r\nDo: {2}"
     IDS_FMT_FILEOPS_NOTE_PERMISSIONS_INHERITED            "Povolenia sa zdedili z cieľa (položky: {0:L})."
     IDS_FMT_FILEOPS_NOTE_METADATA_NOT_KEPT                "{0} neuchováva časové pečiatky ani povolenia."
     IDS_FILEOPS_NOTE_METADATA_LOST_BASIC                  "Časové pečiatky a atribúty sa v cieli nezachovali."
@@ -1884,7 +1888,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Priečinok nie je prázdny.
     IDS_CMD_SORT_BY_TIME                                  "Zoradiť podľa času"
     IDS_CMD_PACK                                          "Zbaliť"
     IDS_CMD_MOVE                                          "Pohybujte sa"
-    IDS_CMD_MOVE_WITH_OPTIONS                             "Presunúť/Premenovať s možnosťami"
+    IDS_CMD_MOVE_WITH_OPTIONS                             "Presunúť s možnosťami"
     IDS_CMD_SORT_BY_SIZE                                  "Zoradiť podľa veľkosti"
     IDS_CMD_UNPACK                                        "Rozbaľte"
     IDS_CMD_LOAD_SELECTION                                "Výber zaťaženia"
@@ -2186,7 +2190,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "Priečinok nie je prázdny.
 		    IDS_CMD_DESC_LOAD_SELECTION                           "Načítať uložený výber."
 		    IDS_CMD_DESC_MENU                                     "Otvorte hlavnú ponuku pre aktívny panel."
 		    IDS_CMD_DESC_MOVE                                     "Presuňte sa na druhý panel."
-		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "Vyberte možnosti a potom presuňte alebo premenujte na druhý panel."
+		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "Vyberte možnosti a potom presuňte výber na druhý panel."
 		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "Presuňte výber do koša."
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "Otvorte aktuálny priečinok."
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "Otvorte dialógové okno vlastností pre výber."

@@ -586,8 +586,9 @@ void FolderView::UpdateContextMenuState(HMENU menu, const bool allowItemTarget) 
     setEnabled(CmdDelete, hasTarget);
     setEnabled(CmdMove, hasTarget);
     setEnabled(CmdRename, singleTarget && hasFocus);
-    setEnabled(CmdCut, hasTarget && SupportsFileDropCut());
-    setEnabled(CmdCopy, hasTarget);
+    const bool canPublishShellFiles = hasTarget && SupportsLocalFileDropClipboard();
+    setEnabled(CmdCut, canPublishShellFiles);
+    setEnabled(CmdCopy, canPublishShellFiles);
     setEnabled(CmdProperties, singleTarget && hasFocus);
 
     setEnabled(CmdPaste, CanPasteItemsFromClipboard());

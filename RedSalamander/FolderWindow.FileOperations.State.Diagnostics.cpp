@@ -472,8 +472,8 @@ UINT FileOperations::ConflictClassMessageId(ConflictClass bucket) noexcept
     switch (bucket)
     {
         case ConflictClass::RegularFileExists: return IDS_FILEOPS_CONFLICT_EXISTS;
-        case ConflictClass::ReadOnlyRegularFile:
-        case ConflictClass::ReadOnlyRegularFileExists: return IDS_FILEOPS_CONFLICT_READONLY;
+        case ConflictClass::ReadOnlyRegularFile: return IDS_FILEOPS_CONFLICT_READONLY;
+        case ConflictClass::ReadOnlyRegularFileExists: return IDS_FILEOPS_CONFLICT_READONLY_EXISTS;
         case ConflictClass::TypeMismatch: return IDS_FILEOPS_CONFLICT_TYPE_MISMATCH;
         case ConflictClass::DestinationLink: return IDS_FILEOPS_CONFLICT_REPARSE_POINT;
         case ConflictClass::NameNotRepresentable: return IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE;

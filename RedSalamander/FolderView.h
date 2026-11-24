@@ -297,6 +297,7 @@ public:
         enum class Origin : uint8_t
         {
             PaneCommand,
+            MoveFolderPicker,
             ClipboardPaste,
             InternalDrop,
             ExternalDrop,
@@ -1789,7 +1790,7 @@ private:
     void DeleteSelectedItems();
     void CopySelectionToClipboard();
     void PasteItemsFromClipboard();
-    [[nodiscard]] bool SupportsFileDropCut() const noexcept;
+    [[nodiscard]] bool SupportsLocalFileDropClipboard() const noexcept;
     [[nodiscard]] bool CanPasteItemsFromClipboard() const noexcept;
     // True when the host refused operation (it already showed why); FolderView then shows no prompt.
     [[nodiscard]] bool IsFileOperationRefusedByHost(FileSystemOperation operation) const;

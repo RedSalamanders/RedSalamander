@@ -118,6 +118,8 @@ enum HostPromptPresentation : uint32_t
     // OK, or NO together with YES and CANCEL, "Open location in File Explorer"; CANCEL, OK alone, or NO
     // without CANCEL, "Close". No result grants a receipt.
     HOST_PROMPT_PRESENTATION_ARTIFACT_BLOCKED = 5,
+    HOST_PROMPT_PRESENTATION_RECYCLE          = 6,
+    HOST_PROMPT_PRESENTATION_MOVE_CONTINUE    = 7,
 };
 
 enum HostFileOperationLinkPolicy : uint32_t

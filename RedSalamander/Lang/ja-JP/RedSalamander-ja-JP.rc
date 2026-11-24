@@ -195,7 +195,7 @@ BEGIN
         MENUITEM "コピー(&C)",                     IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
         MENUITEM "オプション付きでコピー(&O)...", IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
         MENUITEM "移動/名前変更(&M)",              IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
-        MENUITEM "オプション付きで移動/名前変更(&P)...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "オプション付きで移動(&P)...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "パック(&P)...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
         MENUITEM "開梱(&U)...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
@@ -1410,6 +1410,7 @@ BEGIN
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "{0}:\r\nを次から: {1}\r\n\r\n にコピーします: {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "{0}:\r\n を {1}\r\n\r\n から {2} に移動します"
     IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             "{0}:\r\n から:{1}\r\n\r\nを完全に削除します。これは元に戻すことができません。"
+    IDS_FMT_FILEOPS_CONFIRM_RECYCLE                      "{0} をごみ箱に移動しますか？\r\n元の場所: {1}"
     IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP          "この操作は、同じアイテムまたはそれ自体のサブフォルダーをターゲットにすることはできません。\r\n\r\nソース:\r\n{0}\r\n\r\n宛先フォルダー:\r\n{1}"
     IDS_FILEOPS_LOCATION_MULTIPLE                        "複数の場所"
     IDS_FMT_FILEOPS_COUNT_ITEM                           "{0:L} アイテム"
@@ -1481,7 +1482,7 @@ BEGIN
     IDS_FILEOPS_GRAPH_WAITING                             "前の処理が完了するのを待っています"
     IDS_FILEOPS_GRAPH_DISCOVERING                         "項目を数えています…"
     IDS_CAPTION_FILEOPS_CANCEL_ALL                        "すべての操作をキャンセルする"
-    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "保留中のファイル操作をすべてキャンセルしてもよろしいですか?"
+    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "実行中および待機中のファイル操作をすべてキャンセルしますか？"
     IDS_CAPTION_FILEOPS_EXIT                              "アプリケーションを終了する"
     IDS_MSG_FILEOPS_CANCEL_ALL_EXIT                       "ファイル操作はまだ進行中です。\r\n\r\nすべての操作をキャンセルして終了しますか?"
     IDS_CAPTION_FILEOPS_CLOSE_WINDOW                      "ウィンドウを閉じる"
@@ -1495,6 +1496,7 @@ BEGIN
     IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           "この項目の名前またはパスは、この操作には無効です。"
     IDS_FILEOPS_CONFLICT_TARGET                           "必要なリンク先を利用できません。"
     IDS_FILEOPS_CONFLICT_READONLY                         "項目は読み取り専用です。"
+    IDS_FILEOPS_CONFLICT_READONLY_EXISTS                  "同じ名前のファイルが既に存在し、読み取り専用です。"
     IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "アクセスが拒否されました。"
     IDS_FILEOPS_CONFLICT_SHARING                          "ファイルは使用中です。"
     IDS_FILEOPS_CONFLICT_DISK_FULL                        "ディスクがいっぱいです。空き容量を増やしてから再試行してください。"
@@ -1655,6 +1657,8 @@ BEGIN
     IDS_FILEOPS_NOTE_RECYCLE_ESCALATED                    "要求に従って完全に削除しました: ごみ箱に移動できませんでした。"
     IDS_FILEOPS_NOTE_CLEANUP_COMMITTED_WITH_ERROR         "場所からエラーが報告されましたが、元の項目は削除されました。"
     IDS_FMT_FILEOPS_CONFIRM_COPY_ONLY_MOVE                "{0:L} 個の項目はここから移動できません。コピーされ、元の項目は保持されます。"
+    IDS_FMT_FILEOPS_COPY_ONLY_QUESTION                    "項目をコピーして元の項目を残しますか？\r\nコピー先: {0}"
+    IDS_FMT_FILEOPS_MIXED_MOVE_QUESTION                   "{0}を移動し、{1}を元の場所に残してコピーしますか？\r\n移動先・コピー先: {2}"
     IDS_FMT_FILEOPS_NOTE_PERMISSIONS_INHERITED            "アクセス許可はコピー先から継承されました ({0:L} 個の項目)。"
     IDS_FMT_FILEOPS_NOTE_METADATA_NOT_KEPT                "{0} はタイムスタンプとアクセス許可を保持しません。"
     IDS_FILEOPS_NOTE_METADATA_LOST_BASIC                  "タイムスタンプと属性はコピー先で保持されませんでした。"
@@ -1884,7 +1888,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "フォルダーが空では
     IDS_CMD_SORT_BY_TIME                                  "時間順に並べ替える"
     IDS_CMD_PACK                                          "パック"
     IDS_CMD_MOVE                                          "移動"
-    IDS_CMD_MOVE_WITH_OPTIONS                             "オプション付きで移動/名前変更"
+    IDS_CMD_MOVE_WITH_OPTIONS                             "オプション付きで移動"
     IDS_CMD_SORT_BY_SIZE                                  "サイズで並べ替え"
     IDS_CMD_UNPACK                                        "開梱"
     IDS_CMD_LOAD_SELECTION                                "ロード選択"
@@ -2186,7 +2190,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "フォルダーが空では
 		    IDS_CMD_DESC_LOAD_SELECTION                           "保存した選択内容をロードします。"
 		    IDS_CMD_DESC_MENU                                     "アクティブなペインのメイン メニューを開きます。"
 		    IDS_CMD_DESC_MOVE                                     "他のペインに移動します。"
-		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "オプションを選択してから、他のペインに移動または名前を変更します。"
+		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "オプションを選択してから、選択項目を他のペインに移動します。"
 		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "選択内容をごみ箱に移動します。"
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "現在のフォルダーを開きます。"
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "選択内容のプロパティ ダイアログを開きます。"

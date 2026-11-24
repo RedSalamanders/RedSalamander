@@ -4981,15 +4981,15 @@ template <typename Fn>
     return Task::ConflictBucket::Unknown;
 }
 
-// Retry is offered only where retrying can plausibly succeed. Existing-destination and
-// read-only collisions are deterministic — they have dedicated resolution actions instead, and
-// a Retry button there is a dead end that pads the prompt.
+// Retry is offered only where retrying can plausibly succeed. A path-length failure
+// cannot be resolved by replaying the same request.
 [[nodiscard]] bool IsRetryableConflictBucket(Task::ConflictBucket bucket) noexcept
 {
     return bucket != Task::ConflictBucket::UnsupportedReparse && bucket != Task::ConflictBucket::RegularFileExists &&
            bucket != Task::ConflictBucket::ReadOnlyRegularFileExists && bucket != Task::ConflictBucket::TypeMismatch &&
            bucket != Task::ConflictBucket::DestinationLink && bucket != Task::ConflictBucket::ReadOnlyRegularFile &&
-           bucket != Task::ConflictBucket::NameNotRepresentable && bucket != Task::ConflictBucket::TargetConflict;
+           bucket != Task::ConflictBucket::NameNotRepresentable && bucket != Task::ConflictBucket::TargetConflict &&
+           bucket != Task::ConflictBucket::PathTooLong;
 }
 
 using ConflictBucket = Task::ConflictBucket;
@@ -5747,7 +5747,7 @@ struct ConflictActionPolicy
         default: break;
     }
 
-    if (allowRetry && ! IsDeferredConsentBucket(bucket))
+    if (allowRetry && bucket != ConflictBucket::PathTooLong && ! IsDeferredConsentBucket(bucket))
     {
         policy.Add(ConflictAction::Retry);
     }
@@ -6111,6 +6111,8 @@ void ClearConflictPrompt(Task& task) noexcept
         std::scoped_lock lock(task._conflictArbiter.mutex);
         promptWasActive = task._conflictArbiter.prompt.active;
         FileOperations::ConflictBroker::ResetLocked(task._conflictArbiter);
+        if (promptWasActive)
+            task.MarkRateSamplingStateChanged();
     }
 
     task._conflictArbiter.cv.notify_all();
@@ -6246,6 +6248,7 @@ void SetConflictPromptMetadataLoadingLocked(Task& task,
     FileOperations::ConflictBroker::ResetLocked(task._conflictArbiter);
     task._conflictArbiter.prompt        = std::move(prompt);
     task._conflictArbiter.ownerThreadId = GetCurrentThreadId();
+    task.MarkRateSamplingStateChanged();
 }
 
 // Snapshot under the arbiter mutex; enqueue only after unlocking. No provider or diagnostics I/O
@@ -6637,7 +6640,7 @@ struct ConflictPromptBeginResult
     // (an existing or read-only destination, a type or name mismatch, a link) is an Information note;
     // a prompt raised by a failure (sharing, access, disk, path, network, unknown, unsupported link)
     // or after a failed retry stays a Warning.
-    const bool typedCollision      = ! IsRetryableConflictBucket(bucket) && bucket != ConflictBucket::UnsupportedReparse;
+    const bool typedCollision = ! IsRetryableConflictBucket(bucket) && bucket != ConflictBucket::UnsupportedReparse && bucket != ConflictBucket::PathTooLong;
     const bool informationalPrompt = attemptCount == 0u && (consentFacts != nullptr || typedCollision);
     diagnostic.severity =
         informationalPrompt ? FolderWindow::FileOperationState::DiagnosticSeverity::Info : FolderWindow::FileOperationState::DiagnosticSeverity::Warning;
@@ -6853,6 +6856,7 @@ struct ConflictPromptBeginResult
         // Consume, publish repeat policy, reset the event and release ownership as one
         // transition. Diagnostics may flush only after no accepted prompt remains live.
         FileOperations::ConflictBroker::ResetLocked(task._conflictArbiter);
+        task.MarkRateSamplingStateChanged();
         break;
     }
     task._conflictArbiter.cv.notify_all();
@@ -8871,6 +8875,7 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                 ((flags & 8u) == 0u && (policy.Contains(ConflictAction::Overwrite) || policy.Contains(ConflictAction::ReplaceReadOnly) ||
                                         policy.Contains(ConflictAction::ReplaceLink))) ||
                 ((flags & 2u) == 0u && policy.Contains(ConflictAction::KeepBoth)) ||
+                (bucket == ConflictBucket::PathTooLong && policy.Contains(ConflictAction::Retry)) ||
                 ((flags & 16u) == 0u && policy.Contains(ConflictAction::RunConcurrently)) ||
                 ((flags & 32u) == 0u && policy.Contains(ConflictAction::InvalidateLiveOutput)) ||
                 // Q2: the task-scoped Recycle grant exists only on an eligible escalation; the by-name
@@ -14494,7 +14499,7 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
 
 void FolderWindow::FileOperationState::Task::MarkRateSamplingStateChanged() noexcept
 {
-    _rateSamplingStateChangeTick.store(GetTickCount64(), std::memory_order_release);
+    _rateSamplingStateGeneration.fetch_add(1u, std::memory_order_release);
 }
 
 bool FolderWindow::FileOperationState::Task::HasStarted() const noexcept
@@ -14796,6 +14801,9 @@ void FolderWindow::FileOperationState::Task::SetAwaitingUserDecision(const bool 
     {
         return;
     }
+    MarkRateSamplingStateChanged();
+    if (_state)
+        _state->RequestTaskPresentationRefresh();
     // I63 G7: every wait starts as not quiet, so the request is kept until the task shows no progress; the answer takes
     // the request back at once.
     _awaitingAnswerQuiet.store(false, std::memory_order_release);
@@ -15582,12 +15590,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
 HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const size_t operationIndex,
                                                                            const std::filesystem::path& sourcePath,
                                                                            const std::filesystem::path& destinationPath,
-                                                                           std::vector<FileOperations::BoundObjectAuthority>& authorities) noexcept
+                                                                           FileSystemBoundObjectKind expectedSourceKind) noexcept
 {
     const auto scopeOwner                                                     = LoadMutationInterlockScopes();
     const auto& scopes                                                        = *scopeOwner;
     const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
-    if (! plans || plans->size() != 1u || ! _fileSystem || operationIndex >= authorities.size())
+    if (! plans || plans->size() != 1u || ! _fileSystem)
     {
         return E_UNEXPECTED;
     }
@@ -15661,12 +15669,24 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
     constexpr FileSystemBindFlags destinationBindFlags =
         static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION);
 
-    FileOperations::BoundObjectAuthority& sourceAuthority = authorities[operationIndex];
-    const FileOperations::ObjectRevalidationResult sourceRevalidation =
-        FileOperations::RevalidateObjectAuthority(_fileSystem.get(), sourcePath.native(), rename->endpoint.profileId, sourceBindFlags, sourceAuthority);
-    if (sourceRevalidation.state != FileOperations::ObjectRevalidationState::Same)
+    // Preflight retains the ingress snapshot, so a child never holds a rename handle
+    // across the later dependency layer that moves its parent.
+    FileOperations::ObjectBindingResult source =
+        FileOperations::BindObjectAuthority(_fileSystem.get(), sourcePath.native(), rename->endpoint.profileId, sourceBindFlags);
+    if (source.state != FileOperations::ObjectBindingState::Bound)
     {
-        return FAILED(sourceRevalidation.status) ? sourceRevalidation.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        return FAILED(source.status) ? source.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    const FileOperations::BoundObjectAuthority& sourceAuthority = source.authority;
+    if (! admittedStep.source.ingressSnapshot.has_value())
+    {
+        return E_UNEXPECTED;
+    }
+    const FileOperations::ProviderIdentitySnapshot& ingress = admittedStep.source.ingressSnapshot.value();
+    if (sourceAuthority.kind != expectedSourceKind || sourceAuthority.identity.pathProfileId != ingress.pathProfileId ||
+        sourceAuthority.identity.objectId != ingress.objectId || sourceAuthority.identity.revisionId != ingress.revisionId)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
 
     std::wstring parentPath;
@@ -15831,14 +15851,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
                                                : returned.status;
                     if (FAILED(sameHr) || ! sameObject)
                     {
-                        // The namespace mutation committed, but the provider did not return the exact
-                        // authority needed by the next dependency step. Never turn that into a
-                        // retryable name conflict or repeat the mutation.
+                        // The namespace mutation committed. A returned object that cannot
+                        // corroborate that result must never authorize another attempt.
                         renameHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
-                    }
-                    else
-                    {
-                        sourceAuthority = std::move(returned.authority);
                     }
                 }
             }
@@ -15980,9 +15995,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
             static_cast<void>(StoreTypedItemResult(std::move(result)));
         }
     };
-    std::vector<FileOperations::BoundObjectAuthority> authorities;
+    std::vector<FileSystemBoundObjectKind> sourceKinds;
     std::vector<BatchRenameExecutionOp> operations;
-    authorities.reserve(rename->finalMappings.size());
+    sourceKinds.reserve(rename->finalMappings.size());
     operations.reserve(rename->finalMappings.size());
     for (size_t index = 0u; index < rename->finalMappings.size(); ++index)
     {
@@ -16007,8 +16022,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
             storePreMutationFailure(index, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
-        const bool isDirectory = bound.authority.kind == FILESYSTEM_BOUND_DIRECTORY;
-        authorities.push_back(std::move(bound.authority));
+        const FileSystemBoundObjectKind sourceKind = bound.authority.kind;
+        sourceKinds.push_back(sourceKind);
+        bound.authority.boundObject.reset();
         const std::filesystem::path sourcePath(step.source.providerPath);
         std::wstring parentPath;
         std::wstring sourceLeaf;
@@ -16048,7 +16064,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
             .providerSourceCollisionKey = sourceName.collisionKey,
             .providerFinalCollisionKey  = finalName.collisionKey,
             .depth                      = PathDepthKey(sourcePath),
-            .isDirectory                = isDirectory,
+            .isDirectory                = sourceKind == FILESYSTEM_BOUND_DIRECTORY,
         });
     }
 
@@ -16088,15 +16104,15 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
 
     struct ExecutionContext final
     {
-        Task* task                                                     = nullptr;
-        std::vector<FileOperations::BoundObjectAuthority>* authorities = nullptr;
-    } context{.task = this, .authorities = &authorities};
+        Task* task = nullptr;
+        std::span<const FileSystemBoundObjectKind> sourceKinds;
+    } context{.task = this, .sourceKinds = sourceKinds};
     const auto mutation =
         [](void* raw, const size_t operationIndex, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationPath) noexcept -> HRESULT
     {
         auto* const execution = static_cast<ExecutionContext*>(raw);
-        return execution != nullptr && execution->task != nullptr && execution->authorities != nullptr
-                   ? execution->task->ExecuteBatchRenameMutation(operationIndex, sourcePath, destinationPath, *execution->authorities)
+        return execution != nullptr && execution->task != nullptr && operationIndex < execution->sourceKinds.size()
+                   ? execution->task->ExecuteBatchRenameMutation(operationIndex, sourcePath, destinationPath, execution->sourceKinds[operationIndex])
                    : E_POINTER;
     };
     const auto progress = [](void* raw, const uint64_t completed, const uint64_t total, bool) noexcept

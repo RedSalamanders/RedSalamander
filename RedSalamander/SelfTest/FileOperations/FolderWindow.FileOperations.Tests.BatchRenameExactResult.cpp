@@ -162,6 +162,14 @@
         const bool sourceExists = std::filesystem::exists(sourcePath, ec);
         if (ec)
             return failAndRelease(L"Could not inspect source before post-preflight race injection.");
+        {
+            // An open that denies DELETE sharing conflicts with any retained rename handle.
+            // It must succeed while the task is between preflight and the first mutation.
+            const wil::unique_handle withoutDeleteSharing(CreateFileW(
+                sourcePath.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            if (! withoutDeleteSharing)
+                return failAndRelease(L"Batch Rename retained a delete-capable source handle after preflight.");
+        }
         const bool finalExists = std::filesystem::exists(finalPath, ec);
         if (ec || ! sourceExists || finalExists || ! WriteFileTextFsIo(io, finalPath, occupantBytes))
             return failAndRelease(L"Post-preflight race did not start with source present and final slot absent.");

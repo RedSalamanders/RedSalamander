@@ -2058,9 +2058,17 @@ private:
                 model.presentation = RedSalamander::Ui::AlertPresentation::Move;
                 operationLabel     = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_MOVE);
                 break;
+            case HOST_PROMPT_PRESENTATION_MOVE_CONTINUE:
+                model.presentation = RedSalamander::Ui::AlertPresentation::Move;
+                operationLabel     = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_CONTINUE);
+                break;
             case HOST_PROMPT_PRESENTATION_DELETE:
                 model.presentation = RedSalamander::Ui::AlertPresentation::Delete;
                 operationLabel     = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_DELETE);
+                break;
+            case HOST_PROMPT_PRESENTATION_RECYCLE:
+                model.presentation = RedSalamander::Ui::AlertPresentation::Delete;
+                operationLabel     = LoadStringResource(nullptr, IDS_CMD_MOVE_TO_RECYCLE_BIN);
                 break;
             case HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH:
                 model.presentation = RedSalamander::Ui::AlertPresentation::Severity;

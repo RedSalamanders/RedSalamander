@@ -1,0 +1,1 @@
+- Release every exact Batch Rename source handle after preflight. Rebind each row against its captured identity and preflight kind so a child's rename handle cannot block a later parent rename. Add a sharing-mode witness to the existing post-preflight test. Live SMB behavior, legacy protocol fallback, and case-only hops remain I66 qualification work.

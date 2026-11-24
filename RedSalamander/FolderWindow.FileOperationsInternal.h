@@ -2099,7 +2099,7 @@ struct FolderWindow::FileOperationState
         HRESULT ExecuteBatchRenameMutation(size_t operationIndex,
                                            const std::filesystem::path& sourcePath,
                                            const std::filesystem::path& destinationPath,
-                                           std::vector<FileOperations::BoundObjectAuthority>& authorities) noexcept;
+                                           FileSystemBoundObjectKind expectedSourceKind) noexcept;
         void InitializeSourceItemResultBuilders() noexcept;
         void MarkSourceItemsMutationPossible() noexcept;
         void MarkSourceItemMutationPossible(size_t sourceIndex) noexcept;
@@ -2377,7 +2377,8 @@ struct FolderWindow::FileOperationState
         std::atomic<ULONGLONG> _cancelRequestedTick{0};
         std::atomic<bool> _paused{false};
         std::atomic<bool> _queuePaused{false};
-        std::atomic<ULONGLONG> _rateSamplingStateChangeTick{0};
+        std::atomic<uint64_t> _rateSamplingStateGeneration{0};
+        std::atomic<unsigned int> _liveOutputWaitCount{0};
         std::atomic<bool> _started{false};
         std::atomic<ULONGLONG> _operationStartTick{0};
         std::atomic<uint64_t> _desiredSpeedLimitBytesPerSecond{0};

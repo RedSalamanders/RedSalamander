@@ -142,7 +142,9 @@ public:
         FileOperationsPopupInternal::PopupSelfTestInvoke cancelAll{};
         cancelAll.kind = FileOperationsPopupInternal::PopupHitTest::Kind::FooterCancelAll;
         static_cast<void>(DebugInvokeFileOperationsPopup(popup, cancelAll));
-        if (HostGetTestPromptRequestCount() != promptsBefore + 1u)
+        HostPromptDebugSnapshot prompt{};
+        if (HostGetTestPromptRequestCount() != promptsBefore + 1u || ! HostGetTestLastPromptDebugSnapshot(prompt) ||
+            prompt.defaultResult != HOST_PROMPT_RESULT_CANCEL || prompt.message != LoadStringResource(nullptr, IDS_MSG_FILEOPS_CANCEL_ALL_POPUP))
             return false;
         const auto ended = RedSalamander::TestSupport::PumpMessagesUntil(
             [&]() noexcept
