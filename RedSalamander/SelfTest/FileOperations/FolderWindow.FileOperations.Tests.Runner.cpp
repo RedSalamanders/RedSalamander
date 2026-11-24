@@ -9749,6 +9749,148 @@ using TickResult = std::optional<bool>;
     return desktop.Finish() || reject(L"owned-window no-activation witness failed");
 }
 
+[[nodiscard]] bool RunFileOpsRecycleIngressChecks(SelfTestState& state, std::wstring& failureReason) noexcept
+{
+    const auto reject = [&](std::wstring message) noexcept
+    {
+        failureReason = std::move(message);
+        return false;
+    };
+    auto* folder     = TryGetFolderWindow(state.mainWindow);
+    auto* operations = state.fileOps;
+    using Pane       = FolderWindow::Pane;
+    using Mode       = FolderWindow::FileOperationState::ExecutionMode;
+    if (! folder || ! operations || operations->HasActiveOperations() ||
+        ! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+    {
+        return reject(L"Recycle ingress requires an idle test window with activation blocked.");
+    }
+    const auto local = folder->GetFileSystem(Pane::Left);
+    if (! local)
+        return reject(L"The Local pane is unavailable.");
+
+    const bool originalAutoAccept = HostGetAutoAcceptPrompts();
+    const auto originalOverride   = HostGetTestPromptResultOverride();
+    const auto cleanup            = wil::scope_exit([&]() noexcept
+    {
+        HostSetAutoAcceptPrompts(originalAutoAccept);
+        if (originalOverride == HOST_PROMPT_RESULT_NONE)
+            HostClearTestPromptResultOverride();
+        else
+            HostSetTestPromptResultOverride(originalOverride);
+        if (operations->HasActiveOperations())
+            static_cast<void>(CancelOutstandingSelfTestOperations(operations));
+        if (std::wstring leak = SelfTest::PurgeRecycledTestItems(); ! leak.empty())
+            AppendLog(std::move(leak));
+    });
+    HostSetAutoAcceptPrompts(false);
+
+    constexpr size_t kFileCount = 12u;
+    constexpr auto kFlags       = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+    const auto root             = state.tempRoot / L"recycle-ingress";
+    const auto run              = [&](std::wstring_view name, bool batched, bool accepting, const auto& start) noexcept -> bool
+    {
+        std::vector<std::filesystem::path> paths;
+        RecycleBinBatchTestSnapshot snapshot{};
+        if (! CreateSiblingFiles(root / name, static_cast<int>(kFileCount), 4096u, paths) ||
+            FAILED(ReadRecycleBinBatchTestSnapshot(local.get(), true, snapshot)))
+            return reject(std::format(L"{} Recycle fixture could not be prepared.", name));
+
+        HostSetTestPromptResultOverride(accepting ? HOST_PROMPT_RESULT_OK : HOST_PROMPT_RESULT_CANCEL);
+        const uint64_t beforePrompts = HostGetTestPromptRequestCount();
+        static_cast<void>(TakeFileOpsBulkDeleteProviderCallsForSelfTest());
+        DWORD handlesBefore = 0u;
+        if (! GetProcessHandleCount(GetCurrentProcess(), &handlesBefore))
+            return reject(L"Could not sample process handles before Recycle.");
+        const auto memoryBefore = FolderWindowFileOperationsStateInternal::CaptureProcessMemorySnapshot();
+        const auto started      = std::chrono::steady_clock::now();
+        uint64_t taskId         = 0u;
+        const HRESULT hr        = start(paths, taskId);
+        if (accepting && (hr != S_OK || taskId == 0u))
+            return reject(std::format(L"{} Recycle was refused (hr=0x{:08X}).", name, static_cast<uint32_t>(hr)));
+        if (! accepting && (hr != S_FALSE || taskId != 0u || operations->HasActiveOperations()))
+            return reject(std::format(L"{} Recycle cancellation published a task or returned hr=0x{:08X}.", name, static_cast<uint32_t>(hr)));
+        if (accepting)
+        {
+            const auto done = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+                return state.completedTasks.contains(taskId) && ! operations->HasActiveOperations();
+            }, {.timeout = SelfTest::Scale(std::chrono::seconds(20)), .operationName = L"Local Recycle ingress"});
+            if (! done.conditionMet)
+                return reject(std::format(L"{} Recycle did not settle.", name));
+            const auto& completed = state.completedTasks.at(taskId);
+            if (completed.hr != S_OK || completed.conflictPromptCount != 0u)
+                return reject(std::format(L"{} Recycle did not finish cleanly without another prompt.", name));
+        }
+        const uint64_t elapsed = Debug::Perf::ElapsedUs(started);
+        DWORD handlesAfter     = 0u;
+        if (! GetProcessHandleCount(GetCurrentProcess(), &handlesAfter))
+            return reject(L"Could not sample process handles after Recycle.");
+        const auto memoryAfter = FolderWindowFileOperationsStateInternal::CaptureProcessMemorySnapshot();
+        const uint64_t calls   = TakeFileOpsBulkDeleteProviderCallsForSelfTest();
+        if (FAILED(ReadRecycleBinBatchTestSnapshot(local.get(), false, snapshot)))
+            return reject(L"Could not observe the Local Recycle batch.");
+        const bool correctFiles           = std::ranges::all_of(paths,
+                                                                [&](const auto& path) noexcept
+        {
+            std::error_code error;
+            const bool exists = std::filesystem::exists(path, error);
+            return ! error && exists == ! accepting;
+        });
+        const auto purgeFailure           = PurgeExpectedRecycledTestItems(accepting ? kFileCount : 0u);
+        const uint64_t expectedBatchCalls = batched && accepting ? 1u : 0u;
+        const uint64_t expectedItems      = expectedBatchCalls * kFileCount;
+        Debug::Perf::Emit(L"FileOps.RecycleBin.IngressUs", name, elapsed, calls, snapshot.batchCalls, hr);
+        Debug::Perf::Emit(L"FileOps.RecycleBin.IngressHandles", name, 0u, handlesBefore, handlesAfter, S_OK);
+        Debug::Perf::Emit(L"FileOps.RecycleBin.IngressPrivateBytes", name, 0u, memoryBefore.privateBytes, memoryAfter.privateBytes, S_OK);
+        if (! correctFiles || ! purgeFailure.empty() || HostGetTestPromptRequestCount() != beforePrompts + 1u || calls != expectedBatchCalls ||
+            snapshot.batchCalls != expectedBatchCalls || snapshot.requestedItems != expectedItems || snapshot.observedItems != expectedItems ||
+            snapshot.failedItems != 0u || snapshot.fallbackCount != 0u)
+        {
+            return reject(
+                std::format(L"{} Recycle files={} purge='{}' prompts={} bulk calls={} Shell batches={} requested={} observed={} failed={} fallback={}.",
+                            name,
+                            correctFiles,
+                            purgeFailure,
+                            HostGetTestPromptRequestCount() - beforePrompts,
+                            calls,
+                            snapshot.batchCalls,
+                            snapshot.requestedItems,
+                            snapshot.observedItems,
+                            snapshot.failedItems,
+                            snapshot.fallbackCount));
+        }
+        AppendLog(std::format(
+            L"{} Recycle us={} bulk calls={} Shell batches={} handles={}->{}.", name, elapsed, calls, snapshot.batchCalls, handlesBefore, handlesAfter));
+        return true;
+    };
+    const auto startViewerRecycle = [&](const std::vector<std::filesystem::path>& paths, uint64_t& taskId) noexcept
+    {
+        std::array<const wchar_t*, kFileCount> rawPaths{};
+        std::ranges::transform(paths, rawPaths.begin(), [](const auto& path) noexcept { return path.c_str(); });
+        HostViewerActionRequest request{};
+        request.sizeBytes  = sizeof(request);
+        request.action     = HOST_VIEWER_RECYCLE;
+        request.fileSystem = local.get();
+        request.paths      = rawPaths.data();
+        request.pathCount  = static_cast<uint32_t>(rawPaths.size());
+        return folder->ExecuteViewerAction(request, &taskId);
+    };
+    return run(L"per-item",
+               false,
+               true,
+               [&](const auto& paths, uint64_t& taskId) noexcept
+    {
+        return operations->AdmitOperation(
+            FILESYSTEM_DELETE, Pane::Left, std::nullopt, local, paths, {}, kFlags, false, 0u, Mode::PerItem, true, nullptr, &taskId);
+    }) &&
+           run(L"find",
+               true,
+               true,
+               [&](const auto& paths, uint64_t& taskId) noexcept
+    { return folder->StartFileOperationForResolvedPaths(kPluginIdLocal, {}, FILESYSTEM_DELETE, paths, kFlags, true, &taskId); }) &&
+           run(L"viewer-cancel", true, false, startViewerRecycle) && run(L"viewer", true, true, startViewerRecycle);
+}
+
 [[nodiscard]] bool RunFileOpsPopupIdleCadenceChecks(SelfTestState& state, std::wstring& failureReason) noexcept
 {
     using namespace std::chrono_literals;
@@ -15928,6 +16070,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsInterruptedMoveWriterChecks(state))
             {
                 Fail(L"Interrupted Move writer, selection, notice ownership or history-retention contracts failed.");
+                return true;
+            }
+            std::wstring recycleIngressFailure;
+            if (! RunFileOpsRecycleIngressChecks(state, recycleIngressFailure))
+            {
+                Fail(std::format(L"Local Recycle ingress: {}", recycleIngressFailure));
                 return true;
             }
             bool injectedFailureReached = false;

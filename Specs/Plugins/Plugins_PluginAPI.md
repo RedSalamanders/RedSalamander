@@ -73,6 +73,10 @@ point. The source-tree host and shipped plugins use the same ABI revision.
 
 The host matches COM identity to a current pane's exact filesystem instance and snapshots plugin ID, short ID and instance context before navigation/confirmation can pump messages. No match or conflicting contexts fail with `ERROR_NOT_SUPPORTED`. Focus targets the active pane and optionally reveals its leaf. Other pane targets the opposite active pane. Recycle/Delete enter normal File Operations with recursive semantics and confirmation, and return the accepted task ID; this is not completion or proof that data changed. Cancellation and unavailable bindings must not fall back to direct plugin mutation. Synthetic aggregate paths are never valid inputs.
 
+Viewer Recycle uses the [same admitted Local bulk path](../FileSystem/FileSystem_FileOperations.md#delete-and-recycle)
+as pane Recycle when the plan qualifies for batching. The number of provider groups does not change the
+pre-start confirmation count.
+
 ### ABI evolution policy
 
 This is the governing rule for future host/plugin interface changes.

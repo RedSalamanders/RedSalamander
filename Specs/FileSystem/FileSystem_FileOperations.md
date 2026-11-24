@@ -1772,6 +1772,13 @@ write for bandwidth pacing; verification remains separately counted under the sa
 
 ## Delete and Recycle
 
+The host selects the bulk executor for context-menu, Find and Viewer removal requests
+when every admitted child plans Recycle through the Local provider. The pane Delete
+command uses its existing bulk admission. Local groups same-parent items into Shell
+batches under the configured cap. Each ingress keeps its confirmation policy, and
+provider results still drive per-item outcomes, focus restoration and guarded escalation.
+An explicit executor selection is available to existing callers that require it.
+
 Recycle and Permanent are distinct `DeletePlan` modes. Permanent Delete requires fresh explicit
 consent and confirmation-to-mutation identity continuity. Admission makes no provider call for it:
 it decides native authority from the provider's binding interface alone and gathers the

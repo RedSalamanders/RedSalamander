@@ -1106,7 +1106,8 @@ struct FolderWindow::FileOperationState
         std::filesystem::path destinationFolder;
         FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
         FileOperations::OperationOptions options;
-        ExecutionMode executionMode = ExecutionMode::PerItem;
+        // An explicit mode keeps callers that exercise a specific executor on that route.
+        std::optional<ExecutionMode> executionMode;
         std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems;
         std::wstring sourcePluginId;
         std::wstring sourcePluginShortId;
@@ -1127,8 +1128,8 @@ struct FolderWindow::FileOperationState
         wil::com_ptr<IFileSystem> fileSystem;
         wil::com_ptr<IFileSystem> destinationFileSystem;
         FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
-        // Copy and Move are identity-guarded only by the per-item executor. Delete callers that
-        // intentionally use provider batching must opt in to BulkItems explicitly.
+        // Copy, Move and Permanent Delete use the per-item executor. Local Recycle can use
+        // provider batching once the plan group has been qualified.
         ExecutionMode executionMode = ExecutionMode::PerItem;
         bool requireConfirmation    = false;
         std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems;
@@ -2647,7 +2648,7 @@ struct FolderWindow::FileOperationState
                            FileSystemFlags flags,
                            bool waitForOthers,
                            uint64_t initialSpeedLimitBytesPerSecond                           = 0,
-                           ExecutionMode executionMode                                        = ExecutionMode::PerItem,
+                           std::optional<ExecutionMode> executionMode                         = std::nullopt,
                            bool requireConfirmation                                           = false,
                            wil::com_ptr<IFileSystem> destinationFileSystem                    = nullptr,
                            uint64_t* taskIdOut                                                = nullptr,

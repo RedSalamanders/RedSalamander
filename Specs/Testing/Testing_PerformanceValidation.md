@@ -1307,6 +1307,15 @@ improvement claims.
 
 Recycle Bin batch validation records `FileOps.SelfTest.RecycleBinBatchBaseline`,
 `RecycleBinBatchCandidate`, and `RecycleBinBatchImprovement` as live-environment timing evidence.
+
+The no-activation `FileOps_ReviewRemediationContracts` selection compares explicit per-item
+Recycle and normal Find and Viewer admission on equivalent same-parent Local batches. It verifies
+the one start prompt, canceled Viewer preservation, removed paths, batch receipts and exact
+Recycle Bin purging. `FileOps.RecycleBin.IndividualPerformOperationsUs` and
+`FileOps.RecycleBin.PerformOperationsUs` measure Shell calls, and the ingress rows report
+admission-to-settlement time, bulk calls, before/after handle counts and private bytes.
+Resource snapshots include the process's other retained state. The timings describe the Local
+provider and its host process on the measured machine.
 Those elapsed times are advisory because `IFileOperation` completion includes variable Windows
 Shell broker, Defender, and indexing latency; a single baseline/candidate wall-clock pair is not a
 hard regression gate. Test-enabled Debug and Release instead hard-gate the process-local route:

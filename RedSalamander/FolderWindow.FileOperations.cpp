@@ -2214,7 +2214,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                                                          FileSystemFlags flags,
                                                          bool waitForOthers,
                                                          uint64_t initialSpeedLimitBytesPerSecond,
-                                                         ExecutionMode executionMode,
+                                                         std::optional<ExecutionMode> executionMode,
                                                          bool requireConfirmation,
                                                          wil::com_ptr<IFileSystem> destinationFileSystem,
                                                          uint64_t* taskIdOut,
@@ -2425,7 +2425,6 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     const std::filesystem::path& destinationFolder                       = construction.destinationFolder;
     const FileSystemFlags flags                                          = construction.flags;
     const FileOperations::OperationOptions& options                      = construction.options;
-    const ExecutionMode executionMode                                    = construction.executionMode;
     std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems   = std::move(construction.resolvedItems);
     const std::wstring& sourcePluginId                                   = construction.sourcePluginId;
     const std::wstring& sourcePluginShortId                              = construction.sourcePluginShortId;
@@ -2826,6 +2825,23 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
                       S_OK);
     Debug::Perf::EmitValue(L"fileops.plan.source_count", sourceCount);
     Debug::Perf::EmitValue(L"fileops.plan.payload_bytes", payloadBytes);
+
+    ExecutionMode executionMode = ExecutionMode::PerItem;
+    if (construction.executionMode.has_value())
+    {
+        executionMode = construction.executionMode.value();
+    }
+    else if (operation == FILESYSTEM_DELETE && std::ranges::all_of(plans,
+                                                                   [](const FileOperations::FileOperationPlan& plan) noexcept
+    {
+        const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+        return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Recycle && FileOperations::IsLocalFileSystemEndpoint(deletion->endpoint);
+    }))
+    {
+        // The Local provider batches same-parent items in one Shell operation. The route
+        // depends on the admitted plans, so every ordinary Recycle ingress can use it.
+        executionMode = ExecutionMode::BulkItems;
+    }
 
     OperationAdmission admission{};
     admission.plans                      = std::move(plans);
@@ -3726,7 +3742,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
                                                       request.flags,
                                                       waitForOthers,
                                                       0,
-                                                      FileOperationState::ExecutionMode::PerItem,
+                                                      std::nullopt,
                                                       false,
                                                       std::move(destinationFileSystem),
                                                       &taskId,
@@ -3976,7 +3992,7 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
                                            flags,
                                            waitForOthers,
                                            0,
-                                           FileOperationState::ExecutionMode::PerItem,
+                                           std::nullopt,
                                            requireConfirmation,
                                            nullptr,
                                            taskIdOut,
@@ -4652,9 +4668,8 @@ void FolderWindow::CommandDelete(Pane pane)
         return;
     }
 
-    // Recycle deletes go through ONE bulk DeleteItems call: the plugin batches same-parent
-    // items into a single IFileOperation (up to 1000 per batch), which per-item routing would
-    // degrade to one shell operation + one STA thread per item.
+    // Keep the pane's existing provider bulk path. Local Recycle can group
+    // same-parent paths into a single Shell operation per batch.
     const bool waitForOthers                                        = _fileOperations->ShouldQueueNewTask();
     const std::optional<FileSystemPathIdentity> removalPathIdentity = TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
     const uint64_t removalFocusToken = removalPathIdentity.has_value() ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value()) : 0u;

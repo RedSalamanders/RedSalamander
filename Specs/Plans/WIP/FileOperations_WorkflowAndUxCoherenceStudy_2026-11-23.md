@@ -6,7 +6,8 @@
 
 ## Implementation checklist
 
-**Current work (2026-11-24).** The branch has the first ingress, exact Batch Rename handle-lifetime, and throughput
+**Current work (2026-11-24).** The next increment brings Local Recycle batching to context-menu, Find and Viewer
+admission. The branch has the first ingress, exact Batch Rename handle-lifetime, and throughput
 changes. The test-enabled x64 Debug solution build and paced throughput rerun passed. PrePush uncovered two stale
 source guards. Both were corrected, and the source-contract file passed its focused rerun. The repaired same-folder
 Ctrl+drag still needs a desktop rerun. Implementation started at `bbb57a572`. Drift from the study baseline affected the
@@ -19,8 +20,10 @@ ancestry-cleanup test and its evidence contracts.
     and read-only case coverage as needed for the workflow walkthrough.
   - [ ] Verify the implemented short Copy-only Move question across mixed plans, changed endpoints, and Cut/queue
     preservation. The focused source-retention case passed.
-  - [ ] Implement typed Recycle availability, bulk ingress parity and direct permanent consent for known-unavailable
-    routes. Prove per-item routing, prompt counts and bulk cost.
+  - [ ] **In progress.** Route Local Recycle from context menu, Find and Viewer through the existing bulk executor.
+    Check prompt counts, results, Shell calls and settled resources against the per-item route.
+  - [ ] Implement typed per-item Recycle availability and direct permanent consent for known-unavailable routes.
+    Prove mixed-group routing, consent scope and unchanged handling after an unknown result.
 - [ ] **S1.** Qualify Rename by route.
   - [x] Release each exact Batch Rename handle after preflight and validate captured identity on every mutation
     rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
