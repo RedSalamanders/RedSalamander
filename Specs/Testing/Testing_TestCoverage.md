@@ -90,6 +90,11 @@ call boundaries, ordering or forbidden APIs. The File Operations durable-store g
 complete publication call and fail-if-exists/replace policy; native durable-store cases remain the
 authority for atomic publication, rejected paths and recovery behavior.
 
+The popup cadence source guard requires the retained-history pause witness to advance the sampling
+generation and call the live rate reducer with a separate sample time. The live-output wait guard
+checks the active publisher's task identity inside the wait function. Native tests own the cadence
+and wait outcomes.
+
 The explicit hosted UI-attribution campaign is component evidence: one existing help
 case executes the native process-observer fake controls before the three fixed UI cases.
 Compiler-free source/managed controls do not prove their native execution or the cause

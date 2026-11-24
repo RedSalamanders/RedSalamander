@@ -207,7 +207,9 @@ Describe 'Popup cadence diagnostic source contracts' {
         $reducer=[regex]::Match($source,'(?ms)^bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVisualRateForSelfTest\([^\r\n]+\) noexcept\s*\{.*?^\}')
         $reducer.Success|Should Be $true
         $reducer.Value|Should Match 'task->paused \|\| history->second\.displayedBytesPerSec <= 0\.0'
-        $reducer.Value|Should Match 'AdvanceRateHistory\(history->second, rate, rate\.progressStateChangeTick, totals\)'
+        $reducer.Value|Should Match 'rate\.paused\s*=\s*true;'
+        $reducer.Value|Should Match 'rate\.progressStateGeneration\s*=\s*history->second\.lastStateGeneration\s*\+\s*1u;'
+        $reducer.Value|Should Match 'AdvanceRateHistory\(\s*history->second,\s*rate,\s*GetTickCount64\(\),\s*totals\s*\)'
         $reducer.Value|Should Not Match 'DebugSetVisualScenario|_rates\.clear|_controlsHost\.Detach|SetTimer'
         $runner=Get-RSText 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'
         $case=[regex]::Match($runner,'(?ms)^\[\[nodiscard\]\] bool RunFileOpsPopupIdleCadenceChecks\([^\r\n]+\) noexcept\s*\{.*?^\}')
@@ -4499,7 +4501,9 @@ Specs\TestRuns\local_scratch
         $queue | Should Match 'HasConcurrentPublisherConsent[\s\S]{0,330}candidate\.relations\.Allows\(publisher\.admission->key\)'
         $queue | Should Match 'ExactMutationPathsOverlap'
         $queue | Should Match '_livePublishedIndexOverflow[\s\S]{0,900}_activeMutationInterlocks'
-        $queue | Should Match 'WaitForLiveOutputPublisher[\s\S]{0,700}active\.taskId\s*==\s*publisherTaskId'
+        $waiter = [regex]::Match($queue, '(?ms)^bool FolderWindow::FileOperationState::WaitForLiveOutputPublisher\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $waiter.Success | Should Be $true
+        $waiter.Value | Should Match 'std::ranges::any_of\(\s*_activeMutationInterlocks,\s*\[&\]\(const ActiveMutationInterlock& active\) noexcept\s*\{\s*return active\.taskId\s*==\s*publisherTaskId;\s*\}\s*\)'
         $state | Should Match 'case\s+ConflictBucket::SameHostOverlap:[\s\S]{0,260}defaultAction\s*=\s*ConflictAction::Proceed'
         $state | Should Match 'case\s+ConflictBucket::SameHostLiveOutput:[\s\S]{0,340}defaultAction\s*=\s*ConflictAction::QueueUntilOtherTaskFinishes'
         $state | Should Match 'policy\.Add\(ConflictAction::RunConcurrently\)'

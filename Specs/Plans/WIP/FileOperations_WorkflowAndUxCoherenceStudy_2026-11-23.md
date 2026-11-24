@@ -6,39 +6,43 @@
 
 ## Implementation checklist
 
-**Current work (2026-11-24).** The first ingress, exact Batch Rename handle-lifetime, and throughput changes are in the
-implementation branch. The first fixed candidate `dc30fb46b` built cleanly for x64 Debug. Six focused selections
-passed. The same-folder drag test caught a refusal when the two local panes have separate provider objects. The
-patch now recognizes the shared Windows namespace and needs a focused rerun. Implementation started at `bbb57a572`.
-Drift from the study baseline affected the ancestry-cleanup test and its evidence contracts.
+**Current work (2026-11-24).** The branch has the first ingress, exact Batch Rename handle-lifetime, and throughput
+changes. The test-enabled x64 Debug solution build and paced throughput rerun passed. PrePush uncovered two stale
+source guards. Both were corrected, and the source-contract file passed its focused rerun. The repaired same-folder
+Ctrl+drag still needs a desktop rerun. Implementation started at `bbb57a572`. Drift from the study baseline affected the
+ancestry-cleanup test and its evidence contracts.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
-- [ ] **S0, implemented.** Viewer Recycle wording, Windows folder-picker Move, clipboard guards, same-folder Ctrl+drag
-  Copy, Cancel all, blocked Retry and read-only wording. Verify the affected commands and decision surfaces.
-- [ ] **S0, implemented.** Short Copy-only Move question with disclosure in the existing options flow. Verify acceptance
-  and cancellation, including mixed plans, endpoint changes and Cut/queue preservation.
-- [ ] **S0, remaining.** Bulk Recycle parity and typed availability. Prove per-item routing and prompt counts. Measure
-  affected bulk Recycle routes.
-- [ ] **S1, implemented in part.** Batch Rename releases each rename handle after preflight and checks captured identity
-  on each mutation rebind. The exact-result fixture now checks DELETE sharing at that boundary. Remaining exact Local/SMB
-  qualification includes nested rows, case-only hops, legacy API fallbacks and reproduction of any blocking watches.
-- [ ] **S1.** Corroborated same-parent Local/SMB Rename without file IDs. Qualify the retained-handle namespace guard on
-  Windows SMB and Samba, including changed parents and decoys.
-- [ ] **S1.** New-name Rename on Curl, Drive, and Graph. Qualify each protocol/profile and its result receipts before
-  enabling it. Verify F2, Batch Rename and Change Case plus unsupported-route cases.
-- [ ] **S2, implemented in part.** A wait/resume generation covers task decisions, live-output waits and the existing
-  pause/queue transitions. Stopping freezes the sample history and paused tasks no longer suppress a running peer's ETA.
-  The model fixture covers missed wait edges and stopping. Remaining work includes credential waits, preparing elapsed
-  time, projection parity across the popup and taskbar, and paired timing, allocation and active-peer evidence.
-- [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling. Match
-  card and mirror scopes and authority, including stage cleanup and post-publication results.
+- [ ] **S0.** Finish ingress parity and qualification.
+  - [x] Verify folder-picker Move, Viewer Recycle wording and safe cancel, and Cancel all in the focused x64 tests.
+  - [ ] Rerun the same-folder Ctrl+drag guard after the Windows provider instance fix. Expand clipboard, blocked Retry
+    and read-only case coverage as needed for the workflow walkthrough.
+  - [ ] Verify the implemented short Copy-only Move question across mixed plans, changed endpoints, and Cut/queue
+    preservation. The focused source-retention case passed.
+  - [ ] Implement typed Recycle availability, bulk ingress parity and direct permanent consent for known-unavailable
+    routes. Prove per-item routing, prompt counts and bulk cost.
+- [ ] **S1.** Qualify Rename by route.
+  - [x] Release each exact Batch Rename handle after preflight and validate captured identity on every mutation
+    rebind. The local exact-result test passed with a no-DELETE-sharing witness at the preflight boundary.
+  - [ ] Qualify exact Local and SMB for nested rows, case-only hops, legacy API fallbacks and blocking watchers. Compare
+    single- and 100-item Rename costs, including handle peaks and cancellation.
+  - [ ] Implement and qualify corroborated same-parent Local/SMB Rename without file IDs on Windows SMB and Samba,
+    including changed parents and decoys.
+  - [ ] Qualify new-name Rename on Curl, Drive, and Graph and its result receipts before enabling each protocol or
+    profile. Verify F2, Batch Rename, Change Case and unsupported-route cases.
+- [ ] **S2.** Complete progress projection and paired measurements.
+  - [x] Preserve sampling through decision, live-output, pause and queue transitions. Freeze history while stopping
+    and keep a running peer's ETA. The model and paced idle-cadence selections passed.
+  - [ ] Cover credential waits and preparing elapsed time. Align the popup and taskbar snapshots.
+  - [ ] Collect paired allocation, timing, history and active-peer evidence.
+- [ ] **S3.** One repeat control, coalesced cleanup and read-only decisions, overlap and sensitive-loss handling.
+  Match card and mirror scopes and authority, including stage cleanup and post-publication results.
 - [ ] **S4–S5.** Queue controls and persistence, shared cap, completed grouping, mirror focus and Issues entry.
   Recheck I60/I64 ownership and verify interlocks, pause provenance, retention, UIA and focus.
 - [ ] **S6–S7.** Options parity, asynchronous Create Directory and archives, and useful results. Preserve saved
   settings. Qualify worker cancellation, exit, refresh and cleanup.
-- [ ] **S8, in progress.** First ingress and Batch Rename contracts, Move with Options label, Cut/Paste guidance, and
-  removal of the obsolete queued destination selector. Keep the owning specifications, consistency ledger and user guide
-  current with each remaining slice.
+- [ ] **S8.** Keep the owning specifications, consistency ledger and user guide current. The first ingress, exact
+  Batch Rename, throughput, Move with Options, and Cut/Paste updates are in the branch.
 - [ ] **Closeout.** Complete the walkthrough, native and live-provider gates, document checks and reviewed history
   admission. Move to Done after all required rows have evidence or an accepting owner for the exact transferred gate.
 
@@ -68,7 +72,32 @@ Drift from the study baseline affected the ancestry-cleanup test and its evidenc
 |---|---|---|
 | `FileOps_RepeatDecisionContracts` | Passed without activation | `20261124T081614Z-64872-f5cb2a98b9c542b181b3b8a97ec8192d` |
 | `FileOps_IdentityInterlockWaiting` | Passed without activation | `20261124T081715Z-64872-a7b1ace66f8f4fb58da7eb79d89dabd8` |
-| `FileOps_PopupIdleCadence` | Failed because the tiny fixture reached publication before a new rate could be measured. The fixture now paces a real transfer across several samples. Rerun pending. | `20261124T081817Z-64872-e3f005a81f5c48649ca3a0dd4aaff921` |
+| `FileOps_PopupIdleCadence` | Failed because the tiny fixture reached publication before a new rate could be measured. The paced rerun passed on the candidate below. | `20261124T081817Z-64872-e3f005a81f5c48649ca3a0dd4aaff921` |
+
+- The full solution built test-enabled x64 Debug on `0211122e8` with zero warnings and zero errors. Receipt
+  `782884d4bec483414e035036c1b48f80cd71bd8b1ed4ab10e98f21625ff2a9c4`. The paced
+  `FileOps_PopupIdleCadence` selection passed without activation in run
+  `20261124T082752Z-59536-98f34ae1390f465989d44c3027b3b8b1`.
+- Non-activating `Test-Changes.ps1 -Mode PrePush -Configuration Debug -Platform x64 -SkipBuild` on `0211122e8`
+  executed 14 entries. Thirteen passed their entry gates. The run recorded 1,797 passed, two failed, and 27
+  skipped cases. The Pester failures matched an obsolete transition tick and a fixed character distance
+  in the live-output wait guard. Run `20261124T082910Z-59536-199bace9c93c4fffba708267a19c2e54`,
+  final receipt `30e70fc85e83d409cf324d7d60cb2f17aaf93b1d65b04b0fa9ecda6bd23a09ad`.
+  Commands, File Operations and both interactive viewer selections remain pending.
+- After the guard repair, `TestHarnessSourceContracts.Tests.ps1` passed 243 cases with zero failures or skips
+  in Pester 3.4.0. Run `20261124T092118Z-19224-3e7f22bb4d984e5fba1a4bdae44c663e` binds native sources at
+  `0211122e8` and the updated test file SHA-256
+  `aab6ae96a3e1b4179b64755fd50590d18604b37b13970ef4eb07f271f526b23b`.
+  A current-head PrePush rerun remains open.
+- Same-machine x64 Debug cadence comparison used baseline `bbb57a572`, verified receipt
+  `aad8a6aefb2102d3f24a592ccb4ceb9c620f78f149bed0f39bb773a66376956a`,
+  run `20261124T091748Z-75364-035371b12b9344f0a32412ced821a0ac`,
+  and candidate `0211122e8`, final PrePush build receipt above,
+  run `20261124T091911Z-69464-1f7f62f41fb24db186fcc04be6f8fa9d`.
+  Both focused selections passed. In each unchanged synthetic interval of about 1.2 seconds, running
+  recorded 11 ticks and 11 renders, paused, prompting and queued each recorded one tick and one render,
+  and completed idle recorded zero. The changed live-copy workload requires a matched workload for a
+  cost comparison. Allocation, retained history and concurrent active-peer measurements remain open.
 
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.
