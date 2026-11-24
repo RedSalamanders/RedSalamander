@@ -7,10 +7,10 @@
 ## Implementation checklist
 
 **Current work (2026-11-24).** The first ingress, exact Batch Rename handle-lifetime, and throughput changes are in the
-implementation branch. The cold x64 Debug build compiled with zero warnings and errors, but the wrapper withheld the
-receipt when source inputs changed during the build. A fixed candidate is required for runtime evidence. The implementation baseline
-is `bbb57a572`. Drift from the study baseline affects the
-ancestry-cleanup test and its evidence contracts. The production Rename and ingress paths were unchanged at that baseline.
+implementation branch. The first fixed candidate `dc30fb46b` built cleanly for x64 Debug. Six focused selections
+passed. The same-folder drag test caught a refusal when the two local panes have separate provider objects. The
+patch now recognizes the shared Windows namespace and needs a focused rerun. Implementation started at `bbb57a572`.
+Drift from the study baseline affected the ancestry-cleanup test and its evidence contracts.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0, implemented.** Viewer Recycle wording, Windows folder-picker Move, clipboard guards, same-folder Ctrl+drag
@@ -41,6 +41,24 @@ ancestry-cleanup test and its evidence contracts. The production Rename and ingr
   current with each remaining slice.
 - [ ] **Closeout.** Complete the walkthrough, native and live-provider gates, document checks and reviewed history
   admission. Move to Done after all required rows have evidence or an accepting owner for the exact transferred gate.
+
+### Validation checkpoints
+
+- `dc30fb46b` built with zero warnings and zero errors using `build.ps1 -Configuration Debug -Platform x64
+  -ProjectNames RedSalamander` with tests enabled. Build receipt
+  `04985ac959f56c20a9f2a40d8f0613490866797615e6e138c911876fba3b7bd0`.
+- Focused x64 Debug runs used the marked local sandbox. The runner reported `NOT_EVALUATED` at repository scope.
+  The passed selections and the initial failed witness remain in its completed-run archive.
+
+| Selection | Result | Run ID |
+|---|---|---|
+| `Commands_FileOpsFolderPickerMoveUsesHostQueue` | Passed | `20261124T080347Z-60876-a29df09ceaeb4316b8894cfd894b2c9e` |
+| `folderView_drop_integrity_guards` | Failed on same-folder Ctrl+drag in the first candidate | `20261124T080442Z-60876-402869228c9c4feeb44ff233aad4da72` |
+| `FileOpsFamily_BatchRenameExactResult` | Passed, including the post-preflight sharing witness | `20261124T080545Z-60876-bfc378cf17ad4c1ab786cf4527749906` |
+| `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof` | Passed | `20261124T080633Z-60876-ff9be60a22e34d6eb6880fdfdf6e8987` |
+| `Phase10_PermanentDelete` | Passed, including the Recycle confirmation snapshot | `20261124T080714Z-60876-d01ca01cc0aa43218ba40875855a2e8e` |
+| `FileOps_RateWindowDisplay` | Passed | `20261124T080756Z-60876-09d1cdd6f4c049b79b05e52c6d9e390a` |
+| `FileOps_CancelAllNeverStarted` | Passed | `20261124T080835Z-60876-ea661fa63ee5419c97544e2d3586433a` |
 
 Each delivered change updates the implementation, tests, and owning specification together. The current domain contracts
 govern shipped behavior until those changes land.

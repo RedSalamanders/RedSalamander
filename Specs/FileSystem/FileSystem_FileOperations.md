@@ -1351,7 +1351,8 @@ cleanup or UAC.
 - Same-pane `Ctrl+C` then `Ctrl+V` copies into a collision-safe Keep Both sibling name.
 - A same-folder Ctrl+drag Copy uses that same Keep Both route. The internal drop resolves the
   originating pane by its provider context and qualified parent comparison. Two panes showing
-  the same folder can use their shared provider instance.
+  the same folder can use either pane when both address the built-in Windows namespace or share
+  the same provider instance.
 - Same-folder Move is rejected before mutation.
 - Same-folder comparison and explicit destination-mapping containment use the admitted path-profile
   identity contract, including its separator and case rules; host `std::filesystem` lexical rules

@@ -3617,7 +3617,8 @@ struct ClipboardDropEffectReadStatus
     const auto sibling          = destRoot / L"beta (2).txt";
     dropHr                      = folderView->DebugPerformFileDropForSelfTest(
         {sameFolderSource}, DROPEFFECT_COPY, &performed, POINT{-1, -1}, false, DROPEFFECT_COPY | DROPEFFECT_MOVE, MK_CONTROL);
-    state.Require(dropHr == S_OK && performed == DROPEFFECT_COPY, L"Ctrl+drag into the same folder must use Copy.");
+    state.Require(dropHr == S_OK && performed == DROPEFFECT_COPY,
+                  std::format(L"Ctrl+drag into the same folder must use Copy. hr=0x{:08X}, effect={}.", static_cast<unsigned long>(dropHr), performed));
     static_cast<void>(RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, destRoot, L"Same-folder Ctrl+drag"));
     state.Require(WaitForPathExistsForShellCommandTest(sibling, SelfTest::Scale(5000ms)) && ReadUtf8TextFileForCommandSelfTest(sameFolderSource) == L"beta" &&
                       ReadUtf8TextFileForCommandSelfTest(sibling) == L"beta",

@@ -3635,11 +3635,14 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             };
             const bool fromLeft  = selectsFromPane(_leftPane);
             const bool fromRight = selectsFromPane(_rightPane);
+            // Local is instantiated per pane. Its matching contexts still address one Windows namespace.
+            const bool sameNamespace =
+                _leftPane.fileSystem.get() == _rightPane.fileSystem.get() || NavigationLocation::EqualsNoCase(request.sourcePluginId, L"builtin/file-system");
             if (fromLeft != fromRight)
             {
                 sourcePane = fromLeft ? Pane::Left : Pane::Right;
             }
-            else if (! fromLeft || _leftPane.fileSystem.get() != _rightPane.fileSystem.get())
+            else if (! fromLeft || ! sameNamespace)
             {
                 return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             }
