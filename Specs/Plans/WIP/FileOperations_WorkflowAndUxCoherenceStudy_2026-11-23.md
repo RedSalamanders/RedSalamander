@@ -15,12 +15,14 @@ test and its evidence contracts.
 [PR #246](https://github.com/RedSalamanders/RedSalamander/pull/246) merged into `main` at `bcaa59d10`.
 Its non-activating x64 Debug PrePush executed 14 entries with 1,799 passes, zero failures and 27 environment skips.
 [The first main Release attempt](https://github.com/RedSalamanders/RedSalamander/actions/runs/45405656554/attempts/1)
-timed out downloading a Ghostty build dependency on both architectures before native regression tests. The failed jobs
-were retried. Four desktop-lease entries and the qualification below remain open.
+timed out downloading a Ghostty build dependency on both architectures before native regression tests.
+[Attempt 2](https://github.com/RedSalamanders/RedSalamander/actions/runs/45405656554/attempts/2) hit the same timeout.
+Four desktop-lease entries and the qualification below remain open.
 
 The follow-up x64 Debug PR selection on `842ac811a` executed 12 entries with 1,507 passes and zero failures.
 Repository coverage remains `NOT_EVALUATED`. The current candidate also includes Queue/Parallel persistence,
-bulk-pause ownership and a dedicated live SMB Rename case. Their native validation is pending.
+bulk-pause ownership and a dedicated live SMB Rename case. The first combined build stopped because the new case was
+missing from the SMB child family. The family is now registered. A fresh native run remains required.
 
 - [x] **Intake.** Preserve the source study, add the WIP index entry, and check source drift.
 - [ ] **S0.** Finish ingress parity and qualification.
