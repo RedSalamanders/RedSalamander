@@ -29276,5 +29276,8 @@ void FolderWindow::ApplyFileOperationSettings() noexcept
     const uint32_t limit = _settings && _settings->fileOperations.has_value() ? _settings->fileOperations->maxParallelTransfers : 4u;
     GetConnectionConcurrencyLimiter().ConfigureSharedTransfers(limit);
     if (_fileOperations)
+    {
+        _fileOperations->LoadQueueDefaultFromSettings();
         _fileOperations->NotifyQueueChanged();
+    }
 }

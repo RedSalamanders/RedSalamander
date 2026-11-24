@@ -586,8 +586,17 @@ bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long wa
     return SUCCEEDED(resultHr);
 }
 
+namespace
+{
+[[nodiscard]] bool GetQueueDefaultFromSettings(const Common::Settings::Settings* settings) noexcept
+{
+    return ! settings || ! settings->fileOperations.has_value() || settings->fileOperations->queueNewTasks;
+}
+} // namespace
+
 FolderWindow::FileOperationState::FileOperationState(FolderWindow& owner) : _owner(owner)
 {
+    LoadQueueDefaultFromSettings();
     _uiLifetime = std::make_shared<int>(0);
     LoadInterruptedMoveBreadcrumbs();
 }
@@ -2840,6 +2849,11 @@ void FolderWindow::FileOperationState::SetQueueNewTasks(bool queue) noexcept
     _queueNewTasks.store(queue, std::memory_order_release);
 }
 
+void FolderWindow::FileOperationState::LoadQueueDefaultFromSettings() noexcept
+{
+    SetQueueNewTasks(GetQueueDefaultFromSettings(_owner._settings));
+}
+
 bool FolderWindow::FileOperationState::GetQueueNewTasks() const noexcept
 {
     return _queueNewTasks.load(std::memory_order_acquire);
@@ -2847,7 +2861,7 @@ bool FolderWindow::FileOperationState::GetQueueNewTasks() const noexcept
 
 void FolderWindow::FileOperationState::ApplyQueueMode(bool queue) noexcept
 {
-    _queueNewTasks.store(queue, std::memory_order_release);
+    SetQueueNewTasks(queue);
 
     std::vector<Task*> tasks;
     CollectTasks(tasks);
@@ -2876,6 +2890,16 @@ void FolderWindow::FileOperationState::ApplyQueueMode(bool queue) noexcept
 
     UpdateQueuePausedTasks();
     NotifyQueueChanged();
+
+    if (_owner._settings && GetQueueDefaultFromSettings(_owner._settings) != queue)
+    {
+        auto& settings = *_owner._settings;
+        if (! settings.fileOperations.has_value())
+            settings.fileOperations.emplace();
+        settings.fileOperations->queueNewTasks = queue;
+        PruneFileOperationsSettingsIfDefault(settings);
+        QueueSettingsSave(L"queue default");
+    }
 }
 
 bool FolderWindow::FileOperationState::RunQueuedTaskNow(uint64_t taskId) noexcept

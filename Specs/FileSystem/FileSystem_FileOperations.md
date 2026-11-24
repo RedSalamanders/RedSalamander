@@ -3525,7 +3525,8 @@ mutate only objects proven created/changed by the original task.
 
 Host settings:
 
-- `fileOperations.mode`: Queue or Parallel;
+- `fileOperations.queueNewTasks`: saved popup default for new work (Boolean, `true` for Queue on a
+  fresh profile and `false` for Parallel). An explicit Start option applies to that submission.
 - concurrency and bandwidth controls already exposed;
 - `fileOperations.verifyAfterCopy`: Boolean, default false;
 - `fileOperations.maxParallelTransfers`: integer, default four, range one through sixteen;

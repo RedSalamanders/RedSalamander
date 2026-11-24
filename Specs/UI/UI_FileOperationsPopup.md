@@ -361,6 +361,10 @@ item calls `ApplyQueueMode(...)`, and choosing the current item is idempotent. I
 animated sliding thumb or keep a second UI-local mode state. It uses the shared DxUi current-value
 selector chrome: one whole click target, flat borderless rest state, quiet chevron, shared hover
 animation across the complete target, and no split-button divider or nested chevron button.
+The footer saves the selected mode through the deferred settings writer as the default for new
+submissions. A new owner loads that default, and missing settings use Queue. Starting a single task
+with an explicit mode leaves the saved default alone. The selecting owner's existing live transition
+and per-task safety interlocks continue to apply.
 
 A flyout opened from a popup button MUST use the invoking button's width as its minimum root-surface
 width. Longer localized labels, shortcut columns, and other flyout content may expand the surface

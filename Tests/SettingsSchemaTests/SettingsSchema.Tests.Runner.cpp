@@ -1127,6 +1127,50 @@ void TestFileOperationParallelLimitSettings(bool& success)
     }
 }
 
+void TestFileOperationQueueDefaultSettings(bool& success)
+{
+    using namespace Common::Settings;
+    const std::wstring appId = std::format(L"RedSalamanderQueueDefault-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const auto path    = GetSettingsPath(appId);
+
+    Settings legacy{};
+    Check(WriteTestBytes(path, R"json({"schemaVersion":16,"fileOperations":{"popupThroughputExpanded":false}})json") &&
+              TryLoadSettingsNoRecovery(appId, legacy) == S_OK && legacy.fileOperations.has_value() && legacy.fileOperations->queueNewTasks &&
+              ! legacy.fileOperations->popupThroughputExpanded,
+          L"queue default: old settings default to Queue and keep other popup choices",
+          success);
+
+    Settings settings{};
+    settings.fileOperations.emplace().queueNewTasks = false;
+    Settings parallel{};
+    Check(SaveSettings(appId, settings) == S_OK && TryLoadSettingsNoRecovery(appId, parallel) == S_OK && parallel.fileOperations.has_value() &&
+              ! parallel.fileOperations->queueNewTasks,
+          L"queue default: Parallel persists as the sole non-default setting",
+          success);
+
+    settings.fileOperations->queueNewTasks = true;
+    Settings queue{};
+    Check(SaveSettings(appId, settings) == S_OK && TryLoadSettingsNoRecovery(appId, queue) == S_OK && ! queue.fileOperations.has_value(),
+          L"queue default: restoring Queue prunes the default-only section",
+          success);
+
+    settings.fileOperations->popupThroughputExpanded = false;
+    Settings unrelated{};
+    Check(SaveSettings(appId, settings) == S_OK && TryLoadSettingsNoRecovery(appId, unrelated) == S_OK && unrelated.fileOperations.has_value() &&
+              unrelated.fileOperations->queueNewTasks && ! unrelated.fileOperations->popupThroughputExpanded &&
+              ReadTestBytes(path).find("queueNewTasks") == std::string::npos,
+          L"queue default: the writer omits Queue and keeps other popup choices",
+          success);
+
+    Settings invalid{};
+    Check(WriteTestBytes(path, R"json({"schemaVersion":16,"fileOperations":{"queueNewTasks":"false"}})json") &&
+              TryLoadSettingsNoRecovery(appId, invalid) == S_OK && invalid.fileOperations.has_value() && invalid.fileOperations->queueNewTasks,
+          L"queue default: invalid types keep the Queue default",
+          success);
+}
+
 void TestConnectionProfileIdentityGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderConnectionIdentity-{}-{}", GetCurrentProcessId(), GetTickCount64());
@@ -1464,6 +1508,7 @@ int wmain(int argc, wchar_t** argv)
 #endif
     TestConnectionProfileIdentityGuards(success);
     TestFileOperationParallelLimitSettings(success);
+    TestFileOperationQueueDefaultSettings(success);
 
     std::array<wchar_t, 32768> executablePath{};
     const DWORD executableLength = GetModuleFileNameW(nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));

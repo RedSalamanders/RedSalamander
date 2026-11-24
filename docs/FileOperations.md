@@ -19,6 +19,8 @@ The **File Operations** popup opens automatically when an operation is still run
 - **Queue / Parallel**:
   - **Queue** runs tasks sequentially, one after another.
   - **Parallel** allows multiple tasks to run at the same time.
+  - The popup remembers this choice for future work, including after a restart. A fresh profile uses **Queue**.
+  - **Start** in the options for a copy or move can choose a different mode for that task.
   - Parallel mode uses shared, bounded worker pools so thread count stays under control even with multiple in-flight operations.
   - Switching to **Queue** while several tasks are active pauses all but one at the next safe checkpoint.
 - **Clear completed**: removes the completed task summaries shown in the **Completed** group. A task that finishes just before you click stays, and an interrupted-Move notice from a previous session stays until you dismiss it on its own card.

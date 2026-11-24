@@ -9996,6 +9996,29 @@ using TickResult = std::optional<bool>;
         }
     };
 
+    // Exercise the real footer command handler on the sandboxed application settings, then
+    // give a new owner the value read from disk. Restore the saved and live values independently.
+    {
+        const bool savedQueue = ! g_settings.fileOperations.has_value() || g_settings.fileOperations->queueNewTasks;
+        const bool liveQueue  = operations->GetQueueNewTasks();
+        operations->ApplyQueueMode(! savedQueue);
+        Common::Settings::Settings reloaded{};
+        const bool loaded =
+            operations->DebugFlushPendingSettingsSaveForSelfTest(5'000u) && Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", reloaded) == S_OK;
+        const bool persistedQueue = ! reloaded.fileOperations.has_value() || reloaded.fileOperations->queueNewTasks;
+        auto newOwner             = std::make_unique<FolderWindow>();
+        newOwner->SetSettings(&reloaded);
+        State newOperations(*newOwner);
+        if (! loaded || persistedQueue == savedQueue || operations->GetQueueNewTasks() == savedQueue || newOperations.GetQueueNewTasks() == savedQueue)
+        {
+            fail(L"the footer mode must persist its selection and seed the next owner from saved settings");
+        }
+        operations->ApplyQueueMode(savedQueue);
+        operations->SetQueueNewTasks(liveQueue);
+        if (! operations->DebugFlushPendingSettingsSaveForSelfTest(5'000u))
+            return reject(L"the original queue default could not be restored");
+    }
+
     // 1. Synthetic popup on a private engine: the cadence each declared task state selects, and the
     //    path-detail motion check (x-lifetime#3). Nothing here admits work or touches the user's popup.
     {

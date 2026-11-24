@@ -2805,6 +2805,7 @@ struct FolderWindow::FileOperationState
     bool HasCancelableOperations() noexcept;
     bool ShouldQueueNewTask() noexcept;
     void SetQueueNewTasks(bool queue) noexcept;
+    void LoadQueueDefaultFromSettings() noexcept;
     bool GetQueueNewTasks() const noexcept;
     void ApplyQueueMode(bool queue) noexcept;
     bool RunQueuedTaskNow(uint64_t taskId) noexcept;

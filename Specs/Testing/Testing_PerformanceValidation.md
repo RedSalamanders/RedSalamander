@@ -2603,6 +2603,12 @@ the preparation clock restarts before execution. Compare the existing
 `FileOps.PopupCadence.Counters` rows for matching running, paused, prompting, queued and idle
 fixtures. `FileOps.Admission.TaskLayoutBytes` tracks the per-task storage cost.
 
+`FileOps_PopupIdleCadence` also selects the opposite Queue/Parallel footer mode on an idle,
+non-activating application owner, flushes pending writes, and creates a second owner from the saved
+settings. It restores the original saved and live modes before measuring cadence. Capture
+`FileOps.Settings.EnqueueUs` and `FileOps.Settings.SaveUs` for the `queue default` changes to account
+for foreground enqueue and deferred persistence separately.
+
 ## Completed-card collapse after telemetry stops (2026-10-18)
 
 `FileOps_ReviewRemediationContracts` includes a private, no-activation production popup whose live
