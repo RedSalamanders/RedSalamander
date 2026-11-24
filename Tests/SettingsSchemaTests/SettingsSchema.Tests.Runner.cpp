@@ -1142,7 +1142,8 @@ void TestFileOperationQueueDefaultSettings(bool& success)
           L"queue default: old settings default to Queue and keep other popup choices",
           success);
 
-    Settings settings{};
+    // Reuse the loaded revision when saving over the legacy fixture.
+    Settings settings = std::move(legacy);
     settings.fileOperations.emplace().queueNewTasks = false;
     Settings parallel{};
     Check(SaveSettings(appId, settings) == S_OK && TryLoadSettingsNoRecovery(appId, parallel) == S_OK && parallel.fileOperations.has_value() &&
