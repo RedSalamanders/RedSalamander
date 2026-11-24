@@ -2163,6 +2163,15 @@ FolderWindow::FileOperationState::LiveOutputConflictAdvice FolderWindow::FileOpe
 bool FolderWindow::FileOperationState::WaitForLiveOutputPublisher(Task& task, uint64_t publisherTaskId, std::stop_token stopToken) noexcept
 {
     const uint64_t startedUs = PerfNowUs();
+    task._liveOutputWaitCount.fetch_add(1u, std::memory_order_release);
+    task.MarkRateSamplingStateChanged();
+    RequestTaskPresentationRefresh();
+    const auto clearWait = wil::scope_exit([&]() noexcept
+    {
+        task._liveOutputWaitCount.fetch_sub(1u, std::memory_order_release);
+        task.MarkRateSamplingStateChanged();
+        task.NotifyTelemetryWorkResumed();
+    });
     std::unique_lock lock(_queueMutex);
     const auto publisherIsLive = [&]() noexcept
     {
@@ -2523,7 +2532,10 @@ FolderWindow::FileOperationState::OperationEntryResult FolderWindow::FileOperati
             // Publish the monotonic preparation phase before withdrawing queue presentation;
             // strict acquisition and confirmation must never appear as transfer execution.
             if (admission->hasDeferredDirectoryDeletes)
+            {
+                task._preparationStartTick.store(GetTickCount64(), std::memory_order_release);
                 task.PublishLifecyclePhase(FileOperations::TaskLifecyclePhase::PreparingExecution);
+            }
             if (waitForOthers)
                 task._waitForOthers.store(false, std::memory_order_release);
             task.SetWaitingInQueue(false);

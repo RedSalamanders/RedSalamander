@@ -36,7 +36,7 @@ Each task shows:
 - Item/byte progress and “Remaining” time (once the totals are final; while items are still being counted, live counters are shown instead, see [“Counting items…” and totals](#counting-items-and-totals))
 - Current file activity (including multiple in-flight files when copying/moving)
 - Throughput graph colors in rainbow mode, weighted by each active stream's byte share so parallel copies show balanced color bands when streams progress evenly
-- **Speed**: what the task moved over the last 5 seconds, so a pause in the transfer lowers it honestly instead of freezing it or making it jump. When nothing has moved for longer than usual for that copy (at least 0.6 seconds, more for a copy that reports in coarse steps), the card says what the copy is waiting on next to the speed (**Finalizing file…**, **Waiting for the destination…**, **Waiting for the source…** or **Waiting for storage…**) and the throughput graph hatches that stretch. A copy held at its speed limit, and a task that is stopping, are not called waiting. Paused and queued tasks, and a task waiting for your answer, show no speed. Moving files to a network share from another drive writes each block straight through to the share, so the speed shows what the share accepts as it goes. A copy to a network share lets Windows hold part of the data in memory first, so with a very large file the card can say **Waiting for the destination…** while Windows sends what it holds.
+- **Speed**: what the task moved over the last 5 seconds, so a stall during active work lowers the displayed rate. When nothing has moved for longer than usual for that copy (at least 0.6 seconds, more for a copy that reports in coarse steps), the card says what the copy is waiting on next to the speed (**Finalizing file…**, **Waiting for the destination…**, **Waiting for the source…** or **Waiting for storage…**) and the throughput graph hatches that stretch. A copy held at its speed limit, and a task that is stopping, are not called waiting. A paused, queued, or decision-blocked task adds no samples. On resume, measurement restarts with the existing graph history. Stopping preserves that history. Moving files to a network share from another drive writes each block straight through to the share, so the speed shows what the share accepts as it goes. A copy to a network share lets Windows hold part of the data in memory first, so with a very large file the card can say **Waiting for the destination…** while Windows sends what it holds.
 
 Task controls (what you can click):
 
@@ -45,9 +45,6 @@ Task controls (what you can click):
 - **Pause / Resume**: pauses the task at the next safe checkpoint.
 - **Cancel**: requests cancellation of only that task; its card shows Stopping until the worker reaches a safe stop and the final result is known.
 - **Skip counting**: shown while the card is counting ahead of the work. It stops the count from running ahead so the operation can use its full speed. It does not skip any check (see [“Counting items…” and totals](#counting-items-and-totals)).
-- **Destination** *(Copy/Move, before the task starts)*: choose a different destination folder:
-  - **Other panel** (the other pane’s current folder), or
-  - a compatible folder from the destination pane’s **history**.
 - **Speed Limit** *(Copy/Move)*: sets a per-task bandwidth cap:
   - **Unlimited**
   - presets: `1 MiB/s`, `5 MiB/s`, `10 MiB/s`, `50 MiB/s`, `100 MiB/s`, `1 GiB/s`
@@ -85,6 +82,8 @@ total is fixed once the listing has caught up.
 For Copy and Move of selected files on local disks, RedSalamander freshly checks the size of every selected file before starting payload transfers. A Ctrl+A selection therefore reaches a correct total without waiting for earlier files to finish copying. These are current disk metadata checks; the sizes displayed in the pane are not reused. Zero-byte files count too. Unreadable items, links and folders still require their normal checks or traversal. Network sources keep their existing counting path so a separate list of remote size requests does not hold up the first transfer.
 
 RedSalamander does not scan a folder tree twice just to get totals. Copy, Move and Delete use one traversal to count a tree while handing each item to the operation as it is found. A task starts with a brief **Preparing...** step in which RedSalamander checks the selection and destination. Deleting to the Recycle Bin is carried out by Windows, which reports only the items you selected, so that card counts your selection rather than everything inside a folder.
+
+Preparing status details show elapsed time after the first second. For a queued permanent folder Delete, the elapsed time for final checks starts when the task gets its turn.
 
 While the count is still open, the totals are not final, so the card shows what is known instead of guessing:
 
@@ -212,13 +211,18 @@ These commands use the **focused pane** as the source and the **other pane’s c
 Notes:
 
 - If both panes point to the same effective destination folder, RedSalamander blocks the operation to prevent accidental self-copy/self-move.
+- To make a copy beside the original, hold Ctrl while dragging the item into the same folder. RedSalamander gives the copy a new name.
 - If source/destination are different file-system contexts, RedSalamander uses a cross-filesystem bridge (read → write). Files can start copying as soon as their parent destination directory exists, while read-only destinations still reject writes.
-- Clipboard paste and folder-picker move use the same File Operations task workflow as `F5`/`F6`, including the popup, conflict prompts, pause/cancel, and safe default overwrite policy.
+- Clipboard paste and the item menu's **Move…** use the same File Operations task workflow as `F5`/`F6`. **Move…** takes the selection from the current pane and uses a Windows folder as the destination, including when the source is on a connected provider.
+- If a Move can only copy, RedSalamander asks whether to copy and keep the originals before starting. For a mixed selection it shows how many items will move and how many will be copied. **Cancel** keeps the files and any cut list intact. **Move with Options** includes this information in its options dialog.
 - Providers that advertise an operation as unsupported block that command before a task starts.
 
 ## Delete vs permanent delete
 
+- **Move to Recycle Bin** in ViewerSpace asks before sending the selection to the Windows Recycle Bin. Cancel is the default.
 - **Delete** (`Del` / `F8`): deletes to the Recycle Bin when supported by the active file system. Delete never removes an item permanently on its own: when Windows cannot recycle an item (for example on a network share, or a drive without a Recycle Bin), the item is kept and the task asks whether to delete that item permanently. For a folder, the question shows how many items and how much data the folder holds, and deleting it permanently removes the folder with everything in it. **Skip** keeps that item and the task goes on with the others. When several items are selected, that question also has a **Delete all remaining permanently** button: it deletes this item and, without asking again, every later item of the same task that also cannot be recycled on the same drive or share. It never applies to an item whose outcome is unknown, and it ends with the task. If an item cannot be deleted permanently (for example because it changed after Windows failed to recycle it), the task stops there: that item and every item not yet handled are kept, without another question and without being deleted. With **Continue on error** enabled, the task never asks: it keeps each item that could not be recycled, reports it as failed and continues with the other items. If Windows ever deletes an item without moving it to the Recycle Bin, the task reports that item as failed, not as recycled.
+  Context-menu, Find and Viewer Recycle can group items from the same Local folder into a batch.
+  A command that asks before starting still asks once for the request.
 - **Permanent Delete** (`Shift+F8` / `Shift+Del`): asks for confirmation, then bypasses the Recycle Bin. The confirmation keeps the captured provider path spelling; mixed or unknown locations use a Multiple locations summary instead of a guessed common folder.
 
 ## Progress UI: tasks, pause, cancel, mode, speed limit
@@ -237,7 +241,7 @@ When an operation starts, RedSalamander creates a **task** and shows it in the F
 
 This page owns host-wide defaults that apply to newly created tasks (the label in parentheses is the section heading on the page):
 
-- **Verify copied files** (Verification): after a file is copied, compares the copy with the original, which may read every copied byte again. Off by default. With it on, a task's bar has two halves, copying then verifying; a divider in the verifying color separates them, and the verifying half fills with hatching in that color. A finished task reads **100%** only when everything was verified; otherwise its card says **Not verified** or **Verified N%** next to the bar. **Copy with Options** (`Shift+F5`) and **Move/Rename with Options** (`Shift+F6`) can change it for a single task without changing Preferences.
+- **Verify copied files** (Verification): after a file is copied, compares the copy with the original, which may read every copied byte again. Off by default. With it on, a task's bar has two halves, copying then verifying; a divider in the verifying color separates them, and the verifying half fills with hatching in that color. A finished task reads **100%** only when everything was verified; otherwise its card says **Not verified** or **Verified N%** next to the bar. **Copy with Options** (`Shift+F5`) and **Move with Options** (`Shift+F6`) can change it for a single task without changing Preferences.
 - **Default speed limit** (Bandwidth): seeds new copy/move tasks with **Unlimited**, a preset (`1 MiB/s` through `500 MiB/s`), or **Custom**. There is no GiB/s preset; use **Custom** for faster rates.
 - **Custom limit**: the throughput used when **Custom** is selected, a value such as `128KB`, `5MB`, or `1GB`.
 - **Auto-dismiss successful tasks** (Advanced): automatically clears completed tasks that succeeded or were canceled, and closes the popup when nothing remains.
@@ -319,13 +323,13 @@ Folder view supports a basic Explorer-style clipboard for **Windows paths**:
 
 - `Ctrl+C`: copy selection to the clipboard as `CF_HDROP`
 - `Ctrl+X`: cut selection to the clipboard as `CF_HDROP` with the Explorer move drop effect
-- `Ctrl+V`: paste into the current folder (copy)
+- `Ctrl+V`: paste into the current folder. A copied selection starts Copy, and a cut selection starts Move.
 - **Paste Shortcut**: create `.lnk` shortcuts in the current local folder for file paths on the clipboard, using unique shortcut names
 
 Limitations:
 
-- The clipboard format is Windows-path based, so file cut and Paste Shortcut are available for local `file` file-system paths.
-- Clipboard paste queues a File Operations copy task; destination conflicts are handled by the same inline conflict prompt as pane copy.
+- Clipboard Copy and Cut are available for Windows paths in the built-in local filesystem. On other providers these shortcuts leave the current clipboard intact. Paste Shortcut also requires a local destination.
+- Clipboard paste queues a File Operations task. Destination conflicts use the same inline questions as F5 and F6.
 
 ## Creating files from ShellNew templates
 

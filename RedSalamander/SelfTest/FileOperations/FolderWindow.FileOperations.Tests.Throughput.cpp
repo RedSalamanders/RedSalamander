@@ -684,7 +684,7 @@ public:
                                      .completedItems           = _items,
                                      .lastProgressCallbackTick = _lastCallbackTick,
                                      .lastByteProgressTick     = _lastByteTick,
-                                     .progressStateChangeTick  = _stateChangeTick,
+                                     .progressStateGeneration  = _stateGeneration,
                                      .stallKind                = stall,
                                      .speedLimitBytesPerSecond = speedLimitBytesPerSecond,
                                      .paused                   = paused,
@@ -704,8 +704,8 @@ public:
     // Pause and resume are state changes the task publishes at that instant.
     void SetPaused(bool value) noexcept
     {
-        paused           = value;
-        _stateChangeTick = _tick;
+        paused = value;
+        ++_stateGeneration;
     }
 
     std::vector<RateTick> ticks;
@@ -719,7 +719,7 @@ private:
     ULONGLONG _tick             = 100'000ull;
     ULONGLONG _lastCallbackTick = 0ull;
     ULONGLONG _lastByteTick     = 0ull;
-    ULONGLONG _stateChangeTick  = 0ull;
+    ULONGLONG _stateGeneration  = 0ull;
     uint64_t _bytes             = 0u;
     unsigned long _items        = 0u;
 };
@@ -1003,8 +1003,9 @@ private:
         return L"the rate model rejected the stopping shape";
     for (size_t index = stoppingFrom; index < observed.size(); ++index)
     {
-        if (observed[index].stallKind != RateStall::None)
-            return std::format(L"a stopping task was named stalled {} ms into its abort (label='{}')",
+        if (observed[index].stallKind != RateStall::None || observed[index].sampleCount != observed[stoppingFrom - 1u].sampleCount ||
+            observed[index].newestSample != observed[stoppingFrom - 1u].newestSample)
+            return std::format(L"a stopping task changed its graph or was named stalled {} ms into its abort (label='{}')",
                                (index - stoppingFrom + 1u) * kRateTickMs,
                                observed[index].rateLabelText);
     }
@@ -1055,6 +1056,22 @@ private:
                                FormatRateMiB(observed[index].displayedBytesPerSec),
                                static_cast<unsigned int>(observed[index].stallKind));
     }
+    // A hidden popup can miss both edges of a wait. The published generation
+    // resets the window at the first visible tick without resampling that gap.
+    RateShape hidden;
+    hidden.Run(5'000ull, 2ull * 1024ull * 1024ull);
+    RateTick afterDecision = hidden.ticks.back();
+    afterDecision.tick += 60'000ull;
+    afterDecision.progressStateGeneration += 2u;
+    hidden.ticks.push_back(afterDecision);
+    const auto afterHiddenWait = RunRateShape(hidden);
+    if (afterHiddenWait.size() != hidden.ticks.size())
+        return L"the rate model rejected the hidden decision interval";
+    const auto& before = afterHiddenWait[afterHiddenWait.size() - 2u];
+    const auto& after  = afterHiddenWait.back();
+    if (before.sampleCount == 0u || after.sampleCount != before.sampleCount || after.stalledSampleCount != before.stalledSampleCount ||
+        after.newestSample != before.newestSample || after.stallKind != RateStall::None || after.displayedBytesPerSec != 0.0)
+        return L"a wait missed by the popup changed graph history or showed a stale rate on resume";
     return std::nullopt;
 }
 

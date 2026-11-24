@@ -566,7 +566,7 @@ Notation:
 - Copy (`F5`) `[cmd/pane/copyToOtherPane]`
 - Copy with Options… (`Shift+F5`) `[cmd/pane/copyToOtherPaneWithOptions]`
 - Move/Rename (`F6`) `[cmd/pane/moveToOtherPane]`
-- Move/Rename with Options… (`Shift+F6`) `[cmd/pane/moveToOtherPaneWithOptions]`
+- Move with Options… (`Shift+F6`) `[cmd/pane/moveToOtherPaneWithOptions]`
 - ---
 - Pack… (`Alt+F5`) `[cmd/pane/pack]`
 - Unpack… (`Alt+F6`) `[cmd/pane/unpack]`

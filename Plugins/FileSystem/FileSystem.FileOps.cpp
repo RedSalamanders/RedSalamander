@@ -9808,7 +9808,11 @@ HRESULT DeleteToRecycleBinCore(OperationContext& context, const PathInfo& path, 
         AwaitParallelStopForSelfTest(context.parallel);
     }
 #endif
-    hr = fileOperation->PerformOperations();
+    {
+        Debug::Perf::Scope performPerf(L"FileOps.RecycleBin.IndividualPerformOperationsUs");
+        hr = fileOperation->PerformOperations();
+        performPerf.SetHr(hr);
+    }
     if (mutationResult != nullptr)
     {
         *mutationResult = progressSinkImpl->GetMutationResult();

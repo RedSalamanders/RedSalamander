@@ -1307,6 +1307,15 @@ improvement claims.
 
 Recycle Bin batch validation records `FileOps.SelfTest.RecycleBinBatchBaseline`,
 `RecycleBinBatchCandidate`, and `RecycleBinBatchImprovement` as live-environment timing evidence.
+
+The no-activation `FileOps_ReviewRemediationContracts` selection compares explicit per-item
+Recycle and normal Find and Viewer admission on equivalent same-parent Local batches. It verifies
+the one start prompt, canceled Viewer preservation, removed paths, batch receipts and exact
+Recycle Bin purging. `FileOps.RecycleBin.IndividualPerformOperationsUs` and
+`FileOps.RecycleBin.PerformOperationsUs` measure Shell calls, and the ingress rows report
+admission-to-settlement time, bulk calls, before/after handle counts and private bytes.
+Resource snapshots include the process's other retained state. The timings describe the Local
+provider and its host process on the measured machine.
 Those elapsed times are advisory because `IFileOperation` completion includes variable Windows
 Shell broker, Defender, and indexing latency; a single baseline/candidate wall-clock pair is not a
 hard regression gate. Test-enabled Debug and Release instead hard-gate the process-local route:
@@ -2575,6 +2584,15 @@ files/folders/bytes must represent committed removals even before a selected roo
 `FileOps.SelfTest.PermanentDeleteCompletionProgressUs` records bounded candidate work. Retain raw
 metrics/results and harness captures under the governed archive limits; report any missing baseline
 or blocked profile rather than inferring a speedup or full qualification from these focused runs.
+
+## Preparing status and popup cadence
+
+`FileOps_PopupIdleCadence` checks the full Preparing status before execution and at the first
+whole second with a fixed clock. The short chip stays stable and queue status has precedence.
+`FileOps_ReviewRemediationContracts` uses a real Local directory Delete reservation to verify
+the preparation clock restarts before execution. Compare the existing
+`FileOps.PopupCadence.Counters` rows for matching running, paused, prompting, queued and idle
+fixtures. `FileOps.Admission.TaskLayoutBytes` tracks the per-task storage cost.
 
 ## Completed-card collapse after telemetry stops (2026-10-18)
 

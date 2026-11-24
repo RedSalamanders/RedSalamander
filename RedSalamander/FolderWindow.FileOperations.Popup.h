@@ -326,6 +326,7 @@ struct TaskSnapshot
     bool hasProgressCallbacks          = false;
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG operationStartTick       = 0;
+    ULONGLONG preparationStartTick     = 0;
 
     bool waitingForOthers                = false;
     bool waitingInQueue                  = false;
@@ -901,7 +902,7 @@ struct RateSnapshot
     uint64_t verificationReadBytes      = 0;
     std::wstring currentSourcePath;
     ULONGLONG lastProgressCallbackTick = 0;
-    ULONGLONG progressStateChangeTick  = 0;
+    ULONGLONG progressStateGeneration  = 0;
     // R10.2: the last report that advanced the bytes (0 before the first byte), and the stall name
     // the host derives from the phase the streams had announced and the slower side of the transfer.
     ULONGLONG lastByteProgressTick = 0;
@@ -971,7 +972,7 @@ struct RateHistory
     size_t writeIndex = 0;
     bool initialized  = false;
 
-    ULONGLONG lastStateChangeTick      = 0;
+    ULONGLONG lastStateGeneration      = 0;
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG lastDisplaySampleTick    = 0;
 
@@ -1030,7 +1031,7 @@ struct RateModelDebugTick
     unsigned long completedItems       = 0;
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG lastByteProgressTick     = 0;
-    ULONGLONG progressStateChangeTick  = 0;
+    ULONGLONG progressStateGeneration  = 0;
     RateStallKind stallKind            = RateStallKind::WaitingForStorage;
     uint64_t speedLimitBytesPerSecond  = 0;
     bool paused                        = false;
@@ -2460,6 +2461,7 @@ void DebugFailNextFileOperationsFailureSurfaceButtonSetup(unsigned int ordinal) 
 [[nodiscard]] bool DebugValidateFileOperationsVerificationPresentation() noexcept;
 [[nodiscard]] bool DebugValidateFileOperationsMissingSourcePresentation(std::wstring& failure) noexcept;
 [[nodiscard]] bool DebugValidateFileOperationsStoppingPresentation() noexcept;
+[[nodiscard]] bool DebugValidateFileOperationsPreparingPresentation() noexcept;
 [[nodiscard]] float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 void DebugPublishFileOperationsPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 [[nodiscard]] bool DebugFileOperationsTaskHasKnownCompactProgress(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;

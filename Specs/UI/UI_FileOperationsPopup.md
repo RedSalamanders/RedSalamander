@@ -215,7 +215,8 @@ The global footer MUST include:
   a retained dead combined-summary resource is forbidden.
 - Right-aligned details chevron for footer-only collapse/expand.
 
-Cancel all asks for confirmation. Declining leaves live work, pending decisions, completed
+Cancel all asks whether to cancel running and waiting file operations. It defaults to Cancel.
+Declining leaves live work, pending decisions, completed
 records and informational tasks unchanged. Accepting requests cancellation of the operation
 tasks present when the engine snapshots its task list after confirmation. A task admitted
 while the confirmation is open is included if present in that snapshot; a later admission
@@ -470,6 +471,10 @@ The card consumes the engine-owned `TaskLifecyclePhase`; it MUST NOT infer Prepa
 progress, zero totals, or a worker that has not emitted a transfer callback. `Preparing` and
 `AwaitingAcceptance` and `PreparingExecution` render as Preparing. `Ready` is a transition boundary before Waiting/Running;
 after queue reservation, `PreparingExecution` covers strict directory acquisition and consent without regressing the engine lifecycle.
+Preparing elapsed time reflects the task's monotonic preparation start at whole-second precision.
+It starts over for reserved directory Delete preparation, so earlier queue time stays out of the
+new elapsed value. The full accessible status and the Delete card's preparation detail use the
+same clock and wording. Queue, pause, decision, and cancellation status take precedence.
 `Terminal` remains an engine fact. The normal finalizer also enters lifecycle `Stopping`, so
 that phase alone MUST NOT imply cancellation. The popup snapshots `Task::CancelRequestedDurable`
 as cancellation authority, published before `RequestCancel` exposes the lifecycle phase. An
@@ -2052,8 +2057,14 @@ FileSystem_FileOperations.md "Transfer phases, stalls and throughput tuning"), o
 side of the transfer from the storage characteristics: `Waiting for the destination…`, `Waiting for
 the source…`, or `Waiting for storage…` when neither or both sides are high-latency. A task that has
 not reported progress yet is starting, not stalled. Paused and queued tasks and a task waiting for a
-decision move nothing by design: they show no speed and no stall, and measuring restarts when they
-continue. A deletion names no transfer stall. The stall text is part of the label's accessible text.
+decision show no speed and add no stall samples. The same treatment applies while waiting for another
+task to finish publishing live output. The rate sampler observes a monotonic task generation, so a
+wait that starts and ends while the popup is hidden still restarts measuring when the sampler resumes.
+The previous graph history stays visible when measuring resumes. Stopping freezes recorded samples
+while actual work counters can change. Paused and stopping tasks do not contribute to the running
+transfer ETA. A deletion names no transfer stall. The stall text is part of the label's accessible text.
+The idle-cadence self-test uses a paced real Copy with post-answer byte reports before requiring a
+running rate and checking that Pause settles the popup without altering the history.
 Copy/Move keeps the speed's right edge fixed on the Throughput heading; the ETA has its independent
 row beside the counts. Measure the full current speed/stall text, wrapping it below the heading's
 label when necessary and reserving that complete height above the plot. A wrapped stall label can

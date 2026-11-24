@@ -1106,7 +1106,8 @@ struct FolderWindow::FileOperationState
         std::filesystem::path destinationFolder;
         FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
         FileOperations::OperationOptions options;
-        ExecutionMode executionMode = ExecutionMode::PerItem;
+        // An explicit mode keeps callers that exercise a specific executor on that route.
+        std::optional<ExecutionMode> executionMode;
         std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems;
         std::wstring sourcePluginId;
         std::wstring sourcePluginShortId;
@@ -1127,8 +1128,8 @@ struct FolderWindow::FileOperationState
         wil::com_ptr<IFileSystem> fileSystem;
         wil::com_ptr<IFileSystem> destinationFileSystem;
         FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
-        // Copy and Move are identity-guarded only by the per-item executor. Delete callers that
-        // intentionally use provider batching must opt in to BulkItems explicitly.
+        // Copy, Move and Permanent Delete use the per-item executor. Local Recycle can use
+        // provider batching once the plan group has been qualified.
         ExecutionMode executionMode = ExecutionMode::PerItem;
         bool requireConfirmation    = false;
         std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems;
@@ -2099,7 +2100,7 @@ struct FolderWindow::FileOperationState
         HRESULT ExecuteBatchRenameMutation(size_t operationIndex,
                                            const std::filesystem::path& sourcePath,
                                            const std::filesystem::path& destinationPath,
-                                           std::vector<FileOperations::BoundObjectAuthority>& authorities) noexcept;
+                                           FileSystemBoundObjectKind expectedSourceKind) noexcept;
         void InitializeSourceItemResultBuilders() noexcept;
         void MarkSourceItemsMutationPossible() noexcept;
         void MarkSourceItemMutationPossible(size_t sourceIndex) noexcept;
@@ -2219,6 +2220,7 @@ struct FolderWindow::FileOperationState
         std::atomic<uint64_t> _admissionKey{0u};
         std::atomic<std::shared_ptr<const SelectedAdmissionView>> _selectedAdmission;
         std::atomic<TaskLifecyclePhase> _lifecyclePhase{TaskLifecyclePhase::Preparing};
+        std::atomic<ULONGLONG> _preparationStartTick{GetTickCount64()};
         std::optional<BatchRenameAdmissionInput> _pendingBatchRenameAdmission;
         FileSystemOperation _operation = FILESYSTEM_COPY;
         ExecutionMode _executionMode   = ExecutionMode::PerItem;
@@ -2377,7 +2379,8 @@ struct FolderWindow::FileOperationState
         std::atomic<ULONGLONG> _cancelRequestedTick{0};
         std::atomic<bool> _paused{false};
         std::atomic<bool> _queuePaused{false};
-        std::atomic<ULONGLONG> _rateSamplingStateChangeTick{0};
+        std::atomic<uint64_t> _rateSamplingStateGeneration{0};
+        std::atomic<unsigned int> _liveOutputWaitCount{0};
         std::atomic<bool> _started{false};
         std::atomic<ULONGLONG> _operationStartTick{0};
         std::atomic<uint64_t> _desiredSpeedLimitBytesPerSecond{0};
@@ -2646,7 +2649,7 @@ struct FolderWindow::FileOperationState
                            FileSystemFlags flags,
                            bool waitForOthers,
                            uint64_t initialSpeedLimitBytesPerSecond                           = 0,
-                           ExecutionMode executionMode                                        = ExecutionMode::PerItem,
+                           std::optional<ExecutionMode> executionMode                         = std::nullopt,
                            bool requireConfirmation                                           = false,
                            wil::com_ptr<IFileSystem> destinationFileSystem                    = nullptr,
                            uint64_t* taskIdOut                                                = nullptr,

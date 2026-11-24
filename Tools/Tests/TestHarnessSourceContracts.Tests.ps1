@@ -139,6 +139,7 @@ Describe 'Product documentation capture fixtures' {
         $startupAdmission.Value | Should Match 'hasArg\(L"--commands-selftest"\)'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_product_documentation_gallery"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"folderView_drop_integrity_guards"'
         foreach ($flag in @('--selftest', '--compare-selftest', '--fileops-selftest')) {
             $startupAdmission.Value | Should Match ([regex]::Escape('! hasArg(L"' + $flag + '")'))
         }
@@ -147,8 +148,8 @@ Describe 'Product documentation capture fixtures' {
         }
         $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
         $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
-        $runner | Should Match 'const bool noActivationDirectoryCacheCase\s*=\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
-        $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectoryCacheCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
+        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
         $bypass.Success | Should Be $true
         $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)
         $prepareIndex = $runner.IndexOf('PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext)', [StringComparison]::Ordinal)
@@ -156,6 +157,12 @@ Describe 'Product documentation capture fixtures' {
         $bypass.Index | Should BeLessThan $prepareIndex
         $interactiveIndex = $runner.IndexOf('else if (! options.listCasesOnly)', $bypass.Index, [StringComparison]::Ordinal)
         $interactiveIndex | Should BeGreaterThan $bypass.Index
+        $shellCommands = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.ShellCommands.cpp'
+        $dropCase = [regex]::Match($shellCommands, '(?ms)^\[\[nodiscard\]\] bool TestFolderViewDropIntegrityGuards\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $dropCase.Success | Should Be $true
+        $dropCase.Value | Should Match 'DebugPerformFileDropForSelfTest'
+        $dropCase.Value | Should Match 'MK_CONTROL'
+        $dropCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|DoDragDrop)\s*\('
         $interactiveIndex | Should BeLessThan $warningIndex
         $interactiveIndex | Should BeLessThan $prepareIndex
     }
@@ -207,7 +214,9 @@ Describe 'Popup cadence diagnostic source contracts' {
         $reducer=[regex]::Match($source,'(?ms)^bool FileOperationsPopupInternal::FileOperationsPopupState::DebugPauseRetainedVisualRateForSelfTest\([^\r\n]+\) noexcept\s*\{.*?^\}')
         $reducer.Success|Should Be $true
         $reducer.Value|Should Match 'task->paused \|\| history->second\.displayedBytesPerSec <= 0\.0'
-        $reducer.Value|Should Match 'AdvanceRateHistory\(history->second, rate, rate\.progressStateChangeTick, totals\)'
+        $reducer.Value|Should Match 'rate\.paused\s*=\s*true;'
+        $reducer.Value|Should Match 'rate\.progressStateGeneration\s*=\s*history->second\.lastStateGeneration\s*\+\s*1u;'
+        $reducer.Value|Should Match 'AdvanceRateHistory\(\s*history->second,\s*rate,\s*GetTickCount64\(\),\s*totals\s*\)'
         $reducer.Value|Should Not Match 'DebugSetVisualScenario|_rates\.clear|_controlsHost\.Detach|SetTimer'
         $runner=Get-RSText 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'
         $case=[regex]::Match($runner,'(?ms)^\[\[nodiscard\]\] bool RunFileOpsPopupIdleCadenceChecks\([^\r\n]+\) noexcept\s*\{.*?^\}')
@@ -4499,7 +4508,9 @@ Specs\TestRuns\local_scratch
         $queue | Should Match 'HasConcurrentPublisherConsent[\s\S]{0,330}candidate\.relations\.Allows\(publisher\.admission->key\)'
         $queue | Should Match 'ExactMutationPathsOverlap'
         $queue | Should Match '_livePublishedIndexOverflow[\s\S]{0,900}_activeMutationInterlocks'
-        $queue | Should Match 'WaitForLiveOutputPublisher[\s\S]{0,700}active\.taskId\s*==\s*publisherTaskId'
+        $waiter = [regex]::Match($queue, '(?ms)^bool FolderWindow::FileOperationState::WaitForLiveOutputPublisher\([^\r\n]+\) noexcept\s*\{.*?^\}')
+        $waiter.Success | Should Be $true
+        $waiter.Value | Should Match 'std::ranges::any_of\(\s*_activeMutationInterlocks,\s*\[&\]\(const ActiveMutationInterlock& active\) noexcept\s*\{\s*return active\.taskId\s*==\s*publisherTaskId;\s*\}\s*\)'
         $state | Should Match 'case\s+ConflictBucket::SameHostOverlap:[\s\S]{0,260}defaultAction\s*=\s*ConflictAction::Proceed'
         $state | Should Match 'case\s+ConflictBucket::SameHostLiveOutput:[\s\S]{0,340}defaultAction\s*=\s*ConflictAction::QueueUntilOtherTaskFinishes'
         $state | Should Match 'policy\.Add\(ConflictAction::RunConcurrently\)'

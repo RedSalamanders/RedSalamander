@@ -252,7 +252,7 @@ BEGIN
         MENUITEM "&Copy",                     IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
         MENUITEM "Copy with &Options...",     IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
         MENUITEM "&Move/Rename",              IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
-        MENUITEM "Move/Rename with Op&tions...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "Move with Op&tions...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Pack...",                    IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
         MENUITEM "&Unpack...",                  IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
@@ -1670,6 +1670,7 @@ BEGIN
     IDS_FMT_FILEOPS_CONFIRM_COPY                         "Copy {0}:\r\nfrom: {1}\r\n\r\nto:   {2}"
     IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Move {0}:\r\nfrom: {1}\r\n\r\nto:   {2}"
     IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             "Permanently delete {0}:\r\nfrom: {1}\r\n\r\nThis cannot be undone."
+    IDS_FMT_FILEOPS_CONFIRM_RECYCLE                      "Move {0} to Recycle Bin?\r\nFrom: {1}"
     IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP          "This operation can't target the same item or a subfolder of itself.\r\n\r\nSource:\r\n{0}\r\n\r\nDestination folder:\r\n{1}"
     IDS_FILEOPS_LOCATION_MULTIPLE                        "Multiple locations"
     IDS_FMT_FILEOPS_COUNT_ITEM                           "{0:L} items"
@@ -1779,7 +1780,7 @@ BEGIN
     IDS_FILEOPS_WAITING_EXCLUSIVE_TRANSFER "Waiting for an operation that must run separately."
     IDS_FILEOPS_GRAPH_DISCOVERING                         "Counting items…"
     IDS_CAPTION_FILEOPS_CANCEL_ALL                        "Cancel All Operations"
-    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Are you sure you want to cancel all pending file operations?"
+    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Cancel all running and waiting file operations?"
     IDS_CAPTION_FILEOPS_EXIT                              "Exit Application"
     IDS_MSG_FILEOPS_CANCEL_ALL_EXIT                       "File operations are still in progress.\n\nCancel all operations and exit?"
     IDS_CAPTION_FILEOPS_CLOSE_WINDOW                      "Close Window"
@@ -1793,6 +1794,7 @@ BEGIN
     IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           "The item name or path is not valid for this operation."
     IDS_FILEOPS_CONFLICT_TARGET                           "A required link target is unavailable."
     IDS_FILEOPS_CONFLICT_READONLY                         "Item is read-only."
+    IDS_FILEOPS_CONFLICT_READONLY_EXISTS                  "A file with this name already exists and is read-only."
     IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "Access denied."
     IDS_FILEOPS_CONFLICT_SHARING                          "File is in use."
     IDS_FILEOPS_CONFLICT_DISK_FULL                        "The disk is full. Free some space, then retry."
@@ -1951,6 +1953,8 @@ BEGIN
     IDS_FILEOPS_NOTE_RECYCLE_ESCALATED                    "Deleted permanently at your request: the Recycle Bin could not take it."
     IDS_FILEOPS_NOTE_CLEANUP_COMMITTED_WITH_ERROR         "The original was removed, although the location reported an error."
     IDS_FMT_FILEOPS_CONFIRM_COPY_ONLY_MOVE                "{0:L} item(s) cannot be moved from here: they will be copied and the originals kept."
+    IDS_FMT_FILEOPS_COPY_ONLY_QUESTION                    "Copy the items and keep the originals?\r\nTo: {0}"
+    IDS_FMT_FILEOPS_MIXED_MOVE_QUESTION                   "Move {0} and copy {1}, keeping the originals of the copies?\r\nTo: {2}"
     IDS_FMT_FILEOPS_NOTE_PERMISSIONS_INHERITED            "Permissions were inherited from the destination ({0:L} item(s))."
     IDS_FMT_FILEOPS_NOTE_METADATA_NOT_KEPT                "{0} does not keep timestamps and permissions."
     IDS_FILEOPS_NOTE_METADATA_LOST_BASIC                  "Timestamps and attributes were not kept at the destination."
@@ -2187,7 +2191,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "The folder is not empty. Ch
     IDS_CMD_SORT_BY_TIME                                  "Sort by Time"
     IDS_CMD_PACK                                          "Pack"
     IDS_CMD_MOVE                                          "Move"
-    IDS_CMD_MOVE_WITH_OPTIONS                             "Move/Rename with Options"
+    IDS_CMD_MOVE_WITH_OPTIONS                             "Move with Options"
     IDS_CMD_SORT_BY_SIZE                                  "Sort by Size"
     IDS_CMD_UNPACK                                        "Unpack"
     IDS_CMD_LOAD_SELECTION                                "Load Selection"
@@ -2491,7 +2495,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "The folder is not empty. Ch
 		    IDS_CMD_DESC_LOAD_SELECTION                           "Load a saved selection."
 		    IDS_CMD_DESC_MENU                                     "Open the main menu for the active pane."
 		    IDS_CMD_DESC_MOVE                                     "Move to the other pane."
-		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "Choose options, then move or rename to the other pane."
+		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "Choose options, then move to the other pane."
 		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "Move the selection to the recycle bin."
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "Open the current folder."
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "Open the properties dialog for the selection."

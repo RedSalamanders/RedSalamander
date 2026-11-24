@@ -6984,11 +6984,14 @@ public:
                                           static_cast<unsigned int>(operation),
                                           prompt.message));
             }
-            // The actual card/modal Delete paths both consume this same source formatter.
-            const std::wstring deleteSource  = FormatFileOperationConfirmationSource(test.sources, counts, test.sourceIdentity);
-            const std::wstring deleteMessage = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, deleteSource);
-            state.Require(deleteSource == test.expectedSource && deleteMessage.find(test.expectedSource) != std::wstring::npos,
-                          std::format(L"{} {}: permanent Delete must use the exact qualified location; source='{}'.", culture, test.name, deleteSource));
+            // Delete and Recycle confirmations consume the same qualified source formatter.
+            const std::wstring deleteSource   = FormatFileOperationConfirmationSource(test.sources, counts, test.sourceIdentity);
+            const std::wstring deleteMessage  = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, deleteSource);
+            const std::wstring recycleMessage = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_RECYCLE, what, deleteSource);
+            state.Require(
+                deleteSource == test.expectedSource && deleteMessage.find(test.expectedSource) != std::wstring::npos &&
+                    recycleMessage.find(test.expectedSource) != std::wstring::npos && recycleMessage != deleteMessage,
+                std::format(L"{} {}: Delete and Recycle must use distinct questions with the exact location; source='{}'.", culture, test.name, deleteSource));
             state.Require(
                 std::ranges::equal(test.sources, sourceBefore, [](const auto& left, const auto& right) noexcept { return left.native() == right.native(); }) &&
                     test.destination.native() == destinationBefore,

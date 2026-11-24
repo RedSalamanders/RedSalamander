@@ -443,7 +443,9 @@ evidence, not a permanent exemption.
 | Ingress | Required plan and confirmation owner |
 |---|---|
 | F5/F6 Copy or Move to the other pane | `TransferPlan`; routine accepted-default admission has no generic confirmation, while explicit/material routes retain their owning decision |
+| Pane item-menu Move folder picker | `TransferPlan`; the originating pane supplies the source items and the Shell picker selects a Windows destination |
 | Pane Delete/Recycle | `DeletePlan`; Delete confirmation and Recycle rules |
+| Viewer Recycle | `DeletePlan`; the pre-start confirmation names the Recycle Bin and defaults to Cancel |
 | Clipboard paste, including same-pane duplicate | `TransferPlan`; captured clipboard sequence for Move |
 | Internal drag/drop | `TransferPlan`; retain the qualified source endpoint |
 | External OLE / `CF_HDROP` drop | Qualify the local source, then `TransferPlan`; report Copy to OLE until asynchronous Move is proven |
@@ -486,8 +488,11 @@ After plan publication and before the first rename mutation, the worker rebinds 
 and checks every unrelated final namespace slot once. A missing/replaced source, an occupied unrelated
 target, or an indeterminate binding fails before any row mutates. A target occupied by another planned
 source is a declared dependency/cycle edge and is not rejected by this check. This pass is comparison-
-only: it does not retain destination replacement authority, enumerate descendants, or replace the per-
-hop exact revalidation required at each mutation boundary.
+only. Preflight releases each source's rename handle before binding the next source and never
+retains destination replacement authority. At mutation, bind that row afresh and require the
+captured profile, object and revision and the preflight kind. Retain the source and approved
+destination authority for the current conditional mutation, then release both before the next row
+or dependency layer. The task's existing ancestry interlocks stay in force.
 
 Routine accepted-default Copy/Move, including F5/F6, destination-picker transfers, clipboard paste,
 and internal drag/drop, does not invoke a generic confirmation. The stable
@@ -495,10 +500,13 @@ and internal drag/drop, does not invoke a generic confirmation. The stable
 `cmd/pane/moveToOtherPaneWithOptions` (`Shift+F6`) commands are the deliberate pane-transfer
 ingress to the same single pre-consumption options surface; their acceptance publishes the same
 plan as the corresponding routine command with the selected task-local options, and Cancel publishes
-no task and mutates nothing. A Copy/Move confirmation remains mandatory only when the ingress sets
-`requireConfirmation`, a Move is already known to contain a Copy-only strategy, or an existing exact
-artifact/risk gate requires a decision. These causes share one confirmation and never stack generic
-dialogs. Permanent Delete retains its separate consent rule; preview/editor/drop decisions that
+no task and mutates nothing. A routine Move with a captured Copy-only strategy asks whether to copy
+and keep the originals. The question includes the captured destination and offers Copy and Cancel.
+A mixed strategy selection shows the Move and Copy-only counts and offers Continue and Cancel.
+Cancel is the default for both questions. An ingress that explicitly requests options or confirmation
+includes the Copy-only disclosure in its existing surface. This decision precedes task publication
+and Cut consumption. Preparation still revalidates the captured plans and keeps the Copy-only sources.
+The existing exact artifact guard retains its own authority. Permanent Delete retains its consent rule; preview/editor/drop decisions that
 already own initial consent remain authoritative. Find-result and Compare synchronization commands
 retain their specialized behavior on the original routine command IDs and do not inherit the pane
 with-options commands.
@@ -584,6 +592,11 @@ engine-owned monotonic lifecycle:
 pre-consumption decision is unresolved. `Ready` means common preparation and every required
 acceptance/clipboard receipt have succeeded. Pause, conflict, verification, and discovery are
 orthogonal facts; they neither replace the lifecycle nor authorize a skipped transition.
+
+The task records its preparation start using a monotonic clock when it is created. A deferred
+directory Delete entering `PreparingExecution` after reservation publishes a fresh start before
+leaving the queue presentation. The popup uses this start for preparation elapsed time. The
+operation start still marks execution for transfer and completion accounting.
 
 Preparing is selected-root/top-level proportional. The worker qualifies a scheduled Rename plan
 when applicable, validates the immutable plan group, binds the selected top-level mutation/interlock
@@ -1341,6 +1354,10 @@ cleanup or UAC.
 - Hidden, system, and filter-hidden descendants are included when they are descendants of a
   selected directory; pane filters do not redefine the selected tree.
 - Same-pane `Ctrl+C` then `Ctrl+V` copies into a collision-safe Keep Both sibling name.
+- A same-folder Ctrl+drag Copy uses that same Keep Both route. The internal drop resolves the
+  originating pane by its provider context and qualified parent comparison. Two panes showing
+  the same folder can use either pane when both address the built-in Windows namespace or share
+  the same provider instance.
 - Same-folder Move is rejected before mutation.
 - Same-folder comparison and explicit destination-mapping containment use the admitted path-profile
   identity contract, including its separator and case rules; host `std::filesystem` lexical rules
@@ -1534,8 +1551,13 @@ qualification withholds Skip all with an explanation. A qualified prompt offers 
 Cancel directly, with no checkbox/overflow, and caches only the explicit Skip all choice. Other
 conflict classes retain their original typed shape boundaries except the four non-mutating Skip
 failure families above. Read-only permanent-delete consent
-is a separate, explicit noncached action for the exact retained selected tree; known partial work
-can resume under that authority, while unknown mutation and generic retry rules remain unchanged.
+is a separate, explicit action after a provider proves the read-only blocker. A checked Apply to all
+applies only to matching typed scopes with a fresh proof and a retained identity for each root.
+Known partial work can resume under its existing authority. An unknown mutation or generic access denial
+cannot acquire that authority.
+
+A path-length failure offers Skip and Cancel as applicable. Retrying the same path is unavailable.
+An occupied read-only file is described as an existing destination that is read-only.
 
 Conflict classification controls resolution policy, not whether an HRESULT has an explanation.
 An otherwise Unknown conflict with Win32 error 2 or 3 still explains the missing required file or
@@ -1754,6 +1776,13 @@ attempts can change the bytes or size. The separate physical byte count includes
 write for bandwidth pacing; verification remains separately counted under the same bandwidth budget.
 
 ## Delete and Recycle
+
+The host selects the bulk executor for context-menu, Find and Viewer removal requests
+when every admitted child plans Recycle through the Local provider. The pane Delete
+command uses its existing bulk admission. Local groups same-parent items into Shell
+batches under the configured cap. Each ingress keeps its confirmation policy, and
+provider results still drive per-item outcomes, focus restoration and guarded escalation.
+An explicit executor selection is available to existing callers that require it.
 
 Recycle and Permanent are distinct `DeletePlan` modes. Permanent Delete requires fresh explicit
 consent and confirmation-to-mutation identity continuity. Admission makes no provider call for it:
@@ -3109,6 +3138,10 @@ the header, with no unknown `0/?` fraction, footer counting label or provisional
 - The primary graph series and pump throughput contain transfer bytes only; `fileOps.graphVerify`
   is the separate verification series. The current/aggregate bandwidth marker and configured
   bandwidth budget count both.
+- The task publishes a monotonic rate-sampling generation on pause, queue, blocking decision,
+  and live-output wait transitions. The popup resets the rate window if its last sample predates
+  that generation, including when a whole wait occurred without a popup tick. A live-output wait
+  uses the existing waiting-for-another-task presentation.
 - Verification off creates no verification reads, graph samples, or artificial phase.
 
 The existing More menu, Pause/Resume, Cancel, Start now/reorder, Issues pane, completed grouping,

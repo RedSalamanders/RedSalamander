@@ -2214,7 +2214,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                                                          FileSystemFlags flags,
                                                          bool waitForOthers,
                                                          uint64_t initialSpeedLimitBytesPerSecond,
-                                                         ExecutionMode executionMode,
+                                                         std::optional<ExecutionMode> executionMode,
                                                          bool requireConfirmation,
                                                          wil::com_ptr<IFileSystem> destinationFileSystem,
                                                          uint64_t* taskIdOut,
@@ -2425,7 +2425,6 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     const std::filesystem::path& destinationFolder                       = construction.destinationFolder;
     const FileSystemFlags flags                                          = construction.flags;
     const FileOperations::OperationOptions& options                      = construction.options;
-    const ExecutionMode executionMode                                    = construction.executionMode;
     std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems   = std::move(construction.resolvedItems);
     const std::wstring& sourcePluginId                                   = construction.sourcePluginId;
     const std::wstring& sourcePluginShortId                              = construction.sourcePluginShortId;
@@ -2826,6 +2825,23 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
                       S_OK);
     Debug::Perf::EmitValue(L"fileops.plan.source_count", sourceCount);
     Debug::Perf::EmitValue(L"fileops.plan.payload_bytes", payloadBytes);
+
+    ExecutionMode executionMode = ExecutionMode::PerItem;
+    if (construction.executionMode.has_value())
+    {
+        executionMode = construction.executionMode.value();
+    }
+    else if (operation == FILESYSTEM_DELETE && std::ranges::all_of(plans,
+                                                                   [](const FileOperations::FileOperationPlan& plan) noexcept
+    {
+        const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+        return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Recycle && FileOperations::IsLocalFileSystemEndpoint(deletion->endpoint);
+    }))
+    {
+        // The Local provider batches same-parent items in one Shell operation. The route
+        // depends on the admitted plans, so every ordinary Recycle ingress can use it.
+        executionMode = ExecutionMode::BulkItems;
+    }
 
     OperationAdmission admission{};
     admission.plans                      = std::move(plans);
@@ -3538,8 +3554,36 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
     std::wstring sourcePluginShortIdOverride;
     std::optional<std::wstring> sourceInstanceIdOverride;
 
-    if (isCopyMove && ! request.sourceContextSpecified &&
-        CompareStringOrdinal(destinationState.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) != CSTR_EQUAL)
+    if (request.origin == FolderView::FileOperationRequest::Origin::MoveFolderPicker)
+    {
+        if (request.operation != FILESYSTEM_MOVE || ! request.destinationFolder.has_value() || ! request.destinationFolder->is_absolute())
+        {
+            return E_INVALIDARG;
+        }
+
+        // The Shell picker returns a Windows directory. The originating pane supplied the sources.
+        if (! NavigationLocation::EqualsNoCase(destinationState.pluginId, L"builtin/file-system"))
+        {
+            const auto* localEntry = FileSystemPluginManager::GetInstance().FindPluginById(L"builtin/file-system");
+            if (! localEntry || ! localEntry->fileSystem || localEntry->disabled || ! localEntry->loadable || localEntry->shortId.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+            if (! CanCrossFileSystemCopyMove(fileSystem,
+                                             request.sourcePaths.front().native(),
+                                             destinationState.pluginId,
+                                             localEntry->fileSystem,
+                                             request.destinationFolder->native(),
+                                             localEntry->id,
+                                             FILESYSTEM_MOVE))
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+            destinationFileSystem = localEntry->fileSystem;
+        }
+    }
+    else if (isCopyMove && ! request.sourceContextSpecified &&
+             CompareStringOrdinal(destinationState.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) != CSTR_EQUAL)
     {
         const FileSystemPluginManager::PluginEntry* localEntry = FileSystemPluginManager::GetInstance().FindPluginById(L"builtin/file-system");
         if (! localEntry || ! localEntry->fileSystem || localEntry->disabled || ! localEntry->loadable || localEntry->shortId.empty())
@@ -3589,45 +3633,32 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
         }
         else if (leftMatches && rightMatches)
         {
-            const auto isUnderFolder = [](std::wstring_view folder, std::wstring_view path) noexcept -> bool
+            const auto capabilities = TryGetCapabilities(_leftPane.fileSystem, request.sourcePaths.front().native(), request.operation, request.sourcePluginId);
+            if (! capabilities.has_value() || ! HasStablePathIdentity(capabilities.value()))
             {
-                while (! folder.empty() && (folder.back() == L'\\' || folder.back() == L'/'))
-                {
-                    folder.remove_suffix(1);
-                }
-                if (folder.empty() || path.size() <= folder.size())
-                {
-                    return false;
-                }
-
-                if (! OrdinalString::StartsWithNoCase(path, folder))
-                {
-                    return false;
-                }
-
-                const wchar_t next = path[folder.size()];
-                return next == L'\\' || next == L'/';
-            };
-
-            bool inferredSourcePane = false;
-            if (! request.sourcePaths.empty())
-            {
-                const std::wstring_view firstPath = request.sourcePaths.front().native();
-
-                const auto leftFolder  = _leftPane.folderView.GetFolderPath();
-                const auto rightFolder = _rightPane.folderView.GetFolderPath();
-
-                const bool underLeft  = leftFolder.has_value() && isUnderFolder(leftFolder->native(), firstPath);
-                const bool underRight = rightFolder.has_value() && isUnderFolder(rightFolder->native(), firstPath);
-
-                if (underLeft ^ underRight)
-                {
-                    sourcePane         = underLeft ? Pane::Left : Pane::Right;
-                    inferredSourcePane = true;
-                }
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             }
-
-            if (! inferredSourcePane)
+            const FileSystemPathIdentity& identity = capabilities->pathIdentity.value();
+            const auto selectsFromPane             = [&](const PaneState& state) noexcept
+            {
+                const auto folder = state.folderView.GetFolderPath();
+                return folder.has_value() && std::ranges::all_of(request.sourcePaths,
+                                                                 [&](const std::filesystem::path& path) noexcept
+                {
+                    std::wstring parent;
+                    return TryGetFileSystemParentPath(identity, path.native(), parent) && EquivalentPath(identity, folder->native(), parent);
+                });
+            };
+            const bool fromLeft  = selectsFromPane(_leftPane);
+            const bool fromRight = selectsFromPane(_rightPane);
+            // Local is instantiated per pane. Its matching contexts still address one Windows namespace.
+            const bool sameNamespace =
+                _leftPane.fileSystem.get() == _rightPane.fileSystem.get() || NavigationLocation::EqualsNoCase(request.sourcePluginId, L"builtin/file-system");
+            if (fromLeft != fromRight)
+            {
+                sourcePane = fromLeft ? Pane::Left : Pane::Right;
+            }
+            else if (! fromLeft || ! sameNamespace)
             {
                 return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             }
@@ -3690,6 +3721,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             case FolderView::FileOperationRequest::Origin::PackCleanup: return FileOperations::DeleteOrigin::PackCleanup;
             case FolderView::FileOperationRequest::Origin::UnpackCleanup: return FileOperations::DeleteOrigin::UnpackCleanup;
             case FolderView::FileOperationRequest::Origin::PaneCommand:
+            case FolderView::FileOperationRequest::Origin::MoveFolderPicker:
             case FolderView::FileOperationRequest::Origin::ClipboardPaste:
             case FolderView::FileOperationRequest::Origin::InternalDrop:
             case FolderView::FileOperationRequest::Origin::ExternalDrop: return FileOperations::DeleteOrigin::PaneCommand;
@@ -3710,7 +3742,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
                                                       request.flags,
                                                       waitForOthers,
                                                       0,
-                                                      FileOperationState::ExecutionMode::PerItem,
+                                                      std::nullopt,
                                                       false,
                                                       std::move(destinationFileSystem),
                                                       &taskId,
@@ -3960,7 +3992,7 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
                                            flags,
                                            waitForOthers,
                                            0,
-                                           FileOperationState::ExecutionMode::PerItem,
+                                           std::nullopt,
                                            requireConfirmation,
                                            nullptr,
                                            taskIdOut,
@@ -4636,9 +4668,8 @@ void FolderWindow::CommandDelete(Pane pane)
         return;
     }
 
-    // Recycle deletes go through ONE bulk DeleteItems call: the plugin batches same-parent
-    // items into a single IFileOperation (up to 1000 per batch), which per-item routing would
-    // degrade to one shell operation + one STA thread per item.
+    // Keep the pane's existing provider bulk path. Local Recycle can group
+    // same-parent paths into a single Shell operation per batch.
     const bool waitForOthers                                        = _fileOperations->ShouldQueueNewTask();
     const std::optional<FileSystemPathIdentity> removalPathIdentity = TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
     const uint64_t removalFocusToken = removalPathIdentity.has_value() ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value()) : 0u;

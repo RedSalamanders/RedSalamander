@@ -43,19 +43,48 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
                               Utf16FromUtf8ForFileOpsSelfTest(Common::Crypto::EncodeHexDigest(originalHasher.Finalize()))));
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFile},
-                                                                 std::filesystem::path(dummyRoot),
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsDummy);
+        {
+            const HostPromptResult previous = HostGetTestPromptResultOverride();
+            const auto restorePrompt        = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(previous); });
+            HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+            const uint64_t promptsBefore = HostGetTestPromptRequestCount();
+            uint64_t canceledTaskId      = 0u;
+            const HRESULT canceled       = state.fileOps->AdmitOperation(FILESYSTEM_MOVE,
+                                                                         FolderWindow::Pane::Left,
+                                                                         FolderWindow::Pane::Right,
+                                                                         state.fsLocal,
+                                                                         {srcFile},
+                                                                         std::filesystem::path(dummyRoot),
+                                                                         flags,
+                                                                         false,
+                                                                         0,
+                                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                         false,
+                                                                         state.fsDummy,
+                                                                         &canceledTaskId);
+            HostPromptDebugSnapshot prompt{};
+            const bool validQuestion = HostGetTestPromptRequestCount() == promptsBefore + 1u && HostGetTestLastPromptDebugSnapshot(prompt) &&
+                                       prompt.presentation == HOST_PROMPT_PRESENTATION_COPY && prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL &&
+                                       ! prompt.hasFileOperationOptions && prompt.message.find(dummyRoot) != std::wstring::npos;
+            if (canceled != S_FALSE || canceledTaskId != 0u || ! validQuestion)
+            {
+                Fail(L"Routine Copy-only Move must ask one Copy/Cancel question with the destination, and cancellation must publish no task.");
+                return true;
+            }
+        }
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFile},
+                                                 std::filesystem::path(dummyRoot),
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsDummy);
         if (! state.taskA.has_value())
         {
             Fail(L"Copy-only Move status test failed to start the move task.");
@@ -921,6 +950,29 @@ case SelfTestState::Step::Phase10_PermanentDelete:
                 ! verifyCopyMovePromptPresentation(
                     FILESYSTEM_MOVE, HOST_PROMPT_PRESENTATION_MOVE, IDS_FILEOP_OPERATION_MOVE, HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE))
             {
+                return true;
+            }
+
+            const uint64_t recyclePromptsBefore = HostGetTestPromptRequestCount();
+            const auto recycled                 = StartFileOperationAndGetId(state.fileOps,
+                                                                             FILESYSTEM_DELETE,
+                                                                             FolderWindow::Pane::Left,
+                                                                             std::nullopt,
+                                                                             state.fsLocal,
+                                                                             {cancelFile},
+                                                                             {},
+                                                                             FILESYSTEM_FLAG_USE_RECYCLE_BIN,
+                                                                             false,
+                                                                             0,
+                                                                             FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                             true);
+            HostPromptDebugSnapshot recyclePrompt{};
+            if (recycled.has_value() || HostGetTestPromptRequestCount() != recyclePromptsBefore + 1u || ! HostGetTestLastPromptDebugSnapshot(recyclePrompt) ||
+                recyclePrompt.presentation != HOST_PROMPT_PRESENTATION_RECYCLE || recyclePrompt.defaultResult != HOST_PROMPT_RESULT_CANCEL ||
+                recyclePrompt.title != LoadStringResource(nullptr, IDS_CMD_MOVE_TO_RECYCLE_BIN) ||
+                recyclePrompt.message.find(cancelFile.native()) == std::wstring::npos)
+            {
+                Fail(L"Recycle confirmation must describe recycling the captured item and cancel without publishing a task.");
                 return true;
             }
 

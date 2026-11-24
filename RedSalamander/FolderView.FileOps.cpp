@@ -762,22 +762,20 @@ void FolderView::DeleteSelectedItems()
 
 void FolderView::CopySelectionToClipboard()
 {
-    std::vector<std::filesystem::path> paths;
-    for (const auto& item : _items)
-    {
-        if (item.selected)
-        {
-            paths.push_back(GetItemFullPath(item));
-        }
-    }
+    Debug::Perf::Scope perf(L"clipboard.copy_us");
 
-    if (paths.empty() && _focusedIndex != static_cast<size_t>(-1) && _focusedIndex < _items.size())
+    if (! SupportsLocalFileDropClipboard())
     {
-        paths.push_back(GetItemFullPath(_items[_focusedIndex]));
-    }
-
-    if (paths.empty())
+        ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_COPY, IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED, OverlaySeverity::Warning);
         return;
+    }
+
+    const std::vector<std::filesystem::path> paths = GetSelectedOrFocusedPaths();
+    perf.SetValue0(static_cast<uint64_t>(paths.size()));
+    if (paths.empty())
+    {
+        return;
+    }
 
     static_cast<void>(SetFileDropClipboard(_hWnd.get(), paths, DROPEFFECT_COPY));
 }
@@ -786,7 +784,7 @@ bool FolderView::CutSelectionToClipboard()
 {
     Debug::Perf::Scope perf(L"clipboard.cut_us");
 
-    if (! SupportsFileDropCut())
+    if (! SupportsLocalFileDropClipboard())
     {
         ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_CUT, IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED, OverlaySeverity::Warning);
         return false;
@@ -812,14 +810,14 @@ bool FolderView::CutSelectionToClipboard()
 bool FolderView::CutPathsToClipboard(const std::vector<std::filesystem::path>& paths)
 {
     Debug::Perf::Scope perf(L"clipboard.cut_exact_paths_us");
-    if (paths.empty() || ! SupportsFileDropCut())
+    if (paths.empty() || ! SupportsLocalFileDropClipboard())
     {
         return false;
     }
     return SetFileDropClipboard(_hWnd.get(), paths, DROPEFFECT_MOVE);
 }
 
-bool FolderView::SupportsFileDropCut() const noexcept
+bool FolderView::SupportsLocalFileDropClipboard() const noexcept
 {
     return _fileSystem && IsBuiltinFileSystemPlugin(_fileSystemPluginId);
 }
@@ -1324,6 +1322,8 @@ void FolderView::MoveSelectedItems()
         return;
     }
 
+    const wil::com_ptr<IFileSystem> sourceFileSystem = _fileSystem;
+    const uint64_t sourceFolderGeneration            = _folderPathGeneration;
     std::filesystem::path destination;
 #ifdef ENABLE_TESTS
     if (std::optional<std::filesystem::path> debugDestination = TakeDebugMoveSelectedItemsDestinationForSelfTest(); debugDestination.has_value())
@@ -1356,7 +1356,7 @@ void FolderView::MoveSelectedItems()
         destination = std::filesystem::path(selectedPath.get());
     }
 
-    if (destination.empty())
+    if (destination.empty() || _fileSystem.get() != sourceFileSystem.get() || _folderPathGeneration != sourceFolderGeneration)
     {
         return;
     }
@@ -1366,6 +1366,7 @@ void FolderView::MoveSelectedItems()
     {
         FileOperationRequest request{};
         request.operation         = FILESYSTEM_MOVE;
+        request.origin            = FileOperationRequest::Origin::MoveFolderPicker;
         request.sourcePaths       = std::move(paths);
         request.destinationFolder = destination;
         request.flags             = flags;

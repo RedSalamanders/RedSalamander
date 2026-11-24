@@ -467,8 +467,12 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
         return false;
     changed.reset();
 
-    auto confirmed = makeTask(0xD1EA202611010002ull, false);
+    const ULONGLONG constructionTick = GetTickCount64();
+    auto confirmed                   = makeTask(0xD1EA202611010002ull, false);
     if (! confirmed)
+        return false;
+    if (! state.Require(confirmed->_preparationStartTick.load(std::memory_order_acquire) >= constructionTick,
+                        L"Initial Preparing starts at task construction before execution."))
         return false;
     State::MutationInterlockRelations relations{};
     relations.advisoryDecided = true;
@@ -483,12 +487,19 @@ struct DirectoryWitnessBorrowControl final : IFileSystemOperationControl
             operations.LeaveOperation(*confirmed, accepted);
         operations.WithdrawPreparedMutationInterlock(key);
     });
-    auto entered                  = operations.EnterOperation(*confirmed, {});
-    accepted                      = std::move(entered.accepted);
+    // Mark an old preparation so even a same-tick reservation must publish a new start time.
+    confirmed->_preparationStartTick.store(1u, std::memory_order_release);
+    const ULONGLONG reservationTick = GetTickCount64();
+    auto entered                    = operations.EnterOperation(*confirmed, {});
+    accepted                        = std::move(entered.accepted);
     if (! state.Require(entered.outcome == State::OperationEntryOutcome::Entered && confirmed->HasReservedOperation() && ! confirmed->HasEnteredOperation() &&
                             confirmed->GetLifecyclePhase() == FileOperations::TaskLifecyclePhase::PreparingExecution &&
                             confirmed->AcquireDeferredDirectoryDeleteAuthoritiesForExecution() == S_OK,
                         L"Directory confirmation reserves overlapping admission and acquires the checked strict lease before execution."))
+        return false;
+    if (! state.Require(confirmed->_preparationStartTick.load(std::memory_order_acquire) >= reservationTick &&
+                            confirmed->_operationStartTick.load(std::memory_order_acquire) == 0u,
+                        L"Reserved directory preparation starts at reservation and cannot borrow earlier queue or execution time."))
         return false;
     auto readScope                    = accepted->interlock->scopes->front();
     readScope.access                  = FileOperations::MutationInterlockAccess::ReadSource;
