@@ -6,6 +6,17 @@
 
 ## Implementation checklist
 
+**Delivery checkpoint (2026-11-25).**
+
+- [x] Merge typed Recycle routing in [PR #249](https://github.com/RedSalamanders/RedSalamander/pull/249) at `e103ebcfe`. The exact x64 Debug mixed-selection and Move cases passed. Live remote Recycle coverage remains open.
+- [x] Merge Create Folder admission in [PR #252](https://github.com/RedSalamanders/RedSalamander/pull/252) at `ccdab5fe5`. The exact no-activation x64 Debug case passed, including submission after exit consent while a name prompt was open.
+- [x] Merge Options → Issues in [PR #255](https://github.com/RedSalamanders/RedSalamander/pull/255) at `95b295b37`. The approved x64 Debug case passed in `20261125T070538Z-18412-72ac67ec16b248b3a2ac40421f7084ff`. It verified opening and hiding Issues and exercising the existing footer choices.
+- [ ] Complete integration of the repeat choices in [PR #251](https://github.com/RedSalamanders/RedSalamander/pull/251) and clean Completed grouping in [PR #256](https://github.com/RedSalamanders/RedSalamander/pull/256). Both integrated x64 Debug builds emitted zero warnings and errors. The repeat, alert accessibility and clean Completed cases passed without activation. Exact PrePush is in progress for both branches.
+- [ ] Land explicit-start Custom bandwidth. The approved x64 Debug check on `8d319bdc6` passed in `20261125T080539Z-74184-e3d06a910a664a7e9c71c17736f4f791`. Cancel preserved the selected limit, and Copy captured an accepted 768 KiB/s rate.
+- [ ] Land credential-wait progress. The x64 Debug cadence case passed on `2968d4493`. It observed one wait entry and exit and a fresh rate window. Same-machine cadence samples are archived on the branch. Actual connection authentication and allocation evidence remain open.
+- [ ] Verify and land the Copy links default and the queued Create Folder worker. Native builds are in progress.
+- [ ] Qualify native x64 and ARM64 Release. The previous x64 run found a source-guard formatting dependency, a Stopping witness that used a frozen rate in the running total, and an exit-admission failure. The latter passed the focused x64 Debug retest. The source-guard and Stopping repair at `44f3b0262` built cleanly and passed the x64 Debug cadence case. The previous ARM64 run ended at a desktop retirement failure following a foreign foreground change. [Current main Release run](https://github.com/RedSalamanders/RedSalamander/actions/runs/45566947991)
+
 **Delivery checkpoint (2026-11-24).**
 
 - [x] Merged ingress, Local Recycle batching and Preparing progress through [PR #246](https://github.com/RedSalamanders/RedSalamander/pull/246).
@@ -13,11 +24,11 @@
 - [x] Merged corroborated F2 Rename and the Preparing assertion repair through [PR #248](https://github.com/RedSalamanders/RedSalamander/pull/248). Live Samba x64 Debug and Release passed the guarded Rename and fixture cleanup.
 - [x] Merged the bounded pinned Zig download fix through [PR #250](https://github.com/RedSalamanders/RedSalamander/pull/250). A fresh x64 Debug solution build verified the archive and executable hashes and emitted zero warnings and errors.
 - [x] Passed the authorized x64 Debug decision-mirror focus, queue order and Clear completed checks in `20261124T194522Z-93024-b369633f9e2a41aab5bf8a539d4d9d13`. This pass exercised the repeat-choice build and ended in under three minutes.
-- [ ] Land the typed Recycle and repeat-choice contracts in [PR #249](https://github.com/RedSalamanders/RedSalamander/pull/249) and [PR #251](https://github.com/RedSalamanders/RedSalamander/pull/251). Their x64 Debug exact cases passed. Broader local results and real remote Recycle are open.
+- [x] Pass the initial exact x64 Debug typed Recycle and repeat-choice cases. Integration status is above.
 - [x] Merge shared bandwidth presets and IEC examples through [PR #253](https://github.com/RedSalamanders/RedSalamander/pull/253). The x64 Debug preset and parser checks and all 12 resource checks passed. Explicit-start Custom editing remains open.
-- [ ] Finish Create Directory admission in [PR #252](https://github.com/RedSalamanders/RedSalamander/pull/252). The initial focused x64 Debug case passed. The native modal-exit retest is running.
-- [ ] Verify clean-only Completed grouping. The implementation and private popup witness keep failed, partial, uncertain and warning results outside Clear completed. All 66 focused runner-plan checks passed. Native evidence is pending.
-- [ ] Finish the stage gates below and qualify native x64 and ARM64. [The first main Release run with the repaired download window](https://github.com/RedSalamanders/RedSalamander/actions/runs/45474460298) awaits a result.
+- [x] Pass the initial focused x64 Debug Create Directory admission check.
+- [x] Pass 66 focused runner-plan checks for clean Completed grouping. The native result is recorded above.
+- [ ] Finish the stage gates below and qualify native x64 and ARM64. [The first main Release run with the repaired download window](https://github.com/RedSalamanders/RedSalamander/actions/runs/45474460298) ended after admission.
 
 **Samba F2 Rename (2026-11-24).** No-activation run
 `20261124T162457Z-88408-705225e504c24214a1191b57d8f59ce3` reached an active-callback assertion while
