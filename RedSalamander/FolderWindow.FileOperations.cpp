@@ -315,6 +315,23 @@ enum class ObjectBindingSupport : uint8_t
             }
             return S_OK;
         }
+        else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+        {
+            if (! IsQualifiedEndpointValid(typedPlan.endpoint) || ! IsLocalFileSystemEndpointImpl(typedPlan.endpoint))
+                return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
+            if (! Common::Paths::IsSupportedLocalFileOperationPath(typedPlan.archivePath.native()))
+                return RejectPlan(PlanRejectionBucket::MalformedDestination, rejectionBucket);
+            if (typedPlan.selectedItems.empty())
+                return RejectPlan(PlanRejectionBucket::EmptySelection, rejectionBucket);
+            for (const auto& source : typedPlan.selectedItems)
+            {
+                if (! IsQualifiedEndpointValid(source.endpoint) || ! IsLocalFileSystemEndpointImpl(source.endpoint))
+                    return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
+                if (! Common::Paths::IsSupportedLocalFileOperationPath(source.providerPath))
+                    return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+            }
+            return S_OK;
+        }
         else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
         {
             if (! IsQualifiedEndpointValid(typedPlan.endpoint))
@@ -499,6 +516,12 @@ enum class ObjectBindingSupport : uint8_t
             bytes += endpointBytes(typedPlan.endpoint);
             for (const auto& item : typedPlan.selectedItems)
                 bytes += itemBytes(item);
+        }
+        else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+        {
+            bytes += endpointBytes(typedPlan.endpoint) + stringBytes(typedPlan.archivePath.native());
+            for (const auto& source : typedPlan.selectedItems)
+                bytes += endpointBytes(source.endpoint) + stringBytes(source.providerPath);
         }
         else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
         {
@@ -2541,7 +2564,8 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
         if (operation != FILESYSTEM_DELETE || capturedConsentKind != FileOperations::ConsentKind::ArchiveDeleteAfter ||
             (flags & (FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN)) != 0 || archiveCleanup->fileSystem.get() != fileSystem.get() ||
             archiveCleanup->pluginId != sourcePluginId || archiveCleanup->instanceContext != sourceInstanceContext ||
-            archiveCleanup->sources.size() != sourcePaths.size())
+            archiveCleanup->sources.size() != sourcePaths.size() ||
+            (deleteOrigin == FileOperations::DeleteOrigin::PackCleanup && (! archiveCleanup->publishedArchive || ! *archiveCleanup->publishedArchive)))
         {
             return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
         }
@@ -2966,7 +2990,10 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     admission.destinationInstanceContext = std::move(destinationInstanceContext);
     admission.capturedConsentKind        = capturedConsentKind;
     if (archiveCleanup)
+    {
         admission.capturedArchiveArtifactTouch = archiveCleanup->artifactTouch;
+        admission.archiveOutputLease           = archiveCleanup->publishedArchive;
+    }
 
     admissionOut = std::move(admission);
     return S_OK;
@@ -3673,10 +3700,19 @@ HRESULT FolderWindow::FileOperationState::AdmitCreateDirectory(FolderWindow::Pan
                                           : now + FileOperations::kTaskCardRevealDelayMs;
     task->InitializeSourceItemResultBuilders();
 
+    const HRESULT status = PublishPreparingTask(std::move(task), L"Create Folder");
+    if (SUCCEEDED(status))
+        Debug::Perf::Emit(L"fileops.create_directory.admission.ui_thread_us", L"published", Debug::Perf::ElapsedUs(startedAt), 1u, 0u, status);
+    return status;
+}
+
+HRESULT FolderWindow::FileOperationState::PublishPreparingTask(std::unique_ptr<Task> task, std::wstring_view operation)
+{
     const HRESULT recoveryHr = ArmCompletionRecoveryTimer();
     if (FAILED(recoveryHr))
         return recoveryHr;
     Task* const published = task.get();
+    const uint64_t id     = task->_taskId;
     {
         std::scoped_lock lock(_mutex);
         _tasks.emplace_back(std::move(task));
@@ -3692,14 +3728,112 @@ HRESULT FolderWindow::FileOperationState::AdmitCreateDirectory(FolderWindow::Pan
     catch (const std::system_error& error)
     {
         // Thread creation may fail before there is a worker to publish a completion.
-        Debug::Error(L"File Operations could not start the Create Folder worker (taskId={}, code={}).", id, error.code().value());
+        Debug::Error(L"File Operations could not start the {} worker (taskId={}, code={}).", operation, id, error.code().value());
         WithdrawUnstartedTask(published);
         return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
     }
     RequestTaskPresentationRefresh();
     published->_workerReleased.store(true, std::memory_order_release);
     published->_workerReleased.notify_all();
-    Debug::Perf::Emit(L"fileops.create_directory.admission.ui_thread_us", L"published", Debug::Perf::ElapsedUs(startedAt), 1u, 0u, S_OK);
+    return S_OK;
+}
+
+HRESULT FolderWindow::FileOperationState::AdmitPackArchive(FolderWindow::Pane sourcePane,
+                                                           const wil::com_ptr<IFileSystem>& fileSystem,
+                                                           std::wstring pluginId,
+                                                           std::wstring pluginShortId,
+                                                           std::wstring instanceContext,
+                                                           std::vector<std::filesystem::path> sources,
+                                                           std::shared_ptr<FileOperations::PackArchiveState> pack,
+                                                           uint64_t& taskId)
+{
+    taskId = 0u;
+    if (_completionShutdown.load(std::memory_order_acquire))
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+    if (_owner.IsFileOperationsExitPending())
+        return FolderWindow::kFileOperationRefusedForPendingExit;
+    if (! fileSystem || ! OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system") || sources.empty() || ! pack || pack->request.archivePath.empty())
+        return E_INVALIDARG;
+
+    auto task = std::make_unique<Task>(*this);
+    {
+        std::scoped_lock lock(_mutex);
+        task->_taskId = _nextTaskId++;
+    }
+    const uint64_t id = task->_taskId;
+    task->_admissionKey.store(id, std::memory_order_release);
+    task->_queueOrderKey.store(id, std::memory_order_release);
+    task->_operation               = FileOperations::kPackArchiveOperation;
+    task->_sourcePane              = sourcePane;
+    task->_sourcePluginId          = std::move(pluginId);
+    task->_sourcePluginShortId     = std::move(pluginShortId);
+    task->_sourceInstanceContext   = std::move(instanceContext);
+    task->_fileSystem              = fileSystem;
+    task->_sourcePaths             = std::move(sources);
+    task->_progressSourcePath      = task->_sourcePaths.front().native();
+    task->_progressDestinationPath = pack->request.archivePath.native();
+    task->_waitForOthers.store(ShouldQueueNewTask(), std::memory_order_release);
+    task->_holdsQueuePlace.store(true, std::memory_order_release);
+
+    AdmissionDestinationInputs destination{};
+    destination.folder = pack->request.archivePath.parent_path();
+    task->InitializeAdmissionInputs({}, std::move(destination));
+    task->_packArchive = std::move(pack);
+    task->InitializeSourceItemResultBuilders();
+    const ULONGLONG now = TaskPresentationNowTick();
+    task->_presentationState.store(Task::TaskPresentationState::Hidden, std::memory_order_release);
+    task->_presentationDeadlineTick = now > std::numeric_limits<ULONGLONG>::max() - FileOperations::kTaskCardRevealDelayMs
+                                          ? std::numeric_limits<ULONGLONG>::max()
+                                          : now + FileOperations::kTaskCardRevealDelayMs;
+
+    RETURN_IF_FAILED(PublishPreparingTask(std::move(task), L"Pack"));
+    taskId = id;
+    return S_OK;
+}
+
+HRESULT FolderWindow::FileOperationState::Task::PreparePackArchiveAdmission() noexcept
+{
+    if (! _packArchive)
+        return E_UNEXPECTED;
+    const auto& request = _packArchive->request;
+    const auto qualify  = [&](std::wstring_view path, bool destination, FileOperations::QualifiedEndpoint& endpoint) noexcept -> HRESULT
+    {
+        if (CancelRequestedDurable())
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        const auto capabilities = TryGetCapabilities(_fileSystem, path, FILESYSTEM_COPY, _sourcePluginId);
+        if (! capabilities.has_value() || ! HasStablePathIdentity(capabilities.value()) || ! HasContainedCancellationRoute(capabilities.value()) ||
+            capabilities->rootId.empty() || (destination ? ! capabilities->write : ! capabilities->read))
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        endpoint = FileOperations::QualifiedEndpoint{
+            .pluginId                  = _sourcePluginId,
+            .instanceId                = CanonicalInstanceId(_sourceInstanceContext),
+            .profileId                 = capabilities->pathProfileId,
+            .rootId                    = capabilities->rootId,
+            .pathIdentity              = capabilities->pathIdentity,
+            .cancellationAbort         = capabilities->cancellationAbort,
+            .cancellationDeadline      = capabilities->cancellationDeadline,
+            .cancellationRouteClass    = capabilities->cancellationRouteClass,
+            .providerWatchdogTimeoutMs = capabilities->providerWatchdogTimeoutMs,
+        };
+        return S_OK;
+    };
+
+    FileOperations::PackArchiveAdmission plan{};
+    plan.archivePath = request.archivePath;
+    plan.options.executionMode =
+        _waitForOthers.load(std::memory_order_acquire) ? FileOperations::ExecutionMode::Queue : FileOperations::ExecutionMode::Parallel;
+    RETURN_IF_FAILED(qualify(plan.archivePath.native(), true, plan.endpoint));
+    plan.selectedItems.reserve(_sourcePaths.size());
+    for (const std::filesystem::path& path : _sourcePaths)
+    {
+        FileOperations::PackArchiveSource source{};
+        source.providerPath = path.native();
+        RETURN_IF_FAILED(qualify(source.providerPath, false, source.endpoint));
+        plan.selectedItems.push_back(std::move(source));
+    }
+    FileOperations::FileOperationPlanGroup plans;
+    plans.emplace_back(std::move(plan));
+    StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(plans)));
     return S_OK;
 }
 

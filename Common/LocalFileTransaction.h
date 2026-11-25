@@ -255,7 +255,9 @@ public:
         return Write(bytes.data(), bytes.size());
     }
 
-    [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize = std::nullopt, BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr) noexcept
+    [[nodiscard]] HRESULT Commit(std::optional<uint64_t> expectedSize                 = std::nullopt,
+                                 BY_HANDLE_FILE_INFORMATION* committedFileInformation = nullptr,
+                                 wil::unique_hfile* retainedPublishedFile             = nullptr) noexcept
     {
         if (! _file || _temporaryPath.empty() || _targetPath.empty() || _committed)
         {
@@ -337,7 +339,10 @@ public:
         if (FAILED(renameHr))
             return renameHr;
 
-        _file.reset();
+        if (retainedPublishedFile)
+            *retainedPublishedFile = std::move(_file);
+        else
+            _file.reset();
         _temporaryPath.clear();
         _committed = true;
         if (committedFileInformation)

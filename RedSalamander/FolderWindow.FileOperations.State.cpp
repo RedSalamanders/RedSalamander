@@ -218,6 +218,7 @@ SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
 SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 SelfTestPausePoint g_fileOpsBridgeOpenListingPausePoint;
 SelfTestPausePoint g_fileOpsPreparingBeforePublishPausePoint;
+SelfTestPausePoint g_fileOpsPackBeforePublishPausePoint;
 SelfTestProgressIoGate g_fileOpsProgressIoGateForSelfTest;
 SelfTestPausePoint g_fileOpsConflictConvergenceItemPausePoint;
 
@@ -3260,6 +3261,8 @@ void SetPopupCompactDensityInSettings(Common::Settings::Settings& settings, bool
 
 [[nodiscard]] const wchar_t* OperationToString(FileSystemOperation operation) noexcept
 {
+    if (operation == FileOperations::kPackArchiveOperation)
+        return L"pack";
     switch (operation)
     {
         case FILESYSTEM_COPY: return L"copy";
@@ -12036,6 +12039,22 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                                               selectedAdmission->destination->fileSystem ? selectedAdmission->destination->fileSystem.get()
                                                                                          : _fileSystem.get());
             }
+            else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+            {
+                for (const auto& source : typedPlan.selectedItems)
+                {
+                    if (CancelRequestedDurable())
+                        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                    RETURN_IF_FAILED(builder.Add(
+                        _fileSystem.get(), source.endpoint, source.providerPath, FileOperations::MutationInterlockAccess::ReadSource, false, false));
+                }
+                return builder.Add(_fileSystem.get(),
+                                   typedPlan.endpoint,
+                                   typedPlan.archivePath.native(),
+                                   FileOperations::MutationInterlockAccess::PublishDestination,
+                                   false,
+                                   false);
+            }
             else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
             {
                 return builder.Add(_fileSystem.get(),
@@ -12362,7 +12381,7 @@ HRESULT FolderWindow::FileOperationState::BuildPreparationFacts(uint64_t taskId,
                     addCount(snapshot.copyOnlyCount, typedPlan.selectedItems.size());
                 }
             }
-            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
+            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan> || std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
             {
                 addCount(snapshot.selectedRootCount, typedPlan.selectedItems.size());
             }
@@ -13386,6 +13405,10 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
     {
         RETURN_IF_FAILED(PrepareCreateDirectoryAdmission());
     }
+    if (_operation == FileOperations::kPackArchiveOperation)
+    {
+        RETURN_IF_FAILED(PreparePackArchiveAdmission());
+    }
 
     if (_pendingBatchRenameAdmission.has_value())
     {
@@ -13572,6 +13595,11 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     // Once Cancel/Stop is requested, the watch cancels a call still pending after its grace, so a
     // wedged network round trip returns instead of holding the task, its popup, or shutdown.
     const Common::SynchronousIoCancelWatch::Scope cancelWatch(&Task::ShouldCancelSynchronousIo, this);
+    const auto retireArchiveState = wil::scope_exit([this]() noexcept
+    {
+        _packArchive.reset();
+        _archiveOutputLease.reset();
+    });
     const ScopedHostCredentialWaitObserver credentialObserver({this, &Task::OnCredentialWait});
     [[maybe_unused]] const std::stop_callback stopWake(stopToken,
                                                        [this]() noexcept
@@ -15281,6 +15309,8 @@ HRESULT FolderWindow::FileOperationState::Task::FinalizeTypedItemResults(HRESULT
                       0u,
                       operationStatus);
 
+    if (_operation == FileOperations::kPackArchiveOperation)
+        return operationStatus;
     if (IsTraversalResourceLimitStatus(operationStatus))
     {
         // A traversal/resource ceiling is an exact task-terminal cause even when a partially
@@ -24417,6 +24447,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
     _observedSkipAction.store(false, std::memory_order_release);
     _started.store(true, std::memory_order_release);
     _operationStartTick.store(GetTickCount64(), std::memory_order_release);
+
+    if (_operation == FileOperations::kPackArchiveOperation)
+    {
+        const auto* pack = plans && plans->size() == 1u ? std::get_if<FileOperations::PackArchiveAdmission>(&plans->front()) : nullptr;
+        return pack ? ExecutePackArchive(*pack) : E_UNEXPECTED;
+    }
 
 #ifdef ENABLE_TESTS
     _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);

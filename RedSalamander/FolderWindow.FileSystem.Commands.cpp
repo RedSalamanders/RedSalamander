@@ -7,7 +7,7 @@
 #include "FileOperationArtifactRegistry.h"
 #include "FileOperationConfirmation.h"
 #include "FileSystemRouteContract.h"
-#include "FolderWindow.FileOperationsInternal.h"
+#include "FolderWindow.FileOperations.State.Private.h"
 #include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindowInternal.h"
 #include "Helpers.h"
@@ -4204,6 +4204,8 @@ struct ArchiveUnpackPromptTextPayload final
 
 [[nodiscard]] HRESULT LoadSevenZipArchiveExports(SevenZipArchiveExports& out) noexcept
 {
+    static std::mutex initMutex;
+    std::scoped_lock lock(initMutex);
     if (out.module && out.createObject && out.getNumberOfFormats && out.getHandlerProperty2)
     {
         return S_OK;
@@ -6176,17 +6178,15 @@ struct ZipEndOfCentralDirectory final
     uint32_t centralDirectoryOffset = 0u;
 };
 
-struct ArchiveOperationResult final
+using FileOperations::ArchiveOperationResult;
+
+enum class PackWorkCheckpoint : uint8_t
 {
-    HRESULT hr                   = S_OK;
-    bool sourceSelectionComplete = true;
-    std::filesystem::path archivePath;
-    std::filesystem::path destinationPath;
-    uint64_t entryCount           = 0u;
-    uint64_t bytesProcessed       = 0u;
-    uint64_t skippedConflictCount = 0u;
-    std::vector<std::wstring> entries;
+    Encoding,
+    BeforePublish,
 };
+
+using PackCheckpoint = std::function<HRESULT(PackWorkCheckpoint)>;
 
 void AppendLe16(std::vector<std::byte>& bytes, uint16_t value)
 {
@@ -6742,7 +6742,8 @@ private:
 [[nodiscard]] HRESULT CollectArchiveDirectoryEntries(const std::filesystem::path& root,
                                                      const std::filesystem::path& relativeRoot,
                                                      bool deleteSourcesAfterPack,
-                                                     ArchiveSourceInventory& inventory)
+                                                     ArchiveSourceInventory& inventory,
+                                                     const PackCheckpoint& checkpoint)
 {
     if (const HRESULT hr = AddArchiveSourceEntry(root, relativeRoot, true, inventory.entries); FAILED(hr))
     {
@@ -6762,6 +6763,7 @@ private:
     const std::filesystem::path parent = root.parent_path();
     for (; it != end;)
     {
+        RETURN_IF_FAILED(checkpoint(PackWorkCheckpoint::Encoding));
         const std::filesystem::path itemPath      = it->path();
         const std::filesystem::file_status status = it->symlink_status(ec);
         if (ec)
@@ -6796,12 +6798,14 @@ private:
 
 [[nodiscard]] HRESULT CollectArchiveSources(const std::vector<std::filesystem::path>& selectedPaths,
                                             bool deleteSourcesAfterPack,
-                                            ArchiveSourceInventory& inventory)
+                                            ArchiveSourceInventory& inventory,
+                                            const PackCheckpoint& checkpoint)
 {
     inventory        = {};
     auto& outEntries = inventory.entries;
     for (const std::filesystem::path& path : selectedPaths)
     {
+        RETURN_IF_FAILED(checkpoint(PackWorkCheckpoint::Encoding));
         std::error_code ec;
         const std::filesystem::file_status status = std::filesystem::symlink_status(path, ec);
         if (ec)
@@ -6821,7 +6825,7 @@ private:
 
         if (std::filesystem::is_directory(status))
         {
-            if (const HRESULT hr = CollectArchiveDirectoryEntries(path, relativeRoot, deleteSourcesAfterPack, inventory); FAILED(hr))
+            if (const HRESULT hr = CollectArchiveDirectoryEntries(path, relativeRoot, deleteSourcesAfterPack, inventory, checkpoint); FAILED(hr))
             {
                 return hr;
             }
@@ -6901,6 +6905,7 @@ private:
 [[nodiscard]] HRESULT StreamFileIntoZip(HANDLE archiveFile,
                                         const std::filesystem::path& sourcePath,
                                         const FileOperations::ArchiveCleanupReceipt* cleanup,
+                                        const PackCheckpoint& checkpoint,
                                         uint32_t& outCrc32,
                                         uint32_t& outSize) noexcept
 {
@@ -6919,6 +6924,7 @@ private:
     uint64_t total = 0u;
     for (;;)
     {
+        RETURN_IF_FAILED(checkpoint(PackWorkCheckpoint::Encoding));
         DWORD bytesRead = 0u;
         if (const HRESULT hr = sourceFile.Read(buffer.data(), static_cast<DWORD>(buffer.size()), bytesRead); FAILED(hr))
             return hr;
@@ -7003,11 +7009,13 @@ private:
     }));
 }
 
-[[nodiscard]] HRESULT CommitPackedArchive(Common::Files::LocalFileTransaction& transaction, std::wstring_view format) noexcept
+[[nodiscard]] HRESULT CommitPackedArchive(Common::Files::LocalFileTransaction& transaction,
+                                          std::wstring_view format,
+                                          wil::unique_hfile* retainedPublication) noexcept
 {
     Debug::Perf::Scope publish(L"archive.pack.publish_us");
     publish.SetDetail(format);
-    const HRESULT status = transaction.Commit();
+    const HRESULT status = transaction.Commit(std::nullopt, nullptr, retainedPublication);
     publish.SetHr(status);
     return status;
 }
@@ -7016,7 +7024,9 @@ private:
                                                             const std::filesystem::path& archivePath,
                                                             bool overwrite,
                                                             bool deleteSourcesAfterPack,
-                                                            const FileOperations::ArchiveCleanupReceipt* cleanup)
+                                                            const FileOperations::ArchiveCleanupReceipt* cleanup,
+                                                            const PackCheckpoint& checkpoint,
+                                                            wil::unique_hfile* retainedPublication)
 {
     ArchiveOperationResult result{};
     result.archivePath = archivePath;
@@ -7042,7 +7052,7 @@ private:
     }
 
     ArchiveSourceInventory inventory;
-    result.hr                      = CollectArchiveSources(selectedPaths, deleteSourcesAfterPack, inventory);
+    result.hr                      = CollectArchiveSources(selectedPaths, deleteSourcesAfterPack, inventory, checkpoint);
     result.sourceSelectionComplete = inventory.complete;
     if (FAILED(result.hr))
     {
@@ -7074,6 +7084,10 @@ private:
 
     for (const ArchiveEntrySource& source : sources)
     {
+        result.hr = checkpoint(PackWorkCheckpoint::Encoding);
+        if (FAILED(result.hr))
+            return result;
+
         std::string entryNameUtf8 = Utf8FromUtf16ForMakeFileList(source.entryName);
         if (entryNameUtf8.empty())
         {
@@ -7103,7 +7117,7 @@ private:
         uint32_t storedSize = 0u;
         if (! source.directory)
         {
-            result.hr = StreamFileIntoZip(archiveFile, source.sourcePath, cleanup, crc32, storedSize);
+            result.hr = StreamFileIntoZip(archiveFile, source.sourcePath, cleanup, checkpoint, crc32, storedSize);
             if (FAILED(result.hr))
             {
                 return result;
@@ -7156,6 +7170,10 @@ private:
 
     for (const ZipCentralEntry& entry : centralEntries)
     {
+        result.hr = checkpoint(PackWorkCheckpoint::Encoding);
+        if (FAILED(result.hr))
+            return result;
+
         result.hr = WriteZipCentralDirectoryEntry(archiveFile, entry);
         if (FAILED(result.hr))
         {
@@ -7179,9 +7197,9 @@ private:
     result.hr = WriteZipEndOfCentralDirectory(
         archiveFile, static_cast<uint16_t>(centralEntries.size()), static_cast<uint32_t>(centralDirectorySize), static_cast<uint32_t>(centralDirectoryOffset));
     if (SUCCEEDED(result.hr))
-    {
-        result.hr = CommitPackedArchive(transaction, L"zip");
-    }
+        result.hr = checkpoint(PackWorkCheckpoint::BeforePublish);
+    if (SUCCEEDED(result.hr))
+        result.hr = CommitPackedArchive(transaction, L"zip", retainedPublication);
     return result;
 }
 
@@ -7260,6 +7278,7 @@ class SevenZipPackFileInStream final : public ISequentialInStream
 public:
     static HRESULT Create(const std::filesystem::path& path,
                           const FileOperations::ArchiveCleanupReceipt* cleanup,
+                          const PackCheckpoint& checkpoint,
                           wil::com_ptr<ISequentialInStream>& out) noexcept
     {
         out.reset();
@@ -7273,7 +7292,7 @@ public:
         if (const HRESULT hr = input.Open(path, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, source.get()); FAILED(hr))
             return hr;
 
-        auto* impl = new (std::nothrow) SevenZipPackFileInStream(std::move(input));
+        auto* impl = new (std::nothrow) SevenZipPackFileInStream(std::move(input), checkpoint);
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -7331,6 +7350,7 @@ public:
             return S_OK;
         }
 
+        RETURN_IF_FAILED(_checkpoint(PackWorkCheckpoint::Encoding));
         DWORD bytesRead = 0u;
         if (const HRESULT hr = _input.Read(data, size, bytesRead); FAILED(hr))
             return hr;
@@ -7341,7 +7361,7 @@ public:
     }
 
 private:
-    explicit SevenZipPackFileInStream(ArchiveReadInput input) noexcept : _input(std::move(input))
+    SevenZipPackFileInStream(ArchiveReadInput input, const PackCheckpoint& checkpoint) noexcept : _input(std::move(input)), _checkpoint(checkpoint)
     {
     }
 
@@ -7349,6 +7369,7 @@ private:
 
     std::atomic_ulong _refCount{1u};
     ArchiveReadInput _input;
+    const PackCheckpoint& _checkpoint;
 };
 
 class SevenZipPackFileOutStream final : public IOutStream
@@ -7371,9 +7392,9 @@ public:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT Commit(std::wstring_view format) noexcept
+    [[nodiscard]] HRESULT Commit(std::wstring_view format, wil::unique_hfile* retainedPublication) noexcept
     {
-        return CommitPackedArchive(_transaction, format);
+        return CommitPackedArchive(_transaction, format, retainedPublication);
     }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** outObject) noexcept override
@@ -7508,9 +7529,12 @@ private:
 class SevenZipUpdateCallback final : public IArchiveUpdateCallback
 {
 public:
-    SevenZipUpdateCallback(const std::vector<ArchiveEntrySource>& sources, const FileOperations::ArchiveCleanupReceipt* cleanup) noexcept
+    SevenZipUpdateCallback(const std::vector<ArchiveEntrySource>& sources,
+                           const FileOperations::ArchiveCleanupReceipt* cleanup,
+                           const PackCheckpoint& checkpoint) noexcept
         : _sources(sources),
-          _cleanup(cleanup)
+          _cleanup(cleanup),
+          _checkpoint(checkpoint)
     {
     }
 
@@ -7556,12 +7580,12 @@ public:
 
     HRESULT STDMETHODCALLTYPE SetTotal(UInt64) noexcept override
     {
-        return S_OK;
+        return _checkpoint(PackWorkCheckpoint::Encoding);
     }
 
     HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64*) noexcept override
     {
-        return S_OK;
+        return _checkpoint(PackWorkCheckpoint::Encoding);
     }
 
     HRESULT STDMETHODCALLTYPE GetUpdateItemInfo(UInt32 index, Int32* newData, Int32* newProps, UInt32* indexInArchive) noexcept override
@@ -7651,8 +7675,9 @@ public:
             return S_OK;
         }
 
+        RETURN_IF_FAILED(_checkpoint(PackWorkCheckpoint::Encoding));
         wil::com_ptr<ISequentialInStream> stream;
-        const HRESULT hr = SevenZipPackFileInStream::Create(source.sourcePath, _cleanup, stream);
+        const HRESULT hr = SevenZipPackFileInStream::Create(source.sourcePath, _cleanup, _checkpoint, stream);
         if (FAILED(hr))
         {
             _resultHr = hr;
@@ -7676,7 +7701,8 @@ private:
     std::atomic_ulong _refCount{1u};
     const std::vector<ArchiveEntrySource>& _sources;
     const FileOperations::ArchiveCleanupReceipt* _cleanup = nullptr;
-    HRESULT _resultHr                                     = S_OK;
+    const PackCheckpoint& _checkpoint;
+    HRESULT _resultHr = S_OK;
 };
 
 [[nodiscard]] ArchiveOperationResult CreateSevenZipArchive(const std::vector<std::filesystem::path>& selectedPaths,
@@ -7684,7 +7710,9 @@ private:
                                                            bool overwrite,
                                                            bool deleteSourcesAfterPack,
                                                            const ArchivePackerDefinition& packer,
-                                                           const FileOperations::ArchiveCleanupReceipt* cleanup)
+                                                           const FileOperations::ArchiveCleanupReceipt* cleanup,
+                                                           const PackCheckpoint& checkpoint,
+                                                           wil::unique_hfile* retainedPublication)
 {
     ArchiveOperationResult result{};
     result.archivePath = archivePath;
@@ -7710,7 +7738,7 @@ private:
     }
 
     ArchiveSourceInventory inventory;
-    result.hr                      = CollectArchiveSources(selectedPaths, deleteSourcesAfterPack, inventory);
+    result.hr                      = CollectArchiveSources(selectedPaths, deleteSourcesAfterPack, inventory, checkpoint);
     result.sourceSelectionComplete = inventory.complete;
     if (FAILED(result.hr))
     {
@@ -7753,7 +7781,7 @@ private:
         return result;
     }
 
-    auto* callbackImpl = new (std::nothrow) SevenZipUpdateCallback(sources, cleanup);
+    auto* callbackImpl = new (std::nothrow) SevenZipUpdateCallback(sources, cleanup, checkpoint);
     if (! callbackImpl)
     {
         result.hr = E_OUTOFMEMORY;
@@ -7775,7 +7803,9 @@ private:
         return result;
     }
 
-    result.hr = outputStream->Commit(packer.extensionNoDot);
+    result.hr = checkpoint(PackWorkCheckpoint::BeforePublish);
+    if (SUCCEEDED(result.hr))
+        result.hr = outputStream->Commit(packer.extensionNoDot, retainedPublication);
     if (FAILED(result.hr))
         return result;
 
@@ -12284,6 +12314,102 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     Debug::Perf::Emit(L"makeFileList.command_return_us", MakeFileListFormatDetail(options.format), Debug::Perf::ElapsedUs(totalStartedAt), taskId, 0u, S_OK);
 }
 
+HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOperations::PackArchiveAdmission& plan) noexcept
+{
+    if (! _packArchive)
+        return E_UNEXPECTED;
+
+    const auto& request             = _packArchive->request;
+    const auto startedAt            = std::chrono::steady_clock::now();
+    const PackCheckpoint checkpoint = [&](PackWorkCheckpoint point) noexcept
+    {
+#ifdef ENABLE_TESTS
+        if (point == PackWorkCheckpoint::BeforePublish)
+        {
+            using FolderWindowFileOperationsStateInternal::g_fileOpsPackBeforePublishPausePoint;
+            g_fileOpsPackBeforePublishPausePoint.PauseForSource(
+                plan.archivePath.native(), _taskId, 5000u, [this]() noexcept { return CancelRequestedDurable(); });
+        }
+#else
+        static_cast<void>(point);
+#endif
+        WaitWhilePaused();
+        return CancelRequestedDurable() ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    ArchiveOperationResult result{};
+    result.archivePath = plan.archivePath;
+    result.hr          = checkpoint(PackWorkCheckpoint::Encoding);
+    if (SUCCEEDED(result.hr))
+    {
+        result.hr                 = ValidateArchiveOutputOutsideSelectedSources(_sourcePaths, plan.archivePath);
+        result.outputInsideSource = FAILED(result.hr);
+    }
+    if (SUCCEEDED(result.hr))
+    {
+        const auto* cleanup             = request.cleanup.get();
+        auto* const retainedPublication = cleanup ? &_packArchive->publishedArchive : nullptr;
+        if (request.storedZip)
+        {
+            result = CreateStoredZipArchive(_sourcePaths, plan.archivePath, request.overwrite, request.deleteAfter, cleanup, checkpoint, retainedPublication);
+        }
+        else
+        {
+            const ArchivePackerDefinition packer{
+                .extensionNoDot = request.format,
+                .classId        = request.classId,
+                .hasClassId     = true,
+            };
+            result =
+                CreateSevenZipArchive(_sourcePaths, plan.archivePath, request.overwrite, request.deleteAfter, packer, cleanup, checkpoint, retainedPublication);
+        }
+        result.published = SUCCEEDED(result.hr);
+#ifdef ENABLE_TESTS
+        const auto rollback         = Common::Files::Testing::LastLocalFileTransactionRollback();
+        result.stageRemovedByHandle = rollback.ownedHandle && (rollback.posixDisposition || rollback.legacyDisposition) && ! rollback.pathDeleteAttempted;
+#endif
+    }
+
+    const bool canceled = CancelRequestedDurable();
+    if (! result.published && canceled)
+        result.hr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    if (result.published && request.deleteAfter && (! result.sourceSelectionComplete || ! request.cleanup || canceled))
+        result.hr = S_FALSE;
+
+    for (size_t index = 0u; index < _sourcePaths.size(); ++index)
+    {
+        const auto& path = _sourcePaths[index];
+        FileOperations::FileOperationItemResult item{};
+        item.sourceIndex     = index;
+        item.verification    = FileOperations::VerificationState::NotApplicable;
+        item.finalSourcePath = path.native();
+        if (result.published)
+        {
+            const auto name     = ArchiveEntryNameFromRelativePath(path.filename(), false);
+            const bool included = std::ranges::binary_search(result.entries, name) || std::ranges::binary_search(result.entries, name + L"/");
+            item.publication    = included ? FileOperations::PublicationState::Published : FileOperations::PublicationState::NotPublished;
+            item.completion     = included ? FileOperations::ItemCompletion::Completed : FileOperations::ItemCompletion::Skipped;
+            item.status         = included ? S_OK : S_FALSE;
+            if (included)
+                item.finalDestinationPath = plan.archivePath.native();
+        }
+        else
+        {
+            item.publication = FileOperations::PublicationState::NotPublished;
+            item.completion =
+                result.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) ? FileOperations::ItemCompletion::Canceled : FileOperations::ItemCompletion::Failed;
+            item.status = result.hr;
+        }
+        static_cast<void>(StoreTypedItemResult(std::move(item)));
+    }
+
+    const HRESULT status = result.hr;
+    Debug::Perf::Emit(L"archive.pack_us", request.format, Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, status);
+    _packArchive->result = std::move(result);
+    _packArchive->resultReady.store(true, std::memory_order_release);
+    return status;
+}
+
 void FolderWindow::CommandPack(Pane pane)
 {
     if (RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
@@ -12303,7 +12429,7 @@ void FolderWindow::CommandPack(Pane pane)
     std::optional<ArchiveCommandDebugOptions> debugOptions = _debugNextArchiveCommandOptions;
     _debugNextArchiveCommandOptions.reset();
     _debugLastArchiveCommandResult.reset();
-    const auto recordDebugResult = [&](const ArchiveOperationResult& operationResult)
+    const auto recordDebugResult = [this](const ArchiveOperationResult& operationResult)
     {
         ArchiveCommandDebugResult debugResult{};
         debugResult.operation            = L"pack";
@@ -12314,6 +12440,7 @@ void FolderWindow::CommandPack(Pane pane)
         debugResult.bytesProcessed       = operationResult.bytesProcessed;
         debugResult.skippedConflictCount = operationResult.skippedConflictCount;
         debugResult.entries              = operationResult.entries;
+        debugResult.stageRemovedByHandle = operationResult.stageRemovedByHandle;
         _debugLastArchiveCommandResult   = std::move(debugResult);
     };
 #endif
@@ -12331,6 +12458,7 @@ void FolderWindow::CommandPack(Pane pane)
         return;
     }
 
+    const std::wstring pluginShortId = state.pluginShortId;
     FileOperations::ArchiveCleanupReceipt cleanupReceipt{
         .fileSystem      = state.fileSystem,
         .pluginId        = state.pluginId,
@@ -12473,78 +12601,129 @@ void FolderWindow::CommandPack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
         return;
 
-    const auto* exactCleanup = deleteSourcesAfterPack && SUCCEEDED(cleanupCapture) ? &cleanupReceipt : nullptr;
-    result                   = selectedPacker.storedZip
-                                   ? CreateStoredZipArchive(selectedPaths, archivePath.value(), overwrite, deleteSourcesAfterPack, exactCleanup)
-                                   : CreateSevenZipArchive(selectedPaths, archivePath.value(), overwrite, deleteSourcesAfterPack, selectedPacker, exactCleanup);
-    const bool keepSources =
-        deleteSourcesAfterPack && SUCCEEDED(result.hr) && (result.hr != S_OK || ! result.sourceSelectionComplete || FAILED(cleanupCapture));
-    if (keepSources)
-        result.hr = S_FALSE;
-#ifdef ENABLE_TESTS
-    recordDebugResult(result);
-#endif
-    Debug::Perf::Emit(
-        L"archive.pack_us", selectedPacker.extensionNoDot, Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, result.hr);
+    EnsureFileOperations();
+    if (! _fileOperations)
+        return;
 
-    if (FAILED(result.hr))
+    auto pack     = std::make_shared<FileOperations::PackArchiveState>();
+    pack->request = FileOperations::PackArchiveRequest{
+        .archivePath    = archivePath.value(),
+        .format         = selectedPacker.extensionNoDot,
+        .classId        = selectedPacker.classId,
+        .storedZip      = selectedPacker.storedZip,
+        .overwrite      = overwrite,
+        .deleteAfter    = deleteSourcesAfterPack,
+        .cleanupCapture = cleanupCapture,
+    };
+    if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
+        pack->request.cleanup = std::make_shared<const FileOperations::ArchiveCleanupReceipt>(cleanupReceipt);
+
+    uint64_t taskId           = 0u;
+    const HRESULT admissionHr = _fileOperations->AdmitPackArchive(
+        pane, cleanupReceipt.fileSystem, cleanupReceipt.pluginId, pluginShortId, cleanupReceipt.instanceContext, selectedPaths, pack, taskId);
+    Debug::Perf::Emit(
+        L"archive.pack.admission.ui_thread_us", selectedPacker.extensionNoDot, Debug::Perf::ElapsedUs(startedAt), selectedPaths.size(), 0u, admissionHr);
+    if (FAILED(admissionHr))
     {
+        result.archivePath = archivePath.value();
+        result.hr          = admissionHr;
+#ifdef ENABLE_TESTS
+        recordDebugResult(result);
+#endif
+        if (admissionHr != kFileOperationRefusedForPendingExit)
+        {
+            ShowArchiveOverlay(*this,
+                               pane,
+                               IDS_CMD_PACK,
+                               FolderView::OverlaySeverity::Warning,
+                               ArchiveFailureMessage(IDS_FMT_ARCHIVE_PACK_FAILED, result.archivePath, result.hr),
+                               result.hr);
+        }
+        return;
+    }
+
+    _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId,
+                                                              [this,
+                                                               pane,
+                                                               pack    = std::move(pack),
+                                                               sources = std::move(selectedPaths)
+#ifdef ENABLE_TESTS
+                                                                   ,
+                                                               recordDebugResult
+#endif
+    ](const FileOperationCompletedEvent& event)
+    {
+        const auto& request = pack->request;
+        ArchiveOperationResult unavailable{.hr = event.hr, .archivePath = request.archivePath};
+        const bool ready                   = pack->resultReady.load(std::memory_order_acquire);
+        const auto& completed              = ready ? pack->result : unavailable;
+        wil::unique_hfile publishedArchive = ready ? std::move(pack->publishedArchive) : wil::unique_hfile{};
+#ifdef ENABLE_TESTS
+        recordDebugResult(completed);
+#endif
+        if (! completed.published)
+        {
+            if (completed.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                return;
+
+            const std::wstring message = completed.outputInsideSource ? LoadStringResource(nullptr, IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE)
+                                                                      : ArchiveFailureMessage(IDS_FMT_ARCHIVE_PACK_FAILED, completed.archivePath, completed.hr);
+            ShowArchiveOverlay(*this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, message, completed.hr);
+            return;
+        }
+
+        const auto archiveParent = completed.archivePath.parent_path();
+        for (PaneState* viewState : {&_leftPane, &_rightPane})
+        {
+            if (IsFilePluginShortId(viewState->pluginShortId))
+                RefreshFolderViewIfPathMatches(viewState->folderView, archiveParent);
+        }
+
+        if (request.deleteAfter)
+        {
+            PaneState& cleanupState  = pane == Pane::Left ? _leftPane : _rightPane;
+            const auto* exactCleanup = request.cleanup.get();
+            if (event.hr != S_OK || completed.hr != S_OK || ! exactCleanup || ! publishedArchive ||
+                cleanupState.fileSystem.get() != exactCleanup->fileSystem.get() || cleanupState.pluginId != exactCleanup->pluginId ||
+                cleanupState.instanceContext != exactCleanup->instanceContext)
+            {
+                const std::wstring message = FAILED(request.cleanupCapture) && completed.sourceSelectionComplete
+                                                 ? ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, completed.archivePath, request.cleanupCapture)
+                                                 : LoadStringResource(nullptr, IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT);
+                ShowArchiveOverlay(*this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, message, S_FALSE);
+                return;
+            }
+
+            FolderView::FileOperationRequest deleteRequest{};
+            deleteRequest.operation                       = FILESYSTEM_DELETE;
+            deleteRequest.origin                          = FolderView::FileOperationRequest::Origin::PackCleanup;
+            deleteRequest.sourcePaths                     = sources;
+            deleteRequest.flags                           = FILESYSTEM_FLAG_NONE;
+            deleteRequest.archiveDeleteAfterConfirmed     = true;
+            FileOperations::ArchiveCleanupReceipt cleanup = *exactCleanup;
+            cleanup.publishedArchive                      = std::make_shared<const wil::unique_hfile>(std::move(publishedArchive));
+            const HRESULT deleteHr                        = StartFileOperationFromFolderView(pane, std::move(deleteRequest), &cleanup);
+            if (deleteHr == kFileOperationRefusedForPendingExit)
+                return;
+            if (FAILED(deleteHr))
+            {
+                ShowArchiveOverlay(*this,
+                                   pane,
+                                   IDS_CMD_PACK,
+                                   FolderView::OverlaySeverity::Warning,
+                                   ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, completed.archivePath, deleteHr),
+                                   deleteHr);
+                return;
+            }
+        }
+
         ShowArchiveOverlay(*this,
                            pane,
                            IDS_CMD_PACK,
-                           FolderView::OverlaySeverity::Warning,
-                           ArchiveFailureMessage(IDS_FMT_ARCHIVE_PACK_FAILED, result.archivePath, result.hr),
-                           result.hr);
-        return;
-    }
-
-    if (keepSources)
-    {
-        RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
-        const std::wstring message = FAILED(cleanupCapture) && result.sourceSelectionComplete
-                                         ? ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, result.archivePath, cleanupCapture)
-                                         : LoadStringResource(nullptr, IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT);
-        ShowArchiveOverlay(*this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, message, result.hr);
-        return;
-    }
-
-    if (deleteSourcesAfterPack)
-    {
-        FolderView::FileOperationRequest deleteRequest{};
-        deleteRequest.operation                   = FILESYSTEM_DELETE;
-        deleteRequest.origin                      = FolderView::FileOperationRequest::Origin::PackCleanup;
-        deleteRequest.sourcePaths                 = selectedPaths;
-        deleteRequest.flags                       = FILESYSTEM_FLAG_NONE;
-        deleteRequest.archiveDeleteAfterConfirmed = true;
-        const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest), exactCleanup);
-        if (deleteHr == kFileOperationRefusedForPendingExit)
-        {
-            // The pane already says why the cleanup Delete was not started.
-            RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
-            return;
-        }
-        if (FAILED(deleteHr))
-        {
-            ShowArchiveOverlay(
-                *this,
-                pane,
-                IDS_CMD_PACK,
-                FolderView::OverlaySeverity::Warning,
-                FormatStringResource(
-                    nullptr, IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, result.archivePath.wstring(), static_cast<unsigned long>(static_cast<uint32_t>(deleteHr))),
-                deleteHr);
-            RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
-            return;
-        }
-    }
-
-    RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
-    ShowArchiveOverlay(*this,
-                       pane,
-                       IDS_CMD_PACK,
-                       FolderView::OverlaySeverity::Information,
-                       FormatStringResource(nullptr, IDS_FMT_ARCHIVE_PACK_COMPLETED, result.archivePath.wstring(), result.entryCount),
-                       S_OK);
+                           FolderView::OverlaySeverity::Information,
+                           FormatStringResource(nullptr, IDS_FMT_ARCHIVE_PACK_COMPLETED, completed.archivePath.wstring(), completed.entryCount),
+                           S_OK);
+    });
 }
 
 void FolderWindow::CommandUnpack(Pane pane)

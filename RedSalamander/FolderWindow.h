@@ -1268,6 +1268,7 @@ public:
         uint64_t bytesProcessed       = 0u;
         uint64_t skippedConflictCount = 0u;
         std::vector<std::wstring> entries;
+        bool stageRemovedByHandle = false;
     };
 
     // Debug/testing hook: access the file-operations state for automation/self-tests.
