@@ -2267,41 +2267,32 @@ Every governed scope carries one access role:
 - `PublishDestination` for every resolved Copy/Move final destination leaf. Rename's destination leaf is inside its
   mandatory same-parent `WriteSource` envelope, so a second weaker scope is unnecessary.
 
-Two overlapping `ReadSource` scopes may run concurrently. Every other overlapping role pair is a
-same-host overlap that the user decides (R4-A02-1, `FO-OVERLAP-01`): during Preparing, once the
-task's scopes exist, the host publishes that immutable scope vector under the queue lock before it
-compares with every other published-prepared or active task using this same predicate (no
-enumeration, no provider call). Activation transfers the registration from prepared to active under
-the same lock. Prepared peers are compared in an acyclic order: a task names every older prepared
-peer, and a newer prepared peer once that peer has decided its own advisory and does not already
-yield to this task, so an older task that publishes after a newer peer prepared still learns about
-it and queues after it, while no two tasks can queue after each other. Only a peer whose advisory is
-still pending at that instant stays unnamed; the interlock below still serializes that pair. A
-Queue-after edge holds in both admission modes: the parallel path waits on it, and queue mode admits
-the first queued task that no still-published predecessor blocks rather than the queue head alone, so
-a task that queues after a peer behind it lets that peer go first instead of holding the queue; such a
-task also takes a fresh queue place behind every task admitted so far, so the visible order matches
-("behind" compares queue order keys, so a reordered or late-queued peer is placed where it waits). The host
-raises one warning on the task card naming the
-concrete problem and the first overlapping task (this task may remove what task N reads; both may
-create or replace the same names; both may remove or rename the same members; this task may remove
-what task N publishes; this task may replace what task N reads; task N deletes this folder by name and
-this task writes or reads there, named first, I35 R7.3). **Queue after these tasks** (the
-default) keeps the admission wait below as the transient edge, released without a second warning once
-the named tasks terminate; **Run at the same time** admits the task concurrently only when the full
-disclosed relation set fits the fixed 64-task bound, no overlapping pair involves a delete by name,
-and the pair is not two transfers. Overlapping Copy/Move jobs always serialize; their warning
-withholds Run, and even a stale caller-supplied concurrent relation cannot bypass admission.
-**Don't start** (Escape) ends the task as a
-Preparing cancel with no mutation, clipboard consumption, or breadcrumb. The question's decision stays
-unrecorded; the metric `FileOps.Overlap.DontStart` counts only the user's own **Don't start** answer,
-and `FileOps.Overlap.CanceledWhilePending` counts a Cancel all or close that ended the task while the
-question waited (I35 R9.6). Run stores only those exact
-task IDs and bypasses the root interlock only while those tasks are concurrently live. An undisclosed
-overlap still waits or raises its own warning, and the relation is discarded with the task rather
-than reconstructed from completed history. A task queued by an overlap edge offers no `Start now`. Inline
-F2 (`RenamePlan(InlineRename)`) keeps honoring the interlock without a prompt, as its completion
-exception states. The warning names only overlaps the paths prove: a scope in a conservative
+Two overlapping `ReadSource` scopes may run concurrently. For any other overlapping role pair,
+the host publishes the immutable scope vector under the queue lock during Preparing and compares
+it with published-prepared and active tasks. Comparison performs no enumeration or provider calls.
+Activation moves the registration from prepared to active under the same lock.
+
+Prepared peers form an acyclic order. The candidate can name older prepared peers. It can name a
+newer peer after that peer's advisory resolves and it has no predecessor path back to the candidate.
+Active peers can also be named. The interlock still serializes an unnamed unsafe pair.
+
+In Queue, or in Parallel when concurrent execution is ineligible, the task automatically waits
+behind the captured predecessors. The same edge applies if the user chooses **Queue after these
+tasks** in the optional Parallel question. In Queue mode the first candidate with no live
+predecessor can run. If a task waits on a peer with a later queue-order key, it receives a new
+place behind the tasks already admitted. Start now leaves these safety edges in place. Cancel
+can end the waiting task. The automatic wait records no consent note.
+
+In Parallel, the card offers a choice only if the entire relation set fits the fixed bound and
+the scopes can run concurrently. A by-name Delete, a serialized Local directory Delete, and two
+overlapping transfers require serialization. **Queue after these tasks** is the default.
+**Run at the same time** grants admission only for the captured, still-live relations.
+**Don't start** (Escape) cancels before mutation or clipboard consumption. Cancellation records
+no grant. `FileOps.Overlap.DontStart` counts the user's explicit answer.
+`FileOps.Overlap.CanceledWhilePending` counts a Cancel all or close during the question.
+`FileOps.Overlap.AdvisoryShown` counts displayed questions, and `FileOps.Overlap.QueuedAfter`
+counts the automatic and accepted edges. A new overlap is revalidated independently. Inline
+F2 honors the interlock without a question. The warning names only overlaps the paths prove: a scope in a conservative
 identity domain (a provider without bound objects, where the interlock treats every
 conflicting-access pair as overlapping) keeps the silent wait it always had and raises none. The
 popup identifies this admission wait as Waiting and explains the identity limitation. The state

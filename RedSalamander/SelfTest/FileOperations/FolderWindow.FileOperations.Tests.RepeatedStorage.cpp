@@ -1,6 +1,6 @@
 // Included by the canonical selftest TU. Each invocation admits two actual
-// intentional non-clipboard commands with distinct IDs. Queue-after is real
-// consent; repeated Copy/Move is not treated as an invalid duplicate command.
+// intentional non-clipboard commands with distinct IDs. The second waits for
+// the first publication automatically and keeps its own admission and result.
 [[nodiscard]] bool RunFileOpsRepeatedNonClipboardStorageChecksImpl(SelfTestState& state, FileSystemOperation operation, std::wstring& unavailableReason)
 {
     using State = FolderWindow::FileOperationState;
@@ -333,43 +333,27 @@
         return reject(L"second intentional admission did not create a distinct real task ID");
     if (auto* second = operations->FindTask(taskIds[1].value()))
         second->_presentationState.store(Task::TaskPresentationState::Presented, std::memory_order_release);
-    unsigned int queueDecisions = 0u;
-    uint64_t queueGeneration    = 0u;
-    bool invalidPrompt          = false;
-    const auto secondQueued     = RedSalamander::TestSupport::PumpMessagesUntil(
+    bool overlapPrompted    = false;
+    const auto secondQueued = RedSalamander::TestSupport::PumpMessagesUntil(
         [&]() noexcept
     {
-        auto* second      = operations->FindTask(taskIds[1].value());
-        const auto prompt = TryGetConflictPromptCopy(second);
-        if (second && prompt.has_value() && prompt->generation != queueGeneration)
-        {
-            if (queueDecisions != 0u || prompt->bucket != Task::ConflictBucket::SameHostOverlap || prompt->sourcePath != source.native() ||
-                prompt->destinationPath != destinationRoot.native() || ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) ||
-                ! second->SubmitConflictDecision(prompt->generation, Task::ConflictAction::Proceed, false))
-                invalidPrompt = true;
-            else
-            {
-                queueGeneration = prompt->generation;
-                ++queueDecisions;
-                AppendLog(std::format(L"D11 second-task={} real SameHostOverlap Queue-after accepted generation={}", taskIds[1].value(), queueGeneration));
-            }
-        }
-        return invalidPrompt || (second && second->IsOverlapQueued() && second->IsWaitingInQueue() && ! second->HasEnteredOperation());
+        auto* second    = operations->FindTask(taskIds[1].value());
+        overlapPrompted = TryGetConflictPromptCopy(second).has_value();
+        return overlapPrompted || IsWaitingBehindForSelfTest(second, operations->FindTask(taskIds[0].value()));
     },
-        {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"D11 second actual task Queue-after disposition"});
+        {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"D11 automatic overlap wait"});
     first        = operations->FindTask(taskIds[0].value());
     auto* second = operations->FindTask(taskIds[1].value());
     Proof destinationWhileQueued;
     Proof sentinelWhileQueued;
-    if (! secondQueued.conditionMet || invalidPrompt || queueDecisions != 1u || ! first || ! first->HasEnteredOperation() || ! second ||
-        second->_clipboardMoveAdmission || ! second->IsOverlapQueued() || ! second->IsWaitingInQueue() || second->HasEnteredOperation() ||
-        second->HasStarted() || second->_discoveredTotalBytes.load(std::memory_order_acquire) != 0u ||
-        second->_hasPublishedLiveOutput.load(std::memory_order_acquire) || GetTickCount64() - gateTick >= 8'000ull ||
-        callbackCounts[0].load(std::memory_order_acquire) != 0u || callbackCounts[1].load(std::memory_order_acquire) != 0u || ! capture(source, sourceAtGate) ||
-        ! sameProof(sourceBefore, sourceAtGate) || ! capture(destination, destinationWhileQueued) || ! sameProof(destinationAtGate, destinationWhileQueued) ||
-        ! capture(sentinel, sentinelWhileQueued) || ! sameProof(sentinelBefore, sentinelWhileQueued) || ! closedTrees(L"second-queued-gate", true, false) ||
-        GetForegroundWindow() != foreground)
-        return reject(L"second task entered, discovered, published, completed or changed storage while first real publication was held");
+    if (! secondQueued.conditionMet || overlapPrompted || ! first || ! first->HasEnteredOperation() || ! second || second->_clipboardMoveAdmission ||
+        ! second->IsOverlapQueued() || ! second->IsWaitingInQueue() || second->HasEnteredOperation() || second->HasStarted() ||
+        second->_discoveredTotalBytes.load(std::memory_order_acquire) != 0u || second->_hasPublishedLiveOutput.load(std::memory_order_acquire) ||
+        GetTickCount64() - gateTick >= 8'000ull || callbackCounts[0].load(std::memory_order_acquire) != 0u ||
+        callbackCounts[1].load(std::memory_order_acquire) != 0u || ! capture(source, sourceAtGate) || ! sameProof(sourceBefore, sourceAtGate) ||
+        ! capture(destination, destinationWhileQueued) || ! sameProof(destinationAtGate, destinationWhileQueued) || ! capture(sentinel, sentinelWhileQueued) ||
+        ! sameProof(sentinelBefore, sentinelWhileQueued) || ! closedTrees(L"second-queued-gate", true, false) || GetForegroundWindow() != foreground)
+        return reject(L"second task asked a question or touched storage while first real publication was held");
     logProof(L"second-queued-gate", source, sourceAtGate);
     logProof(L"second-queued-gate", destination, destinationWhileQueued);
     logProof(L"second-queued-gate", sentinel, sentinelWhileQueued);

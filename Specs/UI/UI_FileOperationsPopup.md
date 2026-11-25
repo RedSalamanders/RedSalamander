@@ -640,37 +640,28 @@ This discovery-action component does not provide general whole-button wrapping f
 actions; that remains required by the adaptive layout contract. Measured footer row and summary
 height are implemented separately in the global footer described above.
 
-### Same-host overlap warning
+### Same-host overlap
 
-When Preparing finds that the new task's scopes overlap another published-prepared or active task in this host
-(R4-A02-1), the task card shows one deferred-consent prompt titled "Another task is working in the
-same place" whose question names the concrete problem and the first overlapping task by number, for
-example "This task may remove items that task #3 is still reading." Its actions are **Queue after
-these tasks** (the default and Enter action), **Run at the same time**, and **Don't start** (Escape).
-Run is present only when every disclosed relation fits the fixed bound and applies only to the named
-concurrently-live task IDs; another undisclosed overlap still asks independently. When an overlapping
-relation contains a Local plain-directory Permanent Delete, Run is absent in both directions, even
-for an overlapping read: its strict confirmation and mutation lease requires serialized host
-admission for that scope. Stale concurrent consent cannot bypass this rule, while disjoint scopes
-remain eligible. When an overlapping task may delete an item by name (I35 R7.3: a delete by name,
-or a Recycle whose escalation could), Run
-is never offered and that task is named first: "Task #3 may delete by name an item that this task writes
-or changes, or a folder that holds it. The two cannot run at the same time: queued, this task starts once
-task #3 has ended, and what it writes to may be gone by then." (or "reads"). Queue keeps the task
-as `Waiting` behind the named tasks without a `Start now` control (the wait is the user's scheduling
-choice, not the queue mode); Don't start ends the task as canceled before any mutation and leaves no
-completed-history success entry. The question itself is a consent note, never a warning (I35 R5.1):
-whichever answer the user gives, including Cancel all while it waits, the task counts no problem, a
-canceled task stays auto-dismissable, and the question row stays in the log, the export and (with
-informational notes shown) the Issues pane. The warning appears at most once per task, and a task that prepared
-later than a peer still learns about that peer once the peer has decided its own warning; when it
-queues after a peer whose queue place is behind its own (queue order keys are compared, not admission
-age, so a reordered or late-queued peer counts where it waits) it takes a fresh place behind every
-task admitted so far, which the queue order on the cards shows, and a task that queues only after
-peers already ahead of it keeps its place; queue-mode
-waits and the interlock wait itself remain silent. Read/read overlaps and clearly disjoint paths never warn, and
-neither does the conservative wait of a provider without bound objects (its interlock cannot prove
-which objects two paths name, so it serializes without naming a problem).
+When Preparing finds that the new task overlaps published or active work in this host, Queue mode
+waits behind the overlapping tasks. Parallel does the same when a relation requires serialization,
+including overlapping transfers, Local plain-directory Permanent Delete, by-name Delete and a
+Recycle that could escalate to it. A conservative interlock on a provider without bound objects
+can wait without identifying an exact conflicting object.
+
+An automatic wait shows the overlap reason on the waiting card and offers Cancel. Start now
+cannot release the safety edge. An ordinary wait creates no question or Issues note.
+
+In Parallel, when every captured relation can safely run concurrently, the card asks
+"Another task is working in the same place" with the concrete problem and first overlapping task.
+The actions are **Queue after these tasks** (Enter), **Run at the same time**, and **Don't start**
+(Escape). Run applies to the disclosed, concurrently live relations within the fixed bound.
+The interlock still protects undisclosed overlaps. Queue uses the same waiting card and exact
+predecessor edges. Don't start cancels before mutation. A displayed question stays in the log
+and export as an informational consent note.
+
+The visible queue order uses queue-order keys. A late task that must wait for a peer whose
+queue place is behind its own receives a new place behind the tasks already admitted. Read-only
+sources compared with each other and disjoint scopes do not create an overlap wait.
 
 A Permanent Delete asks its confirmation on the card, not in a modal at ingress. A Local
 plain-directory task first queues with a nonblocking metadata identity witness, then reserves
