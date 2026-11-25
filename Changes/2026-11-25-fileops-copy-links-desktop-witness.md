@@ -1,0 +1,1 @@
+- Cover the Copy links preference through its actual keyboard control and confirm that Apply saves the choice and Cancel discards the next draft.

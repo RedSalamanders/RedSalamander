@@ -291,7 +291,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPreferencesDialogFileOperationsLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestPreferencesDialogFileOperationsLiveDxInteraction(HWND mainWindow, CaseState& state, bool copyLinksOnly = false) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -321,7 +321,10 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     if (! g_settings.fileOperations.has_value())
         g_settings.fileOperations.emplace();
+    using CopyLinkPolicy                            = Common::Settings::FileOperationsCopyLinkPolicy;
     g_settings.fileOperations->maxParallelTransfers = 4u;
+    if (copyLinksOnly)
+        g_settings.fileOperations->copyLinkPolicy = CopyLinkPolicy::Inherit;
     g_folderWindow.ApplyFileOperationSettings();
     const std::wstring expectedTheme = g_settings.theme.currentThemeId;
     const bool expectedVerification  = g_settings.fileOperations->verifyAfterCopy;
@@ -496,6 +499,70 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     if (! state.failure.empty())
     {
         return false;
+    }
+
+    if (copyLinksOnly)
+    {
+        const std::wstring name         = DxUi::StripNativeMenuMnemonicMarkers(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_TITLE));
+        const std::wstring inherited    = LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_INHERIT);
+        const std::wstring skip         = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_SKIP);
+        const std::wstring preserve     = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_PRESERVE);
+        const auto selectCopyLinkPolicy = [&](CopyLinkPolicy policy, std::wstring_view label) noexcept
+        {
+            const HWND page = getActivePage();
+            if (! focusVisibleDescendantByName(page, UIA_ComboBoxControlTypeId, name))
+                return false;
+            SendMessageW(page, WM_KEYDOWN, VK_HOME, 0);
+            SendMessageW(page, WM_KEYUP, VK_HOME, 0);
+            for (uint32_t step = 0u; step < static_cast<uint32_t>(policy); ++step)
+            {
+                SendMessageW(page, WM_KEYDOWN, VK_DOWN, 0);
+                SendMessageW(page, WM_KEYUP, VK_DOWN, 0);
+            }
+            PumpPendingMessages();
+            return waitForComboValue(name, label);
+        };
+        state.Require(! name.empty() && ! inherited.empty() && ! skip.empty() && ! preserve.empty() && waitForComboValue(name, inherited),
+                      L"Copy links should start with the named provider-default choice.");
+        state.Require(selectCopyLinkPolicy(CopyLinkPolicy::Skip, skip) && DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.dirty &&
+                          snapshot.shellApplyButtonEnabled && g_settings.fileOperations && g_settings.fileOperations->copyLinkPolicy == CopyLinkPolicy::Inherit,
+                      L"Selecting Skip should change the draft and enable Apply while the live default stays inherited.");
+        if (! state.failure.empty())
+            return false;
+
+        state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                          getShellHost(), UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_BTN_APPLY), L"Copy links Preferences Apply"),
+                      L"The visible Apply button should commit the Copy links choice.");
+        const auto diskPolicyIs = [](CopyLinkPolicy expected) noexcept
+        {
+            Common::Settings::Settings persisted{};
+            return Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", persisted) == S_OK && persisted.fileOperations &&
+                   persisted.fileOperations->copyLinkPolicy == expected;
+        };
+        const auto ready = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return g_settings.fileOperations && g_settings.fileOperations->copyLinkPolicy == CopyLinkPolicy::Skip && diskPolicyIs(CopyLinkPolicy::Skip);
+        }, {.timeout = SelfTest::Scale(3000ms), .operationName = L"Copy links Preferences persistence"});
+        state.Require(ready.conditionMet && DebugGetPreferencesDialogSnapshot(snapshot) && ! snapshot.dirty && ! snapshot.shellApplyButtonEnabled,
+                      L"Apply should save Skip and set it as the clean baseline.");
+        state.Require(selectCopyLinkPolicy(CopyLinkPolicy::Preserve, preserve) && DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.dirty &&
+                          snapshot.shellApplyButtonEnabled,
+                      L"Selecting Preserve should make a new draft after Apply.");
+        if (! state.failure.empty())
+            return false;
+
+        state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                          getShellHost(), UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_BTN_CANCEL), L"Copy links Preferences Cancel") &&
+                          WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)) && g_settings.fileOperations &&
+                          g_settings.fileOperations->copyLinkPolicy == CopyLinkPolicy::Skip && diskPolicyIs(CopyLinkPolicy::Skip),
+                      L"Cancel should close Preferences and keep the applied Skip choice in memory and on disk.");
+        if (! state.failure.empty())
+            return false;
+
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
+        prefs = waitForPreferencesWindow();
+        state.Require(prefs && navigateToFileOperationsPage(prefs, snapshot) && waitForComboValue(name, skip),
+                      L"Reopening Preferences should show the last applied Copy links choice.");
+        return state.failure.empty();
     }
 
     const std::wstring comboName        = LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE);

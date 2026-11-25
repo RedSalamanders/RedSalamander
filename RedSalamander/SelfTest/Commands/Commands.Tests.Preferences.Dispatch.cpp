@@ -482,6 +482,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_file_operations_live_dx_interaction", [=](CaseState& state) noexcept {
         return TestPreferencesDialogFileOperationsLiveDxInteraction(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_file_operations_copy_links_apply_cancel", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogFileOperationsLiveDxInteraction(mainWindow, state, true);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_file_operations_custom_bandwidth_live_dx_interaction", [=](CaseState& state) noexcept {
         return TestPreferencesDialogFileOperationsCustomBandwidthLiveDxInteraction(mainWindow, state);
     });
