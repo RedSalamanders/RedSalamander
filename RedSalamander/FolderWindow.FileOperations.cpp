@@ -317,7 +317,7 @@ enum class ObjectBindingSupport : uint8_t
         }
         else if constexpr (std::is_same_v<Plan, FileOperations::ArchiveTaskAdmission>)
         {
-            if (! IsArchiveTaskOperation(typedPlan.operation) || ! IsQualifiedEndpointValid(typedPlan.endpoint) ||
+            if (! FileOperations::IsArchiveTaskOperation(typedPlan.operation) || ! IsQualifiedEndpointValid(typedPlan.endpoint) ||
                 ! IsLocalFileSystemEndpointImpl(typedPlan.endpoint))
                 return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
             if (! Common::Paths::IsSupportedLocalFileOperationPath(typedPlan.targetPath.native()))
