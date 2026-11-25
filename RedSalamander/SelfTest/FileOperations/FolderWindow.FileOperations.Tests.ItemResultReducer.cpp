@@ -2608,8 +2608,9 @@ struct KeepAwakeSelfTestApi final
     };
     struct Scenario final
     {
-        const wchar_t* name = L"";
-        Shape shape         = Shape::DeletePermanently;
+        const wchar_t* name   = L"";
+        Shape shape           = Shape::DeletePermanently;
+        bool knownUnavailable = false;
     };
     static constexpr std::array kScenarios{
         Scenario{L"delete-permanently", Shape::DeletePermanently},
@@ -2617,6 +2618,7 @@ struct KeepAwakeSelfTestApi final
         Scenario{L"source-changed", Shape::SourceChanged},
         Scenario{L"destination-is-source", Shape::DestinationIsSource},
         Scenario{L"cancel-question", Shape::CancelQuestion},
+        Scenario{L"known-unavailable", Shape::SourceChanged, true},
     };
     constexpr uint64_t kTicks   = 133'500'000'000'000'000ull;
     const auto setLastWriteTime = [](const std::filesystem::path& path, uint64_t ticks) noexcept
@@ -2666,7 +2668,16 @@ struct KeepAwakeSelfTestApi final
         }
         const auto firstDestination = destinationFolder / sources.front().filename();
 
-        RedSalamander::TestSupport::ScopedEnvironmentVariable recycleUnavailable(kRecycleUnavailableDirectory, sourceFolder.native());
+        const auto replacement = [](bool enable, std::wstring_view value) -> std::optional<std::wstring_view>
+        {
+            if (enable)
+                return value;
+            return std::nullopt;
+        };
+        const RedSalamander::TestSupport::ScopedEnvironmentVariable recycleUnavailable(kRecycleUnavailableDirectory,
+                                                                                       replacement(! scenario.knownUnavailable, sourceFolder.native()));
+        const RedSalamander::TestSupport::ScopedEnvironmentVariable knownUnavailable(L"REDSALAMANDER_FILEOPS_RECYCLE_CAPABILITY_UNAVAILABLE_PATH",
+                                                                                     replacement(scenario.knownUnavailable, sources.front().native()));
         FileOperations::QualifiedEndpoint endpoint{
             .pluginId               = L"builtin/file-system",
             .instanceId             = L"host/default",

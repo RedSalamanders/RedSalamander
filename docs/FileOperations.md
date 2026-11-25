@@ -15,7 +15,7 @@ The **File Operations** popup opens automatically when an operation is still run
 
 - **Pause all** pauses current tasks, including tasks still preparing or waiting in the queue. **Resume all** releases those pauses. Tasks you paused individually still need to be resumed on their own cards.
 - **Cancel all**: requests cancellation of unfinished tasks after confirmation. Cards show Stopping while workers stop safely; the terminal result replaces that state. A task that had not changed anything yet (still preparing, waiting in the queue, or waiting for your answer before it starts) ends **Canceled** with the line **Not started; nothing was changed** and no warning, so **Auto-dismiss** clears it like any canceled task. When every finished task left in the **Completed** group ended cleanly, the group folds once after Cancel all so its badges and **Clear completed** are in view; open it again with its chevron.
-- **Exiting while operations run**: RedSalamander asks whether to cancel all operations and exit (it does not ask when every task is already stopping). After you accept, it closes as soon as the tasks have stopped; waiting tasks never start. Until then, closing again just brings this popup forward, and any new copy, move, delete or rename is refused with a message in the pane, so nothing is changed. Operations running in a Compare Directories window count too: they are canceled with the others and RedSalamander waits for them before closing.
+- **Exiting while operations run**: RedSalamander asks whether to cancel all operations and exit (it does not ask when every task is already stopping). After you accept, it closes as soon as the tasks have stopped; waiting tasks never start. Until then, closing again just brings this popup forward, and the pane refuses new copy, move, delete, rename and **Create Folder** commands and explains that the app is closing. Operations running in a Compare Directories window count too: they are canceled with the others and RedSalamander waits for them before closing.
 - **Closing a Compare Directories window while its operations run**: the Compare window has its own operations popup. Closing it asks whether to cancel them and close the window; choose Cancel to keep them running. After you accept, the window closes once they have stopped, and new operations in that window are refused until then.
 - **Queue / Parallel**:
   - **Queue** runs tasks sequentially, one after another.
@@ -50,8 +50,8 @@ Task controls (what you can click):
 - **Skip counting**: shown while the card is counting ahead of the work. It stops the count from running ahead so the operation can use its full speed. It does not skip any check (see [“Counting items…” and totals](#counting-items-and-totals)).
 - **Speed Limit** *(Copy/Move)*: sets a per-task bandwidth cap:
   - **Unlimited**
-  - presets: `1 MiB/s`, `5 MiB/s`, `10 MiB/s`, `50 MiB/s`, `100 MiB/s`, `1 GiB/s`
-  - **Custom…** accepts inputs like `3KB`, `4MB`, `1GB` (optional `/s`).
+  - Presets include `1`, `5`, `10`, `50`, `100` and `500 MiB/s`, plus `1 GiB/s`.
+  - **Custom…** accepts inputs such as `3 KiB/s`, `4 MiB/s` or `1 GiB/s`. `/s` is optional and older spellings such as `4MB` still work.
 - **More...** *(completed tasks)*: opens the commands that apply to the finished task, such as **Reveal item**, **Open destination**, **Show log** and **Export issues**. When only one command applies, the task shows that command as its own button instead of a menu.
 - **Dismiss**: removes a completed task summary from the popup.
 
@@ -232,6 +232,7 @@ Notes:
 
 - **Move to Recycle Bin** in ViewerSpace asks before sending the selection to the Windows Recycle Bin. Cancel is the default.
 - **Delete** (`Del` / `F8`): deletes to the Recycle Bin when supported by the active file system. Delete never removes an item permanently on its own: when Windows cannot recycle an item (for example on a network share, or a drive without a Recycle Bin), the item is kept and the task asks whether to delete that item permanently. For a folder, the question shows how many items and how much data the folder holds, and deleting it permanently removes the folder with everything in it. **Skip** keeps that item and the task goes on with the others. When several items are selected, that question also has a **Delete all remaining permanently** button: it deletes this item and, without asking again, every later item of the same task that also cannot be recycled on the same drive or share. It never applies to an item whose outcome is unknown, and it ends with the task. If an item cannot be deleted permanently (for example because it changed after Windows failed to recycle it), the task stops there: that item and every item not yet handled are kept, without another question and without being deleted. With **Continue on error** enabled, the task never asks: it keeps each item that could not be recycled, reports it as failed and continues with the other items. If Windows ever deletes an item without moving it to the Recycle Bin, the task reports that item as failed, not as recycled.
+  When the file system already says an item cannot go to the Recycle Bin, the task asks for permanent deletion before it starts. For a mixed selection, the question identifies the permanent subset and gives the number of other items being sent to the Recycle Bin. **Cancel** keeps all selected items.
   Context-menu, Find and Viewer Recycle can group items from the same Local folder into a batch.
   A command that asks before starting still asks once for the request.
 - **Permanent Delete** (`Shift+F8` / `Shift+Del`): asks for confirmation, then bypasses the Recycle Bin. The confirmation keeps the captured provider path spelling; mixed or unknown locations use a Multiple locations summary instead of a guessed common folder.
@@ -253,8 +254,8 @@ When an operation starts, RedSalamander creates a **task** and shows it in the F
 This page owns host-wide defaults that apply to newly created tasks (the label in parentheses is the section heading on the page):
 
 - **Verify copied files** (Verification): after a file is copied, compares the copy with the original, which may read every copied byte again. Off by default. With it on, a task's bar has two halves, copying then verifying; a divider in the verifying color separates them, and the verifying half fills with hatching in that color. A finished task reads **100%** only when everything was verified; otherwise its card says **Not verified** or **Verified N%** next to the bar. **Copy with Options** (`Shift+F5`) and **Move with Options** (`Shift+F6`) can change it for a single task without changing Preferences.
-- **Default speed limit** (Bandwidth): seeds new copy/move tasks with **Unlimited**, a preset (`1 MiB/s` through `500 MiB/s`), or **Custom**. There is no GiB/s preset; use **Custom** for faster rates.
-- **Custom limit**: the throughput used when **Custom** is selected, a value such as `128KB`, `5MB`, or `1GB`.
+- **Default speed limit** (Bandwidth) sets the initial speed for Copy and Move. Choose **Unlimited**, the same presets through `1 GiB/s` offered in the start options and running card, or **Custom**.
+- **Custom limit** accepts inputs such as `128 KiB/s`, `5 MiB/s` or `1 GiB/s`.
 - **Auto-dismiss successful tasks** (Advanced): automatically clears completed tasks that succeeded or were canceled, and closes the popup when nothing remains.
 - **Show informational notes from file operations** (Advanced): shows notes about expected outcomes (inherited permissions, questions you answered, skipped links) on task cards and in the issues pane. Off by default; the notes are always kept in the task log (see [Results: warnings, errors and notes](#results-warnings-errors-and-notes)).
 - **Also show file-operation questions over the pane** (Advanced): when a task waits for your decision about a folder a pane shows, the question also appears over that pane (see [Answering a question from the pane](#answering-a-question-from-the-pane)). On by default; the question always stays on the task card.
@@ -291,7 +292,7 @@ Advanced logging options (retention and verbosity) are in Preferences → **Adva
 
 When operations encounter errors, they can be reviewed in the issues UI:
 
-- Toggle: **View → File Operation Issues** (default `Ctrl+J`)
+- Open or hide the pane from **Options → Issues** in the File Operations popup or **View → File Operation Issues** (`Ctrl+J` by default).
 - Issues are listed oldest first until you sort a column. Select one to see its details: only the facts that apply are shown (a delete has no destination, and an ordinary failure has no decision or result). **Copy details** copies the selected issue. For a file that already existed at the destination, the details also show the size and date of both files and how they compare, as the question did.
 - A partial Move can leave some items already copied to the destination and some originals left in place. Review each item's source, destination, and cleanup result before retrying or removing either copy.
 

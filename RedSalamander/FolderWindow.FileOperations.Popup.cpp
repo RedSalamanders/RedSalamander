@@ -2,6 +2,7 @@
 #include "WindowActivation.h"
 
 #include "DxUiThemePalette.h"
+#include "FileOperationBandwidth.h"
 #include "FileOperationConfirmation.h"
 #include "FileOperationsFooterLayout.h"
 #include "FileSystemPathIdentity.h"
@@ -13588,10 +13589,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     constexpr int kAutoDismissCommand = 1;
     constexpr int kCompactCommand     = 2;
     constexpr int kExpandedCommand    = 3;
+    constexpr int kIssuesCommand      = 4;
     const bool autoDismiss            = fileOps->GetAutoDismissSuccess();
     const bool compactDensity         = fileOps->GetPopupCompactDensity();
 
-    std::array<DxUi::MenuFlyoutItem, 4u> items{};
+    std::array<DxUi::MenuFlyoutItem, 6u> items{};
     items[0].kind      = DxUi::MenuItemKind::Toggle;
     items[0].text      = LoadStringResource(nullptr, autoDismiss ? IDS_FILEOPS_CHECK_AUTODISMISS_ON : IDS_FILEOPS_CHECK_AUTODISMISS_OFF);
     items[0].commandId = kAutoDismissCommand;
@@ -13605,6 +13607,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     items[3].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_DENSITY_EXPANDED);
     items[3].commandId = kExpandedCommand;
     items[3].checked   = ! compactDensity;
+    items[4].kind      = DxUi::MenuItemKind::Separator;
+    items[5].kind      = DxUi::MenuItemKind::Toggle;
+    items[5].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
+    items[5].commandId = kIssuesCommand;
+    items[5].checked   = fileOps->IsIssuesPaneVisible();
 
     DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     const auto anchor = ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterOptions, 0u, 0u}, DxUi::ContextMenuRootVerticalPlacement::Above);
@@ -13634,6 +13641,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
             fileOps->SetPopupCompactDensity(chosen.value() == kCompactCommand);
             _maxAutoSizedWindowHeight   = 0;
             _lastAutoSizedContentHeight = -1.0f;
+        }
+        else if (chosen.value() == kIssuesCommand)
+        {
+            fileOps->ToggleIssuesPane();
+            return;
         }
         Invalidate(hwnd);
     },
@@ -13678,21 +13690,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     const uint64_t currentLimit = fixture ? fixture->desiredSpeedLimitBytesPerSecond : task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
-    constexpr UINT kCmdUnlimited  = 1u;
     constexpr UINT kCmdCustom     = 2u;
     constexpr UINT kCmdPresetBase = 10u;
 
-    static constexpr std::array<uint64_t, 6> kPresets = {{
-        1ull * 1024ull * 1024ull,
-        5ull * 1024ull * 1024ull,
-        10ull * 1024ull * 1024ull,
-        50ull * 1024ull * 1024ull,
-        100ull * 1024ull * 1024ull,
-        1ull * 1024ull * 1024ull * 1024ull,
-    }};
-
     std::vector<DxUi::MenuFlyoutItem> items;
-    items.reserve(kPresets.size() + 4u);
+    items.reserve(FileOperations::kBandwidthPresets.size() + 3u);
 
     auto appendRadioItem = [&](UINT commandId, std::wstring text, bool checked) noexcept
     {
@@ -13704,18 +13706,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         items.push_back(std::move(item));
     };
 
-    appendRadioItem(kCmdUnlimited, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED), currentLimit == 0);
-
     DxUi::MenuFlyoutItem separator{};
     separator.kind = DxUi::MenuItemKind::Separator;
-    items.push_back(separator);
 
-    for (size_t i = 0; i < kPresets.size(); ++i)
+    for (size_t index = 0; index < FileOperations::kBandwidthPresets.size(); ++index)
     {
-        const uint64_t bytesPerSecond = kPresets[i];
-        appendRadioItem(kCmdPresetBase + static_cast<UINT>(i),
-                        FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond)),
-                        currentLimit == bytesPerSecond);
+        const auto& preset = FileOperations::kBandwidthPresets[index];
+        appendRadioItem(kCmdPresetBase + static_cast<UINT>(index), LoadStringResource(nullptr, preset.labelId), currentLimit == preset.bytesPerSecond);
+        if (preset.bytesPerSecond == 0u)
+        {
+            items.push_back(separator);
+        }
     }
 
     items.push_back(separator);
@@ -13765,14 +13766,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         const UINT chosen      = static_cast<UINT>(chosenOpt.value());
         uint64_t newLimit      = selectedTask->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const uint64_t current = newLimit;
-        if (chosen == kCmdUnlimited)
-        {
-            newLimit = 0;
-        }
-        else if (chosen >= kCmdPresetBase && chosen < (kCmdPresetBase + static_cast<UINT>(kPresets.size())))
+        if (chosen >= kCmdPresetBase && chosen < kCmdPresetBase + static_cast<UINT>(FileOperations::kBandwidthPresets.size()))
         {
             const size_t index = static_cast<size_t>(chosen - kCmdPresetBase);
-            newLimit           = kPresets[index];
+            newLimit           = FileOperations::kBandwidthPresets[index].bytesPerSecond;
         }
         else if (chosen == kCmdCustom)
         {

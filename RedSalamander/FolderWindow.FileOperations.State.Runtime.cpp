@@ -1194,8 +1194,15 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         SessionState::UpdateActiveFileSystemPluginIdsAndOperation({sourcePluginId, destinationPluginId}, SessionState::OperationKind::Copy);
     }
 
-    const bool sourceIsLocalFilePlugin  = NavigationLocation::IsFilePluginShortId(sourcePluginShortId);
-    const bool deleteBypassesRecycleBin = operation == FILESYSTEM_DELETE && ((flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) == 0 || ! sourceIsLocalFilePlugin);
+    const size_t permanentDeleteCount   = std::accumulate(plans.begin(),
+                                                          plans.end(),
+                                                          size_t{0u},
+                                                          [](size_t count, const auto& plan) noexcept
+    {
+        const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+        return deletion && deletion->mode == FileOperations::DeleteMode::Permanent ? count + deletion->selectedItems.size() : count;
+    });
+    const bool deleteBypassesRecycleBin = permanentDeleteCount != 0u;
     const bool supportsBandwidthLimit   = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
     uint64_t taskDesiredSpeedLimit      = supportsBandwidthLimit ? initialSpeedLimitBytesPerSecond : 0u;
 
@@ -1395,6 +1402,18 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     }
     else if (operation == FILESYSTEM_DELETE && ! archiveDeleteConsentCaptured && (requireConfirmation || deleteBypassesRecycleBin))
     {
+        std::vector<std::filesystem::path> permanentlyDeletedPaths;
+        if (deleteBypassesRecycleBin && permanentDeleteCount != sourcePaths.size())
+        {
+            permanentlyDeletedPaths.reserve(permanentDeleteCount);
+            for (const auto& plan : plans)
+            {
+                const auto& deletion = std::get<FileOperations::DeletePlan>(plan);
+                if (deletion.mode == FileOperations::DeleteMode::Permanent)
+                    appendPlanSourcePaths(plan, permanentlyDeletedPaths);
+            }
+        }
+        const auto& confirmationPaths   = permanentlyDeletedPaths.empty() ? sourcePaths : permanentlyDeletedPaths;
         unsigned long long fileCount    = 0;
         unsigned long long folderCount  = 0;
         unsigned long long unknownCount = 0;
@@ -1403,12 +1422,12 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
 
         const FolderView& sourceFolderView = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.folderView : _owner._rightPane.folderView;
         const std::vector<FolderView::PathAttributes> selected = sourceFolderView.GetSelectedOrFocusedPathAttributes();
-        bool selectionMatches                                  = ! selected.empty() && selected.size() == sourcePaths.size();
+        bool selectionMatches                                  = ! selected.empty() && selected.size() == confirmationPaths.size();
         if (selectionMatches)
         {
             for (size_t i = 0; i < selected.size(); ++i)
             {
-                if (selected[i].path != sourcePaths[i])
+                if (selected[i].path != confirmationPaths[i])
                 {
                     selectionMatches = false;
                     break;
@@ -1437,10 +1456,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         }
         else
         {
-            unknownCount = static_cast<unsigned long long>(sourcePaths.size());
+            unknownCount = static_cast<unsigned long long>(confirmationPaths.size());
         }
 
-        const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
+        const unsigned long long itemCount = static_cast<unsigned long long>(confirmationPaths.size());
         std::wstring what;
         if (unknownCount > 0)
         {
@@ -1468,7 +1487,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         counts.unknownCount   = unknownCount;
         counts.sampleFile     = std::move(sampleFile);
         counts.hasSampleFile  = hasSampleFile;
-        std::wstring fromText = FormatFileOperationConfirmationSource(sourcePaths, counts, sourceDisplayIdentity);
+        std::wstring fromText = FormatFileOperationConfirmationSource(confirmationPaths, counts, sourceDisplayIdentity);
 
         if (deleteBypassesRecycleBin)
         {

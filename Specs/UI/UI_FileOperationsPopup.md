@@ -320,7 +320,10 @@ task's decision. A removed focusable path uses global Options as its safe fallba
 
 Footer controls live outside the scrolled task-list viewport and MUST remain hit-testable there. The
 `Options` overflow owns persistent preferences: auto-dismiss success/canceled and Compact/Expanded
-density. Density MUST round-trip through canonical settings save even when it is the only non-default
+density. The same overflow includes an `Issues` toggle for the existing pane, with its checked state
+reflecting current visibility. The toggle leaves the footer preferences and task results intact.
+Per-task Issues actions still open the pane at their own task.
+Density MUST round-trip through canonical settings save even when it is the only non-default
 file-operation setting. Auto-dismiss is a future-retention policy: changing it does not clear cards
 already retained. `Clear completed` is an immediate bulk action for the current completed group and
 MUST NOT be duplicated in the footer.
@@ -545,7 +548,7 @@ operation's endpoints or consent policy.
 `HostFileOperationPromptOptions` in/out snapshot. The host renders its finite choices as four
 option rows, with available choices invokable by keyboard, mouse, and UIA, and writes accepted values back only for the
 affirmative action. Links exposes Preserve/Skip, Verify exposes Off/On, Start exposes Queue/Parallel,
-and Bandwidth cycles Unlimited, the standard presets, plus the captured custom value when needed.
+and Bandwidth cycles the [shared presets](#speed-and-stalls) and includes the captured non-preset value when present.
 Flattening the choices into an unstructured message string or rereading Preferences/provider
 configuration after acceptance is forbidden. Cancel leaves the caller snapshot unchanged, admits no
 task, and consumes no clipboard sequence.
@@ -679,7 +682,10 @@ root strictly pinned, the card shows "Permanent delete" with the question the mo
 ("Permanently delete {what} from {where}. This cannot be undone."), and its actions are **Cancel**
 (first, the default and Escape action) and **Permanently delete**. Cancel ends the task as canceled
 before any mutation and leaves no completed-history success entry; Permanently delete lets the task
-re-check the confirmed pathnames against the pinned objects and then run. Archive cleanup deletes
+re-check the confirmed pathnames against the pinned objects and then run. When Delete includes a
+location whose provider says Recycle is unavailable, the same card covers just the selected items
+that need permanent consent. It identifies that subset and gives the count of accompanying Recycle
+items. Confirm starts their admitted routes. Cancel keeps the whole selection unchanged. Archive cleanup deletes
 whose consent the archive prompt already captured do not ask again. On a location that deletes by name
 the question ends with its own paragraph (the consent note): for a provider without object identity,
 that this location deletes whatever the name refers to (C10); for a Local location without file
@@ -2167,6 +2173,11 @@ the existing bounded history, without synthesizing zero samples for the hidden i
 The configured speed limit belongs in the shared current-value selector/flyout, not as the graph
 marker. Its visible value is `Limit: Unlimited` or the localized compact configured rate; the whole
 selector opens the choices and it has no separate primary action.
+
+Preferences, explicit start options and the running card use the same bandwidth catalog. Its ordered
+values are Unlimited, 1, 5, 10, 50, 100 and 500 MiB/s, and 1 GiB/s. The choices use localized IEC
+labels and binary byte values. Custom examples use IEC units. The shared parser accepts legacy
+spellings such as `4MB` with the same binary meaning.
 
 In Rainbow theme, graph history keeps per-sample colors stable as samples scroll. It MUST NOT blink or
 cycle historic samples by time.

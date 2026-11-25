@@ -911,7 +911,7 @@ their existing contracts, and timed-out copied snapshots remain worker-owned.
 - Delete and metadata-only native renames keep their own concurrency budgets; `maxParallelTransfers` limits file data transfers.
 - The main application publishes this process-wide limit explicitly at startup and when applying settings. Attaching or detaching settings on a private `FolderWindow` does not publish a new limit. Test fixtures that intentionally configure the scheduler apply that value explicitly and restore the previous limit before returning.
 - `fileOperations.crossFsBridgeBufferSizeKB`: default per-buffer size for host-driven cross-filesystem bridge copies (integer, `512..16384`, default: `4096`). Two buffers are allocated per active bridged file transfer.
-- `fileOperations.defaultBandwidthLimitBytesPerSecond`: default speed limit applied to newly created copy/move tasks when the caller did not already specify one (integer, `>= 0`, default: `0`; `0` means unlimited).
+- `fileOperations.defaultBandwidthLimitBytesPerSecond` stores the default Copy/Move speed in bytes per second and applies it when the caller supplies no limit. This is an integer `>= 0` and defaults to `0` (Unlimited). Choosing a named preset or entering Custom uses the same stored byte value. Existing non-preset values remain effective.
 
 ### Throughput disclosure setting
 

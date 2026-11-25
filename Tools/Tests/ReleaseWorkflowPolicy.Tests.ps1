@@ -42,7 +42,8 @@ Describe 'Commands UI attribution adapter wiring' {
         },$true))
         $branches.Count | Should Be 1
         $branch=$branches[0].Extent.Text
-        $root=$repoRoot;$profile=@('-Platform','ARM64','-Configuration','Release');$number='42';$Platform='ARM64';$Configuration='Release'
+        $root=Join-Path $repoRoot 'Repeat-Shuffle-Proof'
+        $profile=@('-Platform','ARM64','-Configuration','Release');$number='42';$Platform='ARM64';$Configuration='Release'
         $QualificationScope='CommandsUiAttribution'
         $receiptDirectory=New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness tools-pester -Case ('attribution-wire-'+[guid]::NewGuid().ToString('N'))
         $calls=[Collections.Generic.List[object]]::new()
@@ -70,13 +71,16 @@ Describe 'Commands UI attribution adapter wiring' {
         & ([scriptblock]::Create($branch))
         $calls.Count | Should Be 4
         foreach($call in $calls){
-            $call.workingDirectory | Should Be $repoRoot
+            $call.workingDirectory | Should Be $root
             $call.timeout | Should Be 18000
             $call.stream | Should Be $true
             $call.allowFailure | Should Be $true
             $arguments=$call.arguments
             ($arguments -join ' ') | Should Match '-Suite Commands -CaseFilter [A-Za-z0-9_]+ -ValidationMode Fresh -SkipBuild'
-            ($arguments -join ' ') | Should Not Match 'ClassifyFailures|Repeat|Shuffle|Proof|AllowAlternateVolume|ResultReference'
+            $disallowedOptions = @($arguments | Where-Object {
+                $_ -match '^-(ClassifyFailures|SelfTestRepeat|SelfTestShuffleSeed|SelfTestFlakyProofCase|SelfTestOrderProofCase|AllowAlternateVolumeTestRoot|ResultReferencePath)(:|$)'
+            })
+            $disallowedOptions.Count | Should Be 0
             @($arguments|Where-Object{$_ -eq '-CaseFilter'}).Count | Should Be 1
             @($arguments|Where-Object{$_ -eq '-RequireCleanQuarantine'}).Count | Should Be 1
             @($arguments|Where-Object{$_ -eq '-TimeoutMultiplier'}).Count | Should Be 1
