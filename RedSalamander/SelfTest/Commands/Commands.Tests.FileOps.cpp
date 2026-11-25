@@ -19595,11 +19595,24 @@ namespace
         return false;
     }
 
+    const bool originallyVisible       = fileOps->IsIssuesPaneVisible();
+    const auto restoreIssueVisibility  = wil::scope_exit([&]() noexcept
+    {
+        if (fileOps->IsIssuesPaneVisible() != originallyVisible)
+            fileOps->ToggleIssuesPane();
+    });
     const bool autoDismissBeforeEscape = fileOps->GetAutoDismissSuccess();
     const bool compactBeforeEscape     = fileOps->GetPopupCompactDensity();
     state.Require(menuEscape(openMenu(Hit::FooterOptions, IDS_FILEOPS_FOOTER_OPTIONS)) && fileOps->GetAutoDismissSuccess() == autoDismissBeforeEscape &&
-                      fileOps->GetPopupCompactDensity() == compactBeforeEscape,
-                  L"Escaping the actual Options menu must leave both preferences unchanged.");
+                      fileOps->GetPopupCompactDensity() == compactBeforeEscape && fileOps->IsIssuesPaneVisible() == originallyVisible,
+                  L"Escaping Options must preserve preferences and Issues visibility.");
+    state.Require(choose(openMenu(Hit::FooterOptions, IDS_FILEOPS_FOOTER_OPTIONS), IDS_FILEOPS_BTN_ISSUES) &&
+                      waitFor([&]() noexcept { return fileOps->IsIssuesPaneVisible() != originallyVisible; }),
+                  L"The Issues menu item must change the visibility of the existing diagnostics pane.");
+    state.Require(choose(openMenu(Hit::FooterOptions, IDS_FILEOPS_FOOTER_OPTIONS), IDS_FILEOPS_BTN_ISSUES) &&
+                      waitFor([&]() noexcept { return fileOps->IsIssuesPaneVisible() == originallyVisible; }) &&
+                      fileOps->GetAutoDismissSuccess() == autoDismissBeforeEscape && fileOps->GetPopupCompactDensity() == compactBeforeEscape,
+                  L"Using the Issues item again must restore its original visibility and preserve the footer preferences.");
     state.Require(choose(openMenu(Hit::FooterOptions, IDS_FILEOPS_FOOTER_OPTIONS), IDS_FILEOPS_CHECK_AUTODISMISS_OFF) && fileOps->GetAutoDismissSuccess() &&
                       retainedSecondCopy(),
                   L"The Options auto-dismiss UIA item must enable the preference without purging an already-retained success card.");

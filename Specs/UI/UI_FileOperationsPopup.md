@@ -320,7 +320,10 @@ task's decision. A removed focusable path uses global Options as its safe fallba
 
 Footer controls live outside the scrolled task-list viewport and MUST remain hit-testable there. The
 `Options` overflow owns persistent preferences: auto-dismiss success/canceled and Compact/Expanded
-density. Density MUST round-trip through canonical settings save even when it is the only non-default
+density. The same overflow includes an `Issues` toggle for the existing pane, with its checked state
+reflecting current visibility. The toggle leaves the footer preferences and task results intact.
+Per-task Issues actions still open the pane at their own task.
+Density MUST round-trip through canonical settings save even when it is the only non-default
 file-operation setting. Auto-dismiss is a future-retention policy: changing it does not clear cards
 already retained. `Clear completed` is an immediate bulk action for the current completed group and
 MUST NOT be duplicated in the footer.
