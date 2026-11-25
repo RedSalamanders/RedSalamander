@@ -1180,7 +1180,8 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
   `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
-  `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`, or
+  `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
+  `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
@@ -1189,6 +1190,7 @@ the same synchronous reporter and counter path as the pointer overload.
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
+  the Copy-only Move witness uses an owned provider and synthetic task decisions under the same blocker;
   the provider capability matrix uses private providers, owned data and direct task controls;
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
@@ -2426,7 +2428,7 @@ invented independently selectable cases. Separately registered families remain f
 | `FileOps_OwnedProductionShutdown` / `FileOpsFamily_OwnedProductionShutdown` | A private owned child reaches normal verified Copy overwrite consent, pauses after a positive incomplete host-bridge owned-stage write, and drives actual application `WM_CLOSE`, deferred cancellation, settings save and `WM_DESTROY` through natural process exit. Require the real `Copy` strategy, exact paths, persisted stage bytes/proof and production worker quiet point. A helper-level Shutdown call or killed process cannot satisfy this witness. |
 | `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage` / `FileOpsFamily_RepeatedNonClipboardStorage` | Admit two intentional non-clipboard commands with distinct task IDs. Pause the first real host-managed publication. Verify that the second waits automatically behind its exact predecessor without a prompt, discovery, publication or completion. Then release the first. Copy reaches normal Exists/Skip; Move reaches normal missing-source failure after the first real Move removed its source. Require separate callbacks, typed results, exact published occupant/sentinel bytes and file IDs, closed trees and unchanged foreground. |
 | `FileOps_AdmissionBaseline` / `FileOpsFamily_AdmissionBaseline` | Measure actual UI-thread `AdmitOperation` for qualified Local, alternate-volume, test-owned-VHDX mounted-volume and available loopback-UNC routes, including mixed endpoint partitions; cancel at a real preconsumption readiness gate and prove unchanged actual closed inventories. Counter-only helper calls cannot substitute for admission. |
-| `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof` | This renamed historical `FileOps_CrossVolumeMovePartialFailureStatus` control is Local-to-Dummy **Copy-only Move without destination content proof**. It checks normal `S_FALSE` source retention plus original/source/destination exact bytes/BLAKE3. It does not witness a real cross-volume Managed Move, partial publication failure or source removal. |
+| `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof` | This renamed historical `FileOps_CrossVolumeMovePartialFailureStatus` control is Local-to-Dummy **Copy-only Move without destination content proof**. It checks normal `S_FALSE` source retention and exact bytes/BLAKE3 on both sides. A second admitted task acquires live destination proof during preparation and still makes no second decision request, retains the source and publishes exact bytes. It does not witness a real cross-volume Managed Move, partial publication failure or source removal. |
 
 Storage cuts must retain original and observed byte sequences as well as canonical BLAKE3,
 exact names and file IDs where identity preservation is asserted. Fixture inventories are bounded,
