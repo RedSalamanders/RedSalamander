@@ -247,6 +247,20 @@ public:
         }
     }
 
+    [[nodiscard]] bool SeedDuplicate(std::string_view path)
+    {
+        std::scoped_lock lock(_mutex);
+        const DriveFile* original = FindByPathLocked(path);
+        if (original == nullptr)
+        {
+            return false;
+        }
+        DriveFile duplicate = *original;
+        duplicate.id        = std::format("gd-{}", ++_nextId);
+        _files.push_back(std::move(duplicate));
+        return true;
+    }
+
     [[nodiscard]] bool Exists(std::string_view path) const
     {
         std::scoped_lock lock(_mutex);
@@ -1163,6 +1177,120 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
         DebugCheck(false, L"Google Drive stalled-request proof should not throw std::exception", passed, failed);
     }
 }
+void RunDriveRenameCollisionSelfTests(unsigned int& passed, unsigned int& failed) noexcept
+{
+    try
+    {
+        FakeDriveEndpoint endpoint;
+        endpoint.Drive().SeedFile("/source/inside.bin", {1u, 2u, 3u});
+        endpoint.Drive().SeedFile("/batch-source/inside.bin", {1u, 2u, 3u});
+        endpoint.Drive().SeedFile("/free-source/inside.bin", {1u, 2u, 3u});
+        endpoint.Drive().SeedFile("/leaf-source.bin", {4u});
+        endpoint.Drive().SeedFile("/occupied/foreign.bin", {4u, 5u, 6u});
+        endpoint.Drive().SeedFile("/duplicate.bin", {7u});
+        if (! DebugCheck(endpoint.Drive().SeedDuplicate("/duplicate.bin"), L"Rename fixture must have two siblings with the same raw name", passed, failed) ||
+            ! DebugCheck(SUCCEEDED(endpoint.Start()), L"Rename collision fixture should start", passed, failed))
+        {
+            return;
+        }
+        const std::wstring origin = endpoint.Origin();
+        ConfigureFakeDrive(origin.c_str(), true);
+        const auto restore = wil::scope_exit([&]() noexcept
+        {
+            ConfigureFakeDrive(nullptr, false);
+            endpoint.Stop();
+        });
+
+        wil::com_ptr<FileSystemGoogleDrive> fileSystem;
+        fileSystem.attach(new (std::nothrow) FileSystemGoogleDrive(nullptr));
+        if (! DebugCheck(fileSystem && SUCCEEDED(fileSystem->SetConfiguration(R"({"connectTimeoutMs":2000,"requestTimeoutMs":3000})")),
+                         L"Rename collision fixture should configure an instance",
+                         passed,
+                         failed))
+        {
+            return;
+        }
+        constexpr wchar_t source[]       = L"/@conn:google-drive-selftest/source";
+        constexpr wchar_t occupied[]     = L"/@conn:google-drive-selftest/occupied";
+        constexpr wchar_t batchSource[]  = L"/@conn:google-drive-selftest/batch-source";
+        constexpr wchar_t occupiedLeaf[] = L"occupied";
+        constexpr HRESULT collision      = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        FileSystemArenaOwner arena;
+        if (! DebugCheck(SUCCEEDED(arena.Initialize(512u)), L"Rename batch should allocate its caller arena", passed, failed))
+        {
+            return;
+        }
+        auto* batch = static_cast<FileSystemRenamePair*>(AllocateFromFileSystemArena(arena.Get(), sizeof(FileSystemRenamePair), alignof(FileSystemRenamePair)));
+        auto* batchPath = static_cast<wchar_t*>(AllocateFromFileSystemArena(arena.Get(), sizeof(batchSource), alignof(wchar_t)));
+        auto* batchName = static_cast<wchar_t*>(AllocateFromFileSystemArena(arena.Get(), sizeof(occupiedLeaf), alignof(wchar_t)));
+        if (! DebugCheck(batch != nullptr && batchPath != nullptr && batchName != nullptr, L"Rename batch should fit in its caller arena", passed, failed))
+        {
+            return;
+        }
+        std::ranges::copy(batchSource, batchPath);
+        std::ranges::copy(occupiedLeaf, batchName);
+        *batch = FileSystemRenamePair{sizeof(FileSystemRenamePair), batchPath, batchName};
+
+        const auto started = std::chrono::steady_clock::now();
+        const auto rename  = [&](const wchar_t* from, const wchar_t* destination) noexcept
+        { return fileSystem->RenameItem(from, destination, FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr); };
+        DebugCheck(rename(source, occupied) == collision, L"Rename must refuse an occupied folder even with the overwrite flag", passed, failed);
+        DebugCheck(fileSystem->RenameItems(batch, 1u, FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr) == collision,
+                   L"Batch Rename must also refuse an occupied folder",
+                   passed,
+                   failed);
+        DebugCheck(rename(L"/@conn:google-drive-selftest/leaf-source.bin", L"/@conn:google-drive-selftest/duplicate.bin") == collision,
+                   L"Rename must detect the raw name of decorated duplicate siblings",
+                   passed,
+                   failed);
+        const auto refusalPatches = endpoint.Server().RequestCount("PATCH");
+        const auto refusalDeletes = endpoint.Server().RequestCount("DELETE");
+        DebugCheck(refusalPatches == 0u && refusalDeletes == 0u && endpoint.Drive().Exists("/source/inside.bin") &&
+                       endpoint.Drive().Exists("/batch-source/inside.bin") && endpoint.Drive().Exists("/leaf-source.bin") &&
+                       endpoint.Drive().Exists("/occupied/foreign.bin") && ! endpoint.Drive().Exists("/occupied/inside.bin"),
+                   L"Refusals must leave the trees intact without issuing mutations",
+                   passed,
+                   failed);
+        const auto refusalUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
+
+        DebugCheck(rename(L"/@conn:google-drive-selftest/free-source", L"/@conn:google-drive-selftest/Free-Source") == S_OK &&
+                       endpoint.Drive().Exists("/Free-Source/inside.bin") && ! endpoint.Drive().Exists("/free-source") &&
+                       endpoint.Server().RequestCount("PATCH") == refusalPatches + 1u,
+                   L"A case-only Rename should preserve the subtree with one PATCH",
+                   passed,
+                   failed);
+        DebugCheck(fileSystem->RenameItem(
+                       L"/@conn:google-drive-selftest/Free-Source", L"/@conn:google-drive-selftest/renamed", FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr) ==
+                           S_OK &&
+                       endpoint.Drive().Exists("/renamed/inside.bin") && ! endpoint.Drive().Exists("/Free-Source") &&
+                       endpoint.Server().RequestCount("PATCH") == refusalPatches + 2u && endpoint.Server().RequestCount("DELETE") == refusalDeletes,
+                   L"Rename to another free name should preserve the subtree with one more PATCH",
+                   passed,
+                   failed);
+        const auto totalUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
+        std::fwprintf(
+            stderr,
+            L"[Google Drive] Rename collision fixture refusal_us=%lld elapsed_us=%lld refusal_PATCH=%zu refusal_DELETE=%zu GET=%zu PATCH=%zu DELETE=%zu\n",
+            static_cast<long long>(refusalUs),
+            static_cast<long long>(totalUs),
+            static_cast<size_t>(refusalPatches),
+            static_cast<size_t>(refusalDeletes),
+            static_cast<size_t>(endpoint.Server().RequestCount("GET")),
+            static_cast<size_t>(endpoint.Server().RequestCount("PATCH")),
+            static_cast<size_t>(endpoint.Server().RequestCount("DELETE")));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // The test export is noexcept. Record a failed fixture after loopback teardown.
+        Debug::Error(L"FileSystemGoogleDrive Rename collision selftest failed after std::exception.");
+        DebugCheck(false, L"Google Drive Rename collision proof should complete", passed, failed);
+    }
+}
+
 // R0-RC4: SetExpectedReplacement with a zero host timestamp is refused instead of replacing the
 // object the writer observed when it opened.
 void RunDriveZeroTimestampReplaceSelfTests(unsigned int& passed, unsigned int& failed) noexcept
@@ -1351,6 +1479,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderGoogleDriveR0fCo
     *passed = 0u;
     *failed = 0u;
     FileSystemGoogleDriveSelfTest::RunDriveStalledRequestCancelSelfTests(*passed, *failed);
+    FileSystemGoogleDriveSelfTest::RunDriveRenameCollisionSelfTests(*passed, *failed);
     return *failed == 0u ? S_OK : E_FAIL;
 }
 
