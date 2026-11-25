@@ -161,6 +161,11 @@ nonempty values. Parameter binding must preserve that distinction before convert
 non-null values to strings. None of these child overrides changes the caller's
 environment. Constructor tests and an actual contained child cover all three states.
 
+The streaming timeout diagnostic reports the PID of the process owned by the
+launcher. The timeout regression reads that PID, verifies the one-second budget and
+the wall bound, and observes process exit even if the child never reached its first
+script statement. The inherited-pipe fixture separately verifies descendant cleanup.
+
 The hosted interactive-entry fixture may give `ContainedProcess` a synchronous, thread-bound
 owned-desktop scope. It accepts only `WinSta0\RedSalamander.Test.<32 lowercase hexadecimal digits>`
 and sets `STARTUPINFO.lpDesktop` for contained children; it does not switch the input desktop.

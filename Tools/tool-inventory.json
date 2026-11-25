@@ -2148,7 +2148,7 @@
         "Launches child processes when invoked"
       ],
       "outputs": [
-        "Streaming exit status and silent captured stdout/stderr/actual-exit records"
+        "Streaming exit status, the contained process PID on timeout, and silent captured stdout/stderr/actual-exit records"
       ],
       "ownerSpec": "Specs/Build/Build_Toolchain.md",
       "tests": [
