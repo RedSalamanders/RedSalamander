@@ -2115,20 +2115,32 @@ constexpr std::wstring_view kRecycleBinDirectoryName{L"$Recycle.Bin"};
     constexpr size_t kMaxInfoRecordSize = kPathOffsetV2 + kMaxPathCharsV2 * sizeof(wchar_t);
 
     failure.clear();
+    const std::wstring extendedInfoPath = ExtendSelfTestPathForIo(infoPath);
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile is intentionally non-copyable.
-    wil::unique_hfile file(::CreateFileW(ExtendSelfTestPathForIo(infoPath).c_str(),
-                                         GENERIC_READ,
-                                         FILE_SHARE_READ,
-                                         nullptr,
-                                         OPEN_EXISTING,
-                                         FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                         nullptr));
+    wil::unique_hfile file;
 #pragma warning(pop)
-    if (! file)
+    // Shell or indexing work can still hold the metadata file open just after Recycle completes.
+    for (int attempt = 0;; ++attempt)
     {
-        failure = std::format(L"its $I record could not be opened (error {})", ::GetLastError());
-        return {};
+        file.reset(::CreateFileW(extendedInfoPath.c_str(),
+                                 GENERIC_READ,
+                                 FILE_SHARE_READ,
+                                 nullptr,
+                                 OPEN_EXISTING,
+                                 FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                 nullptr));
+        if (file)
+        {
+            break;
+        }
+        const DWORD error = ::GetLastError();
+        if (attempt == 2 || (error != ERROR_SHARING_VIOLATION && error != ERROR_LOCK_VIOLATION))
+        {
+            failure = std::format(L"its $I record could not be opened (error {})", error);
+            return {};
+        }
+        ::Sleep(100);
     }
     FILE_ATTRIBUTE_TAG_INFO tag{};
     LARGE_INTEGER size{};

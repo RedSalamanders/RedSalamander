@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 #include <objbase.h>
 
@@ -84,6 +85,18 @@ constexpr uint32_t kPromptOptionLinks     = 0xF001u;
 constexpr uint32_t kPromptOptionVerify    = 0xF002u;
 constexpr uint32_t kPromptOptionExecution = 0xF003u;
 constexpr uint32_t kPromptOptionBandwidth = 0xF004u;
+constexpr uint32_t kPromptEditBandwidth   = 0xF005u;
+
+[[nodiscard]] std::vector<RedSalamander::Ui::AlertOptionChoice> BuildFileOperationBandwidthChoices(uint64_t selectedLimit)
+{
+    std::vector<RedSalamander::Ui::AlertOptionChoice> choices;
+    choices.reserve(FileOperations::kBandwidthPresets.size() + 1u);
+    for (const auto& preset : FileOperations::kBandwidthPresets)
+        choices.push_back({preset.bytesPerSecond, LoadStringResource(nullptr, preset.labelId)});
+    if (std::ranges::find(choices, selectedLimit, &RedSalamander::Ui::AlertOptionChoice::value) == choices.end())
+        choices.push_back({selectedLimit, Common::Parsing::FormatBinaryThroughputText(selectedLimit)});
+    return choices;
+}
 
 template <typename Prompt> [[nodiscard]] HRESULT RunCredentialInteraction(HostCredentialWaitObserver observer, Prompt&& prompt) noexcept
 {
@@ -2166,23 +2179,16 @@ private:
                        {HOST_FILE_OPERATION_EXECUTION_PARALLEL, LoadStringResource(nullptr, IDS_FILEOPS_BTN_MODE_PARALLEL)}},
                       options.executionMode);
 
-            std::vector<RedSalamander::Ui::AlertOptionChoice> bandwidthChoices;
-            bandwidthChoices.reserve(FileOperations::kBandwidthPresets.size() + 1u);
-            for (const auto& preset : FileOperations::kBandwidthPresets)
-            {
-                bandwidthChoices.push_back({preset.bytesPerSecond, LoadStringResource(nullptr, preset.labelId)});
-            }
-            const bool hasCurrentBandwidth =
-                std::ranges::any_of(bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
-            if (! hasCurrentBandwidth)
-            {
-                bandwidthChoices.push_back(
-                    {options.bandwidthLimitBytesPerSecond, Common::Parsing::FormatBinaryThroughputText(options.bandwidthLimitBytesPerSecond)});
-            }
             addOption(kPromptOptionBandwidth,
                       LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_BANDWIDTH),
-                      std::move(bandwidthChoices),
+                      BuildFileOperationBandwidthChoices(options.bandwidthLimitBytesPerSecond),
                       options.bandwidthLimitBytesPerSecond);
+
+            RedSalamander::Ui::AlertButton editBandwidth{};
+            editBandwidth.id    = kPromptEditBandwidth;
+            editBandwidth.label = LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM);
+            editBandwidth.role  = RedSalamander::Ui::AlertButtonRole::Option;
+            model.buttons.push_back(std::move(editBandwidth));
 
             if (options.clipboardMoveConsumesCutList != 0u)
             {
@@ -2243,6 +2249,8 @@ private:
         {
             HostPromptResult chosen                        = HOST_PROMPT_RESULT_NONE;
             bool completed                                 = false;
+            bool editBandwidthRequested                    = false;
+            bool editingBandwidth                          = false;
             RedSalamander::Ui::AlertOverlayWindow* overlay = nullptr;
         };
 
@@ -2252,8 +2260,13 @@ private:
         auto onPromptButton = [](void* context, uint32_t buttonId) noexcept
         {
             auto* self = static_cast<PromptState*>(context);
-            if (! self)
+            if (! self || self->editingBandwidth)
             {
+                return;
+            }
+            if (buttonId == kPromptEditBandwidth)
+            {
+                self->editBandwidthRequested = true;
                 return;
             }
 
@@ -2325,6 +2338,8 @@ private:
                     state.completed = true;
                     break;
                 }
+                if (state.editBandwidthRequested)
+                    break;
             }
 
             if (state.completed)
@@ -2332,9 +2347,24 @@ private:
                 break;
             }
 
-            if (! overlayWindow.IsVisible())
+            if (! overlayWindow.IsVisible() || g_hostPromptShutdown.load(std::memory_order_acquire))
             {
                 break;
+            }
+
+            if (std::exchange(state.editBandwidthRequested, false))
+            {
+                // Open outside the overlay callback so the action dispatch has unwound before the nested prompt runs.
+                const uint64_t currentLimit = overlayWindow.GetOptionValue(kPromptOptionBandwidth).value_or(0u);
+                state.editingBandwidth      = true;
+                const auto limit            = FileOperations::ShowCustomSpeedLimitPrompt(overlayWindow.GetHwnd(), HostFolderWindow().GetTheme(), currentLimit);
+                state.editingBandwidth      = false;
+                if (limit && overlayWindow.IsVisible() && ! g_hostPromptShutdown.load(std::memory_order_acquire))
+                {
+                    const uint64_t acceptedLimit = limit.value();
+                    overlayWindow.SetOptionChoices(kPromptOptionBandwidth, BuildFileOperationBandwidthChoices(acceptedLimit), acceptedLimit);
+                }
+                continue;
             }
 
             if (! sawMessage)

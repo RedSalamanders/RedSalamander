@@ -254,6 +254,7 @@ struct TaskSnapshot
         uint8_t defaultAction           = 0u;
         uint8_t escapeAction            = 0u;
         bool applyToAllEligible         = false;
+        bool applyToAllOnlySkip         = false;
         bool applyToAllChecked          = false;
         bool skipAllEligible            = false;
         uint8_t repeatUnavailableReason = 0u; // FileOperations::ConflictRepeatUnavailableReason
@@ -674,8 +675,8 @@ struct PopupLayoutDebugSnapshot
     size_t completedGroupExpectedBadges     = 0u;
     size_t completedGroupPaintedBadges      = 0u;
     uint32_t completedGroupPaintedBadgeMask = 0u;
-    std::array<wchar_t, 5> completedGroupPaintedGlyphs{};
-    std::array<std::wstring, 5> completedGroupHostedNames{};
+    std::array<wchar_t, 2> completedGroupPaintedGlyphs{};
+    std::array<std::wstring, 2> completedGroupHostedNames{};
     bool completedGroupBadgeCountsFit       = false;
     bool taskTerminalSummaryVisible         = false;
     bool taskTerminalSummaryFits            = false;
@@ -729,8 +730,6 @@ struct PopupLayoutDebugSnapshot
     std::wstring hostedCancelAutomationId;
     uint32_t completedGroupCount            = 0u;
     uint32_t completedGroupCompletedCount   = 0u;
-    uint32_t completedGroupPartialCount     = 0u;
-    uint32_t completedGroupFailedCount      = 0u;
     uint32_t completedGroupCanceledCount    = 0u;
     uint32_t completedGroupVisibleTaskCount = 0u;
     uint32_t taskStatusVisualTone           = 0u;
@@ -2299,7 +2298,7 @@ private:
     {
         std::wstring clearText;
         std::wstring headingText;
-        std::array<uint32_t, 5> counts{};
+        std::array<uint32_t, 2> counts{};
         wil::com_ptr<IDWriteTextFormat> actionFormat;
         wil::com_ptr<IDWriteTextFormat> headingFormat;
         wil::com_ptr<IDWriteTextFormat> countFormat;
@@ -2310,7 +2309,7 @@ private:
         bool expanded = false;
     };
     CompletedGroupMeasurement _completedGroupMeasurement;
-    HRESULT PrepareCompletedGroup(float widthPx, uint32_t total, const std::array<uint32_t, 5>& counts) noexcept;
+    HRESULT PrepareCompletedGroup(float widthPx, uint32_t total, const std::array<uint32_t, 2>& counts) noexcept;
 
     // Fixed Source/Destination/Delete/Verify vocabulary; retain the format identity
     // so DPI/font recreation cannot reuse measurements from a destroyed format.

@@ -1653,6 +1653,7 @@ struct FolderWindow::FileOperationState
             bool applyToAllEligible                                                 = false;
             bool applyToAllChecked                                                  = false;
             FileOperations::ConflictRepeatUnavailableReason repeatUnavailableReason = FileOperations::ConflictRepeatUnavailableReason::None;
+            bool applyToAllOnlySkip                                                 = false;
             bool skipAllEligible                                                    = false;
             bool buttonsPublishable                                                 = false;
             bool retryFailed                                                        = false;

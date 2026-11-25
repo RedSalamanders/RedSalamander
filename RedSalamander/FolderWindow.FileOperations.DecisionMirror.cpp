@@ -90,6 +90,7 @@ struct MirrorPrompt final
     ConflictAction defaultAction = ConflictAction::None;
     ConflictAction escapeAction  = ConflictAction::None;
     bool applyToAllEligible      = false;
+    bool applyToAllOnlySkip      = false;
     bool applyToAllChecked       = false;
     bool factItemCountKnown      = false;
     uint64_t factItemCount       = 0u;
@@ -329,6 +330,7 @@ struct FolderWindow::FileOperationState::DecisionMirror final
         out.defaultAction      = prompt.defaultAction;
         out.escapeAction       = prompt.escapeAction;
         out.applyToAllEligible = prompt.applyToAllEligible;
+        out.applyToAllOnlySkip = prompt.applyToAllOnlySkip;
         out.applyToAllChecked  = prompt.applyToAllChecked;
         out.factItemCountKnown = prompt.factItemCountKnown;
         out.factItemCount      = prompt.factItemCount;
@@ -680,10 +682,11 @@ struct FolderWindow::FileOperationState::DecisionMirror final
         if (prompt.applyToAllEligible)
         {
             model.options.push_back(AlertOption{
-                .id            = kApplyToAllOptionId,
-                .label         = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL),
-                .choices       = {{0u, LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF)}, {1u, LoadStringResource(nullptr, IDS_PREFS_COMMON_ON)}},
+                .id      = kApplyToAllOptionId,
+                .label   = LoadStringResource(nullptr, prompt.applyToAllOnlySkip ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL),
+                .choices = {{0u, {}}, {1u, {}}},
                 .selectedIndex = prompt.applyToAllChecked ? 1u : 0u,
+                .checkBox      = true,
             });
         }
 
@@ -695,7 +698,11 @@ struct FolderWindow::FileOperationState::DecisionMirror final
             textOut.append(L"\x1F");
             textOut.append(button.label);
         }
-        textOut.append(prompt.applyToAllEligible ? L"\x1F+" : L"\x1F-");
+        for (const AlertOption& option : model.options)
+        {
+            textOut.append(L"\x1F");
+            textOut.append(option.label);
+        }
         return model;
     }
 

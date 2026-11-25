@@ -278,7 +278,8 @@ canonical default quarantine before every launch and bind its absent/content ide
 native work, rechecks at repair planning, and rejects every nonempty plan at the actual repair-dispatch boundary. An
 outer preflight is not an atomic file lock; this runner-owned opt-in prevents repair even when the ledger changes before
 the child reads it. Ordinary callers default to the existing repair behavior. No alternate quarantine store is
-substituted. Do not select classification, repeat, shuffle, proof hooks or repair attempts. Each passing child must
+substituted. Verify the diagnostic switches as individual command-line arguments so paths containing words such as `Repeat` remain valid.
+Do not select classification, repeat, shuffle, proof hooks or repair attempts. Each passing child must
 satisfy `Assert-RSHostedFilteredCaseRun` with actual v1 evidence, exactly one passed case, no skips, no retries and no
 active or repaired quarantine. The trusted adapter's one timeout-multiplier value `2.0` feeds both the child CLI and
 expected verifier plan. The verifier's optional `TimeoutMultiplier` defaults to `1.0` for existing callers, accepts the
