@@ -3717,6 +3717,80 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareCreateDirectoryAdmission(
     return S_OK;
 }
 
+HRESULT FolderWindow::FileOperationState::Task::RevalidateMoveConfirmationEndpoints(const FileOperations::FileOperationPlanGroup& plans) noexcept
+{
+    if (! _copyOnlyMoveDisclosed)
+        return S_OK;
+
+    Debug::Perf::Scope perf(L"FileOps.Move.ConfirmedEndpointsRecheckUs");
+    uint64_t sourcesChecked = 0u;
+    const auto finish       = [&](HRESULT status) noexcept
+    {
+        perf.SetValue0(sourcesChecked);
+        perf.SetHr(status);
+        return status;
+    };
+    constexpr HRESULT canceled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    constexpr HRESULT changed  = HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
+    const auto matchesEndpoint = [](const FileSystemRouteContract::QueryResult& route, const FileOperations::QualifiedEndpoint& endpoint) noexcept
+    {
+        return route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.rootId == endpoint.rootId &&
+               route.snapshot.pathProfileId == endpoint.profileId && route.snapshot.pathIdentity.has_value() && endpoint.pathIdentity.has_value() &&
+               SamePathIdentityContract(route.snapshot.pathIdentity.value(), endpoint.pathIdentity.value());
+    };
+
+    const auto* firstTransfer = std::get_if<FileOperations::TransferPlan>(&plans.front());
+    const auto selected       = LoadSelectedAdmission();
+    if (! firstTransfer || ! selected || ! selected->destination)
+        return finish(E_UNEXPECTED);
+    if (CancelRequestedDurable())
+        return finish(canceled);
+
+    const std::wstring& destinationPath      = firstTransfer->destination.providerFolderPath;
+    IFileSystem* const destinationFileSystem = selected->destination->fileSystem ? selected->destination->fileSystem.get() : _fileSystem.get();
+    const auto destinationRoute =
+        FileSystemRouteContract::Query(destinationFileSystem, destinationPath, FILESYSTEM_MOVE, firstTransfer->destinationEndpoint.pluginId);
+    if (CancelRequestedDurable())
+        return finish(canceled);
+
+    // Every transfer in this consent shares the captured destination. Recheck it once,
+    // then recheck the root of each selected item using the captured provider instances.
+    for (const FileOperations::FileOperationPlan& plan : plans)
+    {
+        const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
+        if (! transfer || transfer->destination.providerFolderPath != destinationPath)
+            return finish(E_UNEXPECTED);
+        if (! matchesEndpoint(destinationRoute, transfer->destinationEndpoint))
+        {
+            LogDiagnostic(DiagnosticSeverity::Error,
+                          changed,
+                          L"identity.destinationChanged",
+                          LocalizedDiagnosticText{IDS_FILEOPS_DIAG_DESTINATION_CHANGED},
+                          {},
+                          destinationPath);
+            return finish(changed);
+        }
+        for (const FileOperations::QualifiedSourceItem& item : transfer->selectedItems)
+        {
+            const auto sourceRoute = FileSystemRouteContract::Query(_fileSystem.get(), item.providerPath, FILESYSTEM_MOVE, transfer->sourceEndpoint.pluginId);
+            ++sourcesChecked;
+            if (CancelRequestedDurable())
+                return finish(canceled);
+            if (! matchesEndpoint(sourceRoute, transfer->sourceEndpoint))
+            {
+                LogDiagnostic(DiagnosticSeverity::Error,
+                              changed,
+                              L"identity.sourceChanged",
+                              LocalizedDiagnosticText{IDS_FILEOPS_DIAG_SOURCE_CHANGED},
+                              item.providerPath,
+                              destinationPath);
+                return finish(changed);
+            }
+        }
+    }
+    return finish(S_OK);
+}
+
 HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_ptr<IFileSystem>& fileSystem,
                                                                  std::wstring_view pluginId,
                                                                  std::wstring_view instanceContext,

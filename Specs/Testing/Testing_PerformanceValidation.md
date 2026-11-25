@@ -1257,6 +1257,7 @@ R1d common-preparation evidence uses the test-enabled x64 Release family
 `FileOpsFamily_R1dPreparingLifecycle`. Its protected offline loop projects 4,096 top-level Local
 transfer items and 8,192 selected-root interlock scope facts without descendants or content I/O. It
 emits `FileOps.Preparing.{BuildSnapshotUs,SelectedRootReadinessUs,UiAdmissionUs,SelectedRootCount,ScopeFactCount,StrategyFactCount,CopyOnlyCount,MutationBeforeReadyCount,ClipboardBeforeReadyCount,BreadcrumbBeforeReadyCount,RetainedBytes}`.
+`FileOps.Move.ConfirmedEndpointsRecheckUs` records the worker's elapsed route-check time, selected-source query count and resulting status for Moves that disclosed Copy-only behavior. The worker queries the shared destination once and stops at the first refusal.
 Capture five sequential independent processes per side under
 `Specs/TestRuns/4cb089111a23/FileOps/2026-09-01_r1d_preparing_{baseline,candidate}_release/`.
 Candidate p95 for `BuildSnapshotUs` and `SelectedRootReadinessUs` must be no greater than

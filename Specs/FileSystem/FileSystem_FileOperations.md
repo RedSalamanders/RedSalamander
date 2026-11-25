@@ -523,7 +523,10 @@ and keep the originals. The question includes the captured destination and offer
 A mixed strategy selection shows the Move and Copy-only counts and offers Continue and Cancel.
 Cancel is the default for both questions. An ingress that explicitly requests options or confirmation
 includes the Copy-only disclosure in its existing surface. This decision precedes task publication
-and Cut consumption. Preparation still revalidates the captured plans and keeps the Copy-only sources.
+and Cut consumption. At the start of preparation, the worker checks the captured destination and every selected source
+against the current provider root, path profile and path identity rules. A mismatch or unavailable route refuses the
+whole accepted selection before Cut consumption or mutation, leaving the user to restart with the current endpoints.
+The accepted Copy-only strategy keeps its source even if a fresh check supplies stronger destination content proof.
 The existing exact artifact guard retains its own authority. Permanent Delete retains its consent rule; preview/editor/drop decisions that
 already own initial consent remain authoritative. Find-result and Compare synchronization commands
 retain their specialized behavior on the original routine command IDs and do not inherit the pane

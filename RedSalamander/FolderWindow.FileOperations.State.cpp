@@ -13416,6 +13416,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
         }
     }
 
+    RETURN_IF_FAILED(RevalidateMoveConfirmationEndpoints(*plans));
+
 #ifdef ENABLE_TESTS
     FolderWindowFileOperationsStateInternal::RecordPreparedTransferStrategyForSelfTest(*this);
 #endif

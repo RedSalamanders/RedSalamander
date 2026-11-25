@@ -316,6 +316,48 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
                                                  state.fsDummy,
                                                  &taskId);
         };
+        // Hold after answering Continue and before the worker uses the captured plan.
+        // The provider keeps every fixture byte while its route now names a different root.
+        const auto priorCopyRoute = FileSystemRouteContract::Query(state.fsDummy.get(), copySource.native(), FILESYSTEM_MOVE, kPluginIdDummy);
+        if (priorCopyRoute.state != FileSystemRouteContract::QueryState::Available || ! preparation.ArmForSource(nativeSource.native()))
+        {
+            Fail(L"Mixed Move could not set up the captured source endpoint check.");
+            return true;
+        }
+        const uint64_t beforeDriftPrompts = HostGetTestPromptRequestCount();
+        uint64_t driftedTaskId            = 0u;
+        if (submitMixed(HOST_PROMPT_RESULT_OK, driftedTaskId) != S_OK || ! driftedTaskId)
+        {
+            Fail(L"Mixed Move could not admit its endpoint-change control before the held preparation.");
+            return true;
+        }
+        const auto driftAtGate = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return preparation.HasEnteredForTask(driftedTaskId);
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"mixed Move expected endpoint admission"});
+        if (! driftAtGate.conditionMet || ! setWriterProof(false))
+        {
+            Fail(L"Mixed Move could not change the held provider root.");
+            return true;
+        }
+        const auto currentCopyRoute = FileSystemRouteContract::Query(state.fsDummy.get(), copySource.native(), FILESYSTEM_MOVE, kPluginIdDummy);
+        if (currentCopyRoute.state != FileSystemRouteContract::QueryState::Available || currentCopyRoute.snapshot.rootId == priorCopyRoute.snapshot.rootId)
+        {
+            Fail(L"Mixed Move endpoint-change control did not expose a different provider root.");
+            return true;
+        }
+        preparation.Release();
+        const auto driftFinished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return state.completedTasks.contains(driftedTaskId) && ! state.fileOps->HasActiveOperations();
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"mixed Move source endpoint refusal"});
+        if (! driftFinished.conditionMet || state.completedTasks.at(driftedTaskId).hr != HRESULT_FROM_WIN32(ERROR_FILE_INVALID) ||
+            HostGetTestPromptRequestCount() != beforeDriftPrompts + 1u || ! matchesBytes(nativeSource, nativePayload) ||
+            ! matchesBytes(copySource, copiedPayload) || ! missing(movedFile) || ! missing(copiedFile) || ! setWriterProof(false, true))
+        {
+            Fail(L"Mixed Move must refuse changed endpoint authority before any selected item can publish or move.");
+            return true;
+        }
+        AppendLog(L"Mixed Move rejected a changed source root before publishing either item.");
+
         const uint64_t mixedPrompts = HostGetTestPromptRequestCount();
         uint64_t canceledMixed      = 0u;
         HostPromptDebugSnapshot mixedPrompt{};

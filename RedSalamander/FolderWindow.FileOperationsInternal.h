@@ -2146,6 +2146,7 @@ struct FolderWindow::FileOperationState
                         std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> confirmedTouchReceipt = {}) noexcept;
         HRESULT PrepareBatchRenameAdmission() noexcept;
         HRESULT PrepareCreateDirectoryAdmission() noexcept;
+        HRESULT RevalidateMoveConfirmationEndpoints(const FileOperations::FileOperationPlanGroup& plans) noexcept;
         HRESULT ExecuteCreateDirectory(const FileOperations::CreateDirectoryAdmission& plan) noexcept;
         HRESULT PrepareBatchRenameArtifactGuard() noexcept;
         HRESULT PrepareArtifactTouchGuard(const FileOperations::FileOperationPlanGroup& plans,
