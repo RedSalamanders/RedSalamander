@@ -2358,7 +2358,7 @@ constexpr std::array<SelfTestState::Step, 2> kFileOpsFamilyPhase15{{
     SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,
 }};
 
-constexpr std::array<SelfTestState::Step, 19> kFileOpsFamilyPhase16{{
+constexpr std::array<SelfTestState::Step, 20> kFileOpsFamilyPhase16{{
     SelfTestState::Step::Phase16_RemoteWatchContractExposure,
     SelfTestState::Step::Phase16_RemoteFtpSecret,
     SelfTestState::Step::Phase16_RemoteFtpSandbox,
