@@ -12,7 +12,15 @@ function Get-RSR0eCaseIdentity {
     $case = $match.Value.TrimEnd() + "`n"
     $hash = { param([string]$value) [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($value))) }
     $full = & $hash $case
-    if ($full -cnotin @('AB2DE533491C1816F373655E164C89A38ED38D3EC3D6DE6B8F90502BBB3F9517','A3541BB88E72E6BC41EAD4C77D37F9136A39EF123C8AAB780ECEF63039F020CE')) { throw 'Unreviewed R0e case body.' }
+    # The current matrix adds a no-activation guard and updates the later cleanup and Recycle
+    # assertions. Its measured workload is shared, but it must pair with this exact projection.
+    $reviewed = if ($full -cin @('AB2DE533491C1816F373655E164C89A38ED38D3EC3D6DE6B8F90502BBB3F9517', 'A3541BB88E72E6BC41EAD4C77D37F9136A39EF123C8AAB780ECEF63039F020CE')) {
+        @{ prefix = 'B061625FED5FFB3ADF57BCE2B0FA02E57C055B4E0EEE034628F0719852611833'; suffix = 'BAE1AC8644A3D3994F4DFCB39E763F67859562A095C13903EC3AD71C73582C6B' }
+    } elseif ($full -ceq '2E5558B523D99D73528B2664EA56CE2E1A7733952CB572CF62FF00E2636FA329') {
+        @{ prefix = 'B5580DB8FC0D352F49ACAF2FE5E99100816D7CFB8B20AC676A2F06A2A93AD488'; suffix = '681389C78B53E92548FD3D86563E6AAECC0AB5B3AE00E21AFAC8C6D0FC46FA01' }
+    } else {
+        throw 'Unreviewed R0e case body.'
+    }
     $start = 'providerOperationCallCount == 0u && r0eElapsedUs < kR0eSelfTestCeilingUs,'
     $end = "`n        {`n            return true;`n        }`n`n        std::string missingCreateDirectoryJson(localCapabilitiesJsonSnapshot);"
     $i = $case.IndexOf($start, [StringComparison]::Ordinal)
@@ -21,8 +29,7 @@ function Get-RSR0eCaseIdentity {
     if ($j -lt 0 -or $case.IndexOf($end, $j + 1, [StringComparison]::Ordinal) -ge 0) { throw 'R0e suffix anchor missing or repeated.' }
     $prefix = & $hash ($case.Substring(0, $i + $start.Length))
     $suffix = & $hash ($case.Substring($j))
-    if ($prefix -cne 'B061625FED5FFB3ADF57BCE2B0FA02E57C055B4E0EEE034628F0719852611833' -or
-        $suffix -cne 'BAE1AC8644A3D3994F4DFCB39E763F67859562A095C13903EC3AD71C73582C6B') { throw 'R0e measured case projection changed.' }
+    if ($prefix -cne $reviewed.prefix -or $suffix -cne $reviewed.suffix) { throw 'R0e measured case projection changed.' }
     return [pscustomobject]@{ full=$full; prefix=$prefix; suffix=$suffix }
 }
 

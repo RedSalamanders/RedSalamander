@@ -1175,8 +1175,10 @@ Any before/after optimization comparison must retain this same instrumented fixt
 The explicit hosted `R0ePaired` diagnostic uses
 [`Tools/Invoke-R0ePairedValidation.ps1`](../../Tools/Invoke-R0ePairedValidation.ps1)
 to retain both full-solution Embedded Release builds and five fresh canonical processes per
-side on one native machine. It verifies the exact reviewed case projections, unchanged scale-1
-workload, eight raw metrics, closed archives, source/receipt identities and clean quarantine.
+side on one native machine. It verifies matching reviewed case projections, unchanged scale-1 workload, eight raw metrics,
+closed archives, source/receipt identities and clean quarantine. The current provider matrix
+includes the no-activation guard and revised cleanup and Recycle assertions. Pair it with the
+same matrix projection. The earlier pair remains valid with its reviewed diagnostic wording difference.
 It does not widen a timing gate or qualify Full coverage. A baseline that fails only the
 two-second assertion remains a failed native result and makes the hosted diagnostic fail;
 the candidate measurements and comparison remain useful diagnostic evidence. Missing evidence,
