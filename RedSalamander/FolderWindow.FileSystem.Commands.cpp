@@ -12585,9 +12585,9 @@ void FolderWindow::CommandUnpack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK))
         return;
 
-    HRESULT cleanupCapture = S_OK;
-    constexpr auto archiveReadBindFlags =
-        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_READ_CONTENT);
+    HRESULT cleanupCapture              = S_OK;
+    constexpr auto archiveReadBindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA |
+                                                                           FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_REVISION);
     if (deleteArchiveAfterUnpack)
     {
         const auto captureStarted = std::chrono::steady_clock::now();
@@ -12655,8 +12655,8 @@ void FolderWindow::CommandUnpack(Pane pane)
         wil::com_ptr<IFileSystemBoundObject> source;
         if (! cleanupReceipt.selectedItems.empty())
         {
-            // Rebind each approved file just before reading it. Only one archive
-            // handle is retained while extracting a multi-archive selection.
+            // Rebind each approved file just before reading it. Retain bindings
+            // for only the archive currently being extracted.
             const auto& approved = cleanupReceipt.selectedItems[index].ingressSnapshot.value();
             auto bound =
                 FileOperations::BindObjectAuthority(cleanupReceipt.fileSystem.get(), archivePath.native(), approved.pathProfileId, archiveReadBindFlags);

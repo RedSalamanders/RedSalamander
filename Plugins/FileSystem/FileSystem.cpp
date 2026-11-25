@@ -3588,6 +3588,8 @@ constexpr std::wstring_view kStageCleanupDelayFiredEnvVar = L"REDSALAMANDER_FILE
     return DeleteExactHandle(file.get());
 }
 
+using LocalFileRevision = std::array<int64_t, 4>;
+
 class LocalBoundObject final : public IFileSystemBoundObject,
                                public IFileSystemBoundMetadata,
                                public IFileSystemBoundContentProof,
@@ -3601,9 +3603,11 @@ public:
                      uint64_t committedSizeBytes,
                      FileSystemBindFlags grantedFlags,
                      bool ownedStage,
-                     std::wstring path) noexcept
+                     std::wstring path,
+                     std::unique_ptr<const LocalFileRevision> revision = {}) noexcept
         : _file(std::move(file)),
           _identity(identity),
+          _revision(std::move(revision)),
           _kind(kind),
           _committedSizeBytes(committedSizeBytes),
           _grantedFlags(grantedFlags),
@@ -3719,8 +3723,8 @@ public:
         snapshot->objectId = &_identity;
 #endif
         snapshot->objectIdBytes      = sizeof(_identity);
-        snapshot->revisionId         = nullptr;
-        snapshot->revisionIdBytes    = 0u;
+        snapshot->revisionId         = _revision ? _revision->data() : nullptr;
+        snapshot->revisionIdBytes    = _revision ? static_cast<uint32_t>(sizeof(LocalFileRevision)) : 0u;
         snapshot->committedSizeBytes = committedSizeBytes;
         return S_OK;
     }
@@ -5275,6 +5279,7 @@ private:
 #if defined(ENABLE_TESTS)
     LocalObjectIdentityPayload _reportedIdentity{};
 #endif
+    const std::unique_ptr<const LocalFileRevision> _revision;
     FileSystemBoundObjectKind _kind   = FILESYSTEM_BOUND_OTHER;
     uint64_t _committedSizeBytes      = std::numeric_limits<uint64_t>::max();
     FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;
@@ -7765,7 +7770,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     }
 
     constexpr uint32_t knownFlags = FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE |
-                                    FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION;
+                                    FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION | FILESYSTEM_BIND_READ_REVISION;
     const uint32_t requestedFlags = static_cast<uint32_t>(flags);
     if ((requestedFlags & ~knownFlags) != 0u || (requestedFlags & FILESYSTEM_BIND_NO_FOLLOW) == 0u)
     {
@@ -7773,9 +7778,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
     }
     const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
     DWORD desiredAccess             = FILE_READ_ATTRIBUTES;
+    const bool readRevision         = (requestedFlags & FILESYSTEM_BIND_READ_REVISION) != 0u;
     if ((requestedFlags & FILESYSTEM_BIND_READ_CONTENT) != 0u)
     {
         desiredAccess |= GENERIC_READ;
+    }
+    if (readRevision)
+    {
+        // Redirectors may return older timestamps to metadata-only handles.
+        desiredAccess |= FILE_READ_DATA;
     }
     if ((requestedFlags & (FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION)) != 0u)
     {
@@ -7877,7 +7888,26 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystem
         committedSizeBytes = static_cast<uint64_t>(standard.EndOfFile.QuadPart);
     }
 
-    auto* impl = new (std::nothrow) LocalBoundObject(std::move(file), identity, kind, committedSizeBytes, flags, false, path);
+    std::unique_ptr<const LocalFileRevision> revision;
+    if (readRevision)
+    {
+        if (kind != FILESYSTEM_BOUND_REGULAR_FILE)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+        FILE_BASIC_INFO basic{};
+        if (GetFileInformationByHandleEx(file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        if (basic.ChangeTime.QuadPart <= 0 || basic.LastWriteTime.QuadPart <= 0)
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+        revision = std::make_unique<const LocalFileRevision>(
+            LocalFileRevision{basic.CreationTime.QuadPart, basic.LastWriteTime.QuadPart, basic.ChangeTime.QuadPart, static_cast<int64_t>(committedSizeBytes)});
+    }
+
+    auto* impl = new (std::nothrow) LocalBoundObject(std::move(file), identity, kind, committedSizeBytes, flags, false, path, std::move(revision));
     if (impl == nullptr)
     {
         return E_OUTOFMEMORY;

@@ -1205,6 +1205,7 @@ enum FileSystemBindFlags : uint32_t
     FILESYSTEM_BIND_DELETE        = 0x08,
     FILESYSTEM_BIND_RENAME        = 0x10,
     FILESYSTEM_BIND_PUBLICATION   = 0x20,
+    FILESYSTEM_BIND_READ_REVISION = 0x40, // Require an immutable version snapshot for this regular file.
 };
 
 enum FileSystemLinkKind : uint32_t
@@ -1276,7 +1277,7 @@ struct FileSystemBoundObjectSnapshot
     uint32_t kind;        // FileSystemBoundObjectKind
     const void* objectId; // Provider-owned; immutable for the bound-object lifetime.
     uint32_t objectIdBytes;
-    const void* revisionId; // Empty only when the path profile declares no revision token.
+    const void* revisionId; // Provider-owned immutable token. Required with FILESYSTEM_BIND_READ_REVISION.
     uint32_t revisionIdBytes;
     uint64_t committedSizeBytes; // UINT64_MAX when not applicable or unknown.
 };
