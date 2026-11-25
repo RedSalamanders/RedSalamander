@@ -9417,14 +9417,17 @@ std::shared_ptr<const FileOperations::FileOperationPlanGroup> FolderWindow::File
     return LoadSelectedAdmission()->plans;
 }
 
-void FolderWindow::FileOperationState::Task::StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans) noexcept
+void FolderWindow::FileOperationState::Task::StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans,
+                                                        std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> confirmedTouchReceipt) noexcept
 {
     if (_selectedRootReadinessComplete.load(std::memory_order_acquire) || _enteredOperation.load(std::memory_order_acquire))
         return;
     // Initial Rename/Delete may reseal their plan before registry publication.
-    // Published/running destination generations are never changed through this method.
+    // Publish a confirmed touch receipt together with the destructive consent.
     auto selected   = std::make_shared<SelectedAdmissionView>(*LoadSelectedAdmission());
     selected->plans = std::move(plans);
+    if (confirmedTouchReceipt)
+        selected->artifactTouchReceipt = std::move(confirmedTouchReceipt);
     _selectedAdmission.store(std::move(selected), std::memory_order_release);
     Debug::Perf::Emit(L"FileOps.Admission.ViewObjectsCreated", L"initial-plans", 0u, 1u, sizeof(SelectedAdmissionView), S_OK);
 }
@@ -12709,7 +12712,7 @@ std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsent
             }
         }
     }
-    if (handedOffLeftover)
+    if (handedOffLeftover || _leftoverDeleteTouchRequest)
     {
         append(IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER);
     }
@@ -12734,6 +12737,35 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
     {
         return S_OK;
     }
+    if (_leftoverDeleteTouchRequest)
+    {
+        // This one-plan, complete request and the prepared scopes follow the selected root order.
+        // A changed or missing root cannot inherit the earlier listing's artifact disclosure.
+        const auto& items             = _leftoverDeleteTouchRequest->items;
+        const bool matchesPinnedRoots = items.size() == scopes.size() && std::ranges::equal(items,
+                                                                                            scopes,
+                                                                                            [](const auto& item, const auto& scope) noexcept
+        {
+            if (! scope.exactDeleteAuthority || ! scope.root || scope.providerPath != item.path.native() || scope.endpoint.pluginId != item.endpoint.pluginId ||
+                scope.endpoint.instanceId != item.endpoint.instanceId || scope.endpoint.profileId != item.endpoint.profileId ||
+                scope.endpoint.rootId != item.endpoint.rootId)
+                return false;
+            const auto& authority = scope.root->retained.authority;
+            return authority.kind == item.identity.kind && authority.identity.objectId == item.identity.objectId &&
+                   authority.identity.revisionId == item.identity.revisionId && authority.identity.pathProfileId == item.identity.pathProfileId;
+        });
+        if (! matchesPinnedRoots)
+        {
+            constexpr HRESULT changed = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            LogDiagnostic(DiagnosticSeverity::Error,
+                          changed,
+                          L"delete.leftover.selectionChanged",
+                          L"The checked leftovers changed before confirmation; nothing was deleted.");
+            Debug::Perf::EmitValue(L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(items.size()), changed);
+            return changed;
+        }
+    }
+
     ConflictAction action = ConflictAction::None;
 #ifdef ENABLE_TESTS
     if (_permanentDeleteTestOverride == 1)
@@ -12780,6 +12812,9 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
     }
     if (action != ConflictAction::PermanentDelete)
     {
+        if (_leftoverDeleteTouchRequest)
+            Debug::Perf::EmitValue(
+                L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(_leftoverDeleteTouchRequest->items.size()), HRESULT_FROM_WIN32(ERROR_CANCELLED));
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 #ifdef ENABLE_TESTS
@@ -12873,6 +12908,16 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
                 : FileOperations::ConsentKind::PermanentDelete;
         deletion->initialConsent = FileOperations::DestructiveConsentReceipt{.kind = kind, .taskNonce = _taskId};
     }
+    std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> leftoverReceipt;
+    if (auto touchRequest = std::move(_leftoverDeleteTouchRequest))
+    {
+        FileOperationArtifacts::TouchGuardReceipt accepted;
+        const HRESULT acceptedHr = FileOperationArtifacts::AcceptTouchGuard(*touchRequest, accepted);
+        Debug::Perf::EmitValue(L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(touchRequest->items.size()), acceptedHr);
+        if (acceptedHr != S_OK)
+            return FAILED(acceptedHr) ? acceptedHr : E_UNEXPECTED;
+        leftoverReceipt = std::make_shared<const FileOperationArtifacts::TouchGuardReceipt>(std::move(accepted));
+    }
     if (_reservedOperation.load(std::memory_order_acquire))
     {
         // The general plan store remains frozen after readiness. This reserved-only
@@ -12882,6 +12927,8 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
             return E_UNEXPECTED;
         auto selected   = std::make_shared<SelectedAdmissionView>(*consentView);
         selected->plans = std::move(consented);
+        if (leftoverReceipt)
+            selected->artifactTouchReceipt = std::move(leftoverReceipt);
         {
             std::scoped_lock lock(_state->_queueMutex);
             if (LoadSelectedAdmission() != consentView || ! _reservedOperation.load(std::memory_order_acquire) ||
@@ -12895,7 +12942,7 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         }
     }
     else
-        StorePlans(std::move(consented));
+        StorePlans(std::move(consented), std::move(leftoverReceipt));
     const auto publishedPlans = LoadPlans();
     if (! publishedPlans || publishedPlans->size() != plans->size())
         return E_UNEXPECTED;

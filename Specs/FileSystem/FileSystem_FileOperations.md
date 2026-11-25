@@ -3389,10 +3389,17 @@ in force when the row is rediscovered. If a subfolder cannot be read or its pack
 malformed, the listing retains its prior rows and adds rows from validated portions of the scan, reports
 how many folders were incomplete, and does not present that scan as complete. Provider child names that
 could escape their parent during a host path join are skipped and counted as invalid names.
-**Delete Selected** submits one ordinary `DeletePlan` (`DeleteOrigin::LeftoverCleanup`) through
-`StartOperation` on the provider and plugin identity the listing was opened on (not the pane's current
-one): to the Recycle Bin where the provider supports it, as the pane Delete does, else a permanent
-Delete behind its card, so the touch guard, the confirmation and the by-name rules apply unchanged. On
+**Delete Selected** submits an ordinary `DeletePlan` (`DeleteOrigin::LeftoverCleanup`) through
+`StartOperation` on the provider instance captured when the listing opened. Recycle uses the ordinary
+touch guard. A permanent request whose whole selected set has exact artifact identities uses one
+permanent-delete card with the possible-leftover warning. The worker compares every captured identity
+with its pinned root before offering the question. Cancel grants no receipt. Acceptance seals the
+task's permanent-delete consent and its exact `TouchGuardReceipt` together. Execution revalidates the
+receipt before mutation. A changed root stops the combined request. Partial, blocked and by-name
+requests keep their existing touch guard or by-name consent. The `FileOps.Delete.LeftoverConsent`
+metric records the covered root count and acceptance, cancellation or a changed-selection refusal.
+`FileOps_ReviewRemediationContracts` checks the single card, Cancel, confirmation and a changed
+checked name without desktop activation. On
 a provider that cannot delete (an MTP device) the listing shows its rows unchecked, disables Delete
 Selected and says why. Closing the listing stops its walk, re-issuing the I/O cancel for a bounded
 200 ms; a synchronous provider read may still be blocked after cancellation. The UI closes its HWND and
