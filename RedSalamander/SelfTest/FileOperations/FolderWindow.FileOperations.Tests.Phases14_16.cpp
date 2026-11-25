@@ -1427,14 +1427,43 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox:
     }
 
     RecordCurrentPhase(state, outcome.status, outcome.reason);
+    NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename);
+    return false;
+}
+case SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename:
+{
+    // The owned host Rename pumps the same thread while its worker completes.
+    static bool running = false;
+    if (running)
+        return false;
+    running                 = true;
+    const auto resetRunning = wil::scope_exit([]() noexcept { running = false; });
+    PhaseCheckResult prerequisite =
+        CheckRemoteConnectionSecret(L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::passed)
+        prerequisite = CheckRemoteConnectionSandbox(
+            L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::failed)
+    {
+        Fail(prerequisite.reason);
+        return true;
+    }
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::passed)
+    {
+        const auto resolved = ResolveRemoteConnectionProfile(kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+        const HRESULT hr    = resolved.profile ? RunLiveOneDrivePersonalInlineRenameForSelfTest(*resolved.profile) : E_UNEXPECTED;
+        if (hr != S_OK)
+        {
+            Fail(std::format(L"Live OneDrive Personal inline Rename failed (hr=0x{:08X}).", static_cast<unsigned long>(hr)));
+            return true;
+        }
+    }
+    RecordCurrentPhase(state, prerequisite.status, prerequisite.reason);
     NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps);
     return false;
 }
 case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
 {
-    static bool inlineRenameActive = false;
-    if (inlineRenameActive)
-        return false;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 240'000ull))
     {
@@ -1812,23 +1841,6 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             Fail(L"Phase16_RemoteOneDrivePersonalFileOps move did not materialize the destination file.");
             return true;
         }
-
-        constexpr std::wstring_view renamedLeaf = L"verified-renamed.bin";
-        const HRESULT renameHr                  = [&]() noexcept
-        {
-            inlineRenameActive = true;
-            const auto leave   = wil::scope_exit([]() noexcept { inlineRenameActive = false; });
-            return RunGraphInlineRenameForSelfTest(state.fsRemoteOneDrivePersonal, movedFile, renamedLeaf);
-        }();
-        const std::filesystem::path renamedFile(JoinPluginPathForSelfTest(movedFile.parent_path().native(), renamedLeaf));
-        std::string afterRename;
-        if (renameHr != S_OK || PathExistsFsIo(remoteIo, movedFile) || ! ReadFileTextFsIo(remoteIo, renamedFile, afterRename) || afterRename != beforeRename)
-        {
-            Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps inline Rename failed or did not preserve the file (hr=0x{:08X}).",
-                             static_cast<unsigned long>(renameHr)));
-            return true;
-        }
-        state.remoteOneDrivePersonalMovedFileConn = renamedFile.native();
 
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_DELETE,

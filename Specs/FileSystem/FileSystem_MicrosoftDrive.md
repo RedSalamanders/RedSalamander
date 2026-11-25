@@ -340,6 +340,9 @@ declared bound with the host's verdict after Cancel and as a transport failure w
 `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` proves cross-provider Copy both ways
 (byte-exact), provider CreateDirectory, ordinary host inline Rename, and Recycle through tasks on the same fixture.
 The host Rename checks the terminal publication receipt and the old and new names.
+The configured live `Phase16_RemoteOneDrivePersonalInlineRename` case exercises an
+occupied sibling, file and folder Rename, case-only spelling, preserved bytes, and
+Recycle of its owned fixture. It requires a current saved sign-in.
 The gated `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_*`/`SHAREPOINT` profiles remain the live proof.
 OneDrive and SharePoint are full file-manager destinations.
 

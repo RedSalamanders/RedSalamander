@@ -2,6 +2,15 @@
 
 case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof:
 {
+    static bool provingChangedRoute = false;
+    if (provingChangedRoute)
+        return false;
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+    {
+        Fail(L"Copy-only Move requires the activation blocker.");
+        return true;
+    }
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -14,12 +23,23 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
     const std::wstring dummyRoot        = L"/phase4-copy-only-move-destination";
     const std::wstring dummyFile        = dummyRoot + L"/retained.bin";
 
+    const auto setWriterProof = [&](bool writerProof) noexcept
+    {
+        return SetPluginConfiguration(
+            state.infoDummy.get(),
+            std::format(
+                R"json({{"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":{}}})json",
+                writerProof));
+    };
+
     if (state.stepState == 0)
     {
         // R3-2: this case covers Copy-only Move into a destination without content proof.
-        static_cast<void>(SetPluginConfiguration(
-            state.infoDummy.get(),
-            R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
+        if (! setWriterProof(false))
+        {
+            Fail(L"Copy-only Move could not disable the Dummy writer proof.");
+            return true;
+        }
         if (! RecreateEmptyDirectory(srcRoot) || ! WriteFilledTestFile(srcFile, 256u * 1024u, 0x7Eu) ||
             ! EnsureDummyFolderExists(state.fsDummy.get(), dummyRoot))
         {
@@ -169,6 +189,84 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
                           summaryIt->issueDiagnostics.size(),
                           1,
                           completed->second.hr);
+
+        const std::filesystem::path lateProofSource      = srcRoot / L"late-proof.bin";
+        const std::filesystem::path lateProofDestination = std::filesystem::path(dummyRoot) / L"late-proof.bin";
+        constexpr unsigned int lateProofSize             = 65536u;
+        if (! WriteFilledTestFile(lateProofSource, lateProofSize, 0x46u))
+        {
+            Fail(L"Copy-only Move could not stage the late-proof source.");
+            return true;
+        }
+        auto& preparation = FolderWindowFileOperationsStateInternal::g_fileOpsPreparingBeforePublishPausePoint;
+        if (! preparation.ArmForSource(lateProofSource.native()))
+        {
+            Fail(L"Copy-only Move could not arm the worker preparation gate.");
+            return true;
+        }
+
+        provingChangedRoute = true;
+        const auto restore  = wil::scope_exit([&]() noexcept
+        {
+            preparation.Release();
+            static_cast<void>(CancelOutstandingSelfTestOperations(state.fileOps));
+            static_cast<void>(setWriterProof(false));
+            provingChangedRoute = false;
+        });
+
+        const HostPromptResult previous = HostGetTestPromptResultOverride();
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        const uint64_t promptBefore = HostGetTestPromptRequestCount();
+        uint64_t secondTaskId       = 0u;
+        const HRESULT admitted      = state.fileOps->AdmitOperation(FILESYSTEM_MOVE,
+                                                                    FolderWindow::Pane::Left,
+                                                                    FolderWindow::Pane::Right,
+                                                                    state.fsLocal,
+                                                                    {lateProofSource},
+                                                                    std::filesystem::path(dummyRoot),
+                                                                    FILESYSTEM_FLAG_NONE,
+                                                                    false,
+                                                                    0u,
+                                                                    FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                    false,
+                                                                    state.fsDummy,
+                                                                    &secondTaskId);
+        HostSetTestPromptResultOverride(previous);
+        if (admitted != S_OK || secondTaskId == 0u || HostGetTestPromptRequestCount() != promptBefore + 1u)
+        {
+            Fail(L"Copy-only Move with a later proof change must admit exactly one task after one question.");
+            return true;
+        }
+
+        const auto atGate   = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return preparation.HasEnteredForTask(secondTaskId);
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Copy-only Move capability change"});
+        const auto canProve = [&]() noexcept
+        {
+            const auto route = FileSystemRouteContract::Query(state.fsDummy.get(), dummyRoot, FILESYSTEM_COPY, kPluginIdDummy);
+            return route.state == FileSystemRouteContract::QueryState::Available && (route.snapshot.proofFlags & FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST) != 0u;
+        };
+        if (! atGate.conditionMet || canProve() || ! setWriterProof(true) || ! canProve())
+        {
+            Fail(L"Copy-only Move did not observe a fresh writer proof before publication.");
+            return true;
+        }
+
+        preparation.Release();
+        const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return state.completedTasks.contains(secondTaskId) && ! state.fileOps->HasActiveOperations();
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"Copy-only Move with newly available proof"});
+        std::string kept;
+        std::string published;
+        if (! finished.conditionMet || state.completedTasks.at(secondTaskId).hr != S_FALSE || ! ReadFileTextFsIo(localIo, lateProofSource, kept) ||
+            ! ReadFileTextFsIo(dummyIo, lateProofDestination, published) || kept != std::string(lateProofSize, 'F') || published != kept ||
+            HostGetTestPromptRequestCount() != promptBefore + 1u)
+        {
+            Fail(L"A later writer proof changed the accepted Copy-only Move instead of preserving both files.");
+            return true;
+        }
+        AppendLog(L"Copy-only Move retained the offered source and published equal bytes after a fresh writer proof became available.");
+
         NextStep(state, SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets);
         return false;
     }

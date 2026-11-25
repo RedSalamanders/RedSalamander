@@ -207,8 +207,10 @@ For an explicitly requested configured-server run:
    sign-in ends the attempt and a refreshed token is cached only for that process.
 3. Invoke the governed runner with the same run ID and exact intended cases.
    Keep the normal settings untouched and never archive the seeded settings file.
-   The live OneDrive Personal mutation case creates a single new child of an
-   existing fixture parent and records ownership before creating its contents.
+   The live OneDrive Personal cases create a new child of an existing fixture
+   parent and record ownership before creating its contents. The exact
+   `Phase16_RemoteOneDrivePersonalInlineRename` case checks Rename and verified
+   Recycle independently of the broader live Copy/Move/Delete sequence.
 4. Inspect every selected case and skip reason. Saved-secret and sandbox checks
    prove configuration only; only a successfully executed live case proves its
    stated remote behavior.
