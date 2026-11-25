@@ -6407,7 +6407,15 @@ Describe 'Test link, mount and share exposure source contracts' {
                 # The definition itself (`ProbeLoopbackShare(const std::filesystem::path&`) is not a call site.
                 if ($following -match '^ProbeLoopbackShare\(const ') { continue }
                 $probes++
-                $refusal = [regex]::Match($following, '(?s)^ProbeLoopbackShare\([^;]*\);\s*if\s*\(uncStatus == LoopbackShareStatus::Refused\)\s*(?<body>(?:\{\s*)?(?:\w+\([^;{}]*\);\s*)*(?:Fail|return reject)\([^;]*\);(?:\s*return true;)?(?:\s*\})?|return\s*\{[^{}]*\};)')
+                # The branch must test the result of this exact probe, regardless of the variable name.
+                $lineStart = $text.LastIndexOf("`n", $call.Index) + 1
+                $assignment = $text.Substring($lineStart, $call.Index - $lineStart)
+                $variable = [regex]::Match($assignment, '^\s*const\s+(?:LoopbackShareStatus|auto)\s+(?<name>[a-zA-Z_]\w*)\s*=\s*(?:[^;{}]*:\s*)?$')
+                $variable.Success | Should Be $true
+                $name = [regex]::Escape($variable.Groups['name'].Value)
+                $refusalPattern = '(?s)^ProbeLoopbackShare\([^;]*\);\s*if\s*\(' + $name +
+                    '\s*==\s*LoopbackShareStatus::Refused\)\s*(?<body>(?:\{\s*)?(?:\w+\([^;{}]*\);\s*)*(?:Fail|return reject)\([^;]*\);(?:\s*return true;)?(?:\s*\})?|return\s*\{[^{}]*\};)'
+                $refusal = [regex]::Match($following, $refusalPattern)
                 $refusal.Success | Should Be $true
                 $body = $refusal.Groups['body'].Value
                 $body | Should Not Match '\b(?:skipped|passed)\s*=\s*true'
