@@ -12149,6 +12149,14 @@ void FolderWindow::CommandMakeFileList(Pane pane)
 
 void FolderWindow::CommandPack(Pane pane)
 {
+    if (RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
+        return;
+
+    const HWND folderWindow = _hWnd.get();
+    const FileOperationPromptDispatchScope promptDispatch(*this);
+    const auto ownerAvailable = [&]() noexcept
+    { return ! _fileOperationResetDeferred && folderWindow && _hWnd.get() == folderWindow && IsWindow(folderWindow) != FALSE; };
+
     const auto startedAt = std::chrono::steady_clock::now();
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -12229,6 +12237,9 @@ void FolderWindow::CommandPack(Pane pane)
         }
     }
 
+    if (! ownerAvailable() || (archivePath.has_value() && RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK)))
+        return;
+
     if (! archivePath.has_value())
     {
         result.hr = S_FALSE;
@@ -12296,6 +12307,9 @@ void FolderWindow::CommandPack(Pane pane)
         }
     }
 
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
+        return;
+
     result = selectedPacker.storedZip ? CreateStoredZipArchive(selectedPaths, archivePath.value(), overwrite)
                                       : CreateSevenZipArchive(selectedPaths, archivePath.value(), overwrite, selectedPacker);
 #ifdef ENABLE_TESTS
@@ -12356,6 +12370,14 @@ void FolderWindow::CommandPack(Pane pane)
 
 void FolderWindow::CommandUnpack(Pane pane)
 {
+    if (RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK))
+        return;
+
+    const HWND folderWindow = _hWnd.get();
+    const FileOperationPromptDispatchScope promptDispatch(*this);
+    const auto ownerAvailable = [&]() noexcept
+    { return ! _fileOperationResetDeferred && folderWindow && _hWnd.get() == folderWindow && IsWindow(folderWindow) != FALSE; };
+
     const auto startedAt = std::chrono::steady_clock::now();
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -12438,6 +12460,9 @@ void FolderWindow::CommandUnpack(Pane pane)
         }
     }
 
+    if (! ownerAvailable() || (destinationPath.has_value() && RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK)))
+        return;
+
     if (! destinationPath.has_value())
     {
         result.hr = S_FALSE;
@@ -12496,6 +12521,9 @@ void FolderWindow::CommandUnpack(Pane pane)
             return;
         }
     }
+
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK))
+        return;
 
     result.destinationPath = destinationPath.value();
     for (const std::filesystem::path& archivePath : selectedPaths)
