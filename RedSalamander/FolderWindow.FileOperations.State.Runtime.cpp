@@ -2857,7 +2857,7 @@ FolderWindow::FileOperationState::PopupTelemetryWork FolderWindow::FileOperation
             return PopupTelemetryWork::Active;
         // IsWaitingInQueue is set only while the worker is held before EnterOperation admits it;
         // leaving that wait clears it and posts a presentation change.
-        if (task->IsPaused() || task->IsQueuePaused() || task->IsWaitingInQueue() || task->IsWaitingForOthers() ||
+        if (task->IsPaused() || task->IsQueuePaused() || task->IsWaitingInQueue() || task->IsWaitingForOthers() || task->IsWaitingForCredentials() ||
             task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u || task->_awaitingUserDecision.load(std::memory_order_acquire))
             continue;
         std::scoped_lock promptLock(task->_conflictArbiter.mutex);

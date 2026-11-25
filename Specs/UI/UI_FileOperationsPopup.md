@@ -2062,8 +2062,10 @@ FileSystem_FileOperations.md "Transfer phases, stalls and throughput tuning"), o
 side of the transfer from the storage characteristics: `Waiting for the destination…`, `Waiting for
 the source…`, or `Waiting for storage…` when neither or both sides are high-latency. A task that has
 not reported progress yet is starting, not stalled. Paused and queued tasks and a task waiting for a
-decision show no speed and add no stall samples. The same treatment applies while waiting for another
-task to finish publishing live output. The rate sampler observes a monotonic task generation, so a
+decision show no speed and add no stall samples. The same treatment applies while waiting for credential
+UI or for another task to finish publishing live output. The card reports `Waiting for credentials`.
+The popup counts that task under Needs attention, and the taskbar uses the same status. The waiting task
+contributes no rate or ETA input, so an active peer keeps its ETA. The rate sampler observes a monotonic task generation, so a
 wait that starts and ends while the popup is hidden still restarts measuring when the sampler resumes.
 The previous graph history stays visible when measuring resumes. Stopping freezes recorded samples
 while actual work counters can change. Paused and stopping tasks do not contribute to the running

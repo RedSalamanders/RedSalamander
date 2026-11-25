@@ -1557,6 +1557,7 @@ BEGIN
     IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "結果不明: {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "注意が必要です"
     IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "判断をお待ちしています"
+    IDS_FILEOPS_STATUS_AWAITING_CREDENTIALS               "認証情報を待っています"
     IDS_FILEOPS_CONFLICT_READING_DETAILS                  "判断に必要な詳細を読み込んでいます..."
     IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "最終的な宛先は公開されませんでした。一時項目のクリーンアップを確認できないため、アーティファクトが残っている可能性があります。自動再試行はブロックされました。"
     IDS_FILEOPS_RECYCLE_DESTROYED                         "Windows はこの項目をごみ箱に移動せず、完全に削除しました。"

@@ -7163,6 +7163,7 @@ public:
 
         if (_workers.empty())
         {
+            const ScopedHostCredentialWaitObserver credentialObserver({task, task ? &Task::OnCredentialWait : nullptr});
             for (size_t i = 0; i < job->totalItems; ++i)
             {
                 if (isTaskCancelled(*job))
@@ -7614,6 +7615,7 @@ private:
             const uint64_t processStartUs = PerfNowUs();
             // R0f: a provider call wedged on a dead share returns once this task is canceled.
             const Common::SynchronousIoCancelWatch::Scope cancelWatch(job->task != nullptr ? &Task::ShouldCancelSynchronousIo : nullptr, job->task);
+            const ScopedHostCredentialWaitObserver credentialObserver({job->task, job->task ? &Task::OnCredentialWait : nullptr});
             const HRESULT itemHr = job->itemPolicy->Process(index);
             recordItemResult(*job, itemHr);
             const uint64_t processUs = PerfElapsedUs(processStartUs);
@@ -13379,6 +13381,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     // Once Cancel/Stop is requested, the watch cancels a call still pending after its grace, so a
     // wedged network round trip returns instead of holding the task, its popup, or shutdown.
     const Common::SynchronousIoCancelWatch::Scope cancelWatch(&Task::ShouldCancelSynchronousIo, this);
+    const ScopedHostCredentialWaitObserver credentialObserver({this, &Task::OnCredentialWait});
     [[maybe_unused]] const std::stop_callback stopWake(stopToken,
                                                        [this]() noexcept
     {
@@ -14530,6 +14533,25 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
         _state->RequestTaskPresentationRefresh();
 
     GetPerItemTaskScheduler().NotifyWorkAvailable();
+}
+
+void FolderWindow::FileOperationState::Task::OnCredentialWait(void* context, bool waiting) noexcept
+{
+    auto& task = *static_cast<Task*>(context);
+    const unsigned int previous =
+        waiting ? task._credentialWaitCount.fetch_add(1u, std::memory_order_acq_rel) : task._credentialWaitCount.fetch_sub(1u, std::memory_order_acq_rel);
+    assert(waiting || previous != 0u);
+    if (previous == (waiting ? 0u : 1u))
+    {
+        task.MarkRateSamplingStateChanged();
+        if (task._state)
+            task._state->RequestTaskPresentationRefresh();
+    }
+}
+
+bool FolderWindow::FileOperationState::Task::IsWaitingForCredentials() const noexcept
+{
+    return _credentialWaitCount.load(std::memory_order_acquire) != 0u;
 }
 
 void FolderWindow::FileOperationState::Task::MarkRateSamplingStateChanged() noexcept

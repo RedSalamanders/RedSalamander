@@ -1557,6 +1557,7 @@ BEGIN
     IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "Neznámy výsledok: {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "Vyžaduje pozornosť"
     IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "Čaká sa na vaše rozhodnutie"
+    IDS_FILEOPS_STATUS_AWAITING_CREDENTIALS               "Čaká sa na prihlasovacie údaje"
     IDS_FILEOPS_CONFLICT_READING_DETAILS                  "Načítavajú sa podrobnosti pre rozhodnutie..."
     IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "Konečný cieľ nebol publikovaný. Vyčistenie dočasnej položky sa nepodarilo potvrdiť, takže mohol zostať možný artefakt. Automatický opakovaný pokus je zablokovaný."
     IDS_FILEOPS_RECYCLE_DESTROYED                         "Systém Windows túto položku natrvalo odstránil namiesto presunutia do koša."

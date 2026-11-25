@@ -1,0 +1,1 @@
+- Show when a File Operations task is waiting for credentials. Keep that wait out of speed, stall and ETA calculations while other transfers continue to report progress.

@@ -1988,6 +1988,8 @@ struct FolderWindow::FileOperationState
         void RequestCancel() noexcept;
         // R0f cancel-watch predicate for this task's worker threads (see SynchronousIoCancelWatch.h).
         [[nodiscard]] static bool ShouldCancelSynchronousIo(void* context) noexcept;
+        static void OnCredentialWait(void* context, bool waiting) noexcept;
+        [[nodiscard]] bool IsWaitingForCredentials() const noexcept;
         enum class PauseReason : uint8_t
         {
             None,
@@ -2390,6 +2392,7 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _queuePaused{false};
         std::atomic<uint64_t> _rateSamplingStateGeneration{0};
         std::atomic<unsigned int> _liveOutputWaitCount{0};
+        std::atomic<unsigned int> _credentialWaitCount{0};
         std::atomic<bool> _started{false};
         std::atomic<ULONGLONG> _operationStartTick{0};
         std::atomic<uint64_t> _desiredSpeedLimitBytesPerSecond{0};
