@@ -13418,7 +13418,7 @@ template <size_t TaskCount>
                     L"Painted/expected badges={}/{}, disclosure={}, footerOnly={}, scroll={}->{}, focus='{}'->'{}', "
                     L"layout/resize/group motion={}/{}/{}, visible={}, iconic={}, viewport=[{},{},{},{}].",
                     expectedBadgeTooltipCount,
-                    collapsedGroupLayout.hostedTooltipRegionCount,
+                    collapsedGroupLayout.completedGroupBadgeTooltipRegionCount,
                     collapsedGroupLayout.completedGroupPaintedBadges,
                     collapsedGroupLayout.completedGroupExpectedBadges,
                     collapsedGroupLayout.completedGroupToggleVisible,
@@ -13437,7 +13437,7 @@ template <size_t TaskCount>
                     collapsedGroupLayout.listViewportRect.right,
                     collapsedGroupLayout.listViewportRect.bottom);
     Trace(collapsedGroupDiagnostics);
-    state.Require(collapsedGroupLayout.hostedTooltipRegionCount == expectedBadgeTooltipCount, collapsedGroupDiagnostics);
+    state.Require(collapsedGroupLayout.completedGroupBadgeTooltipRegionCount == expectedBadgeTooltipCount, collapsedGroupDiagnostics);
     state.Require(collapsedGroupLayout.completedGroupBadgeTooltipsInformative,
                   L"Collapsed result badge tooltips should explain the category instead of repeating the visible count.");
     state.Require(collapsedGroupLayout.completedGroupClearTooltipEmpty, L"Clear completed should not expose a tooltip that merely repeats its visible label.");

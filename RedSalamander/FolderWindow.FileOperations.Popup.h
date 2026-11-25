@@ -712,6 +712,8 @@ struct PopupLayoutDebugSnapshot
     size_t hostedGraphControlCount                = 0u;
     size_t hostedGraphStallBandCount              = 0u;
     size_t hostedTooltipRegionCount               = 0u;
+    bool hostedTooltipsInformative                = false;
+    size_t completedGroupBadgeTooltipRegionCount  = 0u;
     bool completedGroupBadgeTooltipsInformative   = false;
     uint64_t hostedAccessibilityNotificationCount = 0u;
     int scrollPosition                            = 0;
