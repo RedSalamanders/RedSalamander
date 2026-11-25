@@ -10629,13 +10629,13 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return false;
     }
 
-    std::wstring initialDirectoryName;
-    const HRESULT initialNameHr = FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameForTests(
-        scriptedFileSystem, root, L"New Folder", L"builtin/file-system", initialDirectoryName);
-    state.Require(initialNameHr == S_OK && initialDirectoryName == L"New Folder (1)" && readDirectoryCalls.load(std::memory_order_relaxed) == 1u,
-                  std::format(L"F7 initial suffix selection must enumerate once and use provider collision keys; hr=0x{:08X}, name='{}'.",
-                              static_cast<unsigned long>(initialNameHr),
-                              initialDirectoryName));
+    unsigned int suggestedSuffix = 0u;
+    const HRESULT suggestionHr =
+        FileOperations::FindCreateDirectorySuggestedSuffix(scriptedFileSystem, root, L"New Folder", L"builtin/file-system", 0u, suggestedSuffix);
+    state.Require(suggestionHr == S_OK && suggestedSuffix == 1u && readDirectoryCalls.load(std::memory_order_relaxed) == 1u,
+                  std::format(L"F7 worker suffix selection must enumerate once and use provider collision keys; hr=0x{:08X}, suffix={}.",
+                              static_cast<unsigned long>(suggestionHr),
+                              suggestedSuffix));
 
     FileOperations::CreateDirectoryAdmission acceptedDirectory{};
     const HRESULT acceptedDirectoryHr =

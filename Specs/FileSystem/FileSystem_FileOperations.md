@@ -12,13 +12,17 @@ The implementation may change public and host-internal payloads while this progr
 development. The host, every shipped provider, Dummy, and all tests use one ABI version. There is
 no capability-v1 adapter or dual parser.
 
-Create Folder opens one name prompt and captures its provider instance and parent. An accepted
-application exit or window close refuses it before the prompt and at submission. Accepting the
-name publishes one typed Create Directory task. The worker qualifies the provider and name before
-admission, enters the mutation interlock for the parent, and rechecks the provider's current name
-contract after waiting and before calling Create Directory. Late cancellation keeps a proven
-creation as a completed result. A timeout or lost reply after dispatch produces an unknown outcome.
-Only confirmed collisions of the default numbered suggestion advance to another candidate.
+Create Folder opens one name prompt and captures its provider instance and parent. The prompt
+suggests a localized numbered name using the already displayed listing, when available within the
+preview budget. It opens without a provider call. An accepted application exit or window close
+refuses it before the prompt and at submission. Accepting the name publishes one typed Create
+Directory task. The worker qualifies the provider and name before admission and enters the
+mutation interlock for the parent. When the accepted text equals the suggested name, the worker
+lists the parent and uses provider collision keys to choose a candidate starting at that suffix.
+A custom name stays exact. The worker rechecks the provider's current name contract before
+creating a folder. A confirmed collision of a suggested name can advance to the next suffix.
+Late cancellation keeps a proven creation as a completed result. A timeout or lost reply after
+dispatch produces an unknown outcome.
 Completion refreshes a pane only when it still displays that parent on the captured route.
 The task card and Issues report the operation as Create Folder. The failure diagnostic stores localized message identity, the destination path and the provider status separately.
 The host queries capability v2 for the concrete parent and provider-joined candidate with
@@ -703,7 +707,7 @@ Batch Rename checks shape before the provider call
 typed parent path key with the provider collision key for duplicate, existing-target,
 and acyclic-schedule decisions, lists each parent through `ReadDirectoryInfo`, and
 revalidates each step immediately before mutation. An existing child the provider
-cannot key is skipped by that listing, by Create Directory's suggestion, and by Change
+cannot key is skipped by that listing, by Create Directory's worker suggestion, and by Change
 Case discovery; it cannot collide with a provider-valid target, and execution still
 binds every destination, so the command stays available and fail-closed. Change Case
 validates every changed leaf before its artifact guard or first rename and revalidates
