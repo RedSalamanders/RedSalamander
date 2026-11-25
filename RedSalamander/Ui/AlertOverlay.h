@@ -110,6 +110,7 @@ struct AlertOption
     std::wstring label;
     std::vector<AlertOptionChoice> choices;
     size_t selectedIndex = 0;
+    bool checkBox        = false; // A binary option uses unchecked (0) and checked (1) choices.
 };
 
 struct AlertModel
@@ -346,6 +347,19 @@ public:
             return false;
         }
         return false;
+    }
+
+    // Replaces an option's finite choices in place while keeping its control identity.
+    [[nodiscard]] bool ReplaceOptionChoices(uint32_t optionId, std::vector<AlertOptionChoice> choices, uint64_t selectedValue) noexcept
+    {
+        const auto option   = std::ranges::find(_model.options, optionId, &AlertOption::id);
+        const auto selected = std::ranges::find(choices, selectedValue, &AlertOptionChoice::value);
+        if (option == _model.options.end() || selected == choices.end())
+            return false;
+        option->selectedIndex = static_cast<size_t>(selected - choices.begin());
+        option->choices       = std::move(choices);
+        InvalidateLayout();
+        return true;
     }
 
     [[nodiscard]] bool FocusNextButton(bool reverse) noexcept
@@ -600,7 +614,8 @@ public:
         for (const auto& option : _optionRects)
         {
             DWRITE_TEXT_METRICS metrics{};
-            if (! option.layout || FAILED(option.layout->GetMetrics(&metrics)) || metrics.width > option.rect.right - option.rect.left - 23.0f ||
+            if (! option.layout || FAILED(option.layout->GetMetrics(&metrics)) ||
+                metrics.width > option.rect.right - option.rect.left - OptionLabelInset(option.checkBox) - kOptionInsetDip + 1.0f ||
                 metrics.height > option.heightDip - 15.0f)
                 return false;
         }
@@ -1112,7 +1127,17 @@ private:
         std::wstring label;
         wil::com_ptr<IDWriteTextLayout> layout;
         float heightDip = 32.0f;
+        bool checkBox   = false;
     };
+
+    static constexpr float kOptionInsetDip  = 12.0f;
+    static constexpr float kCheckBoxSizeDip = 14.0f;
+    static constexpr float kCheckBoxGapDip  = 8.0f;
+
+    [[nodiscard]] static constexpr float OptionLabelInset(bool checkBox) noexcept
+    {
+        return checkBox ? kOptionInsetDip + kCheckBoxSizeDip + kCheckBoxGapDip : kOptionInsetDip;
+    }
 
     static bool PointInRect(D2D1_POINT_2F pt, const D2D1_RECT_F& rc) noexcept
     {
@@ -1374,18 +1399,19 @@ private:
             const auto& option = _model.options[index];
             auto& row          = _optionRects[index];
             std::wstring label = option.label;
-            if (! option.choices.empty() && option.selectedIndex < option.choices.size())
+            if (! option.checkBox && ! option.choices.empty() && option.selectedIndex < option.choices.size())
                 label.append(L": ").append(option.choices[option.selectedIndex].label);
             row.id = option.id;
-            if (row.layout && row.label == label && _optionWidthDip == widthDip)
+            if (row.layout && row.label == label && row.checkBox == option.checkBox && _optionWidthDip == widthDip)
                 continue;
-            row.label = std::move(label);
+            row.label    = std::move(label);
+            row.checkBox = option.checkBox;
             row.layout.reset();
             row.heightDip = 32.0f;
             if (SUCCEEDED(factory->CreateTextLayout(row.label.c_str(),
                                                     static_cast<UINT32>(row.label.size()),
                                                     _bodyFormat.get(),
-                                                    std::max(1.0f, widthDip - 24.0f),
+                                                    std::max(1.0f, widthDip - OptionLabelInset(row.checkBox) - kOptionInsetDip),
                                                     100000.0f,
                                                     row.layout.put())))
             {
@@ -1751,14 +1777,33 @@ private:
             chrome.customStyle     = MakeOverlayButtonChromeStyle(chromeSource, hot, focused, cornerDip);
             // Custom chrome owns its disabled styling. Remove the button outline
             // but keep the explanation at full contrast, including High Contrast.
-            if (! enabled)
+            if (! enabled || option.checkBox)
                 chrome.customStyle.value().showBorder = false;
             DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+            _textBrush->SetColor(_theme.text);
+            _textBrush->SetOpacity(opacity);
+            if (option.checkBox)
+            {
+                const float left = option.rect.left + kOptionInsetDip;
+                const float top  = option.rect.top + 9.0f;
+                const auto box   = D2D1::RectF(left, top, left + kCheckBoxSizeDip, top + kCheckBoxSizeDip);
+                target->DrawRectangle(box, _textBrush.get(), 1.0f);
+                if (GetOptionValue(option.id).value_or(0u) == 1u)
+                {
+                    const wchar_t mark = _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kCheckMark : FluentIcons::kFallbackCheckMark;
+                    if (_closeIconFormat)
+                        target->DrawText(&mark, 1u, _closeIconFormat.get(), box, _textBrush.get());
+                    else
+                    {
+                        target->DrawLine(D2D1::Point2F(left + 3.0f, top + 7.0f), D2D1::Point2F(left + 6.0f, top + 10.0f), _textBrush.get(), 1.5f);
+                        target->DrawLine(D2D1::Point2F(left + 6.0f, top + 10.0f), D2D1::Point2F(left + 11.0f, top + 4.0f), _textBrush.get(), 1.5f);
+                    }
+                }
+            }
             if (option.layout)
             {
-                _textBrush->SetColor(_theme.text);
-                _textBrush->SetOpacity(opacity);
-                target->DrawTextLayout(D2D1::Point2F(option.rect.left + 12.0f, option.rect.top + 8.0f), option.layout.get(), _textBrush.get());
+                target->DrawTextLayout(
+                    D2D1::Point2F(option.rect.left + OptionLabelInset(option.checkBox), option.rect.top + 8.0f), option.layout.get(), _textBrush.get());
             }
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;

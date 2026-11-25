@@ -520,22 +520,16 @@ $grandchild = Start-Process `
         }
     }
 
-    It 'bounds process runtime and closes the contained process tree on timeout' {
+    It 'bounds process runtime and retires the exact contained process on timeout' {
         $scriptPath = Join-Path $TestDrive 'NeverCompletes.ps1'
-        $processIdPath = Join-Path $TestDrive 'timed-out.pid'
-        @'
-param([Parameter(Mandatory = $true)][string]$ProcessIdPath)
-[System.IO.File]::WriteAllText($ProcessIdPath, $PID.ToString())
-Write-Output 'ready'
-Start-Sleep -Seconds 60
-'@ | Set-Content -LiteralPath $scriptPath -Encoding ASCII
+        'Start-Sleep -Seconds 60' | Set-Content -LiteralPath $scriptPath -Encoding ASCII
 
         $message = $null
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
         try {
             Invoke-RSStreamingProcess `
                 -FilePath 'powershell.exe' `
-                -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath, '-ProcessIdPath', $processIdPath) `
+                -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath) `
                 -WorkingDirectory $TestDrive `
                 -TimeoutMilliseconds 1000 `
                 -OutputDrainTimeoutMilliseconds 250 `
@@ -548,10 +542,11 @@ Start-Sleep -Seconds 60
             $stopwatch.Stop()
         }
 
-        $message | Should Match "Timed out after 1000 milliseconds running 'powershell.exe'"
+        # The launcher's timeout record identifies its process even if the child has not started the script.
+        $timeout = [regex]::Match([string]$message, "^Timed out after 1000 milliseconds running 'powershell\.exe' \(PID (?<processId>[1-9][0-9]*)\)\.$")
+        $timeout.Success | Should Be $true
         $stopwatch.ElapsedMilliseconds | Should BeLessThan 6000
-        (Test-Path -LiteralPath $processIdPath) | Should Be $true
-        $timedOutProcessId = [int](Get-Content -LiteralPath $processIdPath -Raw)
+        $timedOutProcessId = [int]$timeout.Groups['processId'].Value
         $exited = $false
         for ($attempt = 0; $attempt -lt 100; $attempt++) {
             if ($null -eq (Get-Process -Id $timedOutProcessId -ErrorAction SilentlyContinue)) {

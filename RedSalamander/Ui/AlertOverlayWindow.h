@@ -85,12 +85,14 @@ struct AlertOverlayTrackingSelfTestResult
 struct AlertOverlayUxAccessibilitySelfTestResult
 {
     // Option activation in a scrolling alert (pointer/UIA, arrow, Space) keeps the content in place.
-    bool optionFixtureScrolls         = false;
-    bool pointerActivationKeepsScroll = false;
-    bool arrowActivationKeepsScroll   = false;
-    bool spaceActivationKeepsScroll   = false;
-    float optionScrollBeforeDip       = 0.0f;
-    float optionScrollAfterDip        = 0.0f;
+    bool optionFixtureScrolls               = false;
+    bool pointerActivationKeepsScroll       = false;
+    bool arrowActivationKeepsScroll         = false;
+    bool spaceActivationKeepsScroll         = false;
+    bool checkBoxExposesToggle              = false;
+    bool checkBoxKeepsLabelAndReportsToggle = false;
+    float optionScrollBeforeDip             = 0.0f;
+    float optionScrollAfterDip              = 0.0f;
     // The prompt icon sits in the visible body of a scrolling alert.
     bool iconFixtureScrolls    = false;
     bool iconInsideVisibleBody = false;
@@ -386,6 +388,7 @@ public:
 
     // Shows the owner's current value of an option without a new presentation (no focus or text change).
     void SetOptionValue(uint32_t optionId, uint64_t value) noexcept;
+    void SetOptionChoices(uint32_t optionId, std::vector<AlertOptionChoice> choices, uint64_t selectedValue) noexcept;
 
 private:
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;

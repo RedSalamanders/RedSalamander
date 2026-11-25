@@ -7487,7 +7487,49 @@ public:
                 }
                 const bool executionChanged =
                     cycle(0xF003u, IDS_FILEOPS_CONFIRM_START, binaryLabel(IDS_FILEOPS_BTN_MODE_QUEUE, IDS_FILEOPS_BTN_MODE_PARALLEL), observed->execution);
-                const bool bandwidthChanged = cycle(0xF004u, IDS_FILEOPS_CONFIRM_BANDWIDTH, bandwidthLabel, observed->bandwidth);
+                const auto editCustomBandwidth = [&](bool accept, uint64_t expectedLimit) noexcept
+                {
+                    if (! InvokeVisibleDescendantByName(overlay, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM)))
+                        return false;
+                    const HWND editor = WaitForWindow(&GetFileOperationsSpeedLimitPromptHandle, SelfTest::Scale(2000ms));
+                    if (! editor)
+                        return false;
+                    auto cancelEditor = wil::scope_exit([editor]() noexcept
+                    {
+                        if (IsWindow(editor) != FALSE)
+                            static_cast<void>(DebugCancelFileOperationsSpeedLimitPrompt());
+                    });
+                    if (! DebugSetFileOperationsSpeedLimitPromptText(L"768 KiB"))
+                        return false;
+                    const bool closed = accept ? DebugConfirmFileOperationsSpeedLimitPrompt() : DebugCancelFileOperationsSpeedLimitPrompt();
+                    if (! closed || ! WaitForWindowClosed(editor, SelfTest::Scale(2000ms)))
+                        return false;
+                    return WaitForWindow(
+                               [&]() noexcept -> HWND
+                    {
+                        RedSalamander::Ui::AlertOverlayWindowDebugSnapshot snapshot{};
+                        if (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, snapshot))
+                            return nullptr;
+                        const auto option = std::ranges::find(snapshot.optionIds, 0xF004u);
+                        if (option == snapshot.optionIds.end())
+                            return nullptr;
+                        const size_t index = static_cast<size_t>(option - snapshot.optionIds.begin());
+                        return index < snapshot.optionValues.size() && snapshot.optionValues[index] == expectedLimit ? overlay : nullptr;
+                    },
+                               SelfTest::Scale(2000ms)) == overlay;
+                };
+
+                bool bandwidthChanged = cycle(0xF004u, IDS_FILEOPS_CONFIRM_BANDWIDTH, bandwidthLabel, observed->bandwidth);
+                if (bandwidthChanged)
+                {
+                    bandwidthChanged = editCustomBandwidth(false, observed->bandwidth);
+                    if (bandwidthChanged && operation == FILESYSTEM_COPY)
+                    {
+                        constexpr uint64_t customLimit = 768u * 1024u;
+                        bandwidthChanged               = editCustomBandwidth(true, customLimit);
+                        observed->bandwidth            = customLimit;
+                    }
+                }
                 RedSalamander::Ui::AlertOverlayWindowDebugSnapshot afterOptions{};
                 if (! RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, afterOptions))
                     verifyValidated = false;
@@ -11632,16 +11674,8 @@ struct FileOperationsPopupTestFixture final
     const uint64_t expectedSourceBytes      = fixture.expectedSourceBytes;
     const uint64_t expectedDestinationBytes = fixture.expectedDestinationBytes;
 
-    // An eligible per-item Exists conflict exposes engine-backed Keep Both alongside the
-    // established Overwrite/Skip/Cancel choices. Skip-all remains All-similar + Skip and, as the only
-    // action that would otherwise sit in a one-command More menu, is a direct button before Cancel.
-    state.Require(taskSnapshot.conflict.actionCount == 5u,
-                  std::format(L"Exists conflict should offer exactly 5 actions (Overwrite/Keep Both/Skip/Skip All/Cancel); saw {} action(s).",
-                              taskSnapshot.conflict.actionCount));
-    const std::array expectedActions{
-        ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel};
-    const std::array expectedPrimaryActions{
-        ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel};
+    const std::array expectedActions{ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel};
+    const std::array expectedPrimaryActions{ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel};
     const auto matchesPublishedActions = [](const auto& actual, size_t actualCount, const auto& expected) noexcept
     {
         if (actualCount != expected.size())
@@ -11660,29 +11694,14 @@ struct FileOperationsPopupTestFixture final
     state.Require(matchesPublishedActions(taskSnapshot.conflict.actions, taskSnapshot.conflict.actionCount, expectedActions),
                   L"Exists conflict should preserve the engine's complete ordered action set.");
     state.Require(matchesPublishedActions(taskSnapshot.conflict.primaryActions, taskSnapshot.conflict.primaryActionCount, expectedPrimaryActions),
-                  L"Exists conflict should publish Keep Both, Replace, Skip, Skip All, and Cancel as its primary placement.");
+                  L"Exists conflict should publish Keep Both, Replace, Skip, and Cancel as its primary placement.");
     state.Require(taskSnapshot.conflict.overflowActionCount == 0u,
                   L"Exists conflict should publish no More placement because a menu needs at least two commands.");
     state.Require(taskSnapshot.conflict.defaultAction == static_cast<uint8_t>(ConflictAction::Cancel) &&
                       taskSnapshot.conflict.escapeAction == static_cast<uint8_t>(ConflictAction::Cancel),
                   L"Exists conflict should publish Cancel as both the default and Escape action.");
-    state.Require(taskSnapshot.conflict.applyToAllEligible && taskSnapshot.conflict.skipAllEligible && taskSnapshot.conflict.buttonsPublishable,
-                  L"Exists conflict should publish its eligible scope and actionable button state.");
-    bool offersKeepBoth = false;
-    bool offersSkipAll  = false;
-    for (size_t index = 0u; index < taskSnapshot.conflict.actionCount && index < taskSnapshot.conflict.actions.size(); ++index)
-    {
-        if (taskSnapshot.conflict.actions[index] == static_cast<uint8_t>(FolderWindow::FileOperationState::Task::ConflictAction::KeepBoth))
-        {
-            offersKeepBoth = true;
-        }
-        if (taskSnapshot.conflict.actions[index] == static_cast<uint8_t>(FolderWindow::FileOperationState::Task::ConflictAction::SkipAll))
-        {
-            offersSkipAll = true;
-        }
-    }
-    state.Require(offersKeepBoth, L"Eligible per-item Exists conflict should expose Keep Both from the engine action layout.");
-    state.Require(offersSkipAll, L"Eligible per-item Exists conflict should expose Skip All through the engine action layout.");
+    state.Require(taskSnapshot.conflict.applyToAllEligible && ! taskSnapshot.conflict.skipAllEligible && taskSnapshot.conflict.buttonsPublishable,
+                  L"Exists conflict should publish the repeat checkbox as its only scope control.");
     state.Require(taskSnapshot.conflict.sourceMetadata.available, L"Conflict prompt should capture source metadata for the colliding item.");
     state.Require(taskSnapshot.conflict.destinationMetadata.available, L"Conflict prompt should capture destination metadata for the colliding item.");
     state.Require(taskSnapshot.conflict.sourceMetadata.sizeKnown, L"Conflict prompt source metadata should include file size.");
@@ -12167,23 +12186,21 @@ struct FileOperationsPopupTestFixture final
         return false;
     };
 
-    state.Require(layout.conflictPrimaryActionCount == 5u && layout.conflictPrimaryActions[0] == static_cast<uint8_t>(ConflictAction::KeepBoth) &&
+    state.Require(layout.conflictPrimaryActionCount == 4u && layout.conflictPrimaryActions[0] == static_cast<uint8_t>(ConflictAction::KeepBoth) &&
                       layout.conflictPrimaryActions[1] == static_cast<uint8_t>(ConflictAction::Overwrite) &&
                       layout.conflictPrimaryActions[2] == static_cast<uint8_t>(ConflictAction::Skip) &&
-                      layout.conflictPrimaryActions[3] == static_cast<uint8_t>(ConflictAction::SkipAll) &&
-                      layout.conflictPrimaryActions[4] == static_cast<uint8_t>(ConflictAction::Cancel),
-                  L"An eligible name conflict must publish Keep Both, Replace, Skip, Skip all and Cancel in that order.");
+                      layout.conflictPrimaryActions[3] == static_cast<uint8_t>(ConflictAction::Cancel),
+                  L"An eligible name conflict must publish Keep Both, Replace, Skip and Cancel in that order.");
     state.Require(layoutHasPrimaryAction(ConflictAction::Overwrite), L"Conflict prompt should keep Overwrite as a primary action.");
     state.Require(layoutHasPrimaryAction(ConflictAction::KeepBoth), L"Conflict prompt should expose Keep Both as a primary action.");
     state.Require(layoutHasPrimaryAction(ConflictAction::Cancel), L"Conflict prompt should keep its safe Cancel action directly visible.");
     state.Require(layoutHasPrimaryAction(ConflictAction::Skip), L"Skip must remain directly visible beside the other name-conflict actions.");
-    state.Require(layoutHasPrimaryAction(ConflictAction::SkipAll), L"The scoped Skip all action must be a direct button, not a one-command More menu.");
     state.Require(! layout.conflictMoreVisible, L"Exists conflict prompt must not expose a More button without a second command to hold.");
     state.Require(layout.conflictOverflowActionCount == 0u, L"Exists conflict prompt should publish an empty overflow.");
     state.Require(layout.conflictDefaultAction == static_cast<uint8_t>(ConflictAction::Cancel) &&
                       layout.conflictEscapeAction == static_cast<uint8_t>(ConflictAction::Cancel) && layout.conflictButtonsPublishable,
                   L"Rendered conflict should consume the engine-published Cancel default/Escape action and button state.");
-    state.Require(layout.conflictSkipAllEligible, L"Rendered Exists conflict should preserve engine-published Skip All eligibility.");
+    state.Require(! layout.conflictSkipAllEligible, L"Rendered Exists conflict must use the checkbox for repeat Skip.");
     state.Require(! layout.hostedDefaultAutomationId.empty() && layout.hostedDefaultAutomationId == layout.hostedCancelAutomationId &&
                       layout.hostedDefaultAutomationId.ends_with(
                           std::format(L".{}.{}", static_cast<uint32_t>(ConflictAction::Cancel), fixture.taskSnapshot.conflict.generation)),
@@ -12622,13 +12639,15 @@ struct FileOperationsPopupTestFixture final
 
 // Inspect the raw hosted tree without a visibility filter. A collapsed card
 // must retire its providers, not merely mark stale controls offscreen.
-[[nodiscard]] bool CountCompletedTaskRawProviders(HWND popup, const std::array<uint64_t, 3>& taskIds, std::array<size_t, 3>& outCounts) noexcept
+template <size_t TaskCount>
+[[nodiscard]] bool CountCompletedTaskRawProviders(HWND popup, const std::array<uint64_t, TaskCount>& taskIds, std::array<size_t, TaskCount>& outCounts) noexcept
 {
     outCounts.fill(0u);
-    if (! popup || taskIds[0] == 0u || taskIds[1] == 0u || taskIds[2] == 0u || taskIds[0] == taskIds[1] || taskIds[0] == taskIds[2] || taskIds[1] == taskIds[2])
+    if (! popup || std::ranges::any_of(taskIds, [&](uint64_t taskId) noexcept { return taskId == 0u || std::ranges::count(taskIds, taskId) != 1; }))
         return false;
 
-    const std::array<std::wstring, 3> taskIdText{{std::to_wstring(taskIds[0]), std::to_wstring(taskIds[1]), std::to_wstring(taskIds[2])}};
+    std::array<std::wstring, TaskCount> taskIdText{};
+    std::ranges::transform(taskIds, taskIdText.begin(), [](uint64_t taskId) { return std::to_wstring(taskId); });
     constexpr std::wstring_view kTaskPrefix   = L"FileOperations.Task.";
     constexpr std::wstring_view kActionPrefix = L"FileOperations.Action.";
     bool propertyReadable                     = true;
@@ -13138,15 +13157,24 @@ struct FileOperationsPopupTestFixture final
         std::this_thread::sleep_for(20ms);
     }
     state.Require(successCollapseObserved, L"Failed to observe the completed success task after its UI-thread auto-collapse transition.");
-    state.Require(successLayout.completedGroupVisible, L"Multiple completed file-operation cards should show a Completed (N) group.");
+    using CompletedSummary                  = FolderWindow::FileOperationState::CompletedTaskSummary;
+    constexpr uint64_t cleanCompanionTaskId = 0xFA260001u;
+    CompletedSummary cleanCompanion{};
+    cleanCompanion.taskId        = cleanCompanionTaskId;
+    cleanCompanion.operation     = FILESYSTEM_COPY;
+    cleanCompanion.resultHr      = S_OK;
+    cleanCompanion.completedTick = GetTickCount64();
+    fileOps->DebugAppendCompletedTaskForSelfTest(std::move(cleanCompanion));
+    RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    successLayout        = {};
+    successLayout.taskId = successTaskId;
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout), L"Read the layout with both clean results.");
+    state.Require(successLayout.completedGroupVisible, L"Two clean file operations should show a Completed (N) group.");
     state.Require(successLayout.completedGroupExpanded, L"Completed group should start expanded so completed-card actions remain discoverable.");
     state.Require(successLayout.completedGroupAnimationEnabled, L"Completed group should use bounded expand/collapse motion when reduced motion is off.");
-    state.Require(successLayout.completedGroupCount == 3u,
-                  std::format(L"Completed group should contain exactly the three case-owned file-operation cards; saw {}.", successLayout.completedGroupCount));
-    state.Require(successLayout.completedGroupCompletedCount + successLayout.completedGroupPartialCount + successLayout.completedGroupFailedCount +
-                          successLayout.completedGroupCanceledCount ==
-                      successLayout.completedGroupCount,
-                  L"Completed-group result badges should classify every grouped operation exactly once.");
+    state.Require(successLayout.completedGroupCount == 2u && successLayout.completedGroupCompletedCount == 2u &&
+                      successLayout.completedGroupCanceledCount == 0u,
+                  L"The Completed group should show exactly the two clean successes.");
     state.Require(successLayout.completedGroupVisibleTaskCount == successLayout.completedGroupCount,
                   std::format(L"Expanded completed group should show all grouped tasks; visible={}, total={}.",
                               successLayout.completedGroupVisibleTaskCount,
@@ -13154,11 +13182,11 @@ struct FileOperationsPopupTestFixture final
     state.Require(successLayout.taskAutoCollapsedOnCompletion, L"Completed success task should auto-collapse when it first finishes.");
     state.Require(successLayout.taskCompactRow, L"Auto-collapsed completed success task should render as a compact row.");
     state.Require(successLayout.taskCompactProgressVisible, L"Auto-collapsed completed success task should keep compact progress visible.");
-    const std::array<uint64_t, 3> completedTaskIds{{taskId.value(), aggregateConflictTaskId, successTaskId}};
+    const std::array<uint64_t, 4> completedTaskIds{{taskId.value(), aggregateConflictTaskId, successTaskId, cleanCompanionTaskId}};
     // Compact cards legitimately have no Dismiss action. Witness task-owned
     // raw providers across the virtualized viewport without requiring one
     // presentation's caption or forcing every task into the same frame.
-    std::array<bool, 3> witnessedTaskProviders{};
+    std::array<bool, completedTaskIds.size()> witnessedTaskProviders{};
     {
         wil::com_ptr_nothrow<IRawElementProviderSimple> footer;
         wil::com_ptr_nothrow<IRawElementProviderFragment> fragment;
@@ -13176,7 +13204,7 @@ struct FileOperationsPopupTestFixture final
         if (page != 0u)
             SendMessageW(popup, WM_VSCROLL, SB_PAGEDOWN, 0);
         RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-        std::array<size_t, 3> expandedTaskProviders{};
+        std::array<size_t, completedTaskIds.size()> expandedTaskProviders{};
         const bool expandedTreeComplete = CountCompletedTaskRawProviders(popup, completedTaskIds, expandedTaskProviders);
         state.Require(expandedTreeComplete, L"The expanded raw UIA provider traversal must complete before collapse.");
         if (! state.failure.empty())
@@ -13381,13 +13409,9 @@ struct FileOperationsPopupTestFixture final
         collapsedGroupLayout.completedGroupVisibleTaskCount == 0u,
         std::format(L"Collapsed completed group should hide grouped task rows; saw {} visible.", collapsedGroupLayout.completedGroupVisibleTaskCount));
     state.Require(collapsedGroupLayout.completedGroupCompletedCount == successLayout.completedGroupCompletedCount &&
-                      collapsedGroupLayout.completedGroupPartialCount == successLayout.completedGroupPartialCount &&
-                      collapsedGroupLayout.completedGroupFailedCount == successLayout.completedGroupFailedCount &&
                       collapsedGroupLayout.completedGroupCanceledCount == successLayout.completedGroupCanceledCount,
-                  L"Collapsed completed group should preserve Completed, Partial, Failed, and Canceled badge counts.");
+                  L"Collapsed completed group should preserve the Completed and Canceled badge counts.");
     const size_t expectedBadgeTooltipCount = static_cast<size_t>(collapsedGroupLayout.completedGroupCompletedCount != 0u) +
-                                             static_cast<size_t>(collapsedGroupLayout.completedGroupPartialCount != 0u) +
-                                             static_cast<size_t>(collapsedGroupLayout.completedGroupFailedCount != 0u) +
                                              static_cast<size_t>(collapsedGroupLayout.completedGroupCanceledCount != 0u);
     const std::wstring collapsedGroupDiagnostics =
         std::format(L"Collapsed result badges should expose one tooltip region per nonzero category; expected {}, saw {}. "
@@ -13418,21 +13442,18 @@ struct FileOperationsPopupTestFixture final
                   L"Collapsed result badge tooltips should explain the category instead of repeating the visible count.");
     state.Require(collapsedGroupLayout.completedGroupClearTooltipEmpty, L"Clear completed should not expose a tooltip that merely repeats its visible label.");
     state.Require(collapsedGroupLayout.taskHiddenByCompletedGroup, L"Selected completed task should report hidden while the group is collapsed.");
-    std::array<size_t, 3> collapsedTaskProviders{};
-    const bool collapsedTreeComplete = CountCompletedTaskRawProviders(popup, completedTaskIds, collapsedTaskProviders);
-    const std::wstring retirementDiagnostics =
-        std::format(L"First collapsed frame must retire all three tasks' raw hosted UIA controls, including offscreen descendants; "
-                    L"traversal={}, providers={}/{}/{} for task IDs {}/{}/{}.",
-                    collapsedTreeComplete,
-                    collapsedTaskProviders[0],
-                    collapsedTaskProviders[1],
-                    collapsedTaskProviders[2],
-                    completedTaskIds[0],
-                    completedTaskIds[1],
-                    completedTaskIds[2]);
-    Trace(retirementDiagnostics);
+    const std::array<uint64_t, 2> groupedTaskIds{{successTaskId, cleanCompanionTaskId}};
+    std::array<size_t, groupedTaskIds.size()> collapsedTaskProviders{};
+    const bool collapsedTreeComplete = CountCompletedTaskRawProviders(popup, groupedTaskIds, collapsedTaskProviders);
     state.Require(collapsedTreeComplete && std::ranges::all_of(collapsedTaskProviders, [](size_t count) noexcept { return count == 0u; }),
-                  retirementDiagnostics);
+                  L"The first collapsed frame must retire both clean tasks' hosted UIA controls.");
+    for (const uint64_t problemTaskId : {taskId.value(), aggregateConflictTaskId})
+    {
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot problemLayout{};
+        problemLayout.taskId = problemTaskId;
+        state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, problemLayout) && ! problemLayout.taskHiddenByCompletedGroup,
+                      L"Collapsed clean results must leave problem cards visible.");
+    }
 
     FileOperationsPopupInternal::PopupSelfTestInvoke expandCompletedGroup{};
     expandCompletedGroup.kind = FileOperationsPopupInternal::PopupHitTest::Kind::CompletedGroupToggle;
@@ -13557,8 +13578,7 @@ struct FileOperationsPopupTestFixture final
         return false;
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> beforeClear;
     fileOps->CollectCompletedTasks(beforeClear);
-    state.Require(beforeClear.size() == 3u && std::ranges::any_of(beforeClear, [&](const auto& item) noexcept { return item.taskId == successTaskId; }),
-                  L"Clear-completed must start with the three actual completed operations.");
+    state.Require(beforeClear.size() == completedTaskIds.size(), L"Clear completed should start with all four case-owned results.");
     state.Require(DirectedSelfTestInputWarning::TryActivateOwnedWindow(popup) &&
                       InvokeExactFileOperationsActionForSelfTest(
                           popup, FileOperationsPopupInternal::PopupHitTest::Kind::CompletedGroupClear, 0u, 0u, IDS_FILEOPS_BTN_CLEAR_COMPLETED),
@@ -13573,7 +13593,8 @@ struct FileOperationsPopupTestFixture final
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
         fileOps->CollectCompletedTasks(completed);
-        return completed.empty();
+        return completed.size() == 2u && std::ranges::any_of(completed, [&](const auto& item) noexcept { return item.taskId == taskId.value(); }) &&
+               std::ranges::any_of(completed, [&](const auto& item) noexcept { return item.taskId == aggregateConflictTaskId; });
     },
                              clearWait)
                                        .conditionMet;
@@ -13584,7 +13605,7 @@ struct FileOperationsPopupTestFixture final
                                           [&](const auto& item) noexcept
     { return item.taskId == neighbor.taskId && ! item.finished && item.makeFileListCollecting; }) &&
                       TextFileEqualsForFileOpsPrompt(successSource, "new payload") && TextFileEqualsForFileOpsPrompt(successDest, "new payload"),
-                  L"Clear-completed must remove only completed records, not its live neighbor or published file bytes.");
+                  L"Clear completed must preserve both problem records, the live neighbor and the published file bytes.");
     return state.failure.empty();
 }
 
@@ -13616,8 +13637,8 @@ struct FileOperationsPopupTestFixture final
     }
     state.Require(task != nullptr && fixture.taskSnapshot.conflict.active && fixture.taskSnapshot.conflict.buttonsPublishable && generationA != 0u &&
                       sourceIndexA.has_value() && sourceIndexA.value() < 2u && fixture.taskSnapshot.conflict.applyToAllEligible &&
-                      fixture.taskSnapshot.conflict.skipAllEligible && fixture.taskSnapshot.conflict.overflowActionCount == 0u,
-                  L"The first real collision must publish a generation-bound primary, scope checkbox and direct Skip all action without a More menu.");
+                      ! fixture.taskSnapshot.conflict.skipAllEligible && fixture.taskSnapshot.conflict.overflowActionCount == 0u,
+                  L"The first collision must publish generation-bound primary actions and a repeat checkbox.");
     if (! state.failure.empty())
     {
         state.Require(fixture.Cleanup(), L"Stale-conflict presentation fixture did not clean after missing prompt actions.");
@@ -13625,7 +13646,7 @@ struct FileOperationsPopupTestFixture final
     }
 
     wil::com_ptr_nothrow<IRawElementProviderSimple> primaryA;
-    wil::com_ptr_nothrow<IRawElementProviderSimple> skipAllA;
+    wil::com_ptr_nothrow<IRawElementProviderSimple> skipA;
     wil::com_ptr_nothrow<IRawElementProviderSimple> scopeA;
     wil::com_ptr_nothrow<IRawElementProviderSimple> inspectSourceA;
     wil::com_ptr_nothrow<IRawElementProviderSimple> inspectDestinationA;
@@ -13641,15 +13662,15 @@ struct FileOperationsPopupTestFixture final
         FindExactFileOperationsActionForSelfTest(
             fixture.popup, Hit::TaskConflictAction, taskId, static_cast<uint32_t>(ConflictAction::KeepBoth), IDS_FILEOPS_CONFLICT_BTN_KEEP_BOTH, primaryA) &&
             FindExactFileOperationsActionForSelfTest(
-                fixture.popup, Hit::TaskConflictAction, taskId, static_cast<uint32_t>(ConflictAction::SkipAll), IDS_FILEOPS_BTN_SKIP_ALL, skipAllA) &&
+                fixture.popup, Hit::TaskConflictAction, taskId, static_cast<uint32_t>(ConflictAction::Skip), IDS_FILEOPS_CONFLICT_BTN_SKIP, skipA) &&
             FindExactFileOperationsActionForSelfTest(
                 fixture.popup, Hit::TaskConflictInspectSource, taskId, 0u, IDS_FILEOPS_INSPECTION_SOURCE, inspectSourceA) &&
             FindExactFileOperationsActionForSelfTest(
                 fixture.popup, Hit::TaskConflictInspectDestination, taskId, 0u, IDS_FILEOPS_INSPECTION_DESTINATION, inspectDestinationA) &&
             FindMatchingWindowHostRawProvider(
                 fixture.popup, UIA_CheckBoxControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL), scopeA.put(), scopeId) &&
-            primaryA && skipAllA && scopeA && inspectSourceA && inspectDestinationA,
-        L"Capture exact generation-A primary, Skip all, scope, Source inspection and Destination inspection UIA providers.");
+            primaryA && skipA && scopeA && inspectSourceA && inspectDestinationA,
+        L"Capture generation-A Keep Both, Skip, repeat scope, and both inspection UIA providers.");
     if (! state.failure.empty())
     {
         state.Require(fixture.Cleanup(), L"Stale-conflict presentation fixture did not clean after provider capture failure.");
@@ -13713,7 +13734,7 @@ struct FileOperationsPopupTestFixture final
             // replacement must name the other item, not a hard-coded index 1.
             generationBReady = prompt.active && prompt.buttonsPublishable && prompt.generation != 0u && prompt.generation != generationA &&
                                prompt.sourceItemIndex.has_value() && prompt.sourceItemIndex.value() < 2u &&
-                               prompt.sourceItemIndex.value() != sourceIndexA.value() && prompt.applyToAllEligible && prompt.skipAllEligible &&
+                               prompt.sourceItemIndex.value() != sourceIndexA.value() && prompt.applyToAllEligible && ! prompt.skipAllEligible &&
                                prompt.overflowActionCount == 0u;
             if (generationBReady)
                 generationB = prompt.generation;
@@ -13738,28 +13759,26 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    // Replay the retained A providers (including the direct Skip all button) and explicit A
-    // placement commands against B before the next paint can synchronize the hosted controls to B.
+    // Replay the retained A providers and explicit A placement commands against B before the
+    // next paint can synchronize the hosted controls.
     static_cast<void>(invoke(primaryA.get()));
     static_cast<void>(toggle(scopeA.get()));
-    static_cast<void>(invoke(skipAllA.get()));
-    state.Require(FindVisibleOwnedDxUiContextMenuWindowForFileOps(fixture.popup) == nullptr,
-                  L"No retained A control may open a flyout for B; Skip all is a direct button and the prompt has no More menu.");
+    static_cast<void>(invoke(skipA.get()));
+    state.Require(FindVisibleOwnedDxUiContextMenuWindowForFileOps(fixture.popup) == nullptr, L"No retained A control may open a flyout for B.");
     FileOperationsPopupInternal::PopupSelfTestInvoke staleOverflow{};
     staleOverflow.kind             = Hit::TaskConflictMore;
     staleOverflow.taskId           = taskId;
-    staleOverflow.data             = static_cast<uint32_t>(ConflictAction::SkipAll);
+    staleOverflow.data             = static_cast<uint32_t>(ConflictAction::Skip);
     staleOverflow.promptGeneration = generationA;
     state.Require(! DebugInvokeFileOperationsPopup(fixture.popup, staleOverflow),
                   L"An explicit A-generation overflow action must be rejected after B is published.");
-    // The same A-generation Skip all as the direct button B publishes now; the dispatch reports success
-    // either way, so the unchanged-B check below is what proves the broker rejected it.
-    FileOperationsPopupInternal::PopupSelfTestInvoke staleSkipAll{};
-    staleSkipAll.kind             = Hit::TaskConflictAction;
-    staleSkipAll.taskId           = taskId;
-    staleSkipAll.data             = static_cast<uint32_t>(ConflictAction::SkipAll);
-    staleSkipAll.promptGeneration = generationA;
-    static_cast<void>(DebugInvokeFileOperationsPopup(fixture.popup, staleSkipAll));
+    // The unchanged-B check verifies that the broker rejected the retained A-generation Skip.
+    FileOperationsPopupInternal::PopupSelfTestInvoke staleSkip{};
+    staleSkip.kind             = Hit::TaskConflictAction;
+    staleSkip.taskId           = taskId;
+    staleSkip.data             = static_cast<uint32_t>(ConflictAction::Skip);
+    staleSkip.promptGeneration = generationA;
+    static_cast<void>(DebugInvokeFileOperationsPopup(fixture.popup, staleSkip));
 
     // The hosted Escape delegate still stores A until the next presentation sync.
     // Send directly so no queued redraw can replace it with B first.
@@ -13774,7 +13793,7 @@ struct FileOperationsPopupTestFixture final
                      ! task->_conflictArbiter.decisionAction && ! task->_conflictArbiter.decisionWasOffered && task->_conflictArbiter.decisionGeneration == 0u;
     }
     state.Require(bUnchanged && IsWindowVisible(fixture.popup) != FALSE,
-                  L"A's retained primary/scope/Skip all/Escape inputs must leave B unresolved, visible, and scope-unchecked.");
+                  L"A's retained Keep Both, scope, Skip and Escape inputs must leave B visible, unanswered and unchecked.");
     if (! state.failure.empty())
     {
         state.Require(fixture.Cleanup(), L"Stale-conflict presentation fixture did not clean after detecting an accepted stale input.");
@@ -13905,24 +13924,20 @@ struct FileOperationsPopupTestFixture final
     FileOperationsPopupTestFixture scoped(state);
     if (! InitializeFileOperationsPopupTestFixture(mainWindow, scoped, false, true) || ! scoped.taskId.has_value())
     {
-        state.Require(scoped.Cleanup(), L"Conflict Skip all fixture did not clean after initialization.");
+        state.Require(scoped.Cleanup(), L"Repeated Skip fixture did not clean after initialization.");
         return false;
     }
-    using Hit               = FileOperationsPopupInternal::PopupHitTest::Kind;
-    using Task              = FolderWindow::FileOperationState::Task;
-    using Entry             = FolderWindow::FileOperationState::TaskDiagnosticEntry;
-    const uint64_t scopedId = scoped.taskId.value();
-    auto* task              = scoped.fileOps->FindTask(scopedId);
-    // Skip all is the only extra scoped action, so it is a direct button before Cancel and the prompt has no More menu.
+    using Hit                     = FileOperationsPopupInternal::PopupHitTest::Kind;
+    using Task                    = FolderWindow::FileOperationState::Task;
+    using Entry                   = FolderWindow::FileOperationState::TaskDiagnosticEntry;
+    const uint64_t scopedId       = scoped.taskId.value();
+    auto* task                    = scoped.fileOps->FindTask(scopedId);
     const auto& publishedConflict = scoped.taskSnapshot.conflict;
-    const bool skipAllIsPrimary =
-        std::ranges::find(publishedConflict.primaryActions, static_cast<uint8_t>(Task::ConflictAction::SkipAll)) - publishedConflict.primaryActions.begin() <
-        static_cast<std::ptrdiff_t>(publishedConflict.primaryActionCount);
-    state.Require(task != nullptr && publishedConflict.overflowActionCount == 0u && publishedConflict.skipAllEligible && skipAllIsPrimary,
-                  L"Direct Skip all requires the published Skip All primary placement and no overflow.");
+    state.Require(task != nullptr && publishedConflict.overflowActionCount == 0u && publishedConflict.applyToAllEligible && ! publishedConflict.skipAllEligible,
+                  L"Repeated Skip requires the checkbox on the published conflict.");
     if (! state.failure.empty())
     {
-        state.Require(scoped.Cleanup(), L"Conflict Skip all fixture did not clean after setup failure.");
+        state.Require(scoped.Cleanup(), L"Repeated Skip fixture did not clean after setup failure.");
         return false;
     }
     uint64_t generation = 0u;
@@ -13937,10 +13952,9 @@ struct FileOperationsPopupTestFixture final
         sourceIndex        = prompt.sourceItemIndex;
         destinationPath    = prompt.destinationPath;
     }
-    state.Require(generation != 0u && sourceIndex.has_value(), L"Conflict Skip all requires an exact selected prompt.");
-    constexpr uint32_t skipAllRaw = static_cast<uint32_t>(Task::ConflictAction::SkipAll);
-    const auto skipAllId          = std::format(
-        L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(Hit::TaskConflictAction), scopedId, skipAllRaw, scoped.taskSnapshot.conflict.generation);
+    state.Require(generation != 0u && sourceIndex.has_value(), L"Repeated Skip requires an exact selected prompt.");
+    constexpr uint32_t skipRaw = static_cast<uint32_t>(Task::ConflictAction::Skip);
+    const auto scopeId = std::format(L"FileOperations.Action.{}.{}.0.{}", static_cast<uint32_t>(Hit::TaskConflictToggleApplyToAll), scopedId, generation);
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot beforeLayout{};
     beforeLayout.taskId = scopedId;
     FileOperationsPopupInternal::TaskSnapshot pending{};
@@ -13958,25 +13972,42 @@ struct FileOperationsPopupTestFixture final
     };
     // The prompt has no More button at all: neither painted nor reachable through UIA under the former overflow-count identity.
     wil::com_ptr_nothrow<IRawElementProviderSimple> moreProbe;
-    wil::com_ptr_nothrow<IRawElementProviderSimple> skipAll;
+    wil::com_ptr_nothrow<IRawElementProviderSimple> skip;
+    wil::com_ptr_nothrow<IRawElementProviderSimple> scopeProvider;
+    wil::com_ptr_nothrow<IUnknown> scopePattern;
+    wil::com_ptr_nothrow<IToggleProvider> scopeToggle;
     state.Require(
         DebugGetFileOperationsPopupLayoutSnapshot(scoped.popup, beforeLayout) && ! beforeLayout.conflictMoreVisible &&
             beforeLayout.conflictOverflowActionCount == 0u &&
             ! FindExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictMore, scopedId, 1u, IDS_FILEOPS_CONFLICT_BTN_MORE, moreProbe) &&
-            FindExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictAction, scopedId, skipAllRaw, IDS_FILEOPS_BTN_SKIP_ALL, skipAll) && skipAll,
-        std::format(L"Conflict Skip all must be the direct button {} and the prompt must expose no More button.", skipAllId));
+            FindExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictAction, scopedId, skipRaw, IDS_FILEOPS_CONFLICT_BTN_SKIP, skip) && skip &&
+            FindMatchingWindowHostRawProvider(
+                scoped.popup, UIA_CheckBoxControlTypeId, LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL), scopeProvider.put(), scopeId) &&
+            scopeProvider && SUCCEEDED(scopeProvider->GetPatternProvider(UIA_TogglePatternId, scopePattern.put())) && scopePattern &&
+            SUCCEEDED(scopePattern.query_to(scopeToggle.put())) && scopeToggle,
+        L"The exact prompt must expose a direct Skip button and a repeat checkbox with the Toggle pattern.");
     const auto acceptedBefore = [&](const Entry& entry) noexcept { return entry.taskId == scopedId && entry.acceptedDecision.has_value(); };
     state.Require(samePrompt() && DebugGetFileOperationsPopupTaskSnapshot(scoped.popup, scopedId, pending) && pending.conflict.active && ! pending.finished &&
                       std::ranges::none_of(before, acceptedBefore) && TextFileEqualsForFileOpsPrompt(scoped.dest, "existing payload") &&
                       TextFileEqualsForFileOpsPrompt(scoped.destDir / L"second-payload.txt", "second existing payload"),
-                  L"Finding Skip all must not accept consent or mutate either destination.");
+                  L"Finding the repeat checkbox and Skip must leave the same unanswered prompt and both original destinations.");
     if (! state.failure.empty())
     {
-        state.Require(scoped.Cleanup(), L"Conflict Skip all fixture did not clean before the click.");
+        state.Require(scoped.Cleanup(), L"Repeated Skip fixture did not clean before the click.");
         return false;
     }
-    state.Require(InvokeExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictAction, scopedId, skipAllRaw, IDS_FILEOPS_BTN_SKIP_ALL),
-                  L"The actual direct Skip all button must invoke.");
+    ToggleState checked{};
+    state.Require(SUCCEEDED(scopeToggle->get_ToggleState(&checked)) && checked == ToggleState_Off && SUCCEEDED(scopeToggle->Toggle()),
+                  L"The repeat checkbox starts unchecked and accepts Toggle.");
+    PumpPendingMessages();
+    state.Require(samePrompt() && DebugGetFileOperationsPopupTaskSnapshot(scoped.popup, scopedId, pending) && pending.conflict.applyToAllChecked &&
+                      pending.conflict.active,
+                  L"Checking the box must update the same prompt and leave it unanswered.");
+    if (state.failure.empty())
+    {
+        state.Require(InvokeExactFileOperationsActionForSelfTest(scoped.popup, Hit::TaskConflictAction, scopedId, skipRaw, IDS_FILEOPS_CONFLICT_BTN_SKIP),
+                      L"Invoking Skip on the checked prompt must accept the scoped choice.");
+    }
     RedSalamander::TestSupport::MessagePumpWaitOptions wait{};
     wait.timeout            = SelfTest::Scale(std::chrono::milliseconds{5000});
     wait.maxMessagesPerPump = 16u;
@@ -14004,8 +14035,8 @@ struct FileOperationsPopupTestFixture final
                       cached->acceptedDecision->originatingPromptGeneration == generation && cached->acceptedDecision->action == Task::ConflictAction::Skip &&
                       cached->acceptedDecision->scope == scope && TextFileEqualsForFileOpsPrompt(scoped.dest, "existing payload") &&
                       TextFileEqualsForFileOpsPrompt(scoped.destDir / L"second-payload.txt", "second existing payload"),
-                  L"Skip All must preserve both destinations with one exact user grant and one same-scope cached choice.");
-    state.Require(scoped.Cleanup(), L"Conflict Skip all fixture did not clean its owned task.");
+                  L"Checked Skip must preserve both destinations with one exact user grant and one same-scope cached choice.");
+    state.Require(scoped.Cleanup(), L"Repeated Skip fixture did not clean its owned task.");
     return state.failure.empty();
 }
 
@@ -15969,20 +16000,16 @@ struct FileOperationsPopupTestFixture final
         FindMatchingWindowHostRawProvider(fixture.popup, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL), cancelProvider.put()) &&
             cancelProvider && SUCCEEDED(cancelProvider.query_to(cancelFragment.put())) && cancelFragment && SUCCEEDED(cancelFragment->SetFocus()),
         L"The bottom conflict action must remain reachable by scrolling the short body.");
-    // The prompt has no More menu (it would hold one command), and Cancel is last. Traverse back
-    // through every published primary action, Skip all included, to the first one, then forward
-    // again. Each step starts at the top scroll position with the previous exact focus ID.
+    // Traverse back from Cancel through every direct action, then forward. Each step starts
+    // at the top scroll position with the previous exact focus ID.
     using HitKind       = FileOperationsPopupInternal::PopupHitTest::Kind;
     const auto actionId = [&](HitKind kind, uint32_t data)
     { return std::format(L"FileOperations.Action.{}.{}.{}.{}", static_cast<uint32_t>(kind), fixture.taskId.value(), data, shortTask.conflict.generation); };
-    const size_t primaryCount           = shortTask.conflict.primaryActionCount;
-    const bool publishesSkipAllDirectly = std::ranges::find(shortTask.conflict.primaryActions, static_cast<uint8_t>(FileOperations::ConflictAction::SkipAll)) -
-                                              shortTask.conflict.primaryActions.begin() <
-                                          static_cast<std::ptrdiff_t>(primaryCount);
+    const size_t primaryCount = shortTask.conflict.primaryActionCount;
     state.Require(primaryCount > 1u && primaryCount <= shortTask.conflict.primaryActions.size() && shortTask.conflict.overflowActionCount == 0u &&
-                      publishesSkipAllDirectly &&
+                      shortTask.conflict.applyToAllEligible && ! shortTask.conflict.skipAllEligible &&
                       shortTask.conflict.primaryActions[primaryCount - 1u] == static_cast<uint8_t>(FileOperations::ConflictAction::Cancel),
-                  L"The short-viewport fixture must publish only direct primary actions, Skip all included, ending with Cancel.");
+                  L"The short-viewport fixture must publish a repeat checkbox and direct actions ending with Cancel.");
     bool exerciseFocusReflow = true;
     const auto revealByTab =
         [&](bool reverse, std::wstring_view fromId, std::wstring_view expectedId, std::wstring_view expectedName, bool cancelReveal = false)
@@ -17721,7 +17748,7 @@ struct FileOperationsPopupTestFixture final
         bool cachedScope;
         bool connectedUi = false;
     };
-    constexpr std::array<DecisionScenario, 11> scenarios{{{Task::ConflictAction::Overwrite, false},
+    constexpr std::array<DecisionScenario, 10> scenarios{{{Task::ConflictAction::Overwrite, false},
                                                           {Task::ConflictAction::Skip, false},
                                                           {Task::ConflictAction::KeepBoth, false},
                                                           {Task::ConflictAction::Cancel, false},
@@ -17729,15 +17756,13 @@ struct FileOperationsPopupTestFixture final
                                                           {Task::ConflictAction::Retry, false},
                                                           {Task::ConflictAction::Overwrite, true},
                                                           {Task::ConflictAction::Skip, true},
-                                                          {Task::ConflictAction::SkipAll, true},
                                                           {Task::ConflictAction::Overwrite, true, true},
                                                           {Task::ConflictAction::Overwrite, false, true}}};
     for (const auto& scenario : scenarios)
     {
         if (requireDisplayFacts && scenario.connectedUi)
             continue; // The connected input rounds belong to the accepted-decision case.
-        const auto action         = scenario.action;
-        const auto acceptedAction = action == Task::ConflictAction::SkipAll ? Task::ConflictAction::Skip : action;
+        const auto action = scenario.action;
         // A later prompt pauses sibling workers. Serialize only the unchecked UI
         // journey so its first mutation completes before the second prompt; keep
         // the cached-scope rounds concurrent and never infer completion from consent.
@@ -18014,7 +18039,7 @@ struct FileOperationsPopupTestFixture final
                               found->conflictPrompt->bucket == expectedScope.bucket && found->conflictPrompt->sourceItemIndex == expectedSourceIndex,
                           L"A decision must retain the same original-problem key despite diagnostic enqueue ordering.");
             state.Require(decision.taskId == taskId && decision.promptGeneration == expectedGeneration && expectedGeneration != 0u &&
-                              decision.sourceItemIndex == expectedSourceIndex && decision.action == acceptedAction && decision.scope == expectedScope &&
+                              decision.sourceItemIndex == expectedSourceIndex && decision.action == action && decision.scope == expectedScope &&
                               decision.applyToAll == scenario.cachedScope && decision.origin == FileOperations::ConflictDecisionOrigin::User &&
                               decision.originatingPromptGeneration == decision.promptGeneration,
                           L"The record must retain the accepted action, exact prompt generation, selected root and scope, with explicit user origin.");
@@ -18053,9 +18078,9 @@ struct FileOperationsPopupTestFixture final
                 state.Require(cached->conflictPrompt.has_value() && cached->conflictPrompt->generation == decision.promptGeneration &&
                                   cached->conflictPrompt->bucket == decision.scope.bucket && decision.taskId == taskId &&
                                   decision.promptGeneration > expectedGeneration && decision.originatingPromptGeneration == expectedGeneration &&
-                                  decision.action == acceptedAction && decision.scope == expectedScope && decision.applyToAll &&
-                                  decision.sourceItemIndex.has_value() && decision.sourceItemIndex != expectedSourceIndex &&
-                                  cached->sourcePath != expectedSourcePath && cached->destinationPath != expectedDestinationPath,
+                                  decision.action == action && decision.scope == expectedScope && decision.applyToAll && decision.sourceItemIndex.has_value() &&
+                                  decision.sourceItemIndex != expectedSourceIndex && cached->sourcePath != expectedSourcePath &&
+                                  cached->destinationPath != expectedDestinationPath,
                               L"Cached decisions must preserve their grant, exact scope and distinct prompt/item identity.");
                 if (requireDisplayFacts)
                     state.Require(cached->conflictPrompt.has_value() && cached->conflictPrompt->sourceName != expectedDisplay[0] &&

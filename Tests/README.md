@@ -618,6 +618,7 @@ using the foreground. It restores cursor/foreground state. Static capture remain
 
 The supplied-review safety cases use `ProductUiTests` (directory decoding and destination-bound payloads),
 `-Suite FileOps -CaseFilter FileOps_ReviewRemediationContracts -NonInteractive` (parent pinning and typed prerequisite results),
+`-Suite FileOps -CaseFilter FileOps_ClearCompletedScope -NonInteractive` (painted clean results, retained problems and interrupted-Move recovery),
 and exact noninteractive `FileOps_SmallFileCopyCost` / `FileOps_CrossRootLocalCopy` selections.
 The exact `FileOps_DeferredExitRefusesNewWork` case verifies rejection of Create Directory and
 other ingress commands after an accepted close. It submits commands against owned windows without
@@ -634,6 +635,11 @@ native/bridge Copy, managed Move, a bounded nested thirteen-file/six-directory f
 controls. An unavailable SMB resource is a skip, never real SMB qualification. Use separate exact
 case filters with `Tools/Run-AllTests.ps1 -Suite FileOps -NonInteractive`; broad families keep their
 interactive lease. See `Specs/Testing/Testing_PerformanceValidation.md` for metrics and acceptance.
+
+`FileOps_AlertOverlayUxAccessibility` runs as an exact FileOps selection without desktop activation. It exercises
+the owned overlay with a local activation blocker and checks for zero foreground requests. Its
+UI Automation checks include the repeat checkbox's Toggle pattern, stable label, scroll position
+and state-change event. Use `-Suite FileOps -CaseFilter FileOps_AlertOverlayUxAccessibility -NonInteractive`.
 
 `FileOps_SmbExactRenameProvider` is a separate exact, non-activating selection for the registered
 SMB root. It creates one owned child, checks exact Rename on nested names, then removes that child.
