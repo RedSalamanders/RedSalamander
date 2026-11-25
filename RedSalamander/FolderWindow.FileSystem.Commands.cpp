@@ -7003,6 +7003,15 @@ private:
     }));
 }
 
+[[nodiscard]] HRESULT CommitPackedArchive(Common::Files::LocalFileTransaction& transaction, std::wstring_view format) noexcept
+{
+    Debug::Perf::Scope publish(L"archive.pack.publish_us");
+    publish.SetDetail(format);
+    const HRESULT status = transaction.Commit();
+    publish.SetHr(status);
+    return status;
+}
+
 [[nodiscard]] ArchiveOperationResult CreateStoredZipArchive(const std::vector<std::filesystem::path>& selectedPaths,
                                                             const std::filesystem::path& archivePath,
                                                             bool overwrite,
@@ -7051,42 +7060,14 @@ private:
         return result;
     }
 
-    const std::filesystem::path parent = archivePath.parent_path();
-    if (! parent.empty())
+    Common::Files::LocalFileTransaction transaction;
+    const auto targetPolicy = overwrite ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+    result.hr               = Common::Files::LocalFileTransaction::Create(archivePath, targetPolicy, true, transaction);
+    if (FAILED(result.hr))
     {
-        std::error_code ec;
-        std::filesystem::create_directories(parent, ec);
-        if (ec)
-        {
-            result.hr = HResultFromErrorCode(ec);
-            return result;
-        }
-    }
-
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile archiveFile(CreateFileW(archivePath.c_str(),
-                                              GENERIC_READ | GENERIC_WRITE,
-                                              FILE_SHARE_READ,
-                                              nullptr,
-                                              overwrite ? CREATE_ALWAYS : CREATE_NEW,
-                                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                              nullptr));
-#pragma warning(pop)
-    if (! archiveFile)
-    {
-        result.hr = HResultFromLastError();
         return result;
     }
-
-    auto deleteIncompleteArchive = wil::scope_exit([&]
-    {
-        if (FAILED(result.hr))
-        {
-            archiveFile.reset();
-            DeleteFileW(archivePath.c_str());
-        }
-    });
+    const HANDLE archiveFile = transaction.GetHandle();
 
     std::vector<ZipCentralEntry> centralEntries;
     centralEntries.reserve(sources.size());
@@ -7101,7 +7082,7 @@ private:
         }
 
         uint64_t localHeaderOffset = 0u;
-        result.hr                  = GetArchiveFilePosition(archiveFile.get(), localHeaderOffset);
+        result.hr                  = GetArchiveFilePosition(archiveFile, localHeaderOffset);
         if (FAILED(result.hr))
         {
             return result;
@@ -7112,7 +7093,7 @@ private:
             return result;
         }
 
-        result.hr = WriteZipLocalHeader(archiveFile.get(), entryNameUtf8, 0u, 0u, 0u);
+        result.hr = WriteZipLocalHeader(archiveFile, entryNameUtf8, 0u, 0u, 0u);
         if (FAILED(result.hr))
         {
             return result;
@@ -7122,7 +7103,7 @@ private:
         uint32_t storedSize = 0u;
         if (! source.directory)
         {
-            result.hr = StreamFileIntoZip(archiveFile.get(), source.sourcePath, cleanup, crc32, storedSize);
+            result.hr = StreamFileIntoZip(archiveFile, source.sourcePath, cleanup, crc32, storedSize);
             if (FAILED(result.hr))
             {
                 return result;
@@ -7130,17 +7111,17 @@ private:
         }
 
         uint64_t endPosition = 0u;
-        result.hr            = GetArchiveFilePosition(archiveFile.get(), endPosition);
+        result.hr            = GetArchiveFilePosition(archiveFile, endPosition);
         if (FAILED(result.hr))
         {
             return result;
         }
-        result.hr = PatchZipLocalHeaderSizes(archiveFile.get(), localHeaderOffset, crc32, storedSize, storedSize);
+        result.hr = PatchZipLocalHeaderSizes(archiveFile, localHeaderOffset, crc32, storedSize, storedSize);
         if (FAILED(result.hr))
         {
             return result;
         }
-        result.hr = SetArchiveFilePosition(archiveFile.get(), endPosition);
+        result.hr = SetArchiveFilePosition(archiveFile, endPosition);
         if (FAILED(result.hr))
         {
             return result;
@@ -7162,7 +7143,7 @@ private:
     }
 
     uint64_t centralDirectoryOffset = 0u;
-    result.hr                       = GetArchiveFilePosition(archiveFile.get(), centralDirectoryOffset);
+    result.hr                       = GetArchiveFilePosition(archiveFile, centralDirectoryOffset);
     if (FAILED(result.hr))
     {
         return result;
@@ -7175,7 +7156,7 @@ private:
 
     for (const ZipCentralEntry& entry : centralEntries)
     {
-        result.hr = WriteZipCentralDirectoryEntry(archiveFile.get(), entry);
+        result.hr = WriteZipCentralDirectoryEntry(archiveFile, entry);
         if (FAILED(result.hr))
         {
             return result;
@@ -7183,7 +7164,7 @@ private:
     }
 
     uint64_t centralDirectoryEnd = 0u;
-    result.hr                    = GetArchiveFilePosition(archiveFile.get(), centralDirectoryEnd);
+    result.hr                    = GetArchiveFilePosition(archiveFile, centralDirectoryEnd);
     if (FAILED(result.hr))
     {
         return result;
@@ -7195,10 +7176,12 @@ private:
         return result;
     }
 
-    result.hr = WriteZipEndOfCentralDirectory(archiveFile.get(),
-                                              static_cast<uint16_t>(centralEntries.size()),
-                                              static_cast<uint32_t>(centralDirectorySize),
-                                              static_cast<uint32_t>(centralDirectoryOffset));
+    result.hr = WriteZipEndOfCentralDirectory(
+        archiveFile, static_cast<uint16_t>(centralEntries.size()), static_cast<uint32_t>(centralDirectorySize), static_cast<uint32_t>(centralDirectoryOffset));
+    if (SUCCEEDED(result.hr))
+    {
+        result.hr = CommitPackedArchive(transaction, L"zip");
+    }
     return result;
 }
 
@@ -7371,30 +7354,14 @@ private:
 class SevenZipPackFileOutStream final : public IOutStream
 {
 public:
-    static HRESULT Create(const std::filesystem::path& path, bool overwrite, wil::com_ptr<IOutStream>& out) noexcept
+    static HRESULT Create(const std::filesystem::path& path, bool overwrite, wil::com_ptr<SevenZipPackFileOutStream>& out) noexcept
     {
         out.reset();
-        if (path.empty())
-        {
-            return E_INVALIDARG;
-        }
+        Common::Files::LocalFileTransaction transaction;
+        const auto targetPolicy = overwrite ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
+        RETURN_IF_FAILED(Common::Files::LocalFileTransaction::Create(path, targetPolicy, true, transaction));
 
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-        wil::unique_hfile file(CreateFileW(path.c_str(),
-                                           GENERIC_READ | GENERIC_WRITE,
-                                           FILE_SHARE_READ,
-                                           nullptr,
-                                           overwrite ? CREATE_ALWAYS : CREATE_NEW,
-                                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                           nullptr));
-#pragma warning(pop)
-        if (! file)
-        {
-            return HResultFromLastError();
-        }
-
-        auto* impl = new (std::nothrow) SevenZipPackFileOutStream(std::move(file));
+        auto* impl = new (std::nothrow) SevenZipPackFileOutStream(std::move(transaction));
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -7402,6 +7369,11 @@ public:
 
         out.attach(impl);
         return S_OK;
+    }
+
+    [[nodiscard]] HRESULT Commit(std::wstring_view format) noexcept
+    {
+        return CommitPackedArchive(_transaction, format);
     }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** outObject) noexcept override
@@ -7457,7 +7429,7 @@ public:
         }
 
         DWORD bytesWritten = 0u;
-        if (WriteFile(_file.get(), data, size, &bytesWritten, nullptr) == FALSE)
+        if (WriteFile(_transaction.GetHandle(), data, size, &bytesWritten, nullptr) == FALSE)
         {
             return HResultFromLastError();
         }
@@ -7480,7 +7452,7 @@ public:
         LARGE_INTEGER distance{};
         distance.QuadPart = offset;
         LARGE_INTEGER position{};
-        if (SetFilePointerEx(_file.get(), distance, &position, method) == FALSE)
+        if (SetFilePointerEx(_transaction.GetHandle(), distance, &position, method) == FALSE)
         {
             return HResultFromLastError();
         }
@@ -7504,33 +7476,33 @@ public:
 
         LARGE_INTEGER current{};
         LARGE_INTEGER zero{};
-        if (SetFilePointerEx(_file.get(), zero, &current, FILE_CURRENT) == FALSE)
+        if (SetFilePointerEx(_transaction.GetHandle(), zero, &current, FILE_CURRENT) == FALSE)
         {
             return HResultFromLastError();
         }
 
         LARGE_INTEGER size{};
         size.QuadPart = static_cast<LONGLONG>(newSize);
-        if (SetFilePointerEx(_file.get(), size, nullptr, FILE_BEGIN) == FALSE)
+        if (SetFilePointerEx(_transaction.GetHandle(), size, nullptr, FILE_BEGIN) == FALSE)
         {
             return HResultFromLastError();
         }
-        if (SetEndOfFile(_file.get()) == FALSE)
+        if (SetEndOfFile(_transaction.GetHandle()) == FALSE)
         {
             return HResultFromLastError();
         }
-        return SetFilePointerEx(_file.get(), current, nullptr, FILE_BEGIN) == FALSE ? HResultFromLastError() : S_OK;
+        return SetFilePointerEx(_transaction.GetHandle(), current, nullptr, FILE_BEGIN) == FALSE ? HResultFromLastError() : S_OK;
     }
 
 private:
-    explicit SevenZipPackFileOutStream(wil::unique_hfile file) noexcept : _file(std::move(file))
+    explicit SevenZipPackFileOutStream(Common::Files::LocalFileTransaction transaction) noexcept : _transaction(std::move(transaction))
     {
     }
 
     ~SevenZipPackFileOutStream() = default;
 
     std::atomic_ulong _refCount{1u};
-    wil::unique_hfile _file;
+    Common::Files::LocalFileTransaction _transaction;
 };
 
 class SevenZipUpdateCallback final : public IArchiveUpdateCallback
@@ -7756,18 +7728,6 @@ private:
         return result;
     }
 
-    const std::filesystem::path parent = archivePath.parent_path();
-    if (! parent.empty())
-    {
-        std::error_code ec;
-        std::filesystem::create_directories(parent, ec);
-        if (ec)
-        {
-            result.hr = HResultFromErrorCode(ec);
-            return result;
-        }
-    }
-
     SevenZipArchiveExports& api = GetSevenZipArchiveExports();
     result.hr                   = LoadSevenZipArchiveExports(api);
     if (FAILED(result.hr) || ! api.createObject)
@@ -7786,7 +7746,7 @@ private:
         return result;
     }
 
-    wil::com_ptr<IOutStream> outputStream;
+    wil::com_ptr<SevenZipPackFileOutStream> outputStream;
     result.hr = SevenZipPackFileOutStream::Create(archivePath, overwrite, outputStream);
     if (FAILED(result.hr))
     {
@@ -7808,12 +7768,16 @@ private:
         result.hr = callbackImpl->ResultHr();
     }
 
-    outputStream.reset();
-    if (FAILED(result.hr))
+    if (result.hr != S_OK)
     {
-        DeleteFileW(archivePath.c_str());
+        if (SUCCEEDED(result.hr))
+            result.hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         return result;
     }
+
+    result.hr = outputStream->Commit(packer.extensionNoDot);
+    if (FAILED(result.hr))
+        return result;
 
     for (const ArchiveEntrySource& source : sources)
     {

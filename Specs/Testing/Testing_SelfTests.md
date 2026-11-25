@@ -210,7 +210,8 @@ FolderView drop handler in the marked sandbox. The UI thread's no-activation gua
 stays active through task and pane cleanup. Physical drag and input acceptance
 remain in the interactive suite.
 
-The exact Commands case `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` has the same
+The exact Commands case `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` injects publication failure for the stored ZIP and 7z writers. Each attempt preserves the previous output bytes and retires only its staged sibling by handle. A subsequent attempt publishes a complete archive.
+The case has the same
 admission rule. It dispatches real archive commands on sandbox fixtures through synthetic
 input and answers the archive cleanup question within the test. The case verifies that an
 Unpack collision skip preserves the selected archive and its existing destination, and that

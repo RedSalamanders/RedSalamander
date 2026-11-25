@@ -2128,6 +2128,11 @@ Local provider offers it for a binding provider (D-7.3); providers without bindi
 
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
 contract succeeds; on an identity-less location they keep the refusal and never delete by name. With delete-after selected,
+Both Pack writers use the shared Local file transaction to write a private sibling and publish it through
+the retained handle after the archive is complete. An existing archive remains available until successful
+replacement. A creation, encoding, flush or publication failure preserves the previous target, retires the
+unpublished stage by handle and starts no source cleanup. The `archive.pack.publish_us` metric
+records the completed-output flush and publication duration, archive format and result.
 Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive. For a regular-file selection, both Pack writers read from each approved source identity and revision. Their cleanup task rebinds those versions for nonrecursive Delete before removing any selected file.
 If Pack cannot prove the exact cleanup set, including the descendants of selected directories, it
 writes the archive and keeps the originals without asking to delete them. Archive admission requires
