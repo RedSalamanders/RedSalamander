@@ -368,6 +368,7 @@
                           destination.native()));
     ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
     SetFileOpsLiveOutputPublishedPauseForSelfTest(false);
+    bool invalidPrompt               = false;
     unsigned int existsSkipDecisions = 0u;
     uint64_t existsGeneration        = 0u;
     const auto completionQuiet       = RedSalamander::TestSupport::PumpMessagesUntil(
