@@ -3463,6 +3463,122 @@ std::wstring FileOperations::BuildCreateDirectorySuggestedName(std::wstring_view
     return std::format(L"{} ({})", baseName, suffix);
 }
 
+namespace
+{
+[[nodiscard]] HRESULT CollectExistingChildNames(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                const std::filesystem::path& folder,
+                                                std::vector<std::wstring>& outNames) noexcept
+{
+    outNames.clear();
+    if (! fileSystem)
+    {
+        return E_POINTER;
+    }
+
+    wil::com_ptr<IFilesInformation> filesInformation;
+    const HRESULT hr = fileSystem->ReadDirectoryInfo(folder.c_str(), filesInformation.put());
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (! filesInformation)
+    {
+        return S_OK;
+    }
+
+    unsigned long entryCount = 0u;
+    RETURN_IF_FAILED(filesInformation->GetCount(&entryCount));
+    if (entryCount == 0u)
+    {
+        return S_OK;
+    }
+
+    FileInfo* buffer = nullptr;
+    RETURN_IF_FAILED(filesInformation->GetBuffer(&buffer));
+    if (buffer == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    unsigned long bufferSize = 0u;
+    RETURN_IF_FAILED(filesInformation->GetBufferSize(&bufferSize));
+    Common::Plugins::PackedFileInfoCursor cursor(buffer, bufferSize, entryCount);
+    for (unsigned long entryIndex = 0u; entryIndex < entryCount; ++entryIndex)
+    {
+        const FileInfo* entry = nullptr;
+        RETURN_IF_FAILED(cursor.Next(&entry));
+        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+        const std::wstring_view name(entry->FileName, nameChars);
+        if (name != L"." && name != L"..")
+        {
+            outNames.emplace_back(name);
+        }
+    }
+
+    return S_OK;
+}
+
+} // namespace
+
+HRESULT FileOperations::FindCreateDirectorySuggestedSuffix(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                           const std::filesystem::path& folder,
+                                                           std::wstring_view defaultName,
+                                                           std::wstring_view pluginId,
+                                                           unsigned int firstSuffix,
+                                                           unsigned int& suggestedSuffix) noexcept
+{
+    if (! fileSystem || folder.empty() || defaultName.empty() || pluginId.empty())
+    {
+        return E_INVALIDARG;
+    }
+    std::vector<std::wstring> existingChildNames;
+    RETURN_IF_FAILED(CollectExistingChildNames(fileSystem, folder, existingChildNames));
+    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    const HRESULT routeHr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
+    if (FAILED(routeHr) || ! route)
+    {
+        return FAILED(routeHr) ? routeHr : E_NOINTERFACE;
+    }
+
+    std::unordered_set<std::wstring> existingKeys;
+    existingKeys.reserve(existingChildNames.size());
+    for (const std::wstring& existingName : existingChildNames)
+    {
+        // Existing names only need their provider collision key. A child the provider cannot key
+        // (a legacy name outside the provider's own rules) cannot collide with a provider-valid
+        // candidate, so it is skipped instead of blocking the command for the whole folder.
+        const FileSystemRouteContract::StringResult existing =
+            FileSystemRouteContract::QueryChildNameCollisionKey(route.get(), folder.native(), existingName, FILESYSTEM_CREATE_DIRECTORY);
+        if (existing.state == FileSystemRouteContract::QueryState::Available && ! existing.value.empty())
+        {
+            existingKeys.insert(existing.value);
+        }
+    }
+
+    for (unsigned int suffix = firstSuffix; suffix < 10000u; ++suffix)
+    {
+        std::wstring candidate = FileOperations::BuildCreateDirectorySuggestedName(defaultName, suffix);
+        const FileSystemRouteContract::ChildNameContractResult candidateContract =
+            FileSystemRouteContract::QueryChildNameContract(route.get(), folder.native(), candidate, FILESYSTEM_CREATE_DIRECTORY, pluginId);
+        if (candidateContract.state == FileSystemRouteContract::QueryState::Available && candidateContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
+        {
+            continue;
+        }
+        if (candidateContract.state != FileSystemRouteContract::QueryState::Available || candidateContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
+            candidateContract.collisionKey.empty())
+        {
+            return FAILED(candidateContract.status) ? candidateContract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        if (! existingKeys.contains(candidateContract.collisionKey))
+        {
+            suggestedSuffix = suffix;
+            return S_OK;
+        }
+    }
+
+    return HRESULT_FROM_WIN32(ERROR_TOO_MANY_NAMES);
+}
+
 HRESULT FolderWindow::FileOperationState::AdmitCreateDirectory(FolderWindow::Pane sourcePane,
                                                                const wil::com_ptr<IFileSystem>& fileSystem,
                                                                std::wstring pluginId,

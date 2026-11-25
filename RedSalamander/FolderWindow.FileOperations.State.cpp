@@ -24188,12 +24188,23 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteCreateDirectory(const Fil
     wil::com_ptr<IFileSystemDirectoryOperations> directoryOperations;
     _fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), directoryOperations.put_void());
     const unsigned int limit = request.firstSuggestedSuffix ? 1000u : 1u;
+    unsigned int firstSuffix = request.firstSuggestedSuffix.value_or(0u);
+    HRESULT suggestionStatus = S_OK;
+    if (request.firstSuggestedSuffix)
+    {
+        WaitWhilePaused();
+        suggestionStatus = CancelRequestedDurable() ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                    : FileOperations::FindCreateDirectorySuggestedSuffix(
+                                                          _fileSystem, request.parent, request.defaultName, _sourcePluginId, firstSuffix, firstSuffix);
+        if (FAILED(suggestionStatus))
+            status = suggestionStatus;
+    }
+
     FileOperations::CreateDirectoryAdmission current{};
     bool dispatched = false;
-    for (unsigned int attempt = 0u; attempt < limit; ++attempt)
+    for (unsigned int attempt = 0u; SUCCEEDED(suggestionStatus) && attempt < limit; ++attempt)
     {
-        dispatched             = false;
-        const auto firstSuffix = request.firstSuggestedSuffix.value_or(0u);
+        dispatched = false;
         if (attempt > (std::numeric_limits<unsigned int>::max)() - firstSuffix)
             break;
         const std::wstring name =

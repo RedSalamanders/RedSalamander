@@ -89,163 +89,6 @@ using OrdinalString::EqualsNoCase;
 
 namespace
 {
-[[nodiscard]] HRESULT CollectExistingChildNames(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                const std::filesystem::path& folder,
-                                                std::vector<std::wstring>& outNames) noexcept
-{
-    outNames.clear();
-    if (! fileSystem)
-    {
-        return E_POINTER;
-    }
-
-    wil::com_ptr<IFilesInformation> filesInformation;
-    const HRESULT hr = fileSystem->ReadDirectoryInfo(folder.c_str(), filesInformation.put());
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-    if (! filesInformation)
-    {
-        return S_OK;
-    }
-
-    unsigned long entryCount = 0u;
-    RETURN_IF_FAILED(filesInformation->GetCount(&entryCount));
-    if (entryCount == 0u)
-    {
-        return S_OK;
-    }
-
-    FileInfo* buffer = nullptr;
-    RETURN_IF_FAILED(filesInformation->GetBuffer(&buffer));
-    if (buffer == nullptr)
-    {
-        return E_POINTER;
-    }
-
-    unsigned long bufferSize = 0u;
-    RETURN_IF_FAILED(filesInformation->GetBufferSize(&bufferSize));
-    Common::Plugins::PackedFileInfoCursor cursor(buffer, bufferSize, entryCount);
-    for (unsigned long entryIndex = 0u; entryIndex < entryCount; ++entryIndex)
-    {
-        const FileInfo* entry = nullptr;
-        RETURN_IF_FAILED(cursor.Next(&entry));
-        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
-        const std::wstring_view name(entry->FileName, nameChars);
-        if (name != L"." && name != L"..")
-        {
-            outNames.emplace_back(name);
-        }
-    }
-
-    return S_OK;
-}
-
-[[nodiscard]] HRESULT ResolveInitialCreateDirectoryName(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                        const std::filesystem::path& folder,
-                                                        std::wstring_view defaultName,
-                                                        std::wstring_view pluginId,
-                                                        std::wstring& nameOut) noexcept
-{
-    nameOut.clear();
-    if (! fileSystem || folder.empty() || defaultName.empty() || pluginId.empty())
-    {
-        return E_INVALIDARG;
-    }
-    std::vector<std::wstring> existingChildNames;
-    RETURN_IF_FAILED(CollectExistingChildNames(fileSystem, folder, existingChildNames));
-    wil::com_ptr<IFileSystemRouteCapabilities> route;
-    const HRESULT routeHr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
-    if (FAILED(routeHr) || ! route)
-    {
-        return FAILED(routeHr) ? routeHr : E_NOINTERFACE;
-    }
-
-    std::unordered_set<std::wstring> existingKeys;
-    existingKeys.reserve(existingChildNames.size());
-    for (const std::wstring& existingName : existingChildNames)
-    {
-        // Existing names only need their provider collision key. A child the provider cannot key
-        // (a legacy name outside the provider's own rules) cannot collide with a provider-valid
-        // candidate, so it is skipped instead of blocking the command for the whole folder.
-        const FileSystemRouteContract::StringResult existing =
-            FileSystemRouteContract::QueryChildNameCollisionKey(route.get(), folder.native(), existingName, FILESYSTEM_CREATE_DIRECTORY);
-        if (existing.state == FileSystemRouteContract::QueryState::Available && ! existing.value.empty())
-        {
-            existingKeys.insert(existing.value);
-        }
-    }
-
-    for (unsigned int suffix = 0u; suffix < 10000u; ++suffix)
-    {
-        std::wstring candidate = FileOperations::BuildCreateDirectorySuggestedName(defaultName, suffix);
-        const FileSystemRouteContract::ChildNameContractResult candidateContract =
-            FileSystemRouteContract::QueryChildNameContract(route.get(), folder.native(), candidate, FILESYSTEM_CREATE_DIRECTORY, pluginId);
-        if (candidateContract.state == FileSystemRouteContract::QueryState::Available && candidateContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
-        {
-            continue;
-        }
-        if (candidateContract.state != FileSystemRouteContract::QueryState::Available || candidateContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
-            candidateContract.collisionKey.empty())
-        {
-            return FAILED(candidateContract.status) ? candidateContract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-        }
-        if (! existingKeys.contains(candidateContract.collisionKey))
-        {
-            nameOut = std::move(candidate);
-            return S_OK;
-        }
-    }
-
-    return HRESULT_FROM_WIN32(ERROR_TOO_MANY_NAMES);
-}
-
-[[nodiscard]] bool TryParseCreateDirectorySuggestedSuffix(std::wstring_view requestedName, std::wstring_view defaultName, unsigned int& outSuffix) noexcept
-{
-    if (requestedName == defaultName)
-    {
-        outSuffix = 0u;
-        return true;
-    }
-
-    std::wstring prefix(defaultName);
-    prefix.append(L" (");
-    if (requestedName.size() <= prefix.size() || ! requestedName.starts_with(prefix) || requestedName.back() != L')')
-    {
-        return false;
-    }
-
-    const std::wstring_view digits = requestedName.substr(prefix.size(), requestedName.size() - prefix.size() - 1u);
-    if (digits.empty())
-    {
-        return false;
-    }
-
-    uint64_t parsedValue = 0u;
-    for (const wchar_t ch : digits)
-    {
-        if (ch < L'0' || ch > L'9')
-        {
-            return false;
-        }
-
-        parsedValue = (parsedValue * 10u) + static_cast<uint64_t>(ch - L'0');
-        if (parsedValue > static_cast<uint64_t>((std::numeric_limits<unsigned int>::max)()))
-        {
-            return false;
-        }
-    }
-
-    if (parsedValue == 0u)
-    {
-        return false;
-    }
-
-    outSuffix = static_cast<unsigned int>(parsedValue);
-    return true;
-}
-
 using ShellNewTemplateDefinition = FolderWindow::ShellNewTemplateDefinition;
 using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
 
@@ -9260,17 +9103,6 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
 
 } // namespace
 
-#ifdef ENABLE_TESTS
-HRESULT FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameForTests(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                                                       const std::filesystem::path& folder,
-                                                                                       std::wstring_view defaultName,
-                                                                                       std::wstring_view pluginId,
-                                                                                       std::wstring& nameOut) noexcept
-{
-    return ResolveInitialCreateDirectoryName(fileSystem, folder, defaultName, pluginId, nameOut);
-}
-#endif
-
 LRESULT FolderWindow::OnMakeFileListTaskUpdate(LPARAM lp) noexcept
 {
     auto payload = TakeMessagePayload<MakeFileListTaskPayload>(_hWnd.get(), WndMsg::kMakeFileListTaskUpdate, lp);
@@ -10656,13 +10488,11 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         return;
     }
 
-    std::wstring initialName;
-    const HRESULT initialNameHr = ResolveInitialCreateDirectoryName(fileSystem, base, defaultNameBase, pluginId, initialName);
-    if (FAILED(initialNameHr))
-    {
-        showFailure(base.native(), initialNameHr);
-        return;
-    }
+    const auto suggestionStarted       = std::chrono::steady_clock::now();
+    const unsigned int suggestedSuffix = state.folderView.GetCreateDirectoryDefaultSuffix(defaultNameBase);
+    const std::wstring initialName     = FileOperations::BuildCreateDirectorySuggestedName(defaultNameBase, suggestedSuffix);
+    Debug::Perf::Emit(
+        L"fileops.create_directory.suggestion.ui_thread_us", L"displayed listing", Debug::Perf::ElapsedUs(suggestionStarted), suggestedSuffix, 0u, S_OK);
 
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
         return;
@@ -10685,11 +10515,10 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         return;
 
     FileOperationState::CreateDirectoryRequest request{};
-    request.parent               = base;
-    request.name                 = folderName.value();
-    request.defaultName          = defaultNameBase;
-    unsigned int suggestedSuffix = 0u;
-    if (TryParseCreateDirectorySuggestedSuffix(request.name, request.defaultName, suggestedSuffix))
+    request.parent      = base;
+    request.name        = folderName.value();
+    request.defaultName = defaultNameBase;
+    if (request.name == initialName)
         request.firstSuggestedSuffix = suggestedSuffix;
 
     const HRESULT hr = _fileOperations->AdmitCreateDirectory(pane, fileSystem, pluginId, pluginShortId, instanceContext, std::move(request));

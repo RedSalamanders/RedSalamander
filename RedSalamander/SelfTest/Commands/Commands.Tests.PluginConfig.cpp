@@ -5092,6 +5092,18 @@ private:
                       L"R7-A15 requires one canonical composite child-name validation/join/collision result.");
     }
 
+    std::string fileSystemCommandsSource;
+    if (readRequired(L"RedSalamander/FolderWindow.FileSystem.Commands.cpp", fileSystemCommandsSource))
+    {
+        const std::string_view createDirectoryCommand =
+            SourceBetween(fileSystemCommandsSource, "void FolderWindow::CommandCreateDirectory", "void FolderWindow::CommandEditNew");
+        state.Require(! createDirectoryCommand.empty() && createDirectoryCommand.find("GetCreateDirectoryDefaultSuffix(") != std::string_view::npos &&
+                          createDirectoryCommand.find("ReadDirectoryInfo(") == std::string_view::npos &&
+                          createDirectoryCommand.find("FindCreateDirectorySuggestedSuffix(") == std::string_view::npos &&
+                          createDirectoryCommand.find("QualifyCreateDirectory(") == std::string_view::npos,
+                      L"F7 must open from its displayed listing and leave provider queries to the Create Folder worker.");
+    }
+
     std::string fileOperationsSource;
     if (readRequired(L"RedSalamander/FolderWindow.FileOperations.cpp", fileOperationsSource))
     {

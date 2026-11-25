@@ -146,6 +146,9 @@ public:
     // the displayed contents match `GetFolderPath()` and no enumeration error overlay is active.
     [[nodiscard]] bool IsCurrentFolderEnumerated() const noexcept;
 
+    // A prompt hint from the displayed listing. The worker rechecks the provider before creating a folder.
+    [[nodiscard]] unsigned int GetCreateDirectoryDefaultSuffix(std::wstring_view baseName) const noexcept;
+
     // Updates the "remembered focus" entry for a specific folder so that the next time that
     // folder is enumerated, the requested item becomes the focused/active item (and is scrolled into view).
     void RememberFocusedItemForFolder(const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
