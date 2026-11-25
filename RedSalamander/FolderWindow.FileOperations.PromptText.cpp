@@ -291,7 +291,7 @@ UINT ConflictPromptTitleStringId(FileSystemOperation operation) noexcept
         case FILESYSTEM_MOVE: return static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
         case FILESYSTEM_DELETE: return static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
         case FILESYSTEM_RENAME: return static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME);
-        case FILESYSTEM_CREATE_DIRECTORY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
+        case FILESYSTEM_CREATE_DIRECTORY: return static_cast<UINT>(IDS_CAPTION_CREATE_DIR);
     }
     return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
 }

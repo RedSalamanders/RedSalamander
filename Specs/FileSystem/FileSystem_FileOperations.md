@@ -12,12 +12,15 @@ The implementation may change public and host-internal payloads while this progr
 development. The host, every shipped provider, Dummy, and all tests use one ABI version. There is
 no capability-v1 adapter or dual parser.
 
-Create Directory uses the provider command path and the typed admission contract. An accepted
-application exit or window close refuses it before the name prompt and at submission. An owner
-shut down while the modal prompt dispatches messages cannot admit the mutation. The prompt captures
-the provider instance and parent, so later pane navigation cannot redirect the operation.
+Create Folder opens one name prompt and captures its provider instance and parent. An accepted
+application exit or window close refuses it before the prompt and at submission. Accepting the
+name publishes one typed Create Directory task. The worker qualifies the provider and name before
+admission, enters the mutation interlock for the parent, and rechecks the provider's current name
+contract after waiting and before calling Create Directory. Late cancellation keeps a proven
+creation as a completed result. A timeout or lost reply after dispatch produces an unknown outcome.
+Only confirmed collisions of the default numbered suggestion advance to another candidate.
 Completion refreshes a pane only when it still displays that parent on the captured route.
-Admission keeps the provider's name or route failure for the pane feedback.
+The task card and Issues report the operation as Create Folder. The failure diagnostic stores localized message identity, the destination path and the provider status separately.
 The host queries capability v2 for the concrete parent and provider-joined candidate with
 `FILESYSTEM_CREATE_DIRECTORY`, requires `operations.createDirectory: true`, matching non-empty
 path-scoped `rootId`/`pathProfile`, one feasible provider-native component, and exact immediate-child
@@ -2217,6 +2220,13 @@ Security-significant metadata-loss consent is evaluated on the exact identity-ow
 anyway and Keep source first publish the stage, then respectively permit the already-qualified
 conditional cleanup or retain the source. A later cancellation point must preserve whatever exact
 publication state its mutation record reports rather than collapsing every Cancel to `NotAttempted`.
+After a final writer publishes, a later finding of lost Mark of the Web, named streams or
+extended attributes without prior consent leaves source cleanup disabled. Continue destination
+verification and preserve its publication result. Issues records the loss and why the source stayed.
+A proved destination and retained source yield **Copied; source kept**. The worker emits
+`FileOps.Metadata.LateMoveSourceRetained` with the sensitive feature mask and presents no additional
+destructive decision. `FileOps_ReviewRemediationContracts` exercises the real Local-to-Dummy writer,
+content verification, and survival of the source's `Zone.Identifier` stream.
 
 The shared deferred-consent gate owns insufficient/unknown space, hydration, sparse inflation, EFS
 plaintext, metadata-loss Move, and Recycle escalation. It serializes the prompt through the task

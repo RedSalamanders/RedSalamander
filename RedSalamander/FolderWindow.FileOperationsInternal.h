@@ -406,14 +406,6 @@ struct QualifiedDestination
     std::wstring providerFolderPath;
 };
 
-struct CreateDirectoryAdmission
-{
-    QualifiedEndpoint endpoint;
-    std::filesystem::path candidateProviderPath;
-    std::wstring providerCollisionKey;
-    bool allowLocalNativeFallback = false;
-};
-
 struct TransferDestinationMapping
 {
     size_t sourceIndex = 0;
@@ -487,7 +479,18 @@ struct DeletePlan
     std::optional<DestructiveConsentReceipt> initialConsent;
 };
 
-using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan>;
+struct CreateDirectoryAdmission
+{
+    QualifiedEndpoint endpoint;
+    std::filesystem::path providerParentPath;
+    std::filesystem::path candidateProviderPath;
+    std::wstring providerCollisionKey;
+    OperationOptions options;
+    bool allowLocalNativeFallback = false;
+};
+
+[[nodiscard]] std::wstring BuildCreateDirectorySuggestedName(std::wstring_view baseName, unsigned int suffix);
+using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan, CreateDirectoryAdmission>;
 // One user admission may contain several executable child plans when a selection spans provider
 // roots. Every child remains qualified by exactly one source endpoint; the admission owns the
 // single confirmation and clipboard-consumption barrier for the whole group.
@@ -1071,6 +1074,15 @@ struct FolderWindow::FileOperationState
         Storage,
         Destination,
         Source,
+    };
+
+    struct CreateDirectoryRequest final
+    {
+        std::filesystem::path parent;
+        std::wstring name;
+        std::wstring defaultName;
+        std::optional<unsigned int> firstSuggestedSuffix;
+        FileOperations::ExecutionMode executionMode = FileOperations::ExecutionMode::Queue;
     };
 
     struct BatchRenameAdmissionInput final
@@ -2104,6 +2116,8 @@ struct FolderWindow::FileOperationState
         void StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans,
                         std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> confirmedTouchReceipt = {}) noexcept;
         HRESULT PrepareBatchRenameAdmission() noexcept;
+        HRESULT PrepareCreateDirectoryAdmission() noexcept;
+        HRESULT ExecuteCreateDirectory(const FileOperations::CreateDirectoryAdmission& plan) noexcept;
         HRESULT PrepareBatchRenameArtifactGuard() noexcept;
         HRESULT PrepareArtifactTouchGuard(const FileOperations::FileOperationPlanGroup& plans,
                                           IFileSystem* sourceFileSystem,
@@ -2240,6 +2254,8 @@ struct FolderWindow::FileOperationState
         std::atomic<TaskLifecyclePhase> _lifecyclePhase{TaskLifecyclePhase::Preparing};
         std::atomic<ULONGLONG> _preparationStartTick{GetTickCount64()};
         std::optional<BatchRenameAdmissionInput> _pendingBatchRenameAdmission;
+        std::optional<CreateDirectoryRequest> _createDirectoryRequest;
+        std::filesystem::path _createdDirectory;
         FileSystemOperation _operation = FILESYSTEM_COPY;
         ExecutionMode _executionMode   = ExecutionMode::PerItem;
         FolderWindow::Pane _sourcePane = FolderWindow::Pane::Left;
@@ -2793,6 +2809,12 @@ struct FolderWindow::FileOperationState
     [[nodiscard]] static uint32_t DebugDecisionMirrorApplyToAllOptionId() noexcept;
 #endif
 
+    HRESULT AdmitCreateDirectory(FolderWindow::Pane sourcePane,
+                                 const wil::com_ptr<IFileSystem>& fileSystem,
+                                 std::wstring pluginId,
+                                 std::wstring pluginShortId,
+                                 std::wstring instanceContext,
+                                 CreateDirectoryRequest request);
     HRESULT QualifyCreateDirectory(const wil::com_ptr<IFileSystem>& fileSystem,
                                    std::wstring_view pluginId,
                                    std::wstring_view instanceContext,

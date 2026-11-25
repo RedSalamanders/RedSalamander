@@ -1,0 +1,1 @@
+- Keep the original when a Move discovers lost security metadata after publishing its copy. Preserve the destination result and report the retention reason in Issues.

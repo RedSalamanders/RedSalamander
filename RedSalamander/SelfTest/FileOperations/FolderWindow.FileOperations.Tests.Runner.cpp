@@ -12401,6 +12401,73 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         ! WriteFilledTestFile(holdDestination, 8192u, 0x22u) || ! WriteFilledTestFile(queuedSource, 2048u, 0x33u) ||
         ! WriteFilledTestFile(payload, 4096u, 0x5Au) || ! WriteFilledTestFile(sentinel, 512u, 0xA5u))
         return reject(L"owned scratch folders could not be created");
+    using State               = FolderWindow::FileOperationState;
+    auto& preparation         = FolderWindowFileOperationsStateInternal::g_fileOpsPreparingBeforePublishPausePoint;
+    const auto workerParent   = root / L"create-worker";
+    const auto canceledFolder = workerParent / L"canceled-folder";
+    const auto occupiedFolder = workerParent / L"suggested-folder";
+    const auto createdFolder  = workerParent / L"suggested-folder (1)";
+    if (! RecreateEmptyDirectory(occupiedFolder) || ! preparation.ArmForSource(workerParent.native()))
+        return reject(L"Create Folder worker fixture could not be prepared");
+    auto releasePreparation = wil::scope_exit([&]() noexcept
+    {
+        preparation.Release();
+        static_cast<void>(CancelOutstandingSelfTestOperations(operations));
+    });
+
+    const HRESULT canceledAdmission = operations->AdmitCreateDirectory(kSource,
+                                                                       state.fsLocal,
+                                                                       L"builtin/file-system",
+                                                                       L"",
+                                                                       L"",
+                                                                       State::CreateDirectoryRequest{
+                                                                           .parent = workerParent,
+                                                                           .name   = L"canceled-folder",
+                                                                       });
+    if (canceledAdmission != S_OK)
+        return reject(L"Create Folder was not queued from the UI thread");
+    std::vector<State::Task*> createTasks;
+    operations->CollectTasks(createTasks);
+    const auto held =
+        std::ranges::find_if(createTasks, [](const State::Task* task) noexcept { return task && task->GetOperation() == FILESYSTEM_CREATE_DIRECTORY; });
+    if (held == createTasks.end())
+        return reject(L"Create Folder was missing from the shared queue");
+    State::Task* const heldCreateTask = *held;
+    const uint64_t heldCreateTaskId   = heldCreateTask->_taskId;
+    const auto preparationEntered     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return preparation.HasEnteredForTask(heldCreateTaskId);
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Create Folder worker preparation"});
+    std::error_code ec;
+    if (! preparationEntered.conditionMet || std::filesystem::exists(canceledFolder, ec) || ec)
+        return reject(L"Create Folder mutation escaped the worker preparation barrier");
+    heldCreateTask->RequestCancel();
+    preparation.Release();
+    const auto canceled = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return ! operations->HasActiveOperations();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Cancel Create Folder preparation"});
+    if (! canceled.conditionMet || std::filesystem::exists(canceledFolder, ec) || ec)
+        return reject(L"Create Folder changed the filesystem after cancellation before dispatch");
+    operations->DismissCompletedTask(heldCreateTaskId);
+
+    const HRESULT createAdmission = operations->AdmitCreateDirectory(kSource,
+                                                                     state.fsLocal,
+                                                                     L"builtin/file-system",
+                                                                     L"",
+                                                                     L"",
+                                                                     State::CreateDirectoryRequest{
+                                                                         .parent               = workerParent,
+                                                                         .name                 = L"suggested-folder",
+                                                                         .defaultName          = L"suggested-folder",
+                                                                         .firstSuggestedSuffix = 0u,
+                                                                     });
+    if (createAdmission != S_OK)
+        return reject(L"Create Folder with a known collision did not enter the worker queue");
+    const auto created = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return ! operations->HasActiveOperations();
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Create Folder collision retry"});
+    if (! created.conditionMet || ! std::filesystem::is_directory(occupiedFolder, ec) || ec || ! std::filesystem::is_directory(createdFolder, ec) || ec)
+        return reject(L"Create Folder did not preserve the occupied name and publish its numbered sibling");
+    releasePreparation.release();
     FileOperationMoveBreadcrumb::SetRootForSelfTest(breadcrumbRoot);
 
     const std::optional<std::filesystem::path> originalLeft  = folder->GetCurrentPath(kSource);
@@ -16734,6 +16801,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsLeftoverPermanentConsentChecks(state, leftoverConsentFailure))
             {
                 Fail(std::format(L"Exact Leftover Cleanup: {}", leftoverConsentFailure));
+                return true;
+            }
+            if (! RunFileOpsLateMoveMetadataLossChecks(state))
+            {
+                Fail(L"Late Move metadata loss did not keep the published copy and original source without an additional question.");
                 return true;
             }
             bool injectedFailureReached = false;

@@ -323,7 +323,7 @@ HRESULT CollectArtifactTouchCandidates(const FileOperations::FileOperationPlanGr
                 }
                 return S_OK;
             }
-            else
+            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
             {
                 const FileOperationArtifacts::DeleteHandoff deleteHandoff = DeleteHandoffForPlan(typedPlan, sourceFileSystem);
                 for (const FileOperations::QualifiedSourceItem& item : typedPlan.selectedItems)
@@ -334,6 +334,11 @@ HRESULT CollectArtifactTouchCandidates(const FileOperations::FileOperationPlanGr
                         return sourceHr;
                     }
                 }
+                return S_OK;
+            }
+            else
+            {
+                // Creating a new name carries no authority to replace an existing artifact.
                 return S_OK;
             }
         },
@@ -886,6 +891,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
                 return typedPlan.intent == FileOperations::TransferIntent::Move ? FILESYSTEM_MOVE : FILESYSTEM_COPY;
             else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
                 return FILESYSTEM_DELETE;
+            else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
+                return FILESYSTEM_CREATE_DIRECTORY;
             else
                 return FILESYSTEM_RENAME;
         },
@@ -927,6 +934,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
             {
                 for (const auto& step : typedPlan.finalMappings)
                     paths.emplace_back(step.source.providerPath);
+            }
+            else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
+            {
+                paths.push_back(typedPlan.providerParentPath);
             }
             else
             {

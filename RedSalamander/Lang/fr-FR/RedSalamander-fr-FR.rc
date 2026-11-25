@@ -1233,6 +1233,7 @@ BEGIN
     IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "Le nom du dossier ne peut pas être '.' ou '..'."
     IDS_MSG_PANE_CREATE_DIR_INVALID_WHITESPACE           "Le nom du dossier ne peut pas contenir de saut de ligne ni de tabulation."
     IDS_FMT_PANE_CREATE_DIR_FAILED                       "Impossible de créer le dossier :\r\n\r\n{0}\r\n\r\nErreur : 0x{1:08X}"
+    IDS_FILEOPS_CREATE_FOLDER_FAILED                     "Impossible de créer le dossier."
     IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "Le plug-in de système de fichiers '{0}' ne prend pas en charge la création de dossiers."
     IDS_MSG_PANE_EDIT_NEW_UNSUPPORTED                    "La création de fichier n’est pas prise en charge par le système de fichiers actuel."
     IDS_FMT_PANE_EDIT_NEW_UNSUPPORTED_PLUGIN             "Le plug-in de système de fichiers '{0}' ne prend pas en charge la création de fichiers."
