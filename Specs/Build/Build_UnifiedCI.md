@@ -241,11 +241,11 @@ and immutable input identity remain required. See the shared
 [SDK cache contract](https://github.com/RedSalamanders/.github/blob/main/Specs/SDK_Cache.md). This compatibility rule
 grants no native or production acceptance; both main regression branches must still pass before production can start.
 
-Native build phases restore the exact vcpkg-tool.json executable and vcpkg.json ports baseline through
-Initialize-RSVcpkgToolContext, then invoke vcpkg-install.ps1 for the selected platform. Process-local pinned
-props/targets, include/library paths and the canonical platform-private install tree are applied before MSBuild; hosted
-images and warm caches are not dependency prerequisites. ReleaseTest executes the already built profile without
-installing or rebuilding. The same prerequisite applies to production and manual native build roles.
+Native build phases restore the exact vcpkg tool and ports baseline through `Initialize-RSVcpkgToolContext` and
+`vcpkg-install.ps1` for the selected platform. MSBuild reads the prepared platform-private installation through the
+repository's explicit include and link properties. The CI adapter binds the runtime search path for that profile.
+`ReleaseTest` executes the previously built profile without installing or rebuilding. Production and manual native
+build roles use the same restore command.
 
 Eligible Main ReleaseTestBuild and Production adapters may prepare the exact pinned qualified SDK input through the
 shared engine, then pass its independent descriptor to build.ps1. Static, ReleaseTest and manual
@@ -253,10 +253,10 @@ Debug/ASan/Qualification do not prepare it. The build receipt and SDK reader sti
 and production packaging; dependency availability never grants regression success or publication. No native/local
 obligation is removed.
 
-Prepare SDK inputs before applying the returned vcpkg build environment. SDK builds and their subsequent ReleaseTest
-reuse retain canonical vcpkg MSBuild imports and installed paths but omit the helper's synthetic `CL` include override.
-Source and manual qualification keep their existing environment. Never clear an inherited caller compiler override: the
-SDK ABI reader must independently reject unsupported overrides rather than accepting a different compiler environment.
+Prepare SDK inputs before applying the restored runtime search path. Preserve inherited compiler, linker and forced
+import overrides through SDK admission so the ABI reader can evaluate the caller's actual environment. The build
+command removes ambient compiler and linker flags and legacy forced vcpkg imports from its MSBuild child environment
+after admission. The repository project properties supply the prepared dependencies for SDK and source builds.
 
 ### Manual diagnostics
 
