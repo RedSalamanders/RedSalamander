@@ -11080,7 +11080,7 @@ case SelfTestState::Step::C0_CurlImapTransportTruth:
                                         : traversalBounds ? 127u
                                         : lateListing     ? 49u
                                         : partialTree     ? 37u
-                                        : replyLoss       ? 33u
+                                        : replyLoss       ? 49u
                                                           : 29u;
     AppendLog(std::format(L"C0 Curl {}: {} passed, {} failed, hr=0x{:08X}; expected {} checks.",
                           imapTransport     ? L"IMAP transport truth"

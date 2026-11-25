@@ -854,7 +854,8 @@ struct FileOperationProgress
                                               std::wstring_view sourcePath,
                                               std::wstring_view destinationPath,
                                               HRESULT status,
-                                              bool sourceObservedWithoutMutation = false) noexcept
+                                              bool sourceObservedWithoutMutation                  = false,
+                                              const FileSystemItemMutationResult* suppliedReceipt = nullptr) noexcept
     {
         if (! callback)
         {
@@ -882,8 +883,8 @@ struct FileOperationProgress
         // evidence can report a retained original. Callers must clear it before any mutation
         // attempt, including owned staging/overwrite work; absent evidence stays unknown.
         FileSystemItemMutationResult mutation{};
-        const FileSystemItemMutationResult* mutationResult = nullptr;
-        if (operation == FILESYSTEM_DELETE || operation == FILESYSTEM_MOVE || operation == FILESYSTEM_RENAME)
+        const FileSystemItemMutationResult* mutationResult = suppliedReceipt;
+        if (! mutationResult && (operation == FILESYSTEM_DELETE || operation == FILESYSTEM_MOVE || operation == FILESYSTEM_RENAME))
         {
             mutation.sizeBytes = sizeof(mutation);
             if (SUCCEEDED(status))
