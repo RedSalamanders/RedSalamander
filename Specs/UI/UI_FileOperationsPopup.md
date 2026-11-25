@@ -384,6 +384,9 @@ the current child path and terminal status MUST NOT replace this identity. A col
 card keeps that subject. Middle shortening retains the useful name ending/file extension; the
 exact full heading remains in the task-owned `Subject` tooltip/accessibility region.
 
+Pack uses its command label for the operation and follows the shared task reveal, queue, pause and Cancel rules.
+Until the worker can report a measured amount, its card keeps progress indeterminate.
+
 For normal expanded Copy/Move cards the order is:
 
 1. Operation/subject at the left, status and disclosure at the right.

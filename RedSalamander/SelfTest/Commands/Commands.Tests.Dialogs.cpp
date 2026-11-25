@@ -8383,6 +8383,20 @@ void AutomateChangeCasePrompt(
     return state.failure.empty();
 }
 
+[[nodiscard]] std::optional<FolderWindow::ArchiveCommandDebugResult> WaitForArchiveDialogCommandResult() noexcept
+{
+    using namespace std::chrono_literals;
+    std::optional<FolderWindow::ArchiveCommandDebugResult> result;
+    static_cast<void>(RedSalamander::TestSupport::PumpMessagesUntil(
+        [&]() noexcept
+    {
+        result = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        return result.has_value();
+    },
+        {.timeout = SelfTest::Scale(5000ms), .operationName = L"Archive command after dialog confirmation"}));
+    return result;
+}
+
 [[nodiscard]] bool TestArchivePackPromptUsesDxUiUniqueArchiveAndPackerExtensions(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -8582,6 +8596,7 @@ void AutomateChangeCasePrompt(
     state.Require(confirm.captured7z, L"Failed to capture the 7z Pack prompt state.");
     state.Require(confirm.actionTriggered, L"Failed to confirm the Pack prompt for 7z creation.");
     state.Require(confirm.closed, L"Pack prompt did not close after 7z confirmation.");
+    const auto packResult = confirm.closed && confirm.actionTriggered && confirm.found7zPacker ? WaitForArchiveDialogCommandResult() : std::nullopt;
     if (confirm.captured7z)
     {
         state.Require(std::filesystem::path(confirm.packer7zSnapshot.archivePathText).extension() == L".7z",
@@ -8590,7 +8605,6 @@ void AutomateChangeCasePrompt(
                       std::format(L"Confirmed 7z Pack prompt should create '{}'.", confirm.packer7zSnapshot.archivePathText));
     }
 
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> packResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
     state.Require(packResult.has_value(), L"7z Pack prompt should record a debug pack result.");
     if (packResult.has_value())
     {
@@ -8694,8 +8708,7 @@ void AutomateChangeCasePrompt(
     packOptions.overwrite   = true;
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(packOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack"), L"cmd/pane/pack should create the Unpack prompt fixture.");
-    PumpPendingMessages();
-    const std::optional<FolderWindow::ArchiveCommandDebugResult> packResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    const auto packResult = WaitForArchiveDialogCommandResult();
     state.Require(packResult.has_value() && SUCCEEDED(packResult->hr), L"Unpack prompt fixture archive should be created.");
     state.Require(SelfTest::PathExists(archivePath), L"Unpack prompt fixture archive should exist.");
     if (! state.failure.empty())
