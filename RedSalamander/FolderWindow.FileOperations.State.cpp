@@ -21310,25 +21310,34 @@ struct CrossFileSystemBridge
 
             constexpr uint32_t kSecuritySignificantLoss =
                 FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
-            if (managedCleanupRecord.Pending() && (finalMetadata.lostFeatures & kSecuritySignificantLoss) != 0u)
+            const uint32_t securitySignificantLoss = finalMetadata.lostFeatures & kSecuritySignificantLoss;
+            if (managedCleanupRecord.Pending() && securitySignificantLoss != 0u)
             {
-                const DeferredConsentResult consent = RequestBridgeConsent(FileOperations::DeferredConsentRisk::MetadataLoss,
-                                                                           FAILED(finalMetadata.firstFailure) ? finalMetadata.firstFailure : S_FALSE,
-                                                                           sourcePath,
-                                                                           destinationPath,
-                                                                           &sourceMetadataAuthority,
-                                                                           &sourceMetadataSnapshot);
-                if (FAILED(consent.status))
+                ConflictAction metadataAction = ConflictAction::RetainSource;
+                if (useIdentityOwnedStage)
                 {
-                    return consent.status;
+                    const DeferredConsentResult consent = RequestBridgeConsent(FileOperations::DeferredConsentRisk::MetadataLoss,
+                                                                               FAILED(finalMetadata.firstFailure) ? finalMetadata.firstFailure : S_FALSE,
+                                                                               sourcePath,
+                                                                               destinationPath,
+                                                                               &sourceMetadataAuthority,
+                                                                               &sourceMetadataSnapshot);
+                    if (FAILED(consent.status))
+                        return consent.status;
+                    metadataAction = consent.action;
                 }
-                if (consent.action == ConflictAction::RetainSource)
+                else
+                {
+                    // Commit already published the destination. Keep the source without authorizing cleanup after publication.
+                    Debug::Perf::EmitValue(L"FileOps.Metadata.LateMoveSourceRetained", securitySignificantLoss, S_FALSE);
+                }
+                if (metadataAction == ConflictAction::RetainSource)
                 {
                     MarkManagedSourceRetained(
                         sourcePath, destinationPath, S_FALSE, FileOperationState::LocalizedDiagnosticText{IDS_FILEOPS_RETAINED_SOURCE_SECURITY_METADATA});
                     managedCleanupRecord = {};
                 }
-                else if (consent.action != ConflictAction::Proceed)
+                else if (metadataAction != ConflictAction::Proceed)
                 {
                     return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 }
