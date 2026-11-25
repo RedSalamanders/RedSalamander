@@ -1190,6 +1190,7 @@ the same synchronous reporter and counter path as the pointer overload.
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
+  `FileOps_DeferredExitRefusesNewWork` also compares F7 prompt appearance from a displayed Dummy listing with a delayed direct read of the same parent, then verifies the worker's numbered creation and pane refresh;
   the Copy-only Move witness uses an owned provider and synthetic task decisions under the same blocker;
   the provider capability matrix uses private providers, owned data and direct task controls;
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
