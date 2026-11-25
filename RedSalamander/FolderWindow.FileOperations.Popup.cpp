@@ -13598,10 +13598,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     constexpr int kAutoDismissCommand = 1;
     constexpr int kCompactCommand     = 2;
     constexpr int kExpandedCommand    = 3;
+    constexpr int kIssuesCommand      = 4;
     const bool autoDismiss            = fileOps->GetAutoDismissSuccess();
     const bool compactDensity         = fileOps->GetPopupCompactDensity();
 
-    std::array<DxUi::MenuFlyoutItem, 4u> items{};
+    std::array<DxUi::MenuFlyoutItem, 6u> items{};
     items[0].kind      = DxUi::MenuItemKind::Toggle;
     items[0].text      = LoadStringResource(nullptr, autoDismiss ? IDS_FILEOPS_CHECK_AUTODISMISS_ON : IDS_FILEOPS_CHECK_AUTODISMISS_OFF);
     items[0].commandId = kAutoDismissCommand;
@@ -13615,6 +13616,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     items[3].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_DENSITY_EXPANDED);
     items[3].commandId = kExpandedCommand;
     items[3].checked   = ! compactDensity;
+    items[4].kind      = DxUi::MenuItemKind::Separator;
+    items[5].kind      = DxUi::MenuItemKind::Toggle;
+    items[5].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
+    items[5].commandId = kIssuesCommand;
+    items[5].checked   = fileOps->IsIssuesPaneVisible();
 
     DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     const auto anchor = ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterOptions, 0u, 0u}, DxUi::ContextMenuRootVerticalPlacement::Above);
@@ -13644,6 +13650,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
             fileOps->SetPopupCompactDensity(chosen.value() == kCompactCommand);
             _maxAutoSizedWindowHeight   = 0;
             _lastAutoSizedContentHeight = -1.0f;
+        }
+        else if (chosen.value() == kIssuesCommand)
+        {
+            fileOps->ToggleIssuesPane();
+            return;
         }
         Invalidate(hwnd);
     },

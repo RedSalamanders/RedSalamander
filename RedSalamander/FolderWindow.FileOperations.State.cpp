@@ -4,6 +4,7 @@
 #include "Blake3Digest.h"
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
+#include "FileOperationConfirmation.h"
 #include "FileOperationItemResultReducer.h"
 #include "FileOperationTraversalPolicy.h"
 #include "FileOperationsConflictBroker.h"
@@ -10199,6 +10200,17 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
 
     if (operationType != _operation)
     {
+        if (operationType == FILESYSTEM_DELETE && _operation == FILESYSTEM_MOVE && _executionMode == ExecutionMode::PerItem && cookie != nullptr)
+        {
+            auto& item = *static_cast<PerItemCallbackCookie*>(cookie);
+            std::scoped_lock lock(_sourceItemStatusMutex);
+            if (item.captureMoveSourceRecycleResult)
+            {
+                const bool validCompletion   = ! item.moveSourceRecycleStatus.has_value() && itemIndex == 0u && FileSystemOptionsHaveValidHeader(options);
+                item.moveSourceRecycleStatus = validCompletion ? status : E_UNEXPECTED;
+                item.moveSourceRecycleResult = validCompletion ? FileSystemRouteContract::SnapshotItemMutationResult(mutationResult) : std::nullopt;
+            }
+        }
         return S_OK;
     }
 
@@ -10469,7 +10481,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
         atomicReplaceEligible = true;
     }
 
-    ConflictBucket bucket = ClassifyConflictBucket(operationType, _flags, wil::com_ptr<IFileSystemIO>{}, status, sourceText, destinationText, false);
+    const FileSystemFlags issueFlags = perItemCookie ? perItemCookie->operationFlags.value_or(_flags) : _flags;
+    ConflictBucket bucket = ClassifyConflictBucket(operationType, issueFlags, wil::com_ptr<IFileSystemIO>{}, status, sourceText, destinationText, false);
 #ifdef ENABLE_TESTS
     if (bucket == ConflictBucket::RegularFileExists && perItemCookie != nullptr && ! perItemCookie->operationDestinationPath.empty() &&
         ! NavigationLocation::EqualsNoCase(destinationText, perItemCookie->operationDestinationPath))
@@ -12642,7 +12655,7 @@ HRESULT FolderWindow::FileOperationState::Task::RefuseByNameRootHeldByAnotherTas
     return HRESULT_FROM_WIN32(ERROR_BUSY);
 }
 
-std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsentNote() const
+std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsentNote(size_t recycleCount) const
 {
     const auto scopeOwner                                                     = LoadMutationInterlockScopes();
     const auto& scopes                                                        = *scopeOwner;
@@ -12702,6 +12715,12 @@ std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsent
     {
         append(IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER);
     }
+    if (recycleCount != 0u)
+    {
+        if (! note.empty())
+            note.push_back(L' ');
+        note += FormatStringResource(nullptr, IDS_FILEOPS_CONSENT_ALSO_RECYCLE, FormatFileOperationCountNoun(FileOperationCountNoun::Item, recycleCount));
+    }
     return note;
 }
 
@@ -12738,11 +12757,22 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         request.status        = S_OK;
         request.sourcePath    = _permanentDeleteConsentFrom;
         request.consentDetail = _permanentDeleteConsentDetail;
-        // C10/I35: how this location deletes (and a handed-off leftover's warning) is a paragraph of
-        // its own after the question, not part of the counts text.
-        request.consentNote                = BuildPermanentDeleteConsentNote();
+        size_t permanentCount = 0u;
+        if (const auto plans = LoadPlans())
+        {
+            for (const auto& plan : *plans)
+            {
+                const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+                if (deletion && deletion->mode == FileOperations::DeleteMode::Permanent)
+                    permanentCount += deletion->selectedItems.size();
+            }
+        }
+        if (permanentCount == 0u || permanentCount > _sourcePaths.size())
+            return E_UNEXPECTED;
+        // The prompt covers the permanent subset and discloses the accompanying Recycle items.
+        request.consentNote                = BuildPermanentDeleteConsentNote(_sourcePaths.size() - permanentCount);
         request.itemCountKnown             = true;
-        request.itemCount                  = _sourcePaths.size();
+        request.itemCount                  = permanentCount;
         const DeferredConsentResult result = RequestDeferredConsent(*this, request);
         if (FAILED(result.status))
         {
@@ -18418,11 +18448,8 @@ struct CrossFileSystemBridge
         return distinct;
     }
 
-    // I63 B4: Delete source on a Move collision. The destination keeps the file it has and nothing is copied; the
-    // source goes to the Recycle Bin by name through the source provider's own Delete, which only the Local provider
-    // is asked to do (ValidateDestinationOverwritePolicy). A location without a Recycle Bin is refused by that
-    // provider before any change (ERROR_NOT_SUPPORTED); that source is then deleted permanently or kept by the task's
-    // one answer to that question (I63 D-5, RemoveSourceWithoutRecycleBin).
+    // Delete source keeps the existing destination. A known unavailable Recycle route goes straight to consent.
+    // A guarded attempt may reach that consent only after a receipt proves the original is still present.
     // Returns S_OK when the source is gone and S_FALSE when it was kept, which the callers treat as a skip.
     [[nodiscard]] HRESULT RemoveSourceAlreadyAtDestination(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
     {
@@ -18430,26 +18457,51 @@ struct CrossFileSystemBridge
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
+        const auto route = FileSystemRouteContract::Query(&sourceFs, sourcePath, FILESYSTEM_DELETE, task._sourcePluginId);
+        if (route.state != FileSystemRouteContract::QueryState::Available)
+            return FAILED(route.status) ? route.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        constexpr HRESULT noRecycle = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        if (! route.snapshot.recycleOperation)
+            return route.snapshot.deleteOperation ? RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, noRecycle) : noRecycle;
+
+        auto* const item = static_cast<Task::PerItemCallbackCookie*>(cookie);
+        if (! item)
+            return E_UNEXPECTED;
+        {
+            std::scoped_lock lock(task._sourceItemStatusMutex);
+            item->moveSourceRecycleStatus.reset();
+            item->moveSourceRecycleResult.reset();
+            item->captureMoveSourceRecycleResult = true;
+        }
         mutationAttemptFlags.fetch_or(kSourceDeleteAttemptedFlag, std::memory_order_acq_rel);
         FileSystemOptions deleteOptions = options;
         const HRESULT deleteHr          = sourceFs.DeleteItem(sourcePath.c_str(), FILESYSTEM_FLAG_USE_RECYCLE_BIN, &deleteOptions, &task, cookie);
-        if (SUCCEEDED(deleteHr))
+        std::optional<FileSystemItemMutationResult> receipt;
+        HRESULT receiptStatus = E_PENDING;
         {
-            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
-            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
-                               deleteHr,
-                               L"bridge.move.discardSource",
-                               L"The destination already holds the file; the source was moved to the Recycle Bin on request.",
+            std::scoped_lock lock(task._sourceItemStatusMutex);
+            item->captureMoveSourceRecycleResult = false;
+            receiptStatus                        = std::exchange(item->moveSourceRecycleStatus, std::nullopt).value_or(E_PENDING);
+            receipt                              = std::exchange(item->moveSourceRecycleResult, std::nullopt);
+        }
+        const bool removed  = receipt && receipt->outcomeKnown == TRUE && receipt->mutationCommitted == TRUE && receipt->originalStillPresent == FALSE;
+        const bool retained = receipt && receipt->outcomeKnown == TRUE && receipt->mutationCommitted == FALSE && receipt->originalStillPresent == TRUE;
+        if (! removed && ! retained)
+        {
+            constexpr HRESULT unknown = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            managedCleanupIndeterminate.store(true, std::memory_order_release);
+            NoteFailure(QualifiedItemFailurePhase::SourceCleanup, unknown);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                               unknown,
+                               L"delete.recycle.indeterminate",
+                               L"Recycle could not prove the source result; permanent deletion was not offered.",
                                sourcePath,
                                destinationPath);
-            return S_OK;
+            return unknown;
         }
-        if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
-        {
-            // The provider refused before any change: the source's location has no Recycle Bin (I63 D-5).
-            return RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, deleteHr);
-        }
-        if (deleteHr == COPYENGINE_E_RECYCLE_FORCE_NUKE)
+        if (retained && receiptStatus == noRecycle)
+            return RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, receiptStatus);
+        if (removed && (receiptStatus == COPYENGINE_E_RECYCLE_FORCE_NUKE || deleteHr == COPYENGINE_E_RECYCLE_FORCE_NUKE))
         {
             // Windows destroyed the source instead of recycling it: it is gone, and the card must not say it can be restored.
             task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
@@ -18461,14 +18513,26 @@ struct CrossFileSystemBridge
                                destinationPath);
             return S_OK;
         }
-        NoteFailure(QualifiedItemFailurePhase::SourceCleanup, deleteHr);
+        if (removed)
+        {
+            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
+                               deleteHr,
+                               L"bridge.move.discardSource",
+                               L"The destination already holds the file; the source was moved to the Recycle Bin on request.",
+                               sourcePath,
+                               destinationPath);
+            return S_OK;
+        }
+        const HRESULT retainedHr = FAILED(receiptStatus) ? receiptStatus : (FAILED(deleteHr) ? deleteHr : E_UNEXPECTED);
+        NoteFailure(QualifiedItemFailurePhase::SourceCleanup, retainedHr);
         task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
-                           deleteHr,
+                           retainedHr,
                            L"bridge.move.discardSourceFailed",
                            L"The source could not be moved to the Recycle Bin after the destination was found to hold the file.",
                            sourcePath,
                            destinationPath);
-        return deleteHr;
+        return retainedHr;
     }
 
     // I63 D-5: the one question a task asks when Delete source meets a source location without a Recycle Bin: "This
@@ -27124,6 +27188,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> retryCounts{};
                     std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> cachedModifierAttempts{};
                     FileSystemFlags itemFlags = useResolvedItems ? resolvedItems[index].flags : _flags;
+                    if (_operation == FILESYSTEM_DELETE && index < deletePlanBySourceIndex.size() && deletePlanBySourceIndex[index] != nullptr)
+                    {
+                        if (deletePlanBySourceIndex[index]->mode == FileOperations::DeleteMode::Recycle)
+                            itemFlags = static_cast<FileSystemFlags>(itemFlags | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+                        else
+                            itemFlags = static_cast<FileSystemFlags>(itemFlags & ~FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+                    }
 
                     bool itemSucceeded        = false;
                     bool itemSkipped          = false;
@@ -27271,6 +27342,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                 }
                             }
                             PerItemCallbackCookie cookie{index};
+                            cookie.operationFlags               = itemFlags;
                             cookie.operationDestinationPath     = destinationItemText;
                             cookie.sourceIsDirectory            = isDirectoryShell || (index < _sourcePathAttributesHint.size() &&
                                                                                        (_sourcePathAttributesHint[index] & FILE_ATTRIBUTE_DIRECTORY) != 0u);

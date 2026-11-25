@@ -12,7 +12,12 @@ The implementation may change public and host-internal payloads while this progr
 development. The host, every shipped provider, Dummy, and all tests use one ABI version. There is
 no capability-v1 adapter or dual parser.
 
-Create Directory remains a provider command outside `StartOperation`, but not outside admission.
+Create Directory uses the provider command path and the typed admission contract. An accepted
+application exit or window close refuses it before the name prompt and at submission. An owner
+shut down while the modal prompt dispatches messages cannot admit the mutation. The prompt captures
+the provider instance and parent, so later pane navigation cannot redirect the operation.
+Completion refreshes a pane only when it still displays that parent on the captured route.
+Admission keeps the provider's name or route failure for the pane feedback.
 The host queries capability v2 for the concrete parent and provider-joined candidate with
 `FILESYSTEM_CREATE_DIRECTORY`, requires `operations.createDirectory: true`, matching non-empty
 path-scoped `rootId`/`pathProfile`, one feasible provider-native component, and exact immediate-child
@@ -1857,6 +1862,21 @@ Such an unexpected partial mutation remains `Failed`/`Retained` and aggregates a
 `ERROR_PARTIAL_COPY`; only an explicit user Skip is `Skipped` and eligible for `S_FALSE`. Recycle
 does not inherit this shortcut: shell-owned work remains unknown unless its per-item completion sink
 provides terminal mutation truth.
+
+Delete admission resolves each selected path against the typed provider route. An available
+Delete route with an explicit Recycle refusal requires permanent consent before mutation. A Local
+descriptor that offers the guarded Shell route still leaves the item's Recycle support unknown.
+The requested Recycle mode uses that guarded route when support is unknown. An unavailable
+or unqualified provider route cannot grant either operation. Move's Delete source uses the same
+known-unavailable shortcut with its own one-per-task consent. A guarded attempt reaches that consent
+only with a proved non-commit and the original still present.
+
+A mixed selection admits separate Recycle and Permanent Delete plans under one task. Permanent
+consent covers only the permanent plans and discloses the accompanying Recycle count. Cancel
+stops the entire task before either group mutates. Accepted permanent items use the per-item
+executor, a typed consent receipt and the existing object or by-name checks. Recycle items
+retain their guards and receipt rules. A homogeneous Local Recycle task still uses Shell batching
+where its ingress can benefit from it.
 
 Recycle never deletes permanently. Local Recycle runs the Shell's `IFileOperation` without its
 confirmation UI, which would otherwise answer the Shell's own "delete permanently?" question when it

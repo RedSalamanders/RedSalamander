@@ -1175,7 +1175,8 @@ the same synchronous reporter and counter path as the pointer overload.
   and UIA witnesses share foreground invariants. The only reviewed lease
   exceptions are `-Suite FileOps` with the exact, case-sensitive
   `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`,
-  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
+  `FileOps_RepeatDecisionContracts`, `FileOps_ReviewRemediationContracts`, `FileOps_DeferredExitRefusesNewWork`,
+  `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
   `FileOps_SmbCorroboratedRenameProvider`, or
@@ -1187,6 +1188,7 @@ the same synchronous reporter and counter path as the pointer overload.
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the exact cadence case uses a private nonactivating popup and preserves its existing
   foreground-preservation observations without acquiring foreground;
+  the deferred-exit case uses the activation blocker, direct command dispatch and message-only close targets;
   they require no foreground ownership transfer, UIA, clipboard or pointer input. Casing
   near-misses, wildcards, multiple-case filters and unknown names fail closed to
   the existing lease. This does not grant activation. Keep

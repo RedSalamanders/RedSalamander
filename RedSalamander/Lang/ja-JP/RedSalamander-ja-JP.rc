@@ -1785,6 +1785,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "フォルダーが空では
     IDS_FILEOPS_CONFLICT_BTN_DELETE_ALL_BY_NAME           "残りをすべて名前で削除"
     IDS_FILEOPS_CONSENT_BY_NAME_CHECKED                   "この場所では、名前がどのオブジェクトを指すかを確認できないため、Red Salamander は今一覧にした項目だけを名前で削除します: 選択した各項目と、選択したフォルダーの中身すべてです。各項目は削除の直前に再確認され (属性、日時、ファイルのサイズ)、変わった項目で削除は停止し、一覧にした後に追加された項目は決して削除されません。ファイルのサイズと日時を変えない変更は検出できず、一部のネットワーク共有は最近の変更を遅れて報告するため、フォルダーの一部が削除された後に停止することがあります。"
     IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER                 "これらの項目の一部は、中断されたコピーまたは移動の残りである可能性があります。データが不完全な場合や、元のファイルの唯一のコピーである場合があります。"
+    IDS_FILEOPS_CONSENT_ALSO_RECYCLE                      "{0}もごみ箱に移動します。"
     IDS_FILEOPS_NOTE_DELETED_BY_NAME                      "名前で削除しました: この場所では、名前がどのオブジェクトを指すかを確認できません。"
     IDS_FILEOPS_NOTE_RECYCLE_ESCALATED_BY_NAME            "要求に従って名前で削除しました: ごみ箱に移動できず、この場所では名前がどのオブジェクトを指すかを確認できません。"
     IDS_CMD_CLEANUP_LEFTOVERS                             "中断された操作の残りを整理"

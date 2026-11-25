@@ -2083,6 +2083,7 @@ IDS_FILEOPS_DIAG_FOLDER_NOT_EMPTY                   "The folder is not empty. Ch
     IDS_FILEOPS_CONFLICT_BTN_DELETE_ALL_BY_NAME           "Delete all remaining by name"
     IDS_FILEOPS_CONSENT_BY_NAME_CHECKED                   "This location cannot prove which object a name refers to, so Red Salamander deletes by name only what it lists now: each selected item and everything inside a selected folder. Each item is checked again right before it is deleted (attributes, dates and a file's size): the delete stops at an item that changed, and nothing added after the listing is ever deleted. A change that keeps a file's size and dates cannot be noticed, and some network shares report recent changes late, so the delete may stop after part of a folder is gone."
     IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER                 "Some of these items may be left over from an interrupted copy or move: their data may be incomplete, or one may be the only copy of an original."
+    IDS_FILEOPS_CONSENT_ALSO_RECYCLE                      "Also move {0} to the Recycle Bin."
     IDS_FILEOPS_NOTE_DELETED_BY_NAME                      "Deleted by name: this location cannot prove which object a name refers to."
     IDS_FILEOPS_NOTE_RECYCLE_ESCALATED_BY_NAME            "Deleted by name at your request: the Recycle Bin could not take it and this location cannot prove which object a name refers to."
     IDS_CMD_CLEANUP_LEFTOVERS                             "Clean Up Leftovers of Interrupted Operations"
