@@ -3560,7 +3560,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                         paths.taskId        = 1u;
                         const bool fit      = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), paths) && paths.taskPaintedPathCount >= 2u &&
                                               paths.taskPaintedPathsFit && paths.taskPaintedPathsValidUnicode && paths.taskPaintedPathsRetainRawExtension &&
-                                              paths.completedGroupBadgeTooltipsInformative;
+                                              paths.hostedTooltipsInformative;
                         abbreviatedPathsFit = abbreviatedPathsFit && fit;
                         AppendLog(std::format(L"AbbreviatedPathsFit: {} display={} dpi={} width={} paths={} fit={} unicode={} extension={} accessible={}",
                                               scenario.name,
@@ -3571,7 +3571,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
                                               paths.taskPaintedPathsFit,
                                               paths.taskPaintedPathsValidUnicode,
                                               paths.taskPaintedPathsRetainRawExtension,
-                                              paths.completedGroupBadgeTooltipsInformative));
+                                              paths.hostedTooltipsInformative));
                     }
                     if (scenario.name == L"17-verifying" || scenario.name == L"13-delete")
                     {

@@ -80,11 +80,6 @@ struct ChangeCaseCompletedPayload final
 #ifdef ENABLE_TESTS
 [[nodiscard]] std::wstring GetWindowClassNameLocal(HWND hwnd);
 [[nodiscard]] size_t CountVisibleNativeChildControlWindowsLocal(HWND hwnd) noexcept;
-[[nodiscard]] HRESULT DebugResolveInitialCreateDirectoryNameForTests(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                                     const std::filesystem::path& folder,
-                                                                     std::wstring_view defaultName,
-                                                                     std::wstring_view pluginId,
-                                                                     std::wstring& nameOut) noexcept;
 #endif
 [[nodiscard]] int ScalePanePromptForDpi(UINT dpi, int dip) noexcept;
 [[nodiscard]] HWND GetClipboardOwnerWindow(HWND window) noexcept;

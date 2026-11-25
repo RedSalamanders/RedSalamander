@@ -1179,7 +1179,8 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
-  `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`, or
+  `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
+  `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
@@ -1187,6 +1188,7 @@ the same synchronous reporter and counter path as the pointer overload.
   the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
+  the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
   the provider capability matrix uses private providers, owned data and direct task controls;
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
@@ -2422,7 +2424,7 @@ invented independently selectable cases. Separately registered families remain f
 | `FileOps_SafetyRemediationContracts` | Partial Move `task.result` text, a synthetic finalizer witness (no executor or provider runs): a constructed per-item Move `Task` stores a fully moved root next to a failed root, finalizes `ERROR_PARTIAL_COPY`, and `Task::FormatPartialMoveResultMessage` counts the finalized typed source dispositions (moved, kept, unknown), here `moved=1, kept=1, unknown=0`. The text must not claim "source preserved" when another root was moved. |
 | `FileOps_CrossVolumeMoveAfterPartialPublicationStorage` / `FileOpsFamily_CrossVolumeMovePartialStorage` | Real Local Managed Move across independently identified volumes, explicit serial budget, first actual publication paused, and exact later source stage-write failure after positive real write. First selected leaf must finish `Published`/`Verified`/`Removed` with stage `Published`; later leaf must finish `Failed`/`NotPublished`/`NotApplicable`/`Retained` with stage `Removed`: verification was requested but never reached. Normal continue-on-error preserves the actual WriteFault diagnostic and reports `ERROR_PARTIAL_COPY`. |
 | `FileOps_OwnedProductionShutdown` / `FileOpsFamily_OwnedProductionShutdown` | A private owned child reaches normal verified Copy overwrite consent, pauses after a positive incomplete host-bridge owned-stage write, and drives actual application `WM_CLOSE`, deferred cancellation, settings save and `WM_DESTROY` through natural process exit. Require the real `Copy` strategy, exact paths, persisted stage bytes/proof and production worker quiet point. A helper-level Shutdown call or killed process cannot satisfy this witness. |
-| `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage` / `FileOpsFamily_RepeatedNonClipboardStorage` | Admit two intentional non-clipboard commands with distinct task IDs. Pause first real host-managed publication, accept second task's actual SameHostOverlap Queue-after choice, prove it has not entered/discovered/published/completed, then release first. Copy reaches normal Exists/Skip; Move reaches normal missing-source failure after the first real Move removed its source. Require separate callbacks, typed results, exact published occupant/sentinel bytes and file IDs, closed trees and unchanged foreground. |
+| `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage` / `FileOpsFamily_RepeatedNonClipboardStorage` | Admit two intentional non-clipboard commands with distinct task IDs. Pause the first real host-managed publication. Verify that the second waits automatically behind its exact predecessor without a prompt, discovery, publication or completion. Then release the first. Copy reaches normal Exists/Skip; Move reaches normal missing-source failure after the first real Move removed its source. Require separate callbacks, typed results, exact published occupant/sentinel bytes and file IDs, closed trees and unchanged foreground. |
 | `FileOps_AdmissionBaseline` / `FileOpsFamily_AdmissionBaseline` | Measure actual UI-thread `AdmitOperation` for qualified Local, alternate-volume, test-owned-VHDX mounted-volume and available loopback-UNC routes, including mixed endpoint partitions; cancel at a real preconsumption readiness gate and prove unchanged actual closed inventories. Counter-only helper calls cannot substitute for admission. |
 | `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof` | This renamed historical `FileOps_CrossVolumeMovePartialFailureStatus` control is Local-to-Dummy **Copy-only Move without destination content proof**. It checks normal `S_FALSE` source retention plus original/source/destination exact bytes/BLAKE3. It does not witness a real cross-volume Managed Move, partial publication failure or source removal. |
 
@@ -2712,6 +2714,11 @@ Header-input fixtures MUST convert snapshot DIPs to client pixels through the ca
 hit-test the intended logical column, and prove an intermediate order change. Restored descending
 sorts must exercise the complete descending/none/ascending/descending cycle before checking the
 restored order, layout and exact selected path; a missed click cannot satisfy the sorting proof.
+
+Commands' `cmd_pane_fileops_completed_group_and_navigation` checks the first collapsed frame.
+It counts tooltip controls owned by the Completed-group status badges, checks that each badge has
+informative accessible text, and verifies that the clean tasks leave the hosted accessibility tree.
+The mixed fixture keeps problem cards and their independent tooltip controls visible.
 
 Commands' `cmd_pane_fileops_conflict_rejects_stale_same_task_presentation` retains UIA actions from
 prompt A, publishes B on the same task before redraw, and proves that old primary/overflow/scope and

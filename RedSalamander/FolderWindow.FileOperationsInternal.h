@@ -491,6 +491,12 @@ struct CreateDirectoryAdmission
 };
 
 [[nodiscard]] std::wstring BuildCreateDirectorySuggestedName(std::wstring_view baseName, unsigned int suffix);
+[[nodiscard]] HRESULT FindCreateDirectorySuggestedSuffix(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                         const std::filesystem::path& folder,
+                                                         std::wstring_view defaultName,
+                                                         std::wstring_view pluginId,
+                                                         unsigned int firstSuffix,
+                                                         unsigned int& suggestedSuffix) noexcept;
 using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan, CreateDirectoryAdmission>;
 // One user admission may contain several executable child plans when a selection spans provider
 // roots. Every child remains qualified by exactly one source endpoint; the admission owns the

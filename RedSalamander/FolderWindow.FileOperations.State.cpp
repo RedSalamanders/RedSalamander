@@ -13067,46 +13067,50 @@ HRESULT FolderWindow::FileOperationState::Task::RunSameHostOverlapAdvisory() noe
     {
         return S_OK;
     }
-    Debug::Perf::EmitValue(L"FileOps.Overlap.AdvisoryShown", advice.taskCount, S_OK);
-
-    const std::wstring sourcePath      = _sourcePaths.empty() ? std::wstring() : _sourcePaths.front().native();
-    const std::wstring destinationPath = GetDestinationFolder().native();
-    DeferredConsentRequest request{};
-    request.risk                       = FileOperations::DeferredConsentRisk::SameHostOverlap;
-    request.status                     = HRESULT_FROM_WIN32(ERROR_BUSY);
-    request.sourcePath                 = sourcePath;
-    request.destinationPath            = destinationPath;
-    request.itemCountKnown             = true;
-    request.itemCount                  = advice.taskCount;
-    request.overlapProblem             = static_cast<uint8_t>(advice.problem);
-    request.overlapTaskId              = advice.firstTaskId;
-    request.overlapTaskIds             = advice.taskIds;
-    request.overlapTaskIdCount         = advice.taskIdCount;
-    request.allowConcurrentRun         = advice.CanRunConcurrently();
-    const DeferredConsentResult result = RequestDeferredConsent(*this, request);
-    if (FAILED(result.status) || (result.action != ConflictAction::Proceed && result.action != ConflictAction::RunConcurrently))
+    if (! IsWaitingForOthers() && advice.CanRunConcurrently())
     {
-        // I35 R9.6: "Don't start" is the user's answer to this question; a Cancel all or close while
-        // it waited is not, and the question's decision stays unrecorded either way.
-        const bool canceledWhilePending = _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
-        if (canceledWhilePending)
-            Debug::Perf::EmitValue(L"FileOps.Overlap.CanceledWhilePending", 1u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
-        else if (result.status == HRESULT_FROM_WIN32(ERROR_CANCELLED) && result.action == ConflictAction::Cancel)
-            Debug::Perf::EmitValue(L"FileOps.Overlap.DontStart", 1u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
-        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
-    }
-    if (result.action == ConflictAction::RunConcurrently)
-    {
-        relations.concurrentKeys  = advice.admissionKeys;
-        relations.concurrentCount = advice.relationCount;
-        // This explicit per-task choice supersedes the global wait mode only for admission;
-        // undisclosed overlapping active tasks still block in EnterOperation.
-        _waitForOthers.store(false, std::memory_order_release);
-        Debug::Perf::EmitValue(L"FileOps.Overlap.RunConcurrent", advice.taskCount, S_OK);
-        return S_OK;
+        Debug::Perf::EmitValue(L"FileOps.Overlap.AdvisoryShown", advice.taskCount, S_OK);
+
+        const std::wstring sourcePath      = _sourcePaths.empty() ? std::wstring() : _sourcePaths.front().native();
+        const std::wstring destinationPath = GetDestinationFolder().native();
+        DeferredConsentRequest request{};
+        request.risk                       = FileOperations::DeferredConsentRisk::SameHostOverlap;
+        request.status                     = HRESULT_FROM_WIN32(ERROR_BUSY);
+        request.sourcePath                 = sourcePath;
+        request.destinationPath            = destinationPath;
+        request.itemCountKnown             = true;
+        request.itemCount                  = advice.taskCount;
+        request.overlapProblem             = static_cast<uint8_t>(advice.problem);
+        request.overlapTaskId              = advice.firstTaskId;
+        request.overlapTaskIds             = advice.taskIds;
+        request.overlapTaskIdCount         = advice.taskIdCount;
+        request.allowConcurrentRun         = true;
+        const DeferredConsentResult result = RequestDeferredConsent(*this, request);
+        if (FAILED(result.status) || (result.action != ConflictAction::Proceed && result.action != ConflictAction::RunConcurrently))
+        {
+            // I35 R9.6: "Don't start" is the user's answer to this question; a Cancel all or close while
+            // it waited is not, and the question's decision stays unrecorded either way.
+            const bool canceledWhilePending = _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
+            if (canceledWhilePending)
+                Debug::Perf::EmitValue(L"FileOps.Overlap.CanceledWhilePending", 1u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+            else if (result.status == HRESULT_FROM_WIN32(ERROR_CANCELLED) && result.action == ConflictAction::Cancel)
+                Debug::Perf::EmitValue(L"FileOps.Overlap.DontStart", 1u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        if (result.action == ConflictAction::RunConcurrently)
+        {
+            relations.concurrentKeys  = advice.admissionKeys;
+            relations.concurrentCount = advice.relationCount;
+            // This explicit per-task choice supersedes the global wait mode only for admission;
+            // undisclosed overlapping active tasks still block in EnterOperation.
+            _waitForOthers.store(false, std::memory_order_release);
+            Debug::Perf::EmitValue(L"FileOps.Overlap.RunConcurrent", advice.taskCount, S_OK);
+            return S_OK;
+        }
     }
 
-    // Queue after the exact disclosed predecessor set. The fixed IDs are discarded with the task;
+    // Queue automatically when no parallel choice is available, or after the confirmed choice.
+    // The exact predecessor set is captured above. Its fixed IDs are discarded with the task;
     // each edge releases when its prepared/active publication disappears, without a second warning.
     relations.predecessorKeys  = advice.admissionKeys;
     relations.predecessorCount = advice.relationCount;
@@ -24231,12 +24235,23 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteCreateDirectory(const Fil
     wil::com_ptr<IFileSystemDirectoryOperations> directoryOperations;
     _fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), directoryOperations.put_void());
     const unsigned int limit = request.firstSuggestedSuffix ? 1000u : 1u;
+    unsigned int firstSuffix = request.firstSuggestedSuffix.value_or(0u);
+    HRESULT suggestionStatus = S_OK;
+    if (request.firstSuggestedSuffix)
+    {
+        WaitWhilePaused();
+        suggestionStatus = CancelRequestedDurable() ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                    : FileOperations::FindCreateDirectorySuggestedSuffix(
+                                                          _fileSystem, request.parent, request.defaultName, _sourcePluginId, firstSuffix, firstSuffix);
+        if (FAILED(suggestionStatus))
+            status = suggestionStatus;
+    }
+
     FileOperations::CreateDirectoryAdmission current{};
     bool dispatched = false;
-    for (unsigned int attempt = 0u; attempt < limit; ++attempt)
+    for (unsigned int attempt = 0u; SUCCEEDED(suggestionStatus) && attempt < limit; ++attempt)
     {
-        dispatched             = false;
-        const auto firstSuffix = request.firstSuggestedSuffix.value_or(0u);
+        dispatched = false;
         if (attempt > (std::numeric_limits<unsigned int>::max)() - firstSuffix)
             break;
         const std::wstring name =

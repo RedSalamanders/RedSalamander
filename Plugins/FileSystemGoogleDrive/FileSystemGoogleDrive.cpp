@@ -2012,7 +2012,7 @@ struct DriveTransferContext final
                                         const wchar_t* sourcePath,
                                         const wchar_t* destinationPath,
                                         FileSystemFlags flags,
-                                        bool move,
+                                        FileSystemOperation operation,
                                         const FileSystemOptions* options,
                                         IFileSystemCallback* callback,
                                         void* cookie,
@@ -2087,17 +2087,33 @@ struct DriveTransferContext final
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
     FileSystemGoogleDrive::GoogleItem existing;
-    const HRESULT existingHr = fileSystem.ResolveChildByName(destinationConnection, destinationParent.id, destinationLeaf, existing);
-    if (FAILED(existingHr) && ! IsDriveNotFound(existingHr))
+    const FileSystemGoogleDrive::GoogleItem* existingPtr = nullptr;
+    if (operation == FILESYSTEM_RENAME)
     {
-        return existingHr;
+        // A new leaf cannot be a synthetic display name. Check the raw name of every
+        // child because duplicates are individually exposed under decorated names.
+        std::vector<FileSystemGoogleDrive::GoogleItem> children;
+        RETURN_IF_FAILED(fileSystem.ListChildren(destinationConnection, destinationParent.id, children));
+        if (std::ranges::any_of(children, [&](const auto& item) noexcept { return item.name == destinationLeaf; }))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
     }
-    const FileSystemGoogleDrive::GoogleItem* existingPtr = SUCCEEDED(existingHr) ? &existing : nullptr;
+    else
+    {
+        const HRESULT existingHr = fileSystem.ResolveChildByName(destinationConnection, destinationParent.id, destinationLeaf, existing);
+        if (FAILED(existingHr) && ! IsDriveNotFound(existingHr))
+        {
+            return existingHr;
+        }
+        existingPtr = SUCCEEDED(existingHr) ? &existing : nullptr;
+    }
     if (existingPtr != nullptr && existingPtr->id == source.id)
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
     }
 
+    const bool move = operation != FILESYSTEM_COPY;
     const DriveTransferContext context{
         .fileSystem = fileSystem,
         .connection = sourceConnection,
@@ -2542,7 +2558,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CopyItem(const wchar_t* sourceP
         // never through the thread-local DriveOperationOptionsScope, which belongs to whichever
         // call owns the current thread. It closes when this frame ends if nothing closed it sooner.
         Common::FileOperations::DiscoveryScope discovery(options);
-        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, false, options, callback, cookie, &discovery, true);
+        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, FILESYSTEM_COPY, options, callback, cookie, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_COPY, 0u, sourcePath, destinationPath, hr, false, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2575,7 +2591,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::MoveItem(const wchar_t* sourceP
         // never through the thread-local DriveOperationOptionsScope, which belongs to whichever
         // call owns the current thread. It closes when this frame ends if nothing closed it sooner.
         Common::FileOperations::DiscoveryScope discovery(options);
-        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, true, options, callback, cookie, &discovery, true);
+        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, FILESYSTEM_MOVE, options, callback, cookie, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_MOVE, 0u, sourcePath, destinationPath, hr, true, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2695,9 +2711,9 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItem(const wchar_t* sourc
     }
     try
     {
-        // A rename is a move whose destination spells the new name; Drive applies both as one PATCH.
+        // Drive applies a Rename to a free name in one PATCH.
         Common::FileOperations::DiscoveryScope discovery(options);
-        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, true, options, callback, cookie, &discovery, true);
+        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, FILESYSTEM_RENAME, options, callback, cookie, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_RENAME, 0u, sourcePath, destinationPath, hr, true, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2785,7 +2801,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CopyItems(const wchar_t* const*
             if (SUCCEEDED(hr))
             {
                 destination = JoinDrivePath(destinationFolder, DriveLeafName(NormalizePluginPath(sourcePath)));
-                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, false, options, callback, cookie, &discovery, false);
+                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, FILESYSTEM_COPY, options, callback, cookie, &discovery, false);
             }
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_COPY, index, sourcePath, destination.c_str(), hr, false, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_COPY, count, index + 1u, sourcePath, destination.c_str(), options, cookie);
@@ -2839,7 +2855,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::MoveItems(const wchar_t* const*
             if (SUCCEEDED(hr))
             {
                 destination = JoinDrivePath(destinationFolder, DriveLeafName(NormalizePluginPath(sourcePath)));
-                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, true, options, callback, cookie, &discovery, false);
+                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, FILESYSTEM_MOVE, options, callback, cookie, &discovery, false);
             }
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_MOVE, index, sourcePath, destination.c_str(), hr, true, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_MOVE, count, index + 1u, sourcePath, destination.c_str(), options, cookie);
@@ -2939,7 +2955,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItems(const FileSystemRen
             {
                 // The pair carries the new leaf name; the destination keeps the source's parent.
                 destination = JoinDrivePath(DriveParentPath(NormalizePluginPath(pair.sourcePath)), pair.newName);
-                hr          = DriveTransferPath(*this, pair.sourcePath, destination.c_str(), flags, true, options, callback, cookie, &discovery, false);
+                hr = DriveTransferPath(*this, pair.sourcePath, destination.c_str(), flags, FILESYSTEM_RENAME, options, callback, cookie, &discovery, false);
             }
             const HRESULT callbackHr =
                 ReportDriveItemCompleted(callback, FILESYSTEM_RENAME, index, pair.sourcePath, destination.c_str(), hr, true, options, cookie);
@@ -4258,6 +4274,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderGoogleDriveDebug
     unsigned int containmentFailed = 0u;
     FileSystemGoogleDriveSelfTest::RunDriveStalledRequestCancelSelfTests(containmentPassed, containmentFailed);
     FileSystemGoogleDriveSelfTest::RunDriveZeroTimestampReplaceSelfTests(containmentPassed, containmentFailed);
+    FileSystemGoogleDriveSelfTest::RunDriveRenameCollisionSelfTests(containmentPassed, containmentFailed);
     if (passed != nullptr && failed != nullptr)
     {
         *passed += containmentPassed;

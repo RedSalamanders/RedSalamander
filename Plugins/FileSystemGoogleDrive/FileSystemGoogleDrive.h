@@ -374,6 +374,7 @@ namespace FileSystemGoogleDriveSelfTest
 // to a synthetic connection; `enable == false` restores the service.
 void ConfigureFakeDrive(const wchar_t* origin, bool enable) noexcept;
 void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDriveRenameCollisionSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDriveZeroTimestampReplaceSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
 } // namespace FileSystemGoogleDriveSelfTest
 #endif

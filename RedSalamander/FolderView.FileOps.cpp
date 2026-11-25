@@ -5,6 +5,38 @@
 #include "SelfTest/Common/Common.Tests.LatencyHooks.h"
 #endif
 
+unsigned int FolderView::GetCreateDirectoryDefaultSuffix(std::wstring_view baseName) const noexcept
+{
+    constexpr size_t maxPreviewItems        = 32'768u;
+    constexpr unsigned int maxPreviewSuffix = 999u;
+    if (baseName.empty() || _items.size() > maxPreviewItems || ! IsCurrentFolderEnumerated())
+        return 0u;
+
+    std::array<bool, maxPreviewSuffix + 1u> occupied{};
+    for (const FolderItem& item : _items)
+    {
+        const std::wstring_view name = item.displayName;
+        if (name.size() == baseName.size() && EquivalentProviderComponent(name, baseName))
+        {
+            occupied[0] = true;
+            continue;
+        }
+        if (name.size() <= baseName.size() + 3u || name.size() > baseName.size() + 6u || name.substr(baseName.size(), 2u) != L" (" || name.back() != L')' ||
+            ! EquivalentProviderComponent(name.substr(0u, baseName.size()), baseName))
+            continue;
+
+        const std::wstring_view digits = name.substr(baseName.size() + 2u, name.size() - baseName.size() - 3u);
+        if (digits.front() == L'0' || ! std::ranges::all_of(digits, [](wchar_t digit) { return digit >= L'0' && digit <= L'9'; }))
+            continue;
+
+        unsigned int suffix = 0u;
+        for (const wchar_t digit : digits)
+            suffix = suffix * 10u + static_cast<unsigned int>(digit - L'0');
+        occupied[suffix] = true;
+    }
+    return static_cast<unsigned int>(std::ranges::find(occupied, false) - occupied.begin());
+}
+
 namespace
 {
 #ifdef ENABLE_TESTS
