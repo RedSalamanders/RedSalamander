@@ -998,6 +998,89 @@ private:
     return true;
 }
 
+[[nodiscard]] bool RunFileOpsStagedMoveMetadataSkipChecks(SelfTestState& state)
+{
+    using Action      = FolderWindow::FileOperationState::Task::ConflictAction;
+    const auto reject = [](std::wstring_view reason)
+    {
+        AppendLog(std::format(L"Staged Move metadata Skip: {}", reason));
+        return false;
+    };
+    auto* operations = state.fileOps;
+    if (! operations || ! state.fsLocal || ! CancelOutstandingSelfTestOperations(operations))
+        return reject(L"the owned Local provider or File Operations engine is unavailable");
+    const LoopbackShareStatus shareStatus = ProbeLoopbackShare(state.tempRoot);
+    if (shareStatus == LoopbackShareStatus::Refused)
+        return reject(L"the owned share alias was refused");
+    if (shareStatus == LoopbackShareStatus::Unreachable)
+    {
+        AppendLog(L"Staged Move metadata Skip skipped because the owned loopback share is unreachable.");
+        return true;
+    }
+
+    const auto root              = state.tempRoot / L"staged-move-metadata-skip";
+    const auto sourceFolder      = root / L"source";
+    const auto destinationFolder = root / L"destination";
+    if (! RecreateEmptyDirectory(sourceFolder) || ! RecreateEmptyDirectory(destinationFolder))
+        return reject(L"the owned folders are unavailable");
+    const auto removeRoot               = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+    const auto source                   = sourceFolder / L"downloaded.bin";
+    const auto zone                     = std::filesystem::path(source.native() + L":Zone.Identifier");
+    const auto destination              = destinationFolder / source.filename();
+    constexpr std::string_view body     = "The incoming selected file.";
+    constexpr std::string_view occupant = "The existing destination file.";
+    constexpr std::string_view mark     = "[ZoneTransfer]\r\nZoneId=3\r\n";
+    const auto localIo                  = state.fsLocal.query<IFileSystemIO>();
+    if (! WriteFileTextFsIo(localIo, source, body) || ! WriteFileTextFsIo(localIo, zone, mark) || ! WriteFileTextFsIo(localIo, destination, occupant))
+        return reject(L"the source, named stream, or existing destination could not be written");
+
+    const RedSalamander::TestSupport::ScopedEnvironmentVariable failMetadataTransfer(L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK", std::wstring_view(L"0x2"));
+    CrossProviderCaseScope scope(state, operations);
+    EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = false;
+    const auto summary                                        = RunCrossProviderTransferAnsweringConflict(state,
+                                                                                                          operations,
+                                                                                                          scope.tasks,
+                                                                                                          state.fsLocal,
+                                                                                                          state.fsLocal,
+                                                                                                          {source},
+                                                                                                          LoopbackShareAlias(destinationFolder),
+                                                                                                          Action::Overwrite,
+                                                                                                          FILESYSTEM_MOVE,
+                                                                                                          nullptr,
+                                                                                                          {},
+                                                                                                          Action::Skip);
+    if (! summary)
+        return reject(L"the existing destination and the metadata-loss decision did not both complete");
+    if (summary->resultHr != S_FALSE || summary->publishedItemCount != 0u || summary->errorCount != 0u)
+        return reject(std::format(L"expected one skipped unpublished item. hr=0x{:08X} diagnostics=[{}]",
+                                  static_cast<unsigned long>(summary->resultHr),
+                                  DescribeCrossProviderDiagnostics(summary.value())));
+    const auto& results = state.completedTasks.at(scope.tasks.back()).sourceItemResults;
+    if (results.size() != 1u || ! results.front())
+        return reject(L"the skipped item result is missing");
+    const auto& result = results.front().value();
+    if (result.completion != FileOperations::ItemCompletion::Skipped || result.publication != FileOperations::PublicationState::NotPublished ||
+        result.sourceDisposition != FileOperations::SourceDisposition::Retained ||
+        result.ownedStageDisposition != FileOperations::OwnedStageDisposition::Removed)
+        return reject(std::format(L"unexpected item outcome completion={} publication={} source={} stage={}",
+                                  static_cast<unsigned int>(result.completion),
+                                  static_cast<unsigned int>(result.publication),
+                                  static_cast<unsigned int>(result.sourceDisposition),
+                                  static_cast<unsigned int>(result.ownedStageDisposition)));
+    std::string sourceBytes;
+    std::string zoneBytes;
+    std::string destinationBytes;
+    if (! ReadFileTextFsIo(localIo, source, sourceBytes) || sourceBytes != body || ! ReadFileTextFsIo(localIo, zone, zoneBytes) || zoneBytes != mark ||
+        ! ReadFileTextFsIo(localIo, destination, destinationBytes) || destinationBytes != occupant)
+        return reject(L"Skip changed the original, its named stream, or the occupied destination");
+    const auto entries = ListCrossProviderChildNames(state.fsLocal.get(), destinationFolder.native());
+    if (entries != std::vector<std::wstring>{destination.filename().native()})
+        return reject(L"the unpublished stage was left behind");
+
+    AppendLog(L"Skipping known metadata loss retired the stage and preserved both file contents and the source stream.");
+    return true;
+}
+
 [[nodiscard]] bool RunFileOpsVerifyAvailabilityChecks(SelfTestState& state) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept

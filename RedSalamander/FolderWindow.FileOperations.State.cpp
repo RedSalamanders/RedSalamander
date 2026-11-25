@@ -5739,6 +5739,7 @@ struct ConflictActionPolicy
         case ConflictBucket::MetadataLoss:
             policy.Add(ConflictAction::Proceed);
             policy.Add(ConflictAction::RetainSource);
+            policy.Add(ConflictAction::Skip);
             break;
         case ConflictBucket::SameHostOverlap:
             policy.Add(ConflictAction::Proceed);
@@ -21408,8 +21409,6 @@ struct CrossFileSystemBridge
                     finalMetadata.firstFailure = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
                 }
             }
-            ReportMetadataOutcome(sourcePath, destinationPath, finalMetadata, ! (txn.destinationStageMetadata && txn.ownedStage));
-
             constexpr uint32_t kSecuritySignificantLoss =
                 FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
             const uint32_t securitySignificantLoss = finalMetadata.lostFeatures & kSecuritySignificantLoss;
@@ -21433,6 +21432,12 @@ struct CrossFileSystemBridge
                     // Commit already published the destination. Keep the source without authorizing cleanup after publication.
                     Debug::Perf::EmitValue(L"FileOps.Metadata.LateMoveSourceRetained", securitySignificantLoss, S_FALSE);
                 }
+                if (metadataAction == ConflictAction::Skip)
+                {
+                    // The stage is unpublished. CopyFile's existing scope guard accounts for its retirement.
+                    Debug::Perf::EmitValue(L"FileOps.Metadata.StageSkipped", securitySignificantLoss, S_FALSE);
+                    return S_FALSE;
+                }
                 if (metadataAction == ConflictAction::RetainSource)
                 {
                     MarkManagedSourceRetained(
@@ -21444,6 +21449,7 @@ struct CrossFileSystemBridge
                     return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 }
             }
+            ReportMetadataOutcome(sourcePath, destinationPath, finalMetadata, ! (txn.destinationStageMetadata && txn.ownedStage));
         }
 
         const bool isMove                                         = txn.isMove;
@@ -21858,7 +21864,7 @@ struct CrossFileSystemBridge
                                              ProgressPhase::Finalizing));
         }
         hr = CommitAndProve(txn, replaceRefused);
-        if (FAILED(hr))
+        if (hr != S_OK)
         {
             return hr;
         }

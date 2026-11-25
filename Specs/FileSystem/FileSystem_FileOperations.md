@@ -2213,7 +2213,9 @@ rules of `../UI/UI_FileOperationsPopup.md` "User-facing policy": always recorded
 
 Security-significant metadata-loss consent is evaluated on the exact identity-owned stage before
 `PublishAs`. Cancel discards/cleans that unpublished stage where its outcome is known and reports
-`NotPublished + Retained + Canceled`; no final destination object is claimed or refreshed. Move
+`NotPublished + Retained + Canceled`; no final destination object is claimed or refreshed. **Skip item**
+retires the unpublished stage, preserves the current destination and source, and lets the remaining
+items continue. The skipped root retains independent stage disposition. Move
 anyway and Keep source first publish the stage, then respectively permit the already-qualified
 conditional cleanup or retain the source. A later cancellation point must preserve whatever exact
 publication state its mutation record reports rather than collapsing every Cancel to `NotAttempted`.
@@ -2241,7 +2243,7 @@ in the published layout is coerced to Cancel.
 | EFS plaintext destination | Copy/Move without encryption; Copy and keep source on Move | Same task/risk/destination root when explicitly selected |
 | Sparse allocation inflation | Continue | Same task/risk/destination root when explicitly selected |
 | Placeholder hydration/recall | Download and continue | Same task/risk/destination root when explicitly selected |
-| Security-significant metadata loss | Move anyway / Copy and keep source | Same task/risk/destination root when explicitly selected |
+| Security-significant metadata loss on an unpublished Move stage | Move anyway / Copy and keep source / Skip item | Same task/risk/destination root when explicitly selected |
 | Recycle escalation | Delete permanently / Skip; Delete all remaining permanently (multi-item task, a direct action) | Exact item, or the explicit task-scoped choice for later known non-commits on the same profile/root; never the Apply-to-all checkbox |
 
 An accepted per-item choice is returned directly to the waiting executor together with its accepted
