@@ -148,6 +148,7 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'FileOps_AlertOverlayUxAccessibility' -or
              $CaseFilter -ceq 'FileOps_ReviewRemediationContracts' -or
              $CaseFilter -ceq 'FileOps_DeferredExitRefusesNewWork' -or
+             $CaseFilter -ceq 'FileOps_ClearCompletedScope' -or
              $CaseFilter -ceq 'FileOps_PopupIdleCadence' -or
              $CaseFilter -ceq 'FileOps_IdentityInterlockWaiting' -or
              $CaseFilter -ceq 'FileOps_CrossRootLocalCopy' -or

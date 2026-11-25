@@ -618,6 +618,7 @@ using the foreground. It restores cursor/foreground state. Static capture remain
 
 The supplied-review safety cases use `ProductUiTests` (directory decoding and destination-bound payloads),
 `-Suite FileOps -CaseFilter FileOps_ReviewRemediationContracts -NonInteractive` (parent pinning and typed prerequisite results),
+`-Suite FileOps -CaseFilter FileOps_ClearCompletedScope -NonInteractive` (painted clean results, retained problems and interrupted-Move recovery),
 and exact noninteractive `FileOps_SmallFileCopyCost` / `FileOps_CrossRootLocalCopy` selections.
 The exact `FileOps_DeferredExitRefusesNewWork` case verifies rejection of Create Directory and
 other ingress commands after an accepted close. It submits commands against owned windows without

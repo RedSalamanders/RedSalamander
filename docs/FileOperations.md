@@ -24,7 +24,7 @@ The **File Operations** popup opens automatically when an operation is still run
   - **Start** in the options for a copy or move can choose a different mode for that task.
   - Parallel mode uses shared, bounded worker pools so thread count stays under control even with multiple in-flight operations.
   - Switching to **Queue** while several tasks are active pauses all but one at the next safe checkpoint.
-- **Clear completed**: removes the completed task summaries shown in the **Completed** group. A task that finishes just before you click stays, and an interrupted-Move notice from a previous session stays until you dismiss it on its own card.
+- **Clear completed** removes the clean completed and canceled results shown in the **Completed** group. Results with warnings, failures or uncertain outcomes stay on their own cards. A task that finishes just before you click stays, and an interrupted-Move notice stays until you dismiss its card.
 - The footer also shows a quick summary of how many tasks are running, paused, stopping, waiting, or need attention. While some tasks are still being counted it adds **Still counting: N** (see [“Counting items…” and totals](#counting-items-and-totals)).
 
 ### Each task card

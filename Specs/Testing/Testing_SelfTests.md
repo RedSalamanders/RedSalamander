@@ -1175,7 +1175,7 @@ the same synchronous reporter and counter path as the pointer overload.
   and UIA witnesses share foreground invariants. The only reviewed lease
   exceptions are `-Suite FileOps` with the exact, case-sensitive
   `DiscoveryScope_LocalDirectApi`, `DiscoveryScope_FolderLiveProgress`, `DiscoveryScope_MultipleFoldersLiveProgress`,
-  `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility`, `FileOps_ReviewRemediationContracts`, `FileOps_DeferredExitRefusesNewWork`,
+  `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility`, `FileOps_ReviewRemediationContracts`, `FileOps_DeferredExitRefusesNewWork`, `FileOps_ClearCompletedScope`,
   `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,

@@ -1705,7 +1705,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_RepeatedNonClipboardCopyStorage,
     SelfTestState::Step::FileOps_RepeatedNonClipboardMoveStorage,
     SelfTestState::Step::FileOps_TerminalFactsProjection,               // Completed summary reaches the production popup with independent terminal counts
-    SelfTestState::Step::FileOps_ClearCompletedScope,                   // Clear completed clears only painted results and keeps interrupted-Move breadcrumbs
+    SelfTestState::Step::FileOps_ClearCompletedScope,                   // Clears only painted clean results and keeps problems and interrupted-Move breadcrumbs
     SelfTestState::Step::FileOps_PerItemCancelUndispatchedRoots,        // Cancel at a prompt leaves never-dispatched per-item roots untouched, not unknown
     SelfTestState::Step::FileOps_AdmissionFailureReachesPane,           // I30 host#2 - a failed pane Copy/Move/Delete admission reaches the pane alert
     SelfTestState::Step::FileOps_DeferredExitRefusesNewWork,            // I30 x-lifetime#4 (Q14) - a pending exit refuses new work and never re-prompts
@@ -11665,17 +11665,25 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
         return L"The restored interrupted-Move breadcrumb did not project as a notice card.";
 
     constexpr uint64_t kOrdinaryBase = 0xC1EA000000000000ull;
-    const auto appendCompleted       = [&operations](uint64_t taskId) noexcept
+    const auto appendCompleted       = [&operations](uint64_t taskId, HRESULT result = S_OK, unsigned long warnings = 0u, unsigned long notes = 0u) noexcept
     {
         Summary summary{};
         summary.taskId        = taskId;
         summary.operation     = FILESYSTEM_COPY;
-        summary.resultHr      = S_OK;
+        summary.resultHr      = result;
+        summary.warningCount  = warnings;
+        summary.noteCount     = notes;
         summary.completedTick = GetTickCount64();
         operations.DebugAppendCompletedTaskForSelfTest(std::move(summary));
     };
-    appendCompleted(kOrdinaryBase + 1u);
-    appendCompleted(kOrdinaryBase + 2u);
+    appendCompleted(kOrdinaryBase + 1u, S_OK, 0u, 1u);
+    appendCompleted(kOrdinaryBase + 2u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+
+    constexpr std::array<uint64_t, 4u> kProblems{{kOrdinaryBase + 10u, kOrdinaryBase + 11u, kOrdinaryBase + 12u, kOrdinaryBase + 13u}};
+    appendCompleted(kProblems[0], E_FAIL);
+    appendCompleted(kProblems[1], HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY));
+    appendCompleted(kProblems[2], HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE));
+    appendCompleted(kProblems[3], S_OK, 1u);
 
     auto lifetime = std::make_shared<int>(0);
     wil::unique_hwnd popup(FileOperationsPopup::Create(&operations, folder, state.mainWindow, lifetime));
@@ -11703,22 +11711,43 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
         return DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), layout);
     };
 
+    const auto revealGroup = [&](uint64_t taskId, Layout& layout) noexcept
+    {
+        SendMessageW(popup.get(), WM_VSCROLL, SB_TOP, 0);
+        for (unsigned int line = 0u; line < 32u; ++line)
+        {
+            paint();
+            if (layoutFor(taskId, layout) && layout.completedGroupClearVisible)
+                return true;
+            SendMessageW(popup.get(), WM_VSCROLL, SB_LINEDOWN, 0);
+        }
+        return false;
+    };
+
     for (const bool collapsed : {true, false})
     {
         const std::wstring_view mode = collapsed ? L"collapsed" : L"expanded";
         const uint64_t seenA         = kOrdinaryBase + (collapsed ? 1u : 3u);
         const uint64_t seenB         = kOrdinaryBase + (collapsed ? 2u : 4u);
         const uint64_t late          = kOrdinaryBase + (collapsed ? 5u : 6u);
-        paint();
         Layout layout{};
-        if (layoutFor(seenA, layout) && layout.completedGroupExpanded == collapsed)
+        bool headerVisible = revealGroup(seenA, layout);
+        if (headerVisible && layout.completedGroupExpanded == collapsed)
         {
-            static_cast<void>(invoke(Hit::CompletedGroupToggle, 0u));
-            paint();
+            if (! invoke(Hit::CompletedGroupToggle, 0u))
+                return L"The private popup did not toggle its Completed group.";
+            headerVisible = revealGroup(seenA, layout);
         }
         Layout notice{};
-        const bool groupReady  = layoutFor(seenA, layout) && layout.completedGroupVisible && layout.completedGroupExpanded != collapsed &&
-                                 layout.completedGroupClearVisible && layout.taskHiddenByCompletedGroup == collapsed;
+        const bool groupReady = headerVisible && layout.completedGroupVisible && layout.completedGroupCount == 2u &&
+                                layout.completedGroupExpanded != collapsed && layout.completedGroupClearVisible &&
+                                layout.taskHiddenByCompletedGroup == collapsed;
+        for (const uint64_t problemId : kProblems)
+        {
+            Layout problem{};
+            if (! layoutFor(problemId, problem) || ! problem.found || problem.taskHiddenByCompletedGroup)
+                return L"The Completed group hid a failed, partial, uncertain or warning result.";
+        }
         const bool noticeShown = layoutFor(noticeId, notice) && ! notice.taskHiddenByCompletedGroup;
         AppendLog(std::format(L"Clear-completed scope {}: groupVisible={} expanded={} clearVisible={} memberHidden={} noticeHidden={}",
                               mode,
@@ -11751,6 +11780,8 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
             return L"Clear completed did not remove the results its painted header covered.";
         if (! lateKept)
             return L"Clear completed removed a result that finished after the last paint.";
+        if (! std::ranges::all_of(kProblems, retained))
+            return L"Clear completed removed a problem result.";
         if (! noticeKept || ! breadcrumbKept)
             return L"Clear completed acknowledged the interrupted-Move notice or deleted its breadcrumb file.";
 
