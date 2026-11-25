@@ -32,6 +32,7 @@ using DxUi::Panel;
 using DxUi::TextField;
 using DxUi::Toggle;
 
+using Common::Settings::FileOperationsCopyLinkPolicy;
 using FileOperations::BandwidthPreset;
 using FileOperations::kBandwidthPresets;
 
@@ -81,6 +82,7 @@ struct FileOperationsDxPage
     FileOperationsToggleCardDx autoDismissSuccess{};
     FileOperationsToggleCardDx showInformationalNotes{};
     FileOperationsToggleCardDx mirrorDecisionsInPane{};
+    FileOperationsComboCardDx copyLinks{};
     FileOperationsComboCardDx parallelTransfers{};
     FileOperationsEditCardDx bridgeBuffer{};
     FileOperationsNoteCardDx pluginHint{};
@@ -96,6 +98,7 @@ struct FileOperationsDxPage
         autoDismissSuccess     = {};
         showInformationalNotes = {};
         mirrorDecisionsInPane  = {};
+        copyLinks              = {};
         parallelTransfers      = {};
         bridgeBuffer           = {};
         pluginHint             = {};
@@ -511,6 +514,39 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
         Refresh(host, *dialogState);
     });
 
+    auto& copyLinks = dxState->page.copyLinks;
+    copyLinks.card  = root->AddChild<CardPanel>();
+    copyLinks.title = root->AddChild<Label>();
+    copyLinks.title->SetFontRole(FontRole::Body);
+    copyLinks.description = root->AddChild<Label>();
+    copyLinks.description->SetFontRole(FontRole::Small);
+    copyLinks.description->SetMultiline(true);
+    copyLinks.combo = root->AddChild<ComboBox>();
+    copyLinks.combo->SetVariant(ComboBoxVariant::Window);
+    copyLinks.combo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    copyLinks.title->SetMnemonicTarget(copyLinks.combo);
+    copyLinks.combo->SetItems({
+        {L"inherit", LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_INHERIT)},
+        {L"preserve", LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_PRESERVE)},
+        {L"skip", LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_SKIP)},
+    });
+    copyLinks.combo->SetOnSelectionChanged([this, host = parent](size_t index) noexcept
+    {
+        if (_syncingDxCopyLinkPolicyCombo || ! host || IsWindow(host) == FALSE || ! _state || index > static_cast<size_t>(FileOperationsCopyLinkPolicy::Skip))
+            return;
+        auto* fileOperations = EnsureWorkingFileOperationsSettings(_state->workingSettings);
+        if (! fileOperations)
+            return;
+
+        const auto policy = static_cast<FileOperationsCopyLinkPolicy>(index);
+        if (fileOperations->copyLinkPolicy != policy)
+        {
+            fileOperations->copyLinkPolicy = policy;
+            MaybeResetWorkingFileOperationsSettingsIfEmpty(_state->workingSettings);
+            SetDirty(GetParent(host), *_state);
+        }
+    });
+
     auto& parallel = dxState->page.parallelTransfers;
     parallel.card  = root->AddChild<CardPanel>();
     parallel.title = root->AddChild<Label>();
@@ -673,6 +709,14 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     page.mirrorDecisionsInPane.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_MIRROR_DECISIONS_DESC));
     page.mirrorDecisionsInPane.toggle->SetChecked(fileOperations.mirrorDecisionsInPane);
     page.mirrorDecisionsInPane.toggle->SetEnabled(true);
+
+    page.copyLinks.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_TITLE));
+    page.copyLinks.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_DESC));
+    page.copyLinks.combo->SetAccessibleName(DxUi::StripNativeMenuMnemonicMarkers(page.copyLinks.title->GetText()));
+    page.copyLinks.combo->SetAccessibleHelpText(std::wstring(page.copyLinks.description->GetText()));
+    _syncingDxCopyLinkPolicyCombo = true;
+    page.copyLinks.combo->SetSelectedIndex(static_cast<size_t>(fileOperations.copyLinkPolicy));
+    _syncingDxCopyLinkPolicyCombo = false;
 
     page.parallelTransfers.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_TITLE));
     page.parallelTransfers.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PARALLEL_TRANSFERS_DESC));
@@ -867,6 +911,7 @@ void FileOperationsPane::LayoutDxPage(
 
     hideToggleCard(page.verifyAfterCopy);
     hideComboCard(page.bandwidthPreset);
+    hideComboCard(page.copyLinks);
     hideComboCard(page.parallelTransfers);
     hideEditCard(page.customBandwidth);
     hideToggleCard(page.autoDismissSuccess);
@@ -1007,6 +1052,7 @@ void FileOperationsPane::LayoutDxPage(
     layoutToggleCard(page.autoDismissSuccess);
     layoutToggleCard(page.showInformationalNotes);
     layoutToggleCard(page.mirrorDecisionsInPane);
+    layoutComboCard(page.copyLinks);
     layoutComboCard(page.parallelTransfers);
     layoutEditCard(page.bridgeBuffer);
     layoutNoteCard(page.pluginHint);

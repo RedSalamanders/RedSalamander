@@ -1234,6 +1234,17 @@
           "title": "Verify Copied Files",
           "description": "Verify destination content against the source after copied regular files are published."
         },
+        "copyLinkPolicy": {
+          "type": "string",
+          "enum": ["inherit", "preserve", "skip"],
+          "default": "inherit",
+          "title": "Copy Links",
+          "description": "Default handling of link objects in newly admitted Copy tasks. The source provider's existing policy applies when inherited.",
+          "x-ui-pane": "File Operations",
+          "x-ui-section": "Advanced",
+          "x-ui-order": 34,
+          "x-ui-control": "custom"
+        },
         "maxParallelTransfers": {
           "type": "integer",
           "minimum": 1,
