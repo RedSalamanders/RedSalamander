@@ -12900,6 +12900,22 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         folder->CommandCreateDirectory(kSource);
         return S_OK;
     }) &&
+                         attempt(L"pane Pack",
+                                 kSource,
+                                 IDS_CMD_PACK,
+                                 [&]() noexcept
+    {
+        folder->CommandPack(kSource);
+        return S_OK;
+    }) &&
+                         attempt(L"pane Unpack",
+                                 kSource,
+                                 IDS_CMD_UNPACK,
+                                 [&]() noexcept
+    {
+        folder->CommandUnpack(kSource);
+        return S_OK;
+    }) &&
                          attempt(L"pane Permanent delete",
                                  kSource,
                                  IDS_FILEOP_OPERATION_DELETE,

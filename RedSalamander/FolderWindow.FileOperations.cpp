@@ -4825,6 +4825,15 @@ bool FolderWindow::RefuseFileOperationForPendingExit(Pane pane, FileSystemOperat
     return true;
 }
 
+bool FolderWindow::RefuseFileOperationForPendingExit(Pane pane, UINT operationLabelId) noexcept
+{
+    if (! IsFileOperationsExitPending())
+        return false;
+    Debug::Warning(L"FolderWindow: a new archive command was refused because {} is pending (label={}).", FileOperationsExitPendingReason(), operationLabelId);
+    ShowFileOperationRefusedForPendingExit(pane, operationLabelId);
+    return true;
+}
+
 bool FolderWindow::RefuseResolvedFileOperationForPendingExit(std::wstring_view sourcePluginId,
                                                              std::wstring_view sourceInstanceContext,
                                                              const std::vector<std::filesystem::path>& sourcePaths,
@@ -4848,8 +4857,6 @@ std::wstring_view FolderWindow::FileOperationsExitPendingReason() const noexcept
 
 void FolderWindow::ShowFileOperationRefusedForPendingExit(Pane pane, FileSystemOperation operation) noexcept
 {
-    // A secondary window refusing for its own accepted close says that window is closing, not the application.
-    const bool windowClosing = IsSecondaryFileOperationsWindow() && ! _applicationExitFolderWindow->IsFileOperationsExitPending();
     Debug::Warning(L"FolderWindow: a new file operation was refused because {} is pending (op={}).",
                    FileOperationsExitPendingReason(),
                    static_cast<unsigned int>(operation));
@@ -4858,10 +4865,17 @@ void FolderWindow::ShowFileOperationRefusedForPendingExit(Pane pane, FileSystemO
                              : operation == FILESYSTEM_RENAME           ? static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME)
                              : operation == FILESYSTEM_CREATE_DIRECTORY ? static_cast<UINT>(IDS_CAPTION_CREATE_DIR)
                                                                         : static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
-    std::wstring title     = LoadStringResource(nullptr, windowClosing ? IDS_CAPTION_FILEOPS_CLOSE_WINDOW : IDS_CAPTION_FILEOPS_EXIT);
-    std::wstring message   = FormatStringResource(nullptr,
-                                                  windowClosing ? IDS_FMT_PANE_FILEOP_REFUSED_CLOSE_PENDING : IDS_FMT_PANE_FILEOP_REFUSED_EXIT_PENDING,
-                                                  LoadStringResource(nullptr, operationId));
+    ShowFileOperationRefusedForPendingExit(pane, operationId);
+}
+
+void FolderWindow::ShowFileOperationRefusedForPendingExit(Pane pane, UINT operationLabelId) noexcept
+{
+    // Use the window-specific wording for a secondary window acknowledging its own close.
+    const bool windowClosing = IsSecondaryFileOperationsWindow() && ! _applicationExitFolderWindow->IsFileOperationsExitPending();
+    std::wstring title       = LoadStringResource(nullptr, windowClosing ? IDS_CAPTION_FILEOPS_CLOSE_WINDOW : IDS_CAPTION_FILEOPS_EXIT);
+    std::wstring message     = FormatStringResource(nullptr,
+                                                    windowClosing ? IDS_FMT_PANE_FILEOP_REFUSED_CLOSE_PENDING : IDS_FMT_PANE_FILEOP_REFUSED_EXIT_PENDING,
+                                                    LoadStringResource(nullptr, operationLabelId));
     ShowPaneAlertOverlay(pane,
                          FolderView::ErrorOverlayKind::Operation,
                          FolderView::OverlaySeverity::Warning,

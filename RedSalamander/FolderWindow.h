@@ -2016,7 +2016,9 @@ private:
     // A pane Copy/Move/Delete whose admission failed shows why in the source pane instead of
     // vanishing; a cancel (S_FALSE, ERROR_CANCELLED) or shutdown stays silent.
     void ReportFileOperationAdmissionFailure(Pane pane, FileSystemOperation operation, HRESULT hr);
+    bool RefuseFileOperationForPendingExit(Pane pane, UINT operationLabelId) noexcept;
     void ShowFileOperationRefusedForPendingExit(Pane pane, FileSystemOperation operation) noexcept;
+    void ShowFileOperationRefusedForPendingExit(Pane pane, UINT operationLabelId) noexcept;
     // A resolved-path admission (Find Files, Compare Directories) refused while the exit is pending
     // shows why in its source pane, or the focused pane when the source pane is not open.
     bool RefuseResolvedFileOperationForPendingExit(std::wstring_view sourcePluginId,

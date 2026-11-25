@@ -35,6 +35,11 @@ S3 flat-prefix success requires a committed zero-byte trailing-`/` marker, S3 Ta
 and a future native-directory profile may advertise success only when it creates a real native
 directory object.
 
+Pack and Unpack use the same accepted-close refusal as the other pane commands. The pane
+names the archive command in the refusal. Check for close before options open and after
+modal options or permanent-removal consent, before starting archive I/O. The prompt lifetime
+guard keeps a deferred owner reset from admitting work through a stale window.
+
 ## Product invariants
 
 1. Path text is an address, not object identity.
@@ -465,7 +470,8 @@ evidence, not a permanent exemption.
 | Compare Directories synchronization | `TransferPlan` with complete `explicitMappings`; Compare summary is the ingress confirmation |
 | Pack cleanup | `DeletePlan(Permanent, PackCleanup)` after successful/verified pack; the archive prompt supplies the one captured `ArchiveDeleteAfter` consent |
 | Unpack cleanup | `DeletePlan(Permanent, UnpackCleanup)` after successful extraction; the archive prompt supplies the one captured `ArchiveDeleteAfter` consent and no private `std::filesystem::remove` is permitted |
-| Inline F2 | One-step `RenamePlan(InlineRename)`; inline editor is the only initial confirmation |
+| F7 Create Folder | `CreateDirectoryAdmission`; one name prompt captures the provider and parent, then the worker validates and creates |
+| Inline F2 | One-step `RenamePlan(InlineRename)`; the inline editor supplies the name, and qualified same-parent routes can capture a provider source token |
 | Batch Rename | `RenamePlan(BatchRename)`; preview and Run are the initial confirmation |
 | Change Case | Discovery emits immutable mappings into `RenamePlan(ChangeCase)`; the Change Case dialog is the initial confirmation |
 | Command/plugin extension | The same plan factory; direct provider mutation is forbidden unless named here |
