@@ -16824,6 +16824,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Late Move metadata loss did not keep the published copy and original source without an additional question.");
                 return true;
             }
+            if (! RunFileOpsStagedMoveMetadataSkipChecks(state))
+            {
+                Fail(L"Staged Move metadata Skip did not preserve the source and existing destination.");
+                return true;
+            }
             bool injectedFailureReached = false;
             if (RecordFileOpsPopupIdleTelemetry(state, true, &injectedFailureReached) || ! injectedFailureReached || state.retainTempRootOnFailure)
             {
