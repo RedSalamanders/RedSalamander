@@ -1,0 +1,1 @@
+- Pack checks the approved regular files again before Delete after and keeps a source that changed.
