@@ -713,7 +713,7 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     page.copyLinks.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_TITLE));
     page.copyLinks.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_COPY_LINKS_DESC));
     page.copyLinks.combo->SetAccessibleName(DxUi::StripNativeMenuMnemonicMarkers(page.copyLinks.title->GetText()));
-    page.copyLinks.combo->SetAccessibleHelpText(page.copyLinks.description->GetText());
+    page.copyLinks.combo->SetAccessibleHelpText(std::wstring(page.copyLinks.description->GetText()));
     _syncingDxCopyLinkPolicyCombo = true;
     page.copyLinks.combo->SetSelectedIndex(static_cast<size_t>(fileOperations.copyLinkPolicy));
     _syncingDxCopyLinkPolicyCombo = false;
