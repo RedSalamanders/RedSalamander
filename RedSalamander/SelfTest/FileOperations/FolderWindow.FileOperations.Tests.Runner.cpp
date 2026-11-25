@@ -4791,12 +4791,12 @@ void CleanupRemoteOneDrivePersonalCase(SelfTestState& state) noexcept
 {
     if (state.fsRemoteOneDrivePersonal && ! state.remoteOneDrivePersonalCaseRootConn.empty())
     {
-        static_cast<void>(
-            state.fsRemoteOneDrivePersonal->DeleteItem(state.remoteOneDrivePersonalCaseRootConn.c_str(),
-                                                       static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                       nullptr,
-                                                       nullptr,
-                                                       nullptr));
+        static_cast<void>(state.fsRemoteOneDrivePersonal->DeleteItem(
+            state.remoteOneDrivePersonalCaseRootConn.c_str(),
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+            nullptr,
+            nullptr,
+            nullptr));
     }
 
     ResetRemoteS3State(state);
@@ -14740,7 +14740,8 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     Debug::Perf::Emit(
         L"FileOps.SelfTest.OneDrivePersonalInlineRenameUs", L"owned live file, case, folder and collision", Debug::Perf::ElapsedUs(started), 3u, 1u, result);
 
-    const HRESULT recycled = fs->DeleteItem(root.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr);
+    const HRESULT recycled =
+        fs->DeleteItem(root.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN), nullptr, nullptr, nullptr);
     if (recycled != S_OK || ! notFound(parent))
     {
         const HRESULT cleanup = reject(L"could not verify Recycle of the exact owned fixture", recycled);

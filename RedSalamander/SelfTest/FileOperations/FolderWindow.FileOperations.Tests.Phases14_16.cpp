@@ -1849,7 +1849,7 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
                                                  state.fsRemoteOneDrivePersonal,
                                                  {std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)},
                                                  {},
-                                                 FILESYSTEM_FLAG_NONE,
+                                                 FILESYSTEM_FLAG_USE_RECYCLE_BIN,
                                                  false);
         if (! state.taskA.has_value())
         {
@@ -1888,12 +1888,12 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             return true;
         }
 
-        const HRESULT cleanupHr =
-            state.fsRemoteOneDrivePersonal->DeleteItem(state.remoteOneDrivePersonalCaseRootConn.c_str(),
-                                                       static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                       nullptr,
-                                                       nullptr,
-                                                       nullptr);
+        const HRESULT cleanupHr = state.fsRemoteOneDrivePersonal->DeleteItem(
+            state.remoteOneDrivePersonalCaseRootConn.c_str(),
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+            nullptr,
+            nullptr,
+            nullptr);
         if (FAILED(cleanupHr))
         {
             Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps failed to clean the remote sandbox: 0x{:08X}.", static_cast<unsigned long>(cleanupHr)));
