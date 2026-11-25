@@ -414,7 +414,54 @@ struct ArchiveCleanupReceipt final
     std::wstring instanceContext;
     std::unordered_map<std::wstring, ProviderIdentitySnapshot> sources;
     std::optional<FileOperationArtifacts::TouchGuardReceipt> artifactTouch;
+    std::shared_ptr<const wil::unique_hfile> publishedArchive;
 };
+
+struct ArchiveOperationResult final
+{
+    HRESULT hr                   = S_OK;
+    bool sourceSelectionComplete = true;
+    bool published               = false;
+    bool outputInsideSource      = false;
+#ifdef ENABLE_TESTS
+    bool stageRemovedByHandle = false;
+#endif
+    std::filesystem::path archivePath;
+    std::filesystem::path destinationPath;
+    uint64_t entryCount           = 0u;
+    uint64_t bytesProcessed       = 0u;
+    uint64_t skippedConflictCount = 0u;
+    std::vector<std::wstring> entries;
+};
+
+struct PackArchiveRequest final
+{
+    std::filesystem::path archivePath;
+    std::wstring format;
+    GUID classId{};
+    bool storedZip         = false;
+    bool overwrite         = false;
+    bool deleteAfter       = false;
+    HRESULT cleanupCapture = S_OK;
+    std::shared_ptr<const ArchiveCleanupReceipt> cleanup;
+};
+
+struct PackArchiveState final
+{
+    PackArchiveState() noexcept                          = default;
+    PackArchiveState(const PackArchiveState&)            = delete;
+    PackArchiveState& operator=(const PackArchiveState&) = delete;
+    PackArchiveState(PackArchiveState&&)                 = delete;
+    PackArchiveState& operator=(PackArchiveState&&)      = delete;
+
+    PackArchiveRequest request;
+    ArchiveOperationResult result;
+    wil::unique_hfile publishedArchive;
+    std::atomic<bool> resultReady{false};
+};
+
+// Host-only task kind. Provider methods receive their existing Copy and Delete operations.
+inline constexpr FileSystemOperation kPackArchiveOperation = static_cast<FileSystemOperation>(0x100u);
 
 struct QualifiedDestination
 {
@@ -509,6 +556,20 @@ struct CreateDirectoryAdmission
     bool allowLocalNativeFallback = false;
 };
 
+struct PackArchiveSource final
+{
+    QualifiedEndpoint endpoint;
+    std::wstring providerPath;
+};
+
+struct PackArchiveAdmission final
+{
+    QualifiedEndpoint endpoint;
+    std::filesystem::path archivePath;
+    std::vector<PackArchiveSource> selectedItems;
+    OperationOptions options;
+};
+
 [[nodiscard]] std::wstring BuildCreateDirectorySuggestedName(std::wstring_view baseName, unsigned int suffix);
 [[nodiscard]] HRESULT FindCreateDirectorySuggestedSuffix(const wil::com_ptr<IFileSystem>& fileSystem,
                                                          const std::filesystem::path& folder,
@@ -516,7 +577,7 @@ struct CreateDirectoryAdmission
                                                          std::wstring_view pluginId,
                                                          unsigned int firstSuffix,
                                                          unsigned int& suggestedSuffix) noexcept;
-using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan, CreateDirectoryAdmission>;
+using FileOperationPlan = std::variant<TransferPlan, RenamePlan, DeletePlan, CreateDirectoryAdmission, PackArchiveAdmission>;
 // One user admission may contain several executable child plans when a selection spans provider
 // roots. Every child remains qualified by exactly one source endpoint; the admission owns the
 // single confirmation and clipboard-consumption barrier for the whole group.
@@ -1194,6 +1255,7 @@ struct FolderWindow::FileOperationState
         // captured kind with the admitted task nonce before final plan validation.
         std::optional<FileOperations::ConsentKind> capturedConsentKind;
         std::optional<FileOperationArtifacts::TouchGuardReceipt> capturedArchiveArtifactTouch;
+        std::shared_ptr<const wil::unique_hfile> archiveOutputLease;
         // Runs on the UI thread after worker-owned selected-root readiness and before mutation
         // release. Clipboard Move reaches this barrier through a tokenized asynchronous message;
         // a failure keeps the accepted task but permits only terminal no-mutation reduction.
@@ -2148,6 +2210,8 @@ struct FolderWindow::FileOperationState
         HRESULT PrepareCreateDirectoryAdmission() noexcept;
         HRESULT RevalidateMoveConfirmationEndpoints(const FileOperations::FileOperationPlanGroup& plans) noexcept;
         HRESULT ExecuteCreateDirectory(const FileOperations::CreateDirectoryAdmission& plan) noexcept;
+        HRESULT PreparePackArchiveAdmission() noexcept;
+        HRESULT ExecutePackArchive(const FileOperations::PackArchiveAdmission& plan) noexcept;
         HRESULT PrepareBatchRenameArtifactGuard() noexcept;
         HRESULT PrepareArtifactTouchGuard(const FileOperations::FileOperationPlanGroup& plans,
                                           IFileSystem* sourceFileSystem,
@@ -2285,6 +2349,8 @@ struct FolderWindow::FileOperationState
         std::atomic<ULONGLONG> _preparationStartTick{GetTickCount64()};
         std::optional<BatchRenameAdmissionInput> _pendingBatchRenameAdmission;
         std::optional<CreateDirectoryRequest> _createDirectoryRequest;
+        std::shared_ptr<FileOperations::PackArchiveState> _packArchive;
+        std::shared_ptr<const wil::unique_hfile> _archiveOutputLease;
         std::filesystem::path _createdDirectory;
         FileSystemOperation _operation = FILESYSTEM_COPY;
         ExecutionMode _executionMode   = ExecutionMode::PerItem;
@@ -2853,7 +2919,16 @@ struct FolderWindow::FileOperationState
                                    std::wstring_view leafName,
                                    FileOperations::CreateDirectoryAdmission& admissionOut) noexcept;
 
+    HRESULT AdmitPackArchive(FolderWindow::Pane sourcePane,
+                             const wil::com_ptr<IFileSystem>& fileSystem,
+                             std::wstring pluginId,
+                             std::wstring pluginShortId,
+                             std::wstring instanceContext,
+                             std::vector<std::filesystem::path> sources,
+                             std::shared_ptr<FileOperations::PackArchiveState> pack,
+                             uint64_t& taskId);
     HRESULT StartOperation(OperationAdmission admission, uint64_t* taskIdOut = nullptr);
+    HRESULT PublishPreparingTask(std::unique_ptr<Task> task, std::wstring_view operation);
     // A failed OS worker launch withdraws its Preparing place and wakes queue predicates.
     void WithdrawUnstartedTask(Task* task) noexcept;
 

@@ -893,6 +893,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
                 return FILESYSTEM_DELETE;
             else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
                 return FILESYSTEM_CREATE_DIRECTORY;
+            else if constexpr (std::is_same_v<Plan, FileOperations::PackArchiveAdmission>)
+                return FileOperations::kPackArchiveOperation;
             else
                 return FILESYSTEM_RENAME;
         },
@@ -964,8 +966,12 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     const FileOperations::FileOperationPlan& firstPlan = plans.front();
     FileOperations::OperationOptions options           = planOptions(firstPlan);
     const FileSystemOperation operation                = planOperation(firstPlan);
-    const bool archiveDeleteConsentCaptured            = admission.capturedConsentKind == FileOperations::ConsentKind::ArchiveDeleteAfter;
-    const bool hasArchiveArtifactTouch                 = admission.capturedArchiveArtifactTouch.has_value();
+    if (operation == FileOperations::kPackArchiveOperation)
+        return E_INVALIDARG; // Pack owns its dedicated pane ingress and worker request.
+    const bool archiveDeleteConsentCaptured = admission.capturedConsentKind == FileOperations::ConsentKind::ArchiveDeleteAfter;
+    const bool hasArchiveArtifactTouch      = admission.capturedArchiveArtifactTouch.has_value();
+    if (admission.archiveOutputLease && ! archiveDeleteConsentCaptured)
+        return E_INVALIDARG;
     if (admission.capturedConsentKind.has_value() || hasArchiveArtifactTouch)
     {
         const bool validCapturedConsent = archiveDeleteConsentCaptured && operation == FILESYSTEM_DELETE &&
@@ -976,7 +982,14 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
             return deletion && deletion->mode == FileOperations::DeleteMode::Permanent && FileOperations::IsArchiveCleanup(deletion->origin) &&
                    ! deletion->recursive;
         });
-        if (! validCapturedConsent)
+        const bool expectsPackLease     = std::ranges::all_of(plans,
+                                                              [](const FileOperations::FileOperationPlan& plan) noexcept
+        {
+            const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+            return deletion && deletion->origin == FileOperations::DeleteOrigin::PackCleanup;
+        });
+        const bool hasPackLease         = admission.archiveOutputLease && *admission.archiveOutputLease;
+        if (! validCapturedConsent || expectsPackLease != hasPackLease)
         {
             Debug::Error(L"FolderWindow StartOperation rejected a captured destructive consent outside archive cleanup.");
             return E_INVALIDARG;
@@ -1635,6 +1648,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         task->_fileSystem                  = fileSystem;
         initialDestination.fileSystem      = std::move(destinationFileSystem);
         task->_sourcePaths                 = std::move(sourcePaths);
+        task->_archiveOutputLease          = std::move(admission.archiveOutputLease);
         task->_sourcePathAttributesHint    = std::move(sourcePathAttributesHint);
         task->_selection.itemCount         = task->_sourcePaths.size();
         task->_selection.kindsKnown        = task->_sourcePathAttributesHint.size() == task->_sourcePaths.size();

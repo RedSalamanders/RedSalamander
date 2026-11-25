@@ -77,6 +77,8 @@ int DipsToPixels(int dip, UINT dpi) noexcept
 
 [[nodiscard]] UINT OperationStringId(FileSystemOperation operation) noexcept
 {
+    if (operation == FileOperations::kPackArchiveOperation)
+        return IDS_CMD_PACK;
     switch (operation)
     {
         case FILESYSTEM_COPY: return IDS_CMD_COPY;

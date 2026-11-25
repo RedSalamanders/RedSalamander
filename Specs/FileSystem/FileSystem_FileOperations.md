@@ -2131,13 +2131,24 @@ use this route; a Managed Move uses its file delete only for its own source, as 
 Local provider offers it for a binding provider (D-7.3); providers without binding keep C10.
 
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
-contract succeeds; on an identity-less location they keep the refusal and never delete by name. With delete-after selected,
+contract succeeds. On an identity-less location they refuse cleanup and keep the sources.
+
+After the Pack options and any exact cleanup confirmation, Pack enters the File Operations scheduler with its captured
+Local provider instance, sources, format and archive target. Preparation qualifies the source and publication scopes.
+The worker inventories and encodes the selection. The task can pause between work checkpoints and can cancel before
+commit. Once publication succeeds, a later cancellation keeps the archive and withholds source cleanup.
+Pane completion refreshes visible matching Local output folders. A changed source pane provider cannot redirect cleanup.
+
 Both Pack writers use the shared Local file transaction to write a private sibling and publish it through
 the retained handle after the archive is complete. An existing archive remains available until successful
 replacement. A creation, encoding, flush or publication failure preserves the previous target, retires the
 unpublished stage by handle and starts no source cleanup. The `archive.pack.publish_us` metric
-records the completed-output flush and publication duration, archive format and result.
-Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive. For a regular-file selection, both Pack writers read from each approved source identity and revision. Their cleanup task rebinds those versions for nonrecursive Delete before removing any selected file.
+records the completed-output flush and publication duration, archive format and result. `archive.pack_us`
+measures worker execution. `archive.pack.admission.ui_thread_us` measures pane capture, options, consent and task admission.
+Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive.
+For a regular-file selection, both Pack writers read from each approved source identity and revision.
+The cleanup task retains the published archive's exact file handle with write and delete sharing denied while it
+rebinds those versions for nonrecursive Delete before removing any selected file.
 If Pack cannot prove the exact cleanup set, including the descendants of selected directories, it
 writes the archive and keeps the originals without asking to delete them. Archive admission requires
 the version receipt and rejects recursive Delete.
