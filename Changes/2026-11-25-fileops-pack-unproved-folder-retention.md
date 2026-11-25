@@ -1,0 +1,1 @@
+- Pack creates the archive and keeps all originals when it cannot verify the exact contents of a selected folder for Delete after.

@@ -12058,10 +12058,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                 // permanent-delete card, or a Recycle's escalation question. A Pack or Unpack cleanup (any
                 // consent captured before the task) keeps the refusal, as its leftovers do
                 // (DeleteHandoffForPlan).
-                const bool archiveRevision = FileOperations::RequiresArchiveCleanupRevision(typedPlan.origin, typedPlan.recursive);
-                const bool automaticOrigin =
-                    typedPlan.origin == FileOperations::DeleteOrigin::PackCleanup || typedPlan.origin == FileOperations::DeleteOrigin::UnpackCleanup;
-                const bool byNameRouteAvailable = FileOperations::IsLocalFileSystemEndpoint(typedPlan.endpoint) && ! automaticOrigin &&
+                const bool archiveCleanup       = FileOperations::IsArchiveCleanup(typedPlan.origin);
+                const bool byNameRouteAvailable = FileOperations::IsLocalFileSystemEndpoint(typedPlan.endpoint) && ! archiveCleanup &&
                                                   (! permanentDelete || _permanentDeleteConfirmationPending);
                 for (const FileOperations::QualifiedSourceItem& item : typedPlan.selectedItems)
                 {
@@ -12079,8 +12077,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                                              exactDeleteAuthority,
                                              exactDeleteAuthority,
                                              &rootBinding,
-                                             ! archiveRevision && exactDeleteAuthority && FileOperations::IsLocalFileSystemEndpoint(typedPlan.endpoint),
-                                             archiveRevision ? FILESYSTEM_BIND_READ_REVISION : static_cast<FileSystemBindFlags>(0u));
+                                             ! archiveCleanup && exactDeleteAuthority && FileOperations::IsLocalFileSystemEndpoint(typedPlan.endpoint),
+                                             archiveCleanup ? FILESYSTEM_BIND_READ_REVISION : static_cast<FileSystemBindFlags>(0u));
                     const bool identityLessRoot =
                         byNameRouteAvailable && rootBinding.attempted && rootBinding.state == FileOperations::ObjectBindingState::Unsupported;
                     if (exactDeleteAuthority && hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && identityLessRoot)
@@ -12162,7 +12160,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                         }
                         return hr;
                     }
-                    if (archiveRevision)
+                    if (archiveCleanup)
                     {
                         const auto scope = builder.FindScope(builder.BucketFor(typedPlan.endpoint), typedPlan.endpoint, item.providerPath, true);
                         if (scope == builder.scopes.end() || ! scope->root || ! item.ingressSnapshot.has_value())

@@ -675,8 +675,8 @@ before any mutation and leaves no completed-history success entry; Permanently d
 re-check the confirmed pathnames against the pinned objects and then run. When Delete includes a
 location whose provider says Recycle is unavailable, the same card covers just the selected items
 that need permanent consent. It identifies that subset and gives the count of accompanying Recycle
-items. Confirm starts their admitted routes. Cancel keeps the whole selection unchanged. Archive cleanup deletes
-whose consent the archive prompt already captured do not ask again. On a location that deletes by name
+items. Confirm starts their admitted routes. Cancel keeps the whole selection unchanged. Archive cleanup uses
+its earlier permanent-delete confirmation, including the possible-leftover disclosure when required. On a location that deletes by name
 the question ends with its own paragraph (the consent note): for a provider without object identity,
 that this location deletes whatever the name refers to (C10); for a Local location without file
 identities (I35 R7.3), the card is titled "Permanent delete by name", its affirmative action is

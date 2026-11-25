@@ -970,12 +970,11 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     {
         const bool validCapturedConsent = archiveDeleteConsentCaptured && operation == FILESYSTEM_DELETE &&
                                           std::ranges::all_of(plans,
-                                                              [&](const FileOperations::FileOperationPlan& plan) noexcept
+                                                              [](const FileOperations::FileOperationPlan& plan) noexcept
         {
             const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
-            return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Permanent &&
-                   (deletion->origin == FileOperations::DeleteOrigin::PackCleanup || deletion->origin == FileOperations::DeleteOrigin::UnpackCleanup) &&
-                   (! hasArchiveArtifactTouch || ! deletion->recursive);
+            return deletion && deletion->mode == FileOperations::DeleteMode::Permanent && FileOperations::IsArchiveCleanup(deletion->origin) &&
+                   ! deletion->recursive;
         });
         if (! validCapturedConsent)
         {

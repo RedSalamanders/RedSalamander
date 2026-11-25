@@ -14221,6 +14221,23 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SelfTest::PathExists(archivePath), L"Pack command should create the ZIP archive.");
 
     {
+        const auto retainedArchive       = outputRoot / L"folders-retained.zip";
+        auto folderCleanupOptions        = packOptions;
+        folderCleanupOptions.archivePath = retainedArchive;
+        folderCleanupOptions.deleteAfter = true;
+        const auto promptCount           = HostGetTestPromptRequestCount();
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(folderCleanupOptions);
+        const bool dispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
+        const auto retained   = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        state.Require(
+            dispatched && HostGetTestPromptRequestCount() == promptCount && retained.has_value() && retained->hr == S_FALSE && packResult.has_value() &&
+                retained->entries == packResult->entries && cleanupIdle() && SelfTest::PathExists(retainedArchive) && SelfTest::PathExists(emptyRoot) &&
+                ReadUtf8TextFileForCommandSelfTest(sourceRoot / L"alpha.txt") == L"alpha" &&
+                ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
+            L"Pack must write the complete folder selection and keep every source without a cleanup prompt or Delete when no tree receipt is available.");
+    }
+
+    {
         const std::filesystem::path omittedSource = nestedRoot / L"omitted-link.txt";
         state.Require(Common::Testing::CreateSandboxedSymbolicLink(omittedSource, sourceRoot / L"alpha.txt", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE, ec),
                       L"Pack retention requires a sandboxed link that is omitted from the stored ZIP.");
@@ -14235,8 +14252,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         partialPackOptions.archivePath = partialArchive;
         partialPackOptions.deleteAfter = true;
         g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(partialPackOptions);
-        state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"The test must have approved the Pack cleanup request."),
-                      L"Pack with Delete after should dispatch.");
+        const auto promptCount = HostGetTestPromptRequestCount();
+        state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack") && HostGetTestPromptRequestCount() == promptCount,
+                      L"Pack with an unproved source tree should dispatch without asking to delete it.");
         PumpPendingMessages();
         const auto partialPack = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
         state.Require(partialPack.has_value() && partialPack->hr == S_FALSE && containsEntry(partialPack->entries, L"nested/beta.txt") &&

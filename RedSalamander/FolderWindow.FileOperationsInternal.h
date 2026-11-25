@@ -494,9 +494,9 @@ struct DeletePlan
     std::optional<DestructiveConsentReceipt> initialConsent;
 };
 
-[[nodiscard]] inline bool RequiresArchiveCleanupRevision(DeleteOrigin origin, bool recursive) noexcept
+[[nodiscard]] inline bool IsArchiveCleanup(DeleteOrigin origin) noexcept
 {
-    return origin == DeleteOrigin::UnpackCleanup || (origin == DeleteOrigin::PackCleanup && ! recursive);
+    return origin == DeleteOrigin::PackCleanup || origin == DeleteOrigin::UnpackCleanup;
 }
 
 struct CreateDirectoryAdmission

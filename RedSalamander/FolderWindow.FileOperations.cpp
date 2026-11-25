@@ -288,7 +288,7 @@ enum class ObjectBindingSupport : uint8_t
             }
             // Ordinary Permanent Delete pins its roots before asking on the task.
             // Regular-file archive cleanup requires the exact versions read by the archive command.
-            if (FileOperations::RequiresArchiveCleanupRevision(typedPlan.origin, typedPlan.recursive) &&
+            if (FileOperations::IsArchiveCleanup(typedPlan.origin) &&
                 (typedPlan.mode != FileOperations::DeleteMode::Permanent || typedPlan.recursive || typedPlan.nativeAuthority ||
                  std::ranges::any_of(typedPlan.selectedItems,
                                      [&](const FileOperations::QualifiedSourceItem& item) noexcept
@@ -2533,7 +2533,7 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
                                                         : FileOperations::PlanRejectionBucket::MalformedEndpoint);
     }
 
-    if (FileOperations::RequiresArchiveCleanupRevision(deleteOrigin, (flags & FILESYSTEM_FLAG_RECURSIVE) != 0))
+    if (FileOperations::IsArchiveCleanup(deleteOrigin))
     {
         if (! archiveCleanup)
             return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
