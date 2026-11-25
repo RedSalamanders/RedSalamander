@@ -335,6 +335,7 @@ run without activation or a desktop
 lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed folder-progress
 witnesses. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
 gates using owned windows. The exact `FileOps_ClearCompletedScope` case uses a private popup.
+The exact `FileOps_ProviderCapabilityMatrix` case uses owned providers and task controls.
 Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
 files and simulated unsupported destination IDs, plus capacity/exclusive waiting-card captures.
