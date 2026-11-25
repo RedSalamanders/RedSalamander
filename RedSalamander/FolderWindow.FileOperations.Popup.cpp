@@ -15756,43 +15756,55 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     result.reducedMotionEnabled                    = reducedMotion;
     const auto scalarAnimationActive               = [](const ScalarAnimation& animation) noexcept
     { return animation.initialized && std::abs(animation.displayed - animation.target) > 0.01; };
-    result.autoResizeMotionActive                 = _autoResizePending || _autoResizeAnimating;
-    result.expandedPlacementRestorePending        = _footerOnlyRestorePending;
-    result.expandedPlacementRestoreRect           = _footerOnlyRestoreWindowRect.value_or(RECT{});
-    result.completedGroupLayoutMotionActive       = completedGroupVisible && scalarAnimationActive(_completedGroupVisibilityAnimation);
-    result.layoutMotionActive                     = result.autoResizeMotionActive || result.completedGroupLayoutMotionActive;
-    result.autoResizeAnimationEnabled             = ! reducedMotion;
-    result.footerQueueModeAnimationEnabled        = false;
-    result.taskCardAnimationEnabled               = ! reducedMotion;
-    result.hostedProgressAnimationEnabled         = ! reducedMotion;
-    result.usesDxUiHost                           = _controlsHost.GetHwnd() != nullptr && _controlsRoot != nullptr;
-    result.surfaceResources                       = FileOperationsSelfTest::CaptureSurfaceResources(_controlsHost);
-    result.hostedActionControlCount               = _hostedButtons.size();
-    result.hostedProgressControlCount             = _hostedProgressBars.size();
-    result.hostedGraphControlCount                = _hostedGraphs.size();
-    result.hostedGraphStallBandCount              = _hostedGraphStallBands.size();
-    result.hostedTooltipRegionCount               = _hostedTooltipRegions.size();
-    result.completedGroupBadgeTooltipsInformative = ! _hostedTooltipDescriptors.empty() && _hostedTooltipDescriptors.size() == _hostedTooltipRegions.size();
-    for (size_t index = 0u; result.completedGroupBadgeTooltipsInformative && index < _hostedTooltipDescriptors.size(); ++index)
+    result.autoResizeMotionActive                      = _autoResizePending || _autoResizeAnimating;
+    result.expandedPlacementRestorePending             = _footerOnlyRestorePending;
+    result.expandedPlacementRestoreRect                = _footerOnlyRestoreWindowRect.value_or(RECT{});
+    result.completedGroupLayoutMotionActive            = completedGroupVisible && scalarAnimationActive(_completedGroupVisibilityAnimation);
+    result.layoutMotionActive                          = result.autoResizeMotionActive || result.completedGroupLayoutMotionActive;
+    result.autoResizeAnimationEnabled                  = ! reducedMotion;
+    result.footerQueueModeAnimationEnabled             = false;
+    result.taskCardAnimationEnabled                    = ! reducedMotion;
+    result.hostedProgressAnimationEnabled              = ! reducedMotion;
+    result.usesDxUiHost                                = _controlsHost.GetHwnd() != nullptr && _controlsRoot != nullptr;
+    result.surfaceResources                            = FileOperationsSelfTest::CaptureSurfaceResources(_controlsHost);
+    result.hostedActionControlCount                    = _hostedButtons.size();
+    result.hostedProgressControlCount                  = _hostedProgressBars.size();
+    result.hostedGraphControlCount                     = _hostedGraphs.size();
+    result.hostedGraphStallBandCount                   = _hostedGraphStallBands.size();
+    result.hostedTooltipRegionCount                    = _hostedTooltipRegions.size();
+    constexpr std::wstring_view completedBadgeIdPrefix = L"FileOperations.CompletedGroup.Badge.";
+    const bool tooltipControlsAligned                  = _hostedTooltipDescriptors.size() == _hostedTooltipRegions.size();
+    result.hostedTooltipsInformative                   = tooltipControlsAligned && ! _hostedTooltipDescriptors.empty();
+    result.completedGroupBadgeTooltipsInformative      = tooltipControlsAligned;
+    for (size_t index = 0u; tooltipControlsAligned && index < _hostedTooltipDescriptors.size(); ++index)
     {
         const HostedTooltipDescriptor& descriptor = _hostedTooltipDescriptors[index];
         const DxUi::Control* region               = _hostedTooltipRegions[index];
-        result.completedGroupBadgeTooltipsInformative =
-            region && ! descriptor.text.empty() && descriptor.text.find_first_not_of(L"0123456789 \t") != std::wstring::npos &&
-            region->GetTooltipText() == descriptor.text && region->GetAccessibleName() == descriptor.text && region->GetAccessibleHelpText() == descriptor.text;
+        const bool informative           = region && ! descriptor.text.empty() && descriptor.text.find_first_not_of(L"0123456789 \t") != std::wstring::npos &&
+                                           region->GetTooltipText() == descriptor.text && region->GetAccessibleName() == descriptor.text &&
+                                           region->GetAccessibleHelpText() == descriptor.text;
+        result.hostedTooltipsInformative = result.hostedTooltipsInformative && informative;
+        if (region && region->GetAccessibleAutomationId().starts_with(completedBadgeIdPrefix))
+            ++result.completedGroupBadgeTooltipRegionCount;
+        if (descriptor.automationId.starts_with(completedBadgeIdPrefix))
+        {
+            result.completedGroupBadgeTooltipsInformative =
+                result.completedGroupBadgeTooltipsInformative && informative && region->GetAccessibleAutomationId() == descriptor.automationId;
+        }
     }
-    result.hostedAccessibilityNotificationCount = _hostedAccessibilityNotificationCount;
-    result.hostedNativeTabCount                 = _debugNativeTabCount;
-    result.hostedModifierState                  = _controlsHost.DebugGetModifierState();
-    result.failureSurfaceTabCount               = _debugFailureSurfaceTabCount;
-    result.failureSurfaceReentrantEntryCount    = _debugFailureSurfaceReentrantEntryCount;
-    result.hostedFocusChangeCount               = _debugFocusChangeCount;
-    result.hostedPreviousFocusTargetId          = _debugPreviousFocusTargetId;
-    result.hostedLastFocusTargetId              = _debugLastFocusTargetId;
-    result.scrollPosition                       = _scrollPos;
-    result.scrollBarVisible                     = _scrollBarVisible;
-    result.pendingFocusReveal                   = _pendingFocusReveal.has_value();
-    result.listViewportRect                     = _listViewportRect;
+    result.completedGroupBadgeTooltipsInformative = result.completedGroupBadgeTooltipsInformative && result.completedGroupBadgeTooltipRegionCount != 0u;
+    result.hostedAccessibilityNotificationCount   = _hostedAccessibilityNotificationCount;
+    result.hostedNativeTabCount                   = _debugNativeTabCount;
+    result.hostedModifierState                    = _controlsHost.DebugGetModifierState();
+    result.failureSurfaceTabCount                 = _debugFailureSurfaceTabCount;
+    result.failureSurfaceReentrantEntryCount      = _debugFailureSurfaceReentrantEntryCount;
+    result.hostedFocusChangeCount                 = _debugFocusChangeCount;
+    result.hostedPreviousFocusTargetId            = _debugPreviousFocusTargetId;
+    result.hostedLastFocusTargetId                = _debugLastFocusTargetId;
+    result.scrollPosition                         = _scrollPos;
+    result.scrollBarVisible                       = _scrollBarVisible;
+    result.pendingFocusReveal                     = _pendingFocusReveal.has_value();
+    result.listViewportRect                       = _listViewportRect;
     if (const auto* focusedControl = _controlsHost.GetFocusControl())
     {
         result.hostedFocusedAutomationId = focusedControl->GetAccessibleAutomationId();

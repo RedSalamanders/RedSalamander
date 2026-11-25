@@ -2715,6 +2715,11 @@ hit-test the intended logical column, and prove an intermediate order change. Re
 sorts must exercise the complete descending/none/ascending/descending cycle before checking the
 restored order, layout and exact selected path; a missed click cannot satisfy the sorting proof.
 
+Commands' `cmd_pane_fileops_completed_group_and_navigation` checks the first collapsed frame.
+It counts tooltip controls owned by the Completed-group status badges, checks that each badge has
+informative accessible text, and verifies that the clean tasks leave the hosted accessibility tree.
+The mixed fixture keeps problem cards and their independent tooltip controls visible.
+
 Commands' `cmd_pane_fileops_conflict_rejects_stale_same_task_presentation` retains UIA actions from
 prompt A, publishes B on the same task before redraw, and proves that old primary/overflow/scope and
 Escape bindings cannot decide B or hide its window. After B redraws, retained A inspection providers
