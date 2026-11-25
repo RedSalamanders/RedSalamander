@@ -17895,12 +17895,16 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
     uncanceled.statusKind            = Status::Running;
     if (! BuildGlobalStatusSummary({uncanceled}, &rates).hasAggregateEta)
         return false;
-    const auto mixed = BuildGlobalStatusSummary({task, uncanceled});
-    if (mixed.running != 2u || mixed.stopping != 1u || mixed.bulkPausable != 1u || mixed.bulkPaused != 0u || ! HasFooterPauseResumeAllControl(mixed))
+    uncanceled.taskId             = task.taskId + 1u;
+    auto& peerRate                = rates[uncanceled.taskId];
+    peerRate.displayedBytesPerSec = 5.0;
+    const auto mixed              = BuildGlobalStatusSummary({task, uncanceled}, &rates);
+    if (mixed.running != 2u || mixed.stopping != 1u || mixed.bulkPausable != 1u || mixed.bulkPaused != 0u || ! HasFooterPauseResumeAllControl(mixed) ||
+        mixed.displayedBytesPerSec != peerRate.displayedBytesPerSec || rates.at(task.taskId).displayedBytesPerSec != 10.0)
         return false;
     const auto taskbar = BuildGlobalTaskbarProgressModel(summary);
     if (! progress.includeInAggregateCohort || ! progress.showThroughputGraph || ! progress.determinate || progress.fraction != 0.25 ||
-        summary.displayedBytesPerSec != 10.0 || summary.hasAggregateEta || summary.completedBytes != 25u || summary.totalBytes != 100u ||
+        summary.displayedBytesPerSec != 0.0 || summary.hasAggregateEta || summary.completedBytes != 25u || summary.totalBytes != 100u ||
         taskbar.state != static_cast<uint32_t>(TBPF_NORMAL) || taskbar.completed != 25u || taskbar.total != 100u)
         return false;
     auto unknownSize                 = task;

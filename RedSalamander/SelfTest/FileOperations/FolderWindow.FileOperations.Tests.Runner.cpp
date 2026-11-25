@@ -8827,8 +8827,10 @@ using TickResult = std::optional<bool>;
     for (const auto& [culture, expected] : cultures)
     {
         if (FAILED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, std::wstring(culture)})) ||
-            LoadStringResource(nullptr, IDS_FILEOPS_STATUS_STOPPING) != expected || ! DebugValidateFileOperationsStoppingPresentation())
-            return reject(std::format(L"{} exact localized label or pure status/summary/taskbar precedence failed", culture));
+            LoadStringResource(nullptr, IDS_FILEOPS_STATUS_STOPPING) != expected)
+            return reject(std::format(L"{} exact localized Stopping label failed", culture));
+        if (! DebugValidateFileOperationsStoppingPresentation())
+            return reject(std::format(L"{} Stopping status, summary or taskbar model failed", culture));
     }
     static_cast<void>(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, L"en-US"}));
 
@@ -10024,6 +10026,8 @@ using TickResult = std::optional<bool>;
     };
     if (! DebugValidateFileOperationsPreparingPresentation())
         fail(L"Preparing elapsed status and bulk pause controls must respect queue priority and group ownership");
+    if (! DebugValidateFileOperationsStoppingPresentation())
+        fail(L"Stopping must retain progress and card history while excluding its rate from the running total.");
     if (! State::DebugValidateBulkPauseOwnershipForSelfTest())
         fail(L"Pause all must capture live preparation and preserve independent pauses and queue waits when resumed");
     auto* folder     = TryGetFolderWindow(state.mainWindow);

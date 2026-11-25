@@ -5379,10 +5379,11 @@ private:
                       folderWindowHeader.find("enum class SourceDisposition") != std::string::npos &&
                       folderWindowHeader.find("enum class ItemCompletion") != std::string::npos,
                   L"File Operations completion consumers must share the public typed result axes.");
+    using FileOperationState = FolderWindow::FileOperationState;
     state.Require(internalHeader.find("struct OperationAdmission") != std::string::npos &&
                       internalHeader.find("HRESULT AdmitOperation(") != std::string::npos &&
                       internalHeader.find("HRESULT StartOperation(OperationAdmission admission") != std::string::npos &&
-                      internalHeader.find("ExecutionMode executionMode                                        = ExecutionMode::PerItem") != std::string::npos,
+                      FileOperationState::OperationAdmission{}.executionMode == FileOperationState::ExecutionMode::PerItem,
                   L"File Operations must expose a typed-only queue-publication boundary and default transfer admission to guarded per-item execution.");
     state.Require(
         internalHeader.find("enum class ObjectBindingState") != std::string::npos && internalHeader.find("struct BoundObjectAuthority") != std::string::npos &&
