@@ -14285,6 +14285,50 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(existingArchivePath) == L"old", L"Pack overwrite rejection should preserve the existing archive.");
 
+    for (const std::wstring_view extension : {std::wstring_view(L"zip"), std::wstring_view(L"7z")})
+    {
+        const auto folder = outputRoot / std::format(L"{}-publication", extension);
+        const auto target = folder / std::format(L"previous.{}", extension);
+        state.Require(SelfTest::EnsureDirectory(folder) && SelfTest::WriteTextFile(target, "previous archive bytes"),
+                      L"Pack publication should stage a previous archive beside the new output.");
+        if (! state.failure.empty())
+            return false;
+
+        auto replaceOptions        = packOptions;
+        replaceOptions.archivePath = target;
+        replaceOptions.overwrite   = true;
+        if (extension == L"7z")
+            replaceOptions.packerExtension = extension;
+
+        constexpr HRESULT failedPublish = HRESULT_FROM_WIN32(ERROR_DISK_FULL);
+        Common::Files::Testing::FailNextLocalFileTransactionPublish(failedPublish);
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(replaceOptions);
+        const bool dispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
+        static_cast<void>(Common::Files::Testing::TakeNextLocalFileTransactionPublishFailure());
+        const auto failedResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        const auto rollback     = Common::Files::Testing::LastLocalFileTransactionRollback();
+        std::error_code listingError;
+        std::filesystem::directory_iterator child(folder, listingError);
+        const std::filesystem::directory_iterator end;
+        const bool foundPrior = ! listingError && child != end && child->path().filename() == target.filename();
+        if (foundPrior)
+            child.increment(listingError);
+        state.Require(dispatched && failedResult.has_value() && failedResult->hr == failedPublish &&
+                          ReadUtf8TextFileForCommandSelfTest(target) == L"previous archive bytes" && foundPrior && child == end && ! listingError &&
+                          rollback.ownedHandle && (rollback.posixDisposition || rollback.legacyDisposition) && ! rollback.pathDeleteAttempted,
+                      std::format(L"{} Pack must retain the previous output and remove only its staged file after publication fails.", extension));
+        if (! state.failure.empty())
+            return false;
+
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(replaceOptions);
+        const bool retried     = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
+        const auto retryResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        const auto packedSize  = std::filesystem::file_size(target, listingError);
+        state.Require(retried && retryResult.has_value() && retryResult->hr == S_OK && packResult.has_value() && retryResult->entries == packResult->entries &&
+                          ! listingError && packedSize > sizeof("previous archive bytes") - 1u,
+                      std::format(L"{} Pack should publish the completed archive on the next attempt.", extension));
+    }
+
     const std::filesystem::path unsafeArchivePath = nestedRoot / L"inside.zip";
     FolderWindow::ArchiveCommandDebugOptions unsafePackOptions{};
     unsafePackOptions.archivePath = unsafeArchivePath;

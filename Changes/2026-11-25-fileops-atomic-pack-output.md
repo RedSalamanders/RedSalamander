@@ -1,0 +1,1 @@
+- Preserve the previous ZIP or 7z archive if Pack fails to publish its completed output.
