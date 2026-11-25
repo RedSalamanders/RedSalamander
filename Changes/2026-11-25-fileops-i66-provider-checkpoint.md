@@ -1,0 +1,1 @@
+- Record the landed I66 Preferences, cleanup, and provider checks alongside the remaining qualification.
