@@ -440,13 +440,14 @@ microseconds (<2,000,000), destructive command count (zero), and cooperative ret
 rows; these are route correctness and bounded loopback cancellation evidence, not
 throughput, deep/wide memory, or live-endpoint qualification.
 
-`C0_CurlCommittedMutationResponseLost` has 33 native checks over eight loopback FTP
-scenarios: single/bulk Delete/Rename with ordinary acknowledgement or a committed
-mutation followed by connection loss and concurrent source replacement.
+`C0_CurlCommittedMutationResponseLost` has 49 native checks over twelve loopback FTP
+scenarios. Single and bulk Delete, new-name Rename and overwrite Rename each exercise
+an acknowledgement or a lost reply followed by concurrent source replacement.
 `FileOps.Curl.MutationReplyLoss` records duration in microseconds, mutation request
-count in `value0` (one), and injected loss count in `value1` (zero/one). Assert
-exact file bytes, exactly one callback with honest mutation classification, and no
-incidental NLST transfer. Keep the pre-fix replay failures alongside candidate rows;
+count in `value0` (one or two), and injected loss count in `value1` (zero or one).
+Assert exact file bytes, one callback with the verified outcome, and no incidental
+NLST transfer. The overwrite branch also checks that the rollback sibling survives
+and its receipt remains available after a lost primary reply. Keep the pre-fix replay failures alongside candidate rows;
 the shorter failure path is not a general throughput claim.
 `C0_CurlHostCommittedDeleteResponseLost` exercises the real host task and records
 `FileOps.SelfTest.C0Curl.CommittedDeleteResponseLost`: duration, one Delete request,
