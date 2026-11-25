@@ -465,7 +465,8 @@ evidence, not a permanent exemption.
 | Compare Directories synchronization | `TransferPlan` with complete `explicitMappings`; Compare summary is the ingress confirmation |
 | Pack cleanup | `DeletePlan(Permanent, PackCleanup)` after successful/verified pack; the archive prompt supplies the one captured `ArchiveDeleteAfter` consent |
 | Unpack cleanup | `DeletePlan(Permanent, UnpackCleanup)` after successful extraction; the archive prompt supplies the one captured `ArchiveDeleteAfter` consent and no private `std::filesystem::remove` is permitted |
-| Inline F2 | One-step `RenamePlan(InlineRename)`; inline editor is the only initial confirmation |
+| F7 Create Folder | `CreateDirectoryAdmission`; one name prompt captures the provider and parent, then the worker validates and creates |
+| Inline F2 | One-step `RenamePlan(InlineRename)`; the inline editor supplies the name, and qualified same-parent routes can capture a provider source token |
 | Batch Rename | `RenamePlan(BatchRename)`; preview and Run are the initial confirmation |
 | Change Case | Discovery emits immutable mappings into `RenamePlan(ChangeCase)`; the Change Case dialog is the initial confirmation |
 | Command/plugin extension | The same plan factory; direct provider mutation is forbidden unless named here |
