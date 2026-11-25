@@ -448,6 +448,12 @@ struct PackArchiveRequest final
 
 struct PackArchiveState final
 {
+    PackArchiveState() noexcept                          = default;
+    PackArchiveState(const PackArchiveState&)            = delete;
+    PackArchiveState& operator=(const PackArchiveState&) = delete;
+    PackArchiveState(PackArchiveState&&)                 = delete;
+    PackArchiveState& operator=(PackArchiveState&&)      = delete;
+
     PackArchiveRequest request;
     ArchiveOperationResult result;
     wil::unique_hfile publishedArchive;

@@ -12348,7 +12348,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecutePackArchive(const FileOpe
     if (SUCCEEDED(result.hr))
     {
         const auto* cleanup             = request.cleanup.get();
-        auto* const retainedPublication = cleanup ? &_packArchive->publishedArchive : nullptr;
+        auto* const retainedPublication = cleanup ? std::addressof(_packArchive->publishedArchive) : nullptr;
         if (request.storedZip)
         {
             result = CreateStoredZipArchive(_sourcePaths, plan.archivePath, request.overwrite, request.deleteAfter, cleanup, checkpoint, retainedPublication);
