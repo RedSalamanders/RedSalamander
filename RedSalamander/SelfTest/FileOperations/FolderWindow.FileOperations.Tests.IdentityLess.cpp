@@ -534,10 +534,28 @@ private:
     ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
     SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(false);
     std::vector<IdentityLessPrompt> extraQuestions;
-    const auto* finished = scope.CancelQuestionsUntilEnd(task.value(), L"changed leftover refusal", &extraQuestions);
-    if (! finished || finished->hr != HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) || ! extraQuestions.empty() || ! FileSizeEquals(stage, 1024u) ||
-        ! FileSizeEquals(savedStage, 4096u) || ! FileSizeEquals(backup, 8192u) || HostGetTestPromptRequestCount() != 0u)
-        return fail(L"A changed checked name did not veto the entire cleanup before consent.");
+    const auto* finished         = scope.CancelQuestionsUntilEnd(task.value(), L"changed leftover refusal", &extraQuestions);
+    const bool refusedBoth       = finished && finished->sourceItemResults.size() == 2u &&
+                                   std::ranges::all_of(finished->sourceItemResults,
+                                                       [](const auto& result) noexcept
+    {
+        return result && result->status == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && result->completion == FileOperations::ItemCompletion::Failed &&
+               result->publication == FileOperations::PublicationState::NotAttempted &&
+               result->sourceDisposition == FileOperations::SourceDisposition::Retained;
+    });
+    const bool stagePreserved    = FileSizeEquals(stage, 1024u);
+    const bool originalPreserved = FileSizeEquals(savedStage, 4096u);
+    const bool backupPreserved   = FileSizeEquals(backup, 8192u);
+    const auto modalCount        = HostGetTestPromptRequestCount();
+    if (! refusedBoth || ! extraQuestions.empty() || ! stagePreserved || ! originalPreserved || ! backupPreserved || modalCount != 0u)
+        return fail(std::format(L"Changed cleanup finish=0x{:08X} exact refusal={} card questions={} modal questions={} replacement={} original={} sibling={}.",
+                                static_cast<unsigned long>(finished ? finished->hr : E_PENDING),
+                                refusedBoth,
+                                extraQuestions.size(),
+                                modalCount,
+                                stagePreserved,
+                                originalPreserved,
+                                backupPreserved));
 
     AppendLog(L"Exact leftover cleanup used one card, preserved both objects on Cancel, and refused a changed selection before consent.");
     return true;
