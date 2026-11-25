@@ -98,6 +98,7 @@
     C0_CurlCommittedMutationResponseLost supports -NonInteractive and uses only loopback FTP fixtures.
     FileOps_ProviderCapabilityMatrix supports -NonInteractive through private providers and task controls.
     FileOps_RepeatedNonClipboardCopyStorage and FileOps_RepeatedNonClipboardMoveStorage support -NonInteractive through owned tasks and sandbox files.
+    R0fGraph_FakeGraphReadWriteCreateRenameRecycle supports -NonInteractive using only the owned Graph loopback fixture and local sandbox.
 
 .PARAMETER CommandsFamily
     With Suite Commands, runs one governed Commands source family in its own process.

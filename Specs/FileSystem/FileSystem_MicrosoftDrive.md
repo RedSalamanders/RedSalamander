@@ -338,7 +338,8 @@ canceled Recycle whose children listing is still arriving returns `ERROR_CANCELL
 read chunks and deletes nothing, and that a request the server never answers returns within the
 declared bound with the host's verdict after Cancel and as a transport failure without it; FileOps
 `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` proves cross-provider Copy both ways
-(byte-exact), provider CreateDirectory and Rename, and Recycle through a task on the same fixture.
+(byte-exact), provider CreateDirectory, ordinary host inline Rename, and Recycle through tasks on the same fixture.
+The host Rename checks the terminal publication receipt and the old and new names.
 The gated `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_*`/`SHAREPOINT` profiles remain the live proof.
 OneDrive and SharePoint are full file-manager destinations.
 

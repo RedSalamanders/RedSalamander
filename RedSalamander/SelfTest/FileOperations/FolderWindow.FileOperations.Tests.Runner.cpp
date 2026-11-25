@@ -14582,6 +14582,57 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     return true;
 }
 
+[[nodiscard]] HRESULT RunGraphInlineRenameForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                      const std::filesystem::path& source,
+                                                      std::wstring_view destinationLeaf) noexcept
+{
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker blocker;
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread() && ! blocker.Start())
+        return E_UNEXPECTED;
+
+    Common::Settings::Settings settings{};
+    wil::unique_hwnd privateHost(
+        CreateWindowExW(0, L"STATIC", L"Owned Graph test", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+    FolderWindow owner;
+    owner.SetSettings(&settings);
+    constexpr auto pane = FolderWindow::Pane::Left;
+    if (! privateHost || ! owner.Create(privateHost.get(), 0, 0, 640, 480))
+        return E_UNEXPECTED;
+    const auto information         = fileSystem.try_query<IInformations>();
+    const PluginMetaData* metadata = nullptr;
+    if (! information || information->GetMetaData(&metadata) != S_OK || ! metadata || ! metadata->shortId)
+        return E_UNEXPECTED;
+    RETURN_IF_FAILED(
+        owner.SetFileSystemInstanceForPane(pane, fileSystem, std::wstring(kPluginIdOneDrivePersonal), metadata->shortId, L"graph-rename-selftest"));
+
+    auto* operations = owner.DebugGetFileOperationState();
+    if (! operations)
+        return E_UNEXPECTED;
+    const auto cleanup = wil::scope_exit([&]() noexcept { static_cast<void>(CancelOutstandingSelfTestOperations(operations)); });
+    std::optional<FolderWindow::FileOperationCompletedEvent> completion;
+    const uint64_t callback = owner.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) { completion = event; });
+    const auto unsubscribe  = wil::scope_exit([&]() noexcept { owner.RemoveFileOperationCompletedCallback(callback); });
+
+    uint64_t id            = 0u;
+    const HRESULT admitted = operations->AdmitInlineRename(pane, fileSystem, source, std::wstring(destinationLeaf), &id);
+    if (admitted != S_OK || id == 0u)
+        return FAILED(admitted) ? admitted : E_UNEXPECTED;
+    const auto finished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return completion.has_value() && completion->taskId == id && operations->FindTask(id) == nullptr;
+    }, {.timeout = SelfTest::Scale(std::chrono::seconds(30)), .operationName = L"Graph inline Rename completion"});
+    if (! finished.conditionMet)
+        return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    if (completion->hr != S_OK || completion->itemOutcomes.size() != 1u)
+        return FAILED(completion->hr) ? completion->hr : E_UNEXPECTED;
+
+    const auto& result = completion->itemOutcomes.front();
+    if (result.status != S_OK || result.publication != FileOperations::PublicationState::Published ||
+        result.sourceDisposition != FileOperations::SourceDisposition::Removed || result.completion != FileOperations::ItemCompletion::Completed ||
+        result.finalDestinationPath.filename().native() != destinationLeaf)
+        return E_UNEXPECTED;
+    return S_OK;
+}
+
 [[nodiscard]] bool RunFileOpsSmbExactRenameProviderChecks(SelfTestState& state, std::wstring& unavailableReason) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept

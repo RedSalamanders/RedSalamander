@@ -1432,6 +1432,9 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox:
 }
 case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
 {
+    static bool inlineRenameActive = false;
+    if (inlineRenameActive)
+        return false;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 240'000ull))
     {
@@ -1794,11 +1797,30 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             return true;
         }
 
-        if (! PathExistsFsIo(remoteIo, std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)))
+        const std::filesystem::path movedFile(state.remoteOneDrivePersonalMovedFileConn);
+        std::string beforeRename;
+        if (! ReadFileTextFsIo(remoteIo, movedFile, beforeRename))
         {
             Fail(L"Phase16_RemoteOneDrivePersonalFileOps move did not materialize the destination file.");
             return true;
         }
+
+        constexpr std::wstring_view renamedLeaf = L"verified-renamed.bin";
+        const HRESULT renameHr                  = [&]() noexcept
+        {
+            inlineRenameActive = true;
+            const auto leave   = wil::scope_exit([]() noexcept { inlineRenameActive = false; });
+            return RunGraphInlineRenameForSelfTest(state.fsRemoteOneDrivePersonal, movedFile, renamedLeaf);
+        }();
+        const std::filesystem::path renamedFile(JoinPluginPathForSelfTest(movedFile.parent_path().native(), renamedLeaf));
+        std::string afterRename;
+        if (renameHr != S_OK || PathExistsFsIo(remoteIo, movedFile) || ! ReadFileTextFsIo(remoteIo, renamedFile, afterRename) || afterRename != beforeRename)
+        {
+            Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps inline Rename failed or did not preserve the file (hr=0x{:08X}).",
+                             static_cast<unsigned long>(renameHr)));
+            return true;
+        }
+        state.remoteOneDrivePersonalMovedFileConn = renamedFile.native();
 
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_DELETE,
