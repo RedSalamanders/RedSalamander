@@ -1,1 +1,0 @@
-- Remember the File Operations popup's Queue or Parallel default across restarts. The Start option in a task's own dialog applies to that task.

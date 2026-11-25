@@ -1,1 +1,0 @@
-- Choose whether Copy preserves or skips link objects in File Operations Preferences. Existing settings continue to inherit the provider policy, and each Copy with Options can override the default.

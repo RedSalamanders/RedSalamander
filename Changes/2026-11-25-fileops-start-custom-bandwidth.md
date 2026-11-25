@@ -1,1 +1,0 @@
-- Set a custom bandwidth limit directly in Copy with Options and Move with Options using the same editor as a running task.

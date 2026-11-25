@@ -1,1 +1,0 @@
-- Use one Apply to all checkbox for eligible File Operations conflict choices on the task card and pane mirror. The label explains when only Skip can repeat.

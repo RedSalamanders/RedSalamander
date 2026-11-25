@@ -1,1 +1,0 @@
-- Report FTP, SFTP and SCP Rename completion from the provider's mutation facts. Preserve a retained rollback sibling in the result even if the primary rename reply is lost.

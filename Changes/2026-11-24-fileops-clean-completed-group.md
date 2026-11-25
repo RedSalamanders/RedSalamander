@@ -1,1 +1,0 @@
-- Keep failed, partial, uncertain and warning tasks visible when clearing the Completed group. Clean successes and cancellations still share the collapsible group, and Clear completed preserves interrupted Move recovery notices.

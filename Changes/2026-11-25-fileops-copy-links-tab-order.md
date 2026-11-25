@@ -1,1 +1,0 @@
-- File Operations Preferences keyboard coverage now checks the Copy links control when tabbing between the decision-mirror toggle and Parallel transfers in either direction.

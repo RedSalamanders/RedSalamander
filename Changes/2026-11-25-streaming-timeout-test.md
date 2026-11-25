@@ -1,1 +1,0 @@
-- Verify process timeout cleanup with the PID from the launcher so the test works when the child has not reached its script before the deadline.

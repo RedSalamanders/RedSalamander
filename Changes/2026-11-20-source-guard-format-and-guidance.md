@@ -1,1 +1,0 @@
-- Keep Terminal and Floodgate source contracts strict across formatter-only spacing, read the three moved project skills from their canonical `.agents` paths, and correct the manual native workflow's documented Normal (CI) default while retaining explicit Full qualification.

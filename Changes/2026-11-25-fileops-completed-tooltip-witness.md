@@ -1,1 +1,0 @@
-- Corrected the Release self-test to count Completed badges when problem cards are visible.

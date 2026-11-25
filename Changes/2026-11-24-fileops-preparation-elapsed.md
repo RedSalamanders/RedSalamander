@@ -1,1 +1,0 @@
-- File Operations reports elapsed time during preparation. Final checks for a queued folder deletion start their own timer once the task gets its turn.

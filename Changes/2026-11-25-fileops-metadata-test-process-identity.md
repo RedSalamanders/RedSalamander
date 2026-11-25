@@ -1,1 +1,0 @@
-- Verify metadata process exit on the launcher-held handle so a reused process ID cannot fail the check.

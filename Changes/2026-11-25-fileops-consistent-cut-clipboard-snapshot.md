@@ -1,1 +1,0 @@
-- Paste reads the file list, drop effect and Cut sequence together. If the clipboard changes before a Move can start, the files stay in place and the newer clipboard contents are preserved.

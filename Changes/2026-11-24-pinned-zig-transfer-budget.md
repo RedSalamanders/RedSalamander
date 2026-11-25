@@ -1,1 +1,0 @@
-- Allow the pinned Zig toolchain archive to finish over slow, sustained connections on hosted runners. The archive has a separate transfer deadline and minimum rate. The lock continues to require the exact archive and executable hashes.
