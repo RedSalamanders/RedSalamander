@@ -3132,8 +3132,10 @@ verification wording as the primary summary must not hide that source dispositio
 
 ### Clipboard consumption
 
-For clipboard Move, capture the full selected list and Windows clipboard sequence. After the whole
-request is accepted, initialize one `Preparing` result builder per selected root, publish the task,
+Clipboard Paste reads the entire file list and preferred drop effect during one Windows clipboard open.
+For Move it captures the sequence after reading both formats and while that same open is held.
+A malformed list or missing Move sequence leaves the request unsubmitted. After the whole request
+is accepted, initialize one `Preparing` result builder per selected root, publish the task,
 and construct its worker. `StartOperation` never waits for provider readiness on the UI thread. The
 worker binds every selected-root mutation/interlock scope and completes the unresolved Preparing-gate
 hook, then either fails closed or posts one registered readiness payload to the Folder window and

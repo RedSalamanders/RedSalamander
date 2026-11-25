@@ -6228,6 +6228,19 @@ private:
                   std::format(L"Failed to read {}.", folderViewFileOpsSourcePath.wstring()));
     std::string compactFolderViewFileOpsSource = folderViewFileOpsSource;
     std::erase_if(compactFolderViewFileOpsSource, [](char value) noexcept { return value == ' ' || value == '\t' || value == '\r' || value == '\n'; });
+    const auto clipboardReaders = SourceFunctionBodies(folderViewFileOpsSource, "ReadFileDropClipboard(HWND");
+    if (state.Require(clipboardReaders.size() == 1u, L"Clipboard file-list capture must have one owning reader."))
+    {
+        const auto reader     = clipboardReaders.front();
+        const size_t open     = reader.find("OpenClipboardWithRetriesForFolderView(");
+        const size_t close    = reader.find("wil::scope_exit", open);
+        const size_t paths    = reader.find("GetClipboardData(CF_HDROP)", close);
+        const size_t effect   = reader.find("ReadOpenClipboardDropEffect()", paths);
+        const size_t sequence = reader.find("GetClipboardSequenceNumber()", effect);
+        state.Require(open != std::string_view::npos && close != std::string_view::npos && paths != std::string_view::npos &&
+                          effect != std::string_view::npos && sequence != std::string_view::npos,
+                      L"Clipboard capture must read the full file list, drop effect and Move sequence in one clipboard open.");
+    }
     state.Require(folderViewFileOpsSource.find("ConsumeMoveClipboardForAdmission") != std::string::npos &&
                       compactFolderViewFileOpsSource.find("request.moveClipboardSequence=clipboardSequenceNumber;") != std::string::npos &&
                       compactFolderViewFileOpsSource.find("request.completionCallback=[clipboardSequenceNumber]") == std::string::npos,
