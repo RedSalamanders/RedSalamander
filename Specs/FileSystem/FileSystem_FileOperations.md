@@ -35,6 +35,11 @@ S3 flat-prefix success requires a committed zero-byte trailing-`/` marker, S3 Ta
 and a future native-directory profile may advertise success only when it creates a real native
 directory object.
 
+Pack and Unpack use the same accepted-close refusal as the other pane commands. The pane
+names the archive command in the refusal. Check for close before options open and after
+modal options or permanent-removal consent, before starting archive I/O. The prompt lifetime
+guard keeps a deferred owner reset from admitting work through a stale window.
+
 ## Product invariants
 
 1. Path text is an address, not object identity.
