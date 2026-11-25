@@ -1720,12 +1720,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle, L"auto-dismiss success toggle");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::ShowInformationalNotesToggle, L"show informational notes toggle");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::MirrorDecisionsInPaneToggle, L"mirror decisions in pane toggle");
+    sendTab(false, PreferencesFileOperationsDebugFocusTarget::CopyLinksCombo, L"Copy links combo");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::ParallelTransfersCombo, L"shared parallel-transfer limit");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit, L"bridge buffer field");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle, L"wrapped verification toggle");
 
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit, L"reverse bridge buffer field");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::ParallelTransfersCombo, L"reverse shared parallel-transfer limit");
+    sendTab(true, PreferencesFileOperationsDebugFocusTarget::CopyLinksCombo, L"reverse Copy links combo");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::MirrorDecisionsInPaneToggle, L"reverse mirror decisions in pane toggle");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::ShowInformationalNotesToggle, L"reverse show informational notes toggle");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle, L"reverse auto-dismiss success toggle");
