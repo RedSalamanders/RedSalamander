@@ -120,9 +120,11 @@ Validation rejections retain a `validation_acceptance` failure with the rejected
 contract's reason codes. Unallowed skips name the missing cases; successful
 assertions and earlier failure details remain visible in the same result.
 
-Locked Ghostty/Zig archive downloads use bounded transient HTTP/transport retries before failing the
-build. Permanent failures, wrong hashes and invalid archive layouts remain fatal; offline builds do not
-download. See `Build-GhosttyTerminalRuntime.ps1` help and `Specs/Build/Build_Toolchain.md` for the bounds.
+Locked Ghostty and Zig archive downloads retry transient HTTP and transport failures within fixed time
+limits. The pinned Zig toolchain has a longer transfer deadline and a minimum transfer rate to handle
+slow hosted runners. Permanent failures, wrong hashes and invalid archive layouts fail the build.
+Offline builds use the verified cache. See `Build-GhosttyTerminalRuntime.ps1` help and
+`Specs/Build/Build_Toolchain.md` for the bounds.
 
 The manual native suite defaults to Full. Its explicit CommandsHandoff, FileOpsVolumes and
 ViewerSpaceCapture choices run one fixed hosted diagnostic case each; the adapter accepts filtered exit 2 only
@@ -330,9 +332,10 @@ The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemedi
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb` and
 `FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
 run without activation or a desktop
-lease, alongside `FileOps_RepeatDecisionContracts`, the private `FileOps_ClearCompletedScope` popup,
-and the two reviewed folder-progress witnesses. Broad filters, other suites and proof injections retain
-normal desktop requirements.
+lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed folder-progress
+witnesses. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
+gates using owned windows. The exact `FileOps_ClearCompletedScope` case uses a private popup.
+Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
 files and simulated unsupported destination IDs, plus capacity/exclusive waiting-card captures.
 The source-contract guard retains the host bridge route for these qualified new-file jobs.

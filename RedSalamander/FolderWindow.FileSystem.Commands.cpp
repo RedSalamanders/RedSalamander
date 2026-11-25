@@ -10595,6 +10595,14 @@ bool DebugCancelArchiveUnpackPrompt() noexcept
 
 void FolderWindow::CommandCreateDirectory(Pane pane)
 {
+    if (RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+        return;
+
+    const HWND folderWindow = _hWnd.get();
+    const FileOperationPromptDispatchScope promptDispatch(*this);
+    const auto ownerAvailable = [&]() noexcept
+    { return ! _fileOperationResetDeferred && folderWindow && _hWnd.get() == folderWindow && IsWindow(folderWindow) != FALSE; };
+
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     if (! state.fileSystem)
@@ -10602,13 +10610,17 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         return;
     }
 
-    HWND ownerWindow = GetOwnerWindowOrSelf(_hWnd.get());
+    const auto fileSystem              = state.fileSystem;
+    const std::wstring pluginId        = state.pluginId;
+    const std::wstring pluginShortId   = state.pluginShortId;
+    const std::wstring instanceContext = state.instanceContext;
+    HWND ownerWindow                   = GetOwnerWindowOrSelf(_hWnd.get());
     std::wstring pluginName;
     if (ownerWindow)
     {
         FileSystemPluginManager& pluginManager = FileSystemPluginManager::GetInstance();
         const auto& plugins                    = pluginManager.GetPlugins();
-        pluginName                             = TryGetFileSystemPluginDisplayName(plugins, state.pluginId, state.pluginShortId);
+        pluginName                             = TryGetFileSystemPluginDisplayName(plugins, pluginId, pluginShortId);
     }
 
     const auto folder = state.folderView.GetFolderPath();
@@ -10618,11 +10630,30 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     }
 
     const std::filesystem::path base = folder.value();
+    const auto showFailure           = [&](std::wstring_view path, HRESULT failure) noexcept
+    {
+        if (! ownerAvailable())
+            return;
+        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message;
+        if (failure == E_NOTIMPL || failure == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+        {
+            message = pluginName.empty() ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
+                                         : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
+        }
+        if (message.empty())
+        {
+            message = FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_FAILED, path, static_cast<unsigned long>(failure));
+        }
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), failure);
+    };
 
     const HWND folderViewToRestore    = state.hFolderView.get();
-    const auto restoreFolderViewFocus = wil::scope_exit([this, pane, folderViewToRestore]() noexcept
+    const auto restoreFolderViewFocus = wil::scope_exit([&, folderViewToRestore]() noexcept
     {
-        if (folderViewToRestore && IsWindow(folderViewToRestore) != FALSE)
+        if (ownerAvailable() && ! IsFileOperationsExitPending() && folderViewToRestore && state.hFolderView.get() == folderViewToRestore &&
+            IsWindow(folderViewToRestore) != FALSE)
         {
             SetActivePane(pane);
             FocusPaneFolderView(pane);
@@ -10636,16 +10667,15 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     }
 
     std::wstring initialName;
-    const HRESULT initialNameHr = ResolveInitialCreateDirectoryName(state.fileSystem, base, defaultNameBase, state.pluginId, initialName);
+    const HRESULT initialNameHr = ResolveInitialCreateDirectoryName(fileSystem, base, defaultNameBase, pluginId, initialName);
     if (FAILED(initialNameHr))
     {
-        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = pluginName.empty() ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
-                                                  : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
-        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        showFailure(base.native(), initialNameHr);
         return;
     }
 
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+        return;
     EnsureFileOperations();
     if (! _fileOperations)
     {
@@ -10653,32 +10683,18 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     }
 
     FileOperations::CreateDirectoryAdmission initialAdmission{};
-    const HRESULT initialAdmissionHr =
-        _fileOperations->QualifyCreateDirectory(state.fileSystem, state.pluginId, state.instanceContext, base, initialName, initialAdmission);
+    const HRESULT initialAdmissionHr = _fileOperations->QualifyCreateDirectory(fileSystem, pluginId, instanceContext, base, initialName, initialAdmission);
     if (FAILED(initialAdmissionHr))
     {
-        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message;
-        if (! pluginName.empty())
-        {
-            message = FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
-        }
-        if (message.empty())
-        {
-            message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
-        }
-        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        showFailure(base.native(), initialAdmissionHr);
         return;
     }
 
     wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
-    state.fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
+    fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
     if (! dirOps && ! initialAdmission.allowLocalNativeFallback)
     {
-        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = pluginName.empty() ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
-                                                  : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
-        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        showFailure(base.native(), HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
         return;
     }
 
@@ -10687,12 +10703,12 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         ownerWindow = _hWnd.get();
     }
 
-    const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, base);
-    const auto folderName                   = PromptForCreateDirectoryName(ownerWindow, displayPath.wstring(), initialName, _theme);
-    if (! folderName.has_value())
-    {
+    const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(pluginShortId, instanceContext, base);
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
         return;
-    }
+    const auto folderName = PromptForCreateDirectoryName(ownerWindow, displayPath.wstring(), initialName, _theme);
+    if (! folderName.has_value() || ! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+        return;
 
     const std::wstring requestedName = folderName.value();
     unsigned int suggestedSuffix     = 0u;
@@ -10708,16 +10724,14 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         }
 
         FileOperations::CreateDirectoryAdmission createAdmission{};
-        const HRESULT admissionHr =
-            _fileOperations->QualifyCreateDirectory(state.fileSystem, state.pluginId, state.instanceContext, base, candidateName, createAdmission);
+        const HRESULT admissionHr = _fileOperations->QualifyCreateDirectory(fileSystem, pluginId, instanceContext, base, candidateName, createAdmission);
         if (FAILED(admissionHr))
         {
-            std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-            std::wstring message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
-            state.folderView.ShowAlertOverlay(
-                FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+            showFailure(candidateName, admissionHr);
             return;
         }
+        if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+            return;
         const std::filesystem::path& newFolderPath = createAdmission.candidateProviderPath;
 
         HRESULT hr = S_OK;
@@ -10740,43 +10754,28 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
 
         if (SUCCEEDED(hr))
         {
-            const std::wstring focusName = candidateName;
-            if (! focusName.empty())
+            const auto displaysParent = [&](const PaneState& current)
             {
-                state.folderView.RememberFocusedItemForFolder(base, focusName);
+                const auto path = current.folderView.GetFolderPath();
+                return current.fileSystem && path.has_value() && createAdmission.endpoint.pathIdentity.has_value() &&
+                       EqualsNoCase(current.pluginId, pluginId) && EqualsNoCase(current.instanceContext, instanceContext) &&
+                       EquivalentPath(createAdmission.endpoint.pathIdentity.value(), path->native(), base.native());
+            };
+            DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+            cache.NotifyPathCreated(fileSystem.get(), newFolderPath);
+            if (! ownerAvailable())
+                return;
+            if (displaysParent(state))
+            {
+                state.folderView.RememberFocusedItemForFolder(base, candidateName);
+                state.folderView.ForceRefresh();
             }
 
-            DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
-            cache.NotifyPathCreated(state.fileSystem.get(), newFolderPath);
-            state.folderView.ForceRefresh();
-
-            const Pane otherPane   = pane == Pane::Left ? Pane::Right : Pane::Left;
-            PaneState& otherState  = otherPane == Pane::Left ? _leftPane : _rightPane;
-            const auto otherFolder = otherState.folderView.GetFolderPath();
-            if (otherState.fileSystem && otherFolder.has_value() && OrdinalString::EqualsNoCasePath(otherFolder.value(), base) &&
-                EqualsNoCase(otherState.pluginId, state.pluginId) && EqualsNoCase(otherState.instanceContext, state.instanceContext) &&
-                ! cache.IsFolderWatched(otherState.fileSystem.get(), base))
+            PaneState& otherState = pane == Pane::Left ? _rightPane : _leftPane;
+            if (displaysParent(otherState) && ! cache.IsFolderWatched(otherState.fileSystem.get(), base))
             {
                 otherState.folderView.ForceRefresh();
             }
-            return;
-        }
-
-        if (hr == E_NOTIMPL)
-        {
-            std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-            std::wstring message;
-            if (! pluginName.empty())
-            {
-                message = FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
-            }
-            if (message.empty())
-            {
-                message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
-            }
-
-            state.folderView.ShowAlertOverlay(
-                FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
             return;
         }
 
@@ -10784,13 +10783,12 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         constexpr HRESULT fileExistsHr    = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
         if (autoSuffix && (hr == alreadyExistsHr || hr == fileExistsHr))
         {
+            if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
+                return;
             continue;
         }
 
-        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_FAILED, newFolderPath.wstring(), static_cast<unsigned long>(hr));
-        state.folderView.ShowAlertOverlay(
-            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), hr);
+        showFailure(newFolderPath.native(), hr);
         return;
     }
 }

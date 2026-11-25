@@ -319,7 +319,10 @@ task's decision. A removed focusable path uses global Options as its safe fallba
 
 Footer controls live outside the scrolled task-list viewport and MUST remain hit-testable there. The
 `Options` overflow owns persistent preferences: auto-dismiss success/canceled and Compact/Expanded
-density. Density MUST round-trip through canonical settings save even when it is the only non-default
+density. The same overflow includes an `Issues` toggle for the existing pane, with its checked state
+reflecting current visibility. The toggle leaves the footer preferences and task results intact.
+Per-task Issues actions still open the pane at their own task.
+Density MUST round-trip through canonical settings save even when it is the only non-default
 file-operation setting. Auto-dismiss is a future-retention policy: changing it does not clear cards
 already retained. `Clear completed` is an immediate bulk action for the current completed group and
 MUST NOT be duplicated in the footer.
@@ -544,7 +547,7 @@ operation's endpoints or consent policy.
 `HostFileOperationPromptOptions` in/out snapshot. The host renders its finite choices as four
 option rows, with available choices invokable by keyboard, mouse, and UIA, and writes accepted values back only for the
 affirmative action. Links exposes Preserve/Skip, Verify exposes Off/On, Start exposes Queue/Parallel,
-and Bandwidth cycles Unlimited, the standard presets, plus the captured custom value when needed.
+and Bandwidth cycles the [shared presets](#speed-and-stalls) and includes the captured non-preset value when present.
 Flattening the choices into an unstructured message string or rereading Preferences/provider
 configuration after acceptance is forbidden. Cancel leaves the caller snapshot unchanged, admits no
 task, and consumes no clipboard sequence.
@@ -678,7 +681,10 @@ root strictly pinned, the card shows "Permanent delete" with the question the mo
 ("Permanently delete {what} from {where}. This cannot be undone."), and its actions are **Cancel**
 (first, the default and Escape action) and **Permanently delete**. Cancel ends the task as canceled
 before any mutation and leaves no completed-history success entry; Permanently delete lets the task
-re-check the confirmed pathnames against the pinned objects and then run. Archive cleanup deletes
+re-check the confirmed pathnames against the pinned objects and then run. When Delete includes a
+location whose provider says Recycle is unavailable, the same card covers just the selected items
+that need permanent consent. It identifies that subset and gives the count of accompanying Recycle
+items. Confirm starts their admitted routes. Cancel keeps the whole selection unchanged. Archive cleanup deletes
 whose consent the archive prompt already captured do not ask again. On a location that deletes by name
 the question ends with its own paragraph (the consent note): for a provider without object identity,
 that this location deletes whatever the name refers to (C10); for a Local location without file
@@ -741,8 +747,9 @@ with the card: `FolderWindow.FileOperations.PromptText.{h,cpp}`.
   heading, question and consent facts in the card's words, then `From:`/`Deleting:` and `To:` rows.
   Buttons: the published primary actions in the published order with the card's labels; `More...`,
   present only when the policy publishes overflow actions (two or more, see "Button placement"), opens
-  them in a menu; the Apply to all option (Off/On) appears only when the prompt
-  is eligible; a close glyph. The published default is the primary button and carries the initial focus
+  them in a menu. The mirror shows the same scoped checkbox and localized label as the card
+  when repeat is eligible. It exposes CheckBox and Toggle state through UI Automation.
+  A close glyph dismisses the mirror. The published default is the primary button and carries the initial focus
   ring.
 - **Keyboard order.** Cancel remains the final action and the initial safe focus/default where
   published by the engine. A modeless mirror's Tab sequence includes its close affordance after the
@@ -755,12 +762,10 @@ with the card: `FolderWindow.FileOperations.PromptText.{h,cpp}`.
   replaced), the mirror hides and requests a presentation refresh. The mirror never submits on a timer,
   focus loss, close, navigation or teardown. The close glyph only hides the mirror: the decision stays on
   the card and that prompt is not mirrored again.
-- **One Apply-to-all flag.** The mirror's Apply to all option is the engine's flag of the published prompt,
-  the one the card's checkbox edits: changing it on the mirror sets that flag (and the card shows it at its
-  next refresh); changing it on the card (`Task::ToggleConflictApplyToAllChecked`) posts a presentation pass,
-  which updates the mirror's option in place at once, without a new presentation. Like the card, the mirror
-  submits no Apply-to-all value of its own (`std::nullopt`), so the broker applies the flag both surfaces
-  show.
+- Both checkboxes edit the engine's repeat flag for the same prompt generation. A change on either
+  surface posts a presentation pass and updates the other in place. The mirror checkbox has a stable
+  accessible name and publishes a Toggle state change. Both surfaces submit the chosen action for
+  the current generation and let the broker read the shared flag.
 - **When it goes away (R8.7).** Every presentation pass reconciles the mirror (posted on publication, on
   resolution, on task removal and by the heartbeat while tasks exist). A pane that navigates (the four
   sites that publish its location call `FolderWindow::NotifyFileOperationsPaneChanged`, which posts a pass
@@ -1673,8 +1678,8 @@ prevents a blanket claim that every item moved.
 
 A Move onto an existing file at a destination that cannot provide object identity raises the
 ordinary name-collision decision (Conflict Layout below) with both items' size and date, and the
-actions the location can perform: Replace (or Replace read-only), Keep both, Skip, Skip all and
-Cancel (I63 B1, B2). Replace is absent when the existing item is a link or a folder, or cannot be
+actions the location can perform: Replace (or Replace read-only), Keep both, Skip and
+Cancel (I63 B1, B2). The shared checkbox offers repetition for eligible choices. Replace is absent when the existing item is a link or a folder, or cannot be
 opened for replacement. The card is then a decision card, not a failed card. When the existing file
 changed between the decision and the replacement, nothing is replaced and the same decision is
 shown again with the current file's facts. Only a route that cannot qualify for that decision
@@ -1787,7 +1792,8 @@ an exact complete retained set.
 Every skipped, warned, failed, retained-source, verification-mismatch, and indeterminate item has an
 Issues record with its canonical bucket, qualified source/destination, selected conflict action or
 grant, and typed axes; a skip the user chose is an Information note, so its row is shown only with
-informational notes on (see "User-facing policy", P1 and P2). `Skip All` is represented as Skip plus its explicit same-bucket task grant;
+informational notes on (see "User-facing policy", P1 and P2). An eligible checkbox can authorize
+Skip for the same typed scope.
 Recycle escalation never gains the Apply-to-all checkbox. Its `Delete all remaining permanently`
 action is recorded as Delete permanently plus its explicit task grant, and each later item that
 consumes it is recorded with the cached-scope origin.
@@ -2166,6 +2172,11 @@ The configured speed limit belongs in the shared current-value selector/flyout, 
 marker. Its visible value is `Limit: Unlimited` or the localized compact configured rate; the whole
 selector opens the choices and it has no separate primary action.
 
+Preferences, explicit start options and the running card use the same bandwidth catalog. Its ordered
+values are Unlimited, 1, 5, 10, 50, 100 and 500 MiB/s, and 1 GiB/s. The choices use localized IEC
+labels and binary byte values. Custom examples use IEC units. The shared parser accepts legacy
+spellings such as `4MB` with the same binary meaning.
+
 In Rainbow theme, graph history keeps per-sample colors stable as samples scroll. It MUST NOT blink or
 cycle historic samples by time.
 
@@ -2312,9 +2323,8 @@ enabled:
 
 On a Move, a collision of two regular files may offer `Delete source` (see
 `FileSystem_FileOperations.md`, product invariant 13a, for when). It is never the default action and
-never the Escape action. It is published in the overflow list, so it appears under `More...` together
-with `Skip all`, or as its own button before Cancel when it is the only overflow action (no menu holds
-fewer than two commands). The repeat checkbox applies to it only when the prompt says `Same size and
+never the Escape action. It appears under `More...` when another additional action shares that menu.
+As the only additional action, it appears as a direct button before Cancel. The repeat checkbox applies to it only when the prompt says `Same size and
 date`. The checkbox's localized tooltip and accessible help explicitly state that `Delete source`
 applies to all only when both files have the same size and date; other offered choices keep their
 existing repeat scope.
@@ -2344,8 +2354,8 @@ date` and `Replace all older` (see `FileSystem_FileOperations.md`, product invar
 offered only on a prompt whose own pair matches it: the first when the prompt says `Same size and
 date`, the second when the incoming file is `Newer` and `Replace` is offered. Both need the prompt to
 offer Apply to all, and neither uses the Apply to all box: the caption says the scope. They are
-published in the overflow list, so they appear under `More...` with `Skip all` (the menu then holds at
-least two commands); neither is the default action or the Escape action. A read-only occupant, a link,
+additional actions. One additional action appears directly before Cancel. Two or more appear
+under `More...`. Cancel remains the default and Escape action. A read-only occupant, a link,
 a folder, a type mismatch and the one-hour class never offer them.
 
 Choosing one answers the current item and, without another question, every later file of the task
@@ -2412,11 +2422,10 @@ a reusable choice and storage must be verified under the arbiter lock. Existing 
 updateable at capacity. A new key that cannot be remembered disables repeated choices and adds a
 localized explanation; never silently accept an unrecorded promise or evict an earlier promise.
 
-Disk-full decisions expose Retry, Skip all, Cancel directly in that order, without a More menu or
-a redundant repeat checkbox. The question tells the user to free space and retry. Its Skip all
-note explains that it applies to remaining items encountering that error in this task, under the
-same qualified scope. Skip all is absent when the scope/capacity cannot support that grant;
-the capacity explanation remains visible. Retry always performs one attempt. An early insufficient-
+Disk-full decisions expose Retry, Skip remaining at this destination and Cancel directly in that
+order. The middle action applies to later items in this task that encounter the same error in the
+qualified destination scope. When that grant is unavailable, Retry and Cancel remain alongside
+the explanation. Retry always performs one attempt. An early insufficient-
 space estimate remains a distinct consent, since it is not proof of an actual disk-full write.
 
 For an exact retained permanent-delete source tree, a provider-proven read-only refusal may offer
@@ -2517,11 +2526,11 @@ every width: Incoming is always above Existing, including wide layouts. File nam
 locations retain the full available width and wrap independently, without silently dropping the
 root or extension. Complete values remain keyboard-accessible. For an ordinary eligible file-name
 collision, the engine publishes its direct actions in this order: `Keep both`, `Replace`, `Skip`,
-`Cancel task`; French: `Conserver les deux`, `Remplacer`, `Ignorer`, `Annuler la tâche`. A task with
-more than one item adds `Skip all` between `Skip` and `Cancel task`.
+`Cancel task`; French: `Conserver les deux`, `Remplacer`, `Ignorer`, `Annuler la tâche`.
+An eligible multi-item task uses the checkbox to repeat Skip.
 Omit an action the typed policy cannot authorize; never manufacture replacement eligibility.
 The primary group has no three-button cap. `More...` appears only when two or more additional
-actions remain; a single one, such as `Skip All`, is published as a direct action before Cancel. Measure localized labels and wrap whole controls into rows when
+actions remain. A single additional action appears directly before Cancel. Measure localized labels and wrap whole controls into rows when
 needed, preserving published action order, default and Escape semantics. Critical action labels
 MUST NOT be clipped or ellipsized. At a short work area, scroll content while keeping decisions
 and safe exit reachable; do not grow beyond that monitor’s work area.
@@ -2640,13 +2649,11 @@ The prompt action set is driven by the typed conflict class. Regular file Exists
 read-only Exists offers Replace read-only; type mismatch never offers Overwrite; an exact final
 destination link offers Replace link and never follows or replaces its target. Apply to all is
 rendered only for an eligible exact scope. Destination-link scope includes the known link kind
-(file symlink, directory symlink, or junction); an unknown kind is one-shot. `Skip All` is a
-separate action that records the scoped Skip grant; it is a direct button unless another additional
-action shares a `More...` menu with it. Skip item honors the current checkbox:
-checked records that same grant for remaining matching conflicts in this task, including conflicts
-in different parent folders; unchecked skips only the current item. Retry remains one attempt even
+(file symlink, directory symlink, or junction). An unknown kind is one-shot. Checked Skip records a
+grant for remaining matching conflicts in this task, including conflicts in different parent folders.
+Unchecked Skip applies to the current item. Retry remains one attempt even
 when the checkbox is checked. Recycle escalation and semantic target-conflict retention never expose Apply to all;
-Recycle escalation's task-scoped choice is a separate More-menu action, like `Skip All`.
+Recycle escalation's task-scoped choice is the direct permanent-delete action before Cancel.
 Overwrite, Replace read-only, and Replace link are omitted when the provider cannot return and
 consume an exact no-follow destination receipt; the UI never presents a destructive button that is
 known to end in `ERROR_NOT_SUPPORTED`. Target conflict exposes no mutation action. Replacing a

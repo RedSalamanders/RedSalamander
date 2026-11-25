@@ -253,6 +253,7 @@ struct TaskSnapshot
         uint8_t defaultAction           = 0u;
         uint8_t escapeAction            = 0u;
         bool applyToAllEligible         = false;
+        bool applyToAllOnlySkip         = false;
         bool applyToAllChecked          = false;
         bool skipAllEligible            = false;
         uint8_t repeatUnavailableReason = 0u; // FileOperations::ConflictRepeatUnavailableReason

@@ -4,6 +4,7 @@
 #include "Blake3Digest.h"
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
+#include "FileOperationConfirmation.h"
 #include "FileOperationItemResultReducer.h"
 #include "FileOperationTraversalPolicy.h"
 #include "FileOperationsConflictBroker.h"
@@ -5374,6 +5375,8 @@ void NormalizeDiskFullSkipScope(Task::ConflictDecisionScope& scope) noexcept
     return scope;
 }
 
+[[nodiscard]] bool IsCacheableConflictDecision(ConflictAction action) noexcept;
+
 struct ConflictActionPolicy
 {
     std::array<ConflictAction, Task::ConflictPromptState::kMaxActions> actions{};
@@ -5416,6 +5419,22 @@ struct ConflictActionPolicy
         }
         primaryActions[primaryActionCount] = action;
         ++primaryActionCount;
+    }
+
+    [[nodiscard]] bool UsesSkipOnlyRepeatLabel() const noexcept
+    {
+        if (! applyToAllEligible)
+            return false;
+        bool offersSkip = false;
+        for (size_t index = 0; index < actionCount; ++index)
+        {
+            const ConflictAction action = actions[index];
+            if (action == ConflictAction::Skip)
+                offersSkip = true;
+            else if (IsCacheableConflictDecision(action))
+                return false;
+        }
+        return offersSkip;
     }
 
     void FinalizePresentation(ConflictBucket bucket, bool scopedApplyToAllEligible) noexcept
@@ -5753,17 +5772,11 @@ struct ConflictActionPolicy
     }
 
     if (! IsDeferredConsentBucket(bucket) || bucket == ConflictBucket::RecycleFailed)
-    {
         policy.Add(ConflictAction::Skip);
-        if (applyToAllEligible)
-        {
-            policy.Add(ConflictAction::SkipAll);
-        }
-    }
     // I63 B6: the two task-wide bulk policies. Each is offered only on a plain regular-file collision whose own pair
     // matches it, so choosing it never has to say what it does to a pair it does not cover, and only where Apply to
     // all is offered (the task can meet another such collision). Replace all older also needs Replace for this pair.
-    // They wait under More beside Skip All; neither is the default or the Escape action.
+    // A lone additional action gets its own button. Cancel stays the default and Escape action.
     if (bucket == ConflictBucket::RegularFileExists && applyToAllEligible)
     {
         if (comparison.date == FileOperations::ConflictDateRelation::Same && comparison.size == FileOperations::ConflictSizeRelation::Same)
@@ -6179,6 +6192,7 @@ void SetConflictPromptLocked(Task& task,
     }
     prompt.decisionScope      = std::move(decisionScope);
     prompt.applyToAllEligible = actionPolicy.applyToAllEligible;
+    prompt.applyToAllOnlySkip = actionPolicy.UsesSkipOnlyRepeatLabel();
     prompt.applyToAllChecked  = false;
     prompt.skipAllEligible    = actionPolicy.skipAllEligible;
     prompt.buttonsPublishable = actionPolicy.buttonsPublishable;
@@ -8939,9 +8953,9 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
             }
         }
     }
-    // I63 B6: the bulk policies exist only on a plain regular-file collision whose own pair matches, only where Apply to
-    // all is offered, Replace all older only where Replace is offered; they sit under More (which then holds at least
-    // two commands) and are never the default or the Escape action. Every class, every switch, both Move forms.
+    // The bulk policies require a matching pair in a plain regular-file collision and an eligible repeat scope.
+    // Replace all older also requires Replace. A matching policy is direct when it is the only additional action.
+    // Additional actions share More. Cancel remains the default and Escape action.
     {
         constexpr std::array<FileOperations::ConflictItemComparison, 7u> comparisons{{
             {FileOperations::ConflictDateRelation::Unknown, FileOperations::ConflictSizeRelation::Unknown},
@@ -8960,38 +8974,47 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                 {
                     for (const FileOperations::ConflictItemComparison& comparison : comparisons)
                     {
-                        const auto bucket         = static_cast<ConflictBucket>(bucketIndex);
-                        const auto policy         = BuildConflictActionPolicy(bucket,
-                                                                              (flags & 1u) != 0u,
-                                                                              (flags & 2u) != 0u,
-                                                                              (flags & 4u) != 0u,
-                                                                              (flags & 8u) != 0u,
-                                                                              (flags & 16u) != 0u,
-                                                                              (flags & 32u) != 0u,
-                                                                              false,
-                                                                              FILESYSTEM_MOVE,
-                                                                              discard,
-                                                                              comparison);
-                        const bool plainFile      = bucket == ConflictBucket::RegularFileExists && (flags & 4u) != 0u;
-                        const bool expectSkipSame = plainFile && comparison.date == FileOperations::ConflictDateRelation::Same &&
-                                                    comparison.size == FileOperations::ConflictSizeRelation::Same;
-                        const bool expectReplace  = plainFile && (flags & 8u) != 0u && comparison.date == FileOperations::ConflictDateRelation::Newer;
-                        const auto primaryEnd     = policy.primaryActions.begin() + static_cast<std::ptrdiff_t>(policy.primaryActionCount);
-                        const auto overflowEnd    = policy.overflowActions.begin() + static_cast<std::ptrdiff_t>(policy.overflowActionCount);
-                        const auto underMore      = [&](ConflictAction action) noexcept
+                        const auto bucket                 = static_cast<ConflictBucket>(bucketIndex);
+                        const auto policy                 = BuildConflictActionPolicy(bucket,
+                                                                                      (flags & 1u) != 0u,
+                                                                                      (flags & 2u) != 0u,
+                                                                                      (flags & 4u) != 0u,
+                                                                                      (flags & 8u) != 0u,
+                                                                                      (flags & 16u) != 0u,
+                                                                                      (flags & 32u) != 0u,
+                                                                                      false,
+                                                                                      FILESYSTEM_MOVE,
+                                                                                      discard,
+                                                                                      comparison);
+                        const bool plainFile              = bucket == ConflictBucket::RegularFileExists && (flags & 4u) != 0u;
+                        const bool expectSkipSame         = plainFile && comparison.date == FileOperations::ConflictDateRelation::Same &&
+                                                            comparison.size == FileOperations::ConflictSizeRelation::Same;
+                        const bool expectReplace          = plainFile && (flags & 8u) != 0u && comparison.date == FileOperations::ConflictDateRelation::Newer;
+                        const auto primaryEnd             = policy.primaryActions.begin() + static_cast<std::ptrdiff_t>(policy.primaryActionCount);
+                        const auto overflowEnd            = policy.overflowActions.begin() + static_cast<std::ptrdiff_t>(policy.overflowActionCount);
+                        const auto placedWithOtherChoices = [&](ConflictAction action) noexcept
                         {
-                            return std::find(policy.overflowActions.begin(), overflowEnd, action) != overflowEnd &&
-                                   std::find(policy.primaryActions.begin(), primaryEnd, action) == primaryEnd;
+                            // The permission matrix can explicitly offer Retry on a collision as an additional action.
+                            const size_t otherActions = static_cast<size_t>(discard) + static_cast<size_t>((flags & 1u) != 0u);
+                            if (otherActions != 0u)
+                            {
+                                return policy.overflowActionCount == 1u + otherActions &&
+                                       std::find(policy.overflowActions.begin(), overflowEnd, action) != overflowEnd &&
+                                       std::find(policy.primaryActions.begin(), primaryEnd, action) == primaryEnd;
+                            }
+                            return policy.overflowActionCount == 0u && policy.primaryActionCount >= 2u &&
+                                   policy.primaryActions[policy.primaryActionCount - 2u] == action &&
+                                   policy.primaryActions[policy.primaryActionCount - 1u] == ConflictAction::Cancel;
                         };
                         if (policy.Contains(ConflictAction::SkipSameSizeAndDate) != expectSkipSame ||
                             policy.Contains(ConflictAction::ReplaceOlder) != expectReplace ||
-                            (expectSkipSame && ! underMore(ConflictAction::SkipSameSizeAndDate)) ||
-                            (expectReplace && ! underMore(ConflictAction::ReplaceOlder)) ||
-                            ((expectSkipSame || expectReplace) && policy.overflowActionCount < 2u) ||
+                            (expectSkipSame && ! placedWithOtherChoices(ConflictAction::SkipSameSizeAndDate)) ||
+                            (expectReplace && ! placedWithOtherChoices(ConflictAction::ReplaceOlder)) ||
                             policy.defaultAction == ConflictAction::SkipSameSizeAndDate || policy.defaultAction == ConflictAction::ReplaceOlder ||
                             policy.escapeAction != ConflictAction::Cancel || ! policy.Contains(ConflictAction::Cancel) ||
                             policy.primaryActionCount + policy.overflowActionCount != policy.actionCount)
                         {
+                            Debug::Perf::Emit(L"FileOps.SelfTest.RepeatPolicyMatrixFailure", L"named collision action", 0u, bucketIndex, flags, E_FAIL);
                             return false;
                         }
                     }
@@ -9146,48 +9169,48 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
     loading.metadataLoading = true;
 
     return matchesPolicy(regularAllowed,
-                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(regularWithheld,
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(readOnlyAllowed,
-                         {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(readOnlyWithheld,
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(typeMismatch,
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(destinationLink,
-                         {ConflictAction::ReplaceLink, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceLink, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::ReplaceLink, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::ReplaceLink, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(targetConflict, {ConflictAction::Skip, ConflictAction::Cancel}, {ConflictAction::Skip, ConflictAction::Cancel}, {}, false, false) &&
            matchesPolicy(accessRetry,
-                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
-                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel},
+                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::Retry, ConflictAction::Skip, ConflictAction::Cancel},
                          {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(diskFull,
                          {ConflictAction::Retry, ConflictAction::SkipAll, ConflictAction::Cancel},
                          {ConflictAction::Retry, ConflictAction::SkipAll, ConflictAction::Cancel},
@@ -9268,70 +9291,51 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false,
                          false,
                          ConflictAction::QueueUntilOtherTaskFinishes) &&
-           // I63 B4: Delete source waits under More with Skip All; without Skip All it is the one command More would hold,
-           // so it is published directly before Cancel.
+           // A lone Delete source gets its own button. Two specialized choices use More.
            matchesPolicy(discardMore,
-                         {ConflictAction::Overwrite,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::DiscardSource,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DiscardSource, ConflictAction::SkipAll},
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
+                         {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(discardDirect,
                          {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
                          {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
                          {},
                          false,
                          false) &&
-           matchesPolicy(discardReadOnly,
-                         {ConflictAction::ReplaceReadOnly,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::DiscardSource,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DiscardSource, ConflictAction::SkipAll},
-                         true,
-                         true) &&
-           matchesPolicy(skipSameMore,
-                         {ConflictAction::Overwrite,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::SkipSameSizeAndDate,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll, ConflictAction::SkipSameSizeAndDate},
-                         true,
-                         true) &&
+           matchesPolicy(
+               discardReadOnly,
+               {ConflictAction::ReplaceReadOnly, ConflictAction::KeepBoth, ConflictAction::DiscardSource, ConflictAction::Skip, ConflictAction::Cancel},
+               {ConflictAction::KeepBoth, ConflictAction::ReplaceReadOnly, ConflictAction::Skip, ConflictAction::DiscardSource, ConflictAction::Cancel},
+               {},
+               true,
+               false) &&
+           matchesPolicy(
+               skipSameMore,
+               {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipSameSizeAndDate, ConflictAction::Cancel},
+               {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::SkipSameSizeAndDate, ConflictAction::Cancel},
+               {},
+               true,
+               false) &&
            matchesPolicy(replaceOlderMore,
-                         {ConflictAction::Overwrite,
-                          ConflictAction::KeepBoth,
-                          ConflictAction::Skip,
-                          ConflictAction::SkipAll,
-                          ConflictAction::ReplaceOlder,
-                          ConflictAction::Cancel},
-                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::SkipAll, ConflictAction::ReplaceOlder},
+                         {ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::ReplaceOlder, ConflictAction::Cancel},
+                         {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::ReplaceOlder, ConflictAction::Cancel},
+                         {},
                          true,
-                         true) &&
+                         false) &&
            matchesPolicy(skipSameMove,
                          {ConflictAction::Overwrite,
                           ConflictAction::KeepBoth,
                           ConflictAction::DiscardSource,
                           ConflictAction::Skip,
-                          ConflictAction::SkipAll,
                           ConflictAction::SkipSameSizeAndDate,
                           ConflictAction::Cancel},
                          {ConflictAction::KeepBoth, ConflictAction::Overwrite, ConflictAction::Skip, ConflictAction::Cancel},
-                         {ConflictAction::DiscardSource, ConflictAction::SkipAll, ConflictAction::SkipSameSizeAndDate},
+                         {ConflictAction::DiscardSource, ConflictAction::SkipSameSizeAndDate},
                          true,
-                         true) &&
+                         false) &&
+           accessRetry.UsesSkipOnlyRepeatLabel() && ! regularAllowed.UsesSkipOnlyRepeatLabel() && ! diskFull.UsesSkipOnlyRepeatLabel() &&
            loading.actionCount == 0u && loading.primaryActionCount == 0u && loading.overflowActionCount == 0u &&
            loading.defaultAction == ConflictAction::None && loading.escapeAction == ConflictAction::None && ! loading.applyToAllEligible &&
            ! loading.skipAllEligible && ! loading.buttonsPublishable;
@@ -9358,6 +9362,7 @@ void DebugBuildFileOpsVisualConflictPolicyForSelfTest(
     prompt.defaultAction       = policy.defaultAction;
     prompt.escapeAction        = policy.escapeAction;
     prompt.applyToAllEligible  = policy.applyToAllEligible;
+    prompt.applyToAllOnlySkip  = policy.UsesSkipOnlyRepeatLabel();
     prompt.skipAllEligible     = policy.skipAllEligible;
     prompt.buttonsPublishable  = policy.buttonsPublishable;
 }
@@ -10197,6 +10202,17 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
 
     if (operationType != _operation)
     {
+        if (operationType == FILESYSTEM_DELETE && _operation == FILESYSTEM_MOVE && _executionMode == ExecutionMode::PerItem && cookie != nullptr)
+        {
+            auto& item = *static_cast<PerItemCallbackCookie*>(cookie);
+            std::scoped_lock lock(_sourceItemStatusMutex);
+            if (item.captureMoveSourceRecycleResult)
+            {
+                const bool validCompletion   = ! item.moveSourceRecycleStatus.has_value() && itemIndex == 0u && FileSystemOptionsHaveValidHeader(options);
+                item.moveSourceRecycleStatus = validCompletion ? status : E_UNEXPECTED;
+                item.moveSourceRecycleResult = validCompletion ? FileSystemRouteContract::SnapshotItemMutationResult(mutationResult) : std::nullopt;
+            }
+        }
         return S_OK;
     }
 
@@ -10467,7 +10483,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
         atomicReplaceEligible = true;
     }
 
-    ConflictBucket bucket = ClassifyConflictBucket(operationType, _flags, wil::com_ptr<IFileSystemIO>{}, status, sourceText, destinationText, false);
+    const FileSystemFlags issueFlags = perItemCookie ? perItemCookie->operationFlags.value_or(_flags) : _flags;
+    ConflictBucket bucket = ClassifyConflictBucket(operationType, issueFlags, wil::com_ptr<IFileSystemIO>{}, status, sourceText, destinationText, false);
 #ifdef ENABLE_TESTS
     if (bucket == ConflictBucket::RegularFileExists && perItemCookie != nullptr && ! perItemCookie->operationDestinationPath.empty() &&
         ! NavigationLocation::EqualsNoCase(destinationText, perItemCookie->operationDestinationPath))
@@ -12640,7 +12657,7 @@ HRESULT FolderWindow::FileOperationState::Task::RefuseByNameRootHeldByAnotherTas
     return HRESULT_FROM_WIN32(ERROR_BUSY);
 }
 
-std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsentNote() const
+std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsentNote(size_t recycleCount) const
 {
     const auto scopeOwner                                                     = LoadMutationInterlockScopes();
     const auto& scopes                                                        = *scopeOwner;
@@ -12700,6 +12717,12 @@ std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsent
     {
         append(IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER);
     }
+    if (recycleCount != 0u)
+    {
+        if (! note.empty())
+            note.push_back(L' ');
+        note += FormatStringResource(nullptr, IDS_FILEOPS_CONSENT_ALSO_RECYCLE, FormatFileOperationCountNoun(FileOperationCountNoun::Item, recycleCount));
+    }
     return note;
 }
 
@@ -12736,11 +12759,22 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         request.status        = S_OK;
         request.sourcePath    = _permanentDeleteConsentFrom;
         request.consentDetail = _permanentDeleteConsentDetail;
-        // C10/I35: how this location deletes (and a handed-off leftover's warning) is a paragraph of
-        // its own after the question, not part of the counts text.
-        request.consentNote                = BuildPermanentDeleteConsentNote();
+        size_t permanentCount = 0u;
+        if (const auto plans = LoadPlans())
+        {
+            for (const auto& plan : *plans)
+            {
+                const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+                if (deletion && deletion->mode == FileOperations::DeleteMode::Permanent)
+                    permanentCount += deletion->selectedItems.size();
+            }
+        }
+        if (permanentCount == 0u || permanentCount > _sourcePaths.size())
+            return E_UNEXPECTED;
+        // The prompt covers the permanent subset and discloses the accompanying Recycle items.
+        request.consentNote                = BuildPermanentDeleteConsentNote(_sourcePaths.size() - permanentCount);
         request.itemCountKnown             = true;
-        request.itemCount                  = _sourcePaths.size();
+        request.itemCount                  = permanentCount;
         const DeferredConsentResult result = RequestDeferredConsent(*this, request);
         if (FAILED(result.status))
         {
@@ -18396,11 +18430,8 @@ struct CrossFileSystemBridge
         return distinct;
     }
 
-    // I63 B4: Delete source on a Move collision. The destination keeps the file it has and nothing is copied; the
-    // source goes to the Recycle Bin by name through the source provider's own Delete, which only the Local provider
-    // is asked to do (ValidateDestinationOverwritePolicy). A location without a Recycle Bin is refused by that
-    // provider before any change (ERROR_NOT_SUPPORTED); that source is then deleted permanently or kept by the task's
-    // one answer to that question (I63 D-5, RemoveSourceWithoutRecycleBin).
+    // Delete source keeps the existing destination. A known unavailable Recycle route goes straight to consent.
+    // A guarded attempt may reach that consent only after a receipt proves the original is still present.
     // Returns S_OK when the source is gone and S_FALSE when it was kept, which the callers treat as a skip.
     [[nodiscard]] HRESULT RemoveSourceAlreadyAtDestination(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
     {
@@ -18408,26 +18439,51 @@ struct CrossFileSystemBridge
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
+        const auto route = FileSystemRouteContract::Query(&sourceFs, sourcePath, FILESYSTEM_DELETE, task._sourcePluginId);
+        if (route.state != FileSystemRouteContract::QueryState::Available)
+            return FAILED(route.status) ? route.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        constexpr HRESULT noRecycle = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        if (! route.snapshot.recycleOperation)
+            return route.snapshot.deleteOperation ? RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, noRecycle) : noRecycle;
+
+        auto* const item = static_cast<Task::PerItemCallbackCookie*>(cookie);
+        if (! item)
+            return E_UNEXPECTED;
+        {
+            std::scoped_lock lock(task._sourceItemStatusMutex);
+            item->moveSourceRecycleStatus.reset();
+            item->moveSourceRecycleResult.reset();
+            item->captureMoveSourceRecycleResult = true;
+        }
         mutationAttemptFlags.fetch_or(kSourceDeleteAttemptedFlag, std::memory_order_acq_rel);
         FileSystemOptions deleteOptions = options;
         const HRESULT deleteHr          = sourceFs.DeleteItem(sourcePath.c_str(), FILESYSTEM_FLAG_USE_RECYCLE_BIN, &deleteOptions, &task, cookie);
-        if (SUCCEEDED(deleteHr))
+        std::optional<FileSystemItemMutationResult> receipt;
+        HRESULT receiptStatus = E_PENDING;
         {
-            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
-            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
-                               deleteHr,
-                               L"bridge.move.discardSource",
-                               L"The destination already holds the file; the source was moved to the Recycle Bin on request.",
+            std::scoped_lock lock(task._sourceItemStatusMutex);
+            item->captureMoveSourceRecycleResult = false;
+            receiptStatus                        = std::exchange(item->moveSourceRecycleStatus, std::nullopt).value_or(E_PENDING);
+            receipt                              = std::exchange(item->moveSourceRecycleResult, std::nullopt);
+        }
+        const bool removed  = receipt && receipt->outcomeKnown == TRUE && receipt->mutationCommitted == TRUE && receipt->originalStillPresent == FALSE;
+        const bool retained = receipt && receipt->outcomeKnown == TRUE && receipt->mutationCommitted == FALSE && receipt->originalStillPresent == TRUE;
+        if (! removed && ! retained)
+        {
+            constexpr HRESULT unknown = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            managedCleanupIndeterminate.store(true, std::memory_order_release);
+            NoteFailure(QualifiedItemFailurePhase::SourceCleanup, unknown);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                               unknown,
+                               L"delete.recycle.indeterminate",
+                               L"Recycle could not prove the source result; permanent deletion was not offered.",
                                sourcePath,
                                destinationPath);
-            return S_OK;
+            return unknown;
         }
-        if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
-        {
-            // The provider refused before any change: the source's location has no Recycle Bin (I63 D-5).
-            return RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, deleteHr);
-        }
-        if (deleteHr == COPYENGINE_E_RECYCLE_FORCE_NUKE)
+        if (retained && receiptStatus == noRecycle)
+            return RemoveSourceWithoutRecycleBin(sourcePath, destinationPath, receiptStatus);
+        if (removed && (receiptStatus == COPYENGINE_E_RECYCLE_FORCE_NUKE || deleteHr == COPYENGINE_E_RECYCLE_FORCE_NUKE))
         {
             // Windows destroyed the source instead of recycling it: it is gone, and the card must not say it can be restored.
             task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
@@ -18439,14 +18495,26 @@ struct CrossFileSystemBridge
                                destinationPath);
             return S_OK;
         }
-        NoteFailure(QualifiedItemFailurePhase::SourceCleanup, deleteHr);
+        if (removed)
+        {
+            task._alreadyThereSourceRemovedCount.fetch_add(1u, std::memory_order_acq_rel);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Info,
+                               deleteHr,
+                               L"bridge.move.discardSource",
+                               L"The destination already holds the file; the source was moved to the Recycle Bin on request.",
+                               sourcePath,
+                               destinationPath);
+            return S_OK;
+        }
+        const HRESULT retainedHr = FAILED(receiptStatus) ? receiptStatus : (FAILED(deleteHr) ? deleteHr : E_UNEXPECTED);
+        NoteFailure(QualifiedItemFailurePhase::SourceCleanup, retainedHr);
         task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
-                           deleteHr,
+                           retainedHr,
                            L"bridge.move.discardSourceFailed",
                            L"The source could not be moved to the Recycle Bin after the destination was found to hold the file.",
                            sourcePath,
                            destinationPath);
-        return deleteHr;
+        return retainedHr;
     }
 
     // I63 D-5: the one question a task asks when Delete source meets a source location without a Recycle Bin: "This
@@ -27102,6 +27170,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                     std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> retryCounts{};
                     std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> cachedModifierAttempts{};
                     FileSystemFlags itemFlags = useResolvedItems ? resolvedItems[index].flags : _flags;
+                    if (_operation == FILESYSTEM_DELETE && index < deletePlanBySourceIndex.size() && deletePlanBySourceIndex[index] != nullptr)
+                    {
+                        if (deletePlanBySourceIndex[index]->mode == FileOperations::DeleteMode::Recycle)
+                            itemFlags = static_cast<FileSystemFlags>(itemFlags | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+                        else
+                            itemFlags = static_cast<FileSystemFlags>(itemFlags & ~FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+                    }
 
                     bool itemSucceeded        = false;
                     bool itemSkipped          = false;
@@ -27249,6 +27324,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
                                 }
                             }
                             PerItemCallbackCookie cookie{index};
+                            cookie.operationFlags               = itemFlags;
                             cookie.operationDestinationPath     = destinationItemText;
                             cookie.sourceIsDirectory            = isDirectoryShell || (index < _sourcePathAttributesHint.size() &&
                                                                                        (_sourcePathAttributesHint[index] & FILE_ATTRIBUTE_DIRECTORY) != 0u);

@@ -1562,6 +1562,11 @@ struct FolderWindow::FileOperationState
             std::wstring lastProgressSourcePath;
             std::wstring lastProgressDestinationPath;
             std::wstring operationDestinationPath;
+            std::optional<FileSystemFlags> operationFlags;
+            // Source cleanup inside Move is a nested Delete. The task's result mutex guards its exact receipt.
+            bool captureMoveSourceRecycleResult = false;
+            std::optional<HRESULT> moveSourceRecycleStatus;
+            std::optional<FileSystemItemMutationResult> moveSourceRecycleResult;
             bool keepBothRequested = false;
             // Set by the bridge for one collision prompt: the destination opens the occupant, cannot
             // identify it, and can publish over the occupant the user is shown (I63 B2). The issue
@@ -1648,6 +1653,7 @@ struct FolderWindow::FileOperationState
             bool applyToAllEligible                                                 = false;
             bool applyToAllChecked                                                  = false;
             FileOperations::ConflictRepeatUnavailableReason repeatUnavailableReason = FileOperations::ConflictRepeatUnavailableReason::None;
+            bool applyToAllOnlySkip                                                 = false;
             bool skipAllEligible                                                    = false;
             bool buttonsPublishable                                                 = false;
             bool retryFailed                                                        = false;
@@ -2171,7 +2177,7 @@ struct FolderWindow::FileOperationState
         [[nodiscard]] HRESULT RefuseByNameRootHeldByAnotherTask(const FileOperations::QualifiedEndpoint& endpoint, std::wstring_view providerPath) noexcept;
         // I35 R7.6: the paragraph a delete consent ends with (how the location deletes, and the
         // leftover warning when a handed-off root has a possible-artifact name).
-        [[nodiscard]] std::wstring BuildPermanentDeleteConsentNote() const;
+        [[nodiscard]] std::wstring BuildPermanentDeleteConsentNote(size_t recycleCount) const;
         [[nodiscard]] bool IsInlineRenameTask() const noexcept;
         HRESULT BuildPreparationSnapshot(uint64_t selectedRootReadinessUs) noexcept;
         HRESULT RunPreConsumptionDecisionGate() noexcept;
@@ -3347,7 +3353,7 @@ private:
     std::atomic<bool> _queueNewTasks{true};
 };
 
-// pluginId is diagnostic-only; flags select the Permanent Delete versus Recycle capability gate.
+// pluginId is diagnostic-only. Delete flags select the requested mode before capability routing.
 [[nodiscard]] bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem,
                                               std::wstring_view providerPath,
                                               FileSystemOperation operation,

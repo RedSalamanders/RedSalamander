@@ -1426,7 +1426,7 @@ static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == Con
 }
 
 // I63 B4: Delete source. A Managed Move of one file onto an existing file at an ordinary destination (a location
-// that identifies its items). The user answers Delete source from the prompt's More list: the destination keeps its
+// that identifies its items). The user answers Delete source. The destination keeps its
 // bytes, nothing is copied or staged, the source goes to the Recycle Bin, and the item is reported as already there
 // with its source removed, not as skipped. Apply to all is remembered only when the two files have the same size and
 // date. The Local provider's Recycle route is the real one; the runner purges the Recycle Bin items it journals for
@@ -1567,12 +1567,12 @@ static_assert(CompareConflictItems(true, 3u, kBase, true, 5u, kBase).size == Con
             const auto end = actions.begin() + static_cast<std::ptrdiff_t>(std::min(count, actions.size()));
             return std::find(actions.begin(), end, action) != end;
         };
-        // Offered once, under More (never a primary button, never the default or the Escape action), and the
-        // published comparison says what the two files are.
-        const bool promptActions = shown.has_value() && listed(shown->actions, shown->actionCount, Action::DiscardSource) &&
-                                   listed(shown->overflowActions, shown->overflowActionCount, Action::DiscardSource) &&
-                                   ! listed(shown->primaryActions, shown->primaryActionCount, Action::DiscardSource) &&
-                                   shown->defaultAction == Action::Cancel && shown->escapeAction == Action::Cancel;
+        const bool hasOtherAction = shown.has_value() && (listed(shown->actions, shown->actionCount, Action::SkipSameSizeAndDate) ||
+                                                          listed(shown->actions, shown->actionCount, Action::ReplaceOlder));
+        const bool promptActions  = shown.has_value() && listed(shown->actions, shown->actionCount, Action::DiscardSource) &&
+                                    listed(shown->overflowActions, shown->overflowActionCount, Action::DiscardSource) == hasOtherAction &&
+                                    listed(shown->primaryActions, shown->primaryActionCount, Action::DiscardSource) != hasOtherAction &&
+                                    shown->defaultAction == Action::Cancel && shown->escapeAction == Action::Cancel;
         const bool promptFacts =
             shown.has_value() && shown->sourceMetadata.available && shown->sourceMetadata.sizeKnown && shown->sourceMetadata.sizeBytes == sourceBytes.size() &&
             shown->destinationMetadata.available && shown->destinationMetadata.sizeKnown && shown->destinationMetadata.sizeBytes == destinationBytes.size() &&
@@ -2234,7 +2234,7 @@ struct KeepAwakeSelfTestApi final
 }
 
 // I63 B6: the bulk policies at a collision. A Copy of several files onto a folder that already holds each of them. The
-// first collision whose pair matches a policy is answered with it from the prompt's More list; every later file whose
+// first collision whose pair matches a policy is answered with it from the prompt. Every later file whose
 // pair matches is then decided without a question, and every other pair still asks. A policy skip leaves the
 // destination's bytes and creates no stage; a policy replacement is an ordinary Replace. Nothing is remembered as an
 // Apply-to-all answer. The three cases: Skip all with the same size and date, Replace all older, and both in one task.
@@ -2397,7 +2397,7 @@ struct KeepAwakeSelfTestApi final
             return false;
 
         // The executor blocks on each decision: answer from a second thread. Every published prompt is checked: each
-        // policy is offered exactly when the prompt's own pair matches it, under More, never the default or Escape.
+        // A matching policy is the only additional action on this Copy and appears directly before Cancel.
         std::atomic<unsigned int> answered{0u};
         std::atomic<bool> offersMatchPairs{true};
         HRESULT executeHr = E_PENDING;
@@ -2424,9 +2424,9 @@ struct KeepAwakeSelfTestApi final
                         const bool offersSkipSame     = listed(prompt->actions, prompt->actionCount, Action::SkipSameSizeAndDate);
                         const bool offersReplaceOlder = listed(prompt->actions, prompt->actionCount, Action::ReplaceOlder);
                         if (offersSkipSame != sameSizeAndDate || offersReplaceOlder != incomingNewer ||
-                            listed(prompt->primaryActions, prompt->primaryActionCount, Action::SkipSameSizeAndDate) ||
-                            listed(prompt->primaryActions, prompt->primaryActionCount, Action::ReplaceOlder) || prompt->defaultAction != Action::Cancel ||
-                            prompt->escapeAction != Action::Cancel)
+                            listed(prompt->primaryActions, prompt->primaryActionCount, Action::SkipSameSizeAndDate) != offersSkipSame ||
+                            listed(prompt->primaryActions, prompt->primaryActionCount, Action::ReplaceOlder) != offersReplaceOlder ||
+                            prompt->overflowActionCount != 0u || prompt->defaultAction != Action::Cancel || prompt->escapeAction != Action::Cancel)
                             offersMatchPairs.store(false, std::memory_order_release);
                         const bool takeSkipSame = offersSkipSame && scenario.chooseSkipSame && ! skipSameChosen;
                         const bool takeReplace  = ! takeSkipSame && offersReplaceOlder && scenario.chooseReplaceOlder && ! replaceOlderChosen;
@@ -2608,8 +2608,9 @@ struct KeepAwakeSelfTestApi final
     };
     struct Scenario final
     {
-        const wchar_t* name = L"";
-        Shape shape         = Shape::DeletePermanently;
+        const wchar_t* name   = L"";
+        Shape shape           = Shape::DeletePermanently;
+        bool knownUnavailable = false;
     };
     static constexpr std::array kScenarios{
         Scenario{L"delete-permanently", Shape::DeletePermanently},
@@ -2617,6 +2618,7 @@ struct KeepAwakeSelfTestApi final
         Scenario{L"source-changed", Shape::SourceChanged},
         Scenario{L"destination-is-source", Shape::DestinationIsSource},
         Scenario{L"cancel-question", Shape::CancelQuestion},
+        Scenario{L"known-unavailable", Shape::SourceChanged, true},
     };
     constexpr uint64_t kTicks   = 133'500'000'000'000'000ull;
     const auto setLastWriteTime = [](const std::filesystem::path& path, uint64_t ticks) noexcept
@@ -2666,7 +2668,16 @@ struct KeepAwakeSelfTestApi final
         }
         const auto firstDestination = destinationFolder / sources.front().filename();
 
-        RedSalamander::TestSupport::ScopedEnvironmentVariable recycleUnavailable(kRecycleUnavailableDirectory, sourceFolder.native());
+        const auto replacement = [](bool enable, std::wstring_view value) -> std::optional<std::wstring_view>
+        {
+            if (enable)
+                return value;
+            return std::nullopt;
+        };
+        const RedSalamander::TestSupport::ScopedEnvironmentVariable recycleUnavailable(kRecycleUnavailableDirectory,
+                                                                                       replacement(! scenario.knownUnavailable, sourceFolder.native()));
+        const RedSalamander::TestSupport::ScopedEnvironmentVariable knownUnavailable(L"REDSALAMANDER_FILEOPS_RECYCLE_CAPABILITY_UNAVAILABLE_PATH",
+                                                                                     replacement(scenario.knownUnavailable, sources.front().native()));
         FileOperations::QualifiedEndpoint endpoint{
             .pluginId               = L"builtin/file-system",
             .instanceId             = L"host/default",

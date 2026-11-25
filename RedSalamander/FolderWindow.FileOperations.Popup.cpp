@@ -2,6 +2,7 @@
 #include "WindowActivation.h"
 
 #include "DxUiThemePalette.h"
+#include "FileOperationBandwidth.h"
 #include "FileOperationConfirmation.h"
 #include "FileOperationsFooterLayout.h"
 #include "FileSystemPathIdentity.h"
@@ -1265,6 +1266,7 @@ void CopyPublishedConflictPolicy(const FolderWindow::FileOperationState::Task::C
     destination.defaultAction           = RawConflictAction(source.defaultAction);
     destination.escapeAction            = RawConflictAction(source.escapeAction);
     destination.applyToAllEligible      = source.applyToAllEligible;
+    destination.applyToAllOnlySkip      = source.applyToAllOnlySkip;
     destination.skipAllEligible         = source.skipAllEligible;
     destination.repeatUnavailableReason = static_cast<uint8_t>(source.repeatUnavailableReason);
     destination.sourceIsDirectory  = source.sourceMetadata.objectKindKnown ? source.sourceMetadata.isDirectory
@@ -7979,7 +7981,8 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
         case PopupHitTest::Kind::TaskConflictMore: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE);
         case PopupHitTest::Kind::TaskConflictInspectSource: return LoadStringResource(nullptr, IDS_FILEOPS_INSPECTION_SOURCE);
         case PopupHitTest::Kind::TaskConflictInspectDestination: return LoadStringResource(nullptr, IDS_FILEOPS_INSPECTION_DESTINATION);
-        case PopupHitTest::Kind::TaskConflictToggleApplyToAll: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
+        case PopupHitTest::Kind::TaskConflictToggleApplyToAll:
+            return LoadStringResource(nullptr, hit.data != 0u ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
         case PopupHitTest::Kind::TaskConflictAction:
         {
             ConflictBucket bucket         = ConflictBucket::Unknown;
@@ -8251,7 +8254,8 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::MeasureConflictAc
                                                rightToLeft ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
     if (! _controlsHost.GetHwnd())
         return E_PENDING;
-    const std::wstring scopeLabel = task.conflict.applyToAllEligible ? LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL) : std::wstring{};
+    const UINT scopeLabelId       = task.conflict.applyToAllOnlySkip ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL;
+    const std::wstring scopeLabel = task.conflict.applyToAllEligible ? LoadStringResource(nullptr, scopeLabelId) : std::wstring{};
     const float widthDip          = _controlsHost.PixelsToDip(widthPx);
     if (cached.format.get() == format && cached.widthDip == widthDip && cached.dpi == _dpi && cached.rightToLeft == rightToLeft && cached.count == count &&
         cached.labels == labels && cached.scopeLabel == scopeLabel)
@@ -12556,6 +12560,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 applyBtn.hit.kind             = PopupHitTest::Kind::TaskConflictToggleApplyToAll;
                                 applyBtn.hit.taskId           = task.taskId;
                                 applyBtn.hit.promptGeneration = task.conflict.generation;
+                                applyBtn.hit.data             = task.conflict.applyToAllOnlySkip ? 1u : 0u;
                                 _buttons.push_back(applyBtn);
                             }
 
@@ -13546,10 +13551,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     constexpr int kAutoDismissCommand = 1;
     constexpr int kCompactCommand     = 2;
     constexpr int kExpandedCommand    = 3;
+    constexpr int kIssuesCommand      = 4;
     const bool autoDismiss            = fileOps->GetAutoDismissSuccess();
     const bool compactDensity         = fileOps->GetPopupCompactDensity();
 
-    std::array<DxUi::MenuFlyoutItem, 4u> items{};
+    std::array<DxUi::MenuFlyoutItem, 6u> items{};
     items[0].kind      = DxUi::MenuItemKind::Toggle;
     items[0].text      = LoadStringResource(nullptr, autoDismiss ? IDS_FILEOPS_CHECK_AUTODISMISS_ON : IDS_FILEOPS_CHECK_AUTODISMISS_OFF);
     items[0].commandId = kAutoDismissCommand;
@@ -13563,6 +13569,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     items[3].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_DENSITY_EXPANDED);
     items[3].commandId = kExpandedCommand;
     items[3].checked   = ! compactDensity;
+    items[4].kind      = DxUi::MenuItemKind::Separator;
+    items[5].kind      = DxUi::MenuItemKind::Toggle;
+    items[5].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
+    items[5].commandId = kIssuesCommand;
+    items[5].checked   = fileOps->IsIssuesPaneVisible();
 
     DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     const auto anchor = ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterOptions, 0u, 0u}, DxUi::ContextMenuRootVerticalPlacement::Above);
@@ -13592,6 +13603,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
             fileOps->SetPopupCompactDensity(chosen.value() == kCompactCommand);
             _maxAutoSizedWindowHeight   = 0;
             _lastAutoSizedContentHeight = -1.0f;
+        }
+        else if (chosen.value() == kIssuesCommand)
+        {
+            fileOps->ToggleIssuesPane();
+            return;
         }
         Invalidate(hwnd);
     },
@@ -13636,21 +13652,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     const uint64_t currentLimit = fixture ? fixture->desiredSpeedLimitBytesPerSecond : task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
-    constexpr UINT kCmdUnlimited  = 1u;
     constexpr UINT kCmdCustom     = 2u;
     constexpr UINT kCmdPresetBase = 10u;
 
-    static constexpr std::array<uint64_t, 6> kPresets = {{
-        1ull * 1024ull * 1024ull,
-        5ull * 1024ull * 1024ull,
-        10ull * 1024ull * 1024ull,
-        50ull * 1024ull * 1024ull,
-        100ull * 1024ull * 1024ull,
-        1ull * 1024ull * 1024ull * 1024ull,
-    }};
-
     std::vector<DxUi::MenuFlyoutItem> items;
-    items.reserve(kPresets.size() + 4u);
+    items.reserve(FileOperations::kBandwidthPresets.size() + 3u);
 
     auto appendRadioItem = [&](UINT commandId, std::wstring text, bool checked) noexcept
     {
@@ -13662,18 +13668,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         items.push_back(std::move(item));
     };
 
-    appendRadioItem(kCmdUnlimited, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED), currentLimit == 0);
-
     DxUi::MenuFlyoutItem separator{};
     separator.kind = DxUi::MenuItemKind::Separator;
-    items.push_back(separator);
 
-    for (size_t i = 0; i < kPresets.size(); ++i)
+    for (size_t index = 0; index < FileOperations::kBandwidthPresets.size(); ++index)
     {
-        const uint64_t bytesPerSecond = kPresets[i];
-        appendRadioItem(kCmdPresetBase + static_cast<UINT>(i),
-                        FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond)),
-                        currentLimit == bytesPerSecond);
+        const auto& preset = FileOperations::kBandwidthPresets[index];
+        appendRadioItem(kCmdPresetBase + static_cast<UINT>(index), LoadStringResource(nullptr, preset.labelId), currentLimit == preset.bytesPerSecond);
+        if (preset.bytesPerSecond == 0u)
+        {
+            items.push_back(separator);
+        }
     }
 
     items.push_back(separator);
@@ -13723,14 +13728,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         const UINT chosen      = static_cast<UINT>(chosenOpt.value());
         uint64_t newLimit      = selectedTask->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const uint64_t current = newLimit;
-        if (chosen == kCmdUnlimited)
-        {
-            newLimit = 0;
-        }
-        else if (chosen >= kCmdPresetBase && chosen < (kCmdPresetBase + static_cast<UINT>(kPresets.size())))
+        if (chosen >= kCmdPresetBase && chosen < kCmdPresetBase + static_cast<UINT>(FileOperations::kBandwidthPresets.size()))
         {
             const size_t index = static_cast<size_t>(chosen - kCmdPresetBase);
-            newLimit           = kPresets[index];
+            newLimit           = FileOperations::kBandwidthPresets[index].bytesPerSecond;
         }
         else if (chosen == kCmdCustom)
         {
@@ -16532,8 +16533,11 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                                                                             checkbox->GetTooltipText() == discardSourceScopeHelp &&
                                                                             checkbox->GetAccessibleHelpText() == discardSourceScopeHelp;
                             result.conflictApplyToAllScopeHelpEmpty       = checkbox->GetTooltipText().empty() && checkbox->GetAccessibleHelpText().empty();
-                            result.conflictScopeLabelFits = hostedLabelFits(*checkbox, button.bounds, true) &&
-                                                            checkbox->GetText() == LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
+                            result.conflictScopeLabelFits =
+                                hostedLabelFits(*checkbox, button.bounds, true) &&
+                                checkbox->GetText() ==
+                                    LoadStringResource(nullptr,
+                                                       button.hit.data != 0u ? IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SKIP : IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
                         }
                     }
                 }
