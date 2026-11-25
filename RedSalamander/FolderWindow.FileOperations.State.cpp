@@ -24110,9 +24110,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteCreateDirectory(const Fil
     }
 
     constexpr HRESULT uncertain = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
-    if (dispatched &&
-        ((SUCCEEDED(status) && status != S_OK) || IsCancellationStatus(status) || status == HRESULT_FROM_WIN32(ERROR_TIMEOUT) ||
-         status == HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT) || (HRESULT_FACILITY(status) == FACILITY_WIN32 && IsNetworkOfflineError(HRESULT_CODE(status)))))
+    if (dispatched && ((SUCCEEDED(status) && status != S_OK) || IsCancellationStatus(status) || status == HRESULT_FROM_WIN32(ERROR_TIMEOUT) ||
+                       status == HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT) ||
+                       (HRESULT_FACILITY(status) == FACILITY_WIN32 && IsNetworkOfflineError(static_cast<DWORD>(HRESULT_CODE(status))))))
         status = uncertain;
     const bool created = status == S_OK;
     if (created)

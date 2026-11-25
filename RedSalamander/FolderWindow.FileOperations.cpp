@@ -5715,8 +5715,8 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                 const auto refresh = [&](PaneState& paneState)
                 {
                     const auto currentFolder = paneState.folderView.GetFolderPath();
-                    if (! paneState.fileSystem || ! currentFolder || ! EqualsNoCase(paneState.pluginId, task->_sourcePluginId) ||
-                        ! EqualsNoCase(paneState.instanceContext, task->_sourceInstanceContext) ||
+                    if (! paneState.fileSystem || ! currentFolder || ! NavigationLocation::EqualsNoCase(paneState.pluginId, task->_sourcePluginId) ||
+                        ! NavigationLocation::EqualsNoCase(paneState.instanceContext, task->_sourceInstanceContext) ||
                         ! EquivalentPath(identity, currentFolder->native(), parent.native()))
                         return;
 

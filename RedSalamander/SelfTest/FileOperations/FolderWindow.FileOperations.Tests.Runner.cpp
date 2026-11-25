@@ -12357,22 +12357,22 @@ LRESULT CALLBACK RecordDeferredExitCloseTarget(HWND hwnd, UINT msg, WPARAM wp, L
         std::ranges::find_if(createTasks, [](const State::Task* task) noexcept { return task && task->GetOperation() == FILESYSTEM_CREATE_DIRECTORY; });
     if (held == createTasks.end())
         return reject(L"Create Folder was missing from the shared queue");
-    State::Task* const heldTask   = *held;
-    const uint64_t heldTaskId     = heldTask->_taskId;
-    const auto preparationEntered = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
-        return preparation.HasEnteredForTask(heldTaskId);
+    State::Task* const heldCreateTask = *held;
+    const uint64_t heldCreateTaskId   = heldCreateTask->_taskId;
+    const auto preparationEntered     = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+        return preparation.HasEnteredForTask(heldCreateTaskId);
     }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Create Folder worker preparation"});
     std::error_code ec;
     if (! preparationEntered.conditionMet || std::filesystem::exists(canceledFolder, ec) || ec)
         return reject(L"Create Folder mutation escaped the worker preparation barrier");
-    heldTask->RequestCancel();
+    heldCreateTask->RequestCancel();
     preparation.Release();
     const auto canceled = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
         return ! operations->HasActiveOperations();
     }, {.timeout = SelfTest::Scale(std::chrono::seconds(5)), .operationName = L"Cancel Create Folder preparation"});
     if (! canceled.conditionMet || std::filesystem::exists(canceledFolder, ec) || ec)
         return reject(L"Create Folder changed the filesystem after cancellation before dispatch");
-    operations->DismissCompletedTask(heldTaskId);
+    operations->DismissCompletedTask(heldCreateTaskId);
 
     const HRESULT createAdmission = operations->AdmitCreateDirectory(kSource,
                                                                      state.fsLocal,
