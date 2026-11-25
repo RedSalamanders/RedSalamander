@@ -16657,6 +16657,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(std::format(L"Local Recycle ingress: {}", recycleIngressFailure));
                 return true;
             }
+            if (! RunFileOpsLateMoveMetadataLossChecks(state))
+            {
+                Fail(L"Late Move metadata loss did not keep the published copy and original source without an additional question.");
+                return true;
+            }
             bool injectedFailureReached = false;
             if (RecordFileOpsPopupIdleTelemetry(state, true, &injectedFailureReached) || ! injectedFailureReached || state.retainTempRootOnFailure)
             {

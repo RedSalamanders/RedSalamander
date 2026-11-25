@@ -927,6 +927,77 @@ private:
     }
 }
 
+[[nodiscard]] bool RunFileOpsLateMoveMetadataLossChecks(SelfTestState& state)
+{
+    const auto reject = [](std::wstring_view reason)
+    {
+        AppendLog(std::format(L"Late Move metadata loss: {}", reason));
+        return false;
+    };
+    auto* operations = state.fileOps;
+    if (! operations || ! state.fsLocal || ! state.fsDummy || ! CancelOutstandingSelfTestOperations(operations))
+        return reject(L"the owned File Operations engine or providers are unavailable");
+
+    const auto root                               = state.tempRoot / L"late-move-metadata-loss";
+    const auto source                             = root / L"downloaded.bin";
+    const auto zone                               = std::filesystem::path(source.native() + L":Zone.Identifier");
+    constexpr std::wstring_view destinationFolder = L"/late-move-metadata-loss";
+    constexpr std::string_view payload            = "Local Move through a writer that proves only the published content.";
+    constexpr std::string_view markOfTheWeb       = "[ZoneTransfer]\r\nZoneId=3\r\n";
+    const auto sourceIo                           = state.fsLocal.query<IFileSystemIO>();
+    const auto destinationIo                      = state.fsDummy.query<IFileSystemIO>();
+    if (! RecreateEmptyDirectory(root) || ! WriteFileTextFsIo(sourceIo, source, payload))
+        return reject(L"could not create the Local source");
+    const auto removeLocal = wil::scope_exit([&]() noexcept { static_cast<void>(SelfTest::RemoveAll(root)); });
+
+    DWORD fileSystemFlags = 0;
+    {
+        const wil::unique_hfile handle(
+            CreateFileW(source.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr));
+        if (! handle || ! GetVolumeInformationByHandleW(handle.get(), nullptr, 0, nullptr, nullptr, &fileSystemFlags, nullptr, 0))
+            return reject(L"could not read the owned source volume capabilities");
+    }
+    if ((fileSystemFlags & FILE_NAMED_STREAMS) == 0u)
+    {
+        AppendLog(L"Late Move metadata loss skipped because the owned sandbox volume does not support named streams.");
+        return true;
+    }
+
+    if (! WriteFileTextFsIo(sourceIo, zone, markOfTheWeb) || ! EnsureDummyFolderExists(state.fsDummy.get(), destinationFolder))
+        return reject(L"could not write Mark of the Web or create the Dummy destination");
+    const std::filesystem::path destination(destinationFolder);
+    const auto removeDestination = wil::scope_exit([&]() noexcept
+    { static_cast<void>(state.fsDummy->DeleteItem(destination.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)); });
+    CrossProviderCaseScope scope(state, operations);
+    EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = true;
+    const auto summary                                        = RunCrossProviderTransferFrom(
+        state, operations, scope.tasks, state.fsLocal, state.fsDummy, {source}, destination, false, FILESYSTEM_FLAG_RECURSIVE, FILESYSTEM_MOVE);
+    if (! summary)
+        return reject(L"the Move did not finish without an additional consent");
+    if (summary->resultHr != S_FALSE || summary->publishedItemCount != 1u || summary->verifiedItemCount != 1u || summary->errorCount != 0u)
+        return reject(std::format(L"expected one verified copy with its source kept. hr=0x{:08X} diagnostics=[{}]",
+                                  static_cast<unsigned long>(summary->resultHr),
+                                  DescribeCrossProviderDiagnostics(summary.value())));
+
+    const auto& results = state.completedTasks.at(scope.tasks.back()).sourceItemResults;
+    if (results.size() != 1u || ! results.front() || results.front()->publication != FileOperations::PublicationState::Published ||
+        results.front()->sourceDisposition != FileOperations::SourceDisposition::Retained)
+        return reject(L"the typed result did not preserve both publication and retention");
+    std::string original;
+    std::string originalZone;
+    std::string published;
+    if (! ReadFileTextFsIo(sourceIo, source, original) || original != payload || ! ReadFileTextFsIo(sourceIo, zone, originalZone) ||
+        originalZone != markOfTheWeb || ! ReadFileTextFsIo(destinationIo, destination / source.filename(), published) || published != payload)
+        return reject(L"source content, source Mark of the Web, or published content changed unexpectedly");
+    if (! std::ranges::any_of(summary->issueDiagnostics, [](const auto& diagnostic) noexcept {
+        return diagnostic.category == L"metadata.motw.lost" && diagnostic.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Warning;
+    }))
+        return reject(L"the known loss is missing from Issues");
+
+    AppendLog(L"The published Move copy stayed verified, and the source and its Mark of the Web were retained without another question.");
+    return true;
+}
+
 [[nodiscard]] bool RunFileOpsVerifyAvailabilityChecks(SelfTestState& state) noexcept
 {
     const auto reject = [](std::wstring_view reason) noexcept
