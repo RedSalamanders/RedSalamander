@@ -4279,21 +4279,23 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 return false;
             }
             const bool permanentDeleteAdmitted          = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_NONE);
-            const bool recycleAdmitted                  = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+            const bool recycleRequestAdmitted           = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
             const bool renameAdmitted                   = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_RENAME, pluginId);
             const bool expectedPermanentDeleteAdmission = expectMutationAdmission && expectDelete;
-            const bool expectedRecycleAdmission         = expectMutationAdmission && expectRecycle;
-            const bool expectedRenameAdmission          = expectMutationAdmission && expectRename;
-            if (permanentDeleteAdmitted != expectedPermanentDeleteAdmission || recycleAdmitted != expectedRecycleAdmission ||
+            // A Recycle request on a permanent-only route is admitted for explicit permanent consent.
+            // The provider's Recycle capability above still has to be false on those routes.
+            const bool expectedRecycleRequestAdmission = expectMutationAdmission && (expectRecycle || expectDelete);
+            const bool expectedRenameAdmission         = expectMutationAdmission && expectRename;
+            if (permanentDeleteAdmitted != expectedPermanentDeleteAdmission || recycleRequestAdmitted != expectedRecycleRequestAdmission ||
                 renameAdmitted != expectedRenameAdmission)
             {
-                Fail(std::format(L"{} host admission mismatch: permanent={} recycle={} rename={}, expected {}/{}/{}.",
+                Fail(std::format(L"{} host admission mismatch: permanent={} recycle request={} rename={}, expected {}/{}/{}.",
                                  providerName,
                                  permanentDeleteAdmitted ? 1 : 0,
-                                 recycleAdmitted ? 1 : 0,
+                                 recycleRequestAdmitted ? 1 : 0,
                                  renameAdmitted ? 1 : 0,
                                  expectedPermanentDeleteAdmission ? 1 : 0,
-                                 expectedRecycleAdmission ? 1 : 0,
+                                 expectedRecycleRequestAdmission ? 1 : 0,
                                  expectedRenameAdmission ? 1 : 0));
                 return false;
             }
