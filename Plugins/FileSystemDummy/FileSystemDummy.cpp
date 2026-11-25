@@ -3046,7 +3046,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
     uint64_t virtualSpeedLimitBytesPerSecond     = 0;
     bool writerProof                             = true; // R3-2: the route proves published content through its writer
 #ifdef ENABLE_TESTS
-    bool probedRenameSelfTest = false;
+    bool probedRenameSelfTest   = false;
+    bool mixedMoveRootsSelfTest = false;
 #endif
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
@@ -3119,6 +3120,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
 #ifdef ENABLE_TESTS
                 if (const yyjson_val* enabled = yyjson_obj_get(root, "probedRenameSelfTest"); enabled && yyjson_is_bool(enabled))
                     probedRenameSelfTest = yyjson_get_bool(enabled);
+                if (const yyjson_val* enabled = yyjson_obj_get(root, "mixedMoveRootsSelfTest"); enabled && yyjson_is_bool(enabled))
+                    mixedMoveRootsSelfTest = yyjson_get_bool(enabled);
 #endif
 
                 yyjson_val* virtualSpeedVal = yyjson_obj_get(root, "virtualSpeedLimit");
@@ -3167,6 +3170,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
         _writerProof.store(writerProof, std::memory_order_release);
 #ifdef ENABLE_TESTS
         _probedRenameSelfTest.store(probedRenameSelfTest, std::memory_order_release);
+        _mixedMoveRootsSelfTest.store(mixedMoveRootsSelfTest, std::memory_order_release);
 #endif
         _streamChunkLatencyMilliseconds = streamChunkLatencyMilliseconds;
         _virtualSpeedLimitText          = std::move(virtualSpeedLimitText);
@@ -5510,10 +5514,20 @@ HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path, Fil
         return E_INVALIDARG;
     }
 
-    descriptor                   = {};
-    descriptor.providerId        = kPluginId;
-    descriptor.pathProfileId     = L"dummy-local";
-    descriptor.rootId            = L"dummy-root";
+    descriptor               = {};
+    descriptor.providerId    = kPluginId;
+    descriptor.pathProfileId = L"dummy-local";
+    descriptor.rootId        = L"dummy-root";
+#ifdef ENABLE_TESTS
+    if (_mixedMoveRootsSelfTest.load(std::memory_order_acquire))
+    {
+        std::filesystem::path normalized;
+        RETURN_IF_FAILED(NormalizePath(path, normalized));
+        const auto relative = normalized.relative_path();
+        if (! relative.empty() && OrdinalString::EqualsNoCase(relative.begin()->native(), L"phase4-i66-mixed-other"))
+            descriptor.rootId = L"dummy-mixed-other-root";
+    }
+#endif
     descriptor.availability      = FILESYSTEM_ROUTE_AVAILABLE;
     descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
     // R3-2: SHA-256 of the committed content; the "writerProof":false configuration removes the claim

@@ -23,13 +23,14 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
     const std::wstring dummyRoot        = L"/phase4-copy-only-move-destination";
     const std::wstring dummyFile        = dummyRoot + L"/retained.bin";
 
-    const auto setWriterProof = [&](bool writerProof) noexcept
+    const auto setWriterProof = [&](bool writerProof, bool mixedMoveRoots = false) noexcept
     {
         return SetPluginConfiguration(
             state.infoDummy.get(),
             std::format(
-                R"json({{"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":{}}})json",
-                writerProof));
+                R"json({{"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":{},"mixedMoveRootsSelfTest":{}}})json",
+                writerProof,
+                mixedMoveRoots));
     };
 
     if (state.stepState == 0)
@@ -266,6 +267,85 @@ case SelfTestState::Step::FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationPro
             return true;
         }
         AppendLog(L"Copy-only Move retained the offered source and published equal bytes after a fresh writer proof became available.");
+
+        const auto mixedStarted                      = std::chrono::steady_clock::now();
+        const std::filesystem::path nativeParent     = L"/phase4-i66-mixed-native";
+        const std::filesystem::path copyParent       = L"/phase4-i66-mixed-other";
+        const std::filesystem::path mixedDestination = L"/phase4-i66-mixed-destination";
+        const auto nativeSource                      = nativeParent / L"move-this.bin";
+        const auto copySource                        = copyParent / L"retain-this.bin";
+        const auto movedFile                         = mixedDestination / nativeSource.filename();
+        const auto copiedFile                        = mixedDestination / copySource.filename();
+        constexpr std::string_view nativePayload     = "source for native move";
+        constexpr std::string_view copiedPayload     = "source for copy and retain";
+        if (! setWriterProof(false, true) || ! EnsureDummyFolderExists(state.fsDummy.get(), nativeParent.native()) ||
+            ! EnsureDummyFolderExists(state.fsDummy.get(), copyParent.native()) || ! EnsureDummyFolderExists(state.fsDummy.get(), mixedDestination.native()) ||
+            ! WriteFileTextFsIo(dummyIo, nativeSource, nativePayload) || ! WriteFileTextFsIo(dummyIo, copySource, copiedPayload))
+        {
+            Fail(L"Mixed Move could not create its two owned provider root fixtures.");
+            return true;
+        }
+        const auto matchesBytes = [&](const std::filesystem::path& path, std::string_view expected) noexcept
+        {
+            std::string bytes;
+            return ReadFileTextFsIo(dummyIo, path, bytes) && bytes == expected;
+        };
+        const auto missing = [&](const std::filesystem::path& path) noexcept
+        {
+            wil::com_ptr<IFileReader> reader;
+            const std::wstring providerPath = ToPluginPathText(path);
+            const HRESULT hr                = dummyIo->CreateFileReader(providerPath.c_str(), reader.put());
+            return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+        };
+        const auto submitMixed = [&](HostPromptResult decision, uint64_t& taskId) noexcept
+        {
+            const auto oldDecision     = HostGetTestPromptResultOverride();
+            const auto restoreDecision = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(oldDecision); });
+            HostSetTestPromptResultOverride(decision);
+            return state.fileOps->AdmitOperation(FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {nativeSource, copySource},
+                                                 mixedDestination,
+                                                 FILESYSTEM_FLAG_NONE,
+                                                 false,
+                                                 0u,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsDummy,
+                                                 &taskId);
+        };
+        const uint64_t mixedPrompts = HostGetTestPromptRequestCount();
+        uint64_t canceledMixed      = 0u;
+        HostPromptDebugSnapshot mixedPrompt{};
+        if (submitMixed(HOST_PROMPT_RESULT_CANCEL, canceledMixed) != S_FALSE || canceledMixed != 0u || HostGetTestPromptRequestCount() != mixedPrompts + 1u ||
+            ! HostGetTestLastPromptDebugSnapshot(mixedPrompt) || mixedPrompt.presentation != HOST_PROMPT_PRESENTATION_MOVE_CONTINUE ||
+            mixedPrompt.defaultResult != HOST_PROMPT_RESULT_CANCEL || mixedPrompt.hasFileOperationOptions ||
+            mixedPrompt.message.find(mixedDestination.filename().native()) == std::wstring::npos || state.fileOps->HasActiveOperations() ||
+            ! matchesBytes(nativeSource, nativePayload) || ! matchesBytes(copySource, copiedPayload) || ! missing(movedFile) || ! missing(copiedFile))
+        {
+            Fail(L"Cancel must leave a mixed Move unpublished and preserve both sources after one Continue/Cancel question.");
+            return true;
+        }
+
+        uint64_t admittedMixed = 0u;
+        if (submitMixed(HOST_PROMPT_RESULT_OK, admittedMixed) != S_OK || ! admittedMixed || HostGetTestPromptRequestCount() != mixedPrompts + 2u)
+        {
+            Fail(L"Continue must admit one mixed Move after one question.");
+            return true;
+        }
+        const auto mixedFinished = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return state.completedTasks.contains(admittedMixed) && ! state.fileOps->HasActiveOperations();
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(10)), .operationName = L"mixed Move"});
+        if (! mixedFinished.conditionMet || state.completedTasks.at(admittedMixed).hr != S_FALSE || ! missing(nativeSource) ||
+            ! matchesBytes(copySource, copiedPayload) || ! matchesBytes(movedFile, nativePayload) || ! matchesBytes(copiedFile, copiedPayload) ||
+            HostGetTestPromptRequestCount() != mixedPrompts + 2u)
+        {
+            Fail(L"Mixed Move must move the qualified source and keep the Copy-only original with no second question.");
+            return true;
+        }
+        Debug::Perf::Emit(L"FileOps.SelfTest.MixedMoveConfirmation", L"cancel-and-continue", Debug::Perf::ElapsedUs(mixedStarted), 2u, 2u, S_OK);
 
         NextStep(state, SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets);
         return false;
