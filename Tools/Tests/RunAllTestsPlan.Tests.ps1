@@ -1150,8 +1150,9 @@ Describe 'Direct Commands no-activation admission' {
         Import-Module $helperModule -Force -ErrorAction Stop
     }
 
-    It 'admits only one exact cache or drop case without proofs or a desktop lease' {
-        foreach ($caseName in @('cmd_directory_cache_invalidation_during_enumeration_is_retained', 'folderView_drop_integrity_guards')) {
+    It 'admits only one exact direct case without proofs or a desktop lease' {
+        foreach ($caseName in @('cmd_directory_cache_invalidation_during_enumeration_is_retained', 'folderView_drop_integrity_guards',
+                'cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation')) {
             $arguments = @{
                 Suite = 'Commands'
                 RepoRoot = $repoRoot

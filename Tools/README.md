@@ -751,6 +751,9 @@ all broader or modified selections retain the ordinary Commands classification.
 The exact `folderView_drop_integrity_guards` case also admits `-NonInteractive`
 with those restrictions. It supplies synthetic drop data and owned client coordinates
 to FolderView while the no-activation guard is active.
+The exact `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` case admits `-NonInteractive`
+under the same restrictions. It dispatches the archive commands programmatically
+with owned inputs and a test prompt answer.
 `ViewerPETests TestViewerDocumentationGallery --no-activate` captures generated
 viewer fixtures; `TestViewerSpaceLifecycleCaptures --no-activate` covers Space.
 These focused captures do not qualify keyboard interaction or a Full run.

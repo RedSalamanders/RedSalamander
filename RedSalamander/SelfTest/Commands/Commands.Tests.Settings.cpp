@@ -14159,6 +14159,22 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return true;
     };
 
+    const auto dispatchApprovedCleanup = [&](std::wstring_view command, std::wstring_view missingConsentMessage) noexcept
+    {
+        const uint64_t promptCount = HostGetTestPromptRequestCount();
+        const auto previousPrompt  = HostGetTestPromptResultOverride();
+        const auto restorePrompt   = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(previousPrompt); });
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        const bool dispatched = DebugDispatchShortcutCommand(mainWindow, command);
+        state.Require(HostGetTestPromptRequestCount() == promptCount + 1u, std::wstring(missingConsentMessage));
+        return dispatched;
+    };
+    const auto cleanupIdle = [&]() noexcept
+    {
+        auto* const operations = g_folderWindow.DebugGetFileOperationState(false);
+        return ! operations || ! operations->HasActiveOperations();
+    };
+
     const std::filesystem::path archivePath = outputRoot / L"selected.zip";
     FolderWindow::ArchiveCommandDebugOptions packOptions{};
     packOptions.archivePath = archivePath;
@@ -14186,6 +14202,36 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         state.Require(containsEntry(packResult->entries, L"empty-dir/"), L"Pack command should preserve empty selected directories.");
     }
     state.Require(SelfTest::PathExists(archivePath), L"Pack command should create the ZIP archive.");
+
+    {
+        const std::filesystem::path omittedSource = nestedRoot / L"omitted-link.txt";
+        state.Require(Common::Testing::CreateSandboxedSymbolicLink(omittedSource, sourceRoot / L"alpha.txt", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE, ec),
+                      L"Pack retention requires a sandboxed link that is omitted from the stored ZIP.");
+        const auto retireLink = wil::scope_exit([&]() noexcept
+        { state.Require(SelfTest::RemoveAll(omittedSource), L"Archive case should retire its owned symbolic link before evidence archival."); });
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+        const std::filesystem::path partialArchive = outputRoot / L"partial.zip";
+        FolderWindow::ArchiveCommandDebugOptions partialPackOptions{};
+        partialPackOptions.archivePath = partialArchive;
+        partialPackOptions.deleteAfter = true;
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(partialPackOptions);
+        state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"The test must have approved the Pack cleanup request."),
+                      L"Pack with Delete after should dispatch.");
+        PumpPendingMessages();
+        const auto partialPack = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        state.Require(partialPack.has_value() && partialPack->hr == S_FALSE && containsEntry(partialPack->entries, L"nested/beta.txt") &&
+                          ! containsEntry(partialPack->entries, L"nested/omitted-link.txt"),
+                      L"Pack should publish the included files and report that it omitted the source link.");
+        const DWORD omittedAttributes = GetFileAttributesW(omittedSource.c_str());
+        state.Require(cleanupIdle() && SelfTest::PathExists(partialArchive) && omittedAttributes != INVALID_FILE_ATTRIBUTES &&
+                          (omittedAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
+                          ReadUtf8TextFileForCommandSelfTest(sourceRoot / L"alpha.txt") == L"alpha" &&
+                          ReadUtf8TextFileForCommandSelfTest(nestedRoot / L"beta.txt") == L"beta",
+                      L"Pack should retain the original files and link without queuing a Delete.");
+    }
 
     const std::filesystem::path existingArchivePath = outputRoot / L"existing.zip";
     state.Require(SelfTest::WriteTextFile(existingArchivePath, "old"), L"Failed to create existing archive overwrite fixture.");
@@ -14275,6 +14321,19 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"stale",
                   L"Unpack skip-existing policy should preserve existing destination file.");
+
+    noOverwriteUnpackOptions.deleteAfter = true;
+    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(noOverwriteUnpackOptions);
+    state.Require(dispatchApprovedCleanup(L"cmd/pane/unpack", L"The test must have approved the Unpack cleanup request."),
+                  L"Unpack with Skip existing and Delete after should dispatch.");
+    PumpPendingMessages();
+    const auto cleanupResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    state.Require(cleanupResult.has_value() && cleanupResult->hr == S_FALSE && cleanupResult->skippedConflictCount >= 1u,
+                  L"Unpack should report that skipped entries kept the selected archive.");
+    state.Require(cleanupIdle(), L"Unpack should not queue a cleanup Delete after skipping an entry.");
+    state.Require(SelfTest::PathExists(archivePath), L"Unpack should retain the original archive after a skipped entry.");
+    state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"stale",
+                  L"Unpack should retain the conflicting destination while keeping the archive.");
 
     FolderWindow::ArchiveCommandDebugOptions replaceUnpackOptions{};
     replaceUnpackOptions.destinationPath = extractRoot;

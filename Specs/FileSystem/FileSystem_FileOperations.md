@@ -2127,8 +2127,11 @@ use this route; a Managed Move uses its file delete only for its own source, as 
 Local provider offers it for a binding provider (D-7.3); providers without binding keep C10.
 
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
-contract succeeds; on an identity-less location they keep the refusal and never delete by name. No
-archive component performs a private pathname delete.
+contract succeeds; on an identity-less location they keep the refusal and never delete by name. With delete-after selected,
+Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive.
+If Unpack skips any requested
+entry because of a destination conflict or reports incomplete extraction, it keeps the selected archive set and reports that in the pane.
+No archive component performs a private pathname delete.
 
 ## Verification and metadata
 

@@ -133,6 +133,12 @@ Describe 'Product documentation capture fixtures' {
         $cacheCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|PrepareMainWindowForIsolatedUiCase|DirectedSelfTestInputWarning|UIAutomation)\s*(?:\(|\b)'
 
         $navigation | Should Match 'SelfTest::RunCase\(options,\s*suite,\s*L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
+        $settingsCommands = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Settings.cpp'
+        $archiveCase = [regex]::Match($settingsCommands, '(?ms)^\[\[nodiscard\]\] bool TestArchiveCommandsPackUnpackZipRoundTripAndValidation\(.*?(?=^\[\[nodiscard\]\]|\z)')
+        $archiveCase.Success | Should Be $true
+        $archiveCase.Value | Should Match '\bDebugDispatchShortcutCommand\('
+        $archiveCase.Value | Should Match '\bHostSetTestPromptResultOverride\(HOST_PROMPT_RESULT_OK\)'
+        $archiveCase.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|TryActivateOwnedWindow|PrepareMainWindowForIsolatedUiCase|DirectedSelfTestInputWarning|UIAutomation)\s*(?:\(|\b)'
         $app = Get-RSText -Path 'RedSalamander/RedSalamander.cpp'
         $startupAdmission = [regex]::Match($app, '(?s)const bool selectedNoActivationCommandsCase\s*=.*?;')
         $startupAdmission.Success | Should Be $true
@@ -140,6 +146,7 @@ Describe 'Product documentation capture fixtures' {
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_product_documentation_gallery"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"'
         $startupAdmission.Value | Should Match 'selectedCaptureCase == L"folderView_drop_integrity_guards"'
+        $startupAdmission.Value | Should Match 'selectedCaptureCase == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"'
         foreach ($flag in @('--selftest', '--compare-selftest', '--fileops-selftest')) {
             $startupAdmission.Value | Should Match ([regex]::Escape('! hasArg(L"' + $flag + '")'))
         }
@@ -148,7 +155,7 @@ Describe 'Product documentation capture fixtures' {
         }
         $startupAdmission.Value | Should Not Match '_wcsicmp|starts_with|SelfTestCaseNameEquals'
         $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
-        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
+        $runner | Should Match 'const bool noActivationDirectCase\s*=\s*\(\s*options\.caseFilter == L"cmd_directory_cache_invalidation_during_enumeration_is_retained"\s*\|\|\s*options\.caseFilter == L"folderView_drop_integrity_guards"\s*\|\|\s*options\.caseFilter == L"cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation"\s*\)\s*&&\s*options\.flakyProofCaseName\.empty\(\)\s*&&\s*options\.orderProofCaseName\.empty\(\)'
         $bypass = [regex]::Match($runner, '(?s)if \(! options\.listCasesOnly && noActivationDirectCase &&\s*RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)\)\s*\{\s*runRegisteredCases\(options\);\s*\}')
         $bypass.Success | Should Be $true
         $warningIndex = $runner.IndexOf('const DirectedSelfTestInputWarning inputWarning', [StringComparison]::Ordinal)

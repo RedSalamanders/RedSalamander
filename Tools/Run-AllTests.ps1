@@ -92,6 +92,7 @@
 
 .PARAMETER CaseFilter
     Run only the matching case name or prefix (passed as --selftest-case=...).
+    cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation supports -NonInteractive through synthetic archive commands and sandbox files.
     Exact FileOps SMB Rename provider cases may run with -NonInteractive. Select
     FileOps_SmbExactRenameProvider or FileOps_SmbCorroboratedRenameProvider for the relevant binding route.
     FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
