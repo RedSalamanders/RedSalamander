@@ -12159,6 +12159,26 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                         }
                         return hr;
                     }
+                    if (typedPlan.origin == FileOperations::DeleteOrigin::UnpackCleanup)
+                    {
+                        const auto scope = builder.FindScope(builder.BucketFor(typedPlan.endpoint), typedPlan.endpoint, item.providerPath, true);
+                        if (scope == builder.scopes.end() || ! scope->root || ! item.ingressSnapshot.has_value())
+                            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                        const auto& current  = scope->root->retained.authority;
+                        const auto& approved = item.ingressSnapshot.value();
+                        if (current.kind != FILESYSTEM_BOUND_REGULAR_FILE || current.identity != approved)
+                        {
+                            const HRESULT changed = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                            RecordDiagnostic(DiagnosticSeverity::Error,
+                                             changed,
+                                             L"preparation.unpackCleanup.sourceChanged",
+                                             L"The archive changed after Unpack was approved. It was kept.",
+                                             LocalizedDiagnosticText{IDS_FILEOPS_DIAG_SOURCE_CHANGED},
+                                             item.providerPath,
+                                             {});
+                            return changed;
+                        }
+                    }
                     if (! permanentDelete && identityLessRoot)
                     {
                         // A Recycle needs no identity. Its corroboration facts are pinned now, best

@@ -14351,6 +14351,94 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"alpha",
                   L"Unpack replace-existing policy should publish the archive content.");
 
+    for (const bool replaceApprovedArchive : {false, true})
+    {
+        const std::wstring archiveName = replaceApprovedArchive ? L"cleanup-replaced.zip" : L"cleanup-unchanged.zip";
+        const auto cleanupArchive      = outputRoot / archiveName;
+        const auto originalArchive     = outputRoot / L"cleanup-original.zip";
+        const auto cleanupDestination  = root / (replaceApprovedArchive ? L"extracted-before-replace" : L"extracted-before-delete");
+        if (! state.Require(WriteStoredZipFixtureForCommandSelfTest(cleanupArchive, "approved.txt", 0x0800u, "approved contents") &&
+                                ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)) &&
+                                WaitForPaneItems(FolderWindow::Pane::Left, {archiveName}, SelfTest::Scale(3000ms)) &&
+                                g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, archiveName),
+                            L"Unpack cleanup needs a selected, owned source archive."))
+        {
+            return false;
+        }
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [&](std::wstring_view name) noexcept { return name == archiveName; });
+
+        if (replaceApprovedArchive)
+            SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(true);
+        const auto releaseCleanup = wil::scope_exit([&]() noexcept
+        {
+            if (replaceApprovedArchive)
+            {
+                ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+                SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(false);
+            }
+        });
+
+        auto approvedUnpack            = replaceUnpackOptions;
+        approvedUnpack.destinationPath = cleanupDestination;
+        approvedUnpack.deleteAfter     = true;
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(approvedUnpack);
+        if (! state.Require(dispatchApprovedCleanup(L"cmd/pane/unpack", L"Unpack cleanup must receive one Delete confirmation."),
+                            L"Unpack Delete after must dispatch."))
+        {
+            return false;
+        }
+        const auto unpacked = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        if (! state.Require(unpacked.has_value() && unpacked->hr == S_OK && unpacked->archivePath == cleanupArchive &&
+                                ReadUtf8TextFileForCommandSelfTest(cleanupDestination / L"approved.txt") == L"approved contents",
+                            L"Unpack must extract the approved archive's bytes before cleanup."))
+        {
+            return false;
+        }
+
+        if (replaceApprovedArchive)
+        {
+            const auto ready = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+                return HasFileOpsPermanentDeleteBeforeBindPauseEnteredForSelfTest();
+            }, {.timeout = SelfTest::Scale(3000ms), .operationName = L"Unpack cleanup before identity bind"});
+            if (! state.Require(ready.conditionMet, L"Cleanup must pause before binding its approved source."))
+                return false;
+
+            std::filesystem::rename(cleanupArchive, originalArchive, ec);
+            if (! state.Require(! ec && SelfTest::WriteTextFile(cleanupArchive, "replacement at the approved name"),
+                                L"Replace the archive with an unrelated owned file while cleanup waits."))
+            {
+                return false;
+            }
+            ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+        }
+        const auto drained =
+            RedSalamander::TestSupport::PumpMessagesUntil(cleanupIdle, {.timeout = SelfTest::Scale(4000ms), .operationName = L"Unpack cleanup completion"});
+        if (! state.Require(drained.conditionMet, L"The Unpack cleanup task must finish."))
+            return false;
+
+        if (replaceApprovedArchive)
+        {
+            auto* const operations = g_folderWindow.DebugGetFileOperationState(false);
+            std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
+            if (operations)
+                operations->CollectCompletedTasks(completed);
+            const bool refused = std::ranges::any_of(completed,
+                                                     [&](const auto& summary) noexcept
+            {
+                return summary.resultHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && std::ranges::any_of(summary.issueDiagnostics,
+                                                                                                              [&](const auto& diagnostic) noexcept
+                { return diagnostic.category == L"preparation.unpackCleanup.sourceChanged" && diagnostic.sourcePath == cleanupArchive.native(); });
+            });
+            state.Require(refused && SelfTest::PathExists(originalArchive) &&
+                              ReadUtf8TextFileForCommandSelfTest(cleanupArchive) == L"replacement at the approved name",
+                          L"Cleanup must report the changed source and keep both the approved archive and the replacement.");
+        }
+        else
+        {
+            state.Require(! SelfTest::PathExists(cleanupArchive), L"Cleanup must delete the unchanged, exactly identified archive.");
+        }
+    }
+
     const std::filesystem::path cp437ArchivePath = outputRoot / L"cp437.zip";
     std::string cp437EntryName                   = "caf";
     cp437EntryName.push_back(static_cast<char>(0x82u));

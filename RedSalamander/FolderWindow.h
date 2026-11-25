@@ -44,6 +44,8 @@ struct CrossFileSystemBridge;
 
 namespace FileOperations
 {
+struct UnpackCleanupReceipt;
+
 // Immutable admission identity for a card. These counts describe selected roots,
 // never recursive discovery; retaining a subject does not retain a path list.
 struct TaskSelectionSummary final
@@ -1553,7 +1555,9 @@ private:
     void RequestMakeFileListCancellation(Pane pane) noexcept;
     // File operations (internal implementation in FolderWindow.FileOperations.cpp)
     void EnsureFileOperations();
-    HRESULT StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept;
+    HRESULT StartFileOperationFromFolderView(Pane pane,
+                                             FolderView::FileOperationRequest request,
+                                             const FileOperations::UnpackCleanupReceipt* unpackCleanup = nullptr) noexcept;
     // The pane already shows why an exit-pending request was refused, and a refusal the user was
     // already told about needs no second message, so FolderView receives either as "not started"
     // and does not add a generic failure.

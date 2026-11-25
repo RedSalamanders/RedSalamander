@@ -2129,9 +2129,16 @@ Local provider offers it for a binding provider (D-7.3); providers without bindi
 Pack and Unpack delete-after-success submit ordinary exact `DeletePlan` tasks after the archive
 contract succeeds; on an identity-less location they keep the refusal and never delete by name. With delete-after selected,
 Pack requires an error-free source listing and keeps the selected originals if any entry is omitted from the archive.
-If Unpack skips any requested
-entry because of a destination conflict or reports incomplete extraction, it keeps the selected archive set and reports that in the pane.
-No archive component performs a private pathname delete.
+If Unpack skips a requested entry because of a destination conflict or reports
+incomplete extraction, it keeps the selected archive set and reports that in
+the pane. Before asking to delete the selected archives, Unpack captures each
+regular archive's provider identity and revision. It rebinds each file against
+that snapshot before reading from the binding, including ZIP fallback
+extraction. The cleanup plan carries those snapshots and requires a matching
+nonrecursive Delete binding for every approved archive before any removal.
+A changed source stops cleanup and is reported on the task. If the original
+selection cannot supply an exact snapshot, Unpack can extract and keeps all
+archives. No archive component performs a private pathname delete.
 
 ## Verification and metadata
 
