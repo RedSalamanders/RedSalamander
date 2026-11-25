@@ -1144,6 +1144,10 @@ PreferencesFileOperationsDebugFocusTarget FileOperationsPane::DebugGetFocusTarge
     {
         return PreferencesFileOperationsDebugFocusTarget::MirrorDecisionsInPaneToggle;
     }
+    if (page.copyLinks.combo == focused)
+    {
+        return PreferencesFileOperationsDebugFocusTarget::CopyLinksCombo;
+    }
     if (page.bridgeBuffer.edit == focused)
     {
         return PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit;
