@@ -11,7 +11,6 @@
 #include "Preferences.HotPaths.h"
 #include "Preferences.Internal.h"
 #include "Preferences.Keyboard.h"
-#include "Preferences.Monitor.h"
 #include "Preferences.Mouse.h"
 #include "Preferences.Panes.h"
 #include "Preferences.Plugins.h"
@@ -227,7 +226,7 @@ private:
     HWND _hwnd = nullptr;
 };
 
-constexpr std::array<CategoryInfo, 14> kCategories = {{
+constexpr std::array<CategoryInfo, kPrefCategoryCount> kCategories = {{
     {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
     {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
     {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
@@ -240,7 +239,6 @@ constexpr std::array<CategoryInfo, 14> kCategories = {{
     {PrefCategory::FileOperations, IDS_PREFS_CAT_FILE_OPERATIONS, IDS_PREFS_CAT_FILE_OPERATIONS_DESC},
     {PrefCategory::CompareDirectories, IDS_PREFS_CAT_COMPARE_DIRECTORIES, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC},
     {PrefCategory::HotPaths, IDS_PREFS_CAT_HOT_PATHS, IDS_PREFS_CAT_HOT_PATHS_DESC},
-    {PrefCategory::Monitor, IDS_PREFS_CAT_MONITOR, IDS_PREFS_CAT_MONITOR_DESC},
     {PrefCategory::Advanced, IDS_PREFS_CAT_ADVANCED, IDS_PREFS_CAT_ADVANCED_DESC},
 }};
 
@@ -262,7 +260,6 @@ struct PreferencesDialogHost final : PreferencesDialogState
     FileOperationsPane _fileOperationsPane;
     CompareDirectoriesPane _compareDirectoriesPane;
     HotPathsPane _hotPathsPane;
-    MonitorPane _monitorPane;
     AdvancedPane _advancedPane;
     WindowHost _categoryTreeHost;
     Tree* _categoryTreeControl = nullptr;
@@ -620,7 +617,6 @@ protected:
         case PrefCategory::FileOperations: return L"FileOperations";
         case PrefCategory::CompareDirectories: return L"CompareDirectories";
         case PrefCategory::HotPaths: return L"HotPaths";
-        case PrefCategory::Monitor: return L"Monitor";
         case PrefCategory::Advanced: return L"Advanced";
         default: return L"Unknown";
     }
@@ -755,7 +751,6 @@ void InitializePreferencesPageControls(const PrefCategory category, PreferencesD
         case PrefCategory::FileOperations: return ensurePage(hostState._fileOperationsPane);
         case PrefCategory::CompareDirectories: return ensurePage(hostState._compareDirectoriesPane);
         case PrefCategory::HotPaths: return ensurePage(hostState._hotPathsPane);
-        case PrefCategory::Monitor: return ensurePage(hostState._monitorPane);
         case PrefCategory::Advanced: return ensurePage(hostState._advancedPane);
         default: return false;
     }
@@ -1594,7 +1589,6 @@ void DetachPreferencesPageHostDxSurface(PreferencesDialogHost& hostState) noexce
     hostState._fileOperationsPane.Destroy(hostState);
     hostState._compareDirectoriesPane.Destroy(hostState);
     hostState._hotPathsPane.Destroy(hostState);
-    hostState._monitorPane.Destroy(hostState);
     hostState._advancedPane.Destroy(hostState);
     hostState.paneWrapperPanels.fill(nullptr);
     hostState.paneFirstCreateDone.fill(false);
@@ -1764,25 +1758,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
         return settings.mouse.value();
     }
     return kDefaults;
-}
-
-[[nodiscard]] const Common::Settings::MonitorSettings& GetMonitorSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
-{
-    static const Common::Settings::MonitorSettings kDefaults{};
-    if (settings.monitor.has_value())
-    {
-        return settings.monitor.value();
-    }
-    return kDefaults;
-}
-
-[[nodiscard]] bool AreEquivalentMonitorSettings(const Common::Settings::Settings& a, const Common::Settings::Settings& b) noexcept
-{
-    const auto& left  = GetMonitorSettingsOrDefault(a);
-    const auto& right = GetMonitorSettingsOrDefault(b);
-    return left.menu.toolbarVisible == right.menu.toolbarVisible && left.menu.lineNumbersVisible == right.menu.lineNumbersVisible &&
-           left.menu.alwaysOnTop == right.menu.alwaysOnTop && left.menu.showIds == right.menu.showIds && left.menu.autoScroll == right.menu.autoScroll &&
-           left.filter.mask == right.filter.mask && left.filter.preset == right.filter.preset;
 }
 
 [[nodiscard]] const Common::Settings::CacheSettings& GetCacheSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
@@ -2075,10 +2050,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     {
         return true;
     }
-    if (! AreEquivalentMonitorSettings(state.monitorBaselineSettings, state.workingMonitorSettings))
-    {
-        return true;
-    }
     {
         const auto& baselineCache = GetCacheSettingsOrDefault(state.baselineSettings);
         const auto& workingCache  = GetCacheSettingsOrDefault(state.workingSettings);
@@ -2317,53 +2288,11 @@ int PrefsUi::ShowSharedPageEmptyState(HWND host,
 
 namespace
 {
-struct PreferencesSaveResult final
+[[nodiscard]] HRESULT SaveSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
 {
-    HRESULT hr        = E_FAIL;
-    bool mainSaved    = false;
-    bool monitorSaved = false;
-};
-
-[[nodiscard]] HRESULT SaveMonitorSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
-{
-    static_cast<void>(dlg);
-    if (AreEquivalentMonitorSettings(state.monitorBaselineSettings, state.workingMonitorSettings))
-    {
-        return S_OK;
-    }
-
-    Common::Settings::Settings merged = state.monitorBaselineSettings;
-    merged.monitor                    = GetMonitorSettingsOrDefault(state.workingMonitorSettings);
-
-    HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, merged);
-    if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
-    {
-        // Monitor Preferences owns only the Monitor section. Rebase that section once onto
-        // the newest document; the store CAS still prevents a second concurrent overwrite.
-        Common::Settings::Settings latest{};
-        if (Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, latest) == S_OK)
-        {
-            latest.monitor = GetMonitorSettingsOrDefault(state.workingMonitorSettings);
-            merged         = std::move(latest);
-            hr             = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, merged);
-        }
-    }
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    state.workingMonitorSettings = SettingsSave::PrepareForSave(merged);
-    return S_OK;
-}
-
-[[nodiscard]] PreferencesSaveResult SaveSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
-{
-    PreferencesSaveResult result{};
     if (state.appId.empty())
     {
-        result.hr = E_INVALIDARG;
-        return result;
+        return E_INVALIDARG;
     }
 
     if (state.owner && IsWindow(state.owner))
@@ -2502,25 +2431,11 @@ struct PreferencesSaveResult final
         const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         const std::wstring message = FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(hr));
         ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
-        result.hr = hr;
-        return result;
+        return hr;
     }
 
     state.workingSettings = SettingsSave::PrepareForSave(merged);
-    result.mainSaved      = true;
-
-    result.hr = SaveMonitorSettingsFromDialog(dlg, state);
-    if (FAILED(result.hr))
-    {
-        const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kPreferencesMonitorAppId);
-        const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        const std::wstring message =
-            FormatStringResource(nullptr, IDS_FMT_PREFS_MONITOR_SAVE_FAILED_AFTER_MAIN, settingsPath.wstring(), static_cast<unsigned long>(result.hr));
-        ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
-        return result;
-    }
-    result.monitorSaved = true;
-    return result;
+    return S_OK;
 }
 
 void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) noexcept;
@@ -2541,10 +2456,6 @@ void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) no
     state.baselineSettings.monitor.reset();
     state.workingSettings = *state.settings;
     state.workingSettings.monitor.reset();
-    Common::Settings::Settings monitorSettings{};
-    static_cast<void>(Common::Settings::LoadSettings(kPreferencesMonitorAppId, monitorSettings));
-    state.monitorBaselineSettings = monitorSettings;
-    state.workingMonitorSettings  = monitorSettings;
 
     PopulateCategoryTree(dlg, state);
     RefreshPreferencesDialogThemeImpl(dlg, state);
@@ -2608,8 +2519,7 @@ void ResetAllPreferencesToDefaults(HWND dlg, PreferencesDialogState& state) noex
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(L"Preferences reset-all: resetting working settings");
 #endif
-    state.workingSettings        = Common::Settings::Settings{};
-    state.workingMonitorSettings = Common::Settings::Settings{};
+    state.workingSettings = Common::Settings::Settings{};
 
     // Shortcuts require explicit default initialization via the factory.
 #ifdef ENABLE_TESTS
@@ -2755,8 +2665,7 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
         return;
     }
 
-    const PreferencesSaveResult saveResult = SaveSettingsFromDialog(dlg, state);
-    if (! saveResult.mainSaved)
+    if (FAILED(SaveSettingsFromDialog(dlg, state)))
     {
         return;
     }
@@ -2766,11 +2675,7 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
     *state.settings = state.workingSettings;
     // Canonical persistence omits factory shortcuts; live consumers need the materialized defaults.
     ShortcutDefaults::EnsureShortcutsInitialized(*state.settings);
-    state.baselineSettings = state.workingSettings;
-    if (saveResult.monitorSaved)
-    {
-        state.monitorBaselineSettings = state.workingMonitorSettings;
-    }
+    state.baselineSettings        = state.workingSettings;
     state.previewApplied          = false;
     state.staleFromExternalReload = false;
 
@@ -3689,7 +3594,6 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const bool showFileOperations     = state.currentCategory == PrefCategory::FileOperations;
     const bool showCompareDirectories = state.currentCategory == PrefCategory::CompareDirectories;
     const bool showHotPaths           = state.currentCategory == PrefCategory::HotPaths;
-    const bool showMonitor            = state.currentCategory == PrefCategory::Monitor;
     const bool showAdvanced           = state.currentCategory == PrefCategory::Advanced;
     if (host)
     {
@@ -3737,7 +3641,6 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     hostState._fileOperationsPane.OnVisibilityChanged(showFileOperations);
     hostState._compareDirectoriesPane.OnVisibilityChanged(showCompareDirectories);
     hostState._hotPathsPane.OnVisibilityChanged(showHotPaths);
-    hostState._monitorPane.OnVisibilityChanged(showMonitor);
     hostState._advancedPane.OnVisibilityChanged(showAdvanced);
 
     if (showPanes)
@@ -3813,13 +3716,6 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
         return;
     }
 
-    if (showMonitor)
-    {
-        hostState._monitorPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
-        FinalizePreferencesPageHostLayout(host, state, margin, width);
-        return;
-    }
-
     if (showAdvanced)
     {
         hostState._advancedPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
@@ -3848,11 +3744,6 @@ void RefreshAdvancedPage(HWND host, PreferencesDialogState& state) noexcept
     static_cast<PreferencesDialogHost&>(state)._advancedPane.Refresh(host, state);
 }
 
-void RefreshMonitorPage(HWND host, PreferencesDialogState& state) noexcept
-{
-    static_cast<PreferencesDialogHost&>(state)._monitorPane.Refresh(host, state);
-}
-
 void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noexcept
 {
     if (! host)
@@ -3873,7 +3764,6 @@ void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noex
         case PrefCategory::FileOperations: static_cast<PreferencesDialogHost&>(state)._fileOperationsPane.Refresh(host, state); break;
         case PrefCategory::CompareDirectories: static_cast<PreferencesDialogHost&>(state)._compareDirectoriesPane.Refresh(host, state); break;
         case PrefCategory::HotPaths: static_cast<PreferencesDialogHost&>(state)._hotPathsPane.Refresh(host, state); break;
-        case PrefCategory::Monitor: RefreshMonitorPage(host, state); break;
         case PrefCategory::Advanced: RefreshAdvancedPage(host, state); break;
         case PrefCategory::Mouse: break;
     }
@@ -5017,31 +4907,11 @@ INT_PTR OnCtlColorListBox(PreferencesDialogState* state, HDC hdc, HWND listBox)
     return reinterpret_cast<INT_PTR>(useInputBrush ? state->inputBrush.get() : state->backgroundBrush.get());
 }
 
-enum class PreferencesSettingsFileTarget : uint8_t
-{
-    Main,
-    Monitor,
-};
-
-[[nodiscard]] std::wstring_view GetPreferencesSettingsFileAppId(const PreferencesDialogState& state, const PreferencesSettingsFileTarget target) noexcept
-{
-    return target == PreferencesSettingsFileTarget::Monitor ? kPreferencesMonitorAppId : std::wstring_view{state.appId};
-}
-
-[[nodiscard]] const Common::Settings::Settings& GetPreferencesSettingsFileSourceSettings(const PreferencesDialogState& state,
-                                                                                         const PreferencesSettingsFileTarget target) noexcept
-{
-    return target == PreferencesSettingsFileTarget::Monitor ? state.monitorBaselineSettings : state.baselineSettings;
-}
-
-[[nodiscard]] HRESULT OpenPreferencesSettingsFile(HWND owner,
-                                                  const PreferencesDialogState& state,
-                                                  const PreferencesSettingsFileTarget target,
-                                                  std::filesystem::path& outPath) noexcept
+[[nodiscard]] HRESULT OpenPreferencesSettingsFile(HWND owner, const PreferencesDialogState& state, std::filesystem::path& outPath) noexcept
 {
     outPath.clear();
 
-    const std::wstring_view appId = GetPreferencesSettingsFileAppId(state, target);
+    const std::wstring_view appId{state.appId};
     if (appId.empty())
     {
         return E_INVALIDARG;
@@ -5063,11 +4933,8 @@ enum class PreferencesSettingsFileTarget : uint8_t
         return S_OK;
     }
 #endif
-    Common::Settings::Settings settingsToCreate = GetPreferencesSettingsFileSourceSettings(state, target);
-    if (target == PreferencesSettingsFileTarget::Main)
-    {
-        settingsToCreate.monitor.reset();
-    }
+    Common::Settings::Settings settingsToCreate = state.baselineSettings;
+    settingsToCreate.monitor.reset();
     return SettingsFileLauncher::Open(owner, appId, settingsToCreate, outPath);
 }
 
@@ -5109,17 +4976,7 @@ INT_PTR OnCommand(HWND dlg, PreferencesDialogState* state, UINT commandId, [[may
         case IDC_PREFS_ADV_OPEN_SETTINGS_FILE:
         {
             std::filesystem::path path;
-            const HRESULT hr = OpenPreferencesSettingsFile(dlg, *state, PreferencesSettingsFileTarget::Main, path);
-            if (FAILED(hr))
-            {
-                ShowPreferencesSettingsFileOpenFailure(dlg, path, hr);
-            }
-            return TRUE;
-        }
-        case IDC_PREFS_MONITOR_OPEN_SETTINGS_FILE:
-        {
-            std::filesystem::path path;
-            const HRESULT hr = OpenPreferencesSettingsFile(dlg, *state, PreferencesSettingsFileTarget::Monitor, path);
+            const HRESULT hr = OpenPreferencesSettingsFile(dlg, *state, path);
             if (FAILED(hr))
             {
                 ShowPreferencesSettingsFileOpenFailure(dlg, path, hr);
@@ -5512,12 +5369,11 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
         effectiveOwner = nullptr;
     }
 
-    state->owner                                                                     = effectiveOwner;
-    state->settings                                                                  = &settings;
-    state->appId                                                                     = std::wstring(appId);
-    state->theme                                                                     = theme;
-    state->initialCategory                                                           = initialCategory;
-    const std::optional<Common::Settings::MonitorSettings> legacyMainMonitorSettings = settings.monitor;
+    state->owner           = effectiveOwner;
+    state->settings        = &settings;
+    state->appId           = std::wstring(appId);
+    state->theme           = theme;
+    state->initialCategory = initialCategory;
 
     if (! EnsurePrefsPageHostClassRegistered())
     {
@@ -5528,15 +5384,6 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
     state->baselineSettings.monitor.reset();
     state->workingSettings = state->baselineSettings;
     settings.monitor.reset();
-
-    Common::Settings::Settings monitorSettings{};
-    static_cast<void>(Common::Settings::LoadSettings(kPreferencesMonitorAppId, monitorSettings));
-    if (! monitorSettings.monitor.has_value() && legacyMainMonitorSettings.has_value())
-    {
-        monitorSettings.monitor = legacyMainMonitorSettings.value();
-    }
-    state->monitorBaselineSettings = monitorSettings;
-    state->workingMonitorSettings  = monitorSettings;
 
     // Ensure mainMenu is explicitly set with defaults if not present
     // This prevents function bar from being reset when applying preferences
@@ -6021,8 +5868,6 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         out.hotPathsFocusTarget               = hostState._hotPathsPane.DebugGetFocusTarget();
         hostState._hotPathsPane.DebugPopulateSnapshot(out);
         out.advancedFocusTarget                         = hostState._advancedPane.DebugGetFocusTarget();
-        out.monitorFocusTarget                          = hostState._monitorPane.DebugGetFocusTarget();
-        out.monitorSettingsFileCardLast                 = hostState._monitorPane.DebugSettingsFileCardIsLast();
         out.fileOperationsFocusTarget                   = hostState._fileOperationsPane.DebugGetFocusTarget();
         out.compareDirectoriesFocusTarget               = hostState._compareDirectoriesPane.DebugGetFocusTarget();
         out.compareDirectoriesVisibleSectionHeaderCount = hostState._compareDirectoriesPane.DebugVisibleSectionHeaderCount();
@@ -7703,42 +7548,6 @@ bool PreferencesDialog::DebugFocusAdvancedBypassHelloToggle() noexcept
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
     return hostState._advancedPane.DebugFocusBypassHelloToggle();
-}
-
-bool PreferencesDialog::DebugFocusMonitorToolbarToggle() noexcept
-{
-    const HWND dlg = GetHandle();
-    if (! dlg)
-    {
-        return false;
-    }
-
-    auto* state = GetState(dlg);
-    if (! state)
-    {
-        return false;
-    }
-
-    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
-    return hostState._monitorPane.DebugFocusToolbarToggle();
-}
-
-bool PreferencesDialog::DebugSelectMonitorFilterPreset(std::wstring_view displayText) noexcept
-{
-    const HWND dlg = GetHandle();
-    if (! dlg)
-    {
-        return false;
-    }
-
-    auto* state = GetState(dlg);
-    if (! state)
-    {
-        return false;
-    }
-
-    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
-    return hostState._monitorPane.DebugSelectFilterPresetByText(displayText);
 }
 
 void PreferencesDialog::DebugSetSettingsFileOpenCapture(const bool capture) noexcept

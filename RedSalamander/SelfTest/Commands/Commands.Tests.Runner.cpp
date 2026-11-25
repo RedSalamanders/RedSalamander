@@ -191,7 +191,6 @@ constexpr PrefCategory kPrefCategoryUserMenu           = static_cast<PrefCategor
 constexpr PrefCategory kPrefCategoryCompareDirectories = static_cast<PrefCategory>(9);
 constexpr PrefCategory kPrefCategoryHotPaths           = static_cast<PrefCategory>(10);
 constexpr PrefCategory kPrefCategoryAdvanced           = static_cast<PrefCategory>(8);
-constexpr PrefCategory kPrefCategoryMonitor            = static_cast<PrefCategory>(13);
 
 [[nodiscard]] constexpr int PreferencesRootRowForCategory(const PrefCategory category) noexcept
 {
@@ -219,10 +218,8 @@ constexpr PrefCategory kPrefCategoryMonitor            = static_cast<PrefCategor
         return 10;
     if (category == kPrefCategoryHotPaths)
         return 11;
-    if (category == kPrefCategoryMonitor)
-        return 12;
     if (category == kPrefCategoryAdvanced)
-        return 13;
+        return 12;
     return -1;
 }
 

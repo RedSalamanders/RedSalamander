@@ -13,7 +13,7 @@ Typical filenames:
 In Debug builds, RedSalamander first looks for `RedSalamander-debug.settings.json`. If it does not exist, it falls back to the versioned or legacy settings file.
 
 You can open the main settings file from **Preferences -> Advanced -> Open settings file**.
-You can open the monitor settings file from **Preferences -> Monitor -> Open monitor settings file**.
+For viewer settings, open **File > Open Settings File** in [RedMonitor](Monitor.md).
 
 ## Settings sections at a glance
 
@@ -37,7 +37,6 @@ for ordinary edits and let the app maintain session/placement state.
 | `mouse` | Pointer-driven pane focus; [Mouse](#mouse). |
 | `cache` | Directory information/watch retention; [Cache](#cache). |
 | `folders` | Pane paths and folder-view state; [Navigation](NavigationAndPaths.md). |
-| `monitor` | ETW monitor options; [Monitor](Monitor.md). |
 | `shortcuts` | Scoped key bindings and aliases; [Keyboard Shortcuts](KeyboardShortcuts.md). |
 | `terminal` | Floating window/tab restoration; [Terminal](Terminal.md). |
 | `extensions` | File-system/archive extension associations; [Plugins](Plugins.md). |
@@ -92,7 +91,7 @@ Notes:
 - If the edited file is invalid or uses an unsupported schema version during live reload, the running app keeps its current settings and shows a warning; the file is not renamed or backed up in that live path.
 - On a later cold startup / recovery load, an invalid settings file still falls back to defaults and is backed up to `.bad.*`.
 - Connection Manager secrets are not stored in this JSON file; only non-secret profile data is kept there.
-- Only the main RedSalamander settings JSON is watched in this iteration; RedSalamanderMonitor settings and `Themes\\*.theme.json5` files are not live-watched.
+- RedSalamander watches the main settings JSON. RedMonitor watches its viewer profile.
 
 ## Common advanced edits
 
@@ -326,9 +325,6 @@ The settings file has additional top-level sections beyond the ones above. Sever
 - `compareDirectories` - Compare Directories command options. See [Compare Directories](CompareDirectories.md).
 - `hotPaths` - the 10 hot-path bookmark slots (`Ctrl+1` .. `Ctrl+0`). See [Navigation & Path Syntax](NavigationAndPaths.md).
 - `theme` - active theme and user theme definitions. See [Themes](Themes.md).
-- `monitor` - Independent RedMonitor window preferences, retained under the legacy settings app ID.
-  Preferences always edits RedSalamanderMonitor-7.0.settings.json, including Debug/ASan consumers.
-  See [Monitor](Monitor.md).
 - `mainMenu` - menu-bar and function-bar visibility (`menuBarVisible`, `functionBarVisible`). See the **View** menu in [Main Window](MainWindow.md).
 - `ui.language` - application language override. See [Localization](dev/Localization.md).
 - `mouse` - the two independent pointer-driven pane-focus settings from `Preferences -> Mouse`.

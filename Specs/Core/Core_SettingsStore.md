@@ -48,15 +48,11 @@ To avoid cross-process contention and keep settings scoped correctly, each execu
 - Release builds: `<AppId>-<Major>.<Minor>.settings.json` (from `Common/Version.h`: `VERSINFO_MAJOR` and `VERSINFO_MINOR`)
 - Legacy name (pre-versioning, supported for migration): `<AppId>.settings.json`
 - Schema file pattern (always unversioned): `<AppId>.settings.schema.json`
-- RedSalamander's monitor Preferences adapter always selects `RedSalamanderMonitor-7.0.settings.json`,
-  including Debug/ASan consumers, to match the independently installed production Release helper.
-  It does not select a standalone development viewer's debug profile.
-- `AppId` examples:
-  - `RedSalamander`
-  - `RedSalamanderMonitor`
+- RedSalamander uses the `RedSalamander` app ID.
 
 Debug-load note:
-- In Debug builds, if `<AppId>-debug.settings.json` does not exist, settings load falls back to the versioned file (and then the legacy file) so developers can reuse existing settings without copying/renaming files. The monitor adapter's fixed Release profile is the exception above.
+
+- If the Debug file is absent, the settings loader checks the versioned file and then the legacy file.
 
 Example (Release):
 - `C:\\Users\\<User>\\AppData\\Local\\RedSalamander\\Settings\\RedSalamander-7.0.settings.json`
@@ -98,7 +94,7 @@ Notes:
 
 ### UI entry point
 
-`Preferences -> Advanced` exposes a command link that opens `GetSettingsPath(L"RedSalamander")` with the shell default editor for the current user. `Preferences -> Monitor` exposes a separate command link that opens `GetSettingsPath(L"RedSalamanderMonitor")`. Either command may create the target JSON/settings schema first when the file is missing, but invoking the link MUST NOT mark Preferences dirty. The generated `RedSalamander.settings.schema.json` MUST NOT expose the root `monitor` property; the generated `RedSalamanderMonitor.settings.schema.json` MUST expose it.
+`Preferences -> Advanced` opens the main settings file with the shell default editor. The command may create the settings file and its generated schema when missing. Invoking it MUST preserve the Preferences draft and dirty state. The generated `RedSalamander.settings.schema.json` excludes the historical `monitor` property. RedMonitor owns its profile and exposes **File > Open Settings File**. See the [consumer contract](Core_RedSalamanderMonitor.md).
 
 ## Read/Write Requirements
 
@@ -312,18 +308,11 @@ Watcher rules:
   revision and MUST still fail CAS rather than being silently rebased.
 - A changed stamp already recorded as `lastAppliedStamp` or `lastRejectedStamp` is ignored on the next reload check.
 - `Themes\\*.theme.json5` files are **not** watched in this iteration.
-- `RedSalamanderMonitor.exe` settings do not participate in this main-app hot-reload flow.
-
-Preferences commits the main and Monitor settings documents independently because NTFS does not provide an
-atomic rename spanning two files. If the main document commits but the Monitor document fails, the main settings
-remain committed and are applied to the running app; the dialog advances only the main baseline, keeps Monitor
-changes dirty, and shows a localized partial-success error. Because Preferences owns the complete Monitor
-section, a Monitor-only revision conflict may load the newest Monitor document, replace that section from the
-working copy, and retry CAS once. A second conflict or any other failure remains pending for the user to retry.
+- The RedSalamander hot-reload flow owns the main document. The RedMonitor watcher owns the independent viewer profile.
 
 Merge policy after a valid external reload:
 - Disk is authoritative for persisted main-app user-editable sections such as `theme`, `ui`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `mainMenu`, `startup`, `search`, and folder preference fields.
-- The `monitor` section belongs to the `RedSalamanderMonitor` settings app id. The main `RedSalamander` settings file MUST NOT be used as the persistence owner for Monitor Preferences edits.
+- RedSalamander Preferences persists the main document. RedMonitor migration can read the historical Monitor section from a legacy main file.
 - Runtime session state is preserved for already-open windows and current pane navigation.
 - Preserved runtime window placements are the placements of currently open modeless/top-level windows already running in the process.
 - Preserved folder session fields are:
@@ -368,7 +357,7 @@ The root JSON object may contain (depending on the application):
 - `cache` (object): cache configuration (directory enumeration cache, etc.)
 - `folders` (object): multi-pane folder state (current folder + global folder history)
 - `search` (object): persisted Find Files and Directories dialog state
-- `monitor` (object): RedSalamanderMonitor UI state (menu toggles, filter state); persisted by the `RedSalamanderMonitor` app id
+- `monitor` (object): historical viewer payload. RedMonitor reads it when migrating an older profile and owns current viewer settings.
 - `shortcuts` (object): shortcut key bindings
 - `extensions` (object, optional): extension-based behaviors (e.g., open archives as virtual file systems)
 - `connections` (object, optional): global Connection Manager settings and saved `ConnectionProfile` entries (non-secret fields only)
@@ -1140,7 +1129,7 @@ Keys:
 - `windowBackdrop` (string, default: `"default"`): `"default" | "none" | "mica" | "micaAlt" | "acrylic"`.
 
 Behavior:
-- `compactMode` is the persisted app-wide default for supported DxUI density-aware surfaces such as Preferences pages, menu bars, popup menus / flyouts, combo boxes, Monitor chrome, and shared grid/list surfaces that opt into the shared density contract.
+- `compactMode` is the persisted app-wide default for supported DxUI density-aware surfaces such as Preferences pages, menu bars, popup menus / flyouts, combo boxes, and shared grid/list surfaces that opt into the shared density contract.
 - `language` drives runtime localization resource lookup for registered application, monitor, and plugin resource owners. Missing, empty, or invalid values fall back to `"system"`.
 - Saving omits `language` when it is the default `"system"` and writes the concrete culture tag for non-default selections.
 - `reducedMotion` overrides the OS reduced-motion preference for DxUI animation behavior when set to `"on"` or `"off"`. `"system"` follows the OS setting.
@@ -1218,7 +1207,9 @@ Keys:
 - `unselectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/unselectDialog`
 - `filterHistory` (array, max 10): most-recent-first history shared by the `cmd/pane/filter` dialog and the inline pane filter bar
 
-## RedSalamanderMonitor UI State
+## Historical RedSalamanderMonitor UI State
+
+This section describes the legacy payload that RedMonitor can import. The [RedMonitor settings contract](https://github.com/RedSalamanders/RedMonitor/blob/main/Specs/Core/Core_Settings.md) owns the current viewer profile.
 
 These settings persist the state of checkable menu items and filter state.
 

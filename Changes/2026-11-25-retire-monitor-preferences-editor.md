@@ -1,0 +1,1 @@
+- RedMonitor owns its settings profile and exposes **File > Open Settings File**. RedSalamander Preferences now edits only its own settings, including the existing Advanced file link.

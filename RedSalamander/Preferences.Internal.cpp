@@ -1239,30 +1239,6 @@ Common::Settings::FolderPane* EnsureWorkingFolderPane(Common::Settings::Settings
 }
 } // namespace PrefsFolders
 
-namespace PrefsMonitor
-{
-const Common::Settings::MonitorSettings& GetMonitorSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
-{
-    static const Common::Settings::MonitorSettings kDefaults{};
-    if (settings.monitor.has_value())
-    {
-        return settings.monitor.value();
-    }
-    return kDefaults;
-}
-
-Common::Settings::MonitorSettings* EnsureWorkingMonitorSettings(Common::Settings::Settings& settings) noexcept
-{
-    if (settings.monitor.has_value())
-    {
-        return &settings.monitor.value();
-    }
-
-    settings.monitor.emplace();
-    return &settings.monitor.value();
-}
-} // namespace PrefsMonitor
-
 namespace PrefsCache
 {
 const Common::Settings::CacheSettings& GetCacheSettingsOrDefault(const Common::Settings::Settings& settings) noexcept

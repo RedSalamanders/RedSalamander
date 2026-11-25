@@ -40,7 +40,7 @@ namespace
     const DWORD ownerThread            = GetCurrentThreadId();
     const size_t baselineHosts         = DxUi::DebugGetAttachedWindowHostCount();
     const uint32_t baselineAttachments = DxUi::DebugGetSharedWindowHostAttachmentCountForThread(ownerThread);
-    constexpr std::array<PrefCategory, 14> categories{{kPrefCategoryGeneral,
+    constexpr std::array<PrefCategory, 13> categories{{kPrefCategoryGeneral,
                                                        kPrefCategoryPanes,
                                                        kPrefCategoryViewers,
                                                        kPrefCategoryEditors,
@@ -52,7 +52,6 @@ namespace
                                                        kPrefCategoryFileOperations,
                                                        kPrefCategoryCompareDirectories,
                                                        kPrefCategoryHotPaths,
-                                                       kPrefCategoryMonitor,
                                                        kPrefCategoryAdvanced}};
     // Three retained hosts per opening crossed the bounded 128-window payload
     // table when the wheel subclass swallowed the dialog's WM_NCDESTROY.
