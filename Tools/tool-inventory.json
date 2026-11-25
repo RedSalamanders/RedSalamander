@@ -874,7 +874,7 @@
       "visibility": "public",
       "lifecycle": "active",
       "purpose": "Inventory and optionally reject remaining Win32/GDI UI findings in owned product/test source; each allowance matches exact category, path, and line pattern with reviewed owner and exit condition; retired DxUi residual entries are not consumer exceptions.",
-      "usage": "Run during Win32 UI retirement reviews; use -FailOnFindings for policy enforcement. Residuals require exact category/path/line-pattern matches with visibility, owner, reason, and exit condition; the shared native test-warning exception stays scoped to Tests/TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h.",
+      "usage": "Run during Win32 UI retirement reviews; use -FailOnFindings for policy enforcement. Residuals require exact category/path/line-pattern matches with visibility, owner, reason, and exit condition. Hidden File Operations parents must match a reviewed title and popup style; the shared native test-warning exception stays scoped to Tests/TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h.",
       "usedBy": [
         "UI maintainers",
         "Tools/Tests/DocumentationDriftContracts.Tests.ps1"

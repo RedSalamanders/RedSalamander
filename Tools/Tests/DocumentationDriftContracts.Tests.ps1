@@ -223,28 +223,34 @@ Describe 'Visible native audit contracts' {
         $auditPath = Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1'
         $definitions = @(
             @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases14_16.cpp'; Title = 'Owned popup lifetime fixture' },
-            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.QueuedAdmission.cpp'; Title = 'Owned clipboard admission fixture' }
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.QueuedAdmission.cpp'; Title = 'Owned clipboard admission fixture' },
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned completion teardown fixture' },
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Create Folder check' },
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Rename fixture' },
+            @{ Path = 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'; Title = 'Owned Graph test' }
         )
         foreach ($definition in $definitions) {
             $path = Join-Path $fixture $definition.Path
             [void][IO.Directory]::CreateDirectory((Split-Path $path))
             $source = 'void Fixture() { owner.reset(CreateWindowExW(0, L"STATIC", L"' + $definition.Title + '", WS_POPUP, 0, 0, 640, 480, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr)); }'
             $definition.Source = $source
-            [IO.File]::WriteAllText($path, $source)
+            [IO.File]::AppendAllLines($path, [string[]]@($source))
         }
         $hidden = @(& $auditPath -RepoRoot $fixture -FailOnFindings)
-        $hidden.Count | Should Be 2
-        @($hidden | Where-Object { $_.Allowed -and $_.Visibility -eq 'test-only hidden FolderWindow owner' }).Count | Should Be 2
+        $hidden.Count | Should Be $definitions.Count
+        @($hidden | Where-Object { $_.Allowed -and $_.Visibility -eq 'test-only hidden FolderWindow owner' }).Count | Should Be $definitions.Count
 
         foreach ($definition in $definitions) {
             $path = Join-Path $fixture $definition.Path
-            [IO.File]::WriteAllText($path, $definition.Source.Replace('WS_POPUP,', 'WS_POPUP | WS_VISIBLE,'))
+            $fixtureSource = [IO.File]::ReadAllText($path)
+            $visibleSource = $definition.Source.Replace('WS_POPUP,', 'WS_POPUP | WS_VISIBLE,')
+            [IO.File]::WriteAllText($path, $fixtureSource.Replace($definition.Source, $visibleSource))
             $visible = @(& $auditPath -RepoRoot $fixture)
             @($visible | Where-Object { -not $_.Allowed -and $_.Path -eq $definition.Path }).Count | Should Be 1
             $visibleFailure = Invoke-RSTestBlock { & $auditPath -RepoRoot $fixture -FailOnFindings | Out-Null }
             $visibleFailure.Succeeded | Should Be $false
             $visibleFailure.Error.Exception.Message | Should Match '1 unallowed finding'
-            [IO.File]::WriteAllText($path, $definition.Source)
+            [IO.File]::WriteAllText($path, $fixtureSource)
 
             $wrongPath = Join-Path $fixture 'RedSalamander\SelfTest\FileOperations\UnexpectedOwner.cpp'
             [IO.File]::WriteAllText($wrongPath, $definition.Source)

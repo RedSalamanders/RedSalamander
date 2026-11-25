@@ -582,7 +582,7 @@ contract and is authoritative when the table is intentionally brief.
 |---|---|---|
 | `AnalyzeTestRuns.ps1` | Public test-run trend command | Manual historical timing/result analysis. |
 | `Audit-ComctlReportSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for list-view/tooltip surfaces. |
-| `Audit-RemainingWin32UiDependencies.ps1` | Public UI source audit | Inventory or reject Win32/GDI UI findings; each allowed residual has an exact path/category/line pattern and owner/exit condition. Default output is structured findings with an information-stream summary; `-AsMarkdown` emits Markdown. |
+| `Audit-RemainingWin32UiDependencies.ps1` | Public UI source audit | Inventory or reject Win32/GDI UI findings. Each allowance names the exact path, category, line pattern, owner and exit condition. Hidden File Operations fixture parents must match a reviewed title and popup style. Default output is structured findings with an information-stream summary. `-AsMarkdown` emits Markdown. |
 | `Audit-VisibleNativeSurfaces.ps1` | Public UI source audit | CI and documentation drift checks for visible native controls. |
 | `Build-GhosttyTerminalRuntime.ps1` | Public active runtime builder | Thin stable entrypoint for canonical Product builds and explicit isolated candidate builds; delegates validation, restore, build, and attestation to `GhosttyRuntimeLifecycle.psm1`, with native-command/lease progress separate from captured streams and one disposable compiler cache shared across authenticated dependency fetches. |
 | `Build-LocalSdkCandidate.ps1` | Public local candidate builder | Builds the isolated Release application/plugin union from an independently hashed local DxUi SDK descriptor; grants no test or production acceptance. |
