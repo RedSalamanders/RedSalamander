@@ -12247,6 +12247,37 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                             scope.corroboratedRenameSource   = std::move(source);
                         }
                     }
+                    else if (hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && typedPlan.origin == FileOperations::RenameOrigin::InlineRename &&
+                             plans->size() == 1u && typedPlan.finalMappings.size() == 1u)
+                    {
+                        wil::com_ptr<IFileSystemProbedRename> capability;
+                        const HRESULT query = _fileSystem->QueryInterface(__uuidof(IFileSystemProbedRename), capability.put_void());
+                        if (query == E_NOINTERFACE)
+                            return hr;
+                        if (query != S_OK || ! capability)
+                            return FAILED(query) ? query : E_UNEXPECTED;
+
+                        FileSystemOptions options{};
+                        InitializeFileSystemOptions(options);
+                        wil::com_ptr<IFileSystemProbedRenameSource> source;
+#ifdef ENABLE_TESTS
+                        _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
+                        const auto dbgCallbackScope = wil::scope_exit([&] noexcept { _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
+#endif
+                        const HRESULT capture = capability->CaptureProbedRenameSource(step.source.providerPath.c_str(), &options, source.put());
+                        if (capture != S_OK || ! source)
+                            return FAILED(capture) ? capture : E_UNEXPECTED;
+
+                        hr = builder.Add(_fileSystem.get(), typedPlan.endpoint, parent, FileOperations::MutationInterlockAccess::WriteSource, false, false);
+                        if (SUCCEEDED(hr))
+                        {
+                            if (builder.scopes.size() != 1u)
+                                return E_UNEXPECTED;
+                            auto& scope                      = builder.scopes.front();
+                            scope.conservativeIdentityDomain = true;
+                            scope.probedRenameSource         = std::move(source);
+                        }
+                    }
                     if (FAILED(hr))
                     {
                         return hr;
@@ -15450,11 +15481,15 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
         return FileOperations::QualifiedEndpointsReferToSameRoot(scope.endpoint, rename->endpoint) &&
                EquivalentPath(rename->endpoint.pathIdentity.value(), scope.providerPath, parentPath);
     });
-    if (parentScope == scopes.end() || (! parentScope->root && ! parentScope->corroboratedRenameSource))
+    if (parentScope == scopes.end())
         return E_UNEXPECTED;
     const auto& corroborated = parentScope->corroboratedRenameSource;
+    const auto& probed       = parentScope->probedRenameSource;
+    const bool unbound       = corroborated || probed;
+    if (! parentScope->root && ! unbound)
+        return E_UNEXPECTED;
 
-    switch (GuardLiveOutputBeforeInvalidation(sourcePath, FileOperations::MutationInterlockAccess::WriteSource, ! corroborated))
+    switch (GuardLiveOutputBeforeInvalidation(sourcePath, FileOperations::MutationInterlockAccess::WriteSource, ! unbound))
     {
         case LiveOutputGuardDisposition::Skip: return S_FALSE;
         case LiveOutputGuardDisposition::Cancel: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -15480,7 +15515,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
     constexpr FileSystemBindFlags destinationReplacementBindFlags =
         static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION);
     FileOperations::ObjectBindingResult source{};
-    if (! corroborated)
+    if (! unbound)
     {
         source = FileOperations::BindObjectAuthority(_fileSystem.get(), sourcePath, rename->endpoint.profileId, sourceBindFlags);
         if (source.state != FileOperations::ObjectBindingState::Bound)
@@ -15590,7 +15625,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
 
         FileOperations::ObjectBindingResult destination{};
         bool destinationIsSource = false;
-        if (! corroborated)
+        if (! unbound)
         {
             const HRESULT revalidationHr = revalidateBeforeMutation();
             if (FAILED(revalidationHr))
@@ -15645,22 +15680,34 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
                 }
             }
 #endif
+            if (CancelRequestedDurable())
+            {
+                recordStatus(HRESULT_FROM_WIN32(ERROR_CANCELLED), false);
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
             FileSystemOptions options{};
             InitializeFileSystemOptions(options);
             MarkSourceItemMutationPossible(0u);
-            if (corroborated)
+            if (unbound)
             {
                 FileSystemCorroboratedRenameResult attempted{};
                 // A provider that returns without initializing the receipt grants no retry.
                 attempted.mutationAttempted     = 2;
                 attempted.mutation.outcomeKnown = 2;
-                renameHr                        = corroborated->RenameToFreeSibling(activeLeaf.c_str(), &options, &attempted);
+                renameHr                        = probed ? probed->RenameToFreeSibling(activeLeaf.c_str(), &options, &attempted)
+                                                         : corroborated->RenameToFreeSibling(activeLeaf.c_str(), &options, &attempted);
                 const auto& receipt             = attempted.mutation;
                 const bool valid = attempted.sizeBytes == sizeof(attempted) && (attempted.mutationAttempted == TRUE || attempted.mutationAttempted == FALSE) &&
                                    receipt.sizeBytes == sizeof(receipt) && FileSystemRouteContract::IsValidItemMutationResultPrefix(receipt) &&
                                    receipt.ownedStageDisposition == FileSystemOwnedStageDisposition::NotApplicable;
-                if (valid && attempted.mutationAttempted == FALSE && FAILED(renameHr) && receipt.outcomeKnown == FALSE &&
-                    receipt.originalStillPresent == FALSE && receipt.mutationCommitted == FALSE)
+                const bool nameCollision = renameHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || renameHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+                if (valid && probed && attempted.mutationAttempted == FALSE && nameCollision && receipt.outcomeKnown == TRUE &&
+                    receipt.originalStillPresent == TRUE && receipt.mutationCommitted == FALSE)
+                {
+                    corroboratedCollision = true;
+                }
+                else if (valid && attempted.mutationAttempted == FALSE && FAILED(renameHr) && receipt.outcomeKnown == FALSE &&
+                         receipt.originalStillPresent == FALSE && receipt.mutationCommitted == FALSE)
                 {
                     beforeCorroboratedDispatch = true;
                     failureSource              = FileOperations::SourceDisposition::Unknown;
@@ -15673,7 +15720,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
                               FileSystemRouteContract::MutationClassification::RetryableNoCommit))
                 {
                     // The provider proves either publication or a refusal that kept the source.
-                    corroboratedCollision = renameHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || renameHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+                    corroboratedCollision = nameCollision;
                 }
                 else
                 {
@@ -15727,7 +15774,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
             recordStatus(S_OK, true);
             ClearConflictPrompt(*this);
             Debug::Perf::Emit(L"FileOps.InlineRename.ExecuteUs",
-                              corroborated ? L"corroborated" : L"identity-bound",
+                              probed ? L"probed" : (corroborated ? L"corroborated" : L"identity-bound"),
                               PerfElapsedUs(executeStartedUs),
                               static_cast<uint64_t>(sourcePath.size() + destinationPath.size()) * sizeof(wchar_t),
                               1u,

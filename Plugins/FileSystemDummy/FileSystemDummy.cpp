@@ -3045,6 +3045,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
     std::wstring virtualSpeedLimitText           = L"0";
     uint64_t virtualSpeedLimitBytesPerSecond     = 0;
     bool writerProof                             = true; // R3-2: the route proves published content through its writer
+#ifdef ENABLE_TESTS
+    bool probedRenameSelfTest = false;
+#endif
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -3113,6 +3116,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
                     writerProof = yyjson_get_bool(writerProofVal); // self-test knob: Copy-only Move coverage needs a proof-less route
                 }
 
+#ifdef ENABLE_TESTS
+                if (const yyjson_val* enabled = yyjson_obj_get(root, "probedRenameSelfTest"); enabled && yyjson_is_bool(enabled))
+                    probedRenameSelfTest = yyjson_get_bool(enabled);
+#endif
+
                 yyjson_val* virtualSpeedVal = yyjson_obj_get(root, "virtualSpeedLimit");
                 if (virtualSpeedVal && yyjson_is_str(virtualSpeedVal))
                 {
@@ -3152,11 +3160,14 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
         const bool structureChanged =
             _configurationJson.empty() || _maxChildrenPerDirectory != maxChildrenPerDirectory || _maxDepth != maxDepth || _seed != seed;
 
-        _maxChildrenPerDirectory        = maxChildrenPerDirectory;
-        _maxDepth                       = maxDepth;
-        _seed                           = seed;
-        _latencyMilliseconds            = latencyMilliseconds;
-        _writerProof                    = writerProof;
+        _maxChildrenPerDirectory = maxChildrenPerDirectory;
+        _maxDepth                = maxDepth;
+        _seed                    = seed;
+        _latencyMilliseconds     = latencyMilliseconds;
+        _writerProof             = writerProof;
+#ifdef ENABLE_TESTS
+        _probedRenameSelfTest.store(probedRenameSelfTest, std::memory_order_release);
+#endif
         _streamChunkLatencyMilliseconds = streamChunkLatencyMilliseconds;
         _virtualSpeedLimitText          = std::move(virtualSpeedLimitText);
         _virtualSpeedLimitBytesPerSecond.store(virtualSpeedLimitBytesPerSecond, std::memory_order_release);
@@ -3360,6 +3371,13 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::QueryInterface(REFIID riid, void** pp
     if (riid == __uuidof(IFileSystemIO))
     {
         *ppvObject = static_cast<IFileSystemIO*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemProbedRename))
+    {
+        *ppvObject = static_cast<IFileSystemProbedRename*>(this);
         AddRef();
         return S_OK;
     }
@@ -5510,6 +5528,7 @@ HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path, Fil
     descriptor.copyOperation                  = true;
     descriptor.moveOperation                  = true;
     descriptor.nativeMoveOperation            = true;
+    descriptor.renameOperation                = _probedRenameSelfTest.load(std::memory_order_acquire);
     descriptor.createDirectoryOperation       = true;
     descriptor.propertiesOperation            = true;
     descriptor.readOperation                  = true;
@@ -6640,6 +6659,172 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
 
     context.completedItems = 1;
     return S_OK;
+}
+
+class FileSystemDummy::ProbedRenameSource final : public IFileSystemProbedRenameSource
+{
+public:
+    ProbedRenameSource(FileSystemDummy* fileSystem, std::filesystem::path parent, const DummyNode& selected)
+        : _fileSystem(fileSystem),
+          _parent(std::move(parent)),
+          _sourceName(selected.name),
+          _parentIdentity(selected.parent->renameIdentity),
+          _sourceIdentity(selected.renameIdentity),
+          _sourceChangeTime(selected.changeTime)
+    {
+    }
+
+    ProbedRenameSource(const ProbedRenameSource&)            = delete;
+    ProbedRenameSource(ProbedRenameSource&&)                 = delete;
+    ProbedRenameSource& operator=(const ProbedRenameSource&) = delete;
+    ProbedRenameSource& operator=(ProbedRenameSource&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** value) noexcept override
+    {
+        if (! value)
+            return E_POINTER;
+        *value = nullptr;
+        if (riid != __uuidof(IUnknown) && riid != __uuidof(IFileSystemProbedRenameSource))
+            return E_NOINTERFACE;
+        *value = static_cast<IFileSystemProbedRenameSource*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (remaining == 0u)
+            delete this;
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameToFreeSibling(const wchar_t* leaf,
+                                                  const FileSystemOptions* options,
+                                                  FileSystemCorroboratedRenameResult* result) noexcept override
+    {
+        if (! result)
+            return E_POINTER;
+        if (result->sizeBytes != sizeof(*result))
+            return E_INVALIDARG;
+        *result = {};
+        if (! leaf || _sourceName == leaf || ! FileSystemOptionsHaveValidHeader(options))
+            return E_INVALIDARG;
+        if (const HRESULT cancellation = FileSystemCheckOperationControl(options); FAILED(cancellation))
+            return cancellation;
+        FileSystemChildNameValidation nameCheck{};
+        nameCheck.sizeBytes   = sizeof(nameCheck);
+        const HRESULT checked = _fileSystem->ValidateChildName(_parent.c_str(), leaf, FILESYSTEM_RENAME, &nameCheck);
+        if (FAILED(checked))
+            return checked;
+        if (nameCheck.status != FILESYSTEM_CHILD_NAME_VALID)
+            return nameCheck.failureStatus;
+
+        try
+        {
+            {
+                std::scoped_lock lock(_mutex);
+                DummyNode* parent = nullptr;
+                if (! _active || FAILED(_fileSystem->ResolvePath(_parent, &parent, false, true)) || parent->renameIdentity != _parentIdentity)
+                    return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                DummyNode* source = _fileSystem->FindChild(parent, _sourceName);
+                if (! source || source->name != _sourceName || source->renameIdentity != _sourceIdentity || source->changeTime != _sourceChangeTime)
+                    return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                if (const DummyNode* occupant = _fileSystem->FindChild(parent, leaf); occupant && occupant != source)
+                {
+                    result->mutation.outcomeKnown         = TRUE;
+                    result->mutation.originalStillPresent = TRUE;
+                    return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+                }
+                if (const HRESULT cancellation = FileSystemCheckOperationControl(options); FAILED(cancellation))
+                    return cancellation;
+
+                _active                   = false;
+                result->mutationAttempted = TRUE;
+                const HRESULT status      = _fileSystem->MoveNode(*source, *parent, leaf, FILESYSTEM_FLAG_NONE, nullptr);
+                if (status != S_OK)
+                    return status;
+
+                result->mutation.outcomeKnown      = TRUE;
+                result->mutation.mutationCommitted = TRUE;
+            }
+            if (_sourceName != leaf)
+                _fileSystem->NotifyDirectoryWatchers(_parent.native(), _sourceName, leaf);
+            return S_OK;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception&)
+        {
+            // Provider ABI boundary. The result still records any dispatch that was reached.
+            Debug::Error(L"Dummy probed Rename failed.");
+            return E_FAIL;
+        }
+    }
+
+private:
+    wil::com_ptr<FileSystemDummy> _fileSystem;
+    std::filesystem::path _parent;
+    std::wstring _sourceName;
+    uint64_t _parentIdentity;
+    uint64_t _sourceIdentity;
+    __int64 _sourceChangeTime;
+    std::atomic_ulong _refs{1u};
+    bool _active = true; // Protected by the filesystem mutex.
+};
+
+HRESULT STDMETHODCALLTYPE FileSystemDummy::CaptureProbedRenameSource(const wchar_t* path,
+                                                                     const FileSystemOptions* options,
+                                                                     IFileSystemProbedRenameSource** source) noexcept
+{
+    if (! source)
+        return E_POINTER;
+    *source = nullptr;
+    if (! _probedRenameSelfTest.load(std::memory_order_acquire))
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    if (! path || path[0] == L'\0' || ! FileSystemOptionsHaveValidHeader(options))
+        return E_INVALIDARG;
+    if (const HRESULT cancellation = FileSystemCheckOperationControl(options); FAILED(cancellation))
+        return cancellation;
+
+    try
+    {
+        std::filesystem::path normalized;
+        RETURN_IF_FAILED(NormalizePath(path, normalized));
+        std::scoped_lock lock(_mutex);
+        DummyNode* selected = nullptr;
+        RETURN_IF_FAILED(ResolvePath(normalized, &selected, false, false));
+        if (! selected->parent || selected->name != normalized.filename().native())
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        if (selected->parent->renameIdentity == 0u)
+            selected->parent->renameIdentity = ++_nextRenameIdentity;
+        if (selected->renameIdentity == 0u)
+            selected->renameIdentity = ++_nextRenameIdentity;
+
+        wil::com_ptr<IFileSystemProbedRenameSource> captured;
+        captured.attach(new (std::nothrow) ProbedRenameSource(this, normalized.parent_path(), *selected));
+        if (! captured)
+            return E_OUTOFMEMORY;
+        *source = captured.detach();
+        return S_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Provider ABI boundary. Failure leaves the caller without a source token.
+        Debug::Error(L"Dummy probed Rename source capture failed.");
+        return E_FAIL;
+    }
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,

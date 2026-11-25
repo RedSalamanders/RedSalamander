@@ -145,6 +145,16 @@ A known non-commit permits the same token to be revalidated and reused. A commit
 attempt closes the token. The caller initializes both record sizes and validates the strict dispatch
 and mutation facts before recovery. See [the provider contract](Plugins_VirtualFileSystem.md#inline-rename).
 
+`IFileSystemProbedRename` (`f87b3f7a-3d43-4e37-aa12-b70dbaec3fdd`) is separately queried
+for an eligible unbound same-parent inline Rename. `CaptureProbedRenameSource` returns
+`IFileSystemProbedRenameSource` (`8558f2a8-2caf-4aef-91c8-d83233e65dad`) with captured
+source, parent and root facts. The worker revalidates those facts and accepts a validated
+new sibling name. The call offers only free-name Rename. It may reuse the same
+`FileSystemCorroboratedRenameResult` record to prove a pre-dispatch collision with the original
+present and `mutationAttempted == FALSE`. Other pre-dispatch failures leave the result unknown.
+Commit or uncertain dispatch retires the token. The contract preserves provider-specific
+semantics if the namespace changes after the destination probe. Dummy exercises the host route.
+
 `IFileSystemRouteCapabilities` (`{1e924d87-2e62-4ab4-9f37-c565d465f25e}`)
 is a separate interface queried from `IFileSystem`. It is the sole executable
 route-capability authority for the current source-tree/release generation.

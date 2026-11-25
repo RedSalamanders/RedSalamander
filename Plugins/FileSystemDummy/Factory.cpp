@@ -9,6 +9,7 @@
 #define PLUGFACTORY_EXPORTS
 #include "PlugInterfaces/Factory.h"
 
+#define REDSAL_DEFINE_TRACE_PROVIDER
 #include "FileSystemDummy.h"
 #include "FileSystemDummyResources.h"
 #include "Helpers.h"
