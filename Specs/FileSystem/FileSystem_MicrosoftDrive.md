@@ -280,7 +280,18 @@ revision. When a reply is lost, reconciliation requires the item ID, exact new s
 parent. Both Rename entry points forward the same per-item receipt for a proved commit or an
 observed pre-dispatch collision. An unproved outcome carries no receipt. The
 [Graph driveItem update contract](https://learn.microsoft.com/en-us/graph/api/driveitem-update?view=graph-rest-1.0)
-defines the revision header. The plugin advertises `IFileSystemAtomicWriter`: a simple upload is one PUT (with
+defines the revision header.
+
+The OneDrive Personal probed inline Rename route holds the drive ID, parent ID, selected
+item ID, exact spelling, and eTag. It rechecks the parent and selected item before checking
+the sibling. An observed occupant produces a known refusal without a PATCH. A changed
+selection or a remote-item reference does not authorize a mutation. The route sends one
+revision-guarded same-parent PATCH without automatic mutation retries. Its response or a
+read by ID must prove the requested spelling in the captured parent. A dispatched request
+without that proof stays indeterminate. This token grants no replacement authority.
+OneDrive Business and SharePoint require separate route qualification.
+
+The plugin advertises `IFileSystemAtomicWriter`: a simple upload is one PUT (with
 `If-None-Match: *` unless overwrite was granted) and an upload session's item appears only when the
 session completes under the requested conflict behavior, so the host bridge publishes new names
 into Graph destinations through the provider writer. A replacement granted through the host
