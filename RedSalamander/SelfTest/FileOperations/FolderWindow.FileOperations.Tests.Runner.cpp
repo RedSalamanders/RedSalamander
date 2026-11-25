@@ -14425,11 +14425,31 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     constexpr auto pane = FolderWindow::Pane::Left;
     if (! privateHost || ! owner.Create(privateHost.get(), 0, 0, 640, 480) || FAILED(owner.SetFileSystemPluginForPane(pane, kPluginIdDummy)))
         return reject(L"owner or Dummy provider unavailable");
-    auto* operations      = owner.DebugGetFileOperationState();
-    const auto fileSystem = owner.GetFileSystem(pane);
-    const auto io         = fileSystem ? fileSystem.try_query<IFileSystemIO>() : wil::com_ptr<IFileSystemIO>{};
+    auto* operations       = owner.DebugGetFileOperationState();
+    const auto fileSystem  = owner.GetFileSystem(pane);
+    const auto io          = fileSystem ? fileSystem.try_query<IFileSystemIO>() : wil::com_ptr<IFileSystemIO>{};
+    const auto information = fileSystem ? fileSystem.try_query<IInformations>() : wil::com_ptr<IInformations>{};
     const std::filesystem::path root(L"/i66-probed-rename");
-    if (! operations || ! io || ! EnsureDummyFolderExists(fileSystem.get(), root.native()))
+    std::string originalConfiguration;
+    Common::Settings::JsonValue configuration;
+    if (! operations || ! io || ! BackupPluginConfiguration(information.get(), originalConfiguration) ||
+        FAILED(Common::Settings::ParseJsonValue(originalConfiguration, configuration)))
+        return reject(L"owned namespace or Dummy configuration unavailable");
+    const auto* object = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&configuration.value);
+    if (! object || ! *object)
+        return reject(L"Dummy configuration was not a JSON object");
+
+    const auto originalRoute = FileSystemRouteContract::Query(fileSystem.get(), root.native(), FILESYSTEM_RENAME, kPluginIdDummy);
+    if (originalRoute.state != FileSystemRouteContract::QueryState::Available || originalRoute.snapshot.renameOperation)
+        return reject(L"the normal Dummy route should refuse typed Rename");
+
+    (*object)->members.emplace_back("probedRenameSelfTest", Common::Settings::JsonValue{.value = true});
+    std::string fixtureConfiguration;
+    if (FAILED(Common::Settings::SerializeJsonValue(configuration, fixtureConfiguration)) ||
+        information->SetConfiguration(fixtureConfiguration.c_str()) != S_OK)
+        return reject(L"could not enable the owned Dummy Rename fixture");
+    const auto restoreConfiguration = wil::scope_exit([&]() noexcept { static_cast<void>(information->SetConfiguration(originalConfiguration.c_str())); });
+    if (! EnsureDummyFolderExists(fileSystem.get(), root.native()))
         return reject(L"owned namespace unavailable");
 
     const auto releaseMutation = []() noexcept
@@ -14465,12 +14485,19 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
             return reject(std::format(L"inline command failed to admit with HRESULT 0x{:08X}", static_cast<unsigned long>(status)));
         return true;
     };
-    const auto retire = [&](uint64_t id)
+    std::optional<FolderWindow::FileOperationCompletedEvent> completed;
+    const uint64_t completionWatch =
+        owner.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) { completed = event; });
+    const auto removeCompletionWatch = wil::scope_exit([&]() noexcept { owner.RemoveFileOperationCompletedCallback(completionWatch); });
+    const auto retire = [&](uint64_t id, HRESULT status, FileOperations::PublicationState publication, FileOperations::SourceDisposition sourceDisposition)
     {
-        return RedSalamander::TestSupport::PumpMessagesUntil(
-                   [&]() noexcept { return operations->FindTask(id) == nullptr; },
-                   {.timeout = SelfTest::Scale(std::chrono::seconds(8)), .operationName = L"probed Rename task retirement"})
-            .conditionMet;
+        const auto quiet = RedSalamander::TestSupport::PumpMessagesUntil([&]() noexcept {
+            return completed.has_value() && completed->taskId == id && operations->FindTask(id) == nullptr;
+        }, {.timeout = SelfTest::Scale(std::chrono::seconds(8)), .operationName = L"probed Rename task retirement"});
+        if (! quiet.conditionMet || completed->hr != status || completed->itemOutcomes.size() != 1u)
+            return false;
+        const auto& result = completed->itemOutcomes.front();
+        return result.status == status && result.publication == publication && result.sourceDisposition == sourceDisposition;
     };
     const auto pauseBeforeMutation = [&](const std::filesystem::path& to, uint64_t& id)
     {
@@ -14497,12 +14524,14 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     if (! asked.conditionMet || ! collisionTask || ! decision.has_value() || ! PromptHasAction(decision.value(), Action::KeepBoth) ||
         PromptHasAction(decision.value(), Action::Overwrite) || ! hasBytes(source, sourceText) || ! hasBytes(occupant, occupantText))
         return reject(L"the occupied destination did not offer a safe Keep both with both files intact");
-    if (! collisionTask->SubmitConflictDecision(decision->generation, Action::KeepBoth, false) || ! retire(collisionId) || ! hasBytes(keepBoth, sourceText) ||
-        ! hasBytes(occupant, occupantText))
+    if (! collisionTask->SubmitConflictDecision(decision->generation, Action::KeepBoth, false) ||
+        ! retire(collisionId, S_OK, FileOperations::PublicationState::Published, FileOperations::SourceDisposition::Removed) ||
+        ! hasBytes(keepBoth, sourceText) || ! hasBytes(occupant, occupantText))
         return reject(L"Keep both did not publish the selected file under a fresh name");
 
     uint64_t caseId = 0u;
-    if (! start(keepBoth, caseOnly, caseId) || ! retire(caseId) || ! hasBytes(caseOnly, sourceText))
+    if (! start(keepBoth, caseOnly, caseId) ||
+        ! retire(caseId, S_OK, FileOperations::PublicationState::Published, FileOperations::SourceDisposition::Removed) || ! hasBytes(caseOnly, sourceText))
         return reject(L"the case-only Rename did not finish");
     const auto names = ListCrossProviderChildNames(fileSystem.get(), root.native());
     if (std::ranges::find(names, caseOnly.filename().native()) == names.end() || std::ranges::find(names, source.filename().native()) != names.end())
@@ -14515,7 +14544,8 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
     if (auto* task = operations->FindTask(cancelId))
         task->RequestCancel();
     releaseMutation();
-    if (! retire(cancelId) || ! hasBytes(caseOnly, sourceText) || hasBytes(canceled, sourceText))
+    if (! retire(cancelId, HRESULT_FROM_WIN32(ERROR_CANCELLED), FileOperations::PublicationState::NotAttempted, FileOperations::SourceDisposition::Retained) ||
+        ! hasBytes(caseOnly, sourceText) || hasBytes(canceled, sourceText))
         return reject(L"canceling before dispatch changed the source or published a destination");
 
     const auto stale     = root / L"stale.bin";
@@ -14527,8 +14557,9 @@ constexpr int64_t kSmbLastWriteToleranceTicks = 20'000'000;
         ! WriteFileTextFsIo(io, caseOnly, replacementText))
         return reject(L"could not replace the captured source");
     releaseMutation();
-    if (! retire(staleId) || ! hasBytes(displaced, sourceText) || ! hasBytes(caseOnly, replacementText) || hasBytes(stale, sourceText) ||
-        hasBytes(stale, replacementText))
+    if (! retire(
+            staleId, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), FileOperations::PublicationState::NotAttempted, FileOperations::SourceDisposition::Unknown) ||
+        ! hasBytes(displaced, sourceText) || ! hasBytes(caseOnly, replacementText) || hasBytes(stale, sourceText) || hasBytes(stale, replacementText))
         return reject(L"the stale capture mutated the replacement or published a destination");
     Debug::Perf::Emit(L"FileOps.SelfTest.ProbedInlineRenameUs", L"Dummy collision,case,cancel,stale source", Debug::Perf::ElapsedUs(began), 4u, 0u, S_OK);
     AppendLog(L"Probed inline Rename kept the observed occupant, verified exact spelling and refused cancel and stale-source dispatch.");

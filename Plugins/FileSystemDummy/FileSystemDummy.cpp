@@ -3045,6 +3045,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
     std::wstring virtualSpeedLimitText           = L"0";
     uint64_t virtualSpeedLimitBytesPerSecond     = 0;
     bool writerProof                             = true; // R3-2: the route proves published content through its writer
+#ifdef ENABLE_TESTS
+    bool probedRenameSelfTest = false;
+#endif
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -3113,6 +3116,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
                     writerProof = yyjson_get_bool(writerProofVal); // self-test knob: Copy-only Move coverage needs a proof-less route
                 }
 
+#ifdef ENABLE_TESTS
+                if (const yyjson_val* enabled = yyjson_obj_get(root, "probedRenameSelfTest"); enabled && yyjson_is_bool(enabled))
+                    probedRenameSelfTest = yyjson_get_bool(enabled);
+#endif
+
                 yyjson_val* virtualSpeedVal = yyjson_obj_get(root, "virtualSpeedLimit");
                 if (virtualSpeedVal && yyjson_is_str(virtualSpeedVal))
                 {
@@ -3152,11 +3160,14 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
         const bool structureChanged =
             _configurationJson.empty() || _maxChildrenPerDirectory != maxChildrenPerDirectory || _maxDepth != maxDepth || _seed != seed;
 
-        _maxChildrenPerDirectory        = maxChildrenPerDirectory;
-        _maxDepth                       = maxDepth;
-        _seed                           = seed;
-        _latencyMilliseconds            = latencyMilliseconds;
-        _writerProof                    = writerProof;
+        _maxChildrenPerDirectory = maxChildrenPerDirectory;
+        _maxDepth                = maxDepth;
+        _seed                    = seed;
+        _latencyMilliseconds     = latencyMilliseconds;
+        _writerProof             = writerProof;
+#ifdef ENABLE_TESTS
+        _probedRenameSelfTest.store(probedRenameSelfTest, std::memory_order_release);
+#endif
         _streamChunkLatencyMilliseconds = streamChunkLatencyMilliseconds;
         _virtualSpeedLimitText          = std::move(virtualSpeedLimitText);
         _virtualSpeedLimitBytesPerSecond.store(virtualSpeedLimitBytesPerSecond, std::memory_order_release);
@@ -5517,6 +5528,7 @@ HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path, Fil
     descriptor.copyOperation                  = true;
     descriptor.moveOperation                  = true;
     descriptor.nativeMoveOperation            = true;
+    descriptor.renameOperation                = _probedRenameSelfTest.load(std::memory_order_acquire);
     descriptor.createDirectoryOperation       = true;
     descriptor.propertiesOperation            = true;
     descriptor.readOperation                  = true;
@@ -6775,6 +6787,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CaptureProbedRenameSource(const wchar
     if (! source)
         return E_POINTER;
     *source = nullptr;
+    if (! _probedRenameSelfTest.load(std::memory_order_acquire))
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     if (! path || path[0] == L'\0' || ! FileSystemOptionsHaveValidHeader(options))
         return E_INVALIDARG;
     if (const HRESULT cancellation = FileSystemCheckOperationControl(options); FAILED(cancellation))

@@ -1575,7 +1575,7 @@ Base Rename capability admits a task. Executing the task also requires qualified
 | Provider path profile | Base `rename` claim | Object binding / conditional rename | Current host behavior |
 |---|---:|---:|---|
 | Local FileSystem | `true` | Implemented and contract-tested | `RenamePlan(InlineRename)` executes on a File Operations worker with exact binding, or through qualified corroboration when its parent chain and source lack exact identity. |
-| FileSystemDummy | `true` | Probed same-parent source token | A single-item inline Rename can publish a free sibling. A collision offers Keep both or Cancel. |
+| FileSystemDummy | `false` by default. Enabled per instance in the owned selftest. | Probed same-parent source token in the selftest | The fixture verifies single-item inline Rename to a free sibling. An occupied name offers Keep both or Cancel. |
 | Other providers advertising `rename: true` without exact, corroborated or probed authority | `true` | Additional provider qualification required | Preparation refuses before mutation and the failed task remains visible. |
 | Any profile advertising `rename: false` | `false` | Unavailable | Admission rejects before task publication and FolderView shows its pane error overlay. |
 

@@ -15676,6 +15676,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
                 }
             }
 #endif
+            if (CancelRequestedDurable())
+            {
+                recordStatus(HRESULT_FROM_WIN32(ERROR_CANCELLED), false);
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
             FileSystemOptions options{};
             InitializeFileSystemOptions(options);
             MarkSourceItemMutationPossible(0u);
