@@ -14078,6 +14078,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     return state.failure.empty();
 }
 
+[[nodiscard]] bool WriteDeflatedZipFixtureForUnpackSelfTest(const std::filesystem::path& archivePath) noexcept;
+
 [[nodiscard]] bool TestArchiveCommandsPackUnpackZipRoundTripAndValidation(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -14350,6 +14352,124 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"alpha",
                   L"Unpack replace-existing policy should publish the archive content.");
+
+    enum class ArchiveCleanupFixture
+    {
+        Unchanged,
+        Replaced,
+        Edited,
+    };
+    for (const auto fixture : {ArchiveCleanupFixture::Unchanged, ArchiveCleanupFixture::Replaced, ArchiveCleanupFixture::Edited})
+    {
+        const bool unchanged           = fixture == ArchiveCleanupFixture::Unchanged;
+        const bool replaced            = fixture == ArchiveCleanupFixture::Replaced;
+        const std::wstring archiveName = unchanged ? L"cleanup-deflated.zip" : replaced ? L"cleanup-replaced.zip" : L"cleanup-edited.zip";
+        const auto cleanupArchive      = outputRoot / archiveName;
+        const auto originalArchive     = outputRoot / L"cleanup-original.zip";
+        const auto cleanupDestination  = root / cleanupArchive.stem();
+        const bool seeded              = unchanged ? WriteDeflatedZipFixtureForUnpackSelfTest(cleanupArchive)
+                                                   : WriteStoredZipFixtureForCommandSelfTest(cleanupArchive, "approved.txt", 0x0800u, "approved contents");
+        if (! state.Require(seeded && ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)) &&
+                                WaitForPaneItems(FolderWindow::Pane::Left, {archiveName}, SelfTest::Scale(3000ms)) &&
+                                g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, archiveName),
+                            L"Unpack cleanup needs a selected, owned source archive."))
+        {
+            return false;
+        }
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [&](std::wstring_view name) noexcept { return name == archiveName; });
+
+        if (! unchanged)
+            SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(true);
+        const auto releaseCleanup = wil::scope_exit([&]() noexcept
+        {
+            if (! unchanged)
+            {
+                ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+                SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(false);
+            }
+        });
+
+        auto approvedUnpack            = replaceUnpackOptions;
+        approvedUnpack.destinationPath = cleanupDestination;
+        approvedUnpack.deleteAfter     = true;
+        g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(approvedUnpack);
+        if (! state.Require(dispatchApprovedCleanup(L"cmd/pane/unpack", L"Unpack cleanup must receive one Delete confirmation."),
+                            L"Unpack Delete after must dispatch."))
+        {
+            return false;
+        }
+        const auto unpacked                      = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+        const auto extracted                     = cleanupDestination / (unchanged ? L"alpha.txt" : L"approved.txt");
+        const std::wstring_view approvedContents = unchanged ? L"alpha from a compressed zip fixture" : L"approved contents";
+        if (! state.Require(unpacked.has_value() && unpacked->hr == S_OK && unpacked->archivePath == cleanupArchive &&
+                                ReadUtf8TextFileForCommandSelfTest(extracted) == approvedContents,
+                            L"Unpack must extract the approved archive's bytes before cleanup."))
+        {
+            return false;
+        }
+
+        std::wstring newContents;
+        if (! unchanged)
+        {
+            const auto ready = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept {
+                return HasFileOpsPermanentDeleteBeforeBindPauseEnteredForSelfTest();
+            }, {.timeout = SelfTest::Scale(3000ms), .operationName = L"Unpack cleanup before identity bind"});
+            if (! state.Require(ready.conditionMet, L"Cleanup must pause before binding its approved source."))
+                return false;
+
+            if (replaced)
+            {
+                std::filesystem::rename(cleanupArchive, originalArchive, ec);
+                if (! state.Require(! ec && SelfTest::WriteTextFile(cleanupArchive, "replacement at the approved name"),
+                                    L"Replace the archive with an unrelated owned file while cleanup waits."))
+                    return false;
+                newContents = L"replacement at the approved name";
+            }
+            else
+            {
+                const auto oldWriteTime = std::filesystem::last_write_time(cleanupArchive, ec);
+                if (! state.Require(! ec, L"Read the archive's original last-write time."))
+                    return false;
+                const auto oldSize = std::filesystem::file_size(cleanupArchive, ec);
+                if (! state.Require(! ec && oldSize > 0u && oldSize < 1024u, L"Read the archive's bounded fixture size."))
+                    return false;
+                const std::string edited(static_cast<size_t>(oldSize), 'v');
+                if (! state.Require(SelfTest::WriteTextFile(cleanupArchive, edited), L"Edit the approved archive in place."))
+                    return false;
+                std::filesystem::last_write_time(cleanupArchive, oldWriteTime, ec);
+                if (! state.Require(! ec && std::filesystem::last_write_time(cleanupArchive, ec) == oldWriteTime && ! ec,
+                                    L"Restore the original last-write time to exercise the change-time proof."))
+                    return false;
+                newContents.assign(edited.size(), L'v');
+            }
+            ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+        }
+        const auto drained =
+            RedSalamander::TestSupport::PumpMessagesUntil(cleanupIdle, {.timeout = SelfTest::Scale(4000ms), .operationName = L"Unpack cleanup completion"});
+        if (! state.Require(drained.conditionMet, L"The Unpack cleanup task must finish."))
+            return false;
+
+        if (! unchanged)
+        {
+            auto* const operations = g_folderWindow.DebugGetFileOperationState(false);
+            std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
+            if (operations)
+                operations->CollectCompletedTasks(completed);
+            const bool refused = std::ranges::any_of(completed,
+                                                     [&](const auto& summary) noexcept
+            {
+                return summary.resultHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && std::ranges::any_of(summary.issueDiagnostics,
+                                                                                                              [&](const auto& diagnostic) noexcept
+                { return diagnostic.category == L"preparation.unpackCleanup.sourceChanged" && diagnostic.sourcePath == cleanupArchive.native(); });
+            });
+            state.Require(refused && (! replaced || SelfTest::PathExists(originalArchive)) && ReadUtf8TextFileForCommandSelfTest(cleanupArchive) == newContents,
+                          L"Cleanup must report the changed source and keep the current archive name and any moved original.");
+        }
+        else
+        {
+            state.Require(! SelfTest::PathExists(cleanupArchive), L"Cleanup must delete the unchanged, exactly identified archive.");
+        }
+    }
 
     const std::filesystem::path cp437ArchivePath = outputRoot / L"cp437.zip";
     std::string cp437EntryName                   = "caf";

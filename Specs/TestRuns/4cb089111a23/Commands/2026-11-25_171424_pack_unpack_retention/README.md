@@ -24,5 +24,13 @@ run after verifying and retiring the single owned link. The target digest
 and native result were preserved. Candidate `63504c595` added scope-bound
 teardown using the existing no-follow test helper and passed the clean rerun.
 
-Repository coverage is `NOT_EVALUATED` for the selected runs. Worker
-migration and captured-source revalidation remain open.
+The exact PR head `e7a6b1f61` also built for x64 Release with zero warnings
+and errors on receipt
+`522109fc9f2e86e400bfc45be7fe54e7ada3e91305d1eb7599e3537d917d86fa`.
+The non-activating selection passed in 845 ms with zero failures and skips
+in `20261125T163138Z-85480-2dddd82cea854964a77d03ceb8eb31a2`. The run
+archived normally. [PR #291](https://github.com/RedSalamanders/RedSalamander/pull/291)
+merged at `64b7c09d2` after the required checks.
+
+Repository coverage is `NOT_EVALUATED` for the selected runs. The plan tracks
+worker migration and original-source proof.

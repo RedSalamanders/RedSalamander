@@ -3652,27 +3652,36 @@ struct QueuedByNameDelete final
         const std::filesystem::path victim = root / (pack ? L"packed.bin" : L"unpacked.bin");
         if (! WriteFilledTestFile(victim, 4096u, pack ? 0x63u : 0x64u))
             return reject(L"archive cleanup fixture unavailable");
-        uint64_t cleanupTaskId  = 0u;
-        const HRESULT cleanupHr = operations->AdmitOperation(FILESYSTEM_DELETE,
-                                                             FolderWindow::Pane::Left,
-                                                             std::nullopt,
-                                                             state.fsLocal,
-                                                             {location / victim.filename()},
-                                                             {},
-                                                             FILESYSTEM_FLAG_RECURSIVE,
-                                                             false,
-                                                             0u,
-                                                             FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                             false,
-                                                             nullptr,
-                                                             &cleanupTaskId,
-                                                             {},
-                                                             {},
-                                                             {},
-                                                             {},
-                                                             std::nullopt,
-                                                             origin,
-                                                             FileOperations::ConsentKind::ArchiveDeleteAfter);
+        const uint64_t promptCount = HostGetTestPromptRequestCount();
+        uint64_t cleanupTaskId     = 0u;
+        const HRESULT cleanupHr    = operations->AdmitOperation(FILESYSTEM_DELETE,
+                                                                FolderWindow::Pane::Left,
+                                                                std::nullopt,
+                                                                state.fsLocal,
+                                                                {location / victim.filename()},
+                                                                {},
+                                                                pack ? FILESYSTEM_FLAG_RECURSIVE : FILESYSTEM_FLAG_NONE,
+                                                                false,
+                                                                0u,
+                                                                FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                false,
+                                                                nullptr,
+                                                                &cleanupTaskId,
+                                                                {},
+                                                                {},
+                                                                {},
+                                                                {},
+                                                                std::nullopt,
+                                                                origin,
+                                                                FileOperations::ConsentKind::ArchiveDeleteAfter);
+        if (! pack)
+        {
+            // Unpack requires exact read authority before it can admit Delete.
+            if (cleanupHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || cleanupTaskId != 0u || HostGetTestPromptRequestCount() != promptCount ||
+                ! FileSizeEquals(victim, 4096u))
+                return reject(L"Unpack cleanup without an exact source receipt must keep the file and publish no task.");
+            continue;
+        }
         if (FAILED(cleanupHr) || cleanupTaskId == 0u)
             return reject(std::format(L"the {} cleanup was not admitted (hr=0x{:08X})", pack ? L"Pack" : L"Unpack", static_cast<unsigned long>(cleanupHr)));
         scope.Track(cleanupTaskId);

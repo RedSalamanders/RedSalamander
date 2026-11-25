@@ -286,7 +286,19 @@ enum class ObjectBindingSupport : uint8_t
             {
                 return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
             }
-            // C1: a Permanent Delete root is pinned by Preparing, not snapshotted at admission.
+            // Ordinary Permanent Delete pins its roots before asking on the task.
+            // Unpack has already read its selected files under exact bindings.
+            if (typedPlan.origin == FileOperations::DeleteOrigin::UnpackCleanup &&
+                (typedPlan.mode != FileOperations::DeleteMode::Permanent || typedPlan.recursive || typedPlan.nativeAuthority ||
+                 std::ranges::any_of(typedPlan.selectedItems,
+                                     [&](const FileOperations::QualifiedSourceItem& item) noexcept
+            {
+                return ! item.ingressSnapshot.has_value() || item.ingressSnapshot->objectId.empty() || item.ingressSnapshot->revisionId.empty() ||
+                       item.ingressSnapshot->pathProfileId != typedPlan.endpoint.profileId;
+            })))
+            {
+                return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+            }
             if (typedPlan.nativeAuthority && std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept {
                 return item.ingressSnapshot.has_value();
             }))
@@ -2275,7 +2287,8 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                                                          std::optional<uint32_t> moveClipboardSequence,
                                                          std::function<HRESULT()> preWorkerReleaseBarrier,
                                                          std::function<HRESULT()> preConsumptionDecisionGate,
-                                                         std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver)
+                                                         std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver,
+                                                         const FileOperations::UnpackCleanupReceipt* unpackCleanup)
 {
     const auto startedAt = std::chrono::steady_clock::now();
     if (taskIdOut)
@@ -2429,6 +2442,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     construction.deleteOrigin               = deleteOrigin;
     construction.capturedConsentKind        = capturedConsentKind;
     construction.moveClipboardSequence      = moveClipboardSequence;
+    construction.unpackCleanup              = unpackCleanup;
     OperationAdmission admission{};
     const HRESULT constructionHr = BuildOperationAdmission(std::move(construction), admission, startedAt);
     if (constructionHr != S_OK)
@@ -2480,6 +2494,7 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     const FileOperations::DeleteOrigin deleteOrigin                      = construction.deleteOrigin;
     const std::optional<FileOperations::ConsentKind> capturedConsentKind = construction.capturedConsentKind;
     const std::optional<uint32_t> moveClipboardSequence                  = construction.moveClipboardSequence;
+    const FileOperations::UnpackCleanupReceipt* unpackCleanup            = construction.unpackCleanup;
 
     const auto reject = [&](HRESULT hr, FileOperations::PlanRejectionBucket bucket) noexcept -> HRESULT
     {
@@ -2516,6 +2531,24 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
         return reject(E_INVALIDARG,
                       moveClipboardSequence.has_value() ? FileOperations::PlanRejectionBucket::InvalidClipboardSequence
                                                         : FileOperations::PlanRejectionBucket::MalformedEndpoint);
+    }
+
+    if (deleteOrigin == FileOperations::DeleteOrigin::UnpackCleanup)
+    {
+        if (! unpackCleanup)
+            return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
+
+        if (operation != FILESYSTEM_DELETE || capturedConsentKind != FileOperations::ConsentKind::ArchiveDeleteAfter ||
+            (flags & (FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN)) != 0 || unpackCleanup->fileSystem.get() != fileSystem.get() ||
+            unpackCleanup->pluginId != sourcePluginId || unpackCleanup->instanceContext != sourceInstanceContext ||
+            unpackCleanup->selectedItems.size() != sourcePaths.size())
+        {
+            return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
+        }
+    }
+    else if (unpackCleanup)
+    {
+        return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
     }
 
     struct SourcePartition final
@@ -2839,7 +2872,17 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
             for (const size_t originalIndex : partition.originalIndices)
             {
                 const std::filesystem::path& sourcePath = sourcePaths[originalIndex];
-                deletion.selectedItems.emplace_back(FileOperations::QualifiedSourceItem{.providerPath = sourcePath.native()});
+                if (unpackCleanup)
+                {
+                    const auto& approved = unpackCleanup->selectedItems[originalIndex];
+                    if (approved.providerPath != sourcePath.native())
+                        return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MalformedSource);
+                    deletion.selectedItems.push_back(approved);
+                }
+                else
+                {
+                    deletion.selectedItems.emplace_back(FileOperations::QualifiedSourceItem{.providerPath = sourcePath.native()});
+                }
                 groupedSourcePaths.push_back(sourcePath);
             }
             deletion.origin    = deleteOrigin;
@@ -3756,7 +3799,9 @@ HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_
     return result;
 }
 
-HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept
+HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane,
+                                                       FolderView::FileOperationRequest request,
+                                                       const FileOperations::UnpackCleanupReceipt* unpackCleanup) noexcept
 {
     // Drop, paste, pane-menu and inline-rename requests are refused before any prompt or clipboard use.
     if (RefuseFileOperationForPendingExit(pane, request.operation))
@@ -4033,7 +4078,10 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
                                                       deleteOrigin,
                                                       capturedConsentKind,
                                                       request.moveClipboardSequence,
-                                                      std::move(request.preWorkerReleaseBarrier));
+                                                      std::move(request.preWorkerReleaseBarrier),
+                                                      {},
+                                                      {},
+                                                      unpackCleanup);
     if (SUCCEEDED(startHr) && taskId != 0u && (removalFocusToken != 0u || requestCompletion))
     {
         _fileOperationRequestCompletionCallbacks.insert_or_assign(

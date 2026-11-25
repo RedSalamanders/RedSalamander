@@ -6370,12 +6370,82 @@ enum class ArchiveTargetDecision : uint8_t
     return bytes.empty() ? S_OK : WriteArchiveBytes(file, bytes.data(), bytes.size());
 }
 
-[[nodiscard]] HRESULT ReadArchiveBytesAt(HANDLE file, uint64_t offset, std::span<std::byte> bytes) noexcept
+// Ordinary extraction keeps its existing Win32 sharing policy. Delete-after reads
+// from the bound object whose identity will be checked by the Delete worker.
+class ArchiveReadInput final
 {
-    if (const HRESULT hr = SetArchiveFilePosition(file, offset); FAILED(hr))
+public:
+    ArchiveReadInput() noexcept                              = default;
+    ArchiveReadInput(const ArchiveReadInput&)                = delete;
+    ArchiveReadInput& operator=(const ArchiveReadInput&)     = delete;
+    ArchiveReadInput(ArchiveReadInput&&) noexcept            = default;
+    ArchiveReadInput& operator=(ArchiveReadInput&&) noexcept = default;
+
+    [[nodiscard]] HRESULT Open(const std::filesystem::path& path, DWORD shareMode, IFileSystemBoundObject* source) noexcept
+    {
+        if (source)
+        {
+            const HRESULT hr = source->OpenReader(nullptr, _reader.put());
+            return FAILED(hr) ? hr : hr == S_OK && _reader ? S_OK : E_UNEXPECTED;
+        }
+        _file.reset(CreateFileW(path.c_str(), GENERIC_READ, shareMode, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+        return _file ? S_OK : HResultFromLastError();
+    }
+
+    [[nodiscard]] HRESULT Read(void* bytes, DWORD count, DWORD& bytesRead) noexcept
+    {
+        if (_reader)
+            return _reader->Read(bytes, count, &bytesRead);
+        return ReadFile(_file.get(), bytes, count, &bytesRead, nullptr) != FALSE ? S_OK : HResultFromLastError();
+    }
+
+    [[nodiscard]] HRESULT Seek(int64_t offset, DWORD method, uint64_t& position) noexcept
+    {
+        if (_reader)
+            return _reader->Seek(offset, method, &position);
+
+        LARGE_INTEGER distance{};
+        distance.QuadPart = offset;
+        LARGE_INTEGER actual{};
+        if (SetFilePointerEx(_file.get(), distance, &actual, method) == FALSE)
+            return HResultFromLastError();
+        if (actual.QuadPart < 0)
+            return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
+        position = static_cast<uint64_t>(actual.QuadPart);
+        return S_OK;
+    }
+
+    [[nodiscard]] HRESULT GetSize(uint64_t& size) noexcept
+    {
+        if (_reader)
+            return _reader->GetSize(&size);
+
+        LARGE_INTEGER actual{};
+        if (GetFileSizeEx(_file.get(), &actual) == FALSE)
+            return HResultFromLastError();
+        if (actual.QuadPart < 0)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        size = static_cast<uint64_t>(actual.QuadPart);
+        return S_OK;
+    }
+
+private:
+    wil::unique_hfile _file;
+    wil::com_ptr<IFileReader> _reader;
+};
+
+[[nodiscard]] HRESULT ReadArchiveBytesAt(ArchiveReadInput& file, uint64_t offset, std::span<std::byte> bytes) noexcept
+{
+    if (offset > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()))
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    uint64_t position = 0u;
+    if (const HRESULT hr = file.Seek(static_cast<int64_t>(offset), FILE_BEGIN, position); FAILED(hr))
     {
         return hr;
     }
+
+    if (position != offset)
+        return HRESULT_FROM_WIN32(ERROR_SEEK);
 
     size_t remaining = bytes.size();
     size_t written   = 0u;
@@ -6383,9 +6453,9 @@ enum class ArchiveTargetDecision : uint8_t
     {
         const DWORD chunk = static_cast<DWORD>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
         DWORD bytesRead   = 0u;
-        if (ReadFile(file, bytes.data() + written, chunk, &bytesRead, nullptr) == FALSE)
+        if (const HRESULT hr = file.Read(bytes.data() + written, chunk, bytesRead); FAILED(hr))
         {
-            return HResultFromLastError();
+            return hr;
         }
         if (bytesRead == 0u || bytesRead > chunk)
         {
@@ -6397,7 +6467,7 @@ enum class ArchiveTargetDecision : uint8_t
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ReadArchiveBytesAt(HANDLE file, uint64_t offset, size_t size, std::vector<std::byte>& outBytes)
+[[nodiscard]] HRESULT ReadArchiveBytesAt(ArchiveReadInput& file, uint64_t offset, size_t size, std::vector<std::byte>& outBytes)
 {
     outBytes.assign(size, std::byte{});
     return outBytes.empty() ? S_OK : ReadArchiveBytesAt(file, offset, std::span<std::byte>(outBytes.data(), outBytes.size()));
@@ -7665,7 +7735,7 @@ private:
     return result;
 }
 
-[[nodiscard]] HRESULT FindZipEndOfCentralDirectory(HANDLE archiveFile, uint64_t fileSize, ZipEndOfCentralDirectory& outEocd)
+[[nodiscard]] HRESULT FindZipEndOfCentralDirectory(ArchiveReadInput& archiveFile, uint64_t fileSize, ZipEndOfCentralDirectory& outEocd)
 {
     outEocd = {};
     if (fileSize < kZipEndOfCentralDirMinSize)
@@ -7764,7 +7834,7 @@ private:
     return Utf16FromArchiveCodePage(rawName, kZipLegacyCodePageCp437, 0u);
 }
 
-[[nodiscard]] HRESULT ParseZipCentralDirectory(HANDLE archiveFile, const ZipEndOfCentralDirectory& eocd, std::vector<ZipParsedEntry>& outEntries)
+[[nodiscard]] HRESULT ParseZipCentralDirectory(ArchiveReadInput& archiveFile, const ZipEndOfCentralDirectory& eocd, std::vector<ZipParsedEntry>& outEntries)
 {
     outEntries.clear();
     std::vector<std::byte> centralBytes;
@@ -7864,7 +7934,7 @@ private:
     return offset == centralBytes.size() ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
 }
 
-[[nodiscard]] HRESULT ResolveZipEntryDataOffset(HANDLE archiveFile, const ZipParsedEntry& entry, uint64_t fileSize, uint64_t& outDataOffset)
+[[nodiscard]] HRESULT ResolveZipEntryDataOffset(ArchiveReadInput& archiveFile, const ZipParsedEntry& entry, uint64_t fileSize, uint64_t& outDataOffset)
 {
     outDataOffset = 0u;
     std::array<std::byte, 30u> header{};
@@ -7893,7 +7963,7 @@ private:
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ExtractStoredZipFileEntry(HANDLE archiveFile,
+[[nodiscard]] HRESULT ExtractStoredZipFileEntry(ArchiveReadInput& archiveFile,
                                                 const ZipParsedEntry& entry,
                                                 uint64_t dataOffset,
                                                 const std::filesystem::path& targetPath,
@@ -7986,40 +8056,22 @@ struct SevenZipExtractEntry final
 class SevenZipExtractFileInStream final : public IInStream, public IStreamGetSize
 {
 public:
-    static HRESULT Create(const std::filesystem::path& path, wil::com_ptr<IInStream>& out) noexcept
+    static HRESULT Create(const std::filesystem::path& path, IFileSystemBoundObject* source, wil::com_ptr<IInStream>& out) noexcept
     {
         out.reset();
         if (path.empty())
-        {
             return E_INVALIDARG;
-        }
 
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-        wil::unique_hfile file(CreateFileW(path.c_str(),
-                                           GENERIC_READ,
-                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                           nullptr,
-                                           OPEN_EXISTING,
-                                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                           nullptr));
-#pragma warning(pop)
-        if (! file)
-        {
-            return HResultFromLastError();
-        }
+        ArchiveReadInput input;
+        const HRESULT openHr = input.Open(path, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, source);
+        if (FAILED(openHr))
+            return openHr;
 
-        LARGE_INTEGER fileSize{};
-        if (GetFileSizeEx(file.get(), &fileSize) == FALSE)
-        {
-            return HResultFromLastError();
-        }
-        if (fileSize.QuadPart < 0)
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
+        uint64_t fileSize = 0u;
+        if (const HRESULT sizeHr = input.GetSize(fileSize); FAILED(sizeHr))
+            return sizeHr;
 
-        auto* impl = new (std::nothrow) SevenZipExtractFileInStream(std::move(file), static_cast<uint64_t>(fileSize.QuadPart));
+        auto* impl = new (std::nothrow) SevenZipExtractFileInStream(std::move(input), fileSize);
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -8090,11 +8142,10 @@ public:
         }
 
         DWORD bytesRead = 0u;
-        if (ReadFile(_file.get(), data, size, &bytesRead, nullptr) == FALSE)
-        {
-            return HResultFromLastError();
-        }
-
+        if (const HRESULT hr = _input.Read(data, size, bytesRead); FAILED(hr))
+            return hr;
+        if (bytesRead > size)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         *processedSize = static_cast<UInt32>(bytesRead);
         return S_OK;
     }
@@ -8110,21 +8161,11 @@ public:
             default: return STG_E_INVALIDFUNCTION;
         }
 
-        LARGE_INTEGER distance{};
-        distance.QuadPart = offset;
-        LARGE_INTEGER position{};
-        if (SetFilePointerEx(_file.get(), distance, &position, method) == FALSE)
-        {
-            return HResultFromLastError();
-        }
-        if (position.QuadPart < 0)
-        {
-            return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
-        }
+        uint64_t position = 0u;
+        if (const HRESULT hr = _input.Seek(offset, method, position); FAILED(hr))
+            return hr;
         if (newPosition)
-        {
-            *newPosition = static_cast<UInt64>(position.QuadPart);
-        }
+            *newPosition = position;
         return S_OK;
     }
 
@@ -8139,14 +8180,14 @@ public:
     }
 
 private:
-    SevenZipExtractFileInStream(wil::unique_hfile file, uint64_t sizeBytes) noexcept : _file(std::move(file)), _sizeBytes(sizeBytes)
+    SevenZipExtractFileInStream(ArchiveReadInput input, uint64_t sizeBytes) noexcept : _input(std::move(input)), _sizeBytes(sizeBytes)
     {
     }
 
     ~SevenZipExtractFileInStream() = default;
 
     std::atomic_ulong _refCount{1u};
-    wil::unique_hfile _file;
+    ArchiveReadInput _input;
     uint64_t _sizeBytes = 0u;
 };
 
@@ -8721,7 +8762,8 @@ private:
 [[nodiscard]] ArchiveOperationResult ExtractSevenZipArchive(const std::filesystem::path& archivePath,
                                                             const std::filesystem::path& destinationPath,
                                                             ArchiveExistingTargetPolicy conflictPolicy,
-                                                            std::wstring_view maskText)
+                                                            std::wstring_view maskText,
+                                                            IFileSystemBoundObject* source)
 {
     ArchiveOperationResult result{};
     result.archivePath     = archivePath;
@@ -8767,7 +8809,7 @@ private:
     }
 
     wil::com_ptr<IInStream> inputStream;
-    result.hr = SevenZipExtractFileInStream::Create(archivePath, inputStream);
+    result.hr = SevenZipExtractFileInStream::Create(archivePath, source, inputStream);
     if (FAILED(result.hr))
     {
         return result;
@@ -8838,7 +8880,8 @@ private:
 [[nodiscard]] ArchiveOperationResult ExtractStoredZipArchive(const std::filesystem::path& archivePath,
                                                              const std::filesystem::path& destinationPath,
                                                              ArchiveExistingTargetPolicy conflictPolicy,
-                                                             std::wstring_view maskText)
+                                                             std::wstring_view maskText,
+                                                             IFileSystemBoundObject* source)
 {
     ArchiveOperationResult result{};
     result.archivePath     = archivePath;
@@ -8862,33 +8905,25 @@ private:
         return result;
     }
 
-    const uint64_t fileSize = std::filesystem::file_size(archivePath, ec);
-    if (ec)
-    {
-        result.hr = HResultFromErrorCode(ec);
+    ArchiveReadInput archiveFile;
+    result.hr = archiveFile.Open(archivePath, FILE_SHARE_READ, source);
+    if (FAILED(result.hr))
         return result;
-    }
 
-#pragma warning(push)
-#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile archiveFile(
-        CreateFileW(archivePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
-#pragma warning(pop)
-    if (! archiveFile)
-    {
-        result.hr = HResultFromLastError();
+    uint64_t fileSize = 0u;
+    result.hr         = archiveFile.GetSize(fileSize);
+    if (FAILED(result.hr))
         return result;
-    }
 
     ZipEndOfCentralDirectory eocd{};
-    result.hr = FindZipEndOfCentralDirectory(archiveFile.get(), fileSize, eocd);
+    result.hr = FindZipEndOfCentralDirectory(archiveFile, fileSize, eocd);
     if (FAILED(result.hr))
     {
         return result;
     }
 
     std::vector<ZipParsedEntry> entries;
-    result.hr = ParseZipCentralDirectory(archiveFile.get(), eocd, entries);
+    result.hr = ParseZipCentralDirectory(archiveFile, eocd, entries);
     if (FAILED(result.hr))
     {
         return result;
@@ -8952,14 +8987,14 @@ private:
         else
         {
             uint64_t dataOffset = 0u;
-            result.hr           = ResolveZipEntryDataOffset(archiveFile.get(), entry, fileSize, dataOffset);
+            result.hr           = ResolveZipEntryDataOffset(archiveFile, entry, fileSize, dataOffset);
             if (FAILED(result.hr))
             {
                 return result;
             }
 
             uint32_t crc32 = 0u;
-            result.hr      = ExtractStoredZipFileEntry(archiveFile.get(), entry, dataOffset, targetPath, conflictPolicy, crc32);
+            result.hr      = ExtractStoredZipFileEntry(archiveFile, entry, dataOffset, targetPath, conflictPolicy, crc32);
             if (result.hr == S_FALSE)
             {
                 ++result.skippedConflictCount;
@@ -12455,6 +12490,11 @@ void FolderWindow::CommandUnpack(Pane pane)
         return;
     }
 
+    FileOperations::UnpackCleanupReceipt cleanupReceipt{
+        .fileSystem      = state.fileSystem,
+        .pluginId        = state.pluginId,
+        .instanceContext = state.instanceContext,
+    };
     std::vector<std::filesystem::path> selectedPaths = state.folderView.GetSelectedOrFocusedPaths();
     if (selectedPaths.empty())
     {
@@ -12542,7 +12582,48 @@ void FolderWindow::CommandUnpack(Pane pane)
         return;
     }
 
+    if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK))
+        return;
+
+    HRESULT cleanupCapture              = S_OK;
+    constexpr auto archiveReadBindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA |
+                                                                           FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_REVISION);
     if (deleteArchiveAfterUnpack)
+    {
+        const auto captureStarted = std::chrono::steady_clock::now();
+        cleanupReceipt.selectedItems.reserve(selectedPaths.size());
+        for (const auto& path : selectedPaths)
+        {
+            const auto route = FileSystemRouteContract::Query(cleanupReceipt.fileSystem.get(), path.native(), FILESYSTEM_DELETE, cleanupReceipt.pluginId);
+            if (route.state != FileSystemRouteContract::QueryState::Available || route.snapshot.pathProfileId.empty())
+            {
+                cleanupCapture = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                break;
+            }
+            auto source =
+                FileOperations::BindObjectAuthority(cleanupReceipt.fileSystem.get(), path.native(), route.snapshot.pathProfileId, archiveReadBindFlags);
+            if (source.state != FileOperations::ObjectBindingState::Bound || source.authority.kind != FILESYSTEM_BOUND_REGULAR_FILE ||
+                source.authority.identity.objectId.empty() || source.authority.identity.revisionId.empty())
+            {
+                cleanupCapture = FAILED(source.status) ? source.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                break;
+            }
+            cleanupReceipt.selectedItems.emplace_back(FileOperations::QualifiedSourceItem{
+                .providerPath    = path.native(),
+                .ingressSnapshot = std::move(source.authority.identity),
+            });
+        }
+        Debug::Perf::Emit(L"archive.unpack.cleanup_capture_us",
+                          SUCCEEDED(cleanupCapture) ? L"bound" : L"kept",
+                          Debug::Perf::ElapsedUs(captureStarted),
+                          cleanupReceipt.selectedItems.size(),
+                          selectedPaths.size(),
+                          cleanupCapture);
+        if (FAILED(cleanupCapture))
+            cleanupReceipt.selectedItems.clear();
+    }
+
+    if (deleteArchiveAfterUnpack && SUCCEEDED(cleanupCapture))
     {
         HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
         if (! ownerWindow)
@@ -12568,12 +12649,37 @@ void FolderWindow::CommandUnpack(Pane pane)
 
     result.destinationPath            = destinationPath.value();
     bool extractedAllRequestedEntries = true;
-    for (const std::filesystem::path& archivePath : selectedPaths)
+    for (size_t index = 0; index < selectedPaths.size(); ++index)
     {
-        ArchiveOperationResult currentResult = ExtractStoredZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText);
+        const auto& archivePath = selectedPaths[index];
+        wil::com_ptr<IFileSystemBoundObject> source;
+        if (! cleanupReceipt.selectedItems.empty())
+        {
+            // Rebind each approved file just before reading it. Retain bindings
+            // for only the archive currently being extracted.
+            const auto& approved = cleanupReceipt.selectedItems[index].ingressSnapshot.value();
+            auto bound =
+                FileOperations::BindObjectAuthority(cleanupReceipt.fileSystem.get(), archivePath.native(), approved.pathProfileId, archiveReadBindFlags);
+            if (bound.state != FileOperations::ObjectBindingState::Bound || bound.authority.kind != FILESYSTEM_BOUND_REGULAR_FILE ||
+                bound.authority.identity != approved)
+            {
+                result.archivePath = archivePath;
+                result.hr          = FAILED(bound.status) ? bound.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+#ifdef ENABLE_TESTS
+                recordDebugResult(result);
+#endif
+                Debug::Perf::Emit(
+                    L"archive.unpack_us", L"source-changed", Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, result.hr);
+                ShowArchiveOverlay(
+                    *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_FILEOPS_DIAG_SOURCE_CHANGED), result.hr);
+                return;
+            }
+            source = std::move(bound.authority.boundObject);
+        }
+        ArchiveOperationResult currentResult = ExtractStoredZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText, source.get());
         if (currentResult.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && PathMatchSpecW(archivePath.c_str(), L"*.zip"))
         {
-            currentResult = ExtractSevenZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText);
+            currentResult = ExtractSevenZipArchive(archivePath, destinationPath.value(), conflictPolicy, maskText, source.get());
         }
         if (FAILED(currentResult.hr))
         {
@@ -12608,7 +12714,7 @@ void FolderWindow::CommandUnpack(Pane pane)
         extractedAllRequestedEntries = extractedAllRequestedEntries && currentResult.hr == S_OK && currentResult.skippedConflictCount == 0u;
     }
 
-    const bool keepArchives = deleteArchiveAfterUnpack && ! extractedAllRequestedEntries;
+    const bool keepArchives = deleteArchiveAfterUnpack && (! extractedAllRequestedEntries || FAILED(cleanupCapture));
     result.hr               = keepArchives ? S_FALSE : S_OK;
 #ifdef ENABLE_TESTS
     recordDebugResult(result);
@@ -12619,8 +12725,10 @@ void FolderWindow::CommandUnpack(Pane pane)
     if (keepArchives)
     {
         RefreshFolderViewIfPathMatches(state.folderView, result.destinationPath);
-        ShowArchiveOverlay(
-            *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT), result.hr);
+        const std::wstring message = FAILED(cleanupCapture) && extractedAllRequestedEntries
+                                         ? ArchiveFailureMessage(IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED, result.archivePath, cleanupCapture)
+                                         : LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNPACK_ARCHIVES_KEPT);
+        ShowArchiveOverlay(*this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, message, result.hr);
         return;
     }
 
@@ -12632,7 +12740,7 @@ void FolderWindow::CommandUnpack(Pane pane)
         deleteRequest.sourcePaths                 = selectedPaths;
         deleteRequest.flags                       = FILESYSTEM_FLAG_NONE;
         deleteRequest.archiveDeleteAfterConfirmed = true;
-        const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
+        const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest), &cleanupReceipt);
         if (deleteHr == kFileOperationRefusedForPendingExit)
         {
             // The pane already says why the cleanup Delete was not started.

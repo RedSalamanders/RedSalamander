@@ -1512,6 +1512,15 @@ snapshot or kind is Changed. Missing,
 unsupported, changed, indeterminate, and provider-contract-violation are distinct states. `S_OK`
 with a null bound object, an invalid kind, an empty/null object ID, an inconsistent revision
 pointer/length pair, or an identity token over 64 KiB fails closed as a provider-contract violation.
+With `FILESYSTEM_BIND_READ_REVISION`, the host requires an immutable, nonempty
+revision token for a regular file. The Local provider captures creation time,
+last-write time, change time and size from the bound file. It uses a
+data-readable handle for these facts and refuses the flag if the location
+cannot supply a usable change time. A revision-qualified Delete uses its
+ordinary strict sharing mode, which protects the compared file against data
+writes or replacement until mutation. The host opts into revision capture
+for an individual binding.
+
 The local provider binding supports no-follow nonzero `FILE_ID_INFO` identity, regular-file reads
 through a duplicate of the retained content-capable handle, handle-bound metadata writes, exact
 conditional rename/delete, bounded exact-handle link reads, and exclusive visible file/link stage
