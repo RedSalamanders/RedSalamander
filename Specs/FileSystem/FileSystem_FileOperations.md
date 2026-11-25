@@ -59,7 +59,7 @@ directory object.
 11. Pane, Find, Compare, watch, and search consumers act from typed result axes, never pathname
     inference.
 12. No File Operations path silently relaunches with elevation or kills a provider worker.
-13. A Move never applies the link policy. `Preserve links` / `Skip links` is a Copy option; every
+13. Copy captures the File Operations link policy at admission. An inherited setting uses the source provider’s existing policy. An explicit Copy confirmation choice overrides the captured default. A Move never applies the Copy link policy. Every
     Move relocates every link object literally, by native rename on one endpoint or by literal
     publication across endpoints.
 13a. **Delete source** (I63 B4). A Managed Move that meets an existing regular file may be answered

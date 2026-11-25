@@ -1435,8 +1435,18 @@ struct ParsedFileSystemConfiguration final
                                                                          FileSystemOperation operation,
                                                                          unsigned int uiMax) noexcept;
 
-[[nodiscard]] ReparsePointPolicy GetReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept
+[[nodiscard]] ReparsePointPolicy GetCopyReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept
 {
+    if (settings.fileOperations)
+    {
+        switch (settings.fileOperations->copyLinkPolicy)
+        {
+            case Common::Settings::FileOperationsCopyLinkPolicy::Preserve: return ReparsePointPolicy::Preserve;
+            case Common::Settings::FileOperationsCopyLinkPolicy::Skip: return ReparsePointPolicy::Skip;
+            case Common::Settings::FileOperationsCopyLinkPolicy::Inherit: break;
+        }
+    }
+
     const auto it = settings.plugins.configurationByPluginId.find(pluginId);
     if (it == settings.plugins.configurationByPluginId.end())
     {

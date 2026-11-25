@@ -2322,7 +2322,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
         if (operation == FILESYSTEM_COPY)
         {
             // Preserve/Skip is a Copy option. A Move relocates every link object as stored.
-            const auto policy  = FolderWindowFileOperationsStateInternal::GetReparsePointPolicyFromSettings(*_owner._settings, sourcePluginId);
+            const auto policy  = FolderWindowFileOperationsStateInternal::GetCopyReparsePointPolicyFromSettings(*_owner._settings, sourcePluginId);
             options.linkPolicy = policy == FolderWindowFileOperationsStateInternal::ReparsePointPolicy::Preserve ? FileOperations::LinkPolicy::Preserve
                                                                                                                  : FileOperations::LinkPolicy::Skip;
         }

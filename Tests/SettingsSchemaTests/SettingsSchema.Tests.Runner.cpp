@@ -1172,6 +1172,43 @@ void TestFileOperationQueueDefaultSettings(bool& success)
           success);
 }
 
+void TestFileOperationCopyLinkPolicySettings(bool& success)
+{
+    using namespace Common::Settings;
+    const std::wstring appId = std::format(L"RedSalamanderCopyLinks-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const auto path    = GetSettingsPath(appId);
+
+    Settings settings{};
+    Check(WriteTestBytes(path, R"json({"schemaVersion":16,"fileOperations":{"verifyAfterCopy":true}})json") &&
+              TryLoadSettingsNoRecovery(appId, settings) == S_OK && settings.fileOperations.has_value() &&
+              settings.fileOperations->copyLinkPolicy == FileOperationsCopyLinkPolicy::Inherit,
+          L"Copy links: older profiles inherit their provider policy",
+          success);
+
+    for (const auto policy : {FileOperationsCopyLinkPolicy::Preserve, FileOperationsCopyLinkPolicy::Skip, FileOperationsCopyLinkPolicy::Inherit})
+    {
+        if (! settings.fileOperations)
+            settings.fileOperations.emplace();
+        settings.fileOperations->copyLinkPolicy = policy;
+        Settings reloaded{};
+        Check(SaveSettings(appId, settings) == S_OK && TryLoadSettingsNoRecovery(appId, reloaded) == S_OK && reloaded.fileOperations &&
+                  reloaded.fileOperations->verifyAfterCopy && reloaded.fileOperations->copyLinkPolicy == policy,
+              L"Copy links: explicit policies round-trip and preserve verification",
+              success);
+        settings = std::move(reloaded);
+    }
+    Check(ReadTestBytes(path).find("copyLinkPolicy") == std::string::npos, L"Copy links: restoring inherited policy omits the key", success);
+
+    Settings invalid{};
+    Check(WriteTestBytes(path, R"json({"schemaVersion":16,"fileOperations":{"copyLinkPolicy":"follow"}})json") &&
+              TryLoadSettingsNoRecovery(appId, invalid) == S_OK && invalid.fileOperations &&
+              invalid.fileOperations->copyLinkPolicy == FileOperationsCopyLinkPolicy::Inherit,
+          L"Copy links: invalid policy inherits",
+          success);
+}
+
 void TestConnectionProfileIdentityGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderConnectionIdentity-{}-{}", GetCurrentProcessId(), GetTickCount64());
@@ -1510,6 +1547,7 @@ int wmain(int argc, wchar_t** argv)
     TestConnectionProfileIdentityGuards(success);
     TestFileOperationParallelLimitSettings(success);
     TestFileOperationQueueDefaultSettings(success);
+    TestFileOperationCopyLinkPolicySettings(success);
 
     std::array<wchar_t, 32768> executablePath{};
     const DWORD executableLength = GetModuleFileNameW(nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));

@@ -3811,6 +3811,13 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     GetBool(fileOperations, "popupThroughputExpanded", settings.popupThroughputExpanded);
     GetBool(fileOperations, "queueNewTasks", settings.queueNewTasks);
     GetBool(fileOperations, "verifyAfterCopy", settings.verifyAfterCopy);
+    if (const auto value = GetString(fileOperations, "copyLinkPolicy"))
+    {
+        if (value.value() == "preserve")
+            settings.copyLinkPolicy = Common::Settings::FileOperationsCopyLinkPolicy::Preserve;
+        else if (value.value() == "skip")
+            settings.copyLinkPolicy = Common::Settings::FileOperationsCopyLinkPolicy::Skip;
+    }
     GetBool(fileOperations, "diagnosticsInfoEnabled", settings.diagnosticsInfoEnabled);
     GetBool(fileOperations, "diagnosticsDebugEnabled", settings.diagnosticsDebugEnabled);
 
@@ -5527,7 +5534,7 @@ bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOpera
            fileOperations.mirrorDecisionsInPane != defaults.mirrorDecisionsInPane || fileOperations.popupFooterOnly != defaults.popupFooterOnly ||
            fileOperations.popupCompactDensity != defaults.popupCompactDensity || fileOperations.popupThroughputExpanded != defaults.popupThroughputExpanded ||
            fileOperations.queueNewTasks != defaults.queueNewTasks || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
-           fileOperations.maxParallelTransfers != defaults.maxParallelTransfers ||
+           fileOperations.copyLinkPolicy != defaults.copyLinkPolicy || fileOperations.maxParallelTransfers != defaults.maxParallelTransfers ||
            fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
            fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
@@ -8082,6 +8089,12 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
             if (settings.fileOperations->verifyAfterCopy != defaults.verifyAfterCopy)
             {
                 yyjson_mut_obj_add_bool(doc, fileOperations, "verifyAfterCopy", settings.fileOperations->verifyAfterCopy);
+            }
+
+            if (settings.fileOperations->copyLinkPolicy != defaults.copyLinkPolicy)
+            {
+                const char* policy = settings.fileOperations->copyLinkPolicy == FileOperationsCopyLinkPolicy::Preserve ? "preserve" : "skip";
+                yyjson_mut_obj_add_str(doc, fileOperations, "copyLinkPolicy", policy);
             }
 
             if (settings.fileOperations->maxParallelTransfers != defaults.maxParallelTransfers)
