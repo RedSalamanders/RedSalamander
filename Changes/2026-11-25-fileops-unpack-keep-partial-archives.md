@@ -1,1 +1,0 @@
-- Unpack keeps the selected archives when skipping existing files leaves requested entries unextracted, even when delete-after is selected.

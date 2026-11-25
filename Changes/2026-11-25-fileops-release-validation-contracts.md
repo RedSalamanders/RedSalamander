@@ -1,1 +1,0 @@
-- Release validation recognizes the reviewed File Operations provider matrix and verifies that every refused loopback share probe fails its case.

@@ -1,1 +1,0 @@
-- Keep the File Operations traversal policy source guard stable across formatting while retaining every ceiling and shared reservation and consumer assertion. Source-only comparisons reproduce the stale witness and verify the correction; native qualification remains pending.

@@ -1,1 +1,0 @@
-- Check the typed File Operations admission default at runtime and verify that the Stopping card keeps its history while the running total uses the active peer rate.

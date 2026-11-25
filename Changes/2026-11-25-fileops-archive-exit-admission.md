@@ -1,1 +1,0 @@
-- Pack and Unpack now respect an accepted application or window close before opening their options or starting archive work.

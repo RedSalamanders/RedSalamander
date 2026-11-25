@@ -1,1 +1,0 @@
-- Record File Operations overlap, Create Folder and Rename qualification in the I66 checklist and ingress table.

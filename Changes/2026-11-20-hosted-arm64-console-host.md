@@ -1,1 +1,0 @@
-- Select Windows Console Host for new consoles in hosted native ARM64 test roles and retain both verified delegation settings in the lane's evidence.

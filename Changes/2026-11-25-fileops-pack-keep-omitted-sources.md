@@ -1,1 +1,0 @@
-- Pack keeps the selected originals when it leaves any item out of the archive, even when delete-after is selected.

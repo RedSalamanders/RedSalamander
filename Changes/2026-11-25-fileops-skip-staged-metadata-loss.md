@@ -1,1 +1,0 @@
-- Offer Skip item when a staged Move discovers sensitive metadata loss. Keep the original and occupied destination and retire the unpublished stage.

@@ -1,1 +1,0 @@
-- Cover the single confirmation and retained original for a Move with both a native item and a Copy-only item.

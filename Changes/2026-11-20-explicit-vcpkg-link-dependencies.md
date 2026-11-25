@@ -1,1 +1,0 @@
-- Build each native target with its declared vcpkg libraries and stage its runtime DLLs from the shared dependency manifest.

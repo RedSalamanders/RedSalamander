@@ -1,1 +1,0 @@
-- Validate the Commands UI attribution switches independently of checkout paths, including directories named Repeat or Shuffle.

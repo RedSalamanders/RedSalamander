@@ -1,1 +1,0 @@
-- Refuse a confirmed Copy-only or mixed Move if a source or destination provider root changes before preparation. Keep the originals and leave the destination untouched.

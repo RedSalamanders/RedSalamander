@@ -1,1 +1,0 @@
-- Create Folder opens without waiting for a provider listing. The worker resolves numbered names and creates the folder in the captured location.

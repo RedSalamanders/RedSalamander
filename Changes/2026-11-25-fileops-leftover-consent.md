@@ -1,1 +1,0 @@
-- Combine permanent deletion and the possible-leftover warning for a fully identified Leftover Cleanup selection. Cancel preserves the checked items, and a changed selection stops the combined request.

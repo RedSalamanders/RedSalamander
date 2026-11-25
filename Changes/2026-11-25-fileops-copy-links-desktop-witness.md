@@ -1,1 +1,0 @@
-- File Operations Preferences now enables Apply and saves changes to Copy links when it is the only edited setting.

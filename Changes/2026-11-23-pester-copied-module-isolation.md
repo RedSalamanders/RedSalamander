@@ -1,1 +1,0 @@
-- Run the representative copied-module BuildConsole fixture in a contained no-window child using the runner's PowerShell executable, preserving its assertions while preventing duplicate module paths from breaking later Pester name lookups.

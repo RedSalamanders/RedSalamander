@@ -1,1 +1,0 @@
-- Document the hosted runtime-only vcpkg environment, SDK admission order, and the contained copied-module fixture already covered by RedSalamander tooling checks.

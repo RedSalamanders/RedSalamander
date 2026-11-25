@@ -1,1 +1,0 @@
-- Queue overlapping File Operations automatically when concurrent execution is unavailable. Parallel still asks when the user can choose to run both tasks.

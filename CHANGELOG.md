@@ -4,6 +4,184 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Verify process timeout cleanup with the PID from the launcher so the test works when the child has not reached its script before the deadline.
+- Document the hosted runtime-only vcpkg environment, SDK admission order, and the contained copied-module fixture already covered by RedSalamander tooling checks.
+- Microsoft Drive Rename preserves an observed occupant, sends the source revision with its rename request, and reports the per-item result to both single-item and batch callers.
+- Google Drive Rename now refuses occupied names, including existing duplicates, without merging folders or trashing another file.
+- Record the focused Create Folder worker evidence and the remaining I66 delivery gates.
+- Record the Windows SMB x64 Release Rename qualification, including occupied-name and watcher refusal, exact case and batch cleanup. Refresh the I66 checklist with the merged repeat and Completed checks and the remaining validation.
+- Unpack keeps the selected archives when skipping existing files leaves requested entries unextracted, even when delete-after is selected.
+- Unpack keeps replaced or changed archives when Delete after checks the original selection again.
+- Set a custom bandwidth limit directly in Copy with Options and Move with Options using the same editor as a running task.
+- Offer Skip item when a staged Move discovers sensitive metadata loss. Keep the original and occupied destination and retire the unpublished stage.
+- Check the typed File Operations admission default at runtime and verify that the Stopping card keeps its history while the running total uses the active peer rate.
+- Release validation recognizes the reviewed File Operations provider matrix and verifies that every refused loopback share probe fails its case.
+- Record current File Operations merge and qualification evidence in the I66 checklist.
+- Route single-item inline Rename through a provider witness for same-parent free names. The Dummy provider exercises observed collisions, exact spelling, cancellation and stale source refusal.
+- Pack creates the archive and keeps all originals when it cannot verify the exact contents of a selected folder for Delete after.
+- Pack keeps the selected originals when it leaves any item out of the archive, even when delete-after is selected.
+- Pack checks the approved regular files again before Delete after and keeps a source that changed.
+- Queue overlapping File Operations automatically when concurrent execution is unavailable. Parallel still asks when the user can choose to run both tasks.
+- Support same-folder F2 Rename for qualified OneDrive Personal files and folders.
+  Capture the selected item, parent and revision, refuse an observed occupant
+  before dispatch, and verify exact spelling and publication. The dedicated
+  live test also verified Recycle and preserved contents.
+- Cover the single confirmation and retained original for a Move with both a native item and a Copy-only item.
+- Verify metadata process exit on the launcher-held handle so a reused process ID cannot fail the check.
+- Verify that a path-length error during Move cleanup keeps the published copy and offers Skip without Retry. Keep retry coverage for sharing, access and disk-full failures.
+- Combine permanent deletion and the possible-leftover warning for a fully identified Leftover Cleanup selection. Cancel preserves the checked items, and a changed selection stops the combined request.
+- Keep the original when a Move discovers lost security metadata after publishing its copy. Preserve the destination result and report the retention reason in Issues.
+- Record File Operations overlap, Create Folder and Rename qualification in the I66 checklist and ingress table.
+- Update the I66 checklist with the merged Create Folder, Copy links, credential progress, and Leftover Cleanup changes and record the remaining qualification gates.
+- Record the merged OneDrive Personal inline Rename, combined x64 Debug checks,
+  and the approved SFTP read-only fixture pass in the I66 checklist.
+- Record the landed I66 Preferences, cleanup, and provider checks alongside the remaining qualification.
+- Advance the I66 checklist through the merged Copy-only Move and archive exit
+  checks and record the OneDrive fixture preflight and retained broad run.
+- Record I66 merges, focused verification and outstanding Release and provider gates.
+- Align File Operations regression checks with worker-side Create Folder names and explicit queue wait telemetry. Audit the named hidden fixture owners with visible and wrong-path controls.
+- Verify that Create Folder offers its selected suggestion from the displayed
+  listing while the same provider has a delayed directory read. The owned
+  fixture verifies the worker creates and refreshes the numbered sibling.
+- Create folders on a queued File Operations worker. The task validates the captured location, checks for cancellation and reports completion against that location.
+- Create Folder opens without waiting for a provider listing. The worker resolves numbered names and creates the folder in the captured location.
+- Refuse a confirmed Copy-only or mixed Move if a source or destination provider root changes before preparation. Keep the originals and leave the destination untouched.
+- Cover Copy-only Move while its destination gains content proof during preparation.
+  The owned route keeps the admitted Copy-only decision, preserves the source and
+  publishes verified destination bytes without showing a second question.
+- File Operations Preferences keyboard coverage now checks the Copy links control when tabbing between the decision-mirror toggle and Parallel transfers in either direction.
+- File Operations Preferences now enables Apply and saves changes to Copy links when it is the only edited setting.
+- Choose whether Copy preserves or skips link objects in File Operations Preferences. Existing settings continue to inherit the provider policy, and each Copy with Options can override the default.
+- Paste reads the file list, drop effect and Cut sequence together. If the clipboard changes before a Move can start, the files stay in place and the newer clipboard contents are preserved.
+- Corrected the Release self-test to count Completed badges when problem cards are visible.
+- Pack and Unpack now respect an accepted application or window close before opening their options or starting archive work.
+- Pack and Unpack shows the possible-leftover warning in the same Delete after confirmation for regular files.
+- Record the deferred DxUi API 6 receiving plan, including pinned restore, rollback, and RedSalamander-owned qualification.
+- Report FTP, SFTP and SCP Rename completion from the provider's mutation facts. Preserve a retained rollback sibling in the result even if the primary rename reply is lost.
+- Validate the Commands UI attribution switches independently of checkout paths, including directories named Repeat or Shuffle.
+- Allow the pinned Zig toolchain archive to finish over slow, sustained connections on hosted runners. The archive has a separate transfer deadline and minimum rate. The lock continues to require the exact archive and executable hashes.
+- Restart File Operations rate measurement after blocking decisions and live-output waits even when the popup missed both transitions. Preserve graph history during waits and stopping, and compute the footer ETA from running transfers. Add deterministic missed-wait and stopping checks. I66 keeps credential waits, remaining presentation parity, and paired performance evidence open.
+- Use one Apply to all checkbox for eligible File Operations conflict choices on the task card and pane mirror. The label explains when only Skip can repeat.
+- Ask once before permanently deleting selected items whose file system says it cannot recycle them. A mixed selection keeps
+  the Recycle route for its other items and leaves the whole selection unchanged on Cancel.
+- Remember the File Operations popup's Queue or Parallel default across restarts. The Start option in a task's own dialog applies to that task.
+- File Operations reports elapsed time during preparation. Final checks for a queued folder deletion start their own timer once the task gets its turn.
+- Use Local Recycle batching from the context menu, Find and Viewer. Preserve each command's confirmation and per-item results.
+  The I66 checklist tracks the focused route comparison and the remaining Recycle availability work.
+- Add a focused live SMB check for exact Rename, stored spelling, occupied destinations and blocking handles.
+- Open or hide the existing File Operations Issues pane directly from the popup Options menu. The menu shows whether the pane is open.
+- Explain ViewerSpace Recycle, Copy-only Move, read-only name collisions, and Cancel all with localized task and prompt text. Keep Move's folder-picker destination on Windows and block unrepresentable pane clipboard Copy and Cut. Route same-folder Ctrl+drag Copy to the safe sibling-copy path. Remove Retry for path-length failures and use Move with Options for Shift+F6. Add focused consent, drop, and conflict regression checks. The I66 checklist tracks native validation and the remaining routes.
+- Record which I66 File Operations changes have landed, which focused tests passed, and which implementation and qualification gates remain open.
+- File Operations checks the original and requested spelling after a failed case-only rename. It also uses the legacy rename call when Windows reports that the extended information class is unimplemented.
+- Run the focused FolderView drop-integrity checks in the marked sandbox without taking desktop focus. The broad Commands suite retains its interactive test window.
+- Show when a File Operations task is waiting for credentials. Keep that wait out of speed, stall and ETA calculations while other transfers continue to report progress.
+- Keep Create Folder on the provider and folder shown when its name prompt opens. Report a rejected name or route with its
+  own failure and refuse to create a folder once the window or application has accepted a close.
+- Let F2 rename files and folders on eligible Local and SMB paths without exact file IDs. Preserve an occupied name and keep
+  the existing item when choosing Keep both. Stop without retry when the rename outcome cannot be verified.
+- Keep failed, partial, uncertain and warning tasks visible when clearing the Completed group. Clean successes and cancellations still share the collapsible group, and Clear completed preserves interrupted Move recovery notices.
+- Pause all now includes tasks still preparing or waiting in the queue. Resume all releases the pauses set by Pause all and preserves individual pauses.
+- Release every exact Batch Rename source handle after preflight. Rebind each row against its captured identity and preflight kind so a child's rename handle cannot block a later parent rename. Add a sharing-mode witness to the existing post-preflight test. Live SMB behavior, legacy protocol fallback, and case-only hops remain I66 qualification work.
+- Share the File Operations speed presets across Preferences, start options and running tasks. The list includes 500 MiB/s and 1 GiB/s, and Custom uses IEC examples while preserving the saved values and accepted input spellings.
+- Keep residual-build query provenance and RuntimeOnly binding aligned with the scripted vcpkg contract.
+- Run the representative copied-module BuildConsole fixture in a contained no-window child using the runner's PowerShell executable, preserving its assertions while preventing duplicate module paths from breaking later Pester name lookups.
+- File Operations ancestry marker-proof cleanup now enumerates both the original nearest control ancestor and the materialized Copy parent through the canonical extended Win32 path helper, retaining fail-closed marker/error checks with cohort, parent-role, error-value and path-length diagnostics. For `deep32-missing8`, its eight absent parents remain absent throughout all timed measurements and are created only afterward for the untimed real Copy witness; the final leaf remains absent before Copy. A focused Debug attempt preserved the original conflict-prompt wait in a sealed pre-retirement snapshot; exact owner-job closure later retired the process, while its run remains retained/incomplete without a canonical archive or native verdict. This fixture-only correction does not change production prompt policy. Compiler-free checks, focused native Debug/Release, paired ReFS/NTFS evidence and broader Full qualification remain pending.
+- Specify the target File Operations workflow and shared plugin contract in I66. Deliver Rename to a free name before expanding Replace, with the existing Curl destination probe and its documented race. Define the pre-enqueue Copy-only Move question, one repeat control, scoped delete consent, truthful results, and acceptance scenarios. Record implementation stop conditions and keep the source study. Documentation validation uses `Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports` and `Tools/Test-Changelog.ps1`. Implementation and provider qualification remain pending.
+- Keep Terminal and Floodgate source contracts strict across formatter-only spacing, read the three moved project skills from their canonical `.agents` paths, and correct the manual native workflow's documented Normal (CI) default while retaining explicit Full qualification.
+- Preserve the completed-task Dismiss failure snapshot and distinguish original native self-test launches, case inventory, classification, stream drain, containment close and hosted boundary retirement in console diagnostics. Strict identity getters retain ordinary errors and fatal aggregate branches; diagnostic failures preserve earlier errors through owned cleanup. These observations do not change assertions or deadlines or identify a foreign Terminal's creator. All 39 focused pure diagnostic controls passed; broader affected tooling and native qualification remain pending.
+- Restore pinned vcpkg packages through the repository installer before native compilation.
+- Restored the SDK include order for RedConfigure and its tests on x64 and ARM64.
+  `objidl.h` now precedes `XmlLite.h` in a separate include block so clang-format
+  preserves the COM declarations that `XmlLite.h` needs.
+- Fix Release qualification checks for moved skills, formatter output and File Operations conflict waits.
+- Bind public builds and receipt metadata queries to verified pinned vcpkg integration and prepared platform dependencies. Avoid a duplicate bundled-root install, preserve SDK override checks, keep generated compiler paths free of ambient flags, and report missing preparation clearly. Broader tooling and native qualification remain pending.
+- Retain the actual private conflict-wait control, decision, awaiting state, wait count and cap, infinite-wait count, and quiet budget when its existing assertion fails after the owned worker joins. The failure-only diagnostic preserves every wait, event, deadline and assertion; native qualification remains pending.
+- Select Windows Console Host for new consoles in hosted native ARM64 test roles and retain both verified delegation settings in the lane's evidence.
+- Keep the File Operations traversal policy source guard stable across formatting while retaining every ceiling and shared reservation and consumer assertion. Source-only comparisons reproduce the stale witness and verify the correction; native qualification remains pending.
+- Isolate destructive popup-shutdown and strict-empty clipboard-ready File Operations fixtures in private real owners, preserve shared retained history, and route selftest completions by their actual owner. Add retained-path and colliding-ID admission-boundary coverage, align the source guard with the private owner-to-popup chain, and classify only the exact hidden fixture parents in the Win32 audit with visible/wrong-path rejection controls; native qualification remains pending.
+- Clear File Operations rate and ETA through the existing reducer before entering the slow waiting cadence, so pausing a Copy does not start a delayed graph animation on the first one-second tick. Extend the real Copy cadence case with a fresh nonzero-rate pause alignment while retaining its timing and repaint limits; native and performance qualification remain pending.
+- Build each native target with its declared vcpkg libraries and stage its runtime DLLs from the shared dependency manifest.
+- Keep build-console checks in an existing active runner context or an owned standalone archived run, preserving original assertions, shared fixture compatibility and primary/fatal archive errors. Add focused lifecycle coverage; broader merged-source qualification remains pending.
+- Converged part of the specifications with every RedSalamanders repository (convergence CV-6-03): the common
+  `Build_UnifiedCI.md` skeleton, dated names for the two undated active plans
+  (`FileSystem_GoogleDrivePluginPlan_2026-03-08.md`, `Win32_Inventory_2026-05-18.md`), the four common plan statuses
+  (the unused `DRAFT` label is retired), the common CODEOWNERS file, and a RedMonitor consumer contract that keeps only
+  RedSalamander's adapter facts and links to RedMonitor's. Rules moved unchanged; no behavior, build input or test
+  changed. Validated with `Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports`, the specification Pester
+  contracts and `Tools/Test-Changelog.ps1`.
+- Converged the root files with every RedSalamanders repository (convergence CV-6-03, owner decision D18 and the
+  B-12 default): `LICENSE.txt` is now only the common MIT text, and its third-party list moves verbatim to
+  `THIRD-PARTY-NOTICES.md`, which also names the shipped components the list predates. The portable ZIP builder
+  copies the notices file beside `LICENSE.txt` and fails without it. The common `CONTRIBUTING.md`, pull request
+  template and `.vsconfig` are added; the template's RedSalamander item names move to `CONTRIBUTING.md`. Validated
+  with `Tools/Get-SpecInventory.ps1 -FailOnFindings -NoReports` and `Tools/Test-Changelog.ps1`; native packaging runs
+  in main qualification.
+- Moved the shared CI engine pin from `a094b2e` to `f965c79`, engine `main` today, with `Update-ProjectPin.ps1`:
+  `.ci/project.json` and the workflow callers name the same full commit. This is this repository's step of the
+  `RedHome` convergence wave (CV-4-04, CV-4-05) that puts every repository on one engine commit. Between the two
+  commits the engine adds the shared changelog commands with their product shim templates (CV-5-01, CV-5-02) and the
+  harness exclusions, and changes no workflow template. The pin also adds the agent harness paths `.codex/**`,
+  `.github/agents/**`, `.github/copilot-instructions.md` to the prose exclusions, so editing them no longer changes
+  native inputs (CV-6-01). Compiler-free checks pass; native qualification runs on `main` after merge.
+- The DxUi restore prepares a complete vcpkg checkout before it runs the pinned DxUi `vcpkg-install.ps1`. That
+  installer (pin `7fb2ab71`) clones vcpkg with `--filter=blob:none`, and vcpkg 2026-07-27 extracts each versioned
+  port with `git read-tree` and `git checkout-index` in an environment holding only `GIT_INDEX_FILE`, where Git
+  resolves no host. Since upstream microsoft/vcpkg de36db0455 (2026-11-18) moved `vcpkg-cmake` past the baseline's
+  tree, every fresh restore failed with "Could not resolve host: github.com" for a promisor object. The new
+  `Tools/Modules/Build/VcpkgToolCheckout.psm1`, the same file in every DxUi consumer, clones
+  `<output>/vcpkg-tool` completely at the pinned source's `vcpkg-tool.json` commit, completes an earlier partial
+  or shallow clone in place, refuses another repository and deletes nothing. The installer then reuses that
+  checkout. The restore runs the helper in the same contained, logged child process as the installer, and now
+  requires `vcpkg-tool.json` in the sparse DxUi checkout. RedSalamander's own vcpkg checkout was already a
+  complete clone. `Tools/Tests/VcpkgToolCheckout.Tests.ps1` covers a fresh and a repeated clone, the completed
+  partial clone (with the failing state as a negative control), the refusals, an offline extraction of an older
+  port tree with lazy fetch disabled, and the restore's own command composition with paths that need quoting.
+  The native compile is proved by the post-merge qualification (D21).
+- Skill packages no longer carry Codex UI metadata (`RedHome` convergence step CV-2-11, register A-11 decided
+  "none"): the three `agents/openai.yaml` files of `red-salamander-crash-forensics`, `build-preferences-pages` and
+  `tooling-governance` are removed. Nothing in the repository reads them; historical run records keep their copies.
+  The 11 project skills move from `.github/skills/` to `.agents/skills/`, the skill folder of every RedSalamanders
+  repository and the one Codex, Antigravity and Copilot read (CV-2-09, register A-09), and drop their
+  `metadata.author` and `metadata.version` keys so front matter is `name` and `description` only (A-10). `AGENTS.md`,
+  `Specs/Testing/Testing_AgentGuidance.md`, the `Specs/NormativeConsistency.json` anchors, two active plans and the
+  default guidance roots of `Tools/Tests/DocumentationDriftContracts.Tests.ps1` follow the move.
+  `red-salamander-crash-forensics`, `cpp-build` and `tooling-governance` now say when to use them ("Use when ...",
+  CV-2-13), so every skill description says what the skill does and then when to use it.
+  `AGENTS.md` shrinks from 27,411 to about 22,300 bytes, below the 24,000-byte limit past which Antigravity
+  truncates a rule file (CV-3-08). The solution layout moves into the `cpp-build` skill; the screenshot, test-path,
+  resource-placeholder and posted-payload guards keep a one-paragraph rule each and link to their owners
+  (`Testing_SelfTests.md`, `Core_Localization.md`, `async-threading`), which gain the three details they lacked.
+  Dependabot now also ignores `RedSalamanders/.github/*`, the name it gives each reusable engine workflow, so it
+  stops proposing one caller bump at a time (CV-4-02, the line the other five repositories already have);
+  `HistoricalTerminalProfile.Tests.ps1` and `Testing_ToolingGovernance.md` expect both ignore names. No C++,
+  MSBuild or product input changes, so nothing compiles differently.
+- Made the shared root `format.ps1` RedSalamander's format command (step CV-6-05 of the `RedHome` convergence
+  plan; register rows D-02, D-05, D-06 and E-02). It takes clang-format 22.1.3 from `Install-CiFormatter` in the
+  pinned `.ci-engine` (cached under `.build/shared-format`), covers the files CI formats (the eight C and C++
+  extensions under the `formatRoots` of `.ci/project.json`, minus its `formatExclude`, tracked or new and not
+  ignored), formats by default and verifies with `-Check`. The repository's own pin and installer are removed:
+  `Build/clang-format.json`, `Tools/Install-ClangFormat.ps1`, `Tools/Modules/Build/ClangFormat.psm1` and its
+  `Tools/Tests/ClangFormat.Tests.ps1`. `format-all.ps1` stays for one release as a deprecated wrapper that runs
+  `format.ps1`, maps `-WhatIf` to `format.ps1 -Check` and refuses a `-RepositoryRoot` other than its own checkout.
+  The tool inventory, validation-impact rules, `Tools/README.md`, `Build_Toolchain.md`, the shared-helper and
+  tooling-governance specs and the focused tests follow; the new fixture tests use the owned formatter probe and
+  download nothing.
+  The 115 C and C++ files that drifted from the repository style since they were last formatted are formatted,
+  so `format.ps1 -Check` passes. 90 change in whitespace only. In the other 25, the style also sorts includes
+  inside their existing blocks (20 files), adds namespace-closing comments (4) and splits one wide string
+  literal into two adjacent literals (1); none changes behavior, and the six build profiles prove the include
+  order.
+- `.gitattributes` and `.gitignore` start with the common blocks that every RedSalamanders repository now
+  shares, and `.editorconfig` is the shared file. The `.gitattributes` block stores text with LF and checks out
+  C and C++ sources, PowerShell, and Visual Studio files with CRLF and Markdown, JSON, and YAML with LF; the
+  repository's own lines follow it unchanged and still take precedence. No tracked file needs renormalizing:
+  every file with CRLF or mixed line endings in the index is already `-text`.
+  This is step CV-6-05 of the `RedHome` convergence plan (register D-03, D-04, and the `.editorconfig` part of B-12).
+- Aligned agent guidance with the other RedSalamanders repositories (convergence step 1, planned in `RedHome`):
+  `CLAUDE.md` is the same thin pointer to `AGENTS.md` in every repository and `.claude/settings.json` enables the
+  shared `redhome` Claude Code skill plugin from the `RedHome` marketplace. The active
+  `Core_HResultStatusFormattingCleanup` plan cites the shared skill references at their `RedHome` paths. No build,
+  test or product input changes.
 - Consolidated the shared `improve`, `compiler-warnings`, `cpp-modern-style`, `error-handling`, `localization`,
   `wil-raii`, and `yyjson` agent skills into the organization `RedHome` repository, retaining the twelve
   RedSalamander-specific skills and validating with `Tools/Get-SpecInventory.ps1 -FailOnFindings`,

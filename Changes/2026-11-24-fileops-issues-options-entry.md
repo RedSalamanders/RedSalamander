@@ -1,1 +1,0 @@
-- Open or hide the existing File Operations Issues pane directly from the popup Options menu. The menu shows whether the pane is open.

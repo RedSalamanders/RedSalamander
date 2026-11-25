@@ -1,1 +1,0 @@
-- Update the I66 checklist with the merged Create Folder, Copy links, credential progress, and Leftover Cleanup changes and record the remaining qualification gates.

@@ -1,1 +1,0 @@
-- Keep build-console checks in an existing active runner context or an owned standalone archived run, preserving original assertions, shared fixture compatibility and primary/fatal archive errors. Add focused lifecycle coverage; broader merged-source qualification remains pending.

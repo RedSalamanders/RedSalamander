@@ -1,1 +1,0 @@
-- Clear File Operations rate and ETA through the existing reducer before entering the slow waiting cadence, so pausing a Copy does not start a delayed graph animation on the first one-second tick. Extend the real Copy cadence case with a fresh nonzero-rate pause alignment while retaining its timing and repaint limits; native and performance qualification remain pending.
