@@ -6141,6 +6141,12 @@ struct ArchiveEntrySource final
     uint64_t fileSize = 0u;
 };
 
+struct ArchiveSourceInventory final
+{
+    std::vector<ArchiveEntrySource> entries;
+    bool complete = true;
+};
+
 struct ZipCentralEntry final
 {
     std::wstring entryName;
@@ -6172,7 +6178,8 @@ struct ZipEndOfCentralDirectory final
 
 struct ArchiveOperationResult final
 {
-    HRESULT hr = S_OK;
+    HRESULT hr                   = S_OK;
+    bool sourceSelectionComplete = true;
     std::filesystem::path archivePath;
     std::filesystem::path destinationPath;
     uint64_t entryCount           = 0u;
@@ -6581,15 +6588,18 @@ enum class ArchiveTargetDecision : uint8_t
 
 [[nodiscard]] HRESULT CollectArchiveDirectoryEntries(const std::filesystem::path& root,
                                                      const std::filesystem::path& relativeRoot,
-                                                     std::vector<ArchiveEntrySource>& entries)
+                                                     bool deleteSourcesAfterPack,
+                                                     ArchiveSourceInventory& inventory)
 {
-    if (const HRESULT hr = AddArchiveSourceEntry(root, relativeRoot, true, entries); FAILED(hr))
+    if (const HRESULT hr = AddArchiveSourceEntry(root, relativeRoot, true, inventory.entries); FAILED(hr))
     {
         return hr;
     }
 
     std::error_code ec;
-    std::filesystem::recursive_directory_iterator it(root, std::filesystem::directory_options::skip_permission_denied, ec);
+    const auto directoryOptions =
+        deleteSourcesAfterPack ? std::filesystem::directory_options::none : std::filesystem::directory_options::skip_permission_denied;
+    std::filesystem::recursive_directory_iterator it(root, directoryOptions, ec);
     const std::filesystem::recursive_directory_iterator end;
     if (ec)
     {
@@ -6611,10 +6621,14 @@ enum class ArchiveTargetDecision : uint8_t
         if (isDirectory || isRegularFile)
         {
             const std::filesystem::path relativePath = itemPath.lexically_relative(parent);
-            if (const HRESULT hr = AddArchiveSourceEntry(itemPath, relativePath, isDirectory, entries); FAILED(hr))
+            if (const HRESULT hr = AddArchiveSourceEntry(itemPath, relativePath, isDirectory, inventory.entries); FAILED(hr))
             {
                 return hr;
             }
+        }
+        else
+        {
+            inventory.complete = false;
         }
 
         it.increment(ec);
@@ -6627,9 +6641,12 @@ enum class ArchiveTargetDecision : uint8_t
     return S_OK;
 }
 
-[[nodiscard]] HRESULT CollectArchiveSources(const std::vector<std::filesystem::path>& selectedPaths, std::vector<ArchiveEntrySource>& outEntries)
+[[nodiscard]] HRESULT CollectArchiveSources(const std::vector<std::filesystem::path>& selectedPaths,
+                                            bool deleteSourcesAfterPack,
+                                            ArchiveSourceInventory& inventory)
 {
-    outEntries.clear();
+    inventory        = {};
+    auto& outEntries = inventory.entries;
     for (const std::filesystem::path& path : selectedPaths)
     {
         std::error_code ec;
@@ -6651,7 +6668,7 @@ enum class ArchiveTargetDecision : uint8_t
 
         if (std::filesystem::is_directory(status))
         {
-            if (const HRESULT hr = CollectArchiveDirectoryEntries(path, relativeRoot, outEntries); FAILED(hr))
+            if (const HRESULT hr = CollectArchiveDirectoryEntries(path, relativeRoot, deleteSourcesAfterPack, inventory); FAILED(hr))
             {
                 return hr;
             }
@@ -6663,15 +6680,20 @@ enum class ArchiveTargetDecision : uint8_t
                 return hr;
             }
         }
+        else
+        {
+            inventory.complete = false;
+        }
     }
 
     std::sort(outEntries.begin(), outEntries.end(), [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept {
         return left.entryName < right.entryName;
     });
-    outEntries.erase(std::unique(outEntries.begin(),
-                                 outEntries.end(),
-                                 [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept { return left.entryName == right.entryName; }),
-                     outEntries.end());
+    const auto duplicates = std::unique(outEntries.begin(), outEntries.end(), [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept {
+        return left.entryName == right.entryName;
+    });
+    inventory.complete    = inventory.complete && duplicates == outEntries.end();
+    outEntries.erase(duplicates, outEntries.end());
     return outEntries.empty() ? HRESULT_FROM_WIN32(ERROR_NOT_FOUND) : S_OK;
 }
 
@@ -6826,7 +6848,8 @@ enum class ArchiveTargetDecision : uint8_t
 
 [[nodiscard]] ArchiveOperationResult CreateStoredZipArchive(const std::vector<std::filesystem::path>& selectedPaths,
                                                             const std::filesystem::path& archivePath,
-                                                            bool overwrite)
+                                                            bool overwrite,
+                                                            bool deleteSourcesAfterPack)
 {
     ArchiveOperationResult result{};
     result.archivePath = archivePath;
@@ -6851,12 +6874,14 @@ enum class ArchiveTargetDecision : uint8_t
         }
     }
 
-    std::vector<ArchiveEntrySource> sources;
-    result.hr = CollectArchiveSources(selectedPaths, sources);
+    ArchiveSourceInventory inventory;
+    result.hr                      = CollectArchiveSources(selectedPaths, deleteSourcesAfterPack, inventory);
+    result.sourceSelectionComplete = inventory.complete;
     if (FAILED(result.hr))
     {
         return result;
     }
+    const auto& sources = inventory.entries;
     if (sources.size() > static_cast<size_t>((std::numeric_limits<uint16_t>::max)()))
     {
         result.hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -7528,6 +7553,7 @@ private:
 [[nodiscard]] ArchiveOperationResult CreateSevenZipArchive(const std::vector<std::filesystem::path>& selectedPaths,
                                                            const std::filesystem::path& archivePath,
                                                            bool overwrite,
+                                                           bool deleteSourcesAfterPack,
                                                            const ArchivePackerDefinition& packer)
 {
     ArchiveOperationResult result{};
@@ -7553,12 +7579,14 @@ private:
         }
     }
 
-    std::vector<ArchiveEntrySource> sources;
-    result.hr = CollectArchiveSources(selectedPaths, sources);
+    ArchiveSourceInventory inventory;
+    result.hr                      = CollectArchiveSources(selectedPaths, deleteSourcesAfterPack, inventory);
+    result.sourceSelectionComplete = inventory.complete;
     if (FAILED(result.hr))
     {
         return result;
     }
+    const auto& sources = inventory.entries;
     if (sources.size() > static_cast<size_t>((std::numeric_limits<UInt32>::max)()))
     {
         result.hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -12215,9 +12243,10 @@ void FolderWindow::CommandPack(Pane pane)
 #ifdef ENABLE_TESTS
     if (debugOptions.has_value())
     {
-        archivePath    = debugOptions->archivePath;
-        overwrite      = debugOptions->overwrite;
-        selectedPacker = BuildStoredZipPackerDefinition();
+        archivePath            = debugOptions->archivePath;
+        overwrite              = debugOptions->overwrite;
+        selectedPacker         = BuildStoredZipPackerDefinition();
+        deleteSourcesAfterPack = debugOptions->deleteAfter;
     }
     else
 #endif
@@ -12310,8 +12339,11 @@ void FolderWindow::CommandPack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
         return;
 
-    result = selectedPacker.storedZip ? CreateStoredZipArchive(selectedPaths, archivePath.value(), overwrite)
-                                      : CreateSevenZipArchive(selectedPaths, archivePath.value(), overwrite, selectedPacker);
+    result = selectedPacker.storedZip ? CreateStoredZipArchive(selectedPaths, archivePath.value(), overwrite, deleteSourcesAfterPack)
+                                      : CreateSevenZipArchive(selectedPaths, archivePath.value(), overwrite, deleteSourcesAfterPack, selectedPacker);
+    const bool keepSources = deleteSourcesAfterPack && SUCCEEDED(result.hr) && (result.hr != S_OK || ! result.sourceSelectionComplete);
+    if (keepSources)
+        result.hr = S_FALSE;
 #ifdef ENABLE_TESTS
     recordDebugResult(result);
 #endif
@@ -12326,6 +12358,14 @@ void FolderWindow::CommandPack(Pane pane)
                            FolderView::OverlaySeverity::Warning,
                            ArchiveFailureMessage(IDS_FMT_ARCHIVE_PACK_FAILED, result.archivePath, result.hr),
                            result.hr);
+        return;
+    }
+
+    if (keepSources)
+    {
+        RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT), result.hr);
         return;
     }
 

@@ -1364,6 +1364,7 @@ BEGIN
     IDS_ARCHIVE_PACK_SELECTION_FMT                       "Compresser la sélection dans une archive"
     IDS_ARCHIVE_PACKER_LABEL                             "Compresseur :"
     IDS_ARCHIVE_PACK_DELETE_AFTER                        "Supprimer les fichiers du disque après la compression"
+    IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT                    "La compression est incomplète. Les éléments d’origine ont été conservés."
     IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "L’archive {0} a été créée, mais la suppression des fichiers d’origine a échoué.\r\n\r\nErreur : 0x{1:08X}"
     IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "Extraire l’archive ""{0}"" vers"
     IDS_ARCHIVE_UNPACKER_LABEL                           "Extracteur :"

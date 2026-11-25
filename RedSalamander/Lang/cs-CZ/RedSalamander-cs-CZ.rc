@@ -1398,6 +1398,7 @@ BEGIN
     IDS_ARCHIVE_PACK_SELECTION_FMT                       "Zabalit výběr k archivaci"
     IDS_ARCHIVE_PACKER_LABEL                             "Balič:"
     IDS_ARCHIVE_PACK_DELETE_AFTER                        "Po zabalení do archivu smažte soubory z disku"
+    IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT                    "Zabalení je neúplné. Původní položky zůstaly zachovány."
     IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "Archiv {0} byl vytvořen, ale odstranění původních souborů se nezdařilo.\r\n\r\nChyba: 0x{1:08X}"
     IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "Rozbalte archiv ""{0}"" do"
     IDS_ARCHIVE_UNPACKER_LABEL                           "Rozbalovač:"

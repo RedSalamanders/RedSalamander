@@ -213,7 +213,8 @@ remain in the interactive suite.
 The exact Commands case `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` has the same
 admission rule. It dispatches real archive commands on sandbox fixtures through synthetic
 input and answers the archive cleanup question within the test. The case verifies that an
-Unpack collision skip preserves the selected archive and its existing destination.
+Unpack collision skip preserves the selected archive and its existing destination, and that
+Pack keeps the originals when a link is omitted from the archive.
 
 Before opening any fixture, bind `LOCALAPPDATA`, `TEMP` and `TMP` to marked
 capture scratch through the canonical `ScopedEnvironmentVariable` helper. Refuse

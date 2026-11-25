@@ -1658,6 +1658,7 @@ BEGIN
     IDS_ARCHIVE_PACK_SELECTION_FMT                       "Pack selection to archive"
     IDS_ARCHIVE_PACKER_LABEL                             "Packer:"
     IDS_ARCHIVE_PACK_DELETE_AFTER                        "Delete files from disk after packing to archive"
+    IDS_MSG_ARCHIVE_PACK_SOURCES_KEPT                    "Packing was incomplete. The original items were kept."
     IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "Archive {0} was created, but deleting the original files failed.\r\n\r\nError: 0x{1:08X}"
     IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "Unpack archive ""{0}"" to"
     IDS_ARCHIVE_UNPACKER_LABEL                           "Unpacker:"

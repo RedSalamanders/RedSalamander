@@ -360,7 +360,7 @@ Files -> New lists Windows ShellNew templates for local folders. Template entrie
 
 Use **Files -> Pack** (`Alt+F5`) to create a ZIP archive from the selected local files and folders, or the focused item when nothing is selected. Use **Files -> Unpack** (`Alt+F6`) on a focused or selected ZIP archive to extract it to a destination folder.
 
-Pack writes deterministic stored ZIP entries, preserves selected empty directories, and reports the created archive. Unpack validates archive entry paths before writing so unsafe absolute, parent-relative, drive-qualified, or alternate-stream paths are rejected. If **Skip existing files** leaves requested entries unextracted, RedSalamander keeps the selected archives and explains why, even when **Delete archive after unpacking** is selected.
+Pack writes deterministic stored ZIP entries, preserves selected empty directories, and reports the created archive. If the archive omits any selected item or child, Pack keeps the originals and explains why, even when **Delete files from disk after packing to archive** is selected. Unpack validates archive entry paths before writing so unsafe absolute, parent-relative, drive-qualified, or alternate-stream paths are rejected. If **Skip existing files** leaves requested entries unextracted, RedSalamander keeps the selected archives and explains why, even when **Delete archive after unpacking** is selected.
 
 ## Drag & drop
 
