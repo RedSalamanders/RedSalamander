@@ -12035,6 +12035,15 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
                                               selectedAdmission->destination->fileSystem ? selectedAdmission->destination->fileSystem.get()
                                                                                          : _fileSystem.get());
             }
+            else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
+            {
+                return builder.Add(_fileSystem.get(),
+                                   typedPlan.endpoint,
+                                   typedPlan.providerParentPath.native(),
+                                   FileOperations::MutationInterlockAccess::PublishDestination,
+                                   false,
+                                   false);
+            }
             else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
             {
                 const bool permanentDelete = typedPlan.mode == FileOperations::DeleteMode::Permanent;
@@ -12305,9 +12314,13 @@ HRESULT FolderWindow::FileOperationState::BuildPreparationFacts(uint64_t taskId,
             {
                 addCount(snapshot.selectedRootCount, typedPlan.selectedItems.size());
             }
-            else
+            else if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
             {
                 addCount(snapshot.selectedRootCount, typedPlan.finalMappings.size());
+            }
+            else
+            {
+                addCount(snapshot.selectedRootCount, 1u);
             }
         },
             plan);
@@ -13311,6 +13324,11 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
     if (_stopToken.stop_requested() || _cancelled.load(std::memory_order_acquire))
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (_operation == FILESYSTEM_CREATE_DIRECTORY)
+    {
+        RETURN_IF_FAILED(PrepareCreateDirectoryAdmission());
     }
 
     if (_pendingBatchRenameAdmission.has_value())
@@ -24152,6 +24170,123 @@ struct CrossFileSystemBridge
 };
 } // namespace FolderWindowFileOperationsStateInternal
 
+HRESULT FolderWindow::FileOperationState::Task::ExecuteCreateDirectory(const FileOperations::CreateDirectoryAdmission& plan) noexcept
+{
+    if (! _createDirectoryRequest || ! _state)
+        return E_UNEXPECTED;
+    const auto& request   = _createDirectoryRequest.value();
+    const auto startedAt  = std::chrono::steady_clock::now();
+    HRESULT status        = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    unsigned int attempts = 0u;
+    const auto measure    = wil::scope_exit([&]() noexcept
+    { Debug::Perf::Emit(L"fileops.create_directory.worker_us", L"mutation", Debug::Perf::ElapsedUs(startedAt), attempts, 0u, status); });
+
+    wil::com_ptr<IFileSystemDirectoryOperations> directoryOperations;
+    _fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), directoryOperations.put_void());
+    const unsigned int limit = request.firstSuggestedSuffix ? 1000u : 1u;
+    FileOperations::CreateDirectoryAdmission current{};
+    bool dispatched = false;
+    for (unsigned int attempt = 0u; attempt < limit; ++attempt)
+    {
+        dispatched             = false;
+        const auto firstSuffix = request.firstSuggestedSuffix.value_or(0u);
+        if (attempt > (std::numeric_limits<unsigned int>::max)() - firstSuffix)
+            break;
+        const std::wstring name =
+            request.firstSuggestedSuffix ? FileOperations::BuildCreateDirectorySuggestedName(request.defaultName, firstSuffix + attempt) : request.name;
+        do
+        {
+            WaitWhilePaused();
+            status = CancelRequestedDurable()
+                         ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                         : _state->QualifyCreateDirectory(_fileSystem, _sourcePluginId, _sourceInstanceContext, request.parent, name, current);
+        } while (SUCCEEDED(status) && IsPaused());
+        if (FAILED(status))
+            break;
+        status = FileOperations::ValidatePlan(current, nullptr);
+        if (FAILED(status))
+            break;
+        if (! FileOperations::QualifiedEndpointsHaveSamePathContract(plan.endpoint, current.endpoint))
+        {
+            status = HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
+            break;
+        }
+        if (! directoryOperations && ! current.allowLocalNativeFallback)
+        {
+            status = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            break;
+        }
+        if (CancelRequestedDurable())
+        {
+            status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            break;
+        }
+        ++attempts;
+        dispatched = true;
+        if (directoryOperations)
+            status = directoryOperations->CreateDirectory(current.candidateProviderPath.c_str());
+        else
+            status = CreateDirectoryW(current.candidateProviderPath.c_str(), nullptr) != FALSE ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+
+        if (status != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && status != HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+            break;
+    }
+
+    constexpr HRESULT uncertain = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+    if (dispatched && ((SUCCEEDED(status) && status != S_OK) || IsCancellationStatus(status) || status == HRESULT_FROM_WIN32(ERROR_TIMEOUT) ||
+                       status == HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT) ||
+                       (HRESULT_FACILITY(status) == FACILITY_WIN32 && IsNetworkOfflineError(static_cast<DWORD>(HRESULT_CODE(status))))))
+        status = uncertain;
+    const bool created = status == S_OK;
+    if (created)
+        _createdDirectory = current.candidateProviderPath;
+
+    FileOperations::FileOperationItemResult result{};
+    result.sourceIndex          = 0u;
+    result.strategy             = FileOperations::OperationStrategy::Native;
+    result.verification         = FileOperations::VerificationState::NotApplicable;
+    result.sourceDisposition    = FileOperations::SourceDisposition::Retained;
+    result.status               = status;
+    result.finalSourcePath      = request.parent.native();
+    result.finalDestinationPath = current.candidateProviderPath.empty() ? plan.candidateProviderPath.native() : current.candidateProviderPath.native();
+    if (created)
+    {
+        result.publication = FileOperations::PublicationState::Published;
+        result.completion  = FileOperations::ItemCompletion::Completed;
+    }
+    else if (dispatched && status == uncertain)
+    {
+        result.publication = FileOperations::PublicationState::Unknown;
+        result.completion  = FileOperations::ItemCompletion::Indeterminate;
+    }
+    else
+    {
+        result.publication = dispatched ? FileOperations::PublicationState::NotPublished : FileOperations::PublicationState::NotAttempted;
+        result.completion  = IsCancellationStatus(status) ? FileOperations::ItemCompletion::Canceled : FileOperations::ItemCompletion::Failed;
+    }
+    if (FAILED(status) && ! IsCancellationStatus(status))
+    {
+        LogDiagnostic(DiagnosticSeverity::Error,
+                      status,
+                      L"create-directory.failed",
+                      LocalizedDiagnosticText{IDS_FILEOPS_CREATE_FOLDER_FAILED},
+                      {},
+                      result.finalDestinationPath);
+    }
+    static_cast<void>(StoreTypedItemResult(std::move(result)));
+    {
+        std::scoped_lock lock(_progressMutex);
+        _progressTotalItems     = 1u;
+        _progressCompletedItems = created ? 1u : 0u;
+        _lastItemIndex          = 0u;
+        _lastItemHr             = status;
+        PublishProgressCountersLocked(*this);
+    }
+    if (created)
+        StorePublishedTopLevelCompletionSnapshot(*this, MarkTopLevelItemCompleted(*this, 0u));
+    return status;
+}
+
 HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 {
     // Direct executor fixtures retain their explicitly initialized admission.
@@ -24219,6 +24354,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation(std::shared_ptr
     if (useResolvedItems && selectedAdmission->destination->resolvedItems.size() != _sourcePaths.size())
     {
         return E_INVALIDARG;
+    }
+
+    if (_operation == FILESYSTEM_CREATE_DIRECTORY)
+    {
+        const auto* create = plans && plans->size() == 1u ? std::get_if<FileOperations::CreateDirectoryAdmission>(&plans->front()) : nullptr;
+        return create ? ExecuteCreateDirectory(*create) : E_UNEXPECTED;
     }
 
     if (_operation == FILESYSTEM_RENAME)

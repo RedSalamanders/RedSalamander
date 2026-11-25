@@ -157,6 +157,7 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'FileOps_SelectionShapeSmb' -or
              $CaseFilter -ceq 'FileOps_SmbExactRenameProvider' -or
              $CaseFilter -ceq 'FileOps_SmbCorroboratedRenameProvider' -or
+             $CaseFilter -ceq 'C0_CurlCommittedMutationResponseLost' -or
              $CaseFilter -ceq 'Delete_IdentityLessPinnedTreeChangedEntry') -and
             [string]::IsNullOrEmpty($SelfTestFlakyProofCase) -and
             [string]::IsNullOrEmpty($SelfTestOrderProofCase)

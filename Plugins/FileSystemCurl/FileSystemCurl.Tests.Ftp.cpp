@@ -2116,7 +2116,8 @@ public:
 
     [[nodiscard]] bool SingleCompletionHasTruth(
         bool responseLost,
-        FileSystemRouteContract::MutationClassification failureClass = FileSystemRouteContract::MutationClassification::Indeterminate) const noexcept
+        FileSystemRouteContract::MutationClassification failureClass = FileSystemRouteContract::MutationClassification::Indeterminate,
+        std::optional<FileSystemOwnedStageDisposition> expectedStage = std::nullopt) const noexcept
     {
         std::scoped_lock lock(_mutex);
         if (_completedCount != 1u || _indices[0] != 0u || _invalidMutation)
@@ -2124,6 +2125,8 @@ public:
             return false;
         }
         const auto* receipt = _mutations[0].has_value() ? &_mutations[0].value() : nullptr;
+        if (expectedStage && (! receipt || receipt->ownedStageDisposition != expectedStage.value()))
+            return false;
         if (responseLost)
         {
             return FAILED(_statuses[0]) && FileSystemRouteContract::ClassifyFailedMutation(true, _statuses[0], receipt) == failureClass;
@@ -8436,8 +8439,17 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlLostMutation
     {
         const std::vector<uint8_t> original{0x31u, 0x00u, 0x7Fu, 0xAAu};
         const std::vector<uint8_t> replacement{0xC5u, 0xFEu, 0x10u};
-        for (bool rename : {false, true})
+        const std::vector<uint8_t> displaced{0x80u, 0xD5u};
+        enum class Mutation
         {
+            Delete,
+            NewNameRename,
+            ReplaceByRename
+        };
+        for (const auto mutation : {Mutation::Delete, Mutation::NewNameRename, Mutation::ReplaceByRename})
+        {
+            const bool rename  = mutation != Mutation::Delete;
+            const bool replace = mutation == Mutation::ReplaceByRename;
             for (bool bulk : {false, true})
             {
                 for (bool responseLost : {false, true})
@@ -8445,6 +8457,8 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlLostMutation
                     FakeFtpEndpoint endpoint(UploadRetention::Complete);
                     endpoint.SeedFile("/source.bin", original);
                     endpoint.SeedFile("/sibling.bin", original);
+                    if (replace)
+                        endpoint.SeedFile("/destination.bin", displaced);
                     if (responseLost)
                     {
                         endpoint.SetLostMutationReply(rename ? "RNTO" : "DELE", "/source.bin", replacement);
@@ -8481,8 +8495,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlLostMutation
                     const auto started = std::chrono::steady_clock::now();
                     if (rename)
                     {
-                        hr = bulk ? fileSystem->RenameItems(pair, 1u, FILESYSTEM_FLAG_NONE, nullptr, &callback, nullptr)
-                                  : fileSystem->RenameItem(source, destination, FILESYSTEM_FLAG_NONE, nullptr, &callback, nullptr);
+                        const auto flags = replace ? FILESYSTEM_FLAG_ALLOW_OVERWRITE : FILESYSTEM_FLAG_NONE;
+                        hr               = bulk ? fileSystem->RenameItems(pair, 1u, flags, nullptr, &callback, nullptr)
+                                                : fileSystem->RenameItem(source, destination, flags, nullptr, &callback, nullptr);
                     }
                     else
                     {
@@ -8496,13 +8511,22 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlLostMutation
                     const bool originalApplied =
                         rename ? FileEquals(after, "/destination.bin", original) : after.deletedPaths == std::vector<std::string>{"/source.bin"};
                     const bool sourceCorrect   = responseLost ? FileEquals(after, "/source.bin", replacement) : ! after.files.contains("/source.bin");
-                    const size_t expectedFiles = 1u + (rename ? 1u : 0u) + (responseLost ? 1u : 0u);
-                    const bool stateCorrect    = SUCCEEDED(after.serverHr) && after.files.size() == expectedFiles && originalApplied && sourceCorrect &&
-                                                 FileEquals(after, "/sibling.bin", original) && after.directories == std::set<std::string>{"/"} &&
-                                                 after.lostMutationReplyCount == (responseLost ? 1u : 0u);
-                    const bool once            = requests == 1u && (! rename || CountCommands(after, "RNFR") == 1u) && CountCommands(after, "NLST") == 0u;
-                    const bool truth           = (responseLost ? FAILED(hr) : hr == S_OK) && callback.SingleCompletionHasTruth(responseLost);
-                    const std::wstring route   = std::format(L"{}{};responseLost={}", rename ? L"Rename" : L"Delete", bulk ? L"Items" : L"Item", responseLost);
+                    const size_t expectedFiles = 1u + (rename ? 1u : 0u) + (replace ? 1u : 0u) + (responseLost ? 1u : 0u);
+                    const auto rollback        = std::ranges::find_if(
+                        after.files, [](const auto& file) noexcept { return file.first.find(kRollbackSiblingMarker) != std::string::npos; });
+                    const bool rollbackCorrect    = replace ? rollback != after.files.end() && rollback->second == displaced : rollback == after.files.end();
+                    const bool stateCorrect       = SUCCEEDED(after.serverHr) && after.files.size() == expectedFiles && originalApplied && sourceCorrect &&
+                                                    rollbackCorrect && FileEquals(after, "/sibling.bin", original) &&
+                                                    after.directories == std::set<std::string>{"/"} && after.lostMutationReplyCount == (responseLost ? 1u : 0u);
+                    const size_t expectedRequests = replace ? 2u : 1u;
+                    const bool once               = requests == expectedRequests && (! rename || CountCommands(after, "RNFR") == expectedRequests) &&
+                                                    CountCommands(after, "NLST") == 0u && (! rename || CountCommands(after, "DELE") == 0u);
+                    const auto expectedStage      = replace ? std::optional(FileSystemOwnedStageDisposition::Retained) : std::nullopt;
+                    const bool truth =
+                        (responseLost ? FAILED(hr) : hr == S_OK) &&
+                        callback.SingleCompletionHasTruth(responseLost, FileSystemRouteContract::MutationClassification::Indeterminate, expectedStage);
+                    const std::wstring route =
+                        std::format(L"{}{};replace={};responseLost={}", rename ? L"Rename" : L"Delete", bulk ? L"Items" : L"Item", replace, responseLost);
                     Debug::Perf::Emit(L"FileOps.Curl.MutationReplyLoss",
                                       route.c_str(),
                                       durationUs,
@@ -8510,7 +8534,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlLostMutation
                                       after.lostMutationReplyCount,
                                       stateCorrect && once && truth ? S_OK : E_FAIL);
                     DebugCheck(stateCorrect, std::format(L"{} preserves the committed effect, replacement and sibling bytes", route).c_str(), *passed, *failed);
-                    DebugCheck(once, std::format(L"{} sends exactly one mutation, never a replay", route).c_str(), *passed, *failed);
+                    DebugCheck(once, std::format(L"{} issues each authorized mutation once and never replays it", route).c_str(), *passed, *failed);
                     DebugCheck(
                         truth, std::format(L"{} reports exactly one honest completion, without safe-Retry proof after loss", route).c_str(), *passed, *failed);
                 }

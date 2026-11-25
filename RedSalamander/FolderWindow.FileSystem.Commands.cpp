@@ -89,16 +89,6 @@ using OrdinalString::EqualsNoCase;
 
 namespace
 {
-[[nodiscard]] std::wstring BuildCreateDirectorySuggestedName(std::wstring_view baseName, unsigned int suffix)
-{
-    if (suffix == 0u)
-    {
-        return std::wstring(baseName);
-    }
-
-    return std::format(L"{} ({})", baseName, suffix);
-}
-
 [[nodiscard]] HRESULT CollectExistingChildNames(const wil::com_ptr<IFileSystem>& fileSystem,
                                                 const std::filesystem::path& folder,
                                                 std::vector<std::wstring>& outNames) noexcept
@@ -189,7 +179,7 @@ namespace
 
     for (unsigned int suffix = 0u; suffix < 10000u; ++suffix)
     {
-        std::wstring candidate = BuildCreateDirectorySuggestedName(defaultName, suffix);
+        std::wstring candidate = FileOperations::BuildCreateDirectorySuggestedName(defaultName, suffix);
         const FileSystemRouteContract::ChildNameContractResult candidateContract =
             FileSystemRouteContract::QueryChildNameContract(route.get(), folder.native(), candidate, FILESYSTEM_CREATE_DIRECTORY, pluginId);
         if (candidateContract.state == FileSystemRouteContract::QueryState::Available && candidateContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
@@ -10682,22 +10672,6 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         return;
     }
 
-    FileOperations::CreateDirectoryAdmission initialAdmission{};
-    const HRESULT initialAdmissionHr = _fileOperations->QualifyCreateDirectory(fileSystem, pluginId, instanceContext, base, initialName, initialAdmission);
-    if (FAILED(initialAdmissionHr))
-    {
-        showFailure(base.native(), initialAdmissionHr);
-        return;
-    }
-
-    wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
-    fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
-    if (! dirOps && ! initialAdmission.allowLocalNativeFallback)
-    {
-        showFailure(base.native(), HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
-        return;
-    }
-
     if (! ownerWindow)
     {
         ownerWindow = _hWnd.get();
@@ -10710,87 +10684,17 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     if (! folderName.has_value() || ! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
         return;
 
-    const std::wstring requestedName = folderName.value();
-    unsigned int suggestedSuffix     = 0u;
-    const bool autoSuffix            = TryParseCreateDirectorySuggestedSuffix(requestedName, defaultNameBase, suggestedSuffix);
+    FileOperationState::CreateDirectoryRequest request{};
+    request.parent               = base;
+    request.name                 = folderName.value();
+    request.defaultName          = defaultNameBase;
+    unsigned int suggestedSuffix = 0u;
+    if (TryParseCreateDirectorySuggestedSuffix(request.name, request.defaultName, suggestedSuffix))
+        request.firstSuggestedSuffix = suggestedSuffix;
 
-    const int maxAttempts = autoSuffix ? 1000 : 1;
-    for (int attempt = 0; attempt < maxAttempts; ++attempt)
-    {
-        std::wstring candidateName = requestedName;
-        if (autoSuffix)
-        {
-            candidateName = BuildCreateDirectorySuggestedName(defaultNameBase, suggestedSuffix + static_cast<unsigned int>(attempt));
-        }
-
-        FileOperations::CreateDirectoryAdmission createAdmission{};
-        const HRESULT admissionHr = _fileOperations->QualifyCreateDirectory(fileSystem, pluginId, instanceContext, base, candidateName, createAdmission);
-        if (FAILED(admissionHr))
-        {
-            showFailure(candidateName, admissionHr);
-            return;
-        }
-        if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
-            return;
-        const std::filesystem::path& newFolderPath = createAdmission.candidateProviderPath;
-
-        HRESULT hr = S_OK;
-        if (dirOps)
-        {
-            hr = dirOps->CreateDirectory(newFolderPath.c_str());
-        }
-        else if (createAdmission.allowLocalNativeFallback)
-        {
-            if (::CreateDirectoryW(newFolderPath.c_str(), nullptr) == 0)
-            {
-                const DWORD error = GetLastError();
-                hr                = HRESULT_FROM_WIN32(error);
-            }
-        }
-        else
-        {
-            hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-        }
-
-        if (SUCCEEDED(hr))
-        {
-            const auto displaysParent = [&](const PaneState& current)
-            {
-                const auto path = current.folderView.GetFolderPath();
-                return current.fileSystem && path.has_value() && createAdmission.endpoint.pathIdentity.has_value() &&
-                       EqualsNoCase(current.pluginId, pluginId) && EqualsNoCase(current.instanceContext, instanceContext) &&
-                       EquivalentPath(createAdmission.endpoint.pathIdentity.value(), path->native(), base.native());
-            };
-            DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
-            cache.NotifyPathCreated(fileSystem.get(), newFolderPath);
-            if (! ownerAvailable())
-                return;
-            if (displaysParent(state))
-            {
-                state.folderView.RememberFocusedItemForFolder(base, candidateName);
-                state.folderView.ForceRefresh();
-            }
-
-            PaneState& otherState = pane == Pane::Left ? _rightPane : _leftPane;
-            if (displaysParent(otherState) && ! cache.IsFolderWatched(otherState.fileSystem.get(), base))
-            {
-                otherState.folderView.ForceRefresh();
-            }
-            return;
-        }
-
-        constexpr HRESULT alreadyExistsHr = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        constexpr HRESULT fileExistsHr    = HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
-        if (autoSuffix && (hr == alreadyExistsHr || hr == fileExistsHr))
-        {
-            if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, FILESYSTEM_CREATE_DIRECTORY))
-                return;
-            continue;
-        }
-
-        showFailure(newFolderPath.native(), hr);
-        return;
-    }
+    const HRESULT hr = _fileOperations->AdmitCreateDirectory(pane, fileSystem, pluginId, pluginShortId, instanceContext, std::move(request));
+    if (FAILED(hr) && hr != kFileOperationRefusedForPendingExit)
+        showFailure(base.native(), hr);
 }
 
 void FolderWindow::CommandEditNew(Pane pane)

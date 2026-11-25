@@ -1063,6 +1063,18 @@ void RunDebugCaseOnlyRenameContractSelfTest(unsigned int& passed, unsigned int& 
     return result;
 }
 
+[[nodiscard]] FileSystemItemMutationResult BuildExplicitRenameReceipt(const CurlPublicationResult& publication, bool sourceObservedWithoutMutation) noexcept
+{
+    FileSystemItemMutationResult receipt{};
+    receipt.sizeBytes            = sizeof(receipt);
+    receipt.outcomeKnown         = publication.primaryCommitted || sourceObservedWithoutMutation ? TRUE : FALSE;
+    receipt.mutationCommitted    = publication.primaryCommitted ? TRUE : FALSE;
+    receipt.originalStillPresent = ! publication.primaryCommitted && sourceObservedWithoutMutation ? TRUE : FALSE;
+    if ((publication.cleanupDebtMask & CurlCleanupDebtMask(CurlCleanupDebtKind::RetainedRollbackSibling)) != 0u)
+        receipt.ownedStageDisposition = FileSystemOwnedStageDisposition::Retained;
+    return receipt;
+}
+
 [[nodiscard]] CurlPublicationResult RenameWithOverwriteRollback(const ConnectionInfo& conn,
                                                                 std::wstring_view sourcePath,
                                                                 std::wstring_view destinationPath,
@@ -3053,6 +3065,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
     const bool allowOverwrite = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
 
     bool sourceObservedWithoutMutation = false;
+    std::optional<FileSystemItemMutationResult> renameReceipt;
     if (! CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
     {
         hr = HRESULT_FROM_WIN32(ERROR_NOT_SAME_DEVICE);
@@ -3077,7 +3090,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
             const CurlPublicationResult renameResult = RenameWithOverwriteRollback(
                 sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath, allowOverwrite, sourceObservedWithoutMutation);
             publicationAccumulator.Merge(renameResult);
-            hr = renameResult.OperationResult();
+            renameReceipt = BuildExplicitRenameReceipt(renameResult, sourceObservedWithoutMutation);
+            hr            = renameResult.OperationResult();
         }
         else if (SUCCEEDED(hr))
         {
@@ -3086,8 +3100,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
     }
 
     progress.completedItems = 1;
-    const HRESULT cbHr      = progress.ReportItemCompleted(0, sourceDisplay, destinationDisplay, hr, sourceObservedWithoutMutation);
-    const HRESULT resultHr  = FAILED(cbHr) ? cbHr : hr;
+    const HRESULT cbHr =
+        progress.ReportItemCompleted(0, sourceDisplay, destinationDisplay, hr, sourceObservedWithoutMutation, renameReceipt ? &renameReceipt.value() : nullptr);
+    const HRESULT resultHr = FAILED(cbHr) ? cbHr : hr;
     if (SUCCEEDED(resultHr))
     {
         NotifySyntheticPathMoved(sourcePath, destinationPath);
@@ -4182,6 +4197,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
         std::wstring sourceDisplay;
         std::wstring destDisplay;
         bool sourceObservedWithoutMutation = false;
+        std::optional<FileSystemItemMutationResult> renameReceipt;
 
         HRESULT itemHr = progress.CheckCancel();
 
@@ -4251,7 +4267,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
                                                                                                            allowOverwrite,
                                                                                                            sourceObservedWithoutMutation);
                                     publicationAccumulator.Merge(renameResult);
-                                    itemHr = renameResult.OperationResult();
+                                    renameReceipt = BuildExplicitRenameReceipt(renameResult, sourceObservedWithoutMutation);
+                                    itemHr        = renameResult.OperationResult();
                                 }
                                 else
                                 {
@@ -4277,7 +4294,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
         const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
         progress.SetCompletedItems(done);
 
-        const HRESULT cbHr = progress.ReportItemCompleted(index, sourceDisplay, destDisplay, itemHr, sourceObservedWithoutMutation);
+        const HRESULT cbHr = progress.ReportItemCompleted(
+            index, sourceDisplay, destDisplay, itemHr, sourceObservedWithoutMutation, renameReceipt ? &renameReceipt.value() : nullptr);
         if (FAILED(cbHr))
         {
             recordFailure(cbHr);

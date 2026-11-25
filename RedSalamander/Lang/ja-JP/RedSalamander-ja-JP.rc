@@ -1267,6 +1267,7 @@ BEGIN
     IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "フォルダー名に「.」または「..」は使用できません。"
     IDS_MSG_PANE_CREATE_DIR_INVALID_WHITESPACE           "フォルダー名には改行やタブを含めることはできません。"
     IDS_FMT_PANE_CREATE_DIR_FAILED                       "フォルダーの作成に失敗しました:\r\n\r\n{0}\r\n\r\nエラー: 0x{1:08X}"
+    IDS_FILEOPS_CREATE_FOLDER_FAILED                     "フォルダーを作成できませんでした。"
     IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "「{0}」ファイル システム プラグインはフォルダーの作成をサポートしていません。"
     IDS_MSG_PANE_EDIT_NEW_UNSUPPORTED                    "新しいファイルの作成は、現在のファイル システムではサポートされていません。"
     IDS_FMT_PANE_EDIT_NEW_UNSUPPORTED_PLUGIN             "「{0}」ファイル システム プラグインはファイルの作成をサポートしていません。"
