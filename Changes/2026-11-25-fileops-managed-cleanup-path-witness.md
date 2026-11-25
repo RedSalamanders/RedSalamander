@@ -1,0 +1,1 @@
+- Verify that a path-length error during Move cleanup keeps the published copy and offers Skip without Retry. Keep retry coverage for sharing, access and disk-full failures.

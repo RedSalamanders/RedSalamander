@@ -1179,7 +1179,7 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_PopupIdleCadence`, `FileOps_IdentityInterlockWaiting`,
   `FileOps_CrossRootLocalCopy`, `FileOps_SmallFileCopyCost`,
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
-  `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, or
+  `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
@@ -1187,6 +1187,8 @@ the same synchronous reporter and counter path as the pointer overload.
   the identity-less Delete witness uses owned sandbox data and submits owned task decisions directly;
   the added storage/route witnesses use owned sandbox data and the same activation blocker;
   the Curl reply-loss case runs the owned loopback FTP endpoint through a joined worker with no UI;
+  the provider capability matrix uses private providers, owned data and direct task controls;
+  its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing
   foreground-preservation observations without acquiring foreground;
   the deferred-exit case uses the activation blocker, direct command dispatch and message-only close targets;
