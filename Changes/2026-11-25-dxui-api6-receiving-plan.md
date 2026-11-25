@@ -1,0 +1,1 @@
+- Record the deferred DxUi API 6 receiving plan, including pinned restore, rollback, and RedSalamander-owned qualification.
