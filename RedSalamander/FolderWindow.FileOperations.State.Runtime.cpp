@@ -965,15 +965,17 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     FileOperations::OperationOptions options           = planOptions(firstPlan);
     const FileSystemOperation operation                = planOperation(firstPlan);
     const bool archiveDeleteConsentCaptured            = admission.capturedConsentKind == FileOperations::ConsentKind::ArchiveDeleteAfter;
-    if (admission.capturedConsentKind.has_value())
+    const bool hasArchiveArtifactTouch                 = admission.capturedArchiveArtifactTouch.has_value();
+    if (admission.capturedConsentKind.has_value() || hasArchiveArtifactTouch)
     {
         const bool validCapturedConsent = archiveDeleteConsentCaptured && operation == FILESYSTEM_DELETE &&
                                           std::ranges::all_of(plans,
-                                                              [](const FileOperations::FileOperationPlan& plan) noexcept
+                                                              [&](const FileOperations::FileOperationPlan& plan) noexcept
         {
             const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
             return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Permanent &&
-                   (deletion->origin == FileOperations::DeleteOrigin::PackCleanup || deletion->origin == FileOperations::DeleteOrigin::UnpackCleanup);
+                   (deletion->origin == FileOperations::DeleteOrigin::PackCleanup || deletion->origin == FileOperations::DeleteOrigin::UnpackCleanup) &&
+                   (! hasArchiveArtifactTouch || ! deletion->recursive);
         });
         if (! validCapturedConsent)
         {
@@ -1160,6 +1162,16 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         if (FAILED(candidatesHr))
         {
             return candidatesHr;
+        }
+        if (hasArchiveArtifactTouch)
+        {
+            // The combined archive prompt already warned about these exact objects.
+            const HRESULT artifactHr = FileOperationArtifacts::RevalidateTouchGuard(admission.capturedArchiveArtifactTouch.value(), artifactCandidates);
+            if (artifactHr != S_OK)
+                return artifactHr;
+
+            artifactTouchReceipt = std::move(admission.capturedArchiveArtifactTouch);
+            break;
         }
         if (candidatesHr != S_OK)
         {

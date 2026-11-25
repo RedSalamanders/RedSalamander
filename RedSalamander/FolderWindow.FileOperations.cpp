@@ -2965,6 +2965,8 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     admission.destinationPluginShortId   = std::move(destinationPluginShortId);
     admission.destinationInstanceContext = std::move(destinationInstanceContext);
     admission.capturedConsentKind        = capturedConsentKind;
+    if (archiveCleanup)
+        admission.capturedArchiveArtifactTouch = archiveCleanup->artifactTouch;
 
     admissionOut = std::move(admission);
     return S_OK;

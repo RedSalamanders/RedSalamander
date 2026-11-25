@@ -14368,6 +14368,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"alpha",
                   L"Unpack replace-existing policy should publish the archive content.");
 
+    const auto combinedCleanupPrompt = [&]() noexcept
+    {
+        const auto warning = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING, 1ul);
+        HostPromptDebugSnapshot prompt{};
+        return HostGetTestLastPromptDebugSnapshot(prompt) && prompt.presentation == HOST_PROMPT_PRESENTATION_DELETE &&
+               prompt.defaultResult == HOST_PROMPT_RESULT_CANCEL && prompt.message.find(warning) != std::wstring::npos;
+    };
+
     enum class ArchiveCleanupFixture
     {
         Unchanged,
@@ -14378,7 +14386,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         const bool unchanged           = fixture == ArchiveCleanupFixture::Unchanged;
         const bool replaced            = fixture == ArchiveCleanupFixture::Replaced;
-        const std::wstring archiveName = unchanged ? L"cleanup-deflated.zip" : replaced ? L"cleanup-replaced.zip" : L"cleanup-edited.zip";
+        const std::wstring archiveName = unchanged  ? L".rs-bak-00000000000000000000000000000003-cleanup-deflated.zip"
+                                         : replaced ? L"cleanup-replaced.zip"
+                                                    : L"cleanup-edited.zip";
         const auto cleanupArchive      = outputRoot / archiveName;
         const auto originalArchive     = outputRoot / L"cleanup-original.zip";
         const auto cleanupDestination  = root / cleanupArchive.stem();
@@ -14413,6 +14423,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         {
             return false;
         }
+        if (unchanged && ! state.Require(combinedCleanupPrompt(), L"The exact Unpack confirmation must disclose the possible leftover and default to Cancel."))
+            return false;
+
         const auto unpacked                      = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
         const auto extracted                     = cleanupDestination / (unchanged ? L"alpha.txt" : L"approved.txt");
         const std::wstring_view approvedContents = unchanged ? L"alpha from a compressed zip fixture" : L"approved contents";
@@ -14485,7 +14498,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     for (const bool replaceSource : {false, true})
     {
-        const std::wstring sourceName              = replaceSource ? L"pack-replaced.bin" : L"pack-unchanged.bin";
+        const std::wstring sourceName =
+            replaceSource ? L"pack-replaced.00000000000000000000000000000001.rs-bak" : L"pack-unchanged.00000000000000000000000000000002.rs-bak";
         const auto sourcePath                      = packCleanupRoot / sourceName;
         const auto retainedOriginal                = packCleanupRoot / L"pack-original.bin";
         const auto packedPath                      = outputRoot / (replaceSource ? L"pack-source-change.zip" : L"pack-source-exact.7z");
@@ -14513,9 +14527,27 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         approvedPack.archivePath     = packedPath;
         approvedPack.deleteAfter     = true;
         approvedPack.packerExtension = replaceSource ? L"zip" : L"7z";
+        if (! replaceSource)
+        {
+            const auto oldPrompt     = HostGetTestPromptResultOverride();
+            const auto restorePrompt = wil::scope_exit([&]() noexcept { HostSetTestPromptResultOverride(oldPrompt); });
+            HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+            const auto promptCount = HostGetTestPromptRequestCount();
+            g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(approvedPack);
+            const bool dispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/pack");
+            const auto canceled   = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+            if (! state.Require(dispatched && HostGetTestPromptRequestCount() == promptCount + 1u && canceled.has_value() && canceled->hr == S_FALSE &&
+                                    cleanupIdle() && ! SelfTest::PathExists(packedPath) &&
+                                    ReadUtf8TextFileForCommandSelfTest(sourcePath) == L"the approved Pack source contents",
+                                L"Cancel on the combined Pack confirmation must keep the source and leave the archive absent."))
+                return false;
+        }
+
         g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(approvedPack);
-        if (! state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"Pack cleanup must receive one Delete confirmation."),
+        if (! state.Require(dispatchApprovedCleanup(L"cmd/pane/pack", L"Pack cleanup must receive one combined confirmation."),
                             L"Pack Delete after must dispatch."))
+            return false;
+        if (! state.Require(combinedCleanupPrompt(), L"The one Pack confirmation must disclose the possible leftover and default to Cancel."))
             return false;
 
         const auto packed = g_folderWindow.DebugGetLastArchiveCommandResultForTest();

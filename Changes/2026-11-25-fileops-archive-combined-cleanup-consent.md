@@ -1,0 +1,1 @@
+- Pack and Unpack shows the possible-leftover warning in the same Delete after confirmation for regular files.

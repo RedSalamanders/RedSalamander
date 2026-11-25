@@ -413,6 +413,7 @@ struct ArchiveCleanupReceipt final
     std::wstring pluginId;
     std::wstring instanceContext;
     std::unordered_map<std::wstring, ProviderIdentitySnapshot> sources;
+    std::optional<FileOperationArtifacts::TouchGuardReceipt> artifactTouch;
 };
 
 struct QualifiedDestination
@@ -1192,6 +1193,7 @@ struct FolderWindow::FileOperationState
         // The archive prompt owns this one destructive choice. StartOperation replaces the
         // captured kind with the admitted task nonce before final plan validation.
         std::optional<FileOperations::ConsentKind> capturedConsentKind;
+        std::optional<FileOperationArtifacts::TouchGuardReceipt> capturedArchiveArtifactTouch;
         // Runs on the UI thread after worker-owned selected-root readiness and before mutation
         // release. Clipboard Move reaches this barrier through a tokenized asynchronous message;
         // a failure keeps the accepted task but permits only terminal no-mutation reduction.

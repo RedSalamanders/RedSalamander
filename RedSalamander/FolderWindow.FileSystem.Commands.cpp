@@ -6407,6 +6407,36 @@ constexpr auto kArchiveReadBindFlags =
     return status;
 }
 
+[[nodiscard]] HRESULT CaptureArchiveArtifactTouch(const FileOperations::ArchiveCleanupReceipt& cleanup,
+                                                  std::span<const std::filesystem::path> paths,
+                                                  FileOperationArtifacts::TouchGuardRequest& request) noexcept
+{
+    std::vector<FileOperationArtifacts::Candidate> candidates;
+    for (const auto& path : paths)
+    {
+        if (! FileOperationArtifacts::HasPossibleArtifactName(path.filename().native()))
+            continue;
+
+        FileOperationArtifacts::Candidate candidate;
+        const HRESULT hr = FileOperationArtifacts::CaptureProviderObjectCandidate(
+            cleanup.fileSystem.get(), path.native(), cleanup.pluginId, cleanup.instanceContext, candidate);
+        if (hr != S_OK)
+            return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+
+        const auto approved = cleanup.sources.find(path.native());
+        if (approved == cleanup.sources.end() || candidate.probeState != FileOperationArtifacts::ProbeState::Present ||
+            candidate.currentIdentity.kind != FILESYSTEM_BOUND_REGULAR_FILE || candidate.currentIdentity.objectId != approved->second.objectId ||
+            candidate.currentIdentity.pathProfileId != approved->second.pathProfileId)
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+
+        candidates.push_back(std::move(candidate));
+    }
+    const HRESULT hr = FileOperationArtifacts::BuildTouchGuardRequest(candidates, request);
+    if (FAILED(hr))
+        return hr;
+    return request.allItemsRevalidatable ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+}
+
 [[nodiscard]] HRESULT BindArchiveSourceForRead(const FileOperations::ArchiveCleanupReceipt* receipt,
                                                const std::filesystem::path& path,
                                                wil::com_ptr<IFileSystemBoundObject>& source) noexcept
@@ -9125,11 +9155,14 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     }
 }
 
-[[nodiscard]] bool ConfirmPermanentDeletePaths(HWND ownerWindow, const std::vector<std::filesystem::path>& sourcePaths) noexcept
+[[nodiscard]] HRESULT ConfirmArchiveCleanupPaths(HWND ownerWindow,
+                                                 std::span<const std::filesystem::path> sourcePaths,
+                                                 const FileOperationArtifacts::TouchGuardRequest& artifactRequest,
+                                                 std::optional<FileOperationArtifacts::TouchGuardReceipt>& artifactTouch) noexcept
 {
     if (sourcePaths.empty())
     {
-        return true;
+        return S_OK;
     }
 
     auto ensureTrailingSeparator = [](std::wstring text) noexcept -> std::wstring
@@ -9187,7 +9220,12 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
 
     normalizeSlashes(fromText);
 
-    const std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, fromText);
+    std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, fromText);
+    if (! artifactRequest.items.empty())
+    {
+        message.append(L"\r\n\r\n");
+        message.append(FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING, static_cast<unsigned long>(artifactRequest.items.size())));
+    }
     const std::wstring caption = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_DELETE);
 
     HostPromptRequest prompt{};
@@ -9203,7 +9241,16 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
 
     HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
     const HRESULT hrPrompt        = HostShowPrompt(prompt, nullptr, &promptResult);
-    return SUCCEEDED(hrPrompt) && promptResult == HOST_PROMPT_RESULT_OK;
+    if (FAILED(hrPrompt) || promptResult != HOST_PROMPT_RESULT_OK)
+        return S_FALSE;
+    if (artifactRequest.items.empty())
+        return S_OK;
+
+    FileOperationArtifacts::TouchGuardReceipt receipt;
+    const HRESULT artifactHr = FileOperationArtifacts::AcceptTouchGuard(artifactRequest, receipt);
+    if (artifactHr == S_OK)
+        artifactTouch = std::move(receipt);
+    return artifactHr;
 }
 
 [[nodiscard]] std::wstring OpenedFilesDisplayNameForPath(const std::filesystem::path& path)
@@ -12433,13 +12480,17 @@ void FolderWindow::CommandPack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_PACK))
         return;
 
-    const bool regularCleanup    = deleteSourcesAfterPack && std::ranges::none_of(selectedPaths,
-                                                                                  [](const auto& sourcePath) noexcept
+    const bool regularCleanup = deleteSourcesAfterPack && std::ranges::none_of(selectedPaths,
+                                                                               [](const auto& sourcePath) noexcept
     {
         const DWORD attributes = GetFileAttributesW(sourcePath.c_str());
         return attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == FILE_ATTRIBUTE_DIRECTORY;
     });
-    const HRESULT cleanupCapture = regularCleanup ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.pack.cleanup_capture_us") : S_OK;
+    HRESULT cleanupCapture    = regularCleanup ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.pack.cleanup_capture_us") : S_OK;
+    FileOperationArtifacts::TouchGuardRequest artifactRequest;
+    if (regularCleanup && SUCCEEDED(cleanupCapture))
+        cleanupCapture = CaptureArchiveArtifactTouch(cleanupReceipt, selectedPaths, artifactRequest);
+
     if (deleteSourcesAfterPack && SUCCEEDED(cleanupCapture))
     {
         HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
@@ -12448,7 +12499,8 @@ void FolderWindow::CommandPack(Pane pane)
             ownerWindow = _hWnd.get();
         }
 
-        if (! ConfirmPermanentDeletePaths(ownerWindow, selectedPaths))
+        cleanupCapture = ConfirmArchiveCleanupPaths(ownerWindow, selectedPaths, artifactRequest, cleanupReceipt.artifactTouch);
+        if (cleanupCapture == S_FALSE)
         {
             result.archivePath = archivePath.value();
             result.hr          = S_FALSE;
@@ -12679,8 +12731,11 @@ void FolderWindow::CommandUnpack(Pane pane)
     if (! ownerAvailable() || RefuseFileOperationForPendingExit(pane, IDS_CMD_UNPACK))
         return;
 
-    const HRESULT cleanupCapture =
+    HRESULT cleanupCapture =
         deleteArchiveAfterUnpack ? CaptureArchiveCleanupSources(cleanupReceipt, selectedPaths, L"archive.unpack.cleanup_capture_us") : S_OK;
+    FileOperationArtifacts::TouchGuardRequest artifactRequest;
+    if (deleteArchiveAfterUnpack && SUCCEEDED(cleanupCapture))
+        cleanupCapture = CaptureArchiveArtifactTouch(cleanupReceipt, selectedPaths, artifactRequest);
 
     if (deleteArchiveAfterUnpack && SUCCEEDED(cleanupCapture))
     {
@@ -12690,7 +12745,8 @@ void FolderWindow::CommandUnpack(Pane pane)
             ownerWindow = _hWnd.get();
         }
 
-        if (! ConfirmPermanentDeletePaths(ownerWindow, selectedPaths))
+        cleanupCapture = ConfirmArchiveCleanupPaths(ownerWindow, selectedPaths, artifactRequest, cleanupReceipt.artifactTouch);
+        if (cleanupCapture == S_FALSE)
         {
             result.archivePath     = selectedPaths.front();
             result.destinationPath = destinationPath.value();
