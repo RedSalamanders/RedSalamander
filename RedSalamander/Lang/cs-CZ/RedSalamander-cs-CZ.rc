@@ -1267,6 +1267,7 @@ BEGIN
     IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "Název složky nemůže být '.' nebo '...'."
     IDS_MSG_PANE_CREATE_DIR_INVALID_WHITESPACE           "Název složky nesmí obsahovat konce řádků ani tabulátory."
     IDS_FMT_PANE_CREATE_DIR_FAILED                       "Nepodařilo se vytvořit složku:\r\n\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_FILEOPS_CREATE_FOLDER_FAILED                     "Složku se nepodařilo vytvořit."
     IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "Plugin systému souborů '{0}' nepodporuje vytváření složek."
     IDS_MSG_PANE_EDIT_NEW_UNSUPPORTED                    "Vytvoření nového souboru není pro aktuální systém souborů podporováno."
     IDS_FMT_PANE_EDIT_NEW_UNSUPPORTED_PLUGIN             "Plugin systému souborů '{0}' nepodporuje vytváření souborů."

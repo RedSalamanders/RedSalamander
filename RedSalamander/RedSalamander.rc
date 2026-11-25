@@ -1467,6 +1467,7 @@ BEGIN
     IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "A folder name can't be '.' or '..'."
     IDS_MSG_PANE_CREATE_DIR_INVALID_WHITESPACE           "A folder name can't contain line breaks or tabs."
     IDS_FMT_PANE_CREATE_DIR_FAILED                       "Failed to create folder:\r\n\r\n{0}\r\n\r\nError: 0x{1:08X}"
+    IDS_FILEOPS_CREATE_FOLDER_FAILED                     "The folder could not be created."
     IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "The '{0}' file system plugin does not support creating folders."
     IDS_MSG_PANE_EDIT_NEW_UNSUPPORTED                    "Creating a new file is not supported for the current file system."
     IDS_FMT_PANE_EDIT_NEW_UNSUPPORTED_PLUGIN             "The '{0}' file system plugin does not support creating files."

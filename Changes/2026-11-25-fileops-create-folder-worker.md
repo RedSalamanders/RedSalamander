@@ -1,0 +1,1 @@
+- Create folders on a queued File Operations worker. The task validates the captured location, checks for cancellation and reports completion against that location.
