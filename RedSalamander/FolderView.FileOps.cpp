@@ -319,7 +319,7 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
         totalPathChars += length;
     }
 
-    if (moveSequence && ! result.empty() && ReadOpenClipboardDropEffect() == DROPEFFECT_MOVE)
+    if (moveSequence && ! result.empty() && ReadOpenClipboardDropEffect() == static_cast<DWORD>(DROPEFFECT_MOVE))
     {
         // Delayed formats can advance the sequence when rendered. Sample after both
         // reads while the same clipboard open still protects the complete list.
