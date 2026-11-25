@@ -12784,6 +12784,11 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         }
     }
 
+    const auto recordLeftoverDecline = [&](HRESULT status) noexcept
+    {
+        if (_leftoverDeleteTouchRequest)
+            Debug::Perf::EmitValue(L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(_leftoverDeleteTouchRequest->items.size()), status);
+    };
     ConflictAction action = ConflictAction::None;
 #ifdef ENABLE_TESTS
     if (_permanentDeleteTestOverride == 1)
@@ -12824,16 +12829,16 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         const DeferredConsentResult result = RequestDeferredConsent(*this, request);
         if (FAILED(result.status))
         {
+            recordLeftoverDecline(result.status);
             return result.status;
         }
         action = result.action;
     }
     if (action != ConflictAction::PermanentDelete)
     {
-        if (_leftoverDeleteTouchRequest)
-            Debug::Perf::EmitValue(
-                L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(_leftoverDeleteTouchRequest->items.size()), HRESULT_FROM_WIN32(ERROR_CANCELLED));
-        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        constexpr HRESULT canceled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        recordLeftoverDecline(canceled);
+        return canceled;
     }
 #ifdef ENABLE_TESTS
     g_fileOpsPermanentDeleteBeforeRecheckPausePoint.Pause(10'000ull);
