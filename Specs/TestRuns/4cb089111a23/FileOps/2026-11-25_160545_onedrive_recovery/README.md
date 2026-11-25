@@ -1,0 +1,25 @@
+# I66 recovery of earlier OneDrive Personal fixtures
+
+The two runs used an isolated copy of the approved test profile and its
+saved sign-in without activating the desktop. The first run verified Recycle
+of the earlier roundtrip seed and the empty Move directory. OneDrive refused
+to recycle the Upload directory nonrecursively with `0x80070091`.
+
+The second run recycled the files and empty directories from the earlier
+Rename fixture and verified that exact root was absent. A separate read
+against the approved sync folder also confirmed absence. It retained the
+remaining Upload directory when the expected file could not be matched to
+the original local upload bytes, returning `0x8007051A`. An independent sync
+read reported the parent and its one Upload child. This does not establish
+a terminal result for the earlier Copy.
+
+| Recovery-only source | x64 Debug build receipt | Governed run | Outcome |
+| --- | --- | --- | --- |
+| `2ce6d94b8` | `09d9fbcebc4ba7b2be154d4e2748076573ed6b190f3e08e0b2099cbcf4106322` | `20261125T145221Z-84500-45eca834211347f686c0e3bf57028827` | 2 passed, 1 failed, 0 skipped |
+| `a08db7f8d` | `c16e7ddf4fba62acde145ed1b10860d2b9cddb6fc8982394353fdf0c3be8fd25` | `20261125T150545Z-68624-6138d1b422834569a3160f0abba000b0` | 2 passed, 1 failed, 0 skipped |
+
+Both builds emitted zero warnings and errors. Both runs verified the
+installed settings digest and removed the isolated settings files before
+archival. The local recovery sources reused the focused selector to launch a
+bounded fixture-specific body. The original broad timeout and failed cleanup
+remain in the [earlier run records](../2026-11-25_144010_graph_live_preflight/README.md).
