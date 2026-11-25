@@ -273,11 +273,14 @@ Recycle removes only the path-resolved stable item ID while preserving a same-pa
 and require every DELETE request in that route to omit root ETag/`If-Match`. Generic provider
 contracts also enforce the `delete:false`, `recycle:true`, `rename:true` capability tuple: Graph
 Delete is Recycle by stable item ID (the item goes to the drive's recycle bin; permanent Delete is
-honestly absent), and Rename is the PATCH rename/move path with its If-Match revision guard. Every
-Recycle and Rename completion carries the provider's `FileSystemItemMutationResult` (success =
-known and committed with the original gone; a definitive refusal = known and not committed;
-anything else carries no record), so the host never treats a successful Graph mutation as
-indeterminate. The plugin advertises `IFileSystemAtomicWriter`: a simple upload is one PUT (with
+honestly absent). Singular and batch Rename refuse an observed occupied name, even with the legacy
+overwrite flag, before sending a backup or source mutation. A Rename that uses the same item ID with
+a different case may proceed. The source PATCH carries `If-Match` when the listing supplies the
+revision. When a reply is lost, reconciliation requires the item ID, exact new spelling, and intended
+parent. Both Rename entry points forward the same per-item receipt for a proved commit or an
+observed pre-dispatch collision. An unproved outcome carries no receipt. The
+[Graph driveItem update contract](https://learn.microsoft.com/en-us/graph/api/driveitem-update?view=graph-rest-1.0)
+defines the revision header. The plugin advertises `IFileSystemAtomicWriter`: a simple upload is one PUT (with
 `If-None-Match: *` unless overwrite was granted) and an upload session's item appears only when the
 session completes under the requested conflict behavior, so the host bridge publishes new names
 into Graph destinations through the provider writer. A replacement granted through the host
