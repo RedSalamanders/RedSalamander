@@ -5719,7 +5719,7 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'sourceIsDirectory[\s\S]{0,220}IsSameOrDescendantNormalizedWindowsPath'
         $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
         $commands | Should Match 'if\s*\(FAILED\(result\.hr\)\)[\s\S]{0,1600}if\s*\(deleteSourcesAfterPack\)'
-        ($commands -replace '\s+', ' ') | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\)\)'
+        ($commands -replace '\s+', ' ') | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE\s*;\s*deleteRequest\.origin\s*=\s*FolderView::FileOperationRequest::Origin::PackCleanup[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\),\s*exactCleanup\)'
         $commands | Should Not Match 'DeletePackedSources\('
     }
 

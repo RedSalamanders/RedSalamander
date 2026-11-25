@@ -287,8 +287,8 @@ enum class ObjectBindingSupport : uint8_t
                 return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
             }
             // Ordinary Permanent Delete pins its roots before asking on the task.
-            // Unpack has already read its selected files under exact bindings.
-            if (typedPlan.origin == FileOperations::DeleteOrigin::UnpackCleanup &&
+            // Regular-file archive cleanup requires the exact versions read by the archive command.
+            if (FileOperations::RequiresArchiveCleanupRevision(typedPlan.origin, typedPlan.recursive) &&
                 (typedPlan.mode != FileOperations::DeleteMode::Permanent || typedPlan.recursive || typedPlan.nativeAuthority ||
                  std::ranges::any_of(typedPlan.selectedItems,
                                      [&](const FileOperations::QualifiedSourceItem& item) noexcept
@@ -2288,7 +2288,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                                                          std::function<HRESULT()> preWorkerReleaseBarrier,
                                                          std::function<HRESULT()> preConsumptionDecisionGate,
                                                          std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver,
-                                                         const FileOperations::UnpackCleanupReceipt* unpackCleanup)
+                                                         const FileOperations::ArchiveCleanupReceipt* archiveCleanup)
 {
     const auto startedAt = std::chrono::steady_clock::now();
     if (taskIdOut)
@@ -2442,7 +2442,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     construction.deleteOrigin               = deleteOrigin;
     construction.capturedConsentKind        = capturedConsentKind;
     construction.moveClipboardSequence      = moveClipboardSequence;
-    construction.unpackCleanup              = unpackCleanup;
+    construction.archiveCleanup             = archiveCleanup;
     OperationAdmission admission{};
     const HRESULT constructionHr = BuildOperationAdmission(std::move(construction), admission, startedAt);
     if (constructionHr != S_OK)
@@ -2494,7 +2494,7 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
     const FileOperations::DeleteOrigin deleteOrigin                      = construction.deleteOrigin;
     const std::optional<FileOperations::ConsentKind> capturedConsentKind = construction.capturedConsentKind;
     const std::optional<uint32_t> moveClipboardSequence                  = construction.moveClipboardSequence;
-    const FileOperations::UnpackCleanupReceipt* unpackCleanup            = construction.unpackCleanup;
+    const FileOperations::ArchiveCleanupReceipt* archiveCleanup          = construction.archiveCleanup;
 
     const auto reject = [&](HRESULT hr, FileOperations::PlanRejectionBucket bucket) noexcept -> HRESULT
     {
@@ -2533,20 +2533,20 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
                                                         : FileOperations::PlanRejectionBucket::MalformedEndpoint);
     }
 
-    if (deleteOrigin == FileOperations::DeleteOrigin::UnpackCleanup)
+    if (FileOperations::RequiresArchiveCleanupRevision(deleteOrigin, (flags & FILESYSTEM_FLAG_RECURSIVE) != 0))
     {
-        if (! unpackCleanup)
+        if (! archiveCleanup)
             return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
 
         if (operation != FILESYSTEM_DELETE || capturedConsentKind != FileOperations::ConsentKind::ArchiveDeleteAfter ||
-            (flags & (FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN)) != 0 || unpackCleanup->fileSystem.get() != fileSystem.get() ||
-            unpackCleanup->pluginId != sourcePluginId || unpackCleanup->instanceContext != sourceInstanceContext ||
-            unpackCleanup->selectedItems.size() != sourcePaths.size())
+            (flags & (FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN)) != 0 || archiveCleanup->fileSystem.get() != fileSystem.get() ||
+            archiveCleanup->pluginId != sourcePluginId || archiveCleanup->instanceContext != sourceInstanceContext ||
+            archiveCleanup->sources.size() != sourcePaths.size())
         {
             return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
         }
     }
-    else if (unpackCleanup)
+    else if (archiveCleanup)
     {
         return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
     }
@@ -2872,12 +2872,15 @@ HRESULT FolderWindow::FileOperationState::BuildOperationAdmission(OperationConst
             for (const size_t originalIndex : partition.originalIndices)
             {
                 const std::filesystem::path& sourcePath = sourcePaths[originalIndex];
-                if (unpackCleanup)
+                if (archiveCleanup)
                 {
-                    const auto& approved = unpackCleanup->selectedItems[originalIndex];
-                    if (approved.providerPath != sourcePath.native())
+                    const auto approved = archiveCleanup->sources.find(sourcePath.native());
+                    if (approved == archiveCleanup->sources.end())
                         return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MalformedSource);
-                    deletion.selectedItems.push_back(approved);
+                    deletion.selectedItems.emplace_back(FileOperations::QualifiedSourceItem{
+                        .providerPath    = sourcePath.native(),
+                        .ingressSnapshot = approved->second,
+                    });
                 }
                 else
                 {
@@ -3801,7 +3804,7 @@ HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_
 
 HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane,
                                                        FolderView::FileOperationRequest request,
-                                                       const FileOperations::UnpackCleanupReceipt* unpackCleanup) noexcept
+                                                       const FileOperations::ArchiveCleanupReceipt* archiveCleanup) noexcept
 {
     // Drop, paste, pane-menu and inline-rename requests are refused before any prompt or clipboard use.
     if (RefuseFileOperationForPendingExit(pane, request.operation))
@@ -4081,7 +4084,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane,
                                                       std::move(request.preWorkerReleaseBarrier),
                                                       {},
                                                       {},
-                                                      unpackCleanup);
+                                                      archiveCleanup);
     if (SUCCEEDED(startHr) && taskId != 0u && (removalFocusToken != 0u || requestCompletion))
     {
         _fileOperationRequestCompletionCallbacks.insert_or_assign(

@@ -26,4 +26,12 @@ The Local revision detected the change and the edited file remained.
 - Focused run `20261125T170419Z-36572-4dd117826c864851a95347102df8e66c`
   passed 67 runner-plan checks and 276 source and tooling checks.
 
+The exact PR head `bee641dfc` built for x64 Release with zero warnings
+and errors on receipt
+`e22001d7917501f2fe2697ae17c67312619c755a11311f87077cbaa65d407937`.
+Non-activating run `20261125T172132Z-87204-de1de0fff1a74e5eafd6bad097707841`
+passed in 1,266 ms with zero failures and skips. The whole evidence
+inventory passed all 18,733 tracked files. [PR #292](https://github.com/RedSalamanders/RedSalamander/pull/292)
+merged at `4e24d76ca` after the required checks.
+
 Full hosted Release and archive worker migration remain open.

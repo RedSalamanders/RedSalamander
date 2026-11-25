@@ -44,7 +44,7 @@ struct CrossFileSystemBridge;
 
 namespace FileOperations
 {
-struct UnpackCleanupReceipt;
+struct ArchiveCleanupReceipt;
 
 // Immutable admission identity for a card. These counts describe selected roots,
 // never recursive discovery; retaining a subject does not retain a path list.
@@ -1255,6 +1255,7 @@ public:
         std::filesystem::path destinationPath;
         bool overwrite   = true;
         bool deleteAfter = false;
+        std::wstring packerExtension;
     };
 
     struct ArchiveCommandDebugResult
@@ -1557,7 +1558,7 @@ private:
     void EnsureFileOperations();
     HRESULT StartFileOperationFromFolderView(Pane pane,
                                              FolderView::FileOperationRequest request,
-                                             const FileOperations::UnpackCleanupReceipt* unpackCleanup = nullptr) noexcept;
+                                             const FileOperations::ArchiveCleanupReceipt* archiveCleanup = nullptr) noexcept;
     // The pane already shows why an exit-pending request was refused, and a refusal the user was
     // already told about needs no second message, so FolderView receives either as "not started"
     // and does not add a generic failure.

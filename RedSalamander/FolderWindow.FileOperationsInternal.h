@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -404,14 +405,14 @@ struct QualifiedSourceItem
     std::optional<ProviderIdentitySnapshot> ingressSnapshot;
 };
 
-// Unpack binds the original regular files before delete-after consent. The
-// Delete task receives only the exact source paths and comparison snapshots.
-struct UnpackCleanupReceipt final
+// The archive command snapshots the original regular files before consent.
+// The Delete task copies the snapshots into its selected source items.
+struct ArchiveCleanupReceipt final
 {
     wil::com_ptr<IFileSystem> fileSystem;
     std::wstring pluginId;
     std::wstring instanceContext;
-    std::vector<QualifiedSourceItem> selectedItems;
+    std::unordered_map<std::wstring, ProviderIdentitySnapshot> sources;
 };
 
 struct QualifiedDestination
@@ -491,6 +492,11 @@ struct DeletePlan
     OperationOptions options;
     std::optional<DestructiveConsentReceipt> initialConsent;
 };
+
+[[nodiscard]] inline bool RequiresArchiveCleanupRevision(DeleteOrigin origin, bool recursive) noexcept
+{
+    return origin == DeleteOrigin::UnpackCleanup || (origin == DeleteOrigin::PackCleanup && ! recursive);
+}
 
 struct CreateDirectoryAdmission
 {
@@ -1152,7 +1158,7 @@ struct FolderWindow::FileOperationState
         std::optional<FileOperations::ConsentKind> capturedConsentKind;
         std::optional<uint32_t> moveClipboardSequence;
         // Borrowed for synchronous plan construction. The plan copies the snapshots.
-        const FileOperations::UnpackCleanupReceipt* unpackCleanup = nullptr;
+        const FileOperations::ArchiveCleanupReceipt* archiveCleanup = nullptr;
     };
 
     struct OperationAdmission
@@ -2721,7 +2727,7 @@ struct FolderWindow::FileOperationState
                            std::function<HRESULT()> preWorkerReleaseBarrier                   = {},
                            std::function<HRESULT()> preConsumptionDecisionGate                = {},
                            std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver = {},
-                           const FileOperations::UnpackCleanupReceipt* unpackCleanup                                           = nullptr);
+                           const FileOperations::ArchiveCleanupReceipt* archiveCleanup                                         = nullptr);
 
     HRESULT AdmitInlineRename(FolderWindow::Pane sourcePane,
                               const wil::com_ptr<IFileSystem>& fileSystem,
