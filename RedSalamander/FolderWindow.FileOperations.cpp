@@ -303,6 +303,23 @@ enum class ObjectBindingSupport : uint8_t
             }
             return S_OK;
         }
+        else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
+        {
+            if (! IsQualifiedEndpointValid(typedPlan.endpoint))
+                return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
+            const auto& parent    = typedPlan.providerParentPath.native();
+            const auto& candidate = typedPlan.candidateProviderPath.native();
+            if (parent.empty() || candidate.empty() || typedPlan.providerCollisionKey.empty())
+                return RejectPlan(PlanRejectionBucket::MalformedDestination, rejectionBucket);
+            if (IsLocalFileSystemEndpointImpl(typedPlan.endpoint) &&
+                (! Common::Paths::IsSupportedLocalFileOperationPath(parent) || ! Common::Paths::IsSupportedLocalFileOperationPath(candidate)))
+                return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
+            std::wstring derivedParent;
+            const auto& identity = typedPlan.endpoint.pathIdentity.value();
+            if (! TryGetFileSystemParentPath(identity, candidate, derivedParent) || ! EquivalentPath(identity, parent, derivedParent))
+                return RejectPlan(PlanRejectionBucket::EscapingDestinationMapping, rejectionBucket);
+            return S_OK;
+        }
         else
         {
             const bool scheduledRename =
@@ -471,6 +488,11 @@ enum class ObjectBindingSupport : uint8_t
             for (const auto& item : typedPlan.selectedItems)
                 bytes += itemBytes(item);
         }
+        else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
+        {
+            bytes += endpointBytes(typedPlan.endpoint) + stringBytes(typedPlan.providerParentPath.native()) +
+                     stringBytes(typedPlan.candidateProviderPath.native()) + stringBytes(typedPlan.providerCollisionKey);
+        }
         else
         {
             bytes += endpointBytes(typedPlan.endpoint);
@@ -493,6 +515,8 @@ enum class ObjectBindingSupport : uint8_t
         using Plan = std::remove_cvref_t<decltype(typedPlan)>;
         if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
             return static_cast<uint64_t>(typedPlan.finalMappings.size());
+        else if constexpr (std::is_same_v<Plan, FileOperations::CreateDirectoryAdmission>)
+            return 1u;
         else
             return static_cast<uint64_t>(typedPlan.selectedItems.size());
     },
@@ -3429,6 +3453,106 @@ HRESULT FolderWindow::FileOperationState::AdmitBatchRename(FolderWindow::Pane so
                                 std::move(preparationObserver));
 }
 
+std::wstring FileOperations::BuildCreateDirectorySuggestedName(std::wstring_view baseName, unsigned int suffix)
+{
+    if (suffix == 0u)
+    {
+        return std::wstring(baseName);
+    }
+
+    return std::format(L"{} ({})", baseName, suffix);
+}
+
+HRESULT FolderWindow::FileOperationState::AdmitCreateDirectory(FolderWindow::Pane sourcePane,
+                                                               const wil::com_ptr<IFileSystem>& fileSystem,
+                                                               std::wstring pluginId,
+                                                               std::wstring pluginShortId,
+                                                               std::wstring instanceContext,
+                                                               CreateDirectoryRequest request)
+{
+    const auto startedAt = std::chrono::steady_clock::now();
+    if (_completionShutdown.load(std::memory_order_acquire))
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+    if (_owner.IsFileOperationsExitPending())
+        return FolderWindow::kFileOperationRefusedForPendingExit;
+    if (! fileSystem || pluginId.empty() || request.parent.empty() || request.name.empty())
+        return E_INVALIDARG;
+
+    request.executionMode = ShouldQueueNewTask() ? FileOperations::ExecutionMode::Queue : FileOperations::ExecutionMode::Parallel;
+    auto task             = std::make_unique<Task>(*this);
+    {
+        std::scoped_lock lock(_mutex);
+        task->_taskId = _nextTaskId++;
+    }
+    const uint64_t id = task->_taskId;
+    task->_admissionKey.store(id, std::memory_order_release);
+    task->_queueOrderKey.store(id, std::memory_order_release);
+    task->_operation             = FILESYSTEM_CREATE_DIRECTORY;
+    task->_executionMode         = ExecutionMode::PerItem;
+    task->_sourcePane            = sourcePane;
+    task->_sourcePluginId        = std::move(pluginId);
+    task->_sourcePluginShortId   = std::move(pluginShortId);
+    task->_sourceInstanceContext = std::move(instanceContext);
+    task->_fileSystem            = fileSystem;
+    task->_sourcePaths.push_back(request.parent);
+    task->_waitForOthers.store(request.executionMode == FileOperations::ExecutionMode::Queue, std::memory_order_release);
+    task->_holdsQueuePlace.store(true, std::memory_order_release);
+    task->_createDirectoryRequest = std::move(request);
+    task->_progressSourcePath     = task->_sourcePaths.front().native();
+    task->_topLevelItemKinds.assign(1u, Task::TopLevelItemKind::Folder);
+    task->_topLevelItemCompleted.assign(1u, 0u);
+    task->_plannedTopLevelFolders = 1u;
+    const ULONGLONG now           = TaskPresentationNowTick();
+    task->_presentationState.store(Task::TaskPresentationState::Hidden, std::memory_order_release);
+    task->_presentationDeadlineTick = now > std::numeric_limits<ULONGLONG>::max() - FileOperations::kTaskCardRevealDelayMs
+                                          ? std::numeric_limits<ULONGLONG>::max()
+                                          : now + FileOperations::kTaskCardRevealDelayMs;
+    task->InitializeSourceItemResultBuilders();
+
+    const HRESULT recoveryHr = ArmCompletionRecoveryTimer();
+    if (FAILED(recoveryHr))
+        return recoveryHr;
+    Task* const published = task.get();
+    {
+        std::scoped_lock lock(_mutex);
+        _tasks.emplace_back(std::move(task));
+    }
+    try
+    {
+        published->_thread = std::jthread([published](std::stop_token token) noexcept { published->ThreadMain(token); });
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::system_error& error)
+    {
+        // Thread creation may fail before there is a worker to publish a completion.
+        Debug::Error(L"File Operations could not start the Create Folder worker (taskId={}, code={}).", id, error.code().value());
+        WithdrawUnstartedTask(published);
+        return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+    }
+    RequestTaskPresentationRefresh();
+    published->_workerReleased.store(true, std::memory_order_release);
+    published->_workerReleased.notify_all();
+    Debug::Perf::Emit(L"fileops.create_directory.admission.ui_thread_us", L"published", Debug::Perf::ElapsedUs(startedAt), 1u, 0u, S_OK);
+    return S_OK;
+}
+
+HRESULT FolderWindow::FileOperationState::Task::PrepareCreateDirectoryAdmission() noexcept
+{
+    if (! _createDirectoryRequest || ! _state)
+        return E_UNEXPECTED;
+    const auto& request = _createDirectoryRequest.value();
+    FileOperations::CreateDirectoryAdmission plan{};
+    RETURN_IF_FAILED(_state->QualifyCreateDirectory(_fileSystem, _sourcePluginId, _sourceInstanceContext, request.parent, request.name, plan));
+    plan.options.executionMode = request.executionMode;
+    FileOperations::FileOperationPlanGroup plans;
+    plans.emplace_back(std::move(plan));
+    StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(plans)));
+    return S_OK;
+}
+
 HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_ptr<IFileSystem>& fileSystem,
                                                                  std::wstring_view pluginId,
                                                                  std::wstring_view instanceContext,
@@ -3507,6 +3631,7 @@ HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_
         .cancellationRouteClass              = candidateCapabilities->cancellationRouteClass,
         .providerWatchdogTimeoutMs           = candidateCapabilities->providerWatchdogTimeoutMs,
     };
+    admissionOut.providerParentPath       = providerParentPath;
     admissionOut.candidateProviderPath    = std::filesystem::path(candidatePath);
     admissionOut.providerCollisionKey     = nameContract.collisionKey;
     admissionOut.allowLocalNativeFallback = localEndpoint;
@@ -5570,6 +5695,44 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                 }
                 break;
             case FILESYSTEM_CREATE_DIRECTORY:
+            {
+                if (! plans || plans->size() != 1u)
+                    break;
+                const auto* create  = std::get_if<FileOperations::CreateDirectoryAdmission>(&plans->front());
+                const auto* outcome = outcomeForIndex(0u);
+                if (! create || ! outcome || ! create->endpoint.pathIdentity ||
+                    (outcome->publication != FileOperations::PublicationState::Published && outcome->publication != FileOperations::PublicationState::Unknown))
+                    break;
+
+                const auto& parent   = create->providerParentPath;
+                const auto& identity = create->endpoint.pathIdentity.value();
+                const bool created   = outcome->publication == FileOperations::PublicationState::Published && ! task->_createdDirectory.empty();
+                cache.NotifyFolderContentsChanged(sourceCacheContext, parent);
+                std::wstring createdLeaf;
+                if (created)
+                    static_cast<void>(TryGetFileSystemLeafName(identity, task->_createdDirectory.native(), createdLeaf));
+
+                const auto refresh = [&](PaneState& paneState)
+                {
+                    const auto currentFolder = paneState.folderView.GetFolderPath();
+                    if (! paneState.fileSystem || ! currentFolder || ! EqualsNoCase(paneState.pluginId, task->_sourcePluginId) ||
+                        ! EqualsNoCase(paneState.instanceContext, task->_sourceInstanceContext) ||
+                        ! EquivalentPath(identity, currentFolder->native(), parent.native()))
+                        return;
+
+                    if (&paneState == &src)
+                    {
+                        if (! createdLeaf.empty())
+                            paneState.folderView.RememberFocusedItemForFolder(parent, createdLeaf);
+                        paneState.folderView.ForceRefresh();
+                    }
+                    else if (! cache.IsFolderWatched(paneState.fileSystem.get(), parent))
+                        paneState.folderView.ForceRefresh();
+                };
+                refresh(_leftPane);
+                refresh(_rightPane);
+                break;
+            }
             default:
                 forceRefreshPane(src);
                 if (dst != nullptr)

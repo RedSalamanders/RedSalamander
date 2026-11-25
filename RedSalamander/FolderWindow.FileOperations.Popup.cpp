@@ -11168,20 +11168,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         ? DipsToPixels(MeasureSpeedLimitWidthDip(row.taskIndex, speedLimitText), _dpi)
                         : 0.0f;
 
-                const UINT opTextId = [&]() -> UINT
-                {
-                    switch (task.operation)
-                    {
-                        case FILESYSTEM_COPY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
-                        case FILESYSTEM_MOVE: return static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
-                        case FILESYSTEM_DELETE: return static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
-                        case FILESYSTEM_RENAME: return static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME);
-                        case FILESYSTEM_CREATE_DIRECTORY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
-                    }
-                    return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
-                }();
-
-                const std::wstring opText = LoadStringResource(nullptr, opTextId);
+                const std::wstring opText = LoadStringResource(nullptr, FileOperations::ConflictPromptTitleStringId(task.operation));
                 const ULONGLONG nowTick   = renderTick;
 
                 const TaskStatusKind taskStatus = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
@@ -14424,18 +14411,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshFailureSurfac
             text.append(L"\r\n…");
             break;
         }
-        UINT operationId = IDS_FILEOP_OPERATION_COPY;
-        switch (task.operation)
-        {
-            case FILESYSTEM_MOVE: operationId = IDS_FILEOP_OPERATION_MOVE; break;
-            case FILESYSTEM_DELETE: operationId = IDS_FILEOP_OPERATION_DELETE; break;
-            case FILESYSTEM_RENAME: operationId = IDS_FILEOP_OPERATION_RENAME; break;
-            case FILESYSTEM_COPY:
-            case FILESYSTEM_CREATE_DIRECTORY:
-            default: break;
-        }
         text.append(L"\r\n")
-            .append(LoadStringResource(nullptr, operationId))
+            .append(LoadStringResource(nullptr, FileOperations::ConflictPromptTitleStringId(task.operation)))
             .append(L": ")
             .append(AccessibleStatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
         ++listed;
@@ -18300,19 +18277,7 @@ void DebugResolveFileOperationsWholeTaskProgress(const FileOperationsPopupIntern
 
 std::wstring DebugBuildFileOperationsTaskHeaderText(const FileOperationsPopupInternal::TaskSnapshot& task, ULONGLONG nowTick)
 {
-    const UINT opTextId = [&]() -> UINT
-    {
-        switch (task.operation)
-        {
-            case FILESYSTEM_COPY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
-            case FILESYSTEM_MOVE: return static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
-            case FILESYSTEM_DELETE: return static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
-            case FILESYSTEM_RENAME: return static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME);
-            case FILESYSTEM_CREATE_DIRECTORY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
-        }
-        return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
-    }();
-    return BuildTaskHeaderText(task, LoadStringResource(nullptr, opTextId), nowTick);
+    return BuildTaskHeaderText(task, LoadStringResource(nullptr, FileOperations::ConflictPromptTitleStringId(task.operation)), nowTick);
 }
 
 std::wstring DebugFormatFileOperationsConflictTimestamp(__int64 fileTime) noexcept
