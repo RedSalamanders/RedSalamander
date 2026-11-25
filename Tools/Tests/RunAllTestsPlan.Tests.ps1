@@ -1221,6 +1221,8 @@ Describe 'Run-AllTests plan helper' {
                 'fileops_smbcorroboratedrenameprovider', 'FileOps_SmbCorroboratedRenameProvider*', 'FileOps_SmbCorroboratedRenameProvider ',
                 'c0_curlcommittedmutationresponselost', 'C0_CurlCommittedMutationResponseLost*', 'C0_CurlCommittedMutationResponseLost ',
                 'fileops_providercapabilitymatrix', 'FileOps_ProviderCapabilityMatrix*', 'FileOps_ProviderCapabilityMatrix ',
+                'fileops_repeatednonclipboardcopystorage', 'FileOps_RepeatedNonClipboardCopyStorage*', 'FileOps_RepeatedNonClipboardCopyStorage ',
+                'fileops_repeatednonclipboardmovestorage', 'FileOps_RepeatedNonClipboardMoveStorage*', 'FileOps_RepeatedNonClipboardMoveStorage ',
                 'delete_identitylesspinnedtreechangedentry', 'Delete_IdentityLessPinnedTreeChangedEntry*', 'Delete_IdentityLessPinnedTreeChangedEntry ',
                 'Delete_IdentityLessPinnedTreeChangedEntry,DiscoveryScope_LocalDirectApi',
                 'FileOpsFamily_PopupIdleCadence', 'FileOps_PopupIdle', 'FileOps_PopupIdleCadence*', 'fileops_popupidlecadence',
@@ -1239,7 +1241,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
-        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'Delete_IdentityLessPinnedTreeChangedEntry')
+        $reviewedCases = @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'Delete_IdentityLessPinnedTreeChangedEntry')
         # Bind the two normative lists to the same exact admissions exercised below.
         foreach ($contract in @(
                 @{ Path = 'Specs/Testing/Testing_ValidationEvidence.md'; Pattern = 'Only `-Suite FileOps` with one exact, case-sensitive filter from (?<cases>.*?) is admitted without that desktop lease\.' },
@@ -1263,7 +1265,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'retains the FileOps desktop lease for broad suites and proof injections using an exact owned-witness name' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('All', 'CI', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
@@ -1286,7 +1288,7 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'preserves exact owned-witness activation and desktop markers in quarantine repair' {
-        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
+        foreach ($case in @('DiscoveryScope_LocalDirectApi', 'DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_AlertOverlayUxAccessibility', 'FileOps_ReviewRemediationContracts', 'FileOps_DeferredExitRefusesNewWork', 'FileOps_ClearCompletedScope', 'FileOps_PopupIdleCadence', 'FileOps_IdentityInterlockWaiting', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb', 'FileOps_SmbExactRenameProvider', 'FileOps_SmbCorroboratedRenameProvider', 'C0_CurlCommittedMutationResponseLost', 'FileOps_ProviderCapabilityMatrix', 'FileOps_RepeatedNonClipboardCopyStorage', 'FileOps_RepeatedNonClipboardMoveStorage', 'Delete_IdentityLessPinnedTreeChangedEntry')) {
             foreach ($suite in @('FileOps', 'Full')) {
                 $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                     -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)

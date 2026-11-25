@@ -397,6 +397,20 @@ public:
         return waiting.conditionMet && task != nullptr && task->IsWaitingInQueue() && ! _state.completedTasks.contains(taskId);
     }
 
+    [[nodiscard]] bool WaitForAutomaticOverlap(uint64_t taskId, uint64_t predecessorId, std::wstring_view what)
+    {
+        const auto waiting = RedSalamander::TestSupport::PumpMessagesUntil(
+            [&]() noexcept
+        {
+            auto* task = _operations->FindTask(taskId);
+            return TryGetConflictPromptCopy(task).has_value() || _state.completedTasks.contains(taskId) ||
+                   IsWaitingBehindForSelfTest(task, _operations->FindTask(predecessorId));
+        },
+            {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = what});
+        auto* task = _operations->FindTask(taskId);
+        return waiting.conditionMet && ! TryGetConflictPromptCopy(task).has_value() && IsWaitingBehindForSelfTest(task, _operations->FindTask(predecessorId));
+    }
+
     // Ends a task that may still ask questions (a refused item asks what to do next): each one is
     // answered Cancel and recorded in `asked`.
     [[nodiscard]] const CompletedTaskInfo* CancelQuestionsUntilEnd(uint64_t taskId,
@@ -610,23 +624,6 @@ struct QueuedByNameDelete final
         return nullptr;
     static_cast<void>(SetEnvironmentVariableW(kIdentityLessRecycleFailEnv.data(), nullptr));
     return scope.CancelQuestionsUntilEnd(fixture.deletion, L"queued delete end", deleteQuestions);
-}
-
-// The overlap question of a task that works in a folder another task deletes by name: it names that
-// delete with the by-name problem, defaults to Queue after these tasks and offers no Run at the same time.
-[[nodiscard]] bool IsByNameOverlapQuestion(const IdentityLessPrompt& prompt, uint64_t deletion, FileOperations::SameHostOverlapProblem problem) noexcept
-{
-    return prompt.bucket == IdentityLessBucket::SameHostOverlap && prompt.overlapTaskId == deletion && prompt.overlapProblem == static_cast<uint8_t>(problem) &&
-           prompt.defaultAction == IdentityLessAction::Proceed && PromptHasAction(prompt, IdentityLessAction::Proceed) &&
-           PromptHasAction(prompt, IdentityLessAction::Cancel) && ! PromptHasAction(prompt, IdentityLessAction::RunConcurrently);
-}
-
-[[nodiscard]] std::wstring DescribeOverlapQuestion(const std::optional<IdentityLessPrompt>& prompt)
-{
-    if (! prompt.has_value())
-        return L"<no question>";
-    return std::format(
-        L"{} overlapTask={} problem={}", DescribeIdentityLessPrompt(prompt), prompt->overlapTaskId, static_cast<unsigned int>(prompt->overlapProblem));
 }
 
 // Opens the file the way another program holding it for reading does: no write or delete sharing.
@@ -1740,24 +1737,7 @@ struct QueuedByNameDelete final
     if (! move.has_value())
         return reject(L"the Move into the shared folder was not admitted");
     scope.Track(move.value());
-    const auto advisory = scope.WaitForQuestion(move.value(), L"queued overlap Move question");
-    const bool advised =
-        advisory.has_value() && IsByNameOverlapQuestion(advisory.value(), fixture.deletion, FileOperations::SameHostOverlapProblem::DeletedByNameWritten);
-    bool queuedBehindDelete = false;
-    if (advisory.has_value() && advisory->bucket == IdentityLessBucket::SameHostOverlap)
-    {
-        // Queue after these tasks, the default, whatever else the question offered.
-        if (! scope.Answer(move.value(), advisory.value(), IdentityLessAction::Proceed))
-            return reject(L"the Move's overlap question could not be answered");
-        queuedBehindDelete               = scope.WaitUntilWaitingToEnter(move.value(), L"queued overlap Move behind the delete");
-        IdentityLessTask* const moveTask = operations->FindTask(move.value());
-        queuedBehindDelete               = queuedBehindDelete && moveTask != nullptr && moveTask->IsOverlapQueued();
-    }
-    else if (! advisory.has_value())
-    {
-        // The defect of round 1: the Move ran without a question; let it finish before T ends.
-        static_cast<void>(scope.WaitForEnd(move.value(), L"queued overlap unadvised Move"));
-    }
+    const bool queuedBehindDelete    = scope.WaitForAutomaticOverlap(move.value(), fixture.deletion, L"Move waits behind the Delete");
     const bool moveEndedBeforeDelete = state.completedTasks.contains(move.value()) && ! state.completedTasks.contains(fixture.deletion);
 
     // T ends; D runs, and B after it when B queued behind it.
@@ -1770,9 +1750,7 @@ struct QueuedByNameDelete final
     const HRESULT deleteHr = deleteEnd != nullptr ? deleteEnd->hr : E_PENDING;
     const HRESULT moveHr   = moveEnd != nullptr ? moveEnd->hr : E_PENDING;
     const std::wstring observed =
-        std::format(L"advised={} queuedBehindDelete={} moveEndedBeforeDelete={} deleteHr=0x{:08X} moveHr=0x{:08X} sourceKept={} moved={} keep={} "
-                    L"deleteQuestions={} question=[{}]",
-                    advised,
+        std::format(L"queuedBehindDelete={} moveEndedBeforeDelete={} deleteHr=0x{:08X} moveHr=0x{:08X} sourceKept={} moved={} keep={} deleteQuestions={}",
                     queuedBehindDelete,
                     moveEndedBeforeDelete,
                     static_cast<unsigned long>(deleteHr),
@@ -1780,12 +1758,11 @@ struct QueuedByNameDelete final
                     sourceKept,
                     moved,
                     std::filesystem::exists(keep),
-                    deleteQuestions.size(),
-                    DescribeOverlapQuestion(advisory));
+                    deleteQuestions.size());
     AppendLog(std::format(L"Identity-less queued root overlap: {}", observed));
     // B waited for the delete: the delete removed only what it was consented for, the moved data survives once.
-    if (! advised || ! queuedBehindDelete || moveEndedBeforeDelete || deleteEnd == nullptr || moveEnd == nullptr || deleteHr != S_OK ||
-        std::filesystem::exists(keep) || sourceKept == moved)
+    if (! queuedBehindDelete || moveEndedBeforeDelete || deleteEnd == nullptr || moveEnd == nullptr || deleteHr != S_OK || std::filesystem::exists(keep) ||
+        sourceKept == moved)
         return reject(std::format(L"a task admitted after a queued delete by name did not respect its root: {}", observed));
     Debug::Perf::Emit(L"FileOps.SelfTest.IdentityLessQueuedRootOverlap", L"queued=after-delete;run-concurrently=not-offered", 0u, 1u, 0u, S_OK);
     return true;
@@ -2039,11 +2016,9 @@ struct QueuedByNameDelete final
     if (! copy.has_value())
         return reject(L"the Copy into the folder was not admitted");
     scope.Track(copy.value());
-    const auto copyQuestion = scope.WaitForQuestion(copy.value(), L"card-pending Copy question");
-    const bool copyAdvised  = copyQuestion.has_value() &&
-                              IsByNameOverlapQuestion(copyQuestion.value(), deletion.value(), FileOperations::SameHostOverlapProblem::DeletedByNameWritten);
-    if (copyQuestion.has_value() && copyQuestion->bucket == IdentityLessBucket::SameHostOverlap)
-        static_cast<void>(scope.Answer(copy.value(), copyQuestion.value(), IdentityLessAction::Cancel));
+    const bool copyQueued = scope.WaitForAutomaticOverlap(copy.value(), deletion.value(), L"Copy waits behind the pending Delete");
+    if (auto* task = operations->FindTask(copy.value()))
+        task->RequestCancel();
     const CompletedTaskInfo* copyEnd = scope.CancelQuestionsUntilEnd(copy.value(), L"card-pending Copy");
     const bool copiedIn              = std::filesystem::exists(shared / L"Sub" / incoming.filename());
 
@@ -2057,16 +2032,15 @@ struct QueuedByNameDelete final
         CountIdentityLessIssues(
             summary.value(), L"delete.confirmation.identityChanged", IdentityLessSeverity::Error, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH)) == 1u;
     const bool kept             = FileSizeEquals(shared / L"a.bin", 2048u) && FileSizeEquals(shared / L"Sub" / L"b.bin", 1024u) && FileSizeEquals(deep, 512u);
-    const std::wstring observed = std::format(L"copyAdvised={} copyHr=0x{:08X} copiedIn={} deleteHr=0x{:08X} refused={} kept={} question=[{}]",
-                                              copyAdvised,
+    const std::wstring observed = std::format(L"copyQueued={} copyHr=0x{:08X} copiedIn={} deleteHr=0x{:08X} refused={} kept={}",
+                                              copyQueued,
                                               copyEnd != nullptr ? static_cast<unsigned long>(copyEnd->hr) : 0ul,
                                               copiedIn,
                                               deleteEnd != nullptr ? static_cast<unsigned long>(deleteEnd->hr) : 0ul,
                                               refused,
-                                              kept,
-                                              DescribeOverlapQuestion(copyQuestion));
+                                              kept);
     AppendLog(std::format(L"Pinned tree, card pending: {}", observed));
-    if (! copyAdvised || copyEnd == nullptr || copyEnd->hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || copiedIn || ! refused || ! kept)
+    if (! copyQueued || copyEnd == nullptr || copyEnd->hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || copiedIn || ! refused || ! kept)
         return reject(std::format(L"the delete by name was not visible while its card waited, or deleted a tree that changed: {}", observed));
     Debug::Perf::Emit(L"FileOps.SelfTest.PinnedTreeCardPending", L"later-task-asked;deep-change-refused", 0u, 2u, 0u, S_OK);
     return true;
@@ -3480,31 +3454,37 @@ struct QueuedByNameDelete final
         return HasFileOpsPermanentDeleteBeforeRecheckPauseEnteredForSelfTest() || state.completedTasks.contains(recheckTask.value());
     }, {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = L"re-check pause"});
     std::optional<uint64_t> recheckLater;
-    std::optional<IdentityLessPrompt> recheckLaterQuestion;
+    bool recheckLaterQueued = false;
     if (recheckPaused.conditionMet && HasFileOpsPermanentDeleteBeforeRecheckPauseEnteredForSelfTest())
     {
         recheckLater = scope.StartDelete({location / recheckFolder.filename() / L"x.bin"}, true);
         if (recheckLater.has_value())
-            recheckLaterQuestion = scope.WaitForQuestion(recheckLater.value(), L"re-check later task question");
+        {
+            recheckLaterQueued = scope.WaitForAutomaticOverlap(recheckLater.value(), recheckTask.value(), L"later task waits behind the re-check");
+            if (auto* task = operations->FindTask(recheckLater.value()))
+                task->SetPaused(true);
+        }
     }
     ReleaseFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest();
     SetFileOpsPermanentDeleteBeforeRecheckPauseForSelfTest(false);
-    const bool recheckLaterAsked =
-        recheckLaterQuestion.has_value() &&
-        IsByNameOverlapQuestion(recheckLaterQuestion.value(), recheckTask.value(), FileOperations::SameHostOverlapProblem::DeletedByNameWritten);
     const CompletedTaskInfo* recheckEnd = scope.WaitForEnd(recheckTask.value(), L"re-check Delete");
-    // R7.5: the leftover listing leaves out the rows of a folder a live task works in: here the later task,
-    // whose question still waits once the delete (itself published from its card on) has ended.
+    // Keep the queued successor live to verify the leftover listing's path guard after the Delete ends.
     const uint64_t workingInHeldFolder =
         recheckLater.has_value() ? operations->FindLiveTaskWorkingIn(kPluginIdLocal, (location / recheckFolder.filename()).native()) : 0u;
     const uint64_t workingInOtherFolder = operations->FindLiveTaskWorkingIn(kPluginIdLocal, (location / L"not-held").native());
     if (recheckLater.has_value())
+    {
+        if (auto* task = operations->FindTask(recheckLater.value()))
+        {
+            task->RequestCancel();
+            task->SetPaused(false);
+        }
         static_cast<void>(scope.CancelQuestionsUntilEnd(recheckLater.value(), L"re-check later task end"));
+    }
     static_cast<void>(SetEnvironmentVariableW(kIdentityLessRecycleFailEnv.data(), nullptr));
-    if (! recheckLater.has_value() || ! recheckLaterAsked || recheckEnd == nullptr || recheckEnd->hr != S_OK || std::filesystem::exists(recheckFolder))
-        return reject(std::format(L"a task admitted after the answer was not asked about the delete, or blocked it: question=[{}] deleteHr=0x{:08X} "
-                                  L"folder={}",
-                                  DescribeOverlapQuestion(recheckLaterQuestion),
+    if (! recheckLater.has_value() || ! recheckLaterQueued || recheckEnd == nullptr || recheckEnd->hr != S_OK || std::filesystem::exists(recheckFolder))
+        return reject(std::format(L"the later task did not wait behind the Delete: queued={} deleteHr=0x{:08X} folder={}",
+                                  recheckLaterQueued,
                                   recheckEnd != nullptr ? static_cast<unsigned long>(recheckEnd->hr) : 0ul,
                                   std::filesystem::exists(recheckFolder)));
     if (workingInHeldFolder != recheckLater.value() || workingInOtherFolder != 0u)
@@ -3529,7 +3509,7 @@ struct QueuedByNameDelete final
         return HasFileOpsPermanentDeleteBeforeLiveOutputGuardPauseEnteredForSelfTest() || state.completedTasks.contains(runTask.value());
     }, {.timeout = SelfTest::Scale(kIdentityLessWait), .operationName = L"delete-time pause"});
     std::optional<uint64_t> copyOut;
-    std::optional<IdentityLessPrompt> copyOutQuestion;
+    bool copyOutQueued = false;
     if (runPaused.conditionMet && HasFileOpsPermanentDeleteBeforeLiveOutputGuardPauseEnteredForSelfTest())
     {
         copyOut = StartFileOperationAndGetId(operations,
@@ -3548,23 +3528,20 @@ struct QueuedByNameDelete final
         if (copyOut.has_value())
         {
             scope.Track(copyOut.value());
-            copyOutQuestion = scope.WaitForQuestion(copyOut.value(), L"delete-time Copy question");
+            copyOutQueued = scope.WaitForAutomaticOverlap(copyOut.value(), runTask.value(), L"Copy waits behind the running Delete");
         }
     }
     ReleaseFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest();
     SetFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest(false);
-    const bool copyOutAsked = copyOutQuestion.has_value() &&
-                              IsByNameOverlapQuestion(copyOutQuestion.value(), runTask.value(), FileOperations::SameHostOverlapProblem::DeletedByNameRead);
     const CompletedTaskInfo* runEnd = scope.CancelQuestionsUntilEnd(runTask.value(), L"delete-time Delete");
     if (copyOut.has_value())
         static_cast<void>(scope.CancelQuestionsUntilEnd(copyOut.value(), L"delete-time Copy end"));
-    if (! copyOut.has_value() || ! copyOutAsked || runEnd == nullptr || runEnd->hr != S_OK || std::filesystem::exists(runFolder))
-        return reject(std::format(L"a task admitted while the delete was about to run was not asked about it, or blocked it: question=[{}] "
-                                  L"deleteHr=0x{:08X} folder={}",
-                                  DescribeOverlapQuestion(copyOutQuestion),
+    if (! copyOut.has_value() || ! copyOutQueued || runEnd == nullptr || runEnd->hr != S_OK || std::filesystem::exists(runFolder))
+        return reject(std::format(L"the Copy did not wait behind the running Delete: queued={} deleteHr=0x{:08X} folder={}",
+                                  copyOutQueued,
                                   runEnd != nullptr ? static_cast<unsigned long>(runEnd->hr) : 0ul,
                                   std::filesystem::exists(runFolder)));
-    Debug::Perf::Emit(L"FileOps.SelfTest.IdentityLessFolderChangeAndHolders", L"card;delete;later-task-asked;running-task-asked", 0u, 4u, 0u, S_OK);
+    Debug::Perf::Emit(L"FileOps.SelfTest.IdentityLessFolderChangeAndHolders", L"card,delete,later-edit-waits,running-edit-waits", 0u, 4u, 0u, S_OK);
     return true;
 }
 

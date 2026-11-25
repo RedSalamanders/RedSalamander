@@ -97,6 +97,7 @@
     FileOps_ClearCompletedScope also supports -NonInteractive through a private popup and test-owned data.
     C0_CurlCommittedMutationResponseLost supports -NonInteractive and uses only loopback FTP fixtures.
     FileOps_ProviderCapabilityMatrix supports -NonInteractive through private providers and task controls.
+    FileOps_RepeatedNonClipboardCopyStorage and FileOps_RepeatedNonClipboardMoveStorage support -NonInteractive through owned tasks and sandbox files.
 
 .PARAMETER CommandsFamily
     With Suite Commands, runs one governed Commands source family in its own process.

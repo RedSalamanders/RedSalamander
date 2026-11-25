@@ -145,6 +145,8 @@ function Get-RSTestRunPlan {
              $CaseFilter -ceq 'DiscoveryScope_FolderLiveProgress' -or
              $CaseFilter -ceq 'DiscoveryScope_MultipleFoldersLiveProgress' -or
              $CaseFilter -ceq 'FileOps_ProviderCapabilityMatrix' -or
+             $CaseFilter -ceq 'FileOps_RepeatedNonClipboardCopyStorage' -or
+             $CaseFilter -ceq 'FileOps_RepeatedNonClipboardMoveStorage' -or
              $CaseFilter -ceq 'FileOps_RepeatDecisionContracts' -or
              $CaseFilter -ceq 'FileOps_AlertOverlayUxAccessibility' -or
              $CaseFilter -ceq 'FileOps_ReviewRemediationContracts' -or

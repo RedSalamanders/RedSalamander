@@ -12451,13 +12451,9 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
         releaseCopyPause();
         Fail(message);
     };
-    // R4-A02-1: a Delete injected over the source of a running Copy overlaps it (WriteSource over
-    // ReadSource). During Preparing the Delete raises the same-host overlap warning on its card with
-    // Queue after these tasks (default) and Don't start. Queue: the Delete waits behind the Copy and
-    // runs once it terminates (source gone, Copy complete). Don't start: the Delete ends as a Preparing
-    // cancel, nothing is removed, the Copy completes. The Copy is slow because it publishes into the
-    // seeded Dummy provider (5 ms per access). Its first publication is held until the
-    // Delete has actually entered its queue wait (or completed the explicit cancel).
+    // Hold a real Copy publication while a directory Delete starts over its source.
+    // Both Queue and Parallel must serialize this scope without asking. Verify ordinary
+    // queue completion and explicit cancellation from the waiting card before mutation.
     const bool dontStart                   = state.step == SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation;
     const wchar_t* const label             = dontStart ? L"R4A02 don't start" : L"R4A02 queue after";
     const std::filesystem::path srcDir     = state.tempRoot / (dontStart ? L"r4a02-dontstart-src" : L"r4a02-queue-src");
@@ -12547,7 +12543,7 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
                                                  {srcDir},
                                                  {},
                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                 false,
+                                                 ! dontStart,
                                                  0,
                                                  FolderWindow::FileOperationState::ExecutionMode::PerItem,
                                                  false);
@@ -12562,31 +12558,17 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
     }
     if (state.stepState == 2u)
     {
-        Task* deleteTask  = state.fileOps->FindTask(state.taskB.value());
-        const auto prompt = TryGetConflictPromptCopy(deleteTask);
-        if (! prompt.has_value())
+        Task* const removal = state.fileOps->FindTask(state.taskB.value());
+        if (TryGetConflictPromptCopy(removal).has_value() || state.completedTasks.contains(state.taskB.value()))
         {
-            if (state.completedTasks.contains(state.taskB.value()))
-            {
-                fail(std::format(L"{}: the Delete ran or waited without the same-host overlap warning.", label));
-                return true;
-            }
-            return false;
-        }
-        if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) ||
-            PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) ||
-            prompt->defaultAction != Task::ConflictAction::Proceed || prompt->escapeAction != Task::ConflictAction::Cancel ||
-            prompt->overlapTaskId != state.taskA.value())
-        {
-            fail(std::format(L"{}: the directory Delete warning must name the overlapping Copy (task {}) with Queue (default) and Don't start "
-                             L"(bucket={}, named task={}).",
-                             label,
-                             state.taskA.value(),
-                             static_cast<unsigned int>(prompt->bucket),
-                             prompt->overlapTaskId));
+            fail(std::format(L"{}: the Delete asked a question or finished before its automatic wait.", label));
             return true;
         }
-        deleteTask->DebugSubmitCurrentConflictDecision(dontStart ? Task::ConflictAction::Cancel : Task::ConflictAction::Proceed, false);
+        if (! IsWaitingBehindForSelfTest(removal, state.fileOps->FindTask(state.taskA.value())))
+            return false;
+
+        if (dontStart)
+            removal->RequestCancel();
         state.stepState = 4u;
         return false;
     }
@@ -12641,22 +12623,16 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
         }
         std::error_code ec;
         const bool sourceExists = std::filesystem::exists(srcDir, ec);
-        // I35 R5.1/R9.1: the overlap question is a consent note, not a warning. Whichever answer the
-        // user gave, the Delete counts no problem and keeps the question row for the log and export.
-        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> consentSummaries;
-        state.fileOps->CollectCompletedTasks(consentSummaries);
-        const auto consentSummary = std::ranges::find_if(consentSummaries, [&](const auto& value) noexcept { return value.taskId == state.taskB.value(); });
-        const bool consentRowKept = consentSummary != consentSummaries.end() && std::ranges::any_of(consentSummary->issueDiagnostics,
-                                                                                                    [](const auto& issue) noexcept
-        { return issue.conflictPrompt.has_value() && issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Info; });
-        if (consentSummary == consentSummaries.end() || consentSummary->warningCount != 0u || consentSummary->errorCount != 0u || ! consentRowKept ||
-            ! IsAutoDismissableFileOperationCompletion(consentSummary->resultHr, consentSummary->warningCount, consentSummary->errorCount, false))
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+        state.fileOps->CollectCompletedTasks(summaries);
+        const auto result                = std::ranges::find(summaries, state.taskB.value(), &FolderWindow::FileOperationState::CompletedTaskSummary::taskId);
+        const bool overlapPromptRecorded = result != summaries.end() && std::ranges::any_of(result->issueDiagnostics, [](const auto& issue) noexcept {
+            return issue.conflictPrompt.has_value() && issue.conflictPrompt->bucket == FileOperations::ConflictClass::SameHostOverlap;
+        });
+        if (result == summaries.end() || result->warningCount != 0u || result->errorCount != 0u || overlapPromptRecorded ||
+            ! IsAutoDismissableFileOperationCompletion(result->resultHr, result->warningCount, result->errorCount, false))
         {
-            fail(std::format(L"{}: the answered overlap question counted as a problem or was not kept (warnings={}, errors={}, row kept={}).",
-                             label,
-                             consentSummary != consentSummaries.end() ? consentSummary->warningCount : 0ul,
-                             consentSummary != consentSummaries.end() ? consentSummary->errorCount : 0ul,
-                             consentRowKept));
+            fail(std::format(L"{}: the automatic wait must not create a consent record or a problem.", label));
             return true;
         }
         if (dontStart)
@@ -12898,37 +12874,18 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
     }
     if (state.stepState == 2u)
     {
-        Task* const taskA  = state.fileOps->FindTask(state.taskA.value());
-        Task* const taskB  = state.fileOps->FindTask(state.taskB.value());
-        const auto promptA = TryGetConflictPromptCopy(taskA);
-        const auto promptB = TryGetConflictPromptCopy(taskB);
-        if (! promptA.has_value() && ! promptB.has_value())
+        Task* const taskA = state.fileOps->FindTask(state.taskA.value());
+        Task* const taskB = state.fileOps->FindTask(state.taskB.value());
+        if (TryGetConflictPromptCopy(taskA).has_value() || TryGetConflictPromptCopy(taskB).has_value() || state.completedTasks.contains(state.taskA.value()) ||
+            state.completedTasks.contains(state.taskB.value()))
         {
-            if (state.completedTasks.contains(state.taskA.value()) || state.completedTasks.contains(state.taskB.value()))
-            {
-                fail(L"R4A02 same destination completed without an overlap warning.");
-                return true;
-            }
-            return false;
-        }
-        const auto validPrompt = [&](const Task::ConflictPromptState& prompt, uint64_t otherTaskId) noexcept
-        {
-            return prompt.bucket == Task::ConflictBucket::SameHostOverlap && PromptHasAction(prompt, Task::ConflictAction::Proceed) &&
-                   ! PromptHasAction(prompt, Task::ConflictAction::RunConcurrently) && PromptHasAction(prompt, Task::ConflictAction::Cancel) &&
-                   prompt.defaultAction == Task::ConflictAction::Proceed && prompt.escapeAction == Task::ConflictAction::Cancel &&
-                   prompt.overlapTaskId == otherTaskId;
-        };
-        if (promptA.has_value() || ! promptB.has_value() || ! validPrompt(promptB.value(), state.taskA.value()))
-        {
-            if (promptB.has_value())
-                AppendLog(std::format(L"R4A02 same destination: B prompt bucket={} named task={}.",
-                                      static_cast<unsigned int>(promptB.value().bucket),
-                                      promptB.value().overlapTaskId));
-            fail(L"R4A02 same destination warning must name the held prepared Copy and offer Queue and Don't start without Run concurrently.");
+            fail(L"R4A02 same destination should queue the second Copy behind the held first Copy without asking.");
             return true;
         }
-        AppendLog(std::format(L"R4A02 same destination: B={} warning names A={}; canceling B and releasing A.", state.taskB.value(), state.taskA.value()));
-        taskB->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
+        if (! IsWaitingBehindForSelfTest(taskB, taskA))
+            return false;
+
+        taskB->RequestCancel();
         static_cast<void>(SetEvent(state.r4a02PreparationGate->release.get()));
         state.stepState = 3u;
         return false;
@@ -13078,25 +13035,14 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     if (state.stepState == 2u)
     {
         Task* const second = state.fileOps->FindTask(state.taskB.value());
-        const auto prompt  = TryGetConflictPromptCopy(second);
-        if (! prompt.has_value())
+        if (TryGetConflictPromptCopy(second).has_value() || state.completedTasks.contains(state.taskB.value()))
         {
-            if (state.completedTasks.contains(state.taskB.value()))
-            {
-                Fail(L"R4A02 Run concurrent second Copy completed without the overlap warning.");
-                return true;
-            }
-            return false;
-        }
-        if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || prompt->overlapTaskId != state.taskA.value() ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) || prompt->defaultAction != Task::ConflictAction::Proceed ||
-            prompt->escapeAction != Task::ConflictAction::Cancel)
-        {
-            Fail(L"Conflicting transfer admission must offer Queue (default) and Don't start, with no Run bypass.");
+            Fail(L"R4A02 the overlapping second Copy must wait automatically.");
             return true;
         }
-        second->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Proceed, false);
+        if (! IsWaitingBehindForSelfTest(second, state.fileOps->FindTask(state.taskA.value())))
+            return false;
+
         state.stepState = 3u;
         return false;
     }
@@ -13134,24 +13080,15 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     if (state.stepState == 4u)
     {
         Task* const third = state.fileOps->FindTask(state.taskC.value());
-        const auto prompt = TryGetConflictPromptCopy(third);
-        if (! prompt.has_value())
+        if (TryGetConflictPromptCopy(third).has_value() || state.completedTasks.contains(state.taskC.value()))
         {
-            if (state.completedTasks.contains(state.taskC.value()))
-            {
-                Fail(L"R4A02 Run concurrent third task bypassed the undisclosed overlap warning.");
-                return true;
-            }
-            return false;
-        }
-        const bool namesDisclosedTask = prompt->overlapTaskId == state.taskA.value() || prompt->overlapTaskId == state.taskB.value();
-        if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! namesDisclosedTask ||
-            PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently))
-        {
-            Fail(L"R4A02 Run concurrent third task did not receive an independent warning naming an active task.");
+            Fail(L"R4A02 the third conflicting Copy must wait without a question or bypass.");
             return true;
         }
-        third->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Cancel, false);
+        if (! IsWaitingBehindForSelfTest(third, first) && ! IsWaitingBehindForSelfTest(third, second))
+            return false;
+
+        third->RequestCancel();
         state.stepState = 5u;
         return false;
     }
@@ -13892,33 +13829,19 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
     }
     if (state.stepState == 4u)
     {
-        Task* const remove = state.fileOps->FindTask(state.taskA.value());
-        const auto prompt  = TryGetConflictPromptCopy(remove);
-        if (! prompt.has_value())
-        {
-            // The warning appears within the Delete's own Preparing; a Delete that instead ran, or
-            // sits in the queue with nothing to say ten seconds after its release, missed the peer.
-            const bool silentWait = remove != nullptr && remove->IsWaitingInQueue() && GetTickCount64() - releaseTick > 10'000ull;
-            if (state.completedTasks.contains(state.taskA.value()) || (remove != nullptr && remove->HasEnteredOperation()) || silentWait)
-            {
-                releaseAll();
-                Fail(L"R4A02 late publisher: the Delete published after the Copy prepared and must still warn, naming the Copy; it ran or waited silently.");
-                return true;
-            }
-            return false;
-        }
-        if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || prompt->overlapTaskId != state.taskB.value() ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel))
+        Task* const removal    = state.fileOps->FindTask(state.taskA.value());
+        const bool behindCopy  = IsWaitingBehindForSelfTest(removal, state.fileOps->FindTask(state.taskB.value()));
+        const bool missingEdge = removal != nullptr && removal->IsWaitingInQueue() && ! behindCopy && GetTickCount64() - releaseTick > 10'000ull;
+        if (TryGetConflictPromptCopy(removal).has_value() || state.completedTasks.contains(state.taskA.value()) ||
+            (removal && removal->HasEnteredOperation()) || missingEdge)
         {
             releaseAll();
-            Fail(std::format(
-                L"R4A02 late publisher: the Delete's warning must name the Copy (task {}) with Queue after and Don't start (bucket={}, named task={}).",
-                state.taskB.value(),
-                static_cast<unsigned int>(prompt->bucket),
-                prompt->overlapTaskId));
+            Fail(L"R4A02 the late publisher must wait behind the previously prepared Copy without asking.");
             return true;
         }
-        remove->DebugSubmitCurrentConflictDecision(Task::ConflictAction::Proceed, false);
+        if (! behindCopy)
+            return false;
+
         state.stepState = 5u;
         return false;
     }

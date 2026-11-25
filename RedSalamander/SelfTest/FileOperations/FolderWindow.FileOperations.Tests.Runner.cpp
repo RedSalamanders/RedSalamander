@@ -6008,6 +6008,22 @@ uint32_t UpdateCrc32(uint32_t crc, const unsigned char* data, size_t size) noexc
     return true;
 }
 
+[[nodiscard]] bool IsWaitingBehindForSelfTest(const FolderWindow::FileOperationState::Task* waiting,
+                                              const FolderWindow::FileOperationState::Task* predecessor) noexcept
+{
+    if (! waiting || ! predecessor || ! waiting->IsOverlapQueued() || ! waiting->IsWaitingInQueue() || waiting->HasEnteredOperation())
+        return false;
+
+    const auto candidate = waiting->LoadMutationInterlockAdmission();
+    const auto prior     = predecessor->LoadMutationInterlockAdmission();
+    if (! candidate || ! prior || ! candidate->relations.advisoryDecided)
+        return false;
+
+    const auto& relations = candidate->relations;
+    const auto keys       = std::span(relations.predecessorKeys).first((std::min)(relations.predecessorCount, relations.predecessorKeys.size()));
+    return std::ranges::find(keys, prior->key) != keys.end();
+}
+
 std::optional<FolderWindow::FileOperationState::Task::ConflictPromptState> TryGetConflictPromptCopy(FolderWindow::FileOperationState::Task* task) noexcept
 {
     if (! task)
