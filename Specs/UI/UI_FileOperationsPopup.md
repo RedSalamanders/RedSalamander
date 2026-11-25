@@ -234,8 +234,7 @@ By task state (I35 R9.7):
 
 The engine returns the IDs it actually asked to cancel; a second Cancel all adds its IDs to a set that
 has not resolved yet. When every one of them has finished (or left the engine; a card still inside its
-reveal delay is still running) and every member of the completed group is a clean success or a clean
-cancel (no Partial, Failed or Indeterminate member, no warning or error), the group collapses once so
+reveal delay is still running) and every visible terminal File Operations result is clean, the group collapses once so
 its badges and `Clear completed` are in view. The user's own expand or collapse wins: toggling the
 group before the set resolves cancels the pending collapse, and nothing is stored. A group with any
 problem member keeps the state the user left it in (R9.5).
@@ -972,18 +971,17 @@ card's normal actions without disabling later completed-card auto-collapse. Comp
 status signal and task name on one line. A final published byte/item denominator permits a mini
 progress meter plus localized percent text. While discovery is open and transfer is active, the
 compact row shows a marquee and no meter or percent text. A row with completed
-work but no denominator MUST NOT render a misleading `0%` meter. When at least two completed file-operation cards remain visible, the
-popup groups them under `Completed (N)`, expanded by default; the one exception is the one-time
-collapse after an accepted Cancel all whose members all ended clean (see Footer, Cancel all). `Clear completed` is the first control
-in the group header and the disclosure chevron occupies the same trailing 18-DIP lane as task-card
-chevrons. Interrupted-Move restart notices are never group members: they stay standalone cards in
-both group states, so no badge hides them and the group count and badges exclude them. `Clear completed`
-removes exactly the member task IDs the group header covered when it was last painted, captured with
-that header; a task that finished after that paint stays, and an invocation before any header is
-published removes nothing. It never acknowledges an interrupted-Move breadcrumb, and the engine's bulk
-clear refuses breadcrumb-backed summaries even if one were listed. The chevron hides/shows completed
-rows without dismissing them. While collapsed, the header
-shows separate nonzero badges for Completed, Partial, Indeterminate, Failed, and Canceled result counts. Task-card
+work but no denominator MUST NOT render a misleading `0%` meter. When at least two file-operation cards
+have completed or canceled without warnings or errors, the popup groups them under `Completed (N)`.
+Information notes do not affect eligibility. Failed, Partial and Indeterminate results, results with
+warnings or errors, and interrupted-Move recovery notices stay visible on their own cards.
+The group starts expanded and supports one-time collapse after Cancel all as described under Footer.
+`Clear completed` is the first control in the header. The disclosure chevron shares the 18-DIP trailing
+lane used by task cards. The header captures the exact member task IDs it covered when last painted.
+`Clear completed` removes only those IDs. A later result stays, and an unpublished header has no
+clear scope. Recovery notices keep their explicit acknowledgement and breadcrumb guard.
+The chevron hides or shows the grouped cards. The collapsed header shows separate nonzero counts for
+Completed and Canceled. Task-card
 height and completed-group visibility animate together with bounded smoothstep easing over 260 ms.
 User-triggered disclosure motion temporarily advances at a 16-ms cadence, then returns to the
 telemetry timer (100 ms, or the 1 s waiting cadence when every open task waits); reduced motion snaps
@@ -2068,12 +2066,14 @@ FileSystem_FileOperations.md "Transfer phases, stalls and throughput tuning"), o
 side of the transfer from the storage characteristics: `Waiting for the destination…`, `Waiting for
 the source…`, or `Waiting for storage…` when neither or both sides are high-latency. A task that has
 not reported progress yet is starting, not stalled. Paused and queued tasks and a task waiting for a
-decision show no speed and add no stall samples. The same treatment applies while waiting for another
-task to finish publishing live output. The rate sampler observes a monotonic task generation, so a
+decision show no speed and add no stall samples. The same treatment applies while waiting for credential
+UI or for another task to finish publishing live output. The card reports `Waiting for credentials`.
+The popup counts that task under Needs attention, and the taskbar uses the same status. The waiting task
+contributes no rate or ETA input, so an active peer keeps its ETA. The rate sampler observes a monotonic task generation, so a
 wait that starts and ends while the popup is hidden still restarts measuring when the sampler resumes.
 The previous graph history stays visible when measuring resumes. Stopping freezes recorded samples
-while actual work counters can change. Paused and stopping tasks do not contribute to the running
-transfer ETA. A deletion names no transfer stall. The stall text is part of the label's accessible text.
+while actual work counters can change. The running rate includes only actively measured tasks.
+Paused and stopping tasks contribute their completed-work counters, keep their own graph history and do not contribute to the running transfer ETA. A deletion names no transfer stall. The stall text is part of the label's accessible text.
 The idle-cadence self-test uses a paced real Copy with post-answer byte reports before requiring a
 running rate and checking that Pause settles the popup without altering the history.
 Copy/Move keeps the speed's right edge fixed on the Throughput heading; the ETA has its independent
@@ -2177,7 +2177,10 @@ selector opens the choices and it has no separate primary action.
 Preferences, explicit start options and the running card use the same bandwidth catalog. Its ordered
 values are Unlimited, 1, 5, 10, 50, 100 and 500 MiB/s, and 1 GiB/s. The choices use localized IEC
 labels and binary byte values. Custom examples use IEC units. The shared parser accepts legacy
-spellings such as `4MB` with the same binary meaning.
+spellings such as `4MB` with the same binary meaning. **Custom…** in explicit start options opens the same
+owned speed-limit editor as the running card. It starts from the currently selected value. Accepting a rate
+updates the option and its accessible value in place. Canceling the editor preserves the selection. The
+operation is admitted only after the user accepts the start options, and the rate applies only to that task.
 
 In Rainbow theme, graph history keeps per-sample colors stable as samples scroll. It MUST NOT blink or
 cycle historic samples by time.

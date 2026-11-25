@@ -139,6 +139,7 @@ struct TaskSnapshot
         Failed,
         Canceled,
         Stopping,
+        AwaitingCredentials,
     };
 
     enum class Kind : uint8_t
@@ -331,6 +332,7 @@ struct TaskSnapshot
     ULONGLONG preparationStartTick     = 0;
 
     bool waitingForOthers                = false;
+    bool waitingForCredentials           = false;
     bool waitingInQueue                  = false;
     bool waitingForIdentityInterlock     = false;
     bool waitingForParallelTransferSlot  = false;
@@ -673,8 +675,8 @@ struct PopupLayoutDebugSnapshot
     size_t completedGroupExpectedBadges     = 0u;
     size_t completedGroupPaintedBadges      = 0u;
     uint32_t completedGroupPaintedBadgeMask = 0u;
-    std::array<wchar_t, 5> completedGroupPaintedGlyphs{};
-    std::array<std::wstring, 5> completedGroupHostedNames{};
+    std::array<wchar_t, 2> completedGroupPaintedGlyphs{};
+    std::array<std::wstring, 2> completedGroupHostedNames{};
     bool completedGroupBadgeCountsFit       = false;
     bool taskTerminalSummaryVisible         = false;
     bool taskTerminalSummaryFits            = false;
@@ -728,8 +730,6 @@ struct PopupLayoutDebugSnapshot
     std::wstring hostedCancelAutomationId;
     uint32_t completedGroupCount            = 0u;
     uint32_t completedGroupCompletedCount   = 0u;
-    uint32_t completedGroupPartialCount     = 0u;
-    uint32_t completedGroupFailedCount      = 0u;
     uint32_t completedGroupCanceledCount    = 0u;
     uint32_t completedGroupVisibleTaskCount = 0u;
     uint32_t taskStatusVisualTone           = 0u;
@@ -912,15 +912,16 @@ struct RateSnapshot
     // The task's effective speed limit (0: none). A transfer held at its limit is not stalled.
     uint64_t speedLimitBytesPerSecond = 0;
     std::array<InFlightStreamSnapshot, TaskSnapshot::kMaxInFlightFiles> inFlightFiles{};
-    size_t inFlightFileCount = 0;
-    bool started             = false;
-    bool paused              = false;
-    bool waitingForOthers    = false;
-    bool waitingInQueue      = false;
-    bool queuePaused         = false;
-    bool waitingForDecision  = false; // a question waits for the user: no bytes is not a stall
-    bool discoveryClosed     = false;
-    bool finished            = false;
+    size_t inFlightFileCount   = 0;
+    bool started               = false;
+    bool paused                = false;
+    bool waitingForOthers      = false;
+    bool waitingInQueue        = false;
+    bool queuePaused           = false;
+    bool waitingForDecision    = false; // a question waits for the user: no bytes is not a stall
+    bool waitingForCredentials = false;
+    bool discoveryClosed       = false;
+    bool finished              = false;
     // Cancellation was requested: what the task waits on is its own abort, never a named stall.
     bool stopping = false;
 };
@@ -2297,7 +2298,7 @@ private:
     {
         std::wstring clearText;
         std::wstring headingText;
-        std::array<uint32_t, 5> counts{};
+        std::array<uint32_t, 2> counts{};
         wil::com_ptr<IDWriteTextFormat> actionFormat;
         wil::com_ptr<IDWriteTextFormat> headingFormat;
         wil::com_ptr<IDWriteTextFormat> countFormat;
@@ -2308,7 +2309,7 @@ private:
         bool expanded = false;
     };
     CompletedGroupMeasurement _completedGroupMeasurement;
-    HRESULT PrepareCompletedGroup(float widthPx, uint32_t total, const std::array<uint32_t, 5>& counts) noexcept;
+    HRESULT PrepareCompletedGroup(float widthPx, uint32_t total, const std::array<uint32_t, 2>& counts) noexcept;
 
     // Fixed Source/Destination/Delete/Verify vocabulary; retain the format identity
     // so DPI/font recreation cannot reuse measurements from a destroyed format.

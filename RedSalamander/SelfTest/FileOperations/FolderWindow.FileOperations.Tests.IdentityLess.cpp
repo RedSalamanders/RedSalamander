@@ -442,6 +442,125 @@ private:
     bool _queueMode                  = false;
 };
 
+[[nodiscard]] bool RunFileOpsLeftoverPermanentConsentChecks(SelfTestState& state, std::wstring& failure)
+{
+    using namespace std::chrono_literals;
+    using State     = FolderWindow::FileOperationState;
+    const auto fail = [&](std::wstring_view reason)
+    {
+        failure = reason;
+        return false;
+    };
+    const auto root       = state.tempRoot / L"leftover-permanent-consent";
+    const auto stage      = root / L"stage.bin.00112233445566778899aabbccddeeff_0.rs-tmp";
+    const auto backup     = root / L"backup.bin.00112233445566778899aabbccddeeff.rs-bak";
+    const auto savedStage = root / L"saved.bin";
+    if (! state.fileOps || ! state.fsLocal || ! RecreateEmptyDirectory(root) || ! WriteFilledTestFile(stage, 4096u, 0x61u) ||
+        ! WriteFilledTestFile(backup, 8192u, 0x62u))
+        return fail(L"Exact Local cleanup fixtures are unavailable.");
+
+    IdentityLessCaseScope scope(state, state.fileOps);
+    const auto releasePause = wil::scope_exit([]() noexcept
+    {
+        ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+        SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(false);
+    });
+    const auto admit        = [&]() -> std::optional<uint64_t>
+    {
+        // A regression that opens the old modal cancels without desktop input.
+        HostResetTestPromptRequestCount();
+        HostQueueTestPromptResults({HOST_PROMPT_RESULT_CANCEL});
+        const auto clearAnswers = wil::scope_exit([]() noexcept { HostClearTestPromptResultQueue(); });
+        uint64_t id             = 0u;
+        const HRESULT hr        = state.fileOps->AdmitOperation(FILESYSTEM_DELETE,
+                                                                FolderWindow::Pane::Left,
+                                                                std::nullopt,
+                                                                state.fsLocal,
+                                                                {stage, backup},
+                                                                {},
+                                                                FILESYSTEM_FLAG_RECURSIVE,
+                                                                false,
+                                                                0u,
+                                                                State::ExecutionMode::PerItem,
+                                                                true,
+                                                                nullptr,
+                                                                &id,
+                                                                {},
+                                                                {},
+                                                                L"builtin/file-system",
+                                                                {},
+                                                                std::nullopt,
+                                                                FileOperations::DeleteOrigin::LeftoverCleanup);
+        if (id != 0u)
+            scope.Track(id);
+        return hr == S_OK && id != 0u && HostGetTestPromptRequestCount() == 0u ? std::optional(id) : std::nullopt;
+    };
+    const std::wstring note = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER);
+    for (const auto action : {IdentityLessAction::Cancel, IdentityLessAction::PermanentDelete})
+    {
+        const auto task = admit();
+        if (! task)
+            return fail(L"Exact cleanup failed admission or opened a separate modal.");
+
+        const auto prompt = scope.WaitForQuestion(task.value(), L"combined leftover consent");
+        if (! prompt || ! prompt->deferredConsent || prompt->bucket != IdentityLessBucket::PermanentDeleteConfirmation || prompt->actionCount != 2u ||
+            prompt->defaultAction != IdentityLessAction::Cancel || prompt->escapeAction != IdentityLessAction::Cancel || prompt->applyToAllEligible ||
+            note.empty() || prompt->consentNote.find(note) == std::wstring::npos || ! FileSizeEquals(stage, 4096u) || ! FileSizeEquals(backup, 8192u) ||
+            ! scope.Answer(task.value(), prompt.value(), action))
+            return fail(
+                std::format(L"The confirm card did not disclose both risks before touching the checked objects: {}.", DescribeIdentityLessPrompt(prompt)));
+
+        std::vector<IdentityLessPrompt> extraQuestions;
+        const auto* finished = scope.CancelQuestionsUntilEnd(task.value(), L"leftover consent outcome", &extraQuestions);
+        const bool canceled  = action == IdentityLessAction::Cancel;
+        const bool filesMatch =
+            canceled ? FileSizeEquals(stage, 4096u) && FileSizeEquals(backup, 8192u)
+                     : GetFileAttributesW(stage.c_str()) == INVALID_FILE_ATTRIBUTES && GetFileAttributesW(backup.c_str()) == INVALID_FILE_ATTRIBUTES;
+        if (! finished || finished->hr != (canceled ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK) || ! extraQuestions.empty() || ! filesMatch ||
+            HostGetTestPromptRequestCount() != 0u)
+            return fail(L"Combined cleanup produced a second question or changed the wrong files.");
+    }
+
+    if (! WriteFilledTestFile(stage, 4096u, 0x63u) || ! WriteFilledTestFile(backup, 8192u, 0x64u))
+        return fail(L"The changed-selection fixtures could not be recreated.");
+
+    SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(true);
+    const auto task      = admit();
+    const auto beforePin = RedSalamander::TestSupport::PumpMessagesUntil([]() noexcept { return HasFileOpsPermanentDeleteBeforeBindPauseEnteredForSelfTest(); },
+                                                                         {.timeout = SelfTest::Scale(5000ms), .operationName = L"leftovers before exact pin"});
+    if (! task || ! beforePin.conditionMet || MoveFileExW(stage.c_str(), savedStage.c_str(), 0u) == FALSE || ! WriteFilledTestFile(stage, 1024u, 0x65u))
+        return fail(L"The checked name could not be replaced before the worker pinned it.");
+
+    ReleaseFileOpsPermanentDeleteBeforeBindPauseForSelfTest();
+    SetFileOpsPermanentDeleteBeforeBindPauseForSelfTest(false);
+    std::vector<IdentityLessPrompt> extraQuestions;
+    const auto* finished         = scope.CancelQuestionsUntilEnd(task.value(), L"changed leftover refusal", &extraQuestions);
+    const bool refusedBoth       = finished && finished->sourceItemResults.size() == 2u &&
+                                   std::ranges::all_of(finished->sourceItemResults,
+                                                       [](const auto& result) noexcept
+    {
+        return result && result->status == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && result->completion == FileOperations::ItemCompletion::Failed &&
+               result->publication == FileOperations::PublicationState::NotAttempted &&
+               result->sourceDisposition == FileOperations::SourceDisposition::Retained;
+    });
+    const bool stagePreserved    = FileSizeEquals(stage, 1024u);
+    const bool originalPreserved = FileSizeEquals(savedStage, 4096u);
+    const bool backupPreserved   = FileSizeEquals(backup, 8192u);
+    const auto modalCount        = HostGetTestPromptRequestCount();
+    if (! refusedBoth || ! extraQuestions.empty() || ! stagePreserved || ! originalPreserved || ! backupPreserved || modalCount != 0u)
+        return fail(std::format(L"Changed cleanup finish=0x{:08X} exact refusal={} card questions={} modal questions={} replacement={} original={} sibling={}.",
+                                static_cast<unsigned long>(finished ? finished->hr : E_PENDING),
+                                refusedBoth,
+                                extraQuestions.size(),
+                                modalCount,
+                                stagePreserved,
+                                originalPreserved,
+                                backupPreserved));
+
+    AppendLog(L"Exact leftover cleanup used one card, preserved both objects on Cancel, and refused a changed selection before consent.");
+    return true;
+}
+
 // A running task T (a Recycle the Recycle Bin refuses, waiting on its question, on a drive-letter path that
 // shares no identity domain with the loopback share) and a delete by name D of `target`, answered and
 // waiting behind T in the queue (queue mode on).

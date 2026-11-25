@@ -1705,7 +1705,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_RepeatedNonClipboardCopyStorage,
     SelfTestState::Step::FileOps_RepeatedNonClipboardMoveStorage,
     SelfTestState::Step::FileOps_TerminalFactsProjection,               // Completed summary reaches the production popup with independent terminal counts
-    SelfTestState::Step::FileOps_ClearCompletedScope,                   // Clear completed clears only painted results and keeps interrupted-Move breadcrumbs
+    SelfTestState::Step::FileOps_ClearCompletedScope,                   // Clears only painted clean results and keeps problems and interrupted-Move breadcrumbs
     SelfTestState::Step::FileOps_PerItemCancelUndispatchedRoots,        // Cancel at a prompt leaves never-dispatched per-item roots untouched, not unknown
     SelfTestState::Step::FileOps_AdmissionFailureReachesPane,           // I30 host#2 - a failed pane Copy/Move/Delete admission reaches the pane alert
     SelfTestState::Step::FileOps_DeferredExitRefusesNewWork,            // I30 x-lifetime#4 (Q14) - a pending exit refuses new work and never re-prompts
@@ -8827,8 +8827,10 @@ using TickResult = std::optional<bool>;
     for (const auto& [culture, expected] : cultures)
     {
         if (FAILED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, std::wstring(culture)})) ||
-            LoadStringResource(nullptr, IDS_FILEOPS_STATUS_STOPPING) != expected || ! DebugValidateFileOperationsStoppingPresentation())
-            return reject(std::format(L"{} exact localized label or pure status/summary/taskbar precedence failed", culture));
+            LoadStringResource(nullptr, IDS_FILEOPS_STATUS_STOPPING) != expected)
+            return reject(std::format(L"{} exact localized Stopping label failed", culture));
+        if (! DebugValidateFileOperationsStoppingPresentation())
+            return reject(std::format(L"{} Stopping status, summary or taskbar model failed", culture));
     }
     static_cast<void>(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, L"en-US"}));
 
@@ -10022,8 +10024,12 @@ using TickResult = std::optional<bool>;
         recordFailure(reason);
         AppendLog(std::format(L"Popup idle cadence: FAILED: {}", reason));
     };
+    if (! DebugValidateFileOperationsVerificationPresentation())
+        return reject(L"Credential attention and the active peer ETA did not agree across popup and taskbar.");
     if (! DebugValidateFileOperationsPreparingPresentation())
         fail(L"Preparing elapsed status and bulk pause controls must respect queue priority and group ownership");
+    if (! DebugValidateFileOperationsStoppingPresentation())
+        fail(L"Stopping must retain progress and card history while excluding its rate from the running total.");
     if (! State::DebugValidateBulkPauseOwnershipForSelfTest())
         fail(L"Pause all must capture live preparation and preserve independent pauses and queue waits when resumed");
     auto* folder     = TryGetFolderWindow(state.mainWindow);
@@ -11061,6 +11067,42 @@ using TickResult = std::optional<bool>;
     stopCadenceCapture.release();
     emitCadenceObservations(L"engine-paused-through-resume", *cadencePopupState);
 
+    // This worker is held at an existing Local transfer barrier. Drive the same task observer
+    // used by synchronous host credential UI without opening a dialog or creating a credential.
+    using Task                      = State::Task;
+    const uint64_t beforeCredential = task->_rateSamplingStateGeneration.load(std::memory_order_acquire);
+    const auto credentialStart      = std::chrono::steady_clock::now();
+    bool credentialProjection       = false;
+    {
+        Task::OnCredentialWait(task, true);
+        const auto leaveCredential = wil::scope_exit([task]() noexcept { Task::OnCredentialWait(task, false); });
+        FileOperationsPopupInternal::TaskSnapshot snapshot{};
+        credentialProjection = operations->GetPopupTelemetryWork() == State::PopupTelemetryWork::Waiting &&
+                               DebugGetFileOperationsPopupTaskSnapshot(popup, taskId, snapshot) && snapshot.waitingForCredentials &&
+                               snapshot.statusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::AwaitingCredentials;
+        {
+            Task::OnCredentialWait(task, true);
+            const auto leaveNestedWait = wil::scope_exit([task]() noexcept { Task::OnCredentialWait(task, false); });
+            credentialProjection &= task->_rateSamplingStateGeneration.load(std::memory_order_acquire) == beforeCredential + 1u;
+        }
+        credentialProjection &= task->IsWaitingForCredentials();
+    }
+    const uint64_t credentialTransitions = task->_rateSamplingStateGeneration.load(std::memory_order_acquire) - beforeCredential;
+    cadencePopupState->DebugUpdateRatesWithoutCadenceRefreshForSelfTest();
+    FileOperationsPopupInternal::PopupRateSamplingDebugSnapshot afterCredential{};
+    const bool credentialReset = credentialProjection && credentialTransitions == 2u && ! task->IsWaitingForCredentials() &&
+                                 operations->GetPopupTelemetryWork() == State::PopupTelemetryWork::Active &&
+                                 cadencePopupState->DebugGetRateSamplingForSelfTest(taskId, afterCredential) && afterCredential.currentBandwidth == 0.0 &&
+                                 afterCredential.windowSampleCount == 1u;
+    Debug::Perf::Emit(L"FileOps.PopupCadence.CredentialWait",
+                      L"owned-held-copy",
+                      Debug::Perf::ElapsedUs(credentialStart),
+                      credentialTransitions,
+                      afterCredential.windowSampleCount,
+                      credentialReset ? S_OK : E_FAIL);
+    if (! credentialReset)
+        fail(L"A complete credential wait between samples must preserve its blocked projection and restart the rate window.");
+
     // Prompt-blocked: the engine classifies a published decision as waiting, and its metadata load
     // (which still changes the card) as active. The flags are restored before any pump.
     {
@@ -11665,17 +11707,25 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
         return L"The restored interrupted-Move breadcrumb did not project as a notice card.";
 
     constexpr uint64_t kOrdinaryBase = 0xC1EA000000000000ull;
-    const auto appendCompleted       = [&operations](uint64_t taskId) noexcept
+    const auto appendCompleted       = [&operations](uint64_t taskId, HRESULT result = S_OK, unsigned long warnings = 0u, unsigned long notes = 0u) noexcept
     {
         Summary summary{};
         summary.taskId        = taskId;
         summary.operation     = FILESYSTEM_COPY;
-        summary.resultHr      = S_OK;
+        summary.resultHr      = result;
+        summary.warningCount  = warnings;
+        summary.noteCount     = notes;
         summary.completedTick = GetTickCount64();
         operations.DebugAppendCompletedTaskForSelfTest(std::move(summary));
     };
-    appendCompleted(kOrdinaryBase + 1u);
-    appendCompleted(kOrdinaryBase + 2u);
+    appendCompleted(kOrdinaryBase + 1u, S_OK, 0u, 1u);
+    appendCompleted(kOrdinaryBase + 2u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+
+    constexpr std::array<uint64_t, 4u> kProblems{{kOrdinaryBase + 10u, kOrdinaryBase + 11u, kOrdinaryBase + 12u, kOrdinaryBase + 13u}};
+    appendCompleted(kProblems[0], E_FAIL);
+    appendCompleted(kProblems[1], HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY));
+    appendCompleted(kProblems[2], HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE));
+    appendCompleted(kProblems[3], S_OK, 1u);
 
     auto lifetime = std::make_shared<int>(0);
     wil::unique_hwnd popup(FileOperationsPopup::Create(&operations, folder, state.mainWindow, lifetime));
@@ -11703,22 +11753,43 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
         return DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), layout);
     };
 
+    const auto revealGroup = [&](uint64_t taskId, Layout& layout) noexcept
+    {
+        SendMessageW(popup.get(), WM_VSCROLL, SB_TOP, 0);
+        for (unsigned int line = 0u; line < 32u; ++line)
+        {
+            paint();
+            if (layoutFor(taskId, layout) && layout.completedGroupClearVisible)
+                return true;
+            SendMessageW(popup.get(), WM_VSCROLL, SB_LINEDOWN, 0);
+        }
+        return false;
+    };
+
     for (const bool collapsed : {true, false})
     {
         const std::wstring_view mode = collapsed ? L"collapsed" : L"expanded";
         const uint64_t seenA         = kOrdinaryBase + (collapsed ? 1u : 3u);
         const uint64_t seenB         = kOrdinaryBase + (collapsed ? 2u : 4u);
         const uint64_t late          = kOrdinaryBase + (collapsed ? 5u : 6u);
-        paint();
         Layout layout{};
-        if (layoutFor(seenA, layout) && layout.completedGroupExpanded == collapsed)
+        bool headerVisible = revealGroup(seenA, layout);
+        if (headerVisible && layout.completedGroupExpanded == collapsed)
         {
-            static_cast<void>(invoke(Hit::CompletedGroupToggle, 0u));
-            paint();
+            if (! invoke(Hit::CompletedGroupToggle, 0u))
+                return L"The private popup did not toggle its Completed group.";
+            headerVisible = revealGroup(seenA, layout);
         }
         Layout notice{};
-        const bool groupReady  = layoutFor(seenA, layout) && layout.completedGroupVisible && layout.completedGroupExpanded != collapsed &&
-                                 layout.completedGroupClearVisible && layout.taskHiddenByCompletedGroup == collapsed;
+        const bool groupReady = headerVisible && layout.completedGroupVisible && layout.completedGroupCount == 2u &&
+                                layout.completedGroupExpanded != collapsed && layout.completedGroupClearVisible &&
+                                layout.taskHiddenByCompletedGroup == collapsed;
+        for (const uint64_t problemId : kProblems)
+        {
+            Layout problem{};
+            if (! layoutFor(problemId, problem) || ! problem.found || problem.taskHiddenByCompletedGroup)
+                return L"The Completed group hid a failed, partial, uncertain or warning result.";
+        }
         const bool noticeShown = layoutFor(noticeId, notice) && ! notice.taskHiddenByCompletedGroup;
         AppendLog(std::format(L"Clear-completed scope {}: groupVisible={} expanded={} clearVisible={} memberHidden={} noticeHidden={}",
                               mode,
@@ -11751,6 +11822,8 @@ void CALLBACK AlertOverlayLifetimePromptStep(HWND, UINT, UINT_PTR timerId, DWORD
             return L"Clear completed did not remove the results its painted header covered.";
         if (! lateKept)
             return L"Clear completed removed a result that finished after the last paint.";
+        if (! std::ranges::all_of(kProblems, retained))
+            return L"Clear completed removed a problem result.";
         if (! noticeKept || ! breadcrumbKept)
             return L"Clear completed acknowledged the interrupted-Move notice or deleted its breadcrumb file.";
 
@@ -16619,8 +16692,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 Fail(L"Review remediation requires the no-activation guard.");
                 return true;
             }
-            // Owned filesystem/API and private task controls only: no foreground input,
-            // clipboard journey, public task admission or documentation capture.
+            // Owned filesystem/API and task controls under the activation guard.
+            // This case requires no foreground input or documentation capture.
             if (! RunFileOperationLocalAncestryProbeSelfTest(state))
             {
                 Fail(L"Local directory ancestry, bound cross-view or same-path folder contracts failed.");
@@ -16655,6 +16728,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (! RunFileOpsRecycleIngressChecks(state, recycleIngressFailure))
             {
                 Fail(std::format(L"Local Recycle ingress: {}", recycleIngressFailure));
+                return true;
+            }
+            std::wstring leftoverConsentFailure;
+            if (! RunFileOpsLeftoverPermanentConsentChecks(state, leftoverConsentFailure))
+            {
+                Fail(std::format(L"Exact Leftover Cleanup: {}", leftoverConsentFailure));
                 return true;
             }
             if (! RunFileOpsLateMoveMetadataLossChecks(state))

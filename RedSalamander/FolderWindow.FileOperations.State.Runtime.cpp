@@ -1138,6 +1138,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     }
 
     std::optional<FileOperationArtifacts::TouchGuardReceipt> artifactTouchReceipt;
+    std::unique_ptr<FileOperationArtifacts::TouchGuardRequest> leftoverDeleteTouchRequest;
+    const auto* onlyDeletePlan           = plans.size() == 1u ? std::get_if<FileOperations::DeletePlan>(&plans.front()) : nullptr;
+    const bool canCombineLeftoverConsent = onlyDeletePlan && onlyDeletePlan->origin == FileOperations::DeleteOrigin::LeftoverCleanup &&
+                                           onlyDeletePlan->mode == FileOperations::DeleteMode::Permanent && ! onlyDeletePlan->nativeAuthority;
     for (;;)
     {
         std::vector<FileOperationArtifacts::Candidate> artifactCandidates;
@@ -1158,6 +1162,14 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         }
         if (requestHr != S_OK)
         {
+            break;
+        }
+        // The permanent card can disclose both decisions only when every selected root supplied
+        // exact identity. It will compare these observations with the pinned roots before asking.
+        if (canCombineLeftoverConsent && touchRequest.allItemsRevalidatable && touchRequest.items.size() == onlyDeletePlan->selectedItems.size() &&
+            std::ranges::all_of(touchRequest.items, [](const auto& item) noexcept { return item.revalidatable && ! item.handedOff; }))
+        {
+            leftoverDeleteTouchRequest = std::make_unique<FileOperationArtifacts::TouchGuardRequest>(std::move(touchRequest));
             break;
         }
         FileOperationArtifacts::TouchGuardReceipt accepted;
@@ -1623,6 +1635,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         task->_flags                              = flags;
         initialDestination.resolvedItems          = std::move(resolvedItems);
         task->_permanentDeleteConfirmationPending = admission.permanentDeleteConfirmationPending;
+        task->_leftoverDeleteTouchRequest         = std::move(leftoverDeleteTouchRequest);
         task->_permanentDeleteConsentDetail       = std::move(admission.permanentDeleteConsentDetail);
         task->_permanentDeleteConsentFrom         = std::move(admission.permanentDeleteConsentFrom);
         task->_permanentDeleteTestOverride        = admission.permanentDeleteTestOverride;
@@ -2876,7 +2889,7 @@ FolderWindow::FileOperationState::PopupTelemetryWork FolderWindow::FileOperation
             return PopupTelemetryWork::Active;
         // IsWaitingInQueue is set only while the worker is held before EnterOperation admits it;
         // leaving that wait clears it and posts a presentation change.
-        if (task->IsPaused() || task->IsQueuePaused() || task->IsWaitingInQueue() || task->IsWaitingForOthers() ||
+        if (task->IsPaused() || task->IsQueuePaused() || task->IsWaitingInQueue() || task->IsWaitingForOthers() || task->IsWaitingForCredentials() ||
             task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u || task->_awaitingUserDecision.load(std::memory_order_acquire))
             continue;
         std::scoped_lock promptLock(task->_conflictArbiter.mutex);

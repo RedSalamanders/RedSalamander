@@ -346,6 +346,13 @@ struct GridColumnLayoutEntry
     float widthDip        = 0.0f;
 };
 
+enum class FileOperationsCopyLinkPolicy : uint8_t
+{
+    Inherit,
+    Preserve,
+    Skip,
+};
+
 struct FileOperationsSettings
 {
     bool autoDismissSuccess = false;
@@ -358,6 +365,7 @@ struct FileOperationsSettings
     bool popupThroughputExpanded                 = true;
     bool queueNewTasks                           = true;
     bool verifyAfterCopy                         = false;
+    FileOperationsCopyLinkPolicy copyLinkPolicy  = FileOperationsCopyLinkPolicy::Inherit;
     uint32_t maxParallelTransfers                = 4;
     uint32_t crossFsBridgeBufferSizeKB           = 4096;
     uint64_t defaultBandwidthLimitBytesPerSecond = 0;

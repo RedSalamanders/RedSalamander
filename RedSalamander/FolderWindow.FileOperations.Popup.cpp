@@ -1611,6 +1611,10 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
     {
         return TaskStatusKind::Conflict;
     }
+    if (task.waitingForCredentials)
+    {
+        return TaskStatusKind::AwaitingCredentials;
+    }
     if (task.queuePaused || task.waitingInQueue || task.waitingForOthers)
     {
         return TaskStatusKind::Waiting;
@@ -1729,8 +1733,8 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
 
 [[nodiscard]] bool StatusNeedsAttention(TaskStatusKind status) noexcept
 {
-    return status == TaskStatusKind::Conflict || status == TaskStatusKind::Partial || status == TaskStatusKind::Indeterminate ||
-           status == TaskStatusKind::Failed;
+    return status == TaskStatusKind::Conflict || status == TaskStatusKind::AwaitingCredentials || status == TaskStatusKind::Partial ||
+           status == TaskStatusKind::Indeterminate || status == TaskStatusKind::Failed;
 }
 
 [[nodiscard]] bool StatusCountsAsRunning(TaskStatusKind status) noexcept
@@ -1746,7 +1750,8 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
 
 [[nodiscard]] bool StatusIsWarning(TaskStatusKind status) noexcept
 {
-    return status == TaskStatusKind::Conflict || status == TaskStatusKind::Partial || status == TaskStatusKind::Indeterminate;
+    return status == TaskStatusKind::Conflict || status == TaskStatusKind::AwaitingCredentials || status == TaskStatusKind::Partial ||
+           status == TaskStatusKind::Indeterminate;
 }
 
 [[nodiscard]] bool StatusIsError(TaskStatusKind status) noexcept
@@ -1772,6 +1777,7 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         case TaskStatusKind::Canceled: return PopupStatusVisualTone::Neutral;
         case TaskStatusKind::Paused: return PopupStatusVisualTone::Muted;
         case TaskStatusKind::Conflict:
+        case TaskStatusKind::AwaitingCredentials:
         case TaskStatusKind::Partial:
         case TaskStatusKind::Indeterminate: return PopupStatusVisualTone::Warning;
         case TaskStatusKind::Failed: return PopupStatusVisualTone::Error;
@@ -1825,6 +1831,7 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         case TaskStatusKind::Paused: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
         case TaskStatusKind::Conflict:
             return LoadStringResource(nullptr, task.conflict.metadataLoading ? IDS_FILEOPS_CONFLICT_READING_DETAILS : IDS_FILEOPS_STATUS_WAITING_FOR_DECISION);
+        case TaskStatusKind::AwaitingCredentials: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_AWAITING_CREDENTIALS);
         case TaskStatusKind::Discovering:
         {
             const uint64_t elapsedSec = task.discoveryElapsedMs / 1000;
@@ -1889,6 +1896,7 @@ void EnsureFinishedTaskDiagnosticAffordance(FileOperationsPopupInternal::TaskSna
         case TaskStatusKind::Preparing: return LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
         case TaskStatusKind::Paused:
         case TaskStatusKind::Stopping:
+        case TaskStatusKind::AwaitingCredentials:
         case TaskStatusKind::Canceled: return StatusTextForTask(task, status, nowTick);
         case TaskStatusKind::Conflict: return {};
         case TaskStatusKind::None:
@@ -2175,6 +2183,7 @@ struct TerminalAxisBadge final
         case TaskStatusKind::Preparing: showAnimation = true; return LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
         case TaskStatusKind::Verifying: showAnimation = true; return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_VERIFYING);
         case TaskStatusKind::Stopping: return {};
+        case TaskStatusKind::AwaitingCredentials: return StatusTextForTask(task, status, 0u);
         case TaskStatusKind::Conflict:
             return LoadStringResource(nullptr, task.conflict.metadataLoading ? IDS_FILEOPS_CONFLICT_READING_DETAILS : IDS_FILEOPS_STATUS_WAITING_FOR_DECISION);
         case TaskStatusKind::Running:
@@ -2296,13 +2305,13 @@ struct TerminalAxisBadge final
         {
             summary.hasClosedUnknownTotals = true;
         }
-        if (presentation.includeInAggregateCohort && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE) &&
+        if (presentation.includeInAggregateCohort && ! task.waitingForCredentials && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE) &&
             (! task.discoveryClosed || task.totalBytes == 0 || copySizeUnavailable))
         {
             summary.hasUnknownActiveTransferBytes = true;
         }
 
-        if (! rates || ! presentation.includeInAggregateCohort || task.paused || task.cancellationRequested ||
+        if (! rates || ! presentation.includeInAggregateCohort || task.paused || task.cancellationRequested || task.waitingForCredentials ||
             (task.operation != FILESYSTEM_COPY && task.operation != FILESYSTEM_MOVE))
         {
             continue;
@@ -2392,17 +2401,20 @@ struct TerminalAxisBadge final
 // group badge, and only its own Dismiss may acknowledge its durable breadcrumb.
 [[nodiscard]] bool IsCompletedGroupTask(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
 {
-    return task.kind == FileOperationsPopupInternal::TaskSnapshot::Kind::FileOperation && task.finished && ! task.interruptedMoveNotice;
+    if (task.kind != FileOperationsPopupInternal::TaskSnapshot::Kind::FileOperation || ! task.finished || task.interruptedMoveNotice ||
+        task.warningCount != 0u || task.errorCount != 0u)
+    {
+        return false;
+    }
+    const TaskStatusKind status = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
+    return status == TaskStatusKind::Done || status == TaskStatusKind::Canceled;
 }
 
 struct CompletedGroupResultSummary final
 {
-    uint32_t total         = 0u;
-    uint32_t completed     = 0u;
-    uint32_t partial       = 0u;
-    uint32_t indeterminate = 0u;
-    uint32_t failed        = 0u;
-    uint32_t canceled      = 0u;
+    uint32_t total     = 0u;
+    uint32_t completed = 0u;
+    uint32_t canceled  = 0u;
 };
 
 [[nodiscard]] CompletedGroupResultSummary BuildCompletedGroupResultSummary(const std::vector<FileOperationsPopupInternal::TaskSnapshot>& snapshot) noexcept
@@ -2417,23 +2429,10 @@ struct CompletedGroupResultSummary final
 
         ++summary.total;
         const TaskStatusKind status = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
-        switch (status)
-        {
-            case TaskStatusKind::Done: ++summary.completed; break;
-            case TaskStatusKind::Partial: ++summary.partial; break;
-            case TaskStatusKind::Indeterminate: ++summary.indeterminate; break;
-            case TaskStatusKind::Failed: ++summary.failed; break;
-            case TaskStatusKind::Canceled: ++summary.canceled; break;
-            case TaskStatusKind::None:
-            case TaskStatusKind::Waiting:
-            case TaskStatusKind::Discovering:
-            case TaskStatusKind::Preparing:
-            case TaskStatusKind::Running:
-            case TaskStatusKind::Verifying:
-            case TaskStatusKind::Paused:
-            case TaskStatusKind::Stopping:
-            case TaskStatusKind::Conflict: break;
-        }
+        if (status == TaskStatusKind::Done)
+            ++summary.completed;
+        else
+            ++summary.canceled;
     }
     return summary;
 }
@@ -3485,12 +3484,6 @@ private:
     std::optional<uint64_t> _result;
 };
 
-[[nodiscard]] std::optional<uint64_t> ShowCustomSpeedLimitPrompt(HWND ownerWindow, const AppTheme& theme, uint64_t initialLimitBytesPerSecond) noexcept
-{
-    FileOperationsSpeedLimitPromptWindow window(ownerWindow, theme, initialLimitBytesPerSecond);
-    return window.ShowModal();
-}
-
 bool PointInRectF(const D2D1_RECT_F& rc, float x, float y) noexcept
 {
     return rc.left <= x && x <= rc.right && rc.top <= y && y <= rc.bottom;
@@ -3708,7 +3701,8 @@ bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task
 {
     // I35 R10.2: a question waiting for the user moves no bytes by design. That is neither
     // throughput nor a stall, so it is measured like a pause.
-    return task.paused || task.queuePaused || task.waitingInQueue || task.waitingForOthers || task.waitingForDecision || task.stopping;
+    return task.paused || task.queuePaused || task.waitingInQueue || task.waitingForOthers || task.waitingForDecision || task.waitingForCredentials ||
+           task.stopping;
 }
 
 void AddHueWeight(std::array<FileOperationsPopupInternal::RateHistory::HueWeight, FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample>& weights,
@@ -4559,6 +4553,12 @@ ATOM RegisterFileOperationsPopupWndClass(HINSTANCE instance)
 
 } // namespace
 
+std::optional<uint64_t> FileOperations::ShowCustomSpeedLimitPrompt(HWND owner, const AppTheme& theme, uint64_t initialBytesPerSecond) noexcept
+{
+    FileOperationsSpeedLimitPromptWindow window(owner, theme, initialBytesPerSecond);
+    return window.ShowModal();
+}
+
 using FileOperationsPopupInternal::PopupButton;
 using FileOperationsPopupInternal::PopupHitTest;
 using FileOperationsPopupInternal::RateHistory;
@@ -4831,9 +4831,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoCollapseComplete
 }
 
 // I35 R9.5: once every task the last Cancel all requested has finished (or left), the completed group
-// collapses one time when each of its members is a clean success or a clean cancel, so its header's
-// badges and Clear completed are in view. This is not a stored preference: the user's toggle wins
-// afterwards, and a group with any problem stays as the user left it.
+// collapses one time when the visible terminal results are clean. The user still controls subsequent
+// disclosure. A visible problem result keeps the group in its current state.
 void FileOperationsPopupInternal::FileOperationsPopupState::ResolveBulkCancelGroupCollapse(HWND hwnd,
                                                                                            const std::vector<TaskSnapshot>& snapshot,
                                                                                            bool showCompletedGroup) noexcept
@@ -4852,15 +4851,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ResolveBulkCancelGro
     _bulkCancelCohort.clear();
     if (! showCompletedGroup || ! _completedGroupExpanded)
         return;
-    const bool everyMemberClean = std::ranges::all_of(snapshot,
-                                                      [](const TaskSnapshot& task) noexcept
-    {
-        if (! IsCompletedGroupTask(task))
-            return true;
-        const TaskStatusKind status = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
-        return (status == TaskStatusKind::Done || status == TaskStatusKind::Canceled) && task.warningCount == 0u && task.errorCount == 0u;
+    const bool everyTerminalResultClean = std::ranges::all_of(snapshot, [](const TaskSnapshot& task) noexcept {
+        return task.kind != TaskSnapshot::Kind::FileOperation || ! task.finished || task.interruptedMoveNotice || IsCompletedGroupTask(task);
     });
-    if (! everyMemberClean)
+    if (! everyTerminalResultClean)
         return;
     _completedGroupExpanded     = false;
     _maxAutoSizedWindowHeight   = 0;
@@ -5825,6 +5819,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.paused                         = pauseReason != PauseReason::None;
         snap.pausedByBulk                   = pauseReason == PauseReason::Bulk;
         snap.waitingForOthers               = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
+        snap.waitingForCredentials          = task->IsWaitingForCredentials();
         snap.waitingInQueue                 = task->IsWaitingInQueue();
         snap.waitingForIdentityInterlock    = snap.waitingInQueue && task->_waitingForIdentityInterlock.load(std::memory_order_acquire);
         snap.waitingForParallelTransferSlot = snap.waitingInQueue && task->_waitingForParallelTransferSlot.load(std::memory_order_acquire);
@@ -6306,12 +6301,13 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             }
         }
 
-        snap.started              = task->HasStarted();
-        snap.paused               = task->IsPaused();
-        snap.waitingForOthers     = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
-        snap.waitingInQueue       = task->IsWaitingInQueue();
-        snap.queuePaused          = task->IsQueuePaused();
-        snap.lastByteProgressTick = task->_lastByteProgressTick.load(std::memory_order_acquire);
+        snap.started               = task->HasStarted();
+        snap.paused                = task->IsPaused();
+        snap.waitingForOthers      = task->IsWaitingForOthers() || task->_liveOutputWaitCount.load(std::memory_order_acquire) != 0u;
+        snap.waitingForCredentials = task->IsWaitingForCredentials();
+        snap.waitingInQueue        = task->IsWaitingInQueue();
+        snap.queuePaused           = task->IsQueuePaused();
+        snap.lastByteProgressTick  = task->_lastByteProgressTick.load(std::memory_order_acquire);
         snap.stallKind = RateStallKindFor(task->_progressStallPhase.load(std::memory_order_acquire), task->_progressStallSide.load(std::memory_order_acquire));
         snap.speedLimitBytesPerSecond = task->_effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         snap.stopping                 = task->CancelRequestedDurable();
@@ -6616,7 +6612,7 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareTerminalAc
 
 HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareCompletedGroup(float widthPx,
                                                                                      uint32_t total,
-                                                                                     const std::array<uint32_t, 5>& counts) noexcept
+                                                                                     const std::array<uint32_t, 2>& counts) noexcept
 {
     auto* actionFormat = _controlsHost.GetTextFormat(DxUi::FontRole::Body);
     if (! _dwriteFactory || ! actionFormat || ! _headerFormat || ! _smallFormat || widthPx <= 0.0f)
@@ -6642,7 +6638,7 @@ HRESULT FileOperationsPopupInternal::FileOperationsPopupState::PrepareCompletedG
         const float headingWidthPx = MeasureTextWidth(_dwriteFactory.get(), _headerFormat.get(), headingText, 4096.0f, DipsToPixels(128.0f, _dpi));
         if (clearWidthDip <= 0.0f || headingWidthPx <= 0.0f)
             return E_FAIL;
-        std::array<D2D1_SIZE_F, 5> badgeSizes{};
+        std::array<D2D1_SIZE_F, 2> badgeSizes{};
         size_t badgeCount = 0u;
         if (! _completedGroupExpanded)
         {
@@ -9774,11 +9770,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
     if (! footerOnly && showCompletedGroup)
     {
-        const std::array counts{completedGroupSummary.completed,
-                                completedGroupSummary.partial,
-                                completedGroupSummary.indeterminate,
-                                completedGroupSummary.failed,
-                                completedGroupSummary.canceled};
+        const std::array counts{completedGroupSummary.completed, completedGroupSummary.canceled};
         const HRESULT groupHr = PrepareCompletedGroup(conflictActionWidthPx, completedGroupCount, counts);
         if (groupHr == E_PENDING)
             return;
@@ -10398,24 +10390,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                         FluentIcons::kFallbackCheckMark,
                                         IDS_FMT_FILEOPS_BADGE_COMPLETED_TOOLTIP,
                                         L"Completed"},
-                            ResultBadge{completedGroupSummary.partial,
-                                        PopupStatusVisualTone::Warning,
-                                        FluentIcons::kWarning,
-                                        FluentIcons::kFallbackWarning,
-                                        IDS_FMT_FILEOPS_BADGE_PARTIAL_TOOLTIP,
-                                        L"Partial"},
-                            ResultBadge{completedGroupSummary.indeterminate,
-                                        PopupStatusVisualTone::Warning,
-                                        FluentIcons::kInfo,
-                                        L'?',
-                                        IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP,
-                                        L"Indeterminate"},
-                            ResultBadge{completedGroupSummary.failed,
-                                        PopupStatusVisualTone::Error,
-                                        FluentIcons::kError,
-                                        FluentIcons::kFallbackError,
-                                        IDS_FMT_FILEOPS_BADGE_FAILED_TOOLTIP,
-                                        L"Failed"},
                             ResultBadge{completedGroupSummary.canceled,
                                         PopupStatusVisualTone::Neutral,
                                         FluentIcons::kClear,
@@ -13776,7 +13750,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
             // The custom prompt pumps nested thread messages; keep FileOperationState alive across
             // that pump and re-find the task by id afterwards (same fence as the deferred path).
             const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
-            const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), current);
+            const auto promptResult = FileOperations::ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), current);
             if (! promptResult.has_value())
             {
                 return;
@@ -13837,7 +13811,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimit
     const uint64_t taskId       = resolvedTaskId;
     const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
     const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
-    const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
+    const auto promptResult = FileOperations::ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
     if (promptResult.has_value() && hostLifetime.lock())
     {
         if (FolderWindow::FileOperationState::Task* const currentTask = fileOps->FindTask(taskId))
@@ -15859,21 +15833,15 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     result.completedGroupExpanded         = completedGroupVisible && _completedGroupExpanded;
     result.completedGroupCount            = completedGroupVisible ? completedGroupCount : 0u;
     result.completedGroupCompletedCount   = completedGroupVisible ? completedGroupSummary.completed : 0u;
-    result.completedGroupPartialCount     = completedGroupVisible ? completedGroupSummary.partial : 0u;
-    result.completedGroupFailedCount      = completedGroupVisible ? completedGroupSummary.failed : 0u;
     result.completedGroupCanceledCount    = completedGroupVisible ? completedGroupSummary.canceled : 0u;
     result.completedGroupVisibleTaskCount = result.completedGroupExpanded ? completedGroupCount : 0u;
     result.completedGroupAnimationEnabled = completedGroupVisible && ! reducedMotion;
     if (completedGroupVisible)
     {
-        for (const uint32_t count : {completedGroupSummary.completed,
-                                     completedGroupSummary.partial,
-                                     completedGroupSummary.indeterminate,
-                                     completedGroupSummary.failed,
-                                     completedGroupSummary.canceled})
+        for (const uint32_t count : {completedGroupSummary.completed, completedGroupSummary.canceled})
             result.completedGroupExpectedBadges += count != 0u ? 1u : 0u;
         result.completedGroupBadgeCountsFit = true;
-        constexpr std::array<std::wstring_view, 5> badgeSuffixes{{L"Completed", L"Partial", L"Indeterminate", L"Failed", L"Canceled"}};
+        constexpr std::array<std::wstring_view, 2> badgeSuffixes{{L"Completed", L"Canceled"}};
         for (size_t regionIndex = 0u; regionIndex < _hostedTooltipDescriptors.size(); ++regionIndex)
         {
             const auto& descriptor = _hostedTooltipDescriptors[regionIndex];
@@ -17939,12 +17907,16 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
     uncanceled.statusKind            = Status::Running;
     if (! BuildGlobalStatusSummary({uncanceled}, &rates).hasAggregateEta)
         return false;
-    const auto mixed = BuildGlobalStatusSummary({task, uncanceled});
-    if (mixed.running != 2u || mixed.stopping != 1u || mixed.bulkPausable != 1u || mixed.bulkPaused != 0u || ! HasFooterPauseResumeAllControl(mixed))
+    uncanceled.taskId             = task.taskId + 1u;
+    auto& peerRate                = rates[uncanceled.taskId];
+    peerRate.displayedBytesPerSec = 5.0;
+    const auto mixed              = BuildGlobalStatusSummary({task, uncanceled}, &rates);
+    if (mixed.running != 2u || mixed.stopping != 1u || mixed.bulkPausable != 1u || mixed.bulkPaused != 0u || ! HasFooterPauseResumeAllControl(mixed) ||
+        mixed.displayedBytesPerSec != peerRate.displayedBytesPerSec || rates.at(task.taskId).displayedBytesPerSec != 10.0)
         return false;
     const auto taskbar = BuildGlobalTaskbarProgressModel(summary);
     if (! progress.includeInAggregateCohort || ! progress.showThroughputGraph || ! progress.determinate || progress.fraction != 0.25 ||
-        summary.displayedBytesPerSec != 10.0 || summary.hasAggregateEta || summary.completedBytes != 25u || summary.totalBytes != 100u ||
+        summary.displayedBytesPerSec != 0.0 || summary.hasAggregateEta || summary.completedBytes != 25u || summary.totalBytes != 100u ||
         taskbar.state != static_cast<uint32_t>(TBPF_NORMAL) || taskbar.completed != 25u || taskbar.total != 100u)
         return false;
     auto unknownSize                 = task;
@@ -17985,8 +17957,8 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
     if (ResolveTaskStatusKind(task) != Status::Indeterminate)
         return false;
 
-    // A cancel that left an item's publication or source unknown is not a clean Canceled: its
-    // chip, tone and completed-group badge say Indeterminate. A clean cancel stays Canceled.
+    // An unknown result from cancellation keeps its warning chip on a standalone card.
+    // A clean cancellation joins the Completed group.
     for (const HRESULT canceledHr : {HRESULT_FROM_WIN32(ERROR_CANCELLED), E_ABORT})
     {
         task.resultHr               = canceledHr;
@@ -17994,14 +17966,13 @@ bool DebugValidateFileOperationsStoppingPresentation() noexcept
         task.hasIndeterminateResult = true;
         ProjectTaskCancellationForDisplay(task);
         const CompletedGroupResultSummary unknown = BuildCompletedGroupResultSummary({task});
-        if (task.statusKind != Status::Indeterminate || StatusVisualToneForTaskStatus(task.statusKind) != PopupStatusVisualTone::Warning ||
-            unknown.indeterminate != 1u || unknown.canceled != 0u)
+        if (task.statusKind != Status::Indeterminate || StatusVisualToneForTaskStatus(task.statusKind) != PopupStatusVisualTone::Warning || unknown.total != 0u)
             return false;
         task.warningCount           = 0u;
         task.hasIndeterminateResult = false;
         ProjectTaskCancellationForDisplay(task);
         const CompletedGroupResultSummary clean = BuildCompletedGroupResultSummary({task});
-        if (task.statusKind != Status::Canceled || clean.canceled != 1u || clean.indeterminate != 0u)
+        if (task.statusKind != Status::Canceled || clean.total != 1u || clean.canceled != 1u)
             return false;
     }
 
@@ -18213,6 +18184,21 @@ bool DebugValidateFileOperationsVerificationPresentation() noexcept
     const GlobalFileOperationsStatusSummary summary = BuildGlobalStatusSummary(tasks, &rates);
     // Transfer is sequentially followed by verification: 20/10 + 50/5 = 12 seconds.
     if (! summary.hasAggregateEta || std::abs(summary.aggregateEtaSeconds - 12.0) >= 0.001)
+    {
+        return false;
+    }
+
+    TaskSnapshot credentialWait          = task;
+    credentialWait.taskId                = task.taskId + 1u;
+    credentialWait.discoveryClosed       = false;
+    credentialWait.waitingForCredentials = true;
+    credentialWait.statusKind            = ResolveTaskStatusKind(credentialWait);
+    tasks.push_back(credentialWait);
+    const GlobalFileOperationsStatusSummary waiting = BuildGlobalStatusSummary(tasks, &rates);
+    const GlobalTaskbarProgressModel taskbar        = BuildGlobalTaskbarProgressModel(waiting);
+    if (credentialWait.statusKind != TaskStatusKind::AwaitingCredentials || waiting.needAttention != 1u || waiting.activeRunning != 1u ||
+        taskbar.state != static_cast<uint32_t>(TBPF_ERROR) || taskbar.total != 0u || ! waiting.hasAggregateEta ||
+        std::abs(waiting.aggregateEtaSeconds - summary.aggregateEtaSeconds) >= 0.001)
     {
         return false;
     }
@@ -18453,7 +18439,7 @@ HWND GetFileOperationsSpeedLimitPromptHandle() noexcept
 
 void DebugShowFileOperationsSpeedLimitPromptForGallery(HWND owner, const AppTheme& theme) noexcept
 {
-    static_cast<void>(ShowCustomSpeedLimitPrompt(owner, theme, 80ull * 1024ull * 1024ull));
+    static_cast<void>(FileOperations::ShowCustomSpeedLimitPrompt(owner, theme, 80ull * 1024ull * 1024ull));
 }
 
 bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept

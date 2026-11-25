@@ -46,6 +46,7 @@ private:
     DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     PreferencesDialogState* _state        = nullptr;
+    bool _syncingDxCopyLinkPolicyCombo    = false;
     bool _syncingDxBandwidthPresetCombo   = false;
     bool _syncingDxCustomBandwidthEdit    = false;
     bool _syncingDxBridgeBufferEdit       = false;

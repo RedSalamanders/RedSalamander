@@ -59,7 +59,7 @@ directory object.
 11. Pane, Find, Compare, watch, and search consumers act from typed result axes, never pathname
     inference.
 12. No File Operations path silently relaunches with elevation or kills a provider worker.
-13. A Move never applies the link policy. `Preserve links` / `Skip links` is a Copy option; every
+13. Copy captures the File Operations link policy at admission. An inherited setting uses the source provider’s existing policy. An explicit Copy confirmation choice overrides the captured default. A Move never applies the Copy link policy. Every
     Move relocates every link object literally, by native rename on one endpoint or by literal
     publication across endpoints.
 13a. **Delete source** (I63 B4). A Managed Move that meets an existing regular file may be answered
@@ -3186,10 +3186,15 @@ the header, with no unknown `0/?` fraction, footer counting label or provisional
 - The primary graph series and pump throughput contain transfer bytes only; `fileOps.graphVerify`
   is the separate verification series. The current/aggregate bandwidth marker and configured
   bandwidth budget count both.
-- The task publishes a monotonic rate-sampling generation on pause, queue, blocking decision,
-  and live-output wait transitions. The popup resets the rate window if its last sample predates
-  that generation, including when a whole wait occurred without a popup tick. A live-output wait
-  uses the existing waiting-for-another-task presentation.
+- The task publishes a monotonic rate-sampling generation at entry and exit for pause, queue,
+  blocking decision, credential UI and live-output waits. The popup resets the rate window if
+  its last sample predates that generation, including when the whole wait occurred between ticks.
+  A task-owned synchronous provider call carries a host-only wait observer into the dispatched
+  credential request. It brackets the actual password, passphrase or Windows Hello interaction.
+  Nested waits remain blocked until the last interaction ends. Cached credentials and requests
+  the host refuses before invoking credential UI do not create a wait. This observation leaves the provider interface,
+  credential rules and mutation reservation intact. A live-output wait uses the existing
+  waiting-for-another-task presentation.
 - Verification off creates no verification reads, graph samples, or artificial phase.
 
 The existing More menu, Pause/Resume, Cancel, Start now/reorder, Issues pane, completed grouping,
@@ -3392,10 +3397,17 @@ in force when the row is rediscovered. If a subfolder cannot be read or its pack
 malformed, the listing retains its prior rows and adds rows from validated portions of the scan, reports
 how many folders were incomplete, and does not present that scan as complete. Provider child names that
 could escape their parent during a host path join are skipped and counted as invalid names.
-**Delete Selected** submits one ordinary `DeletePlan` (`DeleteOrigin::LeftoverCleanup`) through
-`StartOperation` on the provider and plugin identity the listing was opened on (not the pane's current
-one): to the Recycle Bin where the provider supports it, as the pane Delete does, else a permanent
-Delete behind its card, so the touch guard, the confirmation and the by-name rules apply unchanged. On
+**Delete Selected** submits an ordinary `DeletePlan` (`DeleteOrigin::LeftoverCleanup`) through
+`StartOperation` on the provider instance captured when the listing opened. Recycle uses the ordinary
+touch guard. A permanent request whose whole selected set has exact artifact identities uses one
+permanent-delete card with the possible-leftover warning. The worker compares every captured identity
+with its pinned root before offering the question. Cancel grants no receipt. Acceptance seals the
+task's permanent-delete consent and its exact `TouchGuardReceipt` together. Execution revalidates the
+receipt before mutation. A changed root stops the combined request. Partial, blocked and by-name
+requests keep their existing touch guard or by-name consent. The `FileOps.Delete.LeftoverConsent`
+metric records the covered root count and acceptance, cancellation or a changed-selection refusal.
+`FileOps_ReviewRemediationContracts` checks the single card, Cancel, confirmation and a changed
+checked name without desktop activation. On
 a provider that cannot delete (an MTP device) the listing shows its rows unchecked, disables Delete
 Selected and says why. Closing the listing stops its walk, re-issuing the I/O cancel for a bounded
 200 ms; a synchronous provider read may still be blocked after cancellation. The UI closes its HWND and

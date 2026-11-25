@@ -392,7 +392,7 @@ enum class ReparsePointPolicy : unsigned char
 [[nodiscard]] DiagnosticsSettings GetDiagnosticsSettingsFromSettings(const Common::Settings::Settings* settings) noexcept;
 [[nodiscard]] unsigned long GetCrossFsBridgeBufferBytesFromSettings(const Common::Settings::Settings* settings) noexcept;
 [[nodiscard]] uint64_t GetDefaultBandwidthLimitBytesPerSecondFromSettings(const Common::Settings::Settings* settings) noexcept;
-[[nodiscard]] ReparsePointPolicy GetReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept;
+[[nodiscard]] ReparsePointPolicy GetCopyReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept;
 [[nodiscard]] bool HasHighMetadataCostTransferHint(IFileSystem& fileSystem,
                                                    const std::vector<std::filesystem::path>& paths,
                                                    FileSystemOperation operationType,

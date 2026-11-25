@@ -2,8 +2,15 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 #include "resource.h"
+
+struct AppTheme;
 
 namespace FileOperations
 {
@@ -23,4 +30,6 @@ inline constexpr std::array kBandwidthPresets{
     BandwidthPreset{500ull << 20u, IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB},
     BandwidthPreset{1ull << 30u, IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB},
 };
+
+[[nodiscard]] std::optional<uint64_t> ShowCustomSpeedLimitPrompt(HWND owner, const AppTheme& theme, uint64_t initialBytesPerSecond) noexcept;
 } // namespace FileOperations

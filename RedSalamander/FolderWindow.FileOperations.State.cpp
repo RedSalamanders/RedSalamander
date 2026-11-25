@@ -1435,8 +1435,18 @@ struct ParsedFileSystemConfiguration final
                                                                          FileSystemOperation operation,
                                                                          unsigned int uiMax) noexcept;
 
-[[nodiscard]] ReparsePointPolicy GetReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept
+[[nodiscard]] ReparsePointPolicy GetCopyReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept
 {
+    if (settings.fileOperations)
+    {
+        switch (settings.fileOperations->copyLinkPolicy)
+        {
+            case Common::Settings::FileOperationsCopyLinkPolicy::Preserve: return ReparsePointPolicy::Preserve;
+            case Common::Settings::FileOperationsCopyLinkPolicy::Skip: return ReparsePointPolicy::Skip;
+            case Common::Settings::FileOperationsCopyLinkPolicy::Inherit: break;
+        }
+    }
+
     const auto it = settings.plugins.configurationByPluginId.find(pluginId);
     if (it == settings.plugins.configurationByPluginId.end())
     {
@@ -7177,6 +7187,7 @@ public:
 
         if (_workers.empty())
         {
+            const ScopedHostCredentialWaitObserver credentialObserver({task, task ? &Task::OnCredentialWait : nullptr});
             for (size_t i = 0; i < job->totalItems; ++i)
             {
                 if (isTaskCancelled(*job))
@@ -7628,6 +7639,7 @@ private:
             const uint64_t processStartUs = PerfNowUs();
             // R0f: a provider call wedged on a dead share returns once this task is canceled.
             const Common::SynchronousIoCancelWatch::Scope cancelWatch(job->task != nullptr ? &Task::ShouldCancelSynchronousIo : nullptr, job->task);
+            const ScopedHostCredentialWaitObserver credentialObserver({job->task, job->task ? &Task::OnCredentialWait : nullptr});
             const HRESULT itemHr = job->itemPolicy->Process(index);
             recordItemResult(*job, itemHr);
             const uint64_t processUs = PerfElapsedUs(processStartUs);
@@ -9421,14 +9433,17 @@ std::shared_ptr<const FileOperations::FileOperationPlanGroup> FolderWindow::File
     return LoadSelectedAdmission()->plans;
 }
 
-void FolderWindow::FileOperationState::Task::StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans) noexcept
+void FolderWindow::FileOperationState::Task::StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans,
+                                                        std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> confirmedTouchReceipt) noexcept
 {
     if (_selectedRootReadinessComplete.load(std::memory_order_acquire) || _enteredOperation.load(std::memory_order_acquire))
         return;
     // Initial Rename/Delete may reseal their plan before registry publication.
-    // Published/running destination generations are never changed through this method.
+    // Publish a confirmed touch receipt together with the destructive consent.
     auto selected   = std::make_shared<SelectedAdmissionView>(*LoadSelectedAdmission());
     selected->plans = std::move(plans);
+    if (confirmedTouchReceipt)
+        selected->artifactTouchReceipt = std::move(confirmedTouchReceipt);
     _selectedAdmission.store(std::move(selected), std::memory_order_release);
     Debug::Perf::Emit(L"FileOps.Admission.ViewObjectsCreated", L"initial-plans", 0u, 1u, sizeof(SelectedAdmissionView), S_OK);
 }
@@ -12713,7 +12728,7 @@ std::wstring FolderWindow::FileOperationState::Task::BuildPermanentDeleteConsent
             }
         }
     }
-    if (handedOffLeftover)
+    if (handedOffLeftover || _leftoverDeleteTouchRequest)
     {
         append(IDS_FILEOPS_CONSENT_POSSIBLE_LEFTOVER);
     }
@@ -12738,6 +12753,58 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
     {
         return S_OK;
     }
+    if (_leftoverDeleteTouchRequest)
+    {
+        // The interlock builder sorts the one endpoint's scopes by path. The touch receipt keeps
+        // selection order so later provider revalidation can compare its original positions.
+        const auto& items          = _leftoverDeleteTouchRequest->items;
+        std::wstring_view mismatch = items.size() == scopes.size() ? L"" : L"scope-count";
+        if (mismatch.empty())
+        {
+            for (const auto& item : items)
+            {
+                const auto key = std::tie(item.endpoint.pluginId, item.endpoint.instanceId, item.endpoint.profileId, item.endpoint.rootId, item.path.native());
+                const auto scope = std::ranges::lower_bound(scopes, key, {}, [](const FileOperations::MutationInterlockScope& value) noexcept {
+                    return std::tie(value.endpoint.pluginId, value.endpoint.instanceId, value.endpoint.profileId, value.endpoint.rootId, value.providerPath);
+                });
+                if (scope == scopes.end() || scope->providerPath != item.path.native() || scope->endpoint.pluginId != item.endpoint.pluginId ||
+                    scope->endpoint.instanceId != item.endpoint.instanceId || scope->endpoint.profileId != item.endpoint.profileId ||
+                    scope->endpoint.rootId != item.endpoint.rootId)
+                {
+                    mismatch = L"scope";
+                    break;
+                }
+                if (! scope->exactDeleteAuthority || ! scope->root)
+                {
+                    mismatch = L"pin";
+                    break;
+                }
+                const auto& authority = scope->root->retained.authority;
+                if (authority.kind != item.identity.kind || authority.identity.objectId != item.identity.objectId ||
+                    authority.identity.revisionId != item.identity.revisionId || authority.identity.pathProfileId != item.identity.pathProfileId)
+                {
+                    mismatch = L"object";
+                    break;
+                }
+            }
+        }
+        if (! mismatch.empty())
+        {
+            constexpr HRESULT changed = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            LogDiagnostic(DiagnosticSeverity::Error,
+                          changed,
+                          L"delete.leftover.selectionChanged",
+                          L"The checked leftovers changed before confirmation; nothing was deleted.");
+            Debug::Perf::Emit(L"FileOps.Delete.LeftoverConsent", mismatch, 0u, static_cast<uint64_t>(items.size()), 0u, changed);
+            return changed;
+        }
+    }
+
+    const auto recordLeftoverDecline = [&](HRESULT status) noexcept
+    {
+        if (_leftoverDeleteTouchRequest)
+            Debug::Perf::EmitValue(L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(_leftoverDeleteTouchRequest->items.size()), status);
+    };
     ConflictAction action = ConflictAction::None;
 #ifdef ENABLE_TESTS
     if (_permanentDeleteTestOverride == 1)
@@ -12778,13 +12845,16 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         const DeferredConsentResult result = RequestDeferredConsent(*this, request);
         if (FAILED(result.status))
         {
+            recordLeftoverDecline(result.status);
             return result.status;
         }
         action = result.action;
     }
     if (action != ConflictAction::PermanentDelete)
     {
-        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        constexpr HRESULT canceled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        recordLeftoverDecline(canceled);
+        return canceled;
     }
 #ifdef ENABLE_TESTS
     g_fileOpsPermanentDeleteBeforeRecheckPausePoint.Pause(10'000ull);
@@ -12877,6 +12947,16 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
                 : FileOperations::ConsentKind::PermanentDelete;
         deletion->initialConsent = FileOperations::DestructiveConsentReceipt{.kind = kind, .taskNonce = _taskId};
     }
+    std::shared_ptr<const FileOperationArtifacts::TouchGuardReceipt> leftoverReceipt;
+    if (auto touchRequest = std::move(_leftoverDeleteTouchRequest))
+    {
+        FileOperationArtifacts::TouchGuardReceipt accepted;
+        const HRESULT acceptedHr = FileOperationArtifacts::AcceptTouchGuard(*touchRequest, accepted);
+        Debug::Perf::EmitValue(L"FileOps.Delete.LeftoverConsent", static_cast<uint64_t>(touchRequest->items.size()), acceptedHr);
+        if (acceptedHr != S_OK)
+            return FAILED(acceptedHr) ? acceptedHr : E_UNEXPECTED;
+        leftoverReceipt = std::make_shared<const FileOperationArtifacts::TouchGuardReceipt>(std::move(accepted));
+    }
     if (_reservedOperation.load(std::memory_order_acquire))
     {
         // The general plan store remains frozen after readiness. This reserved-only
@@ -12886,6 +12966,8 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
             return E_UNEXPECTED;
         auto selected   = std::make_shared<SelectedAdmissionView>(*consentView);
         selected->plans = std::move(consented);
+        if (leftoverReceipt)
+            selected->artifactTouchReceipt = std::move(leftoverReceipt);
         {
             std::scoped_lock lock(_state->_queueMutex);
             if (LoadSelectedAdmission() != consentView || ! _reservedOperation.load(std::memory_order_acquire) ||
@@ -12899,7 +12981,7 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         }
     }
     else
-        StorePlans(std::move(consented));
+        StorePlans(std::move(consented), std::move(leftoverReceipt));
     const auto publishedPlans = LoadPlans();
     if (! publishedPlans || publishedPlans->size() != plans->size())
         return E_UNEXPECTED;
@@ -13413,6 +13495,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     // Once Cancel/Stop is requested, the watch cancels a call still pending after its grace, so a
     // wedged network round trip returns instead of holding the task, its popup, or shutdown.
     const Common::SynchronousIoCancelWatch::Scope cancelWatch(&Task::ShouldCancelSynchronousIo, this);
+    const ScopedHostCredentialWaitObserver credentialObserver({this, &Task::OnCredentialWait});
     [[maybe_unused]] const std::stop_callback stopWake(stopToken,
                                                        [this]() noexcept
     {
@@ -14564,6 +14647,25 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
         _state->RequestTaskPresentationRefresh();
 
     GetPerItemTaskScheduler().NotifyWorkAvailable();
+}
+
+void FolderWindow::FileOperationState::Task::OnCredentialWait(void* context, bool waiting) noexcept
+{
+    auto& task = *static_cast<Task*>(context);
+    const unsigned int previous =
+        waiting ? task._credentialWaitCount.fetch_add(1u, std::memory_order_acq_rel) : task._credentialWaitCount.fetch_sub(1u, std::memory_order_acq_rel);
+    assert(waiting || previous != 0u);
+    if (previous == (waiting ? 0u : 1u))
+    {
+        task.MarkRateSamplingStateChanged();
+        if (task._state)
+            task._state->RequestTaskPresentationRefresh();
+    }
+}
+
+bool FolderWindow::FileOperationState::Task::IsWaitingForCredentials() const noexcept
+{
+    return _credentialWaitCount.load(std::memory_order_acquire) != 0u;
 }
 
 void FolderWindow::FileOperationState::Task::MarkRateSamplingStateChanged() noexcept
