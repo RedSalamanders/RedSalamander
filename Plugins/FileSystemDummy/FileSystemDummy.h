@@ -335,7 +335,7 @@ private:
     inline static unsigned long _maxDepth                       = 10;
     inline static unsigned int _seed                            = 42;
     inline static unsigned long _latencyMilliseconds            = 0;
-    inline static bool _writerProof                             = true; // R3-2 route proof (configuration "writerProof")
+    inline static std::atomic_bool _writerProof                 = true; // R3-2 route proof (configuration "writerProof")
     inline static unsigned long _streamChunkLatencyMilliseconds = 0;
     inline static std::wstring _virtualSpeedLimitText           = L"0";
     inline static std::atomic<uint64_t> _virtualSpeedLimitBytesPerSecond{0};

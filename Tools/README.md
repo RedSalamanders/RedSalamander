@@ -338,6 +338,7 @@ gates using owned windows. The exact `FileOps_ClearCompletedScope` case uses a p
 The exact `C0_CurlCommittedMutationResponseLost` case uses a loopback FTP fixture and no desktop lease.
 The exact `FileOps_ProviderCapabilityMatrix` case uses owned providers and task controls.
 The exact `FileOps_RepeatedNonClipboardCopyStorage` and `FileOps_RepeatedNonClipboardMoveStorage` cases use owned tasks and sandbox files without a desktop lease.
+The exact `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof` case uses an owned provider, synthetic task decisions and sandbox data.
 Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
 files and simulated unsupported destination IDs, plus capacity/exclusive waiting-card captures.

@@ -3164,7 +3164,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
         _maxDepth                = maxDepth;
         _seed                    = seed;
         _latencyMilliseconds     = latencyMilliseconds;
-        _writerProof             = writerProof;
+        _writerProof.store(writerProof, std::memory_order_release);
 #ifdef ENABLE_TESTS
         _probedRenameSelfTest.store(probedRenameSelfTest, std::memory_order_release);
 #endif
@@ -5518,12 +5518,12 @@ HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path, Fil
     descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
     // R3-2: SHA-256 of the committed content; the "writerProof":false configuration removes the claim
     // so self-tests can cover Copy-only Move into a destination without content proof.
-    descriptor.proofFlags                     = _writerProof ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE;
-    descriptor.namespaceKind                  = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
-    descriptor.componentComparison            = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
-    descriptor.caseOnlyRename                 = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
-    descriptor.copyMoveMaxConcurrency         = 4u;
-    descriptor.deleteMaxConcurrency           = 8u;
+    descriptor.proofFlags             = _writerProof.load(std::memory_order_acquire) ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE;
+    descriptor.namespaceKind          = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+    descriptor.componentComparison    = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+    descriptor.caseOnlyRename         = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.copyMoveMaxConcurrency = 4u;
+    descriptor.deleteMaxConcurrency   = 8u;
     descriptor.deleteRecycleBinMaxConcurrency = 2u;
     descriptor.copyOperation                  = true;
     descriptor.moveOperation                  = true;
