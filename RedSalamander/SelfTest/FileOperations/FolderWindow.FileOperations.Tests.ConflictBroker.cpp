@@ -15,19 +15,16 @@
         prompt.generation          = generation;
         prompt.buttonsPublishable  = true;
         prompt.applyToAllEligible  = true;
-        prompt.skipAllEligible     = true;
         prompt.actions[0]          = Action::Overwrite;
         prompt.actions[1]          = Action::Skip;
         prompt.actions[2]          = Action::Cancel;
-        prompt.actions[3]          = Action::SkipAll;
-        prompt.actions[4]          = Action::Retry;
-        prompt.actionCount         = 5u;
+        prompt.actions[3]          = Action::Retry;
+        prompt.actionCount         = 4u;
         prompt.primaryActions[0]   = Action::Overwrite;
         prompt.primaryActions[1]   = Action::Cancel;
         prompt.primaryActionCount  = 2u;
         prompt.overflowActions[0]  = Action::Skip;
-        prompt.overflowActions[1]  = Action::SkipAll;
-        prompt.overflowActionCount = 2u;
+        prompt.overflowActionCount = 1u;
         prompt.escapeAction        = Action::Cancel;
     };
     const auto accept = [&](uint64_t generation, Action action, Placement placement, bool repeat = false)
@@ -65,7 +62,7 @@
     if (accept(2u, Action::Cancel, Placement::Escape))
         return false;
     publish(3u);
-    if (! accept(3u, Action::SkipAll, Placement::Overflow))
+    if (accept(3u, Action::SkipAll, Placement::Overflow) || ! accept(3u, Action::Skip, Placement::Overflow, true))
         return false;
     {
         std::scoped_lock lock(arbiter.mutex);
@@ -97,18 +94,18 @@
     {
         std::scoped_lock lock(arbiter.mutex);
         arbiter.prompt.applyToAllEligible = false;
-        arbiter.prompt.skipAllEligible    = false;
-        if (TryAcceptLocked(arbiter, 4u, Action::SkipAll, true, Placement::Overflow))
+        if (! TryAcceptLocked(arbiter, 4u, Action::Skip, true, Placement::Overflow))
             return false;
         const auto decision = PendingLocked(arbiter, 4u);
-        if (decision)
+        if (! decision || decision.value().action != Action::Skip || decision.value().applyToAll)
             return false;
     }
     publish(5u);
     {
         std::scoped_lock lock(arbiter.mutex);
-        // DiskFull publishes an explicit scoped Skip All without a redundant checkbox.
+        // DiskFull has its own explicit destination-bound repeat action.
         arbiter.prompt.applyToAllEligible  = false;
+        arbiter.prompt.skipAllEligible     = true;
         arbiter.prompt.actions             = {{Action::Retry, Action::SkipAll, Action::Cancel}};
         arbiter.prompt.actionCount         = 3u;
         arbiter.prompt.primaryActions      = arbiter.prompt.actions;

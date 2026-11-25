@@ -332,7 +332,7 @@ The exact FileOps-only `FileOps_IdentityInterlockWaiting`, `FileOps_ReviewRemedi
 `FileOps_SmallFileCopyCost`, `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb` and
 `FileOps_SmbExactRenameProvider` and `FileOps_SmbCorroboratedRenameProvider` storage and route regressions
 run without activation or a desktop
-lease, alongside `FileOps_RepeatDecisionContracts` and the two reviewed folder-progress
+lease, alongside `FileOps_RepeatDecisionContracts`, `FileOps_AlertOverlayUxAccessibility` and the reviewed folder-progress
 witnesses. The exact `FileOps_DeferredExitRefusesNewWork` case verifies the deferred-close ingress
 gates using owned windows. Broad filters, other suites and proof injections retain normal desktop requirements.
 `FileOps_IdentityInterlockWaiting` also exercises the shared transfer budget with private sandbox
