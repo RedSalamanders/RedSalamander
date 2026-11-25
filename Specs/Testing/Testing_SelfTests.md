@@ -1181,7 +1181,8 @@ the same synchronous reporter and counter path as the pointer overload.
   `FileOps_SelectionShapeLocal`, `FileOps_SelectionShapeSmb`, `FileOps_SmbExactRenameProvider`,
   `FileOps_SmbCorroboratedRenameProvider`, `C0_CurlCommittedMutationResponseLost`, `FileOps_ProviderCapabilityMatrix`,
   `FileOps_RepeatedNonClipboardCopyStorage`, `FileOps_RepeatedNonClipboardMoveStorage`,
-  `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, or
+  `FileOps_CopyOnlyMoveRetainsSourceWithoutDestinationProof`, `R0fGraph_FakeGraphReadWriteCreateRenameRecycle`,
+  `Phase16_RemoteOneDrivePersonalInlineRename`, or
   `Delete_IdentityLessPinnedTreeChangedEntry` case filter and no flaky/order proof injection.
   Their bootstrap and fixtures use direct owned-window/task hooks, real sandbox
   copies and, for progress witnesses, owned HWND WGC capture;
@@ -1192,6 +1193,8 @@ the same synchronous reporter and counter path as the pointer overload.
   the repeated non-clipboard Copy and Move cases use owned task controls and sandbox files under the activation blocker;
   `FileOps_DeferredExitRefusesNewWork` also compares F7 prompt appearance from a displayed Dummy listing with a delayed direct read of the same parent, then verifies the worker's numbered creation and pane refresh;
   the Copy-only Move witness uses an owned provider and synthetic task decisions under the same blocker;
+  `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` uses a loopback Graph fixture and an owned pane;
+  `Phase16_RemoteOneDrivePersonalInlineRename` uses saved sign-in and a fresh test-only fixture child, with exact file and folder Rename, case-only spelling, occupied-name refusal, and Recycle verification;
   the provider capability matrix uses private providers, owned data and direct task controls;
   its managed cleanup witness checks Retry for sharing, access and disk-full failures and verifies that a path-length failure offers Skip and Cancel;
   the exact cadence case uses a private nonactivating popup and preserves its existing

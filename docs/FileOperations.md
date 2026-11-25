@@ -69,11 +69,12 @@ result lists the missing item separately; it does not say that the item was left
 to cut that missing source again. A destination that lacks a required capability still reports its
 own unsupported-operation error when the source exists.
 
-### Rename a local or SMB item
+### Rename a file or folder
 
 Press **F2**, edit the name, and press **Enter**. On an SMB share that supports guarded same-folder
 rename, F2 can also rename files and folders when the share does not report exact item IDs.
-If the chosen name is taken on that route, **Keep both** uses a new name and preserves the existing item.
+On OneDrive Personal, F2 renames files and folders stored on the connected drive within their current folder.
+If the chosen name is taken on either of these routes, **Keep both** uses a new name and preserves the existing item.
 RedSalamander checks the exact spelling for case-only changes. A result it cannot verify appears as
 **Outcome unknown** with details in the File Operations popup.
 

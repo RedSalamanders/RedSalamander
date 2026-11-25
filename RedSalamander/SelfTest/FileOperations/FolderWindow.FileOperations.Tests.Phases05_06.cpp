@@ -9434,7 +9434,7 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
 {
     // R0f-Graph matrix through the host against the plugin's deterministic loopback Graph fixture:
     // cross-provider Copy local -> Graph (upload), Copy Graph -> local (ranged download, byte-exact),
-    // provider CreateDirectory and Rename on Graph, Recycle on Graph through a task (Graph Delete is
+    // provider CreateDirectory, host inline Rename on Graph, and Recycle through a task (Graph Delete is
     // Recycle by stable item ID). The route must qualify as providerWatchdog with a nonzero bound.
     static wil::unique_hmodule graphModule;
     static void* fakeGraph            = nullptr;
@@ -9443,9 +9443,12 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
     static wil::com_ptr<IFileSystemIO> graphIo;
     static std::wstring graphRoot;
     static ULONGLONG phaseStartTick = 0u;
-    using StopFakeGraphFn           = void(__stdcall*)(void*) noexcept;
-    using FakeGraphLogFn            = HRESULT(__stdcall*)(void*, wchar_t*, unsigned int) noexcept;
-    const auto stopFakeGraph        = []() noexcept
+    static bool inlineRenameActive  = false;
+    if (inlineRenameActive)
+        return false;
+    using StopFakeGraphFn    = void(__stdcall*)(void*) noexcept;
+    using FakeGraphLogFn     = HRESULT(__stdcall*)(void*, wchar_t*, unsigned int) noexcept;
+    const auto stopFakeGraph = []() noexcept
     {
         graphIo.reset();
         graph.reset();
@@ -9708,14 +9711,18 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
                 L"R0f-Graph: provider CreateDirectory on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
             return true;
         }
-        const HRESULT renameHr = graph->RenameItem(
-            graphPath(L"source/payload-01.bin").c_str(), graphPath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
-        if (FAILED(renameHr) || graphExists(L"source/payload-01.bin") || ! graphExists(L"source/renamed.bin"))
+        const HRESULT renameHr = [&]() noexcept
+        {
+            inlineRenameActive = true;
+            const auto leave   = wil::scope_exit([]() noexcept { inlineRenameActive = false; });
+            return RunGraphInlineRenameForSelfTest(graph, std::filesystem::path(graphPath(L"source/payload-01.bin")), L"renamed.bin");
+        }();
+        if (renameHr != S_OK || graphExists(L"source/payload-01.bin") || ! graphExists(L"source/renamed.bin"))
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeGraph();
             Fail(std::format(
-                L"R0f-Graph: provider Rename on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(renameHr), diagnostics));
+                L"R0f-Graph: host inline Rename on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(renameHr), diagnostics));
             return true;
         }
 

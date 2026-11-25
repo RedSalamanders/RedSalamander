@@ -1427,6 +1427,38 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox:
     }
 
     RecordCurrentPhase(state, outcome.status, outcome.reason);
+    NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename);
+    return false;
+}
+case SelfTestState::Step::Phase16_RemoteOneDrivePersonalInlineRename:
+{
+    // The owned host Rename pumps the same thread while its worker completes.
+    static bool running = false;
+    if (running)
+        return false;
+    running                 = true;
+    const auto resetRunning = wil::scope_exit([]() noexcept { running = false; });
+    PhaseCheckResult prerequisite =
+        CheckRemoteConnectionSecret(L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::passed)
+        prerequisite = CheckRemoteConnectionSandbox(
+            L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::failed)
+    {
+        Fail(prerequisite.reason);
+        return true;
+    }
+    if (prerequisite.status == SelfTest::SelfTestCaseResult::Status::passed)
+    {
+        const auto resolved = ResolveRemoteConnectionProfile(kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+        const HRESULT hr    = resolved.profile ? RunLiveOneDrivePersonalInlineRenameForSelfTest(*resolved.profile) : E_UNEXPECTED;
+        if (hr != S_OK)
+        {
+            Fail(std::format(L"Live OneDrive Personal inline Rename failed (hr=0x{:08X}).", static_cast<unsigned long>(hr)));
+            return true;
+        }
+    }
+    RecordCurrentPhase(state, prerequisite.status, prerequisite.reason);
     NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps);
     return false;
 }
@@ -1580,10 +1612,20 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
         }
 
         const std::string payload = std::format("onedrive-personal-fileops-{}-roundtrip", static_cast<unsigned long long>(GetTickCount64()));
-        if (! EnsureDirectoryExistsFsOps(remoteDirOps, caseRoot) || ! EnsureDirectoryExistsFsOps(remoteDirOps, uploadDir) ||
-            ! EnsureDirectoryExistsFsOps(remoteDirOps, moveDir))
+        // Create only a fresh child of the configured fixture. An absent parent
+        // or an existing child cannot authorize setup or cleanup outside this run.
+        const HRESULT createCaseHr = remoteDirOps->CreateDirectory(caseRoot.c_str());
+        if (createCaseHr != S_OK)
         {
-            Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to prepare the remote sandbox.");
+            Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps could not create the owned remote sandbox (hr=0x{:08X}).",
+                             static_cast<unsigned long>(createCaseHr)));
+            return true;
+        }
+        state.fsRemoteOneDrivePersonal           = entry->fileSystem;
+        state.remoteOneDrivePersonalCaseRootConn = caseRootConn;
+        if (remoteDirOps->CreateDirectory(uploadDir.c_str()) != S_OK || remoteDirOps->CreateDirectory(moveDir.c_str()) != S_OK)
+        {
+            Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to prepare the owned remote directories.");
             return true;
         }
 
@@ -1606,9 +1648,7 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             return true;
         }
 
-        state.fsRemoteOneDrivePersonal               = entry->fileSystem;
         state.remoteOneDrivePersonalProfileName      = profileName;
-        state.remoteOneDrivePersonalCaseRootConn     = caseRootConn;
         state.remoteOneDrivePersonalUploadDirConn    = ToPluginPathText(uploadDir);
         state.remoteOneDrivePersonalMoveDirConn      = ToPluginPathText(moveDir);
         state.remoteOneDrivePersonalSeedFileConn     = ToPluginPathText(seedFile);
@@ -1794,7 +1834,9 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             return true;
         }
 
-        if (! PathExistsFsIo(remoteIo, std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)))
+        const std::filesystem::path movedFile(state.remoteOneDrivePersonalMovedFileConn);
+        std::string beforeRename;
+        if (! ReadFileTextFsIo(remoteIo, movedFile, beforeRename))
         {
             Fail(L"Phase16_RemoteOneDrivePersonalFileOps move did not materialize the destination file.");
             return true;
@@ -1807,7 +1849,7 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
                                                  state.fsRemoteOneDrivePersonal,
                                                  {std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)},
                                                  {},
-                                                 FILESYSTEM_FLAG_NONE,
+                                                 FILESYSTEM_FLAG_USE_RECYCLE_BIN,
                                                  false);
         if (! state.taskA.has_value())
         {
@@ -1846,12 +1888,12 @@ case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
             return true;
         }
 
-        const HRESULT cleanupHr =
-            state.fsRemoteOneDrivePersonal->DeleteItem(state.remoteOneDrivePersonalCaseRootConn.c_str(),
-                                                       static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                       nullptr,
-                                                       nullptr,
-                                                       nullptr);
+        const HRESULT cleanupHr = state.fsRemoteOneDrivePersonal->DeleteItem(
+            state.remoteOneDrivePersonalCaseRootConn.c_str(),
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+            nullptr,
+            nullptr,
+            nullptr);
         if (FAILED(cleanupHr))
         {
             Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps failed to clean the remote sandbox: 0x{:08X}.", static_cast<unsigned long>(cleanupHr)));

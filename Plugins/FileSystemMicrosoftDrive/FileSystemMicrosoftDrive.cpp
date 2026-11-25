@@ -152,6 +152,7 @@ struct ItemMetadata
     std::wstring id;
     std::wstring name;
     std::wstring parentId;
+    std::wstring parentDriveId;
     std::string rawJson;
     std::wstring downloadUrl;
     std::wstring eTag;
@@ -162,6 +163,7 @@ struct ItemMetadata
     __int64 changeTime       = 0;
     unsigned long attributes = 0;
     bool isFolder            = false;
+    bool remoteReference     = false;
     std::string sha256HashBase64;   // R3-2: file.hashes as Graph reports them for the stored content
     std::string sha1HashBase64;     //       (business/SharePoint: sha256Hash + quickXorHash,
     std::string quickXorHashBase64; //        personal: sha1Hash + quickXorHash)
@@ -3001,8 +3003,11 @@ void LogHttpResponseFailure(std::wstring_view method, std::wstring_view url, DWO
     itemOut.name = TryGetJsonString(root, "name").value_or(L"");
     if (yyjson_val* parentReference = yyjson_obj_get(root, "parentReference"); parentReference && yyjson_is_obj(parentReference))
     {
-        itemOut.parentId = TryGetJsonString(parentReference, "id").value_or(L"");
+        itemOut.parentId      = TryGetJsonString(parentReference, "id").value_or(L"");
+        itemOut.parentDriveId = TryGetJsonString(parentReference, "driveId").value_or(L"");
     }
+    if (const yyjson_val* remote = yyjson_obj_get(root, "remoteItem"); remote && ! yyjson_is_null(remote))
+        itemOut.remoteReference = true;
     itemOut.sizeBytes      = TryGetJsonUInt(root, "size").value_or(0);
     itemOut.creationTime   = ParseIso8601FileTime(TryGetJsonString(root, "createdDateTime").value_or(L""));
     itemOut.lastWriteTime  = ParseIso8601FileTime(TryGetJsonString(root, "lastModifiedDateTime").value_or(L""));
@@ -4054,7 +4059,8 @@ using MoveDiscoveryReporter = std::function<void(bool isFolder, uint64_t sizeByt
                                    std::wstring_view newName,
                                    std::wstring_view parentId,
                                    bool includeParent,
-                                   std::wstring_view expectedEtag = {}) noexcept
+                                   std::wstring_view expectedEtag = {},
+                                   bool requireDestinationReceipt = false) noexcept
 {
     std::string bodyUtf8;
     HRESULT hr = BuildJsonBodyForMoveRename(newName, parentId, includeParent, bodyUtf8);
@@ -4067,20 +4073,26 @@ using MoveDiscoveryReporter = std::function<void(bool isFolder, uint64_t sizeByt
     const std::span<const HttpHeader> requestHeaders(conditionalHeaders.data(), expectedEtag.empty() ? 0u : conditionalHeaders.size());
 
     HttpResponse response{};
-    hr = SendGraphJsonRequest(fs, context, L"PATCH", BuildGraphItemByIdUrl(context, itemId), bodyUtf8, requestHeaders, true, response);
+    hr = SendGraphJsonRequest(fs, context, L"PATCH", BuildGraphItemByIdUrl(context, itemId), bodyUtf8, requestHeaders, ! requireDestinationReceipt, response);
+    const auto matchesPublication = [&](const ItemMetadata& published) noexcept
+    { return published.id == itemId && published.name == newName && (parentId.empty() || published.parentId == parentId); };
     if (FAILED(hr))
     {
-        const HRESULT mutationHr = hr;
         ItemMetadata reconciled{};
         const HRESULT reconcileHr = GetItemMetadataById(fs, context, itemId, reconciled);
-        if (SUCCEEDED(reconcileHr) && reconciled.id == itemId && reconciled.name == newName && (parentId.empty() || reconciled.parentId == parentId))
-        {
-            return S_OK;
-        }
-        return mutationHr;
+        return SUCCEEDED(reconcileHr) && matchesPublication(reconciled) ? S_OK : hr;
     }
 
-    return (response.statusCode >= 200u && response.statusCode < 300u) ? S_OK : HresultFromGraphError(response.statusCode, response.body);
+    if (response.statusCode < 200u || response.statusCode >= 300u)
+        return HresultFromGraphError(response.statusCode, response.body);
+    if (! requireDestinationReceipt)
+        return S_OK;
+
+    ItemMetadata published{};
+    if (SUCCEEDED(ParseItemMetadata(response.body, published)) && matchesPublication(published))
+        return S_OK;
+    const HRESULT observed = GetItemMetadataById(fs, context, itemId, published);
+    return SUCCEEDED(observed) && matchesPublication(published) ? S_OK : HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
 }
 
 [[nodiscard]] HRESULT BuildRollbackLeafName(std::wstring& leafOut) noexcept
@@ -5542,6 +5554,13 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::QueryInterface(REFIID riid, 
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemProbedRename))
+    {
+        *ppvObject = static_cast<IFileSystemProbedRename*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemDirectoryOperations))
     {
         *ppvObject = static_cast<IFileSystemDirectoryOperations*>(this);
@@ -6278,6 +6297,198 @@ namespace
                             nullptr);
 }
 } // namespace
+
+namespace
+{
+struct GraphRenameSelection final
+{
+    std::wstring driveId;
+    std::wstring parentId;
+    std::wstring sourceId;
+    std::wstring exactName;
+    std::wstring revision;
+
+    bool operator==(const GraphRenameSelection&) const = default;
+};
+
+[[nodiscard]] HRESULT ReadGraphRenameItem(FileSystemMicrosoftDrive& fileSystem,
+                                          const DriveContext& context,
+                                          std::wstring_view path,
+                                          ItemMetadata& item) noexcept
+{
+    std::wstring url = BuildGraphItemMetadataUrl(context, path, false);
+    url.append(L",remoteItem");
+    return GetItemMetadataFromUrl(fileSystem, context, url, false, item);
+}
+
+[[nodiscard]] HRESULT ReadGraphRenameSelection(FileSystemMicrosoftDrive& fileSystem,
+                                               std::wstring_view sourcePath,
+                                               DriveContext& context,
+                                               std::wstring& parentPath,
+                                               GraphRenameSelection& selection) noexcept
+{
+    RETURN_IF_FAILED(BuildDriveContext(fileSystem, sourcePath, context));
+    std::wstring requestedLeaf;
+    RETURN_IF_FAILED(SplitParentAndLeaf(context.drivePath, parentPath, requestedLeaf));
+    ItemMetadata parent{};
+    RETURN_IF_FAILED(ReadGraphRenameItem(fileSystem, context, parentPath, parent));
+    ItemMetadata selected{};
+    RETURN_IF_FAILED(ReadGraphRenameItem(fileSystem, context, context.drivePath, selected));
+    if (parent.id.empty() || ! parent.isFolder || parent.remoteReference || selected.remoteReference || selected.id.empty() || selected.eTag.empty() ||
+        context.driveId.empty() || selected.name != requestedLeaf || selected.parentId != parent.id ||
+        (! selected.parentDriveId.empty() && selected.parentDriveId != context.driveId))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    selection = GraphRenameSelection{.driveId   = context.driveId,
+                                     .parentId  = std::move(parent.id),
+                                     .sourceId  = std::move(selected.id),
+                                     .exactName = std::move(selected.name),
+                                     .revision  = std::move(selected.eTag)};
+    return S_OK;
+}
+} // namespace
+
+class FileSystemMicrosoftDrive::ProbedRenameSource final : public IFileSystemProbedRenameSource
+{
+public:
+    ProbedRenameSource(FileSystemMicrosoftDrive* fileSystem, std::wstring path, GraphRenameSelection selection)
+        : _fileSystem(fileSystem),
+          _sourcePath(std::move(path)),
+          _selection(std::move(selection))
+    {
+    }
+
+    ProbedRenameSource(const ProbedRenameSource&)            = delete;
+    ProbedRenameSource(ProbedRenameSource&&)                 = delete;
+    ProbedRenameSource& operator=(const ProbedRenameSource&) = delete;
+    ProbedRenameSource& operator=(ProbedRenameSource&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** value) noexcept override
+    {
+        if (! value)
+            return E_POINTER;
+        *value = nullptr;
+        if (riid != __uuidof(IUnknown) && riid != __uuidof(IFileSystemProbedRenameSource))
+            return E_NOINTERFACE;
+        *value = static_cast<IFileSystemProbedRenameSource*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (remaining == 0u)
+            delete this;
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameToFreeSibling(const wchar_t* leaf,
+                                                  const FileSystemOptions* options,
+                                                  FileSystemCorroboratedRenameResult* result) noexcept override
+    {
+        if (! result)
+            return E_POINTER;
+        if (result->sizeBytes != sizeof(*result))
+            return E_INVALIDARG;
+        *result = {};
+        if (! leaf || ! FileSystemOptionsHaveValidHeader(options) || _selection.exactName == leaf)
+            return E_INVALIDARG;
+
+        std::wstring providerParent;
+        std::wstring oldLeaf;
+        RETURN_IF_FAILED(SplitParentAndLeaf(_sourcePath, providerParent, oldLeaf));
+        FileSystemChildNameValidation nameCheck{};
+        nameCheck.sizeBytes = sizeof(nameCheck);
+        RETURN_IF_FAILED(_fileSystem->ValidateChildName(providerParent.c_str(), leaf, FILESYSTEM_RENAME, &nameCheck));
+        if (nameCheck.status != FILESYSTEM_CHILD_NAME_VALID)
+            return nameCheck.failureStatus;
+
+        const auto started = std::chrono::steady_clock::now();
+        const GraphOperationOptionsScope operationOptionsScope(options);
+        RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+        DriveContext context{};
+        std::wstring driveParent;
+        GraphRenameSelection current{};
+        const HRESULT recheck = ReadGraphRenameSelection(*_fileSystem, _sourcePath, context, driveParent, current);
+        if (IsNotFoundStatus(recheck) || recheck == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) || (SUCCEEDED(recheck) && current != _selection))
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        RETURN_IF_FAILED(recheck);
+
+        const std::wstring destinationPath = JoinMicrosoftDrivePath(driveParent, leaf);
+        ItemMetadata occupant{};
+        const HRESULT probe = ReadGraphRenameItem(*_fileSystem, context, destinationPath, occupant);
+        if (SUCCEEDED(probe))
+        {
+            if (occupant.id != _selection.sourceId)
+            {
+                result->mutation.outcomeKnown         = TRUE;
+                result->mutation.originalStillPresent = TRUE;
+                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            }
+            if (occupant.remoteReference || occupant.parentId != _selection.parentId || occupant.name != _selection.exactName ||
+                occupant.eTag != _selection.revision || ! OrdinalString::EqualsNoCase(leaf, _selection.exactName))
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        else if (! IsNotFoundStatus(probe))
+        {
+            return probe;
+        }
+
+        RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+        result->mutationAttempted = TRUE;
+        const HRESULT status      = MoveItemById(*_fileSystem, context, _selection.sourceId, leaf, _selection.parentId, false, _selection.revision, true);
+        if (SUCCEEDED(status))
+        {
+            result->mutation.outcomeKnown      = TRUE;
+            result->mutation.mutationCommitted = TRUE;
+        }
+        Debug::Perf::Emit(L"fileops.microsoft_drive.probed_rename_us", L"revision guarded", Debug::Perf::ElapsedUs(started), 1u, 0u, status);
+        return status;
+    }
+
+private:
+    std::atomic_ulong _refs{1u};
+    const wil::com_ptr<FileSystemMicrosoftDrive> _fileSystem;
+    const std::wstring _sourcePath;
+    const GraphRenameSelection _selection;
+};
+
+HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::CaptureProbedRenameSource(const wchar_t* path,
+                                                                              const FileSystemOptions* options,
+                                                                              IFileSystemProbedRenameSource** source) noexcept
+{
+    if (! source)
+        return E_POINTER;
+    *source = nullptr;
+    if (! path || path[0] == L'\0' || ! FileSystemOptionsHaveValidHeader(options))
+        return E_INVALIDARG;
+    if (Mode() != FileSystemMicrosoftDriveMode::OneDrivePersonal)
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+    const GraphOperationOptionsScope operationOptionsScope(options);
+    RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+    std::wstring canonicalPath = CanonicalizeInputPath(path);
+    DriveContext context{};
+    std::wstring parentPath;
+    GraphRenameSelection selected{};
+    RETURN_IF_FAILED(ReadGraphRenameSelection(*this, canonicalPath, context, parentPath, selected));
+    RETURN_IF_FAILED(FileSystemCheckOperationControl(options));
+
+    wil::com_ptr<IFileSystemProbedRenameSource> captured;
+    captured.attach(new (std::nothrow) ProbedRenameSource(this, std::move(canonicalPath), std::move(selected)));
+    if (! captured)
+        return E_OUTOFMEMORY;
+    *source = captured.detach();
+    return S_OK;
+}
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItem(const wchar_t* sourcePath,
                                                                const wchar_t* destinationPath,
@@ -7859,11 +8070,40 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
         accessTokenOut = "microsoft-drive-selftest-token";
         return S_OK;
     }
+
+    // A selftest that blocks activation must never enter the system browser or
+    // write back a refresh token to the credential used by the installed profile.
+    static const bool nonActivatingSelfTest = []() noexcept
+    {
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(CommandLineToArgvW(GetCommandLineW(), &argc));
+        if (argv)
+        {
+            for (int i = 1; i < argc; ++i)
+            {
+                if (OrdinalString::EqualsNoCase(argv.get()[i], L"--selftest-no-activate"))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }();
+    if (nonActivatingSelfTest)
+    {
+        persistRefreshToken = false;
+    }
 #endif
 
     const Settings settings = SnapshotSettings();
     if (settings.clientId.empty())
     {
+#if defined(ENABLE_TESTS)
+        if (nonActivatingSelfTest)
+        {
+            return HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION);
+        }
+#endif
         ShowMissingClientIdAlert();
         return HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION);
     }
@@ -7944,6 +8184,14 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
             return cacheToken(refreshed);
         }
 
+#if defined(ENABLE_TESTS)
+        if (nonActivatingSelfTest)
+        {
+            Debug::Warning(L"Microsoft Drive: saved sign-in failed during non-activating selftest (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+            return hr;
+        }
+#endif
+
         const std::wstring_view oauthError = refreshed.error.empty() ? std::wstring_view(L"<none>") : std::wstring_view(refreshed.error);
         const std::wstring_view oauthErrorDescription =
             refreshed.errorDescription.empty() ? std::wstring_view(L"<none>") : std::wstring_view(refreshed.errorDescription);
@@ -7962,6 +8210,13 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
             static_cast<void>(hostConnections->DeleteConnectionSecret(cacheKey.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE));
         }
     }
+
+#if defined(ENABLE_TESTS)
+    if (nonActivatingSelfTest)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+#endif
 
     TokenResponse interactive{};
     Debug::Info(L"Microsoft Drive: starting interactive auth for '{}' authority='{}' clientId='{}' scope='{}' loginHintPresent={} persistRefreshToken={}",
@@ -9951,6 +10206,83 @@ void RunDebugPatchRetryMergeSelfTest(unsigned int& passed, unsigned int& failed)
     DebugCheck(graph.CountRequests(L"DELETE") == 0u, L"directory merge should never issue recursive source-folder DELETE", passed, failed);
 }
 
+void RunDebugProbedRenameSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fileSystem = MakeDebugFileSystem();
+    wil::com_ptr<IFileSystemProbedRename> capability;
+    if (! DebugCheck(fileSystem && fileSystem.try_query_to(capability.put()) && capability,
+                     L"Personal Graph fixture should expose the probed Rename interface",
+                     passed,
+                     failed))
+        return;
+
+    DebugGraphDrive graph;
+    graph.AddFolder(L"/inventory");
+    graph.AddFile(L"/inventory/source.txt");
+    graph.AddFile(L"/inventory/occupied.txt");
+    const auto sourceId   = graph.ItemId(L"/inventory/source.txt");
+    const auto occupantId = graph.ItemId(L"/inventory/occupied.txt");
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+    DebugFlagScope syntheticContext(g_debugMicrosoftDriveUseSyntheticContextForSelfTest, true);
+    constexpr wchar_t sourcePath[] = L"/@conn:microsoft-drive-selftest/inventory/source.txt";
+    wil::com_ptr<IFileSystemProbedRenameSource> source;
+    if (! DebugCheck(capability->CaptureProbedRenameSource(sourcePath, nullptr, source.put()) == S_OK && source,
+                     L"Graph must capture the selected ID, parent and revision",
+                     passed,
+                     failed))
+        return;
+
+    const auto started = std::chrono::steady_clock::now();
+    FileSystemCorroboratedRenameResult receipt{};
+    const HRESULT collision = source->RenameToFreeSibling(L"occupied.txt", nullptr, &receipt);
+    DebugCheck(collision == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && receipt.mutationAttempted == FALSE && receipt.mutation.outcomeKnown == TRUE &&
+                   receipt.mutation.originalStillPresent == TRUE && receipt.mutation.mutationCommitted == FALSE && graph.CountRequests(L"PATCH") == 0u &&
+                   graph.ItemId(L"/inventory/occupied.txt") == occupantId,
+               L"Known Graph sibling collision must retain the selection and occupant without PATCH",
+               passed,
+               failed);
+
+    if (! DebugCheck(graph.RewriteFileExternally(L"/inventory/source.txt", "revised selection"),
+                     L"Graph fixture must mutate only the revision at the existing address",
+                     passed,
+                     failed))
+        return;
+    receipt             = {};
+    const HRESULT stale = source->RenameToFreeSibling(L"stale.txt", nullptr, &receipt);
+    DebugCheck(stale == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && receipt.mutationAttempted == FALSE && graph.CountRequests(L"PATCH") == 0u &&
+                   graph.ItemId(L"/inventory/source.txt") == sourceId,
+               L"A captured Graph revision must refuse the changed file before PATCH",
+               passed,
+               failed);
+
+    source.reset();
+    if (! DebugCheck(capability->CaptureProbedRenameSource(sourcePath, nullptr, source.put()) == S_OK && source,
+                     L"Graph must capture a newly selected revision",
+                     passed,
+                     failed))
+        return;
+
+    receipt               = {};
+    const HRESULT renamed = source->RenameToFreeSibling(L"Source.txt", nullptr, &receipt);
+    const auto patch      = std::ranges::find_if(graph.requests, [](const DebugDriveRequest& request) noexcept { return request.method == L"PATCH"; });
+    DebugCheck(renamed == S_OK && receipt.mutationAttempted == TRUE && receipt.mutation.outcomeKnown == TRUE && receipt.mutation.mutationCommitted == TRUE &&
+                   receipt.mutation.originalStillPresent == FALSE && graph.CountRequests(L"PATCH") == 1u && graph.CountRequests(L"DELETE") == 0u &&
+                   patch != graph.requests.end() && patch->hasIfMatch && ! graph.AllRequestsAllowedRetry(L"PATCH") &&
+                   graph.ItemId(L"/inventory/Source.txt") == sourceId && graph.HasExactLeafName(L"/inventory/Source.txt", L"Source.txt"),
+               L"Case-only Graph Rename must submit one guarded PATCH and report exact same-parent publication",
+               passed,
+               failed);
+    Debug::Perf::Emit(L"FileOps.SelfTest.GraphProbedRenameUs",
+                      L"collision,stale revision,case-only",
+                      Debug::Perf::ElapsedUs(started),
+                      graph.CountRequests(L"GET"),
+                      graph.CountRequests(L"PATCH"),
+                      renamed);
+}
+
 void RunDebugPublicRenameReceiptsSelfTest(unsigned int& passed, unsigned int& failed)
 {
     wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
@@ -11412,6 +11744,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveDe
     RunDebugPatchRetryMergeSelfTest(*passed, *failed);
     RunDebugCaseOnlyRenameSelfTest(*passed, *failed);
     RunDebugPublicRenameReceiptsSelfTest(*passed, *failed);
+    RunDebugProbedRenameSelfTest(*passed, *failed);
     RunDebugDeleteRetrySelfTest(*passed, *failed);
     RunDebugR0dRecycleDeleteSelfTest(*passed, *failed);
     RunDebugCommittedDeleteRetryNotFoundSelfTest(*passed, *failed);

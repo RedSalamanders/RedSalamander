@@ -280,7 +280,18 @@ revision. When a reply is lost, reconciliation requires the item ID, exact new s
 parent. Both Rename entry points forward the same per-item receipt for a proved commit or an
 observed pre-dispatch collision. An unproved outcome carries no receipt. The
 [Graph driveItem update contract](https://learn.microsoft.com/en-us/graph/api/driveitem-update?view=graph-rest-1.0)
-defines the revision header. The plugin advertises `IFileSystemAtomicWriter`: a simple upload is one PUT (with
+defines the revision header.
+
+The OneDrive Personal probed inline Rename route holds the drive ID, parent ID, selected
+item ID, exact spelling, and eTag. It rechecks the parent and selected item before checking
+the sibling. An observed occupant produces a known refusal without a PATCH. A changed
+selection or a remote-item reference does not authorize a mutation. The route sends one
+revision-guarded same-parent PATCH without automatic mutation retries. Its response or a
+read by ID must prove the requested spelling in the captured parent. A dispatched request
+without that proof stays indeterminate. This token grants no replacement authority.
+OneDrive Business and SharePoint require separate route qualification.
+
+The plugin advertises `IFileSystemAtomicWriter`: a simple upload is one PUT (with
 `If-None-Match: *` unless overwrite was granted) and an upload session's item appears only when the
 session completes under the requested conflict behavior, so the host bridge publishes new names
 into Graph destinations through the provider writer. A replacement granted through the host
@@ -327,7 +338,11 @@ canceled Recycle whose children listing is still arriving returns `ERROR_CANCELL
 read chunks and deletes nothing, and that a request the server never answers returns within the
 declared bound with the host's verdict after Cancel and as a transport failure without it; FileOps
 `R0fGraph_FakeGraphReadWriteCreateRenameRecycle` proves cross-provider Copy both ways
-(byte-exact), provider CreateDirectory and Rename, and Recycle through a task on the same fixture.
+(byte-exact), provider CreateDirectory, ordinary host inline Rename, and Recycle through tasks on the same fixture.
+The host Rename checks the terminal publication receipt and the old and new names.
+The configured live `Phase16_RemoteOneDrivePersonalInlineRename` case exercises an
+occupied sibling, file and folder Rename, case-only spelling, preserved bytes, and
+Recycle of its owned fixture. It requires a current saved sign-in.
 The gated `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_*`/`SHAREPOINT` profiles remain the live proof.
 OneDrive and SharePoint are full file-manager destinations.
 
