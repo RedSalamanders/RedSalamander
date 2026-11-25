@@ -20,7 +20,7 @@ Receipt `5a31700b8c32f0232836483d588471be299e2282a8f720d33f74536bf2c6f7c7`.
   The exact read-only rerun `20261125T134004Z-64848-aeabc524b7aa42d8885d6e9ffb23c5fe`
   passed without activation and verified the approved fixture. The exception for
   Windows Hello applied to the isolated test profile. The installed settings
-  digest matched before and after, and the isolated settings was removed before
+  digest matched before and after, and the isolated settings file was removed before
   each archive.
 - The broad configured File Operations run
   `20261125T134032Z-88548-e470bcd602474da485cb1e1685b3fc49` created its owned
